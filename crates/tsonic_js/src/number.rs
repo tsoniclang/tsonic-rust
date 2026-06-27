@@ -92,8 +92,7 @@ pub fn parse_float(text: &str) -> f64 {
     }
 
     let mut end = 0usize;
-    let bytes = trimmed.as_bytes();
-    let mut chars = bytes.iter().peekable();
+    let mut chars = trimmed.chars().peekable();
     let mut has_dot = false;
     let mut seen_digit = false;
     let mut has_exp = false;
@@ -110,7 +109,6 @@ pub fn parse_float(text: &str) -> f64 {
     }
 
     while let Some(ch) = chars.next() {
-        let ch = *ch as char;
         let accept = match ch {
             '0'..='9' => {
                 seen_digit = true;

@@ -259,10 +259,10 @@ fn normalize_slice_index(len: usize, index: isize) -> usize {
     let mut normalized = if index < 0 { max + index } else { index };
     normalized = normalized.max(0);
     if normalized > max {
-        max
+        max as usize
     } else {
-        normalized
-    } as usize
+        normalized as usize
+    }
 }
 
 fn normalize_slice_end(len: usize, index: isize) -> usize {

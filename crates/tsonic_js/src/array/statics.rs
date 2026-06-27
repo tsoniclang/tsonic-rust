@@ -29,7 +29,7 @@ impl<T> ArrayBrand for Vec<T> {
     }
 }
 
-impl<T: ?Sized> ArrayBrand for [T] {
+impl<T> ArrayBrand for [T] {
     fn is_array_brand(&self) -> bool {
         true
     }
