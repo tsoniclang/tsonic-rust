@@ -64,7 +64,7 @@ pub fn max(values: &[f64]) -> f64 {
         if value.is_nan() {
             return f64::NAN;
         }
-        if *value > out || out.is_nan() {
+        if out.is_nan() || *value > out {
             out = *value;
         }
     }
@@ -79,7 +79,7 @@ pub fn min(values: &[f64]) -> f64 {
         if value.is_nan() {
             return f64::NAN;
         }
-        if *value < out || out.is_nan() {
+        if out.is_nan() || *value < out {
             out = *value;
         }
     }
@@ -98,7 +98,23 @@ pub fn random() -> f64 {
     ((nanos as f64) / (u64::MAX as f64)).fract()
 }
 pub fn round(value: f64) -> f64 {
-    value.round()
+    if !value.is_finite() || value == 0.0 {
+        return value;
+    }
+    if value > 0.0 {
+        let floor = value.floor();
+        let fraction = value - floor;
+        return if fraction >= 0.5 { floor + 1.0 } else { floor };
+    }
+
+    let floor = value.floor();
+    let fraction = value - floor;
+    if fraction >= 0.5 {
+        let out = floor + 1.0;
+        if out == 0.0 { -0.0 } else { out }
+    } else {
+        floor
+    }
 }
 pub fn sign(value: f64) -> f64 {
     if value.is_nan() {

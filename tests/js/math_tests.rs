@@ -27,9 +27,11 @@ fn imul_and_clz32_and_shift_sign() {
 #[test]
 fn basic_math_helpers() {
     assert_eq!(math::round(1.5), 2.0);
+    assert_eq!(math::round(-0.5), -0.0);
+    assert_eq!(math::round(-1.5), -1.0);
+    assert_eq!(math::round(-2.5), -2.0);
     assert_eq!(math::trunc(1.9), 1.0);
     assert_eq!(math::trunc(-1.9), -1.0);
     assert_eq!(math::floor(1.9), 1.0);
     assert_eq!(math::ceil(1.1), 2.0);
 }
-

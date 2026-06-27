@@ -36,20 +36,22 @@ impl JsStrictEqual for f64 {
     }
 }
 
-impl<T> JsSameValueZero for T
-where
-    T: PartialEq,
-{
-    fn same_value_zero(&self, other: &Self) -> bool {
-        self == other
-    }
+macro_rules! impl_js_primitive_equality {
+    ($($t:ty),* $(,)?) => {
+        $(
+            impl JsSameValueZero for $t {
+                fn same_value_zero(&self, other: &Self) -> bool {
+                    self == other
+                }
+            }
+
+            impl JsStrictEqual for $t {
+                fn strict_equal(&self, other: &Self) -> bool {
+                    self == other
+                }
+            }
+        )*
+    };
 }
 
-impl<T> JsStrictEqual for T
-where
-    T: PartialEq,
-{
-    fn strict_equal(&self, other: &Self) -> bool {
-        self == other
-    }
-}
+impl_js_primitive_equality!(bool, i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, char, String, &str);

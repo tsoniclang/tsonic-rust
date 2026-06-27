@@ -14,7 +14,7 @@ fn parse_int_radix_examples() {
 #[test]
 fn parse_float_prefix_parse() {
     assert_eq!(number::parse_float("1.5x"), 1.5);
-    assert_eq!(number::parse_float("0x10"), 16.0);
+    assert_eq!(number::parse_float("0x10"), 0.0);
     assert_eq!(number::parse_float("-3.25e1"), -32.5);
     assert!(number::parse_float("x").is_nan());
     assert!(number::parse_float("Infinity").is_infinite() && number::parse_float("Infinity").is_sign_positive());
