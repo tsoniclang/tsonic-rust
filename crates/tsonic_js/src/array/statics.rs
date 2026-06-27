@@ -18,6 +18,10 @@ where
     value.is_array_brand()
 }
 
+pub fn is_array_value(value: &crate::value::JsValue) -> bool {
+    matches!(value, crate::value::JsValue::Array(_))
+}
+
 /// Marker trait for known array-like values in Packet D scope.
 pub trait ArrayBrand {
     fn is_array_brand(&self) -> bool;
@@ -30,6 +34,12 @@ impl<T> ArrayBrand for Vec<T> {
 }
 
 impl<T> ArrayBrand for [T] {
+    fn is_array_brand(&self) -> bool {
+        true
+    }
+}
+
+impl<T> ArrayBrand for super::JsArray<T> {
     fn is_array_brand(&self) -> bool {
         true
     }
