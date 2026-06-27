@@ -28,5 +28,5 @@ fn bitwise_operators_match_js_style() {
 fn shifts_mask_rhs_to_five_bits() {
     assert_eq!(operators::left_shift(1.0, 32.0), 1);
     assert_eq!(operators::signed_right_shift(2147483648.0, 1.0), 0xC000_0000_u32 as i32);
-    assert_eq!(operators::unsigned_right_shift(0x8000_0000_f64, 1.0), 0x4000_0000);
+    assert_eq!(operators::unsigned_right_shift(2_147_483_648_f64, 1.0), 0x4000_0000);
 }

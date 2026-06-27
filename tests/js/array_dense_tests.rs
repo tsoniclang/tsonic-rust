@@ -1,6 +1,4 @@
 use tsonic_js::array::{dense, statics};
-use tsonic_js::{array, number};
-use tsonic_js::equality::{JsSameValueZero, JsStrictEqual};
 
 #[test]
 fn dense_builders_and_length_ops() {

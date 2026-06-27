@@ -8,7 +8,7 @@ fn parse_int_radix_examples() {
     assert!(number::parse_int("08", None).is_finite());
     assert_eq!(number::parse_int("08", None), 8.0);
     assert!(number::parse_int("xyz", None).is_nan());
-    assert_eq!(number::parse_int("2", Some(1)), f64::NAN);
+    assert!(number::parse_int("2", Some(1)).is_nan());
 }
 
 #[test]
