@@ -147,20 +147,20 @@ where
 }
 
 /// Fills a dense sub-range with a cloned value.
-pub fn fill<T: Clone>(array: &mut Vec<T>, value: T, start: isize, end: Option<isize>) {
+pub fn fill<T: Clone>(array: &mut [T], value: T, start: isize, end: Option<isize>) {
     let len = array.len();
     let start = normalize_fill_index(len, start);
     let end = normalize_fill_index(len, end.unwrap_or(len as isize));
     if start >= end {
         return;
     }
-    for index in start..end {
-        array[index] = value.clone();
+    for item in array.iter_mut().take(end).skip(start) {
+        *item = value.clone();
     }
 }
 
 /// Implements copyWithin over dense arrays with overlap-safe copy direction.
-pub fn copy_within<T: Clone>(array: &mut Vec<T>, target: isize, start: isize, end: Option<isize>) {
+pub fn copy_within<T: Clone>(array: &mut [T], target: isize, start: isize, end: Option<isize>) {
     let len = array.len();
     if len == 0 {
         return;

@@ -34,17 +34,15 @@ pub fn parse_int(text: &str, radix: Option<i32>) -> f64 {
         return f64::NAN;
     }
 
-    if base == 10 && source.starts_with("0x") || base == 10 && source.starts_with("0X") {
+    if base == 10 && (source.starts_with("0x") || source.starts_with("0X")) {
         // parseInt in JS keeps parsing decimal leading zeros by default, but also supports 0x with
         // inferred radix only when radix is omitted.
         if radix.is_none() {
             base = 16;
             source = &source[2..];
         }
-    } else if base == 16 {
-        if source.starts_with("0x") || source.starts_with("0X") {
-            source = &source[2..];
-        }
+    } else if base == 16 && (source.starts_with("0x") || source.starts_with("0X")) {
+        source = &source[2..];
     }
 
     let base_usize = base as u32;
@@ -114,7 +112,7 @@ pub fn parse_float(text: &str) -> f64 {
         }
     }
 
-    while let Some(ch) = chars.next() {
+    for ch in chars.by_ref() {
         let accept = match ch {
             '0'..='9' => {
                 seen_digit = true;
@@ -126,7 +124,7 @@ pub fn parse_float(text: &str) -> f64 {
             }
             '.' if !has_dot && !has_exp => {
                 has_dot = true;
-                seen_digit || true
+                true
             }
             'e' | 'E' if !has_exp && (seen_digit || has_dot) => {
                 has_exp = true;
@@ -183,7 +181,7 @@ pub fn is_integer(value: f64) -> bool {
 }
 
 pub fn is_safe_integer(value: f64) -> bool {
-    is_integer(value) && value >= MIN_SAFE_INTEGER && value <= MAX_SAFE_INTEGER
+    is_integer(value) && (MIN_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&value)
 }
 
 pub fn to_fixed(value: f64, digits: usize) -> Result<String, JsError> {

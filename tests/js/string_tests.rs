@@ -75,8 +75,8 @@ fn search_edge_cases() {
     assert_eq!(string::index_of("abc", "z", -10), -1);
     assert_eq!(string::last_index_of("banana", "ana", Some(-1)), -1);
     assert_eq!(string::last_index_of("banana", "ana", Some(-10)), -1);
-    assert_eq!(string::includes("", "", 0), true);
-    assert_eq!(string::includes("a", "a", 1), false);
+    assert!(string::includes("", "", 0));
+    assert!(!string::includes("a", "a", 1));
 }
 
 #[test]

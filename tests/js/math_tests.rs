@@ -1,10 +1,15 @@
+use std::hint::black_box;
+
 use tsonic_js::math;
 
 #[test]
 fn constants_are_exposed() {
-    assert!(math::E > 2.0);
-    assert!(math::PI > 3.0);
-    assert!(math::SQRT2 > 1.0);
+    let e = black_box(math::E);
+    let pi = black_box(math::PI);
+    let sqrt2 = black_box(math::SQRT2);
+    assert!(e > 2.0);
+    assert!(pi > 3.0);
+    assert!(sqrt2 > 1.0);
 }
 
 #[test]

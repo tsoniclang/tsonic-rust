@@ -21,9 +21,8 @@ const FORBIDDEN_PATTERNS: &[&str] = &[
 
 #[test]
 fn no_forbidden_shortcuts_present_in_product_sources() {
-    let workspace_root = locate_workspace_root().unwrap_or_else(|| {
-        panic!("unable to locate workspace root from test manifest directory")
-    });
+    let workspace_root = locate_workspace_root()
+        .unwrap_or_else(|| panic!("unable to locate workspace root from test manifest directory"));
     let mut violations = Vec::new();
     let mut rust_files = Vec::new();
     collect_workspace_product_sources(&workspace_root, &mut rust_files);

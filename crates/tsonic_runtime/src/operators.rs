@@ -41,18 +41,18 @@ pub fn bitwise_xor(left: f64, right: f64) -> i32 {
 
 pub fn left_shift(left: f64, right: f64) -> i32 {
     let lhs = to_int32(left);
-    let shift = (to_uint32(right) & 0x1f) as u32;
+    let shift = to_uint32(right) & 0x1f;
     lhs.wrapping_shl(shift)
 }
 
 pub fn signed_right_shift(left: f64, right: f64) -> i32 {
     let lhs = to_int32(left);
-    let shift = (to_uint32(right) & 0x1f) as u32;
+    let shift = to_uint32(right) & 0x1f;
     lhs.wrapping_shr(shift)
 }
 
 pub fn unsigned_right_shift(left: f64, right: f64) -> u32 {
     let lhs = to_uint32(left);
-    let shift = (to_uint32(right) & 0x1f) as u32;
+    let shift = to_uint32(right) & 0x1f;
     lhs >> shift
 }

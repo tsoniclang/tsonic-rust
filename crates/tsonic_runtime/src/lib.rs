@@ -7,13 +7,6 @@ pub mod operators;
 
 pub use error::{JsError, JsErrorKind};
 pub use operators::{
-    bitwise_and,
-    bitwise_not,
-    bitwise_or,
-    bitwise_xor,
-    left_shift,
-    signed_right_shift,
-    to_int32,
-    to_uint32,
-    unsigned_right_shift,
+    bitwise_and, bitwise_not, bitwise_or, bitwise_xor, left_shift, signed_right_shift, to_int32,
+    to_uint32, unsigned_right_shift,
 };
