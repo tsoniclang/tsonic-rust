@@ -13,6 +13,12 @@ fn math_max_min_with_empty_and_nan() {
     assert_eq!(math::min(&[]), f64::INFINITY);
     assert!(math::max(&[1.0, f64::NAN]).is_nan());
     assert!(math::min(&[1.0, f64::NAN]).is_nan());
+    assert!(math::max(&[f64::NAN, 1.0]).is_nan());
+    assert!(math::min(&[f64::NAN, 1.0]).is_nan());
+    assert_eq!(math::max(&[-0.0, 0.0]), 0.0);
+    assert_eq!(math::max(&[0.0, -0.0]), 0.0);
+    assert_eq!(math::min(&[-0.0, 0.0]), -0.0);
+    assert_eq!(math::min(&[0.0, -0.0]), -0.0);
 }
 
 #[test]

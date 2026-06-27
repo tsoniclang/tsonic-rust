@@ -59,12 +59,15 @@ pub fn max(values: &[f64]) -> f64 {
     if values.is_empty() {
         return f64::NEG_INFINITY;
     }
+    if values[0].is_nan() {
+        return f64::NAN;
+    }
     let mut out = values[0];
     for value in &values[1..] {
         if value.is_nan() {
             return f64::NAN;
         }
-        if out.is_nan() || *value > out {
+        if value.total_cmp(&out).is_gt() {
             out = *value;
         }
     }
@@ -74,12 +77,15 @@ pub fn min(values: &[f64]) -> f64 {
     if values.is_empty() {
         return f64::INFINITY;
     }
+    if values[0].is_nan() {
+        return f64::NAN;
+    }
     let mut out = values[0];
     for value in &values[1..] {
         if value.is_nan() {
             return f64::NAN;
         }
-        if out.is_nan() || *value < out {
+        if value.total_cmp(&out).is_lt() {
             out = *value;
         }
     }

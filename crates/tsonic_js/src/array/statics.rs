@@ -13,7 +13,7 @@ pub fn from_string(value: &str) -> Vec<String> {
 /// Packet F will replace this API to operate on `JsValue` carriers.
 pub fn is_array<T>(value: &T) -> bool
 where
-    T: ArrayBrand,
+    T: ArrayBrand + ?Sized,
 {
     value.is_array_brand()
 }
@@ -29,7 +29,7 @@ impl<T> ArrayBrand for Vec<T> {
     }
 }
 
-impl<T> ArrayBrand for [T] {
+impl<T: ?Sized> ArrayBrand for [T] {
     fn is_array_brand(&self) -> bool {
         true
     }
@@ -40,4 +40,3 @@ impl ArrayBrand for i32 {
         false
     }
 }
-

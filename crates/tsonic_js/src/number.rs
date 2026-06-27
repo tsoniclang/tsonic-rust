@@ -79,17 +79,28 @@ pub fn parse_float(text: &str) -> f64 {
     }
 
     let lower = trimmed.to_lowercase();
-    if lower.starts_with("infinity") || lower.starts_with("+infinity") || lower.starts_with("-infinity") {
-        return trimmed.parse::<f64>().unwrap_or(f64::NAN);
+    let without_sign = if let Some(without_sign) = trimmed.strip_prefix('+') {
+        without_sign
+    } else {
+        trimmed.strip_prefix('-').unwrap_or(trimmed)
+    };
+    if without_sign.to_lowercase().starts_with("infinity") {
+        if lower.starts_with("-") {
+            return f64::NEG_INFINITY;
+        }
+        return f64::INFINITY;
     }
 
     let mut end = 0usize;
-    let mut chars = trimmed.chars().peekable();
+    let bytes = trimmed.as_bytes();
+    let mut chars = bytes.iter().peekable();
     let mut has_dot = false;
     let mut seen_digit = false;
     let mut has_exp = false;
     let mut has_exp_sign = false;
     let mut has_exp_digits = false;
+    let mut exp_start: Option<usize> = None;
+    let mut has_exp_sign_only = false;
 
     if let Some(first) = chars.peek().copied() {
         if first == '+' || first == '-' {
@@ -99,11 +110,13 @@ pub fn parse_float(text: &str) -> f64 {
     }
 
     while let Some(ch) = chars.next() {
+        let ch = *ch as char;
         let accept = match ch {
             '0'..='9' => {
                 seen_digit = true;
                 if has_exp {
                     has_exp_digits = true;
+                    has_exp_sign_only = false;
                 }
                 true
             }
@@ -113,10 +126,12 @@ pub fn parse_float(text: &str) -> f64 {
             }
             'e' | 'E' if !has_exp && (seen_digit || has_dot) => {
                 has_exp = true;
+                exp_start = Some(end);
                 true
             }
             '+' | '-' if has_exp && !has_exp_sign && !has_exp_digits => {
                 has_exp_sign = true;
+                has_exp_sign_only = true;
                 true
             }
             _ => false,
@@ -130,6 +145,14 @@ pub fn parse_float(text: &str) -> f64 {
             continue;
         }
         break;
+    }
+
+    if has_exp && !has_exp_digits {
+        if let Some(exp_pos) = exp_start {
+            end = exp_pos;
+        } else if has_exp_sign_only {
+            end -= 1;
+        }
     }
 
     if !seen_digit {

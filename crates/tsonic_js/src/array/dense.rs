@@ -244,19 +244,9 @@ fn normalize_from_index(len: usize, from_index: isize) -> usize {
         return 0;
     }
 
-    let normalized = if from_index < 0 {
-        len as isize + from_index
-    } else {
-        from_index
-    };
-
-    let clamped = if normalized < 0 {
-        0
-    } else if normalized > len as isize {
-        len
-    } else {
-        normalized
-    };
+    let max = len as isize;
+    let normalized = if from_index < 0 { max + from_index } else { from_index };
+    let clamped = normalized.max(0).min(max);
 
     clamped as usize
 }
@@ -295,31 +285,21 @@ fn normalize_fill_index(len: usize, index: isize) -> usize {
     }
     let max = len as isize;
     let normalized = if index < 0 { max + index } else { index };
-    if normalized < 0 {
-        0
-    } else if normalized > max {
-        max as usize
-    } else {
-        normalized as usize
-    }
+    let clamped = normalized.max(0).min(max);
+    clamped as usize
 }
 
 fn normalize_last_index_start(len: usize, index: isize) -> usize {
     if len == 0 {
         return 0;
     }
+    let max = len as isize - 1;
     let normalized = if index < 0 {
-        len as isize + index
+        max + 1 + index
     } else {
         index
     };
-    let clamped = if normalized < 0 {
-        0
-    } else if normalized >= len as isize {
-        len - 1
-    } else {
-        normalized
-    };
+    let clamped = normalized.max(0).min(max);
     clamped as usize
 }
 
