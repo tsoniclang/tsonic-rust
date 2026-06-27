@@ -1,6 +1,18 @@
 //! Math helper module.
 
 use tsonic_runtime::operators;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static RANDOM_STATE: AtomicU64 = AtomicU64::new(0x9E3779B97F4A7C15);
+
+fn next_random_u64() -> u64 {
+    let mut state = RANDOM_STATE.load(Ordering::Relaxed);
+    state ^= state << 7;
+    state ^= state >> 9;
+    state ^= state << 8;
+    RANDOM_STATE.store(state, Ordering::Relaxed);
+    state
+}
 
 pub const E: f64 = std::f64::consts::E;
 pub const LN10: f64 = std::f64::consts::LN_10;
@@ -95,13 +107,8 @@ pub fn pow(base: f64, exponent: f64) -> f64 {
     base.powf(exponent)
 }
 pub fn random() -> f64 {
-    // Deterministic local PRNG for Packet B; full crypto-quality source to be decided later.
-    // This is intentionally basic and only intended for test-facing runtime support.
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |time| time.subsec_nanos() as u64);
-    ((nanos as f64) / (u64::MAX as f64)).fract()
+    let bits = next_random_u64();
+    (bits as f64) / ((u64::MAX as f64) + 1.0)
 }
 pub fn round(value: f64) -> f64 {
     if !value.is_finite() || value == 0.0 {
