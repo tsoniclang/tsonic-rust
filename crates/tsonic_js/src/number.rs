@@ -56,12 +56,18 @@ pub fn parse_int(text: &str, radix: Option<i32>) -> f64 {
             None => break,
         };
 
-        if let Some(next) = value.checked_mul(base_usize as i128).and_then(|v| v.checked_add(digit as i128))
+        if let Some(next) = value
+            .checked_mul(base_usize as i128)
+            .and_then(|v| v.checked_add(digit as i128))
         {
             value = next;
             consumed += 1;
         } else {
-            return if sign < 0.0 { f64::NEG_INFINITY } else { f64::INFINITY };
+            return if sign < 0.0 {
+                f64::NEG_INFINITY
+            } else {
+                f64::INFINITY
+            };
         }
     }
 

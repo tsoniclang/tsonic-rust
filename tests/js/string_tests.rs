@@ -42,8 +42,12 @@ fn search_and_replace() {
 fn split_and_repeat_and_trim() {
     assert_eq!(string::split("a,b,c", ",", None), vec!["a", "b", "c"]);
     assert_eq!(string::split("abc", "", Some(2)), vec!["a", "b"]);
+    assert_eq!(string::split("a,,c", ",", None), vec!["a", "", "c"]);
     assert_eq!(string::repeat("x", 3).as_deref(), Ok("xxx"));
-    assert_eq!(string::repeat("x", -1).unwrap_err().kind(), JsErrorKind::RangeError);
+    assert_eq!(
+        string::repeat("x", -1).unwrap_err().kind(),
+        JsErrorKind::RangeError
+    );
     assert_eq!(string::trim("  hi  "), "hi");
 }
 
@@ -63,4 +67,24 @@ fn constructors() {
         string::from_code_point(&[0xD800]).unwrap_err().kind(),
         JsErrorKind::RangeError
     );
+}
+
+#[test]
+fn search_edge_cases() {
+    assert_eq!(string::index_of("abc", "", 10), 3);
+    assert_eq!(string::index_of("abc", "z", -10), -1);
+    assert_eq!(string::last_index_of("banana", "ana", Some(-1)), -1);
+    assert_eq!(string::last_index_of("banana", "ana", Some(-10)), -1);
+    assert_eq!(string::includes("", "", 0), true);
+    assert_eq!(string::includes("a", "a", 1), false);
+}
+
+#[test]
+fn conversion_helpers() {
+    assert_eq!(string::to_lower_case("HELLO"), "hello");
+    assert_eq!(string::to_upper_case("hello"), "HELLO");
+    assert_eq!(string::char_at("😀", 5), "");
+    assert_eq!(string::at("😀", 1).as_deref(), Some("\u{FFFD}"));
+    assert_eq!(string::code_point_at("😀", 0), Some(0x1f600));
+    assert_eq!(string::code_point_at("😀", 1), Some(0xDE00));
 }

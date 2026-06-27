@@ -71,7 +71,9 @@ where
         return false;
     }
     let start = normalize_from_index(array.len(), from_index);
-    array[start..].iter().any(|item| item.same_value_zero(value))
+    array[start..]
+        .iter()
+        .any(|item| item.same_value_zero(value))
 }
 
 /// Implements strict `indexOf` with strict equality and JS-`fromIndex` normalization.
@@ -99,7 +101,8 @@ where
     if array.is_empty() {
         return -1;
     }
-    let start = normalize_last_index_start(array.len(), from_index.unwrap_or(array.len() as isize - 1));
+    let start =
+        normalize_last_index_start(array.len(), from_index.unwrap_or(array.len() as isize - 1));
     let mut i = start;
     loop {
         if array[i].strict_equal(value) {
@@ -116,7 +119,7 @@ where
 /// Slices a dense array by index.
 pub fn slice<T: Clone>(array: &[T], start: isize, end: Option<isize>) -> Vec<T> {
     let start = normalize_slice_index(array.len(), start);
-    let mut end = normalize_slice_end(array.len(), end.unwrap_or(array.len() as isize));
+    let end = normalize_slice_end(array.len(), end.unwrap_or(array.len() as isize));
     if start > end {
         return Vec::new();
     }
@@ -231,7 +234,11 @@ fn normalize_index(len: usize, index: isize) -> Option<usize> {
     if len == 0 {
         return None;
     }
-    let normalized = if index < 0 { len as isize + index } else { index };
+    let normalized = if index < 0 {
+        len as isize + index
+    } else {
+        index
+    };
     if normalized >= 0 && normalized < len as isize {
         Some(normalized as usize)
     } else {
@@ -245,7 +252,11 @@ fn normalize_from_index(len: usize, from_index: isize) -> usize {
     }
 
     let max = len as isize;
-    let normalized = if from_index < 0 { max + from_index } else { from_index };
+    let normalized = if from_index < 0 {
+        max + from_index
+    } else {
+        from_index
+    };
     let clamped = normalized.max(0).min(max);
 
     clamped as usize
@@ -270,11 +281,7 @@ fn normalize_slice_end(len: usize, index: isize) -> usize {
         return 0;
     }
     let max = len as isize;
-    let normalized = if index < 0 {
-        max + index
-    } else {
-        index
-    };
+    let normalized = if index < 0 { max + index } else { index };
     let clamped = normalized.max(0).min(max);
     clamped as usize
 }
@@ -294,11 +301,7 @@ fn normalize_last_index_start(len: usize, index: isize) -> usize {
         return 0;
     }
     let max = len as isize - 1;
-    let normalized = if index < 0 {
-        max + 1 + index
-    } else {
-        index
-    };
+    let normalized = if index < 0 { max + 1 + index } else { index };
     let clamped = normalized.max(0).min(max);
     clamped as usize
 }

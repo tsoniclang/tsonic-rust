@@ -1,7 +1,7 @@
 //! Math helper module.
 
-use tsonic_runtime::operators;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tsonic_runtime::operators;
 
 static RANDOM_STATE: AtomicU64 = AtomicU64::new(0x9E3779B97F4A7C15);
 
@@ -58,7 +58,9 @@ pub fn fround(value: f64) -> f32 {
     value as f32
 }
 pub fn hypot(values: &[f64]) -> f64 {
-    let sum = values.iter().fold(0.0_f64, |acc, value| acc + value * value);
+    let sum = values
+        .iter()
+        .fold(0.0_f64, |acc, value| acc + value * value);
     sum.sqrt()
 }
 pub fn imul(a: i32, b: i32) -> i32 {
@@ -124,7 +126,11 @@ pub fn round(value: f64) -> f64 {
     let fraction = value - floor;
     if fraction >= 0.5 {
         let out = floor + 1.0;
-        if out == 0.0 { -0.0 } else { out }
+        if out == 0.0 {
+            -0.0
+        } else {
+            out
+        }
     } else {
         floor
     }

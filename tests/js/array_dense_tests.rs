@@ -51,6 +51,8 @@ fn mutating_dense_helpers() {
     let mut copy = vec![1, 2, 3, 4, 5];
     dense::copy_within(&mut copy, 0, 3, None);
     assert_eq!(copy, vec![4, 5, 3, 4, 5]);
+    dense::copy_within(&mut copy, 10, 0, Some(1));
+    assert_eq!(copy, vec![4, 5, 3, 4, 5]);
 
     dense::reverse(&mut copy[..]);
     assert_eq!(copy, vec![5, 4, 3, 5, 4]);
@@ -59,13 +61,30 @@ fn mutating_dense_helpers() {
     let removed = dense::splice(&mut spliced, 1, 2, vec![9, 10]);
     assert_eq!(removed, vec![2, 3]);
     assert_eq!(spliced, vec![1, 9, 10, 4]);
+
+    let mut clamped = vec![1, 2, 3];
+    assert_eq!(dense::splice(&mut clamped, 99, 100, vec![7]), vec![]);
+    assert_eq!(clamped, vec![1, 2, 3, 7]);
+    assert_eq!(
+        dense::splice(&mut clamped, -1, 10, Vec::<i32>::new()),
+        vec![7]
+    );
+    assert_eq!(clamped, vec![1, 2, 3]);
+    assert_eq!(
+        dense::splice(&mut clamped, -10, 10, Vec::<i32>::new()),
+        vec![1, 2, 3]
+    );
+    assert!(clamped.is_empty());
 }
 
 #[test]
 fn iter_helpers_and_clear() {
     let xs = vec![10, 20, 30];
     assert_eq!(dense::keys(&xs), vec![0, 1, 2]);
-    assert_eq!(dense::values(&xs).into_iter().cloned().collect::<Vec<_>>(), vec![10, 20, 30]);
+    assert_eq!(
+        dense::values(&xs).into_iter().cloned().collect::<Vec<_>>(),
+        vec![10, 20, 30]
+    );
     assert_eq!(dense::entries(&xs), vec![(0, &10), (1, &20), (2, &30)]);
 
     let mut clear = vec![1, 2, 3];

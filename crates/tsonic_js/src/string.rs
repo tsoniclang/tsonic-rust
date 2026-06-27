@@ -89,8 +89,8 @@ pub fn slice(value: &str, start: isize, end: Option<isize>) -> String {
         }
     };
 
-    let mut from = to_isize(start, units.len());
-    let mut to = to_isize(end.unwrap_or(units.len() as isize), units.len());
+    let from = to_isize(start, units.len());
+    let to = to_isize(end.unwrap_or(units.len() as isize), units.len());
     // JS slice does not swap start and end. If normalized start > end, result is empty.
     if from > to {
         return String::new();
@@ -120,9 +120,7 @@ pub fn index_of(value: &str, search: &str, position: isize) -> isize {
         return -1;
     }
 
-    let start = position
-        .max(0)
-        .min(haystack.len() as isize) as usize;
+    let start = position.max(0).min(haystack.len() as isize) as usize;
 
     (start..=haystack.len().saturating_sub(needle.len()))
         .find(|&i| haystack[i..i + needle.len()] == needle[..])
@@ -134,14 +132,28 @@ pub fn last_index_of(value: &str, search: &str, position: Option<isize>) -> isiz
     let haystack = utf16_units(value);
     let needle = utf16_units(search);
     if needle.is_empty() {
-        return if haystack.is_empty() { 0 } else { haystack.len() as isize };
+        return if haystack.is_empty() {
+            0
+        } else {
+            haystack.len() as isize
+        };
     }
     if needle.len() > haystack.len() {
         return -1;
     }
 
+    let max_index = haystack.len() as isize - needle.len() as isize;
+    if max_index < 0 {
+        return -1;
+    }
+
     let pos = position.unwrap_or((haystack.len() as isize) - 1);
-    let end = pos.min(haystack.len() as isize - needle.len() as isize).max(0) as usize;
+    let mut start = if pos < 0 { 0 } else { pos };
+    if start > max_index {
+        start = max_index;
+    }
+
+    let end = start as usize;
     for i in (0..=end).rev() {
         if haystack[i..i + needle.len()] == needle[..] {
             return i as isize;
@@ -249,7 +261,6 @@ pub fn pad_start(value: &str, target_length: usize, pad: &str) -> String {
         return value.to_string();
     }
     let units = utf16_units(value);
-    let pad_units = utf16_units(pad);
     let need = target_length - units.len();
     if need == 0 {
         return value.to_string();
@@ -259,7 +270,7 @@ pub fn pad_start(value: &str, target_length: usize, pad: &str) -> String {
     while utf16_units(&prefix).len() < need {
         prefix.push_str(pad);
     }
-    let mut truncated = utf16_units(&prefix);
+    let truncated = utf16_units(&prefix);
     let start = truncated.len().saturating_sub(need);
     let prefix = from_units(&truncated[start..]);
 
@@ -279,7 +290,7 @@ pub fn pad_end(value: &str, target_length: usize, pad: &str) -> String {
     while utf16_units(&suffix).len() < need {
         suffix.push_str(pad);
     }
-    let mut truncated = utf16_units(&suffix);
+    let truncated = utf16_units(&suffix);
     let end = need;
     format!("{}{}", value, from_units(&truncated[..end]))
 }

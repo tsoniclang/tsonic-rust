@@ -26,6 +26,7 @@ fn imul_and_clz32_and_shift_sign() {
     assert_eq!(math::imul(0x7fffffff, 2), -2);
     assert_eq!(math::clz32(1.0), 31);
     assert_eq!(math::clz32(f64::NAN), 32);
+    assert_eq!(math::clz32(0.0), 32);
     assert_eq!(math::sign(-0.0), 0.0);
     assert_eq!(math::sign(-12.0), -1.0);
     let random = math::random();
