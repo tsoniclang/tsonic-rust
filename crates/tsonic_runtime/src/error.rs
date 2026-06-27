@@ -1,0 +1,54 @@
+use std::fmt;
+
+/// Kinds of JS runtime errors supported by the closed Packet A runtime layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JsErrorKind {
+    TypeError,
+    RangeError,
+    SyntaxError,
+    Unsupported,
+}
+
+impl fmt::Display for JsErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = match self {
+            JsErrorKind::TypeError => "TypeError",
+            JsErrorKind::RangeError => "RangeError",
+            JsErrorKind::SyntaxError => "SyntaxError",
+            JsErrorKind::Unsupported => "Unsupported",
+        };
+        write!(f, "{kind}")
+    }
+}
+
+/// Closed error type for JS-facing APIs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JsError {
+    pub kind: JsErrorKind,
+    pub message: String,
+}
+
+impl JsError {
+    pub fn new(kind: JsErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+
+    pub fn kind(&self) -> JsErrorKind {
+        self.kind
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl fmt::Display for JsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.kind, self.message)
+    }
+}
+
+impl std::error::Error for JsError {}

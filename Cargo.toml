@@ -1,0 +1,16 @@
+[workspace]
+members = [
+  "crates/tsonic_runtime",
+  "crates/tsonic_js",
+  "crates/tsonic_node",
+]
+resolver = "2"
+
+[package]
+name = "tsonic-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+tsonic_runtime = { path = "crates/tsonic_runtime" }
+tsonic_js = { path = "crates/tsonic_js" }
