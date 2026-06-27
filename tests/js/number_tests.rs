@@ -17,6 +17,9 @@ fn parse_float_prefix_parse() {
     assert_eq!(number::parse_float("0x10"), 16.0);
     assert_eq!(number::parse_float("-3.25e1"), -32.5);
     assert!(number::parse_float("x").is_nan());
+    assert!(number::parse_float("Infinity").is_infinite() && number::parse_float("Infinity").is_sign_positive());
+    assert!(number::parse_float("+Infinity").is_infinite() && number::parse_float("+Infinity").is_sign_positive());
+    assert!(number::parse_float("-Infinity").is_infinite() && number::parse_float("-Infinity").is_sign_negative());
 }
 
 #[test]

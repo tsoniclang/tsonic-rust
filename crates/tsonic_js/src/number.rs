@@ -78,8 +78,8 @@ pub fn parse_float(text: &str) -> f64 {
         return f64::NAN;
     }
 
-    let prefix = &trimmed[..trimmed.len().min(8)].to_lowercase();
-    if prefix == "infinity" || prefix == "+infinity" || prefix == "-infinity" {
+    let lower = trimmed.to_lowercase();
+    if lower.starts_with("infinity") || lower.starts_with("+infinity") || lower.starts_with("-infinity") {
         return trimmed.parse::<f64>().unwrap_or(f64::NAN);
     }
 
