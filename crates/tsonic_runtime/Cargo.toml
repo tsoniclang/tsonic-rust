@@ -1,0 +1,10 @@
+[package]
+name = "tsonic_runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[[test]]
+name = "no_forbidden_shortcuts"
+path = "../../tests/architecture/no_forbidden_shortcuts.rs"
