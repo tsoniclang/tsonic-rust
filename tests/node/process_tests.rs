@@ -19,6 +19,10 @@ fn process_platform_and_arch_use_node_spellings() {
     assert!(!process::platform().is_empty());
     assert!(!process::arch().is_empty());
     assert!(process::exec_path().unwrap().contains('/'));
+    assert!(!process::argv0().is_empty());
+    assert!(process::exec_argv().is_empty());
+    assert!(process::ppid() <= process::pid() || process::ppid() > 0);
+    assert_eq!(process::release().name, "tsonic-rust");
 }
 
 #[test]
@@ -35,6 +39,10 @@ fn process_runtime_queries_have_stable_shapes() {
     assert!(process::hrtime_bigint() > 0);
     let memory = process::memory_usage();
     assert!(memory.rss <= memory.rss + memory.heap_total);
+    let cpu = process::cpu_usage(None);
+    assert!(process::cpu_usage(Some(cpu.clone())).user <= process::cpu_usage(None).user);
+    let resource = process::resource_usage();
+    assert!(resource.user_cpu_time >= cpu.user);
 }
 
 #[test]

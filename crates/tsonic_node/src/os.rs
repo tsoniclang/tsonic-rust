@@ -13,6 +13,13 @@ pub struct NetworkInterfaceInfo {
     pub internal: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserInfo {
+    pub username: String,
+    pub homedir: String,
+    pub shell: Option<String>,
+}
+
 pub fn platform() -> String {
     crate::process::platform()
 }
@@ -72,10 +79,62 @@ pub fn release() -> String {
     String::new()
 }
 
-pub fn cpus() -> Vec<CpuInfo> {
-    let count = std::thread::available_parallelism()
+pub fn version() -> String {
+    release()
+}
+
+pub fn uptime() -> f64 {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(value) = std::fs::read_to_string("/proc/uptime") {
+            if let Some(first) = value.split_whitespace().next() {
+                if let Ok(seconds) = first.parse::<f64>() {
+                    return seconds;
+                }
+            }
+        }
+    }
+    0.0
+}
+
+pub fn available_parallelism() -> usize {
+    std::thread::available_parallelism()
         .map(usize::from)
-        .unwrap_or(1);
+        .unwrap_or(1)
+}
+
+pub fn machine() -> String {
+    std::env::consts::ARCH.to_string()
+}
+
+pub fn endianness() -> &'static str {
+    if cfg!(target_endian = "little") {
+        "LE"
+    } else {
+        "BE"
+    }
+}
+
+pub fn dev_null() -> &'static str {
+    if cfg!(windows) {
+        "\\\\.\\nul"
+    } else {
+        "/dev/null"
+    }
+}
+
+pub fn user_info() -> UserInfo {
+    UserInfo {
+        username: std::env::var("USER")
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_default(),
+        homedir: homedir().unwrap_or_default(),
+        shell: std::env::var("SHELL").ok(),
+    }
+}
+
+pub fn cpus() -> Vec<CpuInfo> {
+    let count = available_parallelism();
     (0..count)
         .map(|_| CpuInfo {
             model: std::env::consts::ARCH.to_string(),

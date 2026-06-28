@@ -90,10 +90,12 @@ pub use crate::net::{
     Socket,
 };
 pub use crate::os::{
-    arch as os_arch, cpus as os_cpus, eol as os_eol, freemem as os_freemem, homedir as os_homedir,
-    hostname as os_hostname, loadavg as os_loadavg, network_interfaces as os_network_interfaces,
-    platform as os_platform, r#type as os_type, release as os_release, tmpdir as os_tmpdir,
-    totalmem as os_totalmem,
+    arch as os_arch, available_parallelism as os_available_parallelism, cpus as os_cpus,
+    dev_null as os_dev_null, endianness as os_endianness, eol as os_eol, freemem as os_freemem,
+    homedir as os_homedir, hostname as os_hostname, loadavg as os_loadavg, machine as os_machine,
+    network_interfaces as os_network_interfaces, platform as os_platform, r#type as os_type,
+    release as os_release, tmpdir as os_tmpdir, totalmem as os_totalmem, uptime as os_uptime,
+    user_info as os_user_info, version as os_version,
 };
 pub use crate::path::{
     basename as path_basename, delimiter as path_delimiter, dirname as path_dirname,
@@ -102,17 +104,24 @@ pub use crate::path::{
     parse as path_parse, relative as path_relative, resolve as path_resolve, sep as path_sep,
     to_namespaced_path as path_to_namespaced_path, ParsedPath,
 };
-pub use crate::perf_hooks::performance_now;
+pub use crate::perf_hooks::{
+    clear_marks as performance_clear_marks, clear_measures as performance_clear_measures,
+    get_entries_by_name as performance_get_entries_by_name, mark as performance_mark,
+    measure as performance_measure, performance_now, time_origin as performance_time_origin,
+};
 pub use crate::process::{
-    arch as process_arch, argv as process_argv, chdir as process_chdir, cwd as process_cwd,
-    env_delete as process_env_delete, env_get as process_env_get, env_set as process_env_set,
+    arch as process_arch, argv as process_argv, argv0 as process_argv0, chdir as process_chdir,
+    cpu_usage as process_cpu_usage, cwd as process_cwd, env_delete as process_env_delete,
+    env_get as process_env_get, env_set as process_env_set, exec_argv as process_exec_argv,
     exec_path as process_exec_path, exit as process_exit, exit_code as process_exit_code,
     hrtime as process_hrtime, hrtime_bigint as process_hrtime_bigint,
     memory_usage as process_memory_usage, next_tick as process_next_tick, pid as process_pid,
-    platform as process_platform, set_exit_code as process_set_exit_code, stderr as process_stderr,
-    stdin_is_tty as process_stdin_is_tty, stdout as process_stdout, uptime as process_uptime,
-    version as process_version, versions as process_versions, MemoryUsage as ProcessMemoryUsage,
-    ProcessEvents,
+    platform as process_platform, ppid as process_ppid, release as process_release,
+    resource_usage as process_resource_usage, set_exit_code as process_set_exit_code,
+    stderr as process_stderr, stdin_is_tty as process_stdin_is_tty, stdout as process_stdout,
+    uptime as process_uptime, version as process_version, versions as process_versions,
+    CpuUsage as ProcessCpuUsage, MemoryUsage as ProcessMemoryUsage, ProcessEvents,
+    Release as ProcessRelease, ResourceUsage as ProcessResourceUsage,
 };
 pub use crate::punycode::{to_ascii as punycode_to_ascii, to_unicode as punycode_to_unicode};
 pub use crate::querystring::{parse as querystring_parse, stringify as querystring_stringify};
@@ -127,7 +136,8 @@ pub use crate::stream::{
 };
 pub use crate::string_decoder::StringDecoder;
 pub use crate::timers::{
-    clear_timeout, promises as timers_promises, set_immediate, set_timeout, Timeout,
+    clear_immediate, clear_interval, clear_timeout, promises as timers_promises, set_immediate,
+    set_interval, set_timeout, Immediate, Timeout, Timer,
 };
 pub use crate::tls::{
     check_server_identity as tls_check_server_identity, connect_get as tls_connect_get,

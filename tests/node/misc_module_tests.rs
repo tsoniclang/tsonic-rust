@@ -10,6 +10,20 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     assert::not_deep_strict_equal(&JsValue::Null, &JsValue::Undefined, None).unwrap();
     assert!(assert::ok(false, Some("no")).is_err());
     assert!(perf_hooks::performance_now() >= 0.0);
+    assert_eq!(perf_hooks::time_origin(), 0.0);
+    perf_hooks::clear_marks(None);
+    perf_hooks::clear_measures(None);
+    perf_hooks::mark("start");
+    perf_hooks::mark("end");
+    let measure = perf_hooks::measure("duration", Some("start"), Some("end"));
+    assert_eq!(measure.name, "duration");
+    assert!(measure.duration >= 0.0);
+    assert_eq!(
+        perf_hooks::get_entries_by_name("duration"),
+        vec!["duration".to_string()]
+    );
+    perf_hooks::clear_marks(Some("start"));
+    assert!(perf_hooks::get_entries_by_name("start").is_empty());
 }
 
 #[test]

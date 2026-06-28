@@ -20,6 +20,32 @@ fn timers_run_callbacks_and_expose_handle_state() {
 }
 
 #[test]
+fn timers_cover_interval_immediate_and_scheduler_shapes() {
+    let count = Cell::new(0);
+    let mut interval = timers::set_interval(|| count.set(count.get() + 1), 0);
+    assert_eq!(count.get(), 1);
+    assert!(interval.has_ref());
+    interval.refresh().close();
+    assert!(!interval.has_ref());
+
+    let mut immediate = timers::set_immediate(|| count.set(count.get() + 1));
+    assert_eq!(count.get(), 2);
+    timers::clear_immediate(&mut immediate);
+    assert!(!immediate.has_ref());
+
+    let mut another = timers::set_interval(|| {}, 0);
+    timers::clear_interval(&mut another);
+    assert!(!another.has_ref());
+
+    let (_, values) = timers::promises::set_interval_values(0, "tick", 3);
+    assert_eq!(values, vec!["tick", "tick", "tick"]);
+    let (_, value) = timers::promises::set_immediate_value("immediate");
+    assert_eq!(value, "immediate");
+    timers::promises::scheduler::wait(0);
+    timers::promises::scheduler::yield_now();
+}
+
+#[test]
 fn stream_pipeline_moves_closed_buffer_chunks() {
     let mut readable = stream::Readable::from_chunks(vec![
         Buffer::from_string("hello", Some("utf8")).unwrap(),

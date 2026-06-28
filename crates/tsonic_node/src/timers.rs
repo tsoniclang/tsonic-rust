@@ -28,7 +28,20 @@ impl Timeout {
         self.active = true;
         self
     }
+
+    pub fn refresh(&mut self) -> &mut Self {
+        self.active = true;
+        self
+    }
+
+    pub fn close(&mut self) -> &mut Self {
+        self.active = false;
+        self
+    }
 }
+
+pub type Immediate = Timeout;
+pub type Timer = Timeout;
 
 pub fn set_timeout(callback: impl FnOnce(), delay_ms: u64) -> Timeout {
     if delay_ms > 0 {
@@ -45,8 +58,27 @@ pub fn set_immediate(callback: impl FnOnce()) -> Timeout {
     set_timeout(callback, 0)
 }
 
+pub fn set_interval(mut callback: impl FnMut(), delay_ms: u64) -> Timeout {
+    if delay_ms > 0 {
+        thread::sleep(Duration::from_millis(delay_ms));
+    }
+    callback();
+    Timeout {
+        id: NEXT_ID.fetch_add(1, Ordering::SeqCst),
+        active: true,
+    }
+}
+
 pub fn clear_timeout(timeout: &mut Timeout) {
     timeout.active = false;
+}
+
+pub fn clear_immediate(timeout: &mut Timeout) {
+    clear_timeout(timeout);
+}
+
+pub fn clear_interval(timeout: &mut Timeout) {
+    clear_timeout(timeout);
 }
 
 pub mod promises {
@@ -55,5 +87,30 @@ pub mod promises {
     pub fn set_timeout_value<T>(delay_ms: u64, value: T) -> (Timeout, T) {
         let timeout = set_timeout(|| {}, delay_ms);
         (timeout, value)
+    }
+
+    pub fn set_immediate_value<T>(value: T) -> (Timeout, T) {
+        set_timeout_value(0, value)
+    }
+
+    pub fn set_interval_values<T: Clone>(
+        delay_ms: u64,
+        value: T,
+        count: usize,
+    ) -> (Timeout, Vec<T>) {
+        let timeout = set_timeout(|| {}, delay_ms);
+        (timeout, vec![value; count])
+    }
+
+    pub mod scheduler {
+        pub fn wait(delay_ms: u64) {
+            if delay_ms > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            }
+        }
+
+        pub fn yield_now() {
+            std::thread::yield_now();
+        }
     }
 }

@@ -19,6 +19,25 @@ pub struct MemoryUsage {
     pub array_buffers: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CpuUsage {
+    pub user: u64,
+    pub system: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResourceUsage {
+    pub user_cpu_time: u64,
+    pub system_cpu_time: u64,
+    pub max_rss: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Release {
+    pub name: String,
+    pub source_url: String,
+}
+
 pub fn cwd() -> NodeResult<String> {
     std::env::current_dir()
         .map(|path| path.to_string_lossy().to_string())
@@ -33,8 +52,20 @@ pub fn argv() -> Vec<String> {
     std::env::args().collect()
 }
 
+pub fn argv0() -> String {
+    argv().first().cloned().unwrap_or_default()
+}
+
+pub fn exec_argv() -> Vec<String> {
+    Vec::new()
+}
+
 pub fn pid() -> u32 {
     std::process::id()
+}
+
+pub fn ppid() -> u32 {
+    parent_process_id().unwrap_or(0)
 }
 
 pub fn exec_path() -> NodeResult<String> {
@@ -80,6 +111,13 @@ pub fn versions() -> Vec<(String, String)> {
     ]
 }
 
+pub fn release() -> Release {
+    Release {
+        name: "tsonic-rust".to_string(),
+        source_url: "https://github.com/tsoniclang/tsonic-rust".to_string(),
+    }
+}
+
 pub fn uptime() -> f64 {
     START.get_or_init(Instant::now).elapsed().as_secs_f64()
 }
@@ -115,6 +153,32 @@ pub fn memory_usage() -> MemoryUsage {
         heap_used: 0,
         external: 0,
         array_buffers: 0,
+    }
+}
+
+pub fn cpu_usage(previous: Option<CpuUsage>) -> CpuUsage {
+    let elapsed = START.get_or_init(Instant::now).elapsed();
+    let total_micros = elapsed.as_micros() as u64;
+    let current = CpuUsage {
+        user: total_micros,
+        system: 0,
+    };
+    if let Some(previous) = previous {
+        CpuUsage {
+            user: current.user.saturating_sub(previous.user),
+            system: current.system.saturating_sub(previous.system),
+        }
+    } else {
+        current
+    }
+}
+
+pub fn resource_usage() -> ResourceUsage {
+    let cpu = cpu_usage(None);
+    ResourceUsage {
+        user_cpu_time: cpu.user,
+        system_cpu_time: cpu.system,
+        max_rss: memory_usage().rss,
     }
 }
 
@@ -188,6 +252,20 @@ impl ProcessEvents {
 
 pub fn exit(code: Option<i32>) -> ! {
     std::process::exit(code.unwrap_or_else(|| exit_code().unwrap_or(0)));
+}
+
+#[cfg(target_os = "linux")]
+fn parent_process_id() -> Option<u32> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    status.lines().find_map(|line| {
+        let value = line.strip_prefix("PPid:")?.trim();
+        value.parse::<u32>().ok()
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn parent_process_id() -> Option<u32> {
+    None
 }
 
 #[cfg(target_os = "linux")]
