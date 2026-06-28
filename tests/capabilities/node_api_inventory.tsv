@@ -3374,6 +3374,155 @@ NODE-CRYPTO-ECDSA-PARAMS-NAME	crypto	EcdsaParams.name	implemented	N85	tsonic_nod
 NODE-CRYPTO-ECDSA-PARAMS-HASH	crypto	EcdsaParams.hash	implemented	N85	tsonic_node::crypto::EcdsaParams::hash	NODE-CRYPTO-WEB-002	ECDSA params hash field
 NODE-CRYPTO-ECDH-DERIVE-PARAMS-NAME	crypto	EcdhKeyDeriveParams.name	implemented	N85	tsonic_node::crypto::EcdhKeyDeriveParams::name	NODE-CRYPTO-WEB-002	ECDH derive params name field
 NODE-CRYPTO-ECDH-DERIVE-PARAMS-PUBLIC	crypto	EcdhKeyDeriveParams.public	implemented	N85	tsonic_node::crypto::EcdhKeyDeriveParams::public	NODE-CRYPTO-WEB-002	ECDH derive params public field
+NODE-CRYPTO-KEYOBJECT-EXTRACTABLE	crypto	KeyObject.extractable	implemented	N86	tsonic_node::crypto::KeyObject::extractable	NODE-CRYPTO-010	closed KeyObject extractable accessor
+NODE-CRYPTO-KEYOBJECT-KEY-USAGES	crypto	KeyObject.keyUsages	implemented	N86	tsonic_node::crypto::KeyObject::key_usages	NODE-CRYPTO-010	closed KeyObject keyUsages accessor
+NODE-CRYPTO-KEYOBJECT-ALGORITHM	crypto	KeyObject.algorithm	implemented	N86	tsonic_node::crypto::KeyObject::algorithm	NODE-CRYPTO-010	closed KeyObject algorithm accessor
+NODE-CRYPTO-RSA-OTHER-PRIMES-INFO	crypto	RsaOtherPrimesInfo	implemented	N86	tsonic_node::crypto::RsaOtherPrimesInfo	NODE-CRYPTO-010	closed RSA other primes info carrier
+NODE-CRYPTO-RSA-OTHER-PRIMES-INFO-R	crypto	RsaOtherPrimesInfo.r	implemented	N86	tsonic_node::crypto::RsaOtherPrimesInfo::r	NODE-CRYPTO-010	RSA other prime r field
+NODE-CRYPTO-RSA-OTHER-PRIMES-INFO-D	crypto	RsaOtherPrimesInfo.d	implemented	N86	tsonic_node::crypto::RsaOtherPrimesInfo::d	NODE-CRYPTO-010	RSA other prime d field
+NODE-CRYPTO-RSA-OTHER-PRIMES-INFO-T	crypto	RsaOtherPrimesInfo.t	implemented	N86	tsonic_node::crypto::RsaOtherPrimesInfo::t	NODE-CRYPTO-010	RSA other prime t field
+NODE-CRYPTO-JSONWEBKEY-P	crypto	JsonWebKey.p	implemented	N86	tsonic_node::crypto::JsonWebKey::p	NODE-CRYPTO-010	JWK RSA p field
+NODE-CRYPTO-JSONWEBKEY-Q	crypto	JsonWebKey.q	implemented	N86	tsonic_node::crypto::JsonWebKey::q	NODE-CRYPTO-010	JWK RSA q field
+NODE-CRYPTO-JSONWEBKEY-DP	crypto	JsonWebKey.dp	implemented	N86	tsonic_node::crypto::JsonWebKey::dp	NODE-CRYPTO-010	JWK RSA dp field
+NODE-CRYPTO-JSONWEBKEY-DQ	crypto	JsonWebKey.dq	implemented	N86	tsonic_node::crypto::JsonWebKey::dq	NODE-CRYPTO-010	JWK RSA dq field
+NODE-CRYPTO-JSONWEBKEY-QI	crypto	JsonWebKey.qi	implemented	N86	tsonic_node::crypto::JsonWebKey::qi	NODE-CRYPTO-010	JWK RSA qi field
+NODE-CRYPTO-JSONWEBKEY-OTH	crypto	JsonWebKey.oth	implemented	N86	tsonic_node::crypto::JsonWebKey::oth	NODE-CRYPTO-010	JWK RSA other primes field
+NODE-CRYPTO-JSONWEBKEY-USE	crypto	JsonWebKey.use	implemented	N86	tsonic_node::crypto::JsonWebKey::key_use	NODE-CRYPTO-010	JWK use field
+NODE-CRYPTO-PRIVATE-KEY-INPUT	crypto	PrivateKeyInput	implemented	N86	tsonic_node::crypto::PrivateKeyInput	NODE-CRYPTO-010	closed private key input carrier
+NODE-CRYPTO-PRIVATE-KEY-INPUT-KEY	crypto	PrivateKeyInput.key	implemented	N86	tsonic_node::crypto::PrivateKeyInput::key	NODE-CRYPTO-010	private key input key field
+NODE-CRYPTO-PRIVATE-KEY-INPUT-FORMAT	crypto	PrivateKeyInput.format	implemented	N86	tsonic_node::crypto::PrivateKeyInput::format	NODE-CRYPTO-010	private key input format field
+NODE-CRYPTO-PRIVATE-KEY-INPUT-TYPE	crypto	PrivateKeyInput.type	implemented	N86	tsonic_node::crypto::PrivateKeyInput::key_type	NODE-CRYPTO-010	private key input type field
+NODE-CRYPTO-PRIVATE-KEY-INPUT-ENCODING	crypto	PrivateKeyInput.encoding	implemented	N86	tsonic_node::crypto::PrivateKeyInput::encoding	NODE-CRYPTO-010	private key input encoding field
+NODE-CRYPTO-PRIVATE-KEY-INPUT-PASSPHRASE	crypto	PrivateKeyInput.passphrase	implemented	N86	tsonic_node::crypto::PrivateKeyInput::passphrase	NODE-CRYPTO-010	private key input passphrase field
+NODE-CRYPTO-PUBLIC-KEY-INPUT	crypto	PublicKeyInput	implemented	N86	tsonic_node::crypto::PublicKeyInput	NODE-CRYPTO-010	closed public key input carrier
+NODE-CRYPTO-PUBLIC-KEY-INPUT-KEY	crypto	PublicKeyInput.key	implemented	N86	tsonic_node::crypto::PublicKeyInput::key	NODE-CRYPTO-010	public key input key field
+NODE-CRYPTO-PUBLIC-KEY-INPUT-FORMAT	crypto	PublicKeyInput.format	implemented	N86	tsonic_node::crypto::PublicKeyInput::format	NODE-CRYPTO-010	public key input format field
+NODE-CRYPTO-PUBLIC-KEY-INPUT-TYPE	crypto	PublicKeyInput.type	implemented	N86	tsonic_node::crypto::PublicKeyInput::key_type	NODE-CRYPTO-010	public key input type field
+NODE-CRYPTO-PUBLIC-KEY-INPUT-ENCODING	crypto	PublicKeyInput.encoding	implemented	N86	tsonic_node::crypto::PublicKeyInput::encoding	NODE-CRYPTO-010	public key input encoding field
+NODE-CRYPTO-RSA-PRIVATE-KEY-INPUT	crypto	RsaPrivateKey	implemented	N86	tsonic_node::crypto::RsaPrivateKeyInput	NODE-CRYPTO-010	closed RSA private key input carrier
+NODE-CRYPTO-RSA-PRIVATE-KEY-INPUT-KEY	crypto	RsaPrivateKey.key	implemented	N86	tsonic_node::crypto::RsaPrivateKeyInput::key	NODE-CRYPTO-010	RSA private key input key field
+NODE-CRYPTO-RSA-PRIVATE-KEY-INPUT-PADDING	crypto	RsaPrivateKey.padding	implemented	N86	tsonic_node::crypto::RsaPrivateKeyInput::padding	NODE-CRYPTO-010	RSA private key padding field
+NODE-CRYPTO-RSA-PRIVATE-KEY-INPUT-OAEP-HASH	crypto	RsaPrivateKey.oaepHash	implemented	N86	tsonic_node::crypto::RsaPrivateKeyInput::oaep_hash	NODE-CRYPTO-010	RSA private key oaepHash field
+NODE-CRYPTO-RSA-PRIVATE-KEY-INPUT-OAEP-LABEL	crypto	RsaPrivateKey.oaepLabel	implemented	N86	tsonic_node::crypto::RsaPrivateKeyInput::oaep_label	NODE-CRYPTO-010	RSA private key oaepLabel field
+NODE-CRYPTO-RSA-PRIVATE-KEY-INPUT-PASSPHRASE	crypto	RsaPrivateKey.passphrase	implemented	N86	tsonic_node::crypto::RsaPrivateKeyInput::passphrase	NODE-CRYPTO-010	RSA private key passphrase field
+NODE-CRYPTO-RSA-PUBLIC-KEY-INPUT	crypto	RsaPublicKey	implemented	N86	tsonic_node::crypto::RsaPublicKeyInput	NODE-CRYPTO-010	closed RSA public key input carrier
+NODE-CRYPTO-RSA-PUBLIC-KEY-INPUT-KEY	crypto	RsaPublicKey.key	implemented	N86	tsonic_node::crypto::RsaPublicKeyInput::key	NODE-CRYPTO-010	RSA public key input key field
+NODE-CRYPTO-RSA-PUBLIC-KEY-INPUT-PADDING	crypto	RsaPublicKey.padding	implemented	N86	tsonic_node::crypto::RsaPublicKeyInput::padding	NODE-CRYPTO-010	RSA public key padding field
+NODE-CRYPTO-X509-KEY-USAGE	crypto	X509Certificate.keyUsage	implemented	N86	tsonic_node::crypto::X509Certificate::key_usage	NODE-CRYPTO-010	X509 keyUsage accessor
+NODE-CRYPTO-X509-CHECK-ISSUED	crypto	X509Certificate.checkIssued	implemented	N86	tsonic_node::crypto::X509Certificate::check_issued	NODE-CRYPTO-010	X509 checkIssued accessor
+NODE-CRYPTO-X509-SUBJECT-ALT-NAME	crypto	X509Certificate.subjectAltName	implemented	N86	tsonic_node::crypto::X509Certificate::subject_alt_name	NODE-CRYPTO-010	X509 subjectAltName accessor
+NODE-CRYPTO-X509-VALID-TO-DATE	crypto	X509Certificate.validToDate	implemented	N86	tsonic_node::crypto::X509Certificate::valid_to_date	NODE-CRYPTO-010	X509 validToDate accessor
+NODE-CRYPTO-X509-VERIFY	crypto	X509Certificate.verify	implemented	N86	tsonic_node::crypto::X509Certificate::verify	NODE-CRYPTO-010	X509 verify accessor over closed key carrier
+NODE-CRYPTO-X509-FINGERPRINT	crypto	X509Certificate.fingerprint	implemented	N86	tsonic_node::crypto::X509Certificate::fingerprint	NODE-CRYPTO-010	X509 SHA-1 fingerprint accessor
+NODE-CRYPTO-X509-CHECK-HOST	crypto	X509Certificate.checkHost	implemented	N86	tsonic_node::crypto::X509Certificate::check_host	NODE-CRYPTO-010	X509 checkHost accessor
+NODE-CRYPTO-X509-SERIAL-NUMBER	crypto	X509Certificate.serialNumber	implemented	N86	tsonic_node::crypto::X509Certificate::serial_number	NODE-CRYPTO-010	X509 serialNumber accessor
+NODE-CRYPTO-X509-CHECK-IP	crypto	X509Certificate.checkIP	implemented	N86	tsonic_node::crypto::X509Certificate::check_ip	NODE-CRYPTO-010	X509 checkIP accessor
+NODE-CRYPTO-X509-INFO-ACCESS	crypto	X509Certificate.infoAccess	implemented	N86	tsonic_node::crypto::X509Certificate::info_access	NODE-CRYPTO-010	X509 infoAccess accessor
+NODE-CRYPTO-X509-PUBLIC-KEY	crypto	X509Certificate.publicKey	implemented	N86	tsonic_node::crypto::X509Certificate::public_key	NODE-CRYPTO-010	X509 publicKey accessor
+NODE-CRYPTO-X509-VALID-FROM-DATE	crypto	X509Certificate.validFromDate	implemented	N86	tsonic_node::crypto::X509Certificate::valid_from_date	NODE-CRYPTO-010	X509 validFromDate accessor
+NODE-CRYPTO-X509-SIGNATURE-ALGORITHM	crypto	X509Certificate.signatureAlgorithm	implemented	N86	tsonic_node::crypto::X509Certificate::signature_algorithm	NODE-CRYPTO-010	X509 signatureAlgorithm accessor
+NODE-CRYPTO-X509-CA	crypto	X509Certificate.ca	implemented	N86	tsonic_node::crypto::X509Certificate::ca	NODE-CRYPTO-010	X509 ca accessor
+NODE-CRYPTO-X509-ISSUER-CERTIFICATE	crypto	X509Certificate.issuerCertificate	implemented	N86	tsonic_node::crypto::X509Certificate::issuer_certificate	NODE-CRYPTO-010	X509 issuerCertificate accessor
+NODE-CRYPTO-X509-CHECK-PRIVATE-KEY	crypto	X509Certificate.checkPrivateKey	implemented	N86	tsonic_node::crypto::X509Certificate::check_private_key	NODE-CRYPTO-010	X509 checkPrivateKey accessor
+NODE-CRYPTO-X509-FINGERPRINT512	crypto	X509Certificate.fingerprint512	implemented	N86	tsonic_node::crypto::X509Certificate::fingerprint512	NODE-CRYPTO-010	X509 SHA-512 fingerprint accessor
+NODE-CRYPTO-X509-SIGNATURE-ALGORITHM-OID	crypto	X509Certificate.signatureAlgorithmOid	implemented	N86	tsonic_node::crypto::X509Certificate::signature_algorithm_oid	NODE-CRYPTO-010	X509 signatureAlgorithmOid accessor
+NODE-CRYPTO-X509-CHECK-EMAIL	crypto	X509Certificate.checkEmail	implemented	N86	tsonic_node::crypto::X509Certificate::check_email	NODE-CRYPTO-010	X509 checkEmail accessor
+NODE-CRYPTO-X509-TO-JSON	crypto	X509Certificate.toJSON	implemented	N86	tsonic_node::crypto::X509Certificate::to_json	NODE-CRYPTO-010	X509 toJSON accessor
+NODE-CRYPTO-X509-TO-STRING	crypto	X509Certificate.toString	implemented	N86	tsonic_node::crypto::X509Certificate::to_string	NODE-CRYPTO-010	X509 Display string accessor
+NODE-CRYPTO-X509-CHECK-OPTIONS	crypto	X509CheckOptions	implemented	N86	tsonic_node::crypto::X509CheckOptions	NODE-CRYPTO-010	closed X509 check options carrier
+NODE-CRYPTO-X509-CHECK-OPTIONS-SUBJECT	crypto	X509CheckOptions.subject	implemented	N86	tsonic_node::crypto::X509CheckOptions::subject	NODE-CRYPTO-010	X509 check option subject field
+NODE-CRYPTO-X509-CHECK-OPTIONS-WILDCARDS	crypto	X509CheckOptions.wildcards	implemented	N86	tsonic_node::crypto::X509CheckOptions::wildcards	NODE-CRYPTO-010	X509 check option wildcards field
+NODE-CRYPTO-X509-CHECK-OPTIONS-PARTIAL-WILDCARDS	crypto	X509CheckOptions.partialWildcards	implemented	N86	tsonic_node::crypto::X509CheckOptions::partial_wildcards	NODE-CRYPTO-010	X509 check option partialWildcards field
+NODE-CRYPTO-X509-CHECK-OPTIONS-MULTI-LABEL-WILDCARDS	crypto	X509CheckOptions.multiLabelWildcards	implemented	N86	tsonic_node::crypto::X509CheckOptions::multi_label_wildcards	NODE-CRYPTO-010	X509 check option multiLabelWildcards field
+NODE-CRYPTO-X509-CHECK-OPTIONS-SINGLE-LABEL-SUBDOMAINS	crypto	X509CheckOptions.singleLabelSubdomains	implemented	N86	tsonic_node::crypto::X509CheckOptions::single_label_subdomains	NODE-CRYPTO-010	X509 check option singleLabelSubdomains field
+NODE-CRYPTO-SIGNING-OPTIONS-CONTEXT	crypto	SigningOptions.context	implemented	N86	tsonic_node::crypto::SigningOptions::context	NODE-CRYPTO-010	SigningOptions context field
+NODE-CRYPTO-VERIFY-KEYOBJECT-INPUT-KEY	crypto	VerifyKeyObjectInput.key	implemented	N86	tsonic_node::crypto::VerifyKeyObjectInput::key	NODE-CRYPTO-010	VerifyKeyObjectInput key field
+NODE-CRYPTO-AES-KEY-ALGORITHM	crypto	AesKeyAlgorithm	implemented	N86	tsonic_node::crypto::AesKeyAlgorithm	NODE-CRYPTO-010	closed AES key algorithm carrier
+NODE-CRYPTO-AES-KEY-ALGORITHM-LENGTH	crypto	AesKeyAlgorithm.length	implemented	N86	tsonic_node::crypto::AesKeyAlgorithm::length	NODE-CRYPTO-010	AES key algorithm length field
+NODE-CRYPTO-AES-KEY-GEN-PARAMS	crypto	AesKeyGenParams	implemented	N86	tsonic_node::crypto::AesKeyGenParams	NODE-CRYPTO-010	closed AES key generation params carrier
+NODE-CRYPTO-AES-KEY-GEN-PARAMS-LENGTH	crypto	AesKeyGenParams.length	implemented	N86	tsonic_node::crypto::AesKeyGenParams::length	NODE-CRYPTO-010	AES key generation length field
+NODE-CRYPTO-AES-DERIVED-KEY-PARAMS	crypto	AesDerivedKeyParams	implemented	N86	tsonic_node::crypto::AesDerivedKeyParams	NODE-CRYPTO-010	closed AES derived key params carrier
+NODE-CRYPTO-AES-DERIVED-KEY-PARAMS-LENGTH	crypto	AesDerivedKeyParams.length	implemented	N86	tsonic_node::crypto::AesDerivedKeyParams::length	NODE-CRYPTO-010	AES derived key length field
+NODE-CRYPTO-AES-CBC-PARAMS	crypto	AesCbcParams	implemented	N86	tsonic_node::crypto::AesCbcParams	NODE-CRYPTO-010	closed AES-CBC params carrier
+NODE-CRYPTO-AES-CBC-PARAMS-IV	crypto	AesCbcParams.iv	implemented	N86	tsonic_node::crypto::AesCbcParams::iv	NODE-CRYPTO-010	AES-CBC iv field
+NODE-CRYPTO-RSA-KEY-GEN-PARAMS	crypto	RsaKeyGenParams	implemented	N86	tsonic_node::crypto::RsaKeyGenParams	NODE-CRYPTO-010	closed RSA key generation params carrier
+NODE-CRYPTO-RSA-KEY-GEN-PARAMS-MODULUS-LENGTH	crypto	RsaKeyGenParams.modulusLength	implemented	N86	tsonic_node::crypto::RsaKeyGenParams::modulus_length	NODE-CRYPTO-010	RSA key generation modulusLength field
+NODE-CRYPTO-RSA-KEY-GEN-PARAMS-PUBLIC-EXPONENT	crypto	RsaKeyGenParams.publicExponent	implemented	N86	tsonic_node::crypto::RsaKeyGenParams::public_exponent	NODE-CRYPTO-010	RSA key generation publicExponent field
+NODE-CRYPTO-RSA-HASHED-KEY-GEN-PARAMS	crypto	RsaHashedKeyGenParams	implemented	N86	tsonic_node::crypto::RsaHashedKeyGenParams	NODE-CRYPTO-010	closed RSA hashed key generation params carrier
+NODE-CRYPTO-RSA-HASHED-KEY-GEN-PARAMS-HASH	crypto	RsaHashedKeyGenParams.hash	implemented	N86	tsonic_node::crypto::RsaHashedKeyGenParams::hash	NODE-CRYPTO-010	RSA hashed key generation hash field
+NODE-CRYPTO-HMAC-KEY-GEN-PARAMS	crypto	HmacKeyGenParams	implemented	N86	tsonic_node::crypto::HmacKeyGenParams	NODE-CRYPTO-010	closed HMAC key generation params carrier
+NODE-CRYPTO-HMAC-KEY-GEN-PARAMS-HASH	crypto	HmacKeyGenParams.hash	implemented	N86	tsonic_node::crypto::HmacKeyGenParams::hash	NODE-CRYPTO-010	HMAC key generation hash field
+NODE-CRYPTO-HMAC-KEY-GEN-PARAMS-LENGTH	crypto	HmacKeyGenParams.length	implemented	N86	tsonic_node::crypto::HmacKeyGenParams::length	NODE-CRYPTO-010	HMAC key generation length field
+NODE-CRYPTO-HMAC-IMPORT-PARAMS	crypto	HmacImportParams	implemented	N86	tsonic_node::crypto::HmacImportParams	NODE-CRYPTO-010	closed HMAC import params carrier
+NODE-CRYPTO-HMAC-IMPORT-PARAMS-HASH	crypto	HmacImportParams.hash	implemented	N86	tsonic_node::crypto::HmacImportParams::hash	NODE-CRYPTO-010	HMAC import hash field
+NODE-CRYPTO-HMAC-IMPORT-PARAMS-LENGTH	crypto	HmacImportParams.length	implemented	N86	tsonic_node::crypto::HmacImportParams::length	NODE-CRYPTO-010	HMAC import length field
+NODE-CRYPTO-EC-KEY-GEN-PARAMS	crypto	EcKeyGenParams	implemented	N86	tsonic_node::crypto::EcKeyGenParams	NODE-CRYPTO-010	closed EC key generation params carrier
+NODE-CRYPTO-EC-KEY-GEN-PARAMS-NAMED-CURVE	crypto	EcKeyGenParams.namedCurve	implemented	N86	tsonic_node::crypto::EcKeyGenParams::named_curve	NODE-CRYPTO-010	EC key generation namedCurve field
+NODE-CRYPTO-EC-KEY-IMPORT-PARAMS	crypto	EcKeyImportParams	implemented	N86	tsonic_node::crypto::EcKeyImportParams	NODE-CRYPTO-010	closed EC key import params carrier
+NODE-CRYPTO-EC-KEY-IMPORT-PARAMS-NAMED-CURVE	crypto	EcKeyImportParams.namedCurve	implemented	N86	tsonic_node::crypto::EcKeyImportParams::named_curve	NODE-CRYPTO-010	EC key import namedCurve field
+NODE-CRYPTO-CSHAKE-PARAMS	crypto	CShakeParams	implemented	N86	tsonic_node::crypto::CShakeParams	NODE-CRYPTO-010	closed cSHAKE params carrier
+NODE-CRYPTO-CSHAKE-PARAMS-FUNCTION-NAME	crypto	CShakeParams.functionName	implemented	N86	tsonic_node::crypto::CShakeParams::function_name	NODE-CRYPTO-010	cSHAKE functionName field
+NODE-CRYPTO-CSHAKE-PARAMS-CUSTOMIZATION	crypto	CShakeParams.customization	implemented	N86	tsonic_node::crypto::CShakeParams::customization	NODE-CRYPTO-010	cSHAKE customization field
+NODE-CRYPTO-CSHAKE-PARAMS-OUTPUT-LENGTH	crypto	CShakeParams.outputLength	implemented	N86	tsonic_node::crypto::CShakeParams::output_length	NODE-CRYPTO-010	cSHAKE outputLength field
+NODE-CRYPTO-TURBO-SHAKE-PARAMS	crypto	TurboShakeParams	implemented	N86	tsonic_node::crypto::TurboShakeParams	NODE-CRYPTO-010	closed TurboSHAKE params carrier
+NODE-CRYPTO-TURBO-SHAKE-PARAMS-OUTPUT-LENGTH	crypto	TurboShakeParams.outputLength	implemented	N86	tsonic_node::crypto::TurboShakeParams::output_length	NODE-CRYPTO-010	TurboSHAKE outputLength field
+NODE-CRYPTO-TURBO-SHAKE-PARAMS-DOMAIN-SEPARATION	crypto	TurboShakeParams.domainSeparation	implemented	N86	tsonic_node::crypto::TurboShakeParams::domain_separation	NODE-CRYPTO-010	TurboSHAKE domainSeparation field
+NODE-CRYPTO-KANGAROO-TWELVE-PARAMS	crypto	KangarooTwelveParams	implemented	N86	tsonic_node::crypto::KangarooTwelveParams	NODE-CRYPTO-010	closed KangarooTwelve params carrier
+NODE-CRYPTO-KANGAROO-TWELVE-PARAMS-OUTPUT-LENGTH	crypto	KangarooTwelveParams.outputLength	implemented	N86	tsonic_node::crypto::KangarooTwelveParams::output_length	NODE-CRYPTO-010	KangarooTwelve outputLength field
+NODE-CRYPTO-KANGAROO-TWELVE-PARAMS-CUSTOMIZATION	crypto	KangarooTwelveParams.customization	implemented	N86	tsonic_node::crypto::KangarooTwelveParams::customization	NODE-CRYPTO-010	KangarooTwelve customization field
+NODE-CRYPTO-KMAC-PARAMS	crypto	KmacParams	implemented	N86	tsonic_node::crypto::KmacParams	NODE-CRYPTO-010	closed KMAC params carrier
+NODE-CRYPTO-KMAC-PARAMS-CUSTOMIZATION	crypto	KmacParams.customization	implemented	N86	tsonic_node::crypto::KmacParams::customization	NODE-CRYPTO-010	KMAC customization field
+NODE-CRYPTO-KMAC-PARAMS-OUTPUT-LENGTH	crypto	KmacParams.outputLength	implemented	N86	tsonic_node::crypto::KmacParams::output_length	NODE-CRYPTO-010	KMAC outputLength field
+NODE-CRYPTO-KMAC-KEY-ALGORITHM	crypto	KmacKeyAlgorithm	implemented	N86	tsonic_node::crypto::KmacKeyAlgorithm	NODE-CRYPTO-010	closed KMAC key algorithm carrier
+NODE-CRYPTO-KMAC-KEY-ALGORITHM-LENGTH	crypto	KmacKeyAlgorithm.length	implemented	N86	tsonic_node::crypto::KmacKeyAlgorithm::length	NODE-CRYPTO-010	KMAC key algorithm length field
+NODE-CRYPTO-KMAC-KEY-GEN-PARAMS	crypto	KmacKeyGenParams	implemented	N86	tsonic_node::crypto::KmacKeyGenParams	NODE-CRYPTO-010	closed KMAC key generation params carrier
+NODE-CRYPTO-KMAC-KEY-GEN-PARAMS-LENGTH	crypto	KmacKeyGenParams.length	implemented	N86	tsonic_node::crypto::KmacKeyGenParams::length	NODE-CRYPTO-010	KMAC key generation length field
+NODE-CRYPTO-KMAC-IMPORT-PARAMS	crypto	KmacImportParams	implemented	N86	tsonic_node::crypto::KmacImportParams	NODE-CRYPTO-010	closed KMAC import params carrier
+NODE-CRYPTO-KMAC-IMPORT-PARAMS-LENGTH	crypto	KmacImportParams.length	implemented	N86	tsonic_node::crypto::KmacImportParams::length	NODE-CRYPTO-010	KMAC import length field
+NODE-CRYPTO-ARGON2-PARAMETERS	crypto	Argon2Parameters	implemented	N86	tsonic_node::crypto::Argon2Parameters	NODE-CRYPTO-010	closed Argon2 parameter carrier
+NODE-CRYPTO-ARGON2-PARAMETERS-MESSAGE	crypto	Argon2Parameters.message	implemented	N86	tsonic_node::crypto::Argon2Parameters::message	NODE-CRYPTO-010	Argon2 message field
+NODE-CRYPTO-ARGON2-PARAMETERS-NONCE	crypto	Argon2Parameters.nonce	implemented	N86	tsonic_node::crypto::Argon2Parameters::nonce	NODE-CRYPTO-010	Argon2 nonce field
+NODE-CRYPTO-ARGON2-PARAMETERS-PARALLELISM	crypto	Argon2Parameters.parallelism	implemented	N86	tsonic_node::crypto::Argon2Parameters::parallelism	NODE-CRYPTO-010	Argon2 parallelism field
+NODE-CRYPTO-ARGON2-PARAMETERS-MEMORY	crypto	Argon2Parameters.memory	implemented	N86	tsonic_node::crypto::Argon2Parameters::memory	NODE-CRYPTO-010	Argon2 memory field
+NODE-CRYPTO-ARGON2-PARAMETERS-PASSES	crypto	Argon2Parameters.passes	implemented	N86	tsonic_node::crypto::Argon2Parameters::passes	NODE-CRYPTO-010	Argon2 passes field
+NODE-CRYPTO-ARGON2-PARAMETERS-TAG-LENGTH	crypto	Argon2Parameters.tagLength	implemented	N86	tsonic_node::crypto::Argon2Parameters::tag_length	NODE-CRYPTO-010	Argon2 tagLength field
+NODE-CRYPTO-ARGON2-PARAMETERS-SECRET	crypto	Argon2Parameters.secret	implemented	N86	tsonic_node::crypto::Argon2Parameters::secret	NODE-CRYPTO-010	Argon2 secret field
+NODE-CRYPTO-ARGON2-PARAMETERS-ASSOCIATED-DATA	crypto	Argon2Parameters.associatedData	implemented	N86	tsonic_node::crypto::Argon2Parameters::associated_data	NODE-CRYPTO-010	Argon2 associatedData field
+NODE-CRYPTO-ARGON2-PARAMS	crypto	Argon2Params	implemented	N86	tsonic_node::crypto::Argon2Params	NODE-CRYPTO-010	closed WebCrypto Argon2 params carrier
+NODE-CRYPTO-ARGON2-PARAMS-NONCE	crypto	Argon2Params.nonce	implemented	N86	tsonic_node::crypto::Argon2Params::nonce	NODE-CRYPTO-010	WebCrypto Argon2 nonce field
+NODE-CRYPTO-ARGON2-PARAMS-PARALLELISM	crypto	Argon2Params.parallelism	implemented	N86	tsonic_node::crypto::Argon2Params::parallelism	NODE-CRYPTO-010	WebCrypto Argon2 parallelism field
+NODE-CRYPTO-ARGON2-PARAMS-PASSES	crypto	Argon2Params.passes	implemented	N86	tsonic_node::crypto::Argon2Params::passes	NODE-CRYPTO-010	WebCrypto Argon2 passes field
+NODE-CRYPTO-ARGON2-PARAMS-MEMORY	crypto	Argon2Params.memory	implemented	N86	tsonic_node::crypto::Argon2Params::memory	NODE-CRYPTO-010	WebCrypto Argon2 memory field
+NODE-CRYPTO-ARGON2-PARAMS-VERSION	crypto	Argon2Params.version	implemented	N86	tsonic_node::crypto::Argon2Params::version	NODE-CRYPTO-010	WebCrypto Argon2 version field
+NODE-CRYPTO-ARGON2-PARAMS-SECRET-VALUE	crypto	Argon2Params.secretValue	implemented	N86	tsonic_node::crypto::Argon2Params::secret_value	NODE-CRYPTO-010	WebCrypto Argon2 secretValue field
+NODE-CRYPTO-ARGON2-PARAMS-ASSOCIATED-DATA	crypto	Argon2Params.associatedData	implemented	N86	tsonic_node::crypto::Argon2Params::associated_data	NODE-CRYPTO-010	WebCrypto Argon2 associatedData field
+NODE-CRYPTO-GENERATE-PRIME-OPTIONS	crypto	GeneratePrimeOptions	implemented	N86	tsonic_node::crypto::GeneratePrimeOptions	NODE-CRYPTO-010	closed generatePrime options carrier
+NODE-CRYPTO-GENERATE-PRIME-OPTIONS-ADD	crypto	GeneratePrimeOptions.add	implemented	N86	tsonic_node::crypto::GeneratePrimeOptions::add	NODE-CRYPTO-010	generatePrime add field
+NODE-CRYPTO-GENERATE-PRIME-OPTIONS-REM	crypto	GeneratePrimeOptions.rem	implemented	N86	tsonic_node::crypto::GeneratePrimeOptions::rem	NODE-CRYPTO-010	generatePrime rem field
+NODE-CRYPTO-GENERATE-PRIME-OPTIONS-SAFE	crypto	GeneratePrimeOptions.safe	implemented	N86	tsonic_node::crypto::GeneratePrimeOptions::safe	NODE-CRYPTO-010	generatePrime safe field
+NODE-CRYPTO-GENERATE-PRIME-OPTIONS-BIGINT	crypto	GeneratePrimeOptions.bigint	implemented	N86	tsonic_node::crypto::GeneratePrimeOptions::bigint	NODE-CRYPTO-010	generatePrime bigint field
+NODE-CRYPTO-CHECK-PRIME-OPTIONS	crypto	CheckPrimeOptions	implemented	N86	tsonic_node::crypto::CheckPrimeOptions	NODE-CRYPTO-010	closed checkPrime options carrier
+NODE-CRYPTO-CHECK-PRIME-OPTIONS-CHECKS	crypto	CheckPrimeOptions.checks	implemented	N86	tsonic_node::crypto::CheckPrimeOptions::checks	NODE-CRYPTO-010	checkPrime checks field
+NODE-CRYPTO-RSA-KEY-PAIR-OPTIONS	crypto	RSAKeyPairOptions	implemented	N86	tsonic_node::crypto::RsaKeyPairOptions	NODE-CRYPTO-010	closed RSA key pair options carrier
+NODE-CRYPTO-RSA-KEY-PAIR-OPTIONS-MODULUS-LENGTH	crypto	RSAKeyPairOptions.modulusLength	implemented	N86	tsonic_node::crypto::RsaKeyPairOptions::modulus_length	NODE-CRYPTO-010	RSA key pair modulusLength field
+NODE-CRYPTO-RSA-KEY-PAIR-OPTIONS-PUBLIC-EXPONENT	crypto	RSAKeyPairOptions.publicExponent	implemented	N86	tsonic_node::crypto::RsaKeyPairOptions::public_exponent	NODE-CRYPTO-010	RSA key pair publicExponent field
+NODE-CRYPTO-RSA-PSS-KEY-PAIR-OPTIONS	crypto	RSAPSSKeyPairOptions	implemented	N86	tsonic_node::crypto::RsaPssKeyPairOptions	NODE-CRYPTO-010	closed RSA-PSS key pair options carrier
+NODE-CRYPTO-RSA-PSS-KEY-PAIR-OPTIONS-MODULUS-LENGTH	crypto	RSAPSSKeyPairOptions.modulusLength	implemented	N86	tsonic_node::crypto::RsaPssKeyPairOptions::modulus_length	NODE-CRYPTO-010	RSA-PSS key pair modulusLength field
+NODE-CRYPTO-RSA-PSS-KEY-PAIR-OPTIONS-PUBLIC-EXPONENT	crypto	RSAPSSKeyPairOptions.publicExponent	implemented	N86	tsonic_node::crypto::RsaPssKeyPairOptions::public_exponent	NODE-CRYPTO-010	RSA-PSS key pair publicExponent field
+NODE-CRYPTO-RSA-PSS-KEY-PAIR-OPTIONS-HASH-ALGORITHM	crypto	RSAPSSKeyPairOptions.hashAlgorithm	implemented	N86	tsonic_node::crypto::RsaPssKeyPairOptions::hash_algorithm	NODE-CRYPTO-010	RSA-PSS key pair hashAlgorithm field
+NODE-CRYPTO-RSA-PSS-KEY-PAIR-OPTIONS-MGF1-HASH-ALGORITHM	crypto	RSAPSSKeyPairOptions.mgf1HashAlgorithm	implemented	N86	tsonic_node::crypto::RsaPssKeyPairOptions::mgf1_hash_algorithm	NODE-CRYPTO-010	RSA-PSS key pair mgf1HashAlgorithm field
+NODE-CRYPTO-RSA-PSS-KEY-PAIR-OPTIONS-SALT-LENGTH	crypto	RSAPSSKeyPairOptions.saltLength	implemented	N86	tsonic_node::crypto::RsaPssKeyPairOptions::salt_length	NODE-CRYPTO-010	RSA-PSS key pair saltLength field
+NODE-CRYPTO-DSA-KEY-PAIR-OPTIONS	crypto	DSAKeyPairOptions	implemented	N86	tsonic_node::crypto::DsaKeyPairOptions	NODE-CRYPTO-010	closed DSA key pair options carrier
+NODE-CRYPTO-DSA-KEY-PAIR-OPTIONS-MODULUS-LENGTH	crypto	DSAKeyPairOptions.modulusLength	implemented	N86	tsonic_node::crypto::DsaKeyPairOptions::modulus_length	NODE-CRYPTO-010	DSA key pair modulusLength field
+NODE-CRYPTO-DSA-KEY-PAIR-OPTIONS-DIVISOR-LENGTH	crypto	DSAKeyPairOptions.divisorLength	implemented	N86	tsonic_node::crypto::DsaKeyPairOptions::divisor_length	NODE-CRYPTO-010	DSA key pair divisorLength field
+NODE-CRYPTO-DH-KEY-PAIR-OPTIONS	crypto	DHKeyPairOptions	implemented	N86	tsonic_node::crypto::DhKeyPairOptions	NODE-CRYPTO-010	closed DH key pair options carrier
+NODE-CRYPTO-DH-KEY-PAIR-OPTIONS-PRIME	crypto	DHKeyPairOptions.prime	implemented	N86	tsonic_node::crypto::DhKeyPairOptions::prime	NODE-CRYPTO-010	DH key pair prime field
+NODE-CRYPTO-DH-KEY-PAIR-OPTIONS-PRIME-LENGTH	crypto	DHKeyPairOptions.primeLength	implemented	N86	tsonic_node::crypto::DhKeyPairOptions::prime_length	NODE-CRYPTO-010	DH key pair primeLength field
+NODE-CRYPTO-DH-KEY-PAIR-OPTIONS-GENERATOR	crypto	DHKeyPairOptions.generator	implemented	N86	tsonic_node::crypto::DhKeyPairOptions::generator	NODE-CRYPTO-010	DH key pair generator field
+NODE-CRYPTO-DH-KEY-PAIR-OPTIONS-GROUP-NAME	crypto	DHKeyPairOptions.groupName	implemented	N86	tsonic_node::crypto::DhKeyPairOptions::group_name	NODE-CRYPTO-010	DH key pair groupName field
+NODE-CRYPTO-EC-KEY-PAIR-OPTIONS	crypto	ECKeyPairOptions	implemented	N86	tsonic_node::crypto::EcKeyPairOptions	NODE-CRYPTO-010	closed EC key pair options carrier
+NODE-CRYPTO-EC-KEY-PAIR-OPTIONS-NAMED-CURVE	crypto	ECKeyPairOptions.namedCurve	implemented	N86	tsonic_node::crypto::EcKeyPairOptions::named_curve	NODE-CRYPTO-010	EC key pair namedCurve field
+NODE-CRYPTO-EC-KEY-PAIR-OPTIONS-PARAM-ENCODING	crypto	ECKeyPairOptions.paramEncoding	implemented	N86	tsonic_node::crypto::EcKeyPairOptions::param_encoding	NODE-CRYPTO-010	EC key pair paramEncoding field
 NODE-URL-CARRIER	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL carrier
 NODE-URL-PARSE	url	URL constructor	implemented	L	tsonic_node::url::Url::parse	NODE-URL-001	absolute and base-relative URL parse
 NODE-URL-HREF	url	URL.href	implemented	N59	tsonic_node::url::Url::href	NODE-URL-001,NODE-URL-009	href accessor and reserialization

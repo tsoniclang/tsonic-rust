@@ -7,6 +7,7 @@ use rsa::pkcs1v15::{Signature as RsaSignature, SigningKey, VerifyingKey};
 use rsa::signature::{SignatureEncoding, Signer, Verifier};
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use sha2::{Digest, Sha256, Sha384, Sha512};
+use tsonic_js::date::JsDate;
 
 pub fn random_bytes(size: usize) -> NodeResult<Buffer> {
     let mut bytes = vec![0_u8; size];
@@ -647,6 +648,9 @@ pub struct KeyObject {
     bytes: Buffer,
     asymmetric_key_type: Option<String>,
     asymmetric_key_details: Option<AsymmetricKeyDetails>,
+    extractable: bool,
+    key_usages: Vec<String>,
+    algorithm: Option<KeyAlgorithm>,
 }
 
 impl KeyObject {
@@ -668,6 +672,18 @@ impl KeyObject {
 
     pub fn asymmetric_key_details(&self) -> Option<&AsymmetricKeyDetails> {
         self.asymmetric_key_details.as_ref()
+    }
+
+    pub fn extractable(&self) -> bool {
+        self.extractable
+    }
+
+    pub fn key_usages(&self) -> &[String] {
+        &self.key_usages
+    }
+
+    pub fn algorithm(&self) -> Option<&KeyAlgorithm> {
+        self.algorithm.as_ref()
     }
 
     pub fn export(&self) -> Buffer {
@@ -696,6 +712,11 @@ pub fn create_secret_key(key: &Buffer) -> KeyObject {
         bytes: key.clone(),
         asymmetric_key_type: None,
         asymmetric_key_details: None,
+        extractable: true,
+        key_usages: Vec::new(),
+        algorithm: Some(KeyAlgorithm {
+            name: "secret".to_string(),
+        }),
     }
 }
 
@@ -705,6 +726,11 @@ pub fn create_secret_key_bytes(key: &[u8]) -> KeyObject {
         bytes: Buffer::from_bytes(key.to_vec()),
         asymmetric_key_type: None,
         asymmetric_key_details: None,
+        extractable: true,
+        key_usages: Vec::new(),
+        algorithm: Some(KeyAlgorithm {
+            name: "secret".to_string(),
+        }),
     }
 }
 
@@ -750,9 +776,16 @@ pub enum KeyExportResult {
     String(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RsaOtherPrimesInfo {
+    pub r: Option<String>,
+    pub d: Option<String>,
+    pub t: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JsonWebKey {
-    pub kty: String,
+    pub kty: Option<String>,
     pub crv: Option<String>,
     pub x: Option<String>,
     pub y: Option<String>,
@@ -760,7 +793,14 @@ pub struct JsonWebKey {
     pub n: Option<String>,
     pub e: Option<String>,
     pub k: Option<String>,
+    pub p: Option<String>,
+    pub q: Option<String>,
+    pub dp: Option<String>,
+    pub dq: Option<String>,
+    pub qi: Option<String>,
+    pub oth: Vec<RsaOtherPrimesInfo>,
     pub alg: Option<String>,
+    pub key_use: Option<String>,
     pub key_ops: Vec<String>,
     pub ext: bool,
 }
@@ -776,28 +816,90 @@ pub struct JwkKeyExportOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateKeyInput {
+    pub key: Buffer,
+    pub format: Option<String>,
+    pub key_type: Option<String>,
+    pub encoding: Option<String>,
+    pub passphrase: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicKeyInput {
+    pub key: Buffer,
+    pub format: Option<String>,
+    pub key_type: Option<String>,
+    pub encoding: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaPrivateKeyInput {
+    pub key: Buffer,
+    pub padding: Option<i32>,
+    pub oaep_hash: Option<String>,
+    pub oaep_label: Option<Buffer>,
+    pub passphrase: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaPublicKeyInput {
+    pub key: Buffer,
+    pub padding: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct X509Certificate {
     raw: Buffer,
     subject: String,
     issuer: String,
     valid_from: String,
     valid_to: String,
+    fingerprint: String,
     fingerprint256: String,
+    fingerprint512: String,
+    key_usage: Vec<String>,
+    subject_alt_name: Option<String>,
+    info_access: Option<String>,
+    serial_number: String,
+    signature_algorithm: Option<String>,
+    signature_algorithm_oid: String,
+    ca: bool,
+    public_key: KeyObject,
+    issuer_certificate: Option<Box<X509Certificate>>,
 }
 
 impl X509Certificate {
     pub fn new(raw: Buffer) -> Self {
+        let fingerprint = match hash("sha1", &raw.as_bytes(), Some("hex")) {
+            Ok(DigestResult::String(value)) => value,
+            _ => String::new(),
+        };
         let fingerprint256 = match hash("sha256", &raw.as_bytes(), Some("hex")) {
             Ok(DigestResult::String(value)) => value,
             _ => String::new(),
         };
+        let fingerprint512 = match hash("sha512", &raw.as_bytes(), Some("hex")) {
+            Ok(DigestResult::String(value)) => value,
+            _ => String::new(),
+        };
         Self {
-            raw,
+            raw: raw.clone(),
             subject: String::new(),
             issuer: String::new(),
             valid_from: String::new(),
             valid_to: String::new(),
+            fingerprint,
             fingerprint256,
+            fingerprint512,
+            key_usage: Vec::new(),
+            subject_alt_name: None,
+            info_access: None,
+            serial_number: String::new(),
+            signature_algorithm: None,
+            signature_algorithm_oid: String::new(),
+            ca: false,
+            public_key: create_secret_key(&raw),
+            issuer_certificate: None,
         }
     }
 
@@ -821,8 +923,100 @@ impl X509Certificate {
         &self.valid_to
     }
 
+    pub fn valid_from_date(&self) -> JsDate {
+        JsDate::parse(&self.valid_from).unwrap_or_else(|_| JsDate::from_millis(0.0))
+    }
+
+    pub fn valid_to_date(&self) -> JsDate {
+        JsDate::parse(&self.valid_to).unwrap_or_else(|_| JsDate::from_millis(0.0))
+    }
+
+    pub fn fingerprint(&self) -> &str {
+        &self.fingerprint
+    }
+
     pub fn fingerprint256(&self) -> &str {
         &self.fingerprint256
+    }
+
+    pub fn fingerprint512(&self) -> &str {
+        &self.fingerprint512
+    }
+
+    pub fn key_usage(&self) -> &[String] {
+        &self.key_usage
+    }
+
+    pub fn subject_alt_name(&self) -> Option<&str> {
+        self.subject_alt_name.as_deref()
+    }
+
+    pub fn info_access(&self) -> Option<&str> {
+        self.info_access.as_deref()
+    }
+
+    pub fn serial_number(&self) -> &str {
+        &self.serial_number
+    }
+
+    pub fn signature_algorithm(&self) -> Option<&str> {
+        self.signature_algorithm.as_deref()
+    }
+
+    pub fn signature_algorithm_oid(&self) -> &str {
+        &self.signature_algorithm_oid
+    }
+
+    pub fn ca(&self) -> bool {
+        self.ca
+    }
+
+    pub fn public_key(&self) -> KeyObject {
+        self.public_key.clone()
+    }
+
+    pub fn issuer_certificate(&self) -> Option<&X509Certificate> {
+        self.issuer_certificate.as_deref()
+    }
+
+    pub fn check_issued(&self, other_cert: &X509Certificate) -> bool {
+        !self.issuer.is_empty() && self.issuer == other_cert.subject
+    }
+
+    pub fn check_private_key(&self, private_key: &KeyObject) -> bool {
+        self.public_key.equals(private_key)
+    }
+
+    pub fn verify(&self, public_key: &KeyObject) -> bool {
+        self.public_key.equals(public_key)
+    }
+
+    pub fn check_host(&self, name: &str, _options: Option<&X509CheckOptions>) -> Option<String> {
+        if self.subject == name || self.subject_alt_name.as_deref() == Some(name) {
+            Some(name.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn check_email(&self, email: &str, _options: Option<&X509CheckOptions>) -> Option<String> {
+        if self.subject == email || self.subject_alt_name.as_deref() == Some(email) {
+            Some(email.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn check_ip(&self, ip: &str) -> Option<String> {
+        if self.subject_alt_name.as_deref() == Some(ip) {
+            Some(ip.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn to_json(&self) -> String {
+        self.to_string()
     }
 
     pub fn to_legacy_object(&self) -> X509CertificateLegacyObject {
@@ -836,6 +1030,16 @@ impl X509Certificate {
     }
 }
 
+impl std::fmt::Display for X509Certificate {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{}",
+            self.raw.to_string(Some("base64")).unwrap_or_default()
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct X509CertificateLegacyObject {
     pub subject: String,
@@ -843,6 +1047,15 @@ pub struct X509CertificateLegacyObject {
     pub valid_from: String,
     pub valid_to: String,
     pub fingerprint256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct X509CheckOptions {
+    pub subject: Option<String>,
+    pub wildcards: Option<bool>,
+    pub partial_wildcards: Option<bool>,
+    pub multi_label_wildcards: Option<bool>,
+    pub single_label_subdomains: Option<bool>,
 }
 
 pub fn random_uuid() -> NodeResult<String> {
@@ -978,6 +1191,7 @@ pub struct SigningOptions {
     pub padding: Option<i32>,
     pub salt_length: Option<i32>,
     pub dsa_encoding: Option<String>,
+    pub context: Option<Buffer>,
 }
 
 #[derive(Debug, Clone)]
@@ -1050,6 +1264,7 @@ pub fn verify(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifyKeyObjectInput {
+    pub key: Option<KeyObject>,
     pub padding: Option<i32>,
     pub salt_length: Option<i32>,
 }
@@ -1103,10 +1318,43 @@ pub struct KeyAlgorithm {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AesKeyAlgorithm {
+    pub name: String,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AesKeyGenParams {
+    pub name: String,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AesDerivedKeyParams {
+    pub name: String,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RsaKeyAlgorithm {
     pub name: String,
     pub modulus_length: usize,
     pub public_exponent: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaKeyGenParams {
+    pub name: String,
+    pub modulus_length: usize,
+    pub public_exponent: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaHashedKeyGenParams {
+    pub name: String,
+    pub modulus_length: usize,
+    pub public_exponent: Vec<u8>,
+    pub hash: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1120,6 +1368,32 @@ pub struct HmacKeyAlgorithm {
     pub name: String,
     pub hash: KeyAlgorithm,
     pub length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HmacKeyGenParams {
+    pub name: String,
+    pub hash: String,
+    pub length: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HmacImportParams {
+    pub name: String,
+    pub hash: String,
+    pub length: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EcKeyGenParams {
+    pub name: String,
+    pub named_curve: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EcKeyImportParams {
+    pub name: String,
+    pub named_curve: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1164,6 +1438,12 @@ pub struct AeadParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AesCbcParams {
+    pub name: String,
+    pub iv: Buffer,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AesCtrParams {
     pub name: String,
     pub counter: Buffer,
@@ -1192,6 +1472,125 @@ pub struct EcdsaParams {
 pub struct EcdhKeyDeriveParams {
     pub name: String,
     pub public: CryptoKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CShakeParams {
+    pub name: String,
+    pub output_length: usize,
+    pub function_name: Option<Buffer>,
+    pub customization: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurboShakeParams {
+    pub name: String,
+    pub output_length: usize,
+    pub domain_separation: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KangarooTwelveParams {
+    pub name: String,
+    pub output_length: usize,
+    pub customization: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KmacParams {
+    pub name: String,
+    pub output_length: usize,
+    pub customization: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KmacKeyAlgorithm {
+    pub name: String,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KmacKeyGenParams {
+    pub name: String,
+    pub length: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KmacImportParams {
+    pub name: String,
+    pub length: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Argon2Parameters {
+    pub message: Buffer,
+    pub nonce: Buffer,
+    pub parallelism: usize,
+    pub memory: usize,
+    pub passes: usize,
+    pub tag_length: usize,
+    pub secret: Option<Buffer>,
+    pub associated_data: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Argon2Params {
+    pub name: String,
+    pub nonce: Buffer,
+    pub parallelism: usize,
+    pub memory: usize,
+    pub passes: usize,
+    pub version: Option<u32>,
+    pub secret_value: Option<Buffer>,
+    pub associated_data: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct GeneratePrimeOptions {
+    pub add: Option<Buffer>,
+    pub rem: Option<Buffer>,
+    pub safe: Option<bool>,
+    pub bigint: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CheckPrimeOptions {
+    pub checks: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaKeyPairOptions {
+    pub modulus_length: usize,
+    pub public_exponent: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaPssKeyPairOptions {
+    pub modulus_length: usize,
+    pub public_exponent: Option<u64>,
+    pub hash_algorithm: Option<String>,
+    pub mgf1_hash_algorithm: Option<String>,
+    pub salt_length: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DsaKeyPairOptions {
+    pub modulus_length: usize,
+    pub divisor_length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DhKeyPairOptions {
+    pub prime: Option<Buffer>,
+    pub prime_length: Option<usize>,
+    pub generator: Option<u32>,
+    pub group_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EcKeyPairOptions {
+    pub named_curve: String,
+    pub param_encoding: Option<String>,
 }
 
 pub mod webcrypto {
@@ -1249,7 +1648,7 @@ pub mod webcrypto {
                 "raw" => Ok(KeyExportResult::Buffer(key.data())),
                 "jwk" => {
                     let jwk = JsonWebKey {
-                        kty: "oct".to_string(),
+                        kty: Some("oct".to_string()),
                         crv: None,
                         x: None,
                         y: None,
@@ -1257,13 +1656,20 @@ pub mod webcrypto {
                         n: None,
                         e: None,
                         k: Some(key.data().to_string(Some("base64url"))?),
+                        p: None,
+                        q: None,
+                        dp: None,
+                        dq: None,
+                        qi: None,
+                        oth: Vec::new(),
                         alg: Some(key.algorithm.name.clone()),
+                        key_use: None,
                         key_ops: key.usages.clone(),
                         ext: key.extractable,
                     };
                     Ok(KeyExportResult::String(format!(
                         "{{\"kty\":\"{}\",\"k\":\"{}\"}}",
-                        jwk.kty,
+                        jwk.kty.unwrap_or_default(),
                         jwk.k.unwrap_or_default()
                     )))
                 }

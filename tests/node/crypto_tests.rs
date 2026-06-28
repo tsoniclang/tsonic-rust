@@ -301,6 +301,7 @@ fn crypto_streaming_sign_and_verify_carriers_are_closed() {
                 padding: Some(tsonic_node::crypto::constants().rsa_pkcs1_padding),
                 salt_length: None,
                 dsa_encoding: None,
+                context: None,
             },
         )
         .unwrap();
@@ -312,6 +313,7 @@ fn crypto_streaming_sign_and_verify_carriers_are_closed() {
             &public_key,
             &signature,
             tsonic_node::crypto::VerifyKeyObjectInput {
+                key: None,
                 padding: None,
                 salt_length: None,
             },
@@ -367,7 +369,7 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
     assert_eq!(key_export.encoding.as_deref(), Some("hex"));
 
     let jwk = tsonic_node::crypto::JsonWebKey {
-        kty: "oct".to_string(),
+        kty: Some("oct".to_string()),
         crv: None,
         x: None,
         y: None,
@@ -375,13 +377,31 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
         n: None,
         e: None,
         k: Some("abc".to_string()),
+        p: Some("p".to_string()),
+        q: Some("q".to_string()),
+        dp: Some("dp".to_string()),
+        dq: Some("dq".to_string()),
+        qi: Some("qi".to_string()),
+        oth: vec![tsonic_node::crypto::RsaOtherPrimesInfo {
+            r: Some("r".to_string()),
+            d: Some("d".to_string()),
+            t: Some("t".to_string()),
+        }],
         alg: Some("HS256".to_string()),
+        key_use: Some("sig".to_string()),
         key_ops: vec!["sign".to_string()],
         ext: true,
     };
     let jwk_input = tsonic_node::crypto::JsonWebKeyInput { jwk: jwk.clone() };
-    assert_eq!(jwk_input.jwk.kty, "oct");
+    assert_eq!(jwk_input.jwk.kty.as_deref(), Some("oct"));
     assert_eq!(jwk.k.as_deref(), Some("abc"));
+    assert_eq!(jwk.p.as_deref(), Some("p"));
+    assert_eq!(jwk.q.as_deref(), Some("q"));
+    assert_eq!(jwk.dp.as_deref(), Some("dp"));
+    assert_eq!(jwk.dq.as_deref(), Some("dq"));
+    assert_eq!(jwk.qi.as_deref(), Some("qi"));
+    assert_eq!(jwk.oth[0].r.as_deref(), Some("r"));
+    assert_eq!(jwk.key_use.as_deref(), Some("sig"));
     assert_eq!(jwk.alg.as_deref(), Some("HS256"));
     assert_eq!(jwk.key_ops, vec!["sign"]);
     assert!(jwk.ext);
@@ -411,6 +431,7 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
         padding: Some(tsonic_node::crypto::constants().rsa_pkcs1_padding),
         salt_length: Some(32),
         dsa_encoding: Some("der".to_string()),
+        context: Some(tsonic_node::buffer::Buffer::from_bytes(vec![1, 2, 3])),
     };
     assert_eq!(
         signing.padding,
@@ -418,10 +439,13 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
     );
     assert_eq!(signing.salt_length, Some(32));
     assert_eq!(signing.dsa_encoding.as_deref(), Some("der"));
+    assert_eq!(signing.context.as_ref().unwrap().len(), 3);
     let verify = tsonic_node::crypto::VerifyKeyObjectInput {
+        key: None,
         padding: signing.padding,
         salt_length: signing.salt_length,
     };
+    assert_eq!(verify.key, None);
     assert_eq!(verify.padding, signing.padding);
     assert_eq!(verify.salt_length, signing.salt_length);
 
@@ -513,4 +537,250 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
         public: crypto_key,
     };
     assert_eq!(ecdh.public.key_type, "secret");
+}
+
+#[test]
+fn crypto_extended_option_carriers_expose_documented_fields() {
+    let bytes = tsonic_node::buffer::Buffer::from_bytes(vec![1, 2, 3, 4]);
+    let private_input = tsonic_node::crypto::PrivateKeyInput {
+        key: bytes.clone(),
+        format: Some("pem".to_string()),
+        key_type: Some("pkcs8".to_string()),
+        encoding: Some("utf8".to_string()),
+        passphrase: Some(bytes.clone()),
+    };
+    assert_eq!(private_input.key.len(), 4);
+    assert_eq!(private_input.format.as_deref(), Some("pem"));
+    assert_eq!(private_input.key_type.as_deref(), Some("pkcs8"));
+    assert_eq!(private_input.encoding.as_deref(), Some("utf8"));
+    assert_eq!(private_input.passphrase.as_ref().unwrap().len(), 4);
+
+    let public_input = tsonic_node::crypto::PublicKeyInput {
+        key: bytes.clone(),
+        format: Some("der".to_string()),
+        key_type: Some("spki".to_string()),
+        encoding: None,
+    };
+    assert_eq!(public_input.key_type.as_deref(), Some("spki"));
+
+    let rsa_private = tsonic_node::crypto::RsaPrivateKeyInput {
+        key: bytes.clone(),
+        padding: Some(tsonic_node::crypto::constants().rsa_pkcs1_oaep_padding),
+        oaep_hash: Some("sha256".to_string()),
+        oaep_label: Some(bytes.clone()),
+        passphrase: Some("secret".to_string()),
+    };
+    assert_eq!(rsa_private.oaep_hash.as_deref(), Some("sha256"));
+    assert_eq!(rsa_private.oaep_label.as_ref().unwrap().len(), 4);
+    let rsa_public = tsonic_node::crypto::RsaPublicKeyInput {
+        key: bytes.clone(),
+        padding: Some(tsonic_node::crypto::constants().rsa_pkcs1_padding),
+    };
+    assert_eq!(rsa_public.key.len(), 4);
+
+    let aes_algorithm = tsonic_node::crypto::AesKeyAlgorithm {
+        name: "AES-GCM".to_string(),
+        length: 256,
+    };
+    let aes_gen = tsonic_node::crypto::AesKeyGenParams {
+        name: aes_algorithm.name.clone(),
+        length: aes_algorithm.length,
+    };
+    let aes_derived = tsonic_node::crypto::AesDerivedKeyParams {
+        name: "AES-CBC".to_string(),
+        length: 128,
+    };
+    let aes_cbc = tsonic_node::crypto::AesCbcParams {
+        name: aes_derived.name.clone(),
+        iv: bytes.clone(),
+    };
+    assert_eq!(aes_gen.length, 256);
+    assert_eq!(aes_derived.length, 128);
+    assert_eq!(aes_cbc.iv.len(), 4);
+
+    let rsa_gen = tsonic_node::crypto::RsaKeyGenParams {
+        name: "RSA-PSS".to_string(),
+        modulus_length: 2048,
+        public_exponent: vec![1, 0, 1],
+    };
+    let rsa_hashed_gen = tsonic_node::crypto::RsaHashedKeyGenParams {
+        name: rsa_gen.name.clone(),
+        modulus_length: rsa_gen.modulus_length,
+        public_exponent: rsa_gen.public_exponent.clone(),
+        hash: "SHA-256".to_string(),
+    };
+    assert_eq!(rsa_hashed_gen.hash, "SHA-256");
+
+    let hmac_gen = tsonic_node::crypto::HmacKeyGenParams {
+        name: "HMAC".to_string(),
+        hash: "SHA-256".to_string(),
+        length: Some(256),
+    };
+    let hmac_import = tsonic_node::crypto::HmacImportParams {
+        name: hmac_gen.name.clone(),
+        hash: hmac_gen.hash.clone(),
+        length: hmac_gen.length,
+    };
+    assert_eq!(hmac_import.length, Some(256));
+
+    let ec_gen = tsonic_node::crypto::EcKeyGenParams {
+        name: "ECDSA".to_string(),
+        named_curve: "P-256".to_string(),
+    };
+    let ec_import = tsonic_node::crypto::EcKeyImportParams {
+        name: ec_gen.name.clone(),
+        named_curve: ec_gen.named_curve.clone(),
+    };
+    assert_eq!(ec_import.named_curve, "P-256");
+
+    let cshake = tsonic_node::crypto::CShakeParams {
+        name: "cSHAKE128".to_string(),
+        output_length: 32,
+        function_name: Some(bytes.clone()),
+        customization: Some(bytes.clone()),
+    };
+    assert_eq!(cshake.output_length, 32);
+    assert_eq!(cshake.function_name.as_ref().unwrap().len(), 4);
+    let turbo = tsonic_node::crypto::TurboShakeParams {
+        name: "TurboSHAKE128".to_string(),
+        output_length: 32,
+        domain_separation: Some(0x1f),
+    };
+    assert_eq!(turbo.domain_separation, Some(0x1f));
+    let kangaroo = tsonic_node::crypto::KangarooTwelveParams {
+        name: "KangarooTwelve".to_string(),
+        output_length: 32,
+        customization: Some(bytes.clone()),
+    };
+    assert_eq!(kangaroo.customization.as_ref().unwrap().len(), 4);
+    let kmac = tsonic_node::crypto::KmacParams {
+        name: "KMAC128".to_string(),
+        output_length: 32,
+        customization: Some(bytes.clone()),
+    };
+    assert_eq!(kmac.output_length, 32);
+    let kmac_algorithm = tsonic_node::crypto::KmacKeyAlgorithm {
+        name: "KMAC128".to_string(),
+        length: 256,
+    };
+    let kmac_gen = tsonic_node::crypto::KmacKeyGenParams {
+        name: kmac_algorithm.name.clone(),
+        length: Some(kmac_algorithm.length),
+    };
+    let kmac_import = tsonic_node::crypto::KmacImportParams {
+        name: kmac_gen.name.clone(),
+        length: kmac_gen.length,
+    };
+    assert_eq!(kmac_import.length, Some(256));
+
+    let argon = tsonic_node::crypto::Argon2Parameters {
+        message: bytes.clone(),
+        nonce: bytes.clone(),
+        parallelism: 2,
+        memory: 4096,
+        passes: 3,
+        tag_length: 32,
+        secret: Some(bytes.clone()),
+        associated_data: Some(bytes.clone()),
+    };
+    assert_eq!(argon.parallelism, 2);
+    assert_eq!(argon.secret.as_ref().unwrap().len(), 4);
+    let argon_params = tsonic_node::crypto::Argon2Params {
+        name: "Argon2id".to_string(),
+        nonce: bytes.clone(),
+        parallelism: argon.parallelism,
+        memory: argon.memory,
+        passes: argon.passes,
+        version: Some(0x13),
+        secret_value: argon.secret.clone(),
+        associated_data: argon.associated_data.clone(),
+    };
+    assert_eq!(argon_params.version, Some(0x13));
+
+    let prime = tsonic_node::crypto::GeneratePrimeOptions {
+        add: Some(bytes.clone()),
+        rem: Some(bytes.clone()),
+        safe: Some(true),
+        bigint: Some(false),
+    };
+    assert_eq!(prime.safe, Some(true));
+    let check_prime = tsonic_node::crypto::CheckPrimeOptions { checks: Some(32) };
+    assert_eq!(check_prime.checks, Some(32));
+
+    let rsa_pair = tsonic_node::crypto::RsaKeyPairOptions {
+        modulus_length: 2048,
+        public_exponent: Some(65_537),
+    };
+    assert_eq!(rsa_pair.public_exponent, Some(65_537));
+    let rsa_pss_pair = tsonic_node::crypto::RsaPssKeyPairOptions {
+        modulus_length: 2048,
+        public_exponent: Some(65_537),
+        hash_algorithm: Some("sha256".to_string()),
+        mgf1_hash_algorithm: Some("sha256".to_string()),
+        salt_length: Some("auto".to_string()),
+    };
+    assert_eq!(rsa_pss_pair.salt_length.as_deref(), Some("auto"));
+    let dsa_pair = tsonic_node::crypto::DsaKeyPairOptions {
+        modulus_length: 2048,
+        divisor_length: 256,
+    };
+    assert_eq!(dsa_pair.divisor_length, 256);
+    let dh_pair = tsonic_node::crypto::DhKeyPairOptions {
+        prime: Some(bytes.clone()),
+        prime_length: Some(2048),
+        generator: Some(2),
+        group_name: Some("modp14".to_string()),
+    };
+    assert_eq!(dh_pair.group_name.as_deref(), Some("modp14"));
+    let ec_pair = tsonic_node::crypto::EcKeyPairOptions {
+        named_curve: "P-256".to_string(),
+        param_encoding: Some("named".to_string()),
+    };
+    assert_eq!(ec_pair.param_encoding.as_deref(), Some("named"));
+}
+
+#[test]
+fn crypto_x509_extended_accessors_are_closed_and_deterministic() {
+    let raw = tsonic_node::buffer::Buffer::from_string("certificate", Some("utf8")).unwrap();
+    let cert = tsonic_node::crypto::X509Certificate::new(raw.clone());
+
+    assert_eq!(cert.raw(), raw);
+    assert_eq!(cert.key_usage(), &[] as &[String]);
+    assert_eq!(cert.subject_alt_name(), None);
+    assert_eq!(cert.info_access(), None);
+    assert_eq!(cert.serial_number(), "");
+    assert_eq!(cert.signature_algorithm(), None);
+    assert_eq!(cert.signature_algorithm_oid(), "");
+    assert!(!cert.ca());
+    assert_eq!(cert.valid_from_date().get_time(), 0.0);
+    assert_eq!(cert.valid_to_date().get_time(), 0.0);
+    assert_eq!(cert.issuer_certificate(), None);
+    assert!(!cert.check_issued(&cert));
+    assert!(!cert.check_private_key(&tsonic_node::crypto::create_secret_key_bytes(b"different")));
+    assert!(cert.verify(&cert.public_key()));
+    assert_eq!(cert.check_host("example.com", None), None);
+    assert_eq!(cert.check_email("a@example.com", None), None);
+    assert_eq!(cert.check_ip("127.0.0.1"), None);
+    assert_eq!(cert.to_json(), cert.to_string());
+    assert_eq!(
+        cert.fingerprint(),
+        "735ad571c189d7ba84464bf4a9f1d2280175b128"
+    );
+    assert_eq!(
+        cert.fingerprint512(),
+        "3d9e7bd9a4cb0b591c367461e6e8f625181d65bd6f45c1695de3c4e5f1a6b2dc\
+         5be58e8f22f9d8e7d16057adef058743ce9b22dd7d33f3db6374c05be0efd982"
+            .replace(' ', "")
+    );
+
+    let options = tsonic_node::crypto::X509CheckOptions {
+        subject: Some("always".to_string()),
+        wildcards: Some(true),
+        partial_wildcards: Some(false),
+        multi_label_wildcards: Some(false),
+        single_label_subdomains: Some(true),
+    };
+    assert_eq!(options.subject.as_deref(), Some("always"));
+    assert_eq!(options.wildcards, Some(true));
+    assert_eq!(options.single_label_subdomains, Some(true));
 }
