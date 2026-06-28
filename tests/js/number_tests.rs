@@ -63,6 +63,18 @@ fn number_formatting_rules() {
         number::to_string_radix(255.0, Some(37)).unwrap_err().kind(),
         tsonic_runtime::JsErrorKind::RangeError
     );
+    assert_eq!(
+        number::to_exponential(12.5, Some(1)).as_deref(),
+        Ok("1.2e1")
+    );
+    assert_eq!(
+        number::to_precision(12.345, Some(2)).as_deref(),
+        Ok("12.35")
+    );
+    assert_eq!(
+        number::to_precision(12.345, Some(0)).unwrap_err().kind(),
+        tsonic_runtime::JsErrorKind::RangeError
+    );
 }
 
 #[test]

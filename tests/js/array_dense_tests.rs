@@ -105,3 +105,27 @@ fn array_statics_from_string_and_branding() {
     assert!(statics::is_array(&[1, 2, 3] as &[i32]));
     assert!(!statics::is_array(&not_dense));
 }
+
+#[test]
+fn callback_copying_sort_and_flat_helpers() {
+    let xs = vec![3, 1, 2];
+    assert_eq!(dense::map(&xs, |value| value * 2), vec![6, 2, 4]);
+    assert_eq!(dense::filter(&xs, |value| *value > 1), vec![3, 2]);
+    assert_eq!(dense::reduce(&xs, 0, |sum, value| sum + value), 6);
+    assert!(dense::some(&xs, |value| *value == 2));
+    assert!(dense::every(&xs, |value| *value > 0));
+    assert_eq!(dense::find(&xs, |value| *value == 1), Some(&1));
+
+    let mut sorted = vec![10, 2, 1];
+    dense::sort_by_js_string(&mut sorted);
+    assert_eq!(sorted, vec![1, 10, 2]);
+    assert_eq!(dense::to_reversed(&xs), vec![2, 1, 3]);
+    assert_eq!(dense::to_sorted_by_js_string(&[10, 2, 1]), vec![1, 10, 2]);
+    assert_eq!(dense::to_spliced(&xs, 1, 1, vec![9, 8]), vec![3, 9, 8, 2]);
+    assert_eq!(dense::with(&xs, -1, 9), Some(vec![3, 1, 9]));
+    assert_eq!(dense::flat_one(&[vec![1, 2], vec![3]]), vec![1, 2, 3]);
+    assert_eq!(
+        dense::flat_map_one(&[1, 2], |value| vec![*value, *value + 10]),
+        vec![1, 11, 2, 12]
+    );
+}

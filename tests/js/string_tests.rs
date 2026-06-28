@@ -25,6 +25,8 @@ fn slice_and_substring_behavior() {
     assert_eq!(string::slice("javascript", -3, None), "ipt");
     assert_eq!(string::substring("abc", 2, Some(0)), "ab");
     assert_eq!(string::slice("abc", 2, Some(1)), "");
+    assert_eq!(string::substr("javascript", 4, Some(6)), "script");
+    assert_eq!(string::substr("javascript", -6, Some(3)), "scr");
 }
 
 #[test]

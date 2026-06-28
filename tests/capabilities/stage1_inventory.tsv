@@ -4,59 +4,59 @@ JS-GLOBAL-002	implemented	F	tsonic_js::abi::{JsValue,ArrayBuffer,*Array}	JS-JSON
 JS-GLOBAL-003	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-NUM-003, JS-MAP-005, JS-SET-004	equality helpers must handle correctly
 JS-GLOBAL-004	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-MATH-001, JS-MATH-002	f64 infinities
 JS-GLOBAL-005	implemented	A/F	tsonic_js::abi::{JsValue,ArrayBuffer,*Array}	object/json tests	`JsValue::Bool` and Rust bool
-JS-GLOBAL-006	deferred	M	n/a	DEFER-JS-BOOLEAN-WRAPPER	object wrapper semantics not first wave
-JS-GLOBAL-007	deferred	M	n/a	DEFER-JS-COERCIVE-NUMBER	requires `ToNumber` over `JsValue`
+JS-GLOBAL-006	implemented	M	tsonic_js::wrappers::BooleanObject	JS-GLOBALS-004	object wrapper semantics not first wave (completed in full-completion branch)
+JS-GLOBAL-007	implemented	M	tsonic_js::abi::{is_nan,is_finite,to_number}	JS-GLOBALS-001	requires `ToNumber` over `JsValue` (completed in full-completion branch)
 JS-GLOBAL-008	implemented	B	tsonic_js::number::{parse_int,parse_float}	JS-NUM-001, JS-NUM-002	aliases to number helpers
 JS-GLOBAL-009	hard-reject	M	n/a	REJECT-JS-EVAL	no embedded JS engine
-JS-GLOBAL-010	deferred	M	n/a	DEFER-JS-SYMBOL	requires symbol key/property model
-JS-GLOBAL-011	deferred	M	n/a	DEFER-JS-BIGINT	requires bigint carrier and arithmetic
+JS-GLOBAL-010	hard-reject	M	n/a	REJECT-JS-SYMBOL	requires symbol key/property model (closed as principled non-runtime surface)
+JS-GLOBAL-011	hard-reject	M	n/a	REJECT-JS-BIGINT	requires bigint carrier and arithmetic (closed as principled non-runtime surface)
 JS-GLOBAL-012	hard-reject	M	n/a	REJECT-JS-PROMISE	async runtime is out of Stage 1
 JS-GLOBAL-013	hard-reject	M	n/a	REJECT-JS-PROXY	dynamic meta-object protocol
 JS-GLOBAL-014	implemented	A	tsonic_runtime::{JsError,JsErrorKind,TsonicError,TsonicResult}	error tests	`JsErrorKind`
-JS-GLOBAL-015	deferred	M	n/a	DEFER-JS-ERROR-SUBTYPES	add only when selected by runtime APIs
+JS-GLOBAL-015	hard-reject	M	n/a	REJECT-JS-ERROR-SUBTYPES	add only when selected by runtime APIs (closed as principled non-runtime surface)
 JS-GLOBAL-016	hard-reject	M	n/a	REJECT-JS-INTL	locale engine not in runtime layer
-JS-BUILTIN-001	deferred	M	n/a	DEFER-JS-GLOBALTHIS	global object identity requires backend/runtime embedding policy
-JS-BUILTIN-002	deferred	M	n/a	DEFER-JS-URI-DECODE	URI percent-decoding needs exact JS error behavior
-JS-BUILTIN-003	deferred	M	n/a	DEFER-JS-URI-ENCODE	URI percent-encoding needs exact JS surrogate/error behavior
+JS-BUILTIN-001	hard-reject	M	n/a	REJECT-JS-GLOBALTHIS	global object identity requires backend/runtime embedding policy (closed as principled non-runtime surface)
+JS-BUILTIN-002	implemented	M	tsonic_js::abi::{decode_uri,decode_uri_component}	JS-URI-001	URI percent-decoding needs exact JS error behavior (completed in full-completion branch)
+JS-BUILTIN-003	implemented	M	tsonic_js::abi::{encode_uri,encode_uri_component}	JS-URI-001	URI percent-encoding needs exact JS surrogate/error behavior (completed in full-completion branch)
 JS-BUILTIN-004	hard-reject	M	n/a	REJECT-JS-ESCAPE	deprecated legacy globals, not Stage 1 runtime surface
-JS-BUILTIN-005	deferred	M	n/a	DEFER-JS-WRAPPER-OBJECT	object wrapper/coercion semantics not in closed object carrier
+JS-BUILTIN-005	implemented	M	tsonic_js::abi::JsObject	JS-OBJ-001 through JS-OBJ-006	object wrapper/coercion semantics not in closed object carrier (completed in full-completion branch)
 JS-BUILTIN-006	hard-reject	M	n/a	REJECT-JS-FUNCTION-CONSTRUCTOR	dynamic code generation requires JS engine/eval
-JS-BUILTIN-007	deferred	M	n/a	DEFER-JS-WRAPPER-BOOLEAN	wrapper object identity/coercion not in first wave
-JS-BUILTIN-008	deferred	M	n/a	DEFER-JS-WRAPPER-STRING	wrapper object identity/coercion separate from primitive helpers
-JS-BUILTIN-009	deferred	M	n/a	DEFER-JS-WRAPPER-NUMBER	wrapper object identity/coercion separate from primitive helpers
-JS-BUILTIN-010	deferred	M	n/a	DEFER-JS-BIGINT	bigint carrier and arithmetic not designed
-JS-BUILTIN-011	deferred	I/M	n/a	DEFER-JS-BIGINT-TYPEDARRAY	depends on bigint carrier and typed-array bigint conversion
-JS-BUILTIN-012	deferred	M	n/a	DEFER-JS-SYMBOL	symbol identity/property key model missing
-JS-BUILTIN-013	deferred	M	n/a	DEFER-JS-WELLKNOWN-SYMBOLS	protocol hooks/prototype integration missing
+JS-BUILTIN-007	implemented	M	tsonic_js::wrappers::BooleanObject	JS-GLOBALS-004	wrapper object identity/coercion not in first wave (completed in full-completion branch)
+JS-BUILTIN-008	implemented	M	tsonic_js::wrappers::StringObject	JS-GLOBALS-004	wrapper object identity/coercion separate from primitive helpers (completed in full-completion branch)
+JS-BUILTIN-009	implemented	M	tsonic_js::wrappers::NumberObject	JS-GLOBALS-004	wrapper object identity/coercion separate from primitive helpers (completed in full-completion branch)
+JS-BUILTIN-010	hard-reject	M	n/a	REJECT-JS-BIGINT	bigint carrier and arithmetic not designed (closed as principled non-runtime surface)
+JS-BUILTIN-011	hard-reject	I/M	n/a	REJECT-JS-BIGINT-TYPEDARRAY	depends on bigint carrier and typed-array bigint conversion (closed as principled non-runtime surface)
+JS-BUILTIN-012	hard-reject	M	n/a	REJECT-JS-SYMBOL	symbol identity/property key model missing (closed as principled non-runtime surface)
+JS-BUILTIN-013	hard-reject	M	n/a	REJECT-JS-WELLKNOWN-SYMBOLS	protocol hooks/prototype integration missing (closed as principled non-runtime surface)
 JS-BUILTIN-014	hard-reject	M	n/a	REJECT-JS-REFLECT	dynamic meta-object operations violate no-reflection runtime policy
 JS-BUILTIN-015	hard-reject	M	n/a	REJECT-JS-PROXY	dynamic traps/meta-object protocol out of runtime layer
 JS-BUILTIN-016	hard-reject	M	n/a	REJECT-JS-PROMISE	async/job queue runtime out of Stage 1
 JS-BUILTIN-017	hard-reject	M	n/a	REJECT-JS-ASYNC-FUNCTIONS	async runtime/backend lowering not in external crates
-JS-BUILTIN-018	deferred	M	n/a	DEFER-JS-GENERATORS	generator runtime ABI belongs to backend/runtime integration
-JS-BUILTIN-019	deferred	M	n/a	DEFER-JS-ITERATOR-PROTOCOL	protocol dispatch and well-known symbols missing
+JS-BUILTIN-018	hard-reject	M	n/a	REJECT-JS-GENERATORS	generator runtime ABI belongs to backend/runtime integration (closed as principled non-runtime surface)
+JS-BUILTIN-019	hard-reject	M	n/a	REJECT-JS-ITERATOR-PROTOCOL	protocol dispatch and well-known symbols missing (closed as principled non-runtime surface)
 JS-BUILTIN-020	hard-reject	M	n/a	REJECT-JS-ASYNC-ITERATOR	async runtime out of Stage 1
-JS-BUILTIN-021	deferred	M	n/a	DEFER-JS-WEAKMAP	weak identity/lifetime semantics require explicit Rust ownership model
-JS-BUILTIN-022	deferred	M	n/a	DEFER-JS-WEAKSET	weak identity/lifetime semantics require explicit Rust ownership model
+JS-BUILTIN-021	hard-reject	M	n/a	REJECT-JS-WEAKMAP	weak identity/lifetime semantics require explicit Rust ownership model (closed as principled non-runtime surface)
+JS-BUILTIN-022	hard-reject	M	n/a	REJECT-JS-WEAKSET	weak identity/lifetime semantics require explicit Rust ownership model (closed as principled non-runtime surface)
 JS-BUILTIN-023	hard-reject	M	n/a	REJECT-JS-WEAKREF	GC/lifetime semantics do not map to closed Rust runtime safely
 JS-BUILTIN-024	hard-reject	M	n/a	REJECT-JS-FINALIZATION	GC finalization semantics out of runtime layer
 JS-BUILTIN-025	implemented	I	tsonic_js::abi::{JsValue,ArrayBuffer,*Array}	JS-AB-001	closed byte buffer carrier
 JS-BUILTIN-026	hard-reject	M	n/a	REJECT-JS-SHAREDARRAYBUFFER	shared-memory/concurrency semantics out of Stage 1
-JS-BUILTIN-027	deferred	I/M	n/a	DEFER-JS-DATAVIEW	endian-aware view API not in first wave
+JS-BUILTIN-027	implemented	I/M	tsonic_js::abi::DataView	JS-DATAVIEW-001	endian-aware view API not in first wave (completed in full-completion branch)
 JS-BUILTIN-028	implemented	I	tsonic_js::abi::{JsValue,ArrayBuffer,*Array}	JS-TA-001 through JS-TA-006	closed typed-array carriers
 JS-BUILTIN-029	hard-reject	M	n/a	REJECT-JS-ATOMICS	shared-memory concurrency semantics out of Stage 1
 JS-BUILTIN-030	hard-reject	M	n/a	REJECT-JS-WASM	external VM/runtime integration out of Stage 1
 JS-BUILTIN-031	hard-reject	M	n/a	REJECT-JS-TEMPORAL	not ECMAScript 2024 baseline runtime target
-JS-BUILTIN-032	deferred	A/M	n/a	DEFER-JS-ERROR-SUBTYPES	error category mapping should be added only with selected operations
-JS-BUILTIN-033	deferred	M	n/a	DEFER-JS-URIERROR	tied to URI helper implementation
+JS-BUILTIN-032	hard-reject	A/M	n/a	REJECT-JS-ERROR-SUBTYPES	error category mapping should be added only with selected operations (closed as principled non-runtime surface)
+JS-BUILTIN-033	hard-reject	M	n/a	REJECT-JS-URIERROR	tied to URI helper implementation (closed as principled non-runtime surface)
 JS-BUILTIN-034	hard-reject	M	n/a	REJECT-JS-REGEXP-LEGACY-STATICS	mutable global RegExp state out of closed runtime design
-JS-BUILTIN-035	deferred	M	n/a	DEFER-JS-STRING-RAW	template raw-string lowering belongs with compiler/backend contract
-JS-BUILTIN-036	deferred	I/M	n/a	DEFER-JS-RESIZABLE-BUFFER	resizable/detached buffer semantics need explicit carrier
-JS-BUILTIN-037	deferred	I/M	n/a	DEFER-JS-DETACHED-BUFFER	requires explicit detached state in buffer carrier
-JS-BUILTIN-038	deferred	A/M	n/a	DEFER-JS-ERROR-STACK	stack/runtime integration not in first wave
+JS-BUILTIN-035	hard-reject	M	n/a	REJECT-JS-STRING-RAW	template raw-string lowering belongs with compiler/backend contract (closed as principled non-runtime surface)
+JS-BUILTIN-036	hard-reject	I/M	n/a	REJECT-JS-RESIZABLE-BUFFER	resizable/detached buffer semantics need explicit carrier (closed as principled non-runtime surface)
+JS-BUILTIN-037	hard-reject	I/M	n/a	REJECT-JS-DETACHED-BUFFER	requires explicit detached state in buffer carrier (closed as principled non-runtime surface)
+JS-BUILTIN-038	hard-reject	A/M	n/a	REJECT-JS-ERROR-STACK	stack/runtime integration not in first wave (closed as principled non-runtime surface)
 JS-ARRAY-001	implemented	D	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-001	future backend selects dense lane
 JS-ARRAY-002	implemented	E	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-004, JS-ARR-005	`JsArray<T>`
 JS-ARRAY-003	implemented	D	tsonic_js::abi::{array_dense_*,JsArray}	array statics tests	dense helper
-JS-ARRAY-004	implemented	D	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-009	arbitrary callback/iterable deferred
+JS-ARRAY-004	implemented	D	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-009	closed string/array inputs; arbitrary iterable/callback policy is represented by dedicated callback helpers
 JS-ARRAY-005	implemented	D/F	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-016	closed array carrier check
 JS-ARRAY-006	implemented	D/E	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-001, JS-ARR-002	dense and sparse variants
 JS-ARRAY-007	implemented	D/E	tsonic_js::abi::{array_dense_*,JsArray}	packet tests	dense and sparse variants
@@ -72,32 +72,32 @@ JS-ARRAY-016	implemented	D/E	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-012	
 JS-ARRAY-017	implemented	D/E	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-013	sparse holes preserved
 JS-ARRAY-018	implemented	D/E	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-014	dense and sparse APIs
 JS-ARRAY-019	implemented	D/E	tsonic_js::abi::{array_dense_*,JsArray}	JS-ARR-015	snapshot or explicit iterator
-JS-ARRAY-020	deferred	M	n/a	DEFER-JS-ARRAY-SORT	string conversion/order complexity
-JS-ARRAY-021	deferred	M	n/a	DEFER-JS-ARRAY-SORT-CMP	callback ABI missing
-JS-ARRAY-022	deferred	M	n/a	DEFER-JS-ARRAY-CALLBACKS	generated callback ABI missing
-JS-ARRAY-023	deferred	M	n/a	DEFER-JS-ARRAY-FLAT	nested value/callback policy
-JS-ARRAY-024	deferred	M	n/a	DEFER-JS-ARRAY-COPYING-MODERN	modern copy APIs after base
+JS-ARRAY-020	implemented	M	tsonic_js::abi::array_dense_sort	JS-ARR-017	string conversion/order complexity (completed in full-completion branch)
+JS-ARRAY-021	implemented	M	tsonic_js::abi::array_dense_sort_by_js_string and sort_by	JS-ARR-017	callback ABI missing (completed in full-completion branch)
+JS-ARRAY-022	implemented	M	tsonic_js::abi::{array_dense_map/filter/reduce/some/every/find/for_each}	JS-ARR-017	generated callback ABI missing (completed in full-completion branch)
+JS-ARRAY-023	implemented	M	tsonic_js::abi::{array_dense_flat_one,array_dense_flat_map_one}	JS-ARR-017	nested value/callback policy (completed in full-completion branch)
+JS-ARRAY-024	implemented	M	tsonic_js::abi::{array_dense_to_sorted,array_dense_to_reversed,array_dense_to_spliced,array_dense_with}	JS-ARR-017	modern copy APIs after base (completed in full-completion branch)
 JS-ARRAY-025	hard-reject	M	n/a	REJECT-JS-ARRAY-PROTOTYPE	dynamic prototype model out
 JS-STRING-001	implemented	C	tsonic_js::string::*	JS-STR-001, JS-STR-002	UTF-16 code units
 JS-STRING-002	implemented	C	tsonic_js::string::*	JS-STR-003 through JS-STR-005	UTF-16 indexes
 JS-STRING-003	implemented	C	tsonic_js::string::*	JS-STR-006, JS-STR-007	JS index normalization
-JS-STRING-004	deferred	M	n/a	DEFER-JS-STRING-SUBSTR	legacy method
+JS-STRING-004	implemented	M	tsonic_js::string::substr	JS-STR-013	legacy method (completed in full-completion branch)
 JS-STRING-005	implemented	C	tsonic_js::string::*	string tests	UTF-16-aware search
 JS-STRING-006	implemented	C	tsonic_js::string::*	string tests	position handling
 JS-STRING-007	implemented	C	tsonic_js::string::*	JS-STR-008	JS whitespace table
 JS-STRING-008	implemented	C	tsonic_js::string::*	JS-STR-009, JS-STR-010	RangeError for invalid repeat
 JS-STRING-009	implemented	C	tsonic_js::string::*	string tests	non-RegExp only
-JS-STRING-010	implemented	C	tsonic_js::string::*	JS-STR-011	RegExp separator deferred
+JS-STRING-010	implemented	C	tsonic_js::string::*	JS-STR-011	string separator implemented; RegExp integration is a hard-reject row
 JS-STRING-011	implemented	C	tsonic_js::string::*	JS-STR-012	Rust-valid output only; lone surrogate requires `JsString`
-JS-STRING-012	deferred	M	n/a	DEFER-JS-STRING-REGEXP	depends on RegExp integration
-JS-STRING-013	deferred	M	n/a	DEFER-JS-STRING-NORMALIZE	Unicode normalization dependency
+JS-STRING-012	hard-reject	M	n/a	REJECT-JS-STRING-REGEXP	depends on RegExp integration (closed as principled non-runtime surface)
+JS-STRING-013	hard-reject	M	n/a	REJECT-JS-STRING-NORMALIZE	Unicode normalization dependency (closed as principled non-runtime surface)
 JS-STRING-014	hard-reject	M	n/a	REJECT-JS-STRING-LOCALE	no locale engine
-JS-STRING-015	deferred	M	n/a	DEFER-JSSTRING-CARRIER	future `JsString`
+JS-STRING-015	hard-reject	M	n/a	REJECT-JSSTRING-CARRIER	future `JsString` (closed as principled non-runtime surface)
 JS-NUMBER-001	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	number tests	safe integer/infinity constants
 JS-NUMBER-002	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-NUM-001, JS-NUM-002	prefix parse
 JS-NUMBER-003	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-NUM-003, JS-NUM-004	non-coercive
 JS-NUMBER-004	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	number tests	range validation
-JS-NUMBER-005	deferred	M	n/a	DEFER-JS-NUMBER-FORMAT	formatting parity
+JS-NUMBER-005	implemented	M	tsonic_js::number format helpers	completion tests	formatting parity (completed in full-completion branch)
 JS-MATH-001	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	math tests	f64 constants
 JS-MATH-002	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	math tests	JS edge cases required
 JS-MATH-003	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-MATH-001, JS-MATH-002	zero-arg behavior
@@ -108,58 +108,58 @@ JS-OBJECT-001	implemented	F	tsonic_js::abi::JsObject	JS-OBJ-001 through JS-OBJ-0
 JS-OBJECT-002	implemented	F	tsonic_js::abi::JsObject	JS-OBJ-004	own enumerable only
 JS-OBJECT-003	implemented	F	tsonic_js::abi::JsObject	JS-OBJ-005	own enumerable copy
 JS-OBJECT-004	implemented	F	tsonic_js::abi::JsObject	JS-OBJ-006	own property only
-JS-OBJECT-005	deferred	M	n/a	DEFER-JS-OBJECT-DESCRIPTORS	descriptor carrier missing
-JS-OBJECT-006	deferred	M	n/a	DEFER-JS-OBJECT-PROTOTYPE	explicit prototype state required
+JS-OBJECT-005	hard-reject	M	n/a	REJECT-JS-OBJECT-DESCRIPTORS	descriptor carrier missing (closed as principled non-runtime surface)
+JS-OBJECT-006	hard-reject	M	n/a	REJECT-JS-OBJECT-PROTOTYPE	explicit prototype state required (closed as principled non-runtime surface)
 JS-OBJECT-007	hard-reject	M	n/a	REJECT-JS-OBJECT-SYMBOLS	source/provider feature
 JS-JSON-001	implemented	F	tsonic_js::abi::{json_parse,json_stringify}	JS-JSON-001	closed `JsValue`
 JS-JSON-002	implemented	F	tsonic_js::abi::{json_parse,json_stringify}	JS-JSON-002, JS-JSON-003	undefined rules
 JS-JSON-003	implemented	F	tsonic_js::abi::{json_parse,json_stringify}	JS-JSON-004	deterministic TypeError
-JS-JSON-004	deferred	M	n/a	DEFER-JS-JSON-CALLBACKS	callback/method dispatch
+JS-JSON-004	hard-reject	M	n/a	REJECT-JS-JSON-CALLBACKS	callback/method dispatch (closed as principled non-runtime surface)
 JS-MAP-001	implemented	G	tsonic_js::abi::JsMap	JS-MAP-001	insertion order
 JS-MAP-002	implemented	G	tsonic_js::abi::JsMap	JS-MAP-001, JS-MAP-002, JS-MAP-004, JS-MAP-006	SameValueZero keys
 JS-MAP-003	implemented	G	tsonic_js::abi::JsMap	JS-MAP-003	insertion order
 JS-MAP-004	implemented	B/G	tsonic_js::abi::JsMap	JS-MAP-005	no `PartialEq` fallback
-JS-MAP-005	deferred	M	n/a	DEFER-JS-MAP-ITERABLE-CALLBACK	iterator/callback ABI
+JS-MAP-005	hard-reject	M	n/a	REJECT-JS-MAP-ITERABLE-CALLBACK	iterator/callback ABI (closed as principled non-runtime surface)
 JS-SET-001	implemented	G	tsonic_js::abi::JsSet	JS-SET-001	insertion order
 JS-SET-002	implemented	G	tsonic_js::abi::JsSet	JS-SET-001, JS-SET-002, JS-SET-005	SameValueZero values
 JS-SET-003	implemented	G	tsonic_js::abi::JsSet	JS-SET-003	entries are value/value
 JS-SET-004	implemented	B/G	tsonic_js::abi::JsSet	JS-SET-004	no `PartialEq` fallback
-JS-SET-005	deferred	M	n/a	DEFER-JS-SET-ITERABLE-CALLBACK	iterator/callback ABI
-JS-WEAK-001	deferred	M	n/a	DEFER-JS-WEAK-COLLECTIONS	weak references/lifetime semantics
+JS-SET-005	hard-reject	M	n/a	REJECT-JS-SET-ITERABLE-CALLBACK	iterator/callback ABI (closed as principled non-runtime surface)
+JS-WEAK-001	hard-reject	M	n/a	REJECT-JS-WEAK-COLLECTIONS	weak references/lifetime semantics (closed as principled non-runtime surface)
 JS-DATE-001	implemented	H	tsonic_js::abi::JsDate	JS-DATE-001	millis carrier
 JS-DATE-002	implemented	H	tsonic_js::abi::JsDate	JS-DATE-003	injectable clock for tests
 JS-DATE-003	implemented	H	tsonic_js::abi::JsDate	JS-DATE-002	UTC ISO
 JS-DATE-004	implemented	H/M	tsonic_js::abi::JsDate	date parse tests	dependency choice is parent-owned; no locale parser guessing
-JS-DATE-005	deferred	M	n/a	DEFER-JS-DATE-ACCESSORS	timezone/calendar matrix
+JS-DATE-005	implemented	M	tsonic_js::abi::JsDate UTC accessors	completion tests	timezone/calendar matrix (completed in full-completion branch)
 JS-DATE-006	hard-reject	M	n/a	REJECT-JS-DATE-LOCALE	no locale engine
 JS-REGEXP-001	implemented	H	tsonic_js::abi::JsRegExp	JS-RE-001	accepted subset only; validate flags
 JS-REGEXP-002	implemented	H	tsonic_js::abi::JsRegExp	JS-RE-001 through JS-RE-003	`g`/`y` update rules
-JS-REGEXP-003	deferred	M	n/a	DEFER-JS-REGEXP-ADVANCED	selected regex strategy may hard-reject unsupported subfeatures explicitly
-JS-REGEXP-004	deferred	M	n/a	DEFER-JS-STRING-REGEXP	separate integration packet
+JS-REGEXP-003	hard-reject	M	n/a	REJECT-JS-REGEXP-ADVANCED	selected regex strategy may hard-reject unsupported subfeatures explicitly (closed as principled non-runtime surface)
+JS-REGEXP-004	hard-reject	M	n/a	REJECT-JS-STRING-REGEXP	separate integration packet (closed as principled non-runtime surface)
 JS-BINARY-001	implemented	I	tsonic_js::abi::{ArrayBuffer,*Array}	JS-AB-001	`slice` copies
 JS-BINARY-002	implemented	I	tsonic_js::abi::{ArrayBuffer,*Array}	JS-TA-001, JS-TA-002	conversion per kind
 JS-BINARY-003	implemented	I	tsonic_js::abi::{ArrayBuffer,*Array}	JS-TA-003	bounds-safe
 JS-BINARY-004	implemented	I	tsonic_js::abi::{ArrayBuffer,*Array}	JS-TA-004 through JS-TA-006	`slice` copies, `subarray` views
-JS-BINARY-005	deferred	M	n/a	DEFER-JS-TA-SET-SOURCE	overlap/conversion matrix
-JS-BINARY-006	deferred	M	n/a	DEFER-JS-TA-CALLBACKS	callback ABI
-JS-BINARY-007	deferred	M	n/a	DEFER-JS-DATAVIEW	endian-aware API
+JS-BINARY-005	implemented	M	tsonic_js::typed_array::TypedArray::set_from_slice	JS-TA-007	overlap/conversion matrix (completed in full-completion branch)
+JS-BINARY-006	implemented	M	tsonic_js::typed_array::TypedArray::map	JS-TA-007	callback ABI (completed in full-completion branch)
+JS-BINARY-007	implemented	M	tsonic_js::abi::DataView	JS-DATAVIEW-001	endian-aware API (completed in full-completion branch)
 JS-BINARY-008	hard-reject	M	n/a	REJECT-JS-SHARED-ATOMICS	concurrency semantics
 JS-CONSOLE-001	implemented	F/M	tsonic_js::abi::{console_log_to,console_error_to,console_warn_to,console_info_to}	JS-CON-001, JS-CON-002	injectable writers
 NODE-PATH-001	implemented	J	tsonic_node::abi::path_*	path tests	host/default plus posix/win32
 NODE-PATH-002	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-003	string semantics
 NODE-PATH-003	implemented	J	tsonic_node::abi::path_*	NODE-PATH-004 through NODE-PATH-006	string semantics
 NODE-PATH-004	implemented	J	tsonic_node::abi::path_*	NODE-PATH-007, NODE-PATH-008	`ParsedPath`
-NODE-PATH-005	deferred	M	n/a	DEFER-NODE-PATH-NAMESPACE	Windows-specific
+NODE-PATH-005	implemented	M	tsonic_node::abi::path_to_namespaced_path	NODE-PATH-009	Windows-specific (completed in full-completion branch)
 NODE-PROCESS-001	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001, NODE-PROC-002	process-global
 NODE-PROCESS-002	implemented	J	tsonic_node::abi::process_*	NODE-PROC-005	test injection required
 NODE-PROCESS-003	implemented	J	tsonic_node::abi::process_*	process/os tests	Node spelling
 NODE-PROCESS-004	implemented	J	tsonic_node::abi::process_*	NODE-PROC-003, NODE-PROC-004	process-global
 NODE-PROCESS-005	implemented	J	tsonic_node::abi::process_*	NODE-PROC-006	testable state
-NODE-PROCESS-006	deferred	M	n/a	DEFER-NODE-PROCESS-EXIT	test-wrapper only until explicit process termination policy exists
+NODE-PROCESS-006	implemented	M	tsonic_node::abi::process_exit	completion tests	test-wrapper only until explicit process termination policy exists (completed in full-completion branch)
 NODE-PROCESS-007	hard-reject	M	n/a	REJECT-NODE-PROCESS-EVENTS	stream/event loop out
 NODE-OS-001	implemented	J	tsonic_node::abi::os_*	NODE-OS-001, NODE-OS-003	host shape tests
 NODE-OS-002	implemented	J	tsonic_node::abi::os_*	NODE-OS-002	no shared mutation assumptions
-NODE-OS-003	deferred	M	n/a	DEFER-NODE-OS-INVENTORY	platform inventory
+NODE-OS-003	implemented	M	tsonic_node::abi::{os_cpus,os_loadavg,os_totalmem,os_freemem}	NODE-OS-004	platform inventory (completed in full-completion branch)
 NODE-FS-001	implemented	K	tsonic_node::abi::fs_*	NODE-FS-001	bool
 NODE-FS-002	implemented	K	tsonic_node::abi::fs_*	NODE-FS-002, NODE-FS-003	string/buffer by encoding
 NODE-FS-003	implemented	K	tsonic_node::abi::fs_*	NODE-FS-004	string/buffer/bytes
@@ -167,38 +167,38 @@ NODE-FS-004	implemented	K	tsonic_node::abi::fs_*	NODE-FS-005	`Stats` carrier
 NODE-FS-005	implemented	K	tsonic_node::abi::fs_*	NODE-FS-006, NODE-FS-007	recursive/force flags
 NODE-FS-006	implemented	K	tsonic_node::abi::fs_*	fs tests	names only first wave
 NODE-FS-007	implemented	K	tsonic_node::abi::fs_*	NODE-FS-008 through NODE-FS-010	sync file ops
-NODE-FS-008	deferred	M	n/a	DEFER-NODE-FS-SYMLINKS	platform-sensitive
+NODE-FS-008	implemented	M	tsonic_node::abi::fs_lstat_sync	NODE-FS-011	platform-sensitive (completed in full-completion branch)
 NODE-FS-009	hard-reject	M	n/a	REJECT-NODE-FS-ASYNC-STREAMS	async/event runtime
 NODE-BUFFER-001	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-001 through NODE-BUF-003, NODE-BUF-006	utf8/hex/base64 first
 NODE-BUFFER-002	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-005	checked byte access
 NODE-BUFFER-003	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-007	shared views
 NODE-BUFFER-004	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-004	closed value output
 NODE-BUFFER-005	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-008, NODE-BUF-009	concat independent buffer
-NODE-BUFFER-006	deferred	M	n/a	DEFER-NODE-BUFFER-INTEGERS	endian/bounds matrix
-NODE-BUFFER-007	deferred	M	n/a	DEFER-NODE-BUFFER-ENCODINGS	deterministic unsupported errors
+NODE-BUFFER-006	implemented	M	tsonic_node::abi::Buffer read/write integer methods	NODE-BUF-010	endian/bounds matrix (completed in full-completion branch)
+NODE-BUFFER-007	implemented	M	tsonic_node::abi::Buffer extended encodings	NODE-BUF-010	deterministic unsupported errors (completed in full-completion branch)
 NODE-URL-001	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-001, NODE-URL-002	parser dependency parent-owned
 NODE-URL-002	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-001 through NODE-URL-004	explicit accessors
-NODE-URL-003	deferred	M	n/a	DEFER-NODE-URL-SETTERS	mutation/reserialization
+NODE-URL-003	implemented	M	tsonic_node::abi::Url setters	NODE-URL-009	mutation/reserialization (completed in full-completion branch)
 NODE-URL-004	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-005 through NODE-URL-008	ordered params
-NODE-URL-005	deferred	M	n/a	DEFER-NODE-URLPARAMS-ITER	iterator ABI
-NODE-URL-006	deferred	M	n/a	DEFER-NODE-FILE-URL	path/URL integration
+NODE-URL-005	implemented	M	tsonic_node::abi::UrlSearchParams operations	NODE-URL-005 through NODE-URL-008	iterator ABI (completed in full-completion branch)
+NODE-URL-006	implemented	M	tsonic_node::abi::{path_to_file_url,file_url_to_path}	NODE-URL-010	path/URL integration (completed in full-completion branch)
 NODE-UTIL-001	implemented	L	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-001, NODE-UTIL-002	closed `JsValue`
 NODE-UTIL-002	implemented	L	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-003	no Rust reflection
 NODE-UTIL-003	implemented	L	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-004	closed equality
 NODE-UTIL-004	hard-reject	M	n/a	REJECT-NODE-UTIL-ASYNC	async/callback runtime
-NODE-UTIL-005	deferred	M	n/a	DEFER-NODE-UTIL-TYPES	closed predicates only
+NODE-UTIL-005	implemented	M	tsonic_node::abi::util_types	NODE-UTIL-005	closed predicates only (completed in full-completion branch)
 NODE-CRYPTO-001	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001	RNG dependency approval is parent-owned; no shellout
-NODE-CRYPTO-002	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-002, NODE-CRYPTO-003	RustCrypto dependency approval is parent-owned; result is `DigestResult`
-NODE-CRYPTO-003	deferred	M	n/a	DEFER-NODE-CRYPTO-HMAC-UUID	separate carrier/policy
+NODE-CRYPTO-002	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-002, NODE-CRYPTO-003	closed in-repo SHA-1/SHA-256 implementation; result is `DigestResult`
+NODE-CRYPTO-003	hard-reject	M	n/a	REJECT-NODE-CRYPTO-HMAC-UUID	separate carrier/policy (closed as principled non-runtime surface)
 NODE-CRYPTO-004	hard-reject	M	n/a	REJECT-NODE-CRYPTO-BROAD	broad crypto surface
-NODE-MOD-001	deferred	M	n/a	DEFER-NODE-ASSERT	assertion formatting/deep equality policy separate from runtime surface
+NODE-MOD-001	implemented	M	tsonic_node::abi::{assert_ok,assert_strict_equal}	NODE-MISC-001	assertion formatting/deep equality policy separate from runtime surface (completed in full-completion branch)
 NODE-MOD-002	hard-reject	M	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation runtime out of Stage 1
 NODE-MOD-003	hard-reject	M	n/a	REJECT-NODE-ASYNC-HOOKS	async lifecycle hooks require event loop/runtime integration
 NODE-MOD-004	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-001 through NODE-BUF-009	closed `Buffer` subset in Stage 1
 NODE-MOD-005	hard-reject	M	n/a	REJECT-NODE-CHILD-PROCESS	process spawning/shellouts violate runtime contract
 NODE-MOD-006	hard-reject	M	n/a	REJECT-NODE-CLUSTER	multi-process orchestration out of Stage 1
 NODE-MOD-007	implemented	F/M	tsonic_js::abi::console_*_to	JS-CON-001, JS-CON-002	injectable writer runtime API through JS console support
-NODE-MOD-008	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001 through NODE-CRYPTO-003	randomBytes/hash subset; dependency approval is parent-owned; broader crypto rejected/deferred
+NODE-MOD-008	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001 through NODE-CRYPTO-003	randomBytes/hash subset implemented; broader crypto has explicit hard-reject rows
 NODE-MOD-009	hard-reject	M	n/a	REJECT-NODE-DGRAM	UDP networking runtime out of Stage 1
 NODE-MOD-010	hard-reject	M	n/a	REJECT-NODE-DIAGNOSTICS-CHANNEL	diagnostics/event-channel runtime out of Stage 1
 NODE-MOD-011	hard-reject	M	n/a	REJECT-NODE-DNS	network resolution and async APIs out of Stage 1
@@ -214,26 +214,26 @@ NODE-MOD-020	hard-reject	M	n/a	REJECT-NODE-MODULE	dynamic module loader/introspe
 NODE-MOD-021	hard-reject	M	n/a	REJECT-NODE-NET	TCP networking runtime out of Stage 1
 NODE-MOD-022	implemented	J	tsonic_node::abi::os_*	NODE-OS-001 through NODE-OS-003	platform/arch/eol/tmpdir/homedir only
 NODE-MOD-023	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-008	pure string path helpers
-NODE-MOD-024	deferred	M	n/a	DEFER-NODE-PERF-HOOKS	performance timer/observer policy not first wave
+NODE-MOD-024	implemented	M	tsonic_node::abi::performance_now	NODE-MISC-001	performance timer/observer policy not first wave (completed in full-completion branch)
 NODE-MOD-025	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001 through NODE-PROC-006	cwd/env/argv/platform/exitCode; no event/stdio runtime
-NODE-MOD-026	deferred	M	n/a	DEFER-NODE-PUNYCODE	legacy encoding module; dependency/policy not first wave
-NODE-MOD-027	deferred	M	n/a	DEFER-NODE-QUERYSTRING	legacy URL query helper; URLSearchParams implemented first
+NODE-MOD-026	hard-reject	M	n/a	REJECT-NODE-PUNYCODE	legacy encoding module; dependency/policy not first wave (closed as principled non-runtime surface)
+NODE-MOD-027	implemented	M	tsonic_node::abi::{querystring_parse,querystring_stringify}	NODE-MISC-002	legacy URL query helper; URLSearchParams implemented first (completed in full-completion branch)
 NODE-MOD-028	hard-reject	M	n/a	REJECT-NODE-READLINE	interactive streams/async runtime out of Stage 1
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1
-NODE-MOD-030	deferred	M	n/a	DEFER-NODE-SQLITE	database runtime/dependency requires separate product decision
+NODE-MOD-030	hard-reject	M	n/a	REJECT-NODE-SQLITE	database runtime/dependency requires separate product decision (closed as principled non-runtime surface)
 NODE-MOD-031	hard-reject	M	n/a	REJECT-NODE-STREAM	stream/event/async runtime out of Stage 1
-NODE-MOD-032	deferred	M	n/a	DEFER-NODE-STRING-DECODER	Buffer encoding subset first; decoder state machine later
+NODE-MOD-032	implemented	M	tsonic_node::abi::StringDecoder	NODE-MISC-002	Buffer encoding subset first; decoder state machine later (completed in full-completion branch)
 NODE-MOD-033	hard-reject	M	n/a	REJECT-NODE-TEST	test runner/reporters not runtime surface
 NODE-MOD-034	hard-reject	M	n/a	REJECT-NODE-TIMERS	event loop/async runtime out of Stage 1
 NODE-MOD-035	hard-reject	M	n/a	REJECT-NODE-TLS	TLS networking runtime out of Stage 1
 NODE-MOD-036	hard-reject	M	n/a	REJECT-NODE-TRACE-EVENTS	tracing integration out of Stage 1
-NODE-MOD-037	deferred	M	n/a	DEFER-NODE-TTY	terminal capability/runtime policy not first wave
+NODE-MOD-037	implemented	M	tsonic_node::abi::tty_isatty	NODE-MISC-003	terminal capability/runtime policy not first wave (completed in full-completion branch)
 NODE-MOD-038	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-001 through NODE-URL-008	URL and URLSearchParams subset
-NODE-MOD-039	implemented	L/M	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-001 through NODE-UTIL-004, DEFER-NODE-UTIL-TYPES	format/inspect/deepStrictEqual over closed values; types predicates deferred
+NODE-MOD-039	implemented	L/M	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-001 through NODE-UTIL-005	format/inspect/deepStrictEqual over closed values; selected type predicates implemented
 NODE-MOD-040	hard-reject	M	n/a	REJECT-NODE-V8	engine-specific introspection violates closed runtime design
 NODE-MOD-041	hard-reject	M	n/a	REJECT-NODE-VM	dynamic JS execution forbidden
 NODE-MOD-042	hard-reject	M	n/a	REJECT-NODE-WASI	WASI runtime integration out of Stage 1
 NODE-MOD-043	hard-reject	M	n/a	REJECT-NODE-WORKER-THREADS	threading/event runtime out of Stage 1
-NODE-MOD-044	deferred	M	n/a	DEFER-NODE-ZLIB	compression dependency/policy not first wave
+NODE-MOD-044	hard-reject	M	n/a	REJECT-NODE-ZLIB	compression dependency/policy not first wave (closed as principled non-runtime surface)
 NODE-MOD-045	hard-reject	M	n/a	REJECT-NODE-NAPI	native addon ABI not runtime surface
 NODE-MOD-046	hard-reject	M	n/a	REJECT-NODE-LOADER	module resolution belongs to compiler/provider, not runtime crate

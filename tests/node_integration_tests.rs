@@ -4,6 +4,8 @@ mod buffer_tests;
 mod crypto_tests;
 #[path = "node/fs_tests.rs"]
 mod fs_tests;
+#[path = "node/misc_module_tests.rs"]
+mod misc_module_tests;
 #[path = "node/os_tests.rs"]
 mod os_tests;
 #[path = "node/path_tests.rs"]

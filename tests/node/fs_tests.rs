@@ -18,6 +18,8 @@ fn fs_sync_file_lifecycle() {
     fs::write_file_sync(&file_text, FsWriteData::String("hello"), Some("utf8")).unwrap();
     assert!(fs::exists_sync(&file_text));
     assert_eq!(fs::stat_sync(&file_text).unwrap().size, 5);
+    assert!(!fs::stat_sync(&file_text).unwrap().is_symbolic_link());
+    assert!(!fs::lstat_sync(&file_text).unwrap().is_symbolic_link());
     assert_eq!(
         fs::read_file_sync(&file_text, Some("utf8")).unwrap(),
         FsReadResult::String("hello".to_string())

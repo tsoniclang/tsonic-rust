@@ -78,6 +78,23 @@ pub fn format(path: &ParsedPath) -> String {
     platform().format(path)
 }
 
+pub fn to_namespaced_path(path: &str) -> String {
+    #[cfg(windows)]
+    {
+        if path.starts_with("\\\\?\\") {
+            path.to_string()
+        } else if path.starts_with("\\\\") {
+            format!("\\\\?\\UNC\\{}", &path[2..])
+        } else {
+            format!("\\\\?\\{path}")
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_string()
+    }
+}
+
 pub mod posix {
     pub use crate::path_posix::{
         basename, delimiter, dirname, extname, format, is_absolute, join, normalize, parse,

@@ -26,4 +26,5 @@ fn parse_and_format_roundtrip_basic_path() {
     assert_eq!(parsed.ext, ".txt");
     assert_eq!(parsed.name, "file");
     assert_eq!(path::posix::format(&parsed), "/tmp/file.txt");
+    assert_eq!(path::to_namespaced_path("/tmp/file.txt"), "/tmp/file.txt");
 }

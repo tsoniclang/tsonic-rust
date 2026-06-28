@@ -1,4 +1,4 @@
-use tsonic_node::url::{Url, UrlSearchParams};
+use tsonic_node::url::{file_url_to_path, path_to_file_url, Url, UrlSearchParams};
 
 #[test]
 fn url_parses_common_absolute_and_base_forms() {
@@ -24,4 +24,17 @@ fn url_search_params_preserve_order() {
     params.set("a", "3");
     params.append("c", "4");
     assert_eq!(params.to_string(), "b=hello+world&a=3&c=4");
+}
+
+#[test]
+fn url_setters_and_file_url_helpers() {
+    let mut url = Url::parse("https://example.com/a?x=1#h", None).unwrap();
+    url.set_pathname("b");
+    url.set_search("q=1");
+    url.set_hash("z");
+    assert_eq!(url.href(), "https://example.com/b?q=1#z");
+
+    let file = path_to_file_url("/tmp/a.txt");
+    assert_eq!(file.protocol(), "file:");
+    assert_eq!(file_url_to_path(&file).unwrap(), "/tmp/a.txt");
 }

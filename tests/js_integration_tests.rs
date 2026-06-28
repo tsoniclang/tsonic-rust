@@ -6,6 +6,8 @@ mod array_dense_tests;
 mod console_tests;
 #[path = "js/date_tests.rs"]
 mod date_tests;
+#[path = "js/globals_uri_dataview_tests.rs"]
+mod globals_uri_dataview_tests;
 #[path = "js/js_array_sparse_tests.rs"]
 mod js_array_sparse_tests;
 #[path = "js/json_tests.rs"]

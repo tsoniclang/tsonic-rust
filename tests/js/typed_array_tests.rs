@@ -23,3 +23,14 @@ fn typed_array_subarray_is_shared_view() {
     view.set_index(0, 99);
     assert_eq!(values.get(1), Some(99));
 }
+
+#[test]
+fn typed_array_set_source_and_map_helpers() {
+    let mut values = Uint8Array::from_vec(vec![1, 2, 3, 4]);
+    values.set_from_slice(&[9, 8], 1).unwrap();
+    assert_eq!(values.get(0), Some(1));
+    assert_eq!(values.get(1), Some(9));
+    assert_eq!(values.get(2), Some(8));
+    assert!(values.set_from_slice(&[1, 2, 3], 3).is_err());
+    assert_eq!(values.map(|value| value + 1), vec![2, 10, 9, 5]);
+}

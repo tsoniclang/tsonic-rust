@@ -60,6 +60,56 @@ impl JsDate {
     pub fn to_json(&self) -> JsResult<String> {
         self.to_iso_string()
     }
+
+    pub fn get_utc_full_year(&self) -> JsResult<i32> {
+        let (year, _, _, _, _, _, _) = self.utc_parts()?;
+        Ok(year)
+    }
+
+    pub fn get_utc_month(&self) -> JsResult<u32> {
+        let (_, month, _, _, _, _, _) = self.utc_parts()?;
+        Ok(month - 1)
+    }
+
+    pub fn get_utc_date(&self) -> JsResult<u32> {
+        let (_, _, day, _, _, _, _) = self.utc_parts()?;
+        Ok(day)
+    }
+
+    pub fn get_utc_hours(&self) -> JsResult<i64> {
+        let (_, _, _, hour, _, _, _) = self.utc_parts()?;
+        Ok(hour)
+    }
+
+    pub fn get_utc_minutes(&self) -> JsResult<i64> {
+        let (_, _, _, _, minute, _, _) = self.utc_parts()?;
+        Ok(minute)
+    }
+
+    pub fn get_utc_seconds(&self) -> JsResult<i64> {
+        let (_, _, _, _, _, second, _) = self.utc_parts()?;
+        Ok(second)
+    }
+
+    pub fn get_utc_milliseconds(&self) -> JsResult<i64> {
+        let (_, _, _, _, _, _, milli) = self.utc_parts()?;
+        Ok(milli)
+    }
+
+    fn utc_parts(&self) -> JsResult<(i32, u32, u32, i64, i64, i64, i64)> {
+        if !self.millis.is_finite() {
+            return Err(range_error("Invalid Date"));
+        }
+        let millis = self.millis.trunc() as i64;
+        let days = millis.div_euclid(MS_PER_DAY);
+        let ms_in_day = millis.rem_euclid(MS_PER_DAY);
+        let (year, month, day) = civil_from_days(days);
+        let hour = ms_in_day / 3_600_000;
+        let minute = (ms_in_day % 3_600_000) / 60_000;
+        let second = (ms_in_day % 60_000) / 1_000;
+        let milli = ms_in_day % 1_000;
+        Ok((year, month, day, hour, minute, second, milli))
+    }
 }
 
 fn parse_iso_utc(text: &str) -> Option<f64> {

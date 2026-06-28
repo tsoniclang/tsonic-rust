@@ -22,3 +22,23 @@ fn buffer_compare_equals_concat_and_json() {
     assert_eq!(one.compare(&two), -1);
     assert!(matches!(concat.to_json(), tsonic_js::JsValue::Object(_)));
 }
+
+#[test]
+fn buffer_integer_and_extended_encoding_helpers() {
+    let latin = Buffer::from_string("é", Some("latin1")).unwrap();
+    assert_eq!(latin.as_bytes(), vec![233]);
+    assert_eq!(latin.to_string(Some("latin1")).unwrap(), "é");
+
+    let utf16 = Buffer::from_string("AZ", Some("utf16le")).unwrap();
+    assert_eq!(utf16.as_bytes(), vec![65, 0, 90, 0]);
+    assert_eq!(utf16.to_string(Some("utf16le")).unwrap(), "AZ");
+
+    let base64url = Buffer::from_string("aGk", Some("base64url")).unwrap();
+    assert_eq!(base64url.to_string(Some("utf8")).unwrap(), "hi");
+
+    let mut buffer = Buffer::alloc(4);
+    buffer.write_uint32_be(0x01020304, 0).unwrap();
+    assert_eq!(buffer.read_uint32_be(0).unwrap(), 0x01020304);
+    assert_eq!(buffer.read_uint32_le(0).unwrap(), 0x04030201);
+    assert!(buffer.write_uint32_le(1, 2).is_err());
+}

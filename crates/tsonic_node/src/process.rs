@@ -71,3 +71,7 @@ pub fn exit_code() -> Option<i32> {
 pub fn set_exit_code(code: i32) {
     EXIT_CODE.store(code, Ordering::SeqCst);
 }
+
+pub fn exit(code: Option<i32>) -> ! {
+    std::process::exit(code.unwrap_or_else(|| exit_code().unwrap_or(0)));
+}

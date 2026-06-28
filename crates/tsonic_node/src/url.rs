@@ -68,12 +68,64 @@ impl Url {
     pub fn hash(&self) -> String {
         self.hash.clone()
     }
+
+    pub fn set_hash(&mut self, value: &str) {
+        self.hash = if value.is_empty() || value.starts_with('#') {
+            value.to_string()
+        } else {
+            format!("#{value}")
+        };
+        self.rebuild_href();
+    }
+
+    pub fn set_search(&mut self, value: &str) {
+        self.search = if value.is_empty() || value.starts_with('?') {
+            value.to_string()
+        } else {
+            format!("?{value}")
+        };
+        self.rebuild_href();
+    }
+
+    pub fn set_pathname(&mut self, value: &str) {
+        self.pathname = if value.starts_with('/') {
+            value.to_string()
+        } else {
+            format!("/{value}")
+        };
+        self.rebuild_href();
+    }
+
+    fn rebuild_href(&mut self) {
+        self.href = format!(
+            "{}//{}{}{}{}",
+            self.protocol, self.host, self.pathname, self.search, self.hash
+        );
+    }
 }
 
 impl std::fmt::Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.href)
     }
+}
+
+pub fn path_to_file_url(path: &str) -> Url {
+    let mut pathname = path.replace('\\', "/");
+    if !pathname.starts_with('/') {
+        pathname = format!("/{pathname}");
+    }
+    Url::parse(&format!("file://{pathname}"), None).unwrap()
+}
+
+pub fn file_url_to_path(url: &Url) -> NodeResult<String> {
+    if url.protocol() != "file:" {
+        return Err(NodeError::new(
+            "ERR_INVALID_URL_SCHEME",
+            "expected file: URL",
+        ));
+    }
+    Ok(url.pathname())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

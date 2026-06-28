@@ -8,6 +8,7 @@ pub struct Stats {
     pub size: u64,
     pub is_file: bool,
     pub is_directory: bool,
+    pub is_symbolic_link: bool,
 }
 
 impl Stats {
@@ -17,6 +18,10 @@ impl Stats {
 
     pub fn is_directory(&self) -> bool {
         self.is_directory
+    }
+
+    pub fn is_symbolic_link(&self) -> bool {
+        self.is_symbolic_link
     }
 }
 
@@ -95,6 +100,17 @@ pub fn stat_sync(path: &str) -> NodeResult<Stats> {
         size: metadata.len(),
         is_file: metadata.is_file(),
         is_directory: metadata.is_dir(),
+        is_symbolic_link: metadata.file_type().is_symlink(),
+    })
+}
+
+pub fn lstat_sync(path: &str) -> NodeResult<Stats> {
+    let metadata = fs::symlink_metadata(path).map_err(map_io_error)?;
+    Ok(Stats {
+        size: metadata.len(),
+        is_file: metadata.is_file(),
+        is_directory: metadata.is_dir(),
+        is_symbolic_link: metadata.file_type().is_symlink(),
     })
 }
 
