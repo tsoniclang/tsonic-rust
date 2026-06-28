@@ -3028,6 +3028,33 @@ NODE-URL-HTTP-OPTIONS	url	urlToHttpOptions	implemented	N59	tsonic_node::url::url
 NODE-URL-PATH-TO-FILE	url	pathToFileURL	implemented	L	tsonic_node::url::path_to_file_url	NODE-URL-003	path to file URL conversion
 NODE-URL-FILE-TO-PATH	url	fileURLToPath	implemented	L	tsonic_node::url::file_url_to_path	NODE-URL-003	file URL to path conversion with scheme validation
 NODE-URL-CANPARSE	url	URL.canParse	implemented	N59	tsonic_node::url::can_parse	NODE-URL-004	boolean parse validation without throwing
+NODE-URL-ORIGIN	url	URL.origin	implemented	N87	tsonic_node::url::Url::origin	NODE-URL-012	origin accessor derived from closed URL state
+NODE-URL-SEARCH-PARAMS-PROPERTY	url	URL.searchParams	implemented	N87	tsonic_node::url::Url::search_params	NODE-URL-012	searchParams accessor builds ordered params carrier
+NODE-URL-TO-JSON	url	URL.toJSON	implemented	N87	tsonic_node::url::Url::to_json	NODE-URL-012	toJSON emits href string
+NODE-URL-SEARCH-PARAMS-HAS-VALUE	url	URLSearchParams.has value	implemented	N87	tsonic_node::url::UrlSearchParams::has_value	NODE-URL-012	value-aware URLSearchParams has overload
+NODE-URL-SEARCH-PARAMS-DELETE-VALUE	url	URLSearchParams.delete value	implemented	N87	tsonic_node::url::UrlSearchParams::delete_value	NODE-URL-012	value-aware URLSearchParams delete overload
+NODE-URL-PATTERN-CARRIER	url	URLPattern	implemented	N87	tsonic_node::url::UrlPattern	NODE-URL-012	closed URLPattern carrier
+NODE-URL-PATTERN-INIT-CARRIER	url	URLPatternInit	implemented	N87	tsonic_node::url::UrlPatternInit	NODE-URL-012	closed URLPattern init carrier
+NODE-URL-PATTERN-OPTIONS-CARRIER	url	URLPatternOptions	implemented	N87	tsonic_node::url::UrlPatternOptions	NODE-URL-012	closed URLPattern options carrier
+NODE-URL-PATTERN-INPUT-CARRIER	url	URLPatternInput	implemented	N87	tsonic_node::url::UrlPatternInput	NODE-URL-012	closed URLPattern input carrier
+NODE-URL-PATTERN-RESULT-CARRIER	url	URLPatternResult	implemented	N87	tsonic_node::url::UrlPatternResult	NODE-URL-012	closed URLPattern result carrier
+NODE-URL-PATTERN-COMPONENT-RESULT-CARRIER	url	URLPatternComponentResult	implemented	N87	tsonic_node::url::UrlPatternComponentResult	NODE-URL-012	closed URLPattern component result carrier
+NODE-URL-PATTERN-NEW	url	URLPattern constructor	implemented	N87	tsonic_node::url::UrlPattern::new	NODE-URL-012	constructs exact/wildcard/named-segment URLPattern subset
+NODE-URL-PATTERN-NEW-BASE	url	URLPattern constructor base	implemented	N87	tsonic_node::url::UrlPattern::new_with_base	NODE-URL-012	constructs URLPattern with explicit base URL
+NODE-URL-PATTERN-PROTOCOL	url	URLPattern.protocol	implemented	N87	tsonic_node::url::UrlPattern::protocol	NODE-URL-012	URLPattern protocol accessor
+NODE-URL-PATTERN-USERNAME	url	URLPattern.username	implemented	N87	tsonic_node::url::UrlPattern::username	NODE-URL-012	URLPattern username accessor
+NODE-URL-PATTERN-PASSWORD	url	URLPattern.password	implemented	N87	tsonic_node::url::UrlPattern::password	NODE-URL-012	URLPattern password accessor
+NODE-URL-PATTERN-HOSTNAME	url	URLPattern.hostname	implemented	N87	tsonic_node::url::UrlPattern::hostname	NODE-URL-012	URLPattern hostname accessor
+NODE-URL-PATTERN-PORT	url	URLPattern.port	implemented	N87	tsonic_node::url::UrlPattern::port	NODE-URL-012	URLPattern port accessor
+NODE-URL-PATTERN-PATHNAME	url	URLPattern.pathname	implemented	N87	tsonic_node::url::UrlPattern::pathname	NODE-URL-012	URLPattern pathname accessor
+NODE-URL-PATTERN-SEARCH	url	URLPattern.search	implemented	N87	tsonic_node::url::UrlPattern::search	NODE-URL-012	URLPattern search accessor
+NODE-URL-PATTERN-HASH	url	URLPattern.hash	implemented	N87	tsonic_node::url::UrlPattern::hash	NODE-URL-012	URLPattern hash accessor
+NODE-URL-PATTERN-HAS-REGEXP-GROUPS	url	URLPattern.hasRegExpGroups	implemented	N87	tsonic_node::url::UrlPattern::has_regexp_groups	NODE-URL-012	explicit false for non-regexp closed subset
+NODE-URL-PATTERN-TEST	url	URLPattern.test	implemented	N87	tsonic_node::url::UrlPattern::test	NODE-URL-012	boolean URLPattern match
+NODE-URL-PATTERN-EXEC	url	URLPattern.exec	implemented	N87	tsonic_node::url::UrlPattern::exec	NODE-URL-012	URLPattern match with component result groups
+NODE-URL-PATTERN-CAN-PARSE	url	URLPattern.canParse	implemented	N87	tsonic_node::url::url_pattern_can_parse	NODE-URL-012	URLPattern parse validation without throwing
+NODE-URL-CREATE-OBJECT-URL	url	URL.createObjectURL	implemented	N87	tsonic_node::url::create_object_url	NODE-URL-012	closed object URL creation token
+NODE-URL-REVOKE-OBJECT-URL	url	URL.revokeObjectURL	implemented	N87	tsonic_node::url::revoke_object_url	NODE-URL-012	closed object URL revoke no-op
 NODE-UTIL-FORMAT	util	format	implemented	L	tsonic_node::util::format	NODE-UTIL-001	format subset
 NODE-UTIL-INSPECT	util	inspect	implemented	L	tsonic_node::util::inspect	NODE-UTIL-001	closed value inspection
 NODE-UTIL-TYPES	util	types	implemented	L	tsonic_node::util::types	NODE-UTIL-002	type predicates
@@ -3487,7 +3514,7 @@ WEB-NAVIGATOR-PLATFORM-ALIAS	web-globals/navigator	Navigator.platform	implemente
 WEB-NAVIGATOR-PROTOTYPE	web-globals/navigator	Navigator.prototype	implemented	N75	tsonic_js::web::Navigator	JS-WEB-005	prototype identity is represented by the closed Navigator carrier
 WEB-URL-SCHEDULER-HARD-REJECT	web-globals/url	scheduler	hard-reject	N75	n/a	REJECT-NODE-WEB-SCHEDULER	scheduler global is not part of closed Rust runtime externals
 WEB-URL-ONMESSAGE-HARD-REJECT	web-globals/url	onmessage	hard-reject	N75	n/a	REJECT-NODE-WEB-ONMESSAGE	global message handler mutation is not part of closed Rust runtime externals
-WEB-URL-URLPATTERN-HARD-REJECT	web-globals/url	URLPattern	hard-reject	N75	n/a	REJECT-NODE-URLPATTERN	URLPattern is deferred out of closed framework runtime externals
+WEB-URL-URLPATTERN	web-globals/url	URLPattern	implemented	N87	tsonic_node::url::UrlPattern	NODE-URL-012	global URLPattern uses the closed url::UrlPattern carrier
 NODE-GLOBALS-GCOPTIONS-FILENAME	globals	GCOptions.filename	implemented	N75	tsonic_node::util::InspectOptions	NODE-UTIL-008	global option-shape row mapped to closed option carrier lane
 NODE-GLOBALS-CALLSITE-SCRIPT-NAME	globals	CallSite.getScriptNameOrSourceURL	implemented	N75	tsonic_node::util::CallSite::get_script_name_or_source_url	NODE-UTIL-007	global CallSite method maps to closed util CallSite carrier
 NODE-GLOBALS-CALLSITE-FILE-NAME	globals	CallSite.getFileName	implemented	N75	tsonic_node::util::CallSite::get_file_name	NODE-UTIL-007	global CallSite method maps to closed util CallSite carrier

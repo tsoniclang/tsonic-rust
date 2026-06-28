@@ -332,10 +332,12 @@ pub use crate::tty::{
     isatty as tty_isatty, ReadStream as TtyReadStream, WriteStream as TtyWriteStream,
 };
 pub use crate::url::{
-    can_parse as url_can_parse, domain_to_ascii as url_domain_to_ascii,
-    domain_to_unicode as url_domain_to_unicode, file_url_to_path, format as url_format,
-    parse as url_parse, path_to_file_url, resolve as url_resolve, url_to_http_options, HttpOptions,
-    LegacyUrlObject, Url, UrlSearchParams,
+    can_parse as url_can_parse, create_object_url as url_create_object_url,
+    domain_to_ascii as url_domain_to_ascii, domain_to_unicode as url_domain_to_unicode,
+    file_url_to_path, format as url_format, parse as url_parse, path_to_file_url,
+    resolve as url_resolve, revoke_object_url as url_revoke_object_url, url_pattern_can_parse,
+    url_to_http_options, HttpOptions, LegacyUrlObject, Url, UrlPattern, UrlPatternComponentResult,
+    UrlPatternInit, UrlPatternInput, UrlPatternOptions, UrlPatternResult, UrlSearchParams,
 };
 pub use crate::util::types as util_types;
 pub use crate::util::{

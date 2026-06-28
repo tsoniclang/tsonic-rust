@@ -1,6 +1,7 @@
 use tsonic_node::url::{
     can_parse, domain_to_ascii, domain_to_unicode, file_url_to_path, format, parse,
-    path_to_file_url, resolve, url_to_http_options, LegacyUrlObject, Url, UrlSearchParams,
+    path_to_file_url, resolve, url_pattern_can_parse, url_to_http_options, LegacyUrlObject, Url,
+    UrlPattern, UrlPatternInit, UrlPatternInput, UrlPatternOptions, UrlSearchParams,
 };
 
 #[test]
@@ -15,6 +16,9 @@ fn url_parses_common_absolute_and_base_forms() {
     assert_eq!(url.pathname(), "/a/b");
     assert_eq!(url.search(), "?x=1");
     assert_eq!(url.hash(), "#h");
+    assert_eq!(url.origin(), "https://example.com:8443");
+    assert_eq!(url.search_params().unwrap().get("x").as_deref(), Some("1"));
+    assert_eq!(url.to_json(), url.href());
     assert_eq!(url.to_string(), url.href());
 
     let relative = Url::parse("child", Some("https://example.com/base/file")).unwrap();
@@ -28,6 +32,8 @@ fn url_search_params_preserve_order() {
     assert_eq!(params.get_all("a"), vec!["1", "2"]);
     assert_eq!(params.get("b").as_deref(), Some("hello world"));
     assert!(params.has("a"));
+    assert!(params.has_value("a", "1"));
+    assert!(!params.has_value("a", "missing"));
     params.set("a", "3");
     params.append("c", "4");
     assert_eq!(params.size(), 3);
@@ -51,12 +57,69 @@ fn url_search_params_preserve_order() {
     params.delete("b");
     assert!(!params.has("b"));
     assert_eq!(params.to_string(), "a=3&c=4");
+    params.append("c", "5");
+    params.delete_value("c", "4");
+    assert_eq!(params.get_all("c"), vec!["5"]);
 
     let from_records = UrlSearchParams::from_records(&std::collections::BTreeMap::from([
         ("x".to_string(), "1".to_string()),
         ("y".to_string(), "2".to_string()),
     ]));
     assert_eq!(from_records.to_string(), "x=1&y=2");
+}
+
+#[test]
+fn url_pattern_matches_exact_wildcard_and_named_segments() {
+    let pattern = UrlPattern::new(
+        UrlPatternInput::Init(UrlPatternInit {
+            protocol: Some("https".to_string()),
+            hostname: Some("*.example.com".to_string()),
+            pathname: Some("/users/:id".to_string()),
+            search: Some("q=*".to_string()),
+            ..UrlPatternInit::default()
+        }),
+        UrlPatternOptions { ignore_case: true },
+    )
+    .unwrap();
+    assert_eq!(pattern.protocol(), "https");
+    assert_eq!(pattern.hostname(), "*.example.com");
+    assert_eq!(pattern.pathname(), "/users/:id");
+    assert!(!pattern.has_regexp_groups());
+    assert!(pattern.test("https://API.example.com/users/42?q=yes#top", None));
+    let result = pattern
+        .exec("https://api.example.com/users/42?q=yes#top", None)
+        .unwrap();
+    assert_eq!(
+        result
+            .pathname
+            .groups
+            .get("id")
+            .cloned()
+            .flatten()
+            .as_deref(),
+        Some("42")
+    );
+    assert_eq!(result.hostname.input, "api.example.com");
+    assert_eq!(result.search.input, "q=yes");
+    assert_eq!(result.hash.input, "top");
+
+    let path_pattern = UrlPattern::new_with_base(
+        UrlPatternInput::Pattern("/assets/*".to_string()),
+        Some("https://example.com"),
+        UrlPatternOptions::default(),
+    )
+    .unwrap();
+    assert!(path_pattern.test("https://example.com/assets/app.js", None));
+    assert!(!path_pattern.test("https://example.com/api/app.js", None));
+    assert!(url_pattern_can_parse(
+        "/assets/*",
+        Some("https://example.com")
+    ));
+    assert!(!url_pattern_can_parse("assets/*", None));
+
+    let blob_url = tsonic_node::url::create_object_url(&tsonic_node::buffer::Blob::from_text("x"));
+    assert_eq!(blob_url, "blob:tsonic-runtime");
+    tsonic_node::url::revoke_object_url(&blob_url);
 }
 
 #[test]
