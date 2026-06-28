@@ -81,6 +81,41 @@ pub fn get_hashes() -> Vec<&'static str> {
     vec!["sha1", "sha256", "sha384", "sha512"]
 }
 
+pub fn get_ciphers() -> Vec<&'static str> {
+    vec!["aes-256-gcm"]
+}
+
+pub fn get_curves() -> Vec<&'static str> {
+    vec!["rsa"]
+}
+
+pub fn get_fips() -> u8 {
+    0
+}
+
+pub fn set_fips(value: u8) -> NodeResult<()> {
+    if value == 0 {
+        Ok(())
+    } else {
+        Err(NodeError::new(
+            "ERR_CRYPTO_FIPS_UNAVAILABLE",
+            "FIPS mode is not available in this closed Rust runtime",
+        ))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SecureHeapUsage {
+    pub total: usize,
+    pub used: usize,
+    pub utilization: usize,
+    pub min: usize,
+}
+
+pub fn secure_heap_used() -> SecureHeapUsage {
+    SecureHeapUsage::default()
+}
+
 pub fn create_hash(algorithm: &str) -> NodeResult<Hash> {
     Hash::create(algorithm)
 }
@@ -155,6 +190,12 @@ impl Hash {
             )),
         }
     }
+}
+
+pub fn hash(algorithm: &str, data: &[u8], encoding: Option<&str>) -> NodeResult<DigestResult> {
+    let mut hash = create_hash(algorithm)?;
+    hash.update_bytes(data);
+    hash.digest(encoding)
 }
 
 #[derive(Debug, Clone)]
@@ -342,8 +383,28 @@ impl KeyObject {
         &self.key_type
     }
 
+    pub fn symmetric_key_size(&self) -> Option<usize> {
+        if self.key_type == "secret" {
+            Some(self.bytes.len())
+        } else {
+            None
+        }
+    }
+
+    pub fn asymmetric_key_type(&self) -> Option<&str> {
+        None
+    }
+
     pub fn export(&self) -> Buffer {
         self.bytes.clone()
+    }
+
+    pub fn export_string(&self, encoding: &str) -> NodeResult<String> {
+        self.bytes.to_string(Some(encoding))
+    }
+
+    pub fn equals(&self, other: &Self) -> bool {
+        self.key_type == other.key_type && self.bytes == other.bytes
     }
 }
 
@@ -352,6 +413,83 @@ pub fn create_secret_key(key: &Buffer) -> KeyObject {
         key_type: "secret".to_string(),
         bytes: key.clone(),
     }
+}
+
+pub fn create_secret_key_bytes(key: &[u8]) -> KeyObject {
+    KeyObject {
+        key_type: "secret".to_string(),
+        bytes: Buffer::from_bytes(key.to_vec()),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct X509Certificate {
+    raw: Buffer,
+    subject: String,
+    issuer: String,
+    valid_from: String,
+    valid_to: String,
+    fingerprint256: String,
+}
+
+impl X509Certificate {
+    pub fn new(raw: Buffer) -> Self {
+        let fingerprint256 = match hash("sha256", &raw.as_bytes(), Some("hex")) {
+            Ok(DigestResult::String(value)) => value,
+            _ => String::new(),
+        };
+        Self {
+            raw,
+            subject: String::new(),
+            issuer: String::new(),
+            valid_from: String::new(),
+            valid_to: String::new(),
+            fingerprint256,
+        }
+    }
+
+    pub fn raw(&self) -> Buffer {
+        self.raw.clone()
+    }
+
+    pub fn subject(&self) -> &str {
+        &self.subject
+    }
+
+    pub fn issuer(&self) -> &str {
+        &self.issuer
+    }
+
+    pub fn valid_from(&self) -> &str {
+        &self.valid_from
+    }
+
+    pub fn valid_to(&self) -> &str {
+        &self.valid_to
+    }
+
+    pub fn fingerprint256(&self) -> &str {
+        &self.fingerprint256
+    }
+
+    pub fn to_legacy_object(&self) -> X509CertificateLegacyObject {
+        X509CertificateLegacyObject {
+            subject: self.subject.clone(),
+            issuer: self.issuer.clone(),
+            valid_from: self.valid_from.clone(),
+            valid_to: self.valid_to.clone(),
+            fingerprint256: self.fingerprint256.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct X509CertificateLegacyObject {
+    pub subject: String,
+    pub issuer: String,
+    pub valid_from: String,
+    pub valid_to: String,
+    pub fingerprint256: String,
 }
 
 pub fn random_uuid() -> NodeResult<String> {
@@ -468,6 +606,16 @@ pub fn sign_sha256(key_pair: &RsaKeyPair, data: &[u8]) -> Buffer {
     Buffer::from_bytes(signing_key.sign(data).to_vec())
 }
 
+pub fn sign(algorithm: &str, key_pair: &RsaKeyPair, data: &[u8]) -> NodeResult<Buffer> {
+    match parse_algorithm(algorithm)? {
+        Algorithm::Sha256 => Ok(sign_sha256(key_pair, data)),
+        _ => Err(NodeError::new(
+            "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
+            "sign currently supports RSA-SHA256",
+        )),
+    }
+}
+
 pub fn verify_sha256(
     public_key: &RsaPublicKey,
     data: &[u8],
@@ -477,6 +625,21 @@ pub fn verify_sha256(
     let signature = RsaSignature::try_from(signature.as_bytes().as_slice())
         .map_err(|error| NodeError::new("ERR_CRYPTO_INVALID_SIGNATURE", error.to_string()))?;
     Ok(verifying_key.verify(data, &signature).is_ok())
+}
+
+pub fn verify(
+    algorithm: &str,
+    public_key: &RsaPublicKey,
+    data: &[u8],
+    signature: &Buffer,
+) -> NodeResult<bool> {
+    match parse_algorithm(algorithm)? {
+        Algorithm::Sha256 => verify_sha256(public_key, data, signature),
+        _ => Err(NodeError::new(
+            "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
+            "verify currently supports RSA-SHA256",
+        )),
+    }
 }
 
 pub mod webcrypto {

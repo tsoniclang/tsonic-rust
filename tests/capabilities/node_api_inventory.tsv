@@ -166,8 +166,13 @@ NODE-CRYPTO-HMAC	crypto	createHmac	implemented	L	tsonic_node::crypto::hmac_diges
 NODE-CRYPTO-RANDOM-UUID	crypto	randomUUID	implemented	L	tsonic_node::crypto::random_uuid	NODE-CRYPTO-002	UUID v4 shape
 NODE-CRYPTO-TIMING-SAFE-EQUAL	crypto	timingSafeEqual	implemented	L	tsonic_node::crypto::timing_safe_equal	NODE-CRYPTO-002	constant-time same-length byte comparison
 NODE-CRYPTO-GET-HASHES	crypto	getHashes	implemented	L	tsonic_node::crypto::get_hashes	NODE-CRYPTO-002	declared supported hash algorithms
+NODE-CRYPTO-HASH-ONESHOT	crypto	hash	implemented	N45	tsonic_node::crypto::hash	NODE-CRYPTO-006	one-shot digest helper over same closed hash algorithms and encoding result carrier
+NODE-CRYPTO-RUNTIME-METADATA	crypto	getCiphers/getCurves/getFips/setFips/secureHeapUsed	implemented	N45	tsonic_node::crypto::{get_ciphers,get_curves,get_fips,set_fips,secure_heap_used}	NODE-CRYPTO-006	closed runtime capability metadata; unavailable FIPS mode fails explicitly
+NODE-CRYPTO-KEYOBJECT-METADATA	crypto	KeyObject symmetricKeySize/asymmetricKeyType/export/equals	implemented	N45	tsonic_node::crypto::KeyObject	NODE-CRYPTO-006	closed secret key object metadata and export helpers
 NODE-CRYPTO-CIPHER	crypto	cipher/decipher	implemented	N9	tsonic_node::crypto::{aes_256_gcm_encrypt,aes_256_gcm_decrypt}	NODE-CRYPTO-CIPHER-001	closed AES-256-GCM cipher/decipher over approved audited dependency
 NODE-CRYPTO-KEYS	crypto	keys/certs/sign/verify	implemented	N9	tsonic_node::crypto::{generate_rsa_key_pair,sign_sha256,verify_sha256}	NODE-CRYPTO-PKI-001	closed RSA-SHA256 sign/verify over approved audited dependency
+NODE-CRYPTO-SIGN-VERIFY-GENERIC	crypto	sign/verify generic algorithm entrypoints	implemented	N45	tsonic_node::crypto::{sign,verify}	NODE-CRYPTO-PKI-002	closed generic sign/verify dispatch that rejects unsupported algorithms explicitly
+NODE-CRYPTO-X509-CERTIFICATE	crypto	X509Certificate	implemented	N45	tsonic_node::crypto::X509Certificate	NODE-CRYPTO-006	closed certificate raw/fingerprint carrier without full PKI path validation
 NODE-URL-URL	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL parser/mutators
 NODE-URL-SEARCH-PARAMS	url	URLSearchParams	implemented	L	tsonic_node::url::UrlSearchParams	NODE-URL-002	query parameter carrier
 NODE-URL-FILE	url	fileURLToPath/pathToFileURL	implemented	L	tsonic_node::url::{file_url_to_path,path_to_file_url}	NODE-URL-003	file URL helpers

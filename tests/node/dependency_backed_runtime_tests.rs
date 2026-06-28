@@ -33,11 +33,21 @@ fn crypto_rsa_sha256_sign_and_verify() {
     let key_pair = tsonic_node::crypto::generate_rsa_key_pair(2048).unwrap();
     let public_key = key_pair.public_key();
     let signature = tsonic_node::crypto::sign_sha256(&key_pair, b"important message");
+    let generic_signature =
+        tsonic_node::crypto::sign("sha256", &key_pair, b"important message").unwrap();
 
     assert!(
         tsonic_node::crypto::verify_sha256(&public_key, b"important message", &signature).unwrap()
     );
     assert!(!tsonic_node::crypto::verify_sha256(&public_key, b"tampered", &signature).unwrap());
+    assert!(tsonic_node::crypto::verify(
+        "sha256",
+        &public_key,
+        b"important message",
+        &generic_signature
+    )
+    .unwrap());
+    assert!(tsonic_node::crypto::sign("sha512", &key_pair, b"important message").is_err());
 }
 
 #[test]

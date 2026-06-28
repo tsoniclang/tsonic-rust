@@ -216,6 +216,8 @@ NODE-CRYPTO-002	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,Digest
 NODE-CRYPTO-003	implemented	M	tsonic_node::abi::{crypto_hmac_digest,crypto_random_uuid}	NODE-CRYPTO-004	HMAC SHA-1/SHA-256 and UUID v4 implemented
 NODE-CRYPTO-004	implemented	N9	tsonic_node::crypto::{aes_256_gcm_encrypt,aes_256_gcm_decrypt,generate_rsa_key_pair,sign_sha256,verify_sha256}	NODE-CRYPTO-CIPHER-001,NODE-CRYPTO-PKI-001	approved dependency-backed cipher and key/sign/verify subset
 NODE-CRYPTO-005	implemented	N12	tsonic_node::crypto::{pbkdf2_sync,hkdf_sync}	NODE-CRYPTO-KDF-001	common PBKDF2/HKDF key derivation with SHA-1/SHA-256/SHA-384/SHA-512 support
+NODE-CRYPTO-006	implemented	N45	tsonic_node::abi::{crypto_hash,crypto_get_ciphers,crypto_get_curves,crypto_get_fips,crypto_set_fips,crypto_secure_heap_used,crypto_create_secret_key_bytes,KeyObject,X509Certificate}	NODE-CRYPTO-006	one-shot hash, runtime capability metadata, key-object metadata, and X509 raw/fingerprint carrier
+NODE-CRYPTO-007	implemented	N45	tsonic_node::abi::{crypto_sign,crypto_verify}	NODE-CRYPTO-PKI-002	generic sign/verify entrypoints over approved RSA-SHA256 implementation with unsupported algorithms rejected
 NODE-MOD-001	implemented	M	tsonic_node::abi::{assert_ok,assert_strict_equal}	NODE-MISC-001	assertion formatting/deep equality policy separate from runtime surface (completed in full-completion branch)
 NODE-ASSERT-002	implemented	N25	tsonic_node::abi::{AssertionError,AssertionErrorOptions,AssertionDiff}	NODE-ASSERT-002	ERR_ASSERTION carrier with actual/expected/operator/generatedMessage/diff fields
 NODE-MOD-002	hard-reject	M	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation runtime out of Stage 1
