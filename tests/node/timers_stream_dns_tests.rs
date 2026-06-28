@@ -525,6 +525,14 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
     dns::set_default_result_order(dns::DefaultResultOrder::Verbatim);
 
     let mut resolver = dns::Resolver::new();
+    let resolver_with_options = dns::Resolver::with_options(dns::ResolverOptions {
+        timeout: Some(250),
+        tries: Some(2),
+        max_timeout: Some(1_000),
+    });
+    assert_eq!(resolver_with_options.options().timeout, Some(250));
+    assert_eq!(resolver_with_options.options().tries, Some(2));
+    assert_eq!(resolver_with_options.options().max_timeout, Some(1_000));
     resolver.set_servers(&["1.1.1.1", "8.8.8.8"]);
     assert_eq!(resolver.get_servers(), vec!["1.1.1.1", "8.8.8.8"]);
     resolver.set_local_address(Some("127.0.0.1"), Some("::1"));
@@ -568,4 +576,37 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
     assert!(dns::promises::resolve_any_now("localhost").is_ok());
     assert!(dns::promises::lookup_service_now("127.0.0.1", 443).is_ok());
     assert!(dns::promises::reverse_now("127.0.0.1").is_ok());
+
+    let mut promise_resolver = dns::promises::Resolver::with_options(dns::ResolverOptions {
+        timeout: Some(500),
+        tries: Some(3),
+        max_timeout: Some(2_000),
+    });
+    assert_eq!(promise_resolver.options().tries, Some(3));
+    promise_resolver.set_servers(&["9.9.9.9"]);
+    assert_eq!(promise_resolver.get_servers(), vec!["9.9.9.9"]);
+    promise_resolver.set_local_address(Some("127.0.0.1"), None);
+    assert!(promise_resolver.lookup("localhost").is_ok());
+    assert!(
+        promise_resolver.resolve("localhost", Some("A")).is_ok()
+            || promise_resolver.resolve("localhost", Some("AAAA")).is_ok()
+    );
+    assert!(
+        promise_resolver.resolve4("localhost").is_ok()
+            || promise_resolver.resolve6("localhost").is_ok()
+    );
+    assert!(promise_resolver.resolve_cname("localhost").is_err());
+    assert!(promise_resolver.resolve_mx("localhost").is_err());
+    assert!(promise_resolver.resolve_txt("localhost").is_err());
+    assert!(promise_resolver.resolve_srv("localhost").is_err());
+    assert!(promise_resolver.resolve_ns("localhost").is_err());
+    assert!(promise_resolver.resolve_ptr("localhost").is_err());
+    assert!(promise_resolver.resolve_caa("localhost").is_err());
+    assert!(promise_resolver.resolve_naptr("localhost").is_err());
+    assert!(promise_resolver.resolve_soa("localhost").is_err());
+    assert!(promise_resolver.resolve_tlsa("localhost").is_err());
+    assert!(promise_resolver.resolve_any("localhost").is_ok());
+    assert!(promise_resolver.reverse("127.0.0.1").is_ok());
+    promise_resolver.cancel();
+    assert!(promise_resolver.cancelled());
 }

@@ -352,6 +352,12 @@ NODE-DNS-SOA-RECORD	dns	SoaRecord	implemented	N56	tsonic_node::dns::SoaRecord	NO
 NODE-DNS-TLSA-RECORD	dns	TlsaRecord	implemented	N56	tsonic_node::dns::TlsaRecord	NODE-DNS-002	typed TLSA record carrier
 NODE-DNS-ANY-RECORD	dns	AnyRecord	implemented	N56	tsonic_node::dns::AnyRecord	NODE-DNS-002	closed any-record enum carrier
 NODE-DNS-RESOLVER-CARRIER	dns	Resolver	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	resolver carrier with explicit server/local/cancel state
+NODE-DNS-RESOLVER-OPTIONS-CARRIER	dns	ResolverOptions	implemented	N79	tsonic_node::dns::ResolverOptions	NODE-DNS-002	closed resolver options carrier
+NODE-DNS-RESOLVER-OPTIONS-TIMEOUT	dns	ResolverOptions.timeout	implemented	N79	tsonic_node::dns::ResolverOptions::timeout	NODE-DNS-002	resolver timeout option field
+NODE-DNS-RESOLVER-OPTIONS-TRIES	dns	ResolverOptions.tries	implemented	N79	tsonic_node::dns::ResolverOptions::tries	NODE-DNS-002	resolver tries option field
+NODE-DNS-RESOLVER-OPTIONS-MAX-TIMEOUT	dns	ResolverOptions.maxTimeout	implemented	N79	tsonic_node::dns::ResolverOptions::max_timeout	NODE-DNS-002	resolver maxTimeout option field
+NODE-DNS-RESOLVER-WITH-OPTIONS	dns	Resolver.withOptions	implemented	N79	tsonic_node::dns::Resolver::with_options	NODE-DNS-002	resolver constructor with explicit options carrier
+NODE-DNS-RESOLVER-OPTIONS	dns	Resolver.options	implemented	N79	tsonic_node::dns::Resolver::options	NODE-DNS-002	resolver options accessor
 NODE-DNS-RESOLVER-SET-SERVERS	dns	Resolver.setServers	implemented	N33	tsonic_node::dns::Resolver::set_servers	NODE-DNS-002	sets explicit resolver server list
 NODE-DNS-RESOLVER-GET-SERVERS	dns	Resolver.getServers	implemented	N33	tsonic_node::dns::Resolver::get_servers	NODE-DNS-002	returns cloned resolver server list
 NODE-DNS-RESOLVER-SET-LOCAL-ADDRESS	dns	Resolver.setLocalAddress	implemented	N33	tsonic_node::dns::Resolver::set_local_address	NODE-DNS-002	sets explicit local IPv4 and IPv6 address hints
@@ -375,6 +381,31 @@ NODE-DNS-RESOLVER-RESOLVE-SOA	dns	Resolver.resolveSoa	implemented	N33	tsonic_nod
 NODE-DNS-RESOLVER-RESOLVE-TLSA	dns	Resolver.resolveTlsa	implemented	N33	tsonic_node::dns::Resolver::resolve_tlsa	NODE-DNS-002	resolver TLSA lookup preserves explicit unsupported-record failure
 NODE-DNS-RESOLVER-RESOLVE-ANY	dns	Resolver.resolveAny	implemented	N33	tsonic_node::dns::Resolver::resolve_any	NODE-DNS-002	resolver ANY lookup delegates to explicit AnyRecord helper
 NODE-DNS-PROMISES-MODULE	dns/promises	module	implemented	N26	tsonic_node::dns::promises	NODE-DNS-002	blocking-now promise-shaped DNS module
+NODE-DNS-PROMISES-RESOLVER-CARRIER	dns/promises	Resolver	implemented	N79	tsonic_node::dns::promises::Resolver	NODE-DNS-002	promise Resolver wrapper over same closed resolver state
+NODE-DNS-PROMISES-RESOLVER-NEW	dns/promises	Resolver.new	implemented	N79	tsonic_node::dns::promises::Resolver::new	NODE-DNS-002	constructs default promise Resolver carrier
+NODE-DNS-PROMISES-RESOLVER-WITH-OPTIONS	dns/promises	Resolver.withOptions	implemented	N79	tsonic_node::dns::promises::Resolver::with_options	NODE-DNS-002	constructs promise Resolver with explicit options carrier
+NODE-DNS-PROMISES-RESOLVER-OPTIONS	dns/promises	Resolver.options	implemented	N79	tsonic_node::dns::promises::Resolver::options	NODE-DNS-002	promise Resolver options accessor
+NODE-DNS-PROMISES-RESOLVER-SET-SERVERS	dns/promises	Resolver.setServers	implemented	N79	tsonic_node::dns::promises::Resolver::set_servers	NODE-DNS-002	promise Resolver server list setter
+NODE-DNS-PROMISES-RESOLVER-GET-SERVERS	dns/promises	Resolver.getServers	implemented	N79	tsonic_node::dns::promises::Resolver::get_servers	NODE-DNS-002	promise Resolver server list getter
+NODE-DNS-PROMISES-RESOLVER-SET-LOCAL-ADDRESS	dns/promises	Resolver.setLocalAddress	implemented	N79	tsonic_node::dns::promises::Resolver::set_local_address	NODE-DNS-002	promise Resolver local address setter
+NODE-DNS-PROMISES-RESOLVER-CANCEL	dns/promises	Resolver.cancel	implemented	N79	tsonic_node::dns::promises::Resolver::cancel	NODE-DNS-002	promise Resolver cancellation marker
+NODE-DNS-PROMISES-RESOLVER-CANCELLED	dns/promises	Resolver.cancelled	implemented	N79	tsonic_node::dns::promises::Resolver::cancelled	NODE-DNS-002	promise Resolver cancellation state
+NODE-DNS-PROMISES-RESOLVER-LOOKUP	dns/promises	Resolver.lookup	implemented	N79	tsonic_node::dns::promises::Resolver::lookup	NODE-DNS-002	promise Resolver lookup helper
+NODE-DNS-PROMISES-RESOLVER-RESOLVE4	dns/promises	Resolver.resolve4	implemented	N79	tsonic_node::dns::promises::Resolver::resolve4	NODE-DNS-002	promise Resolver IPv4 lookup helper
+NODE-DNS-PROMISES-RESOLVER-RESOLVE6	dns/promises	Resolver.resolve6	implemented	N79	tsonic_node::dns::promises::Resolver::resolve6	NODE-DNS-002	promise Resolver IPv6 lookup helper
+NODE-DNS-PROMISES-RESOLVER-RESOLVE	dns/promises	Resolver.resolve	implemented	N79	tsonic_node::dns::promises::Resolver::resolve	NODE-DNS-002	promise Resolver record dispatch helper
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-CNAME	dns/promises	Resolver.resolveCname	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_cname	NODE-DNS-002	promise Resolver CNAME unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-MX	dns/promises	Resolver.resolveMx	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_mx	NODE-DNS-002	promise Resolver MX unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-TXT	dns/promises	Resolver.resolveTxt	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_txt	NODE-DNS-002	promise Resolver TXT unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-SRV	dns/promises	Resolver.resolveSrv	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_srv	NODE-DNS-002	promise Resolver SRV unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-NS	dns/promises	Resolver.resolveNs	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_ns	NODE-DNS-002	promise Resolver NS unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-PTR	dns/promises	Resolver.resolvePtr	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_ptr	NODE-DNS-002	promise Resolver PTR unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-CAA	dns/promises	Resolver.resolveCaa	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_caa	NODE-DNS-002	promise Resolver CAA unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-NAPTR	dns/promises	Resolver.resolveNaptr	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_naptr	NODE-DNS-002	promise Resolver NAPTR unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-SOA	dns/promises	Resolver.resolveSoa	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_soa	NODE-DNS-002	promise Resolver SOA unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-TLSA	dns/promises	Resolver.resolveTlsa	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_tlsa	NODE-DNS-002	promise Resolver TLSA unsupported-record failure
+NODE-DNS-PROMISES-RESOLVER-RESOLVE-ANY	dns/promises	Resolver.resolveAny	implemented	N79	tsonic_node::dns::promises::Resolver::resolve_any	NODE-DNS-002	promise Resolver ANY lookup helper
+NODE-DNS-PROMISES-RESOLVER-REVERSE	dns/promises	Resolver.reverse	implemented	N79	tsonic_node::dns::promises::Resolver::reverse	NODE-DNS-002	promise Resolver reverse helper
 NODE-DNS-PROMISES-LOOKUP	dns/promises	lookup	implemented	N56	tsonic_node::dns::promises::lookup_now	NODE-DNS-002	promise-shaped lookup helper
 NODE-DNS-PROMISES-LOOKUP-SERVICE	dns/promises	lookupService	implemented	N56	tsonic_node::dns::promises::lookup_service_now	NODE-DNS-002	promise-shaped lookupService helper
 NODE-DNS-PROMISES-RESOLVE	dns/promises	resolve	implemented	N56	tsonic_node::dns::promises::resolve_now	NODE-DNS-002	promise-shaped resolve helper
