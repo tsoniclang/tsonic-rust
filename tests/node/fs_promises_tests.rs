@@ -60,8 +60,22 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     );
     fs_promises::unlink(&renamed_text).unwrap();
 
+    let link = root.join("hardlink.txt");
+    let link_text = link.to_string_lossy().to_string();
+    fs_promises::link(&file_text, &link_text).unwrap();
+    assert_eq!(
+        fs_promises::read_file_string(&link_text, "utf8").unwrap(),
+        "hello world!"
+    );
+    assert!(fs_promises::realpath(&link_text)
+        .unwrap()
+        .ends_with("hardlink.txt"));
+    fs_promises::unlink(&link_text).unwrap();
+
     assert_eq!(fs_promises::readdir(&root_text).unwrap(), vec!["a.txt"]);
     assert_eq!(fs_promises::opendir(&root_text).unwrap()[0].name, "a.txt");
+    let statfs = fs_promises::statfs(&file_text).unwrap();
+    assert!(statfs.bsize > 0);
 
     let handle = fs_promises::open(&file_text, "r+").unwrap();
     assert_eq!(handle.stat().unwrap().size, 12);
@@ -88,6 +102,11 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
         fs_promises::read_file_string(&file_text, "utf8").unwrap(),
         "hello rust"
     );
+    fs_promises::truncate(&file_text, 5).unwrap();
+    assert_eq!(
+        fs_promises::read_file_string(&file_text, "utf8").unwrap(),
+        "hello"
+    );
 
     let nested = root.join("nested");
     let nested_text = nested.to_string_lossy().to_string();
@@ -102,6 +121,22 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
             .is_file()
     );
     assert!(fs_promises::lstat(&file_text).unwrap().is_file());
+
+    let made = fs_promises::mkdtemp(&root.join("tmp-").to_string_lossy()).unwrap();
+    assert!(fs_promises::stat(&made).unwrap().is_directory());
+    fs_promises::rmdir(&made).unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let symlink = root.join("symlink.txt");
+        let symlink_text = symlink.to_string_lossy().to_string();
+        fs_promises::symlink(&file_text, &symlink_text).unwrap();
+        assert_eq!(fs_promises::readlink(&symlink_text).unwrap(), file_text);
+        let metadata = std::fs::symlink_metadata(&symlink_text).unwrap();
+        fs_promises::lchown(&symlink_text, metadata.uid(), metadata.gid()).unwrap();
+    }
 
     fs_promises::rm(&root_text, true, false).unwrap();
 }

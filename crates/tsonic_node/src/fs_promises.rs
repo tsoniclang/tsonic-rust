@@ -1,6 +1,6 @@
 use crate::buffer::Buffer;
 use crate::error::NodeResult;
-use crate::fs::{self, Dirent, FsWriteData, Stats};
+use crate::fs::{self, Dirent, FsWriteData, StatFs, Stats};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileHandle {
@@ -126,8 +126,16 @@ pub fn cp(from: &str, to: &str, recursive: bool) -> NodeResult<()> {
     fs::cp_sync(from, to, recursive)
 }
 
+pub fn link(existing_path: &str, new_path: &str) -> NodeResult<()> {
+    fs::link_sync(existing_path, new_path)
+}
+
 pub fn stat(path: &str) -> NodeResult<Stats> {
     fs::stat_sync(path)
+}
+
+pub fn statfs(path: &str) -> NodeResult<StatFs> {
+    fs::statfs_sync(path)
 }
 
 pub fn lstat(path: &str) -> NodeResult<Stats> {
@@ -138,8 +146,16 @@ pub fn mkdir(path: &str, recursive: bool) -> NodeResult<()> {
     fs::mkdir_sync(path, recursive)
 }
 
+pub fn mkdtemp(prefix: &str) -> NodeResult<String> {
+    fs::mkdtemp_sync(prefix)
+}
+
 pub fn rm(path: &str, recursive: bool, force: bool) -> NodeResult<()> {
     fs::rm_sync(path, recursive, force)
+}
+
+pub fn rmdir(path: &str) -> NodeResult<()> {
+    fs::rmdir_sync(path)
 }
 
 pub fn rename(from: &str, to: &str) -> NodeResult<()> {
@@ -148,6 +164,22 @@ pub fn rename(from: &str, to: &str) -> NodeResult<()> {
 
 pub fn unlink(path: &str) -> NodeResult<()> {
     fs::unlink_sync(path)
+}
+
+pub fn truncate(path: &str, len: u64) -> NodeResult<()> {
+    fs::truncate_sync(path, len)
+}
+
+pub fn symlink(target: &str, path: &str) -> NodeResult<()> {
+    fs::symlink_sync(target, path)
+}
+
+pub fn readlink(path: &str) -> NodeResult<String> {
+    fs::readlink_sync(path)
+}
+
+pub fn realpath(path: &str) -> NodeResult<String> {
+    fs::realpath_sync(path)
 }
 
 pub fn readdir(path: &str) -> NodeResult<Vec<String>> {
