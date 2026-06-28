@@ -2,9 +2,12 @@ use std::collections::BTreeMap;
 
 use tsonic_js::JsValue;
 
+type Listener = Box<dyn FnMut(&[JsValue])>;
+type ListenerMap = BTreeMap<String, Vec<Listener>>;
+
 #[derive(Default)]
 pub struct EventEmitter {
-    listeners: BTreeMap<String, Vec<Box<dyn FnMut(&[JsValue])>>>,
+    listeners: ListenerMap,
     max_listeners: Option<usize>,
 }
 

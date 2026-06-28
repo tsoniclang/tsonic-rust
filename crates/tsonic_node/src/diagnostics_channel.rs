@@ -3,8 +3,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use tsonic_js::JsValue;
 
+type Subscriber = Box<dyn FnMut(&JsValue)>;
+type SubscriberMap = BTreeMap<String, Vec<Subscriber>>;
+
 thread_local! {
-    static SUBSCRIBERS: RefCell<BTreeMap<String, Vec<Box<dyn FnMut(&JsValue)>>>> = RefCell::new(BTreeMap::new());
+    static SUBSCRIBERS: RefCell<SubscriberMap> = RefCell::new(BTreeMap::new());
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
