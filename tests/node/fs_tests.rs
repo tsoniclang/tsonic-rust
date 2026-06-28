@@ -48,6 +48,9 @@ fn fs_extended_sync_file_lifecycle() {
         fs::read_file_sync_string(&file_text, "utf8").unwrap(),
         "hello world"
     );
+    let constants = fs::constants();
+    assert_eq!(constants.f_ok, 0);
+    assert_ne!(constants.o_append, constants.o_rdonly);
 
     fs::access_sync(&file_text).unwrap();
     fs::chmod_sync(&file_text, 0o600).unwrap();
@@ -63,6 +66,12 @@ fn fs_extended_sync_file_lifecycle() {
     let filesystem = fs::statfs_sync(&file_text).unwrap();
     assert!(filesystem.bsize > 0);
     assert!(filesystem.blocks > 0);
+    let stats = fs::stat_sync(&file_text).unwrap();
+    assert_eq!(stats.size, 11);
+    assert!(stats.mode & 0o600 != 0);
+    assert!(stats.nlink >= 1);
+    assert!(stats.mtime_ms() > 0.0);
+    assert!(stats.ctime_ms() > 0.0);
 
     let fd = fs::open_sync(&file_text, "r+").unwrap();
     assert_eq!(fs::fstat_sync(fd).unwrap().size, 11);
@@ -114,6 +123,142 @@ fn fs_extended_sync_file_lifecycle() {
         fs::read_file_sync_string(&buffer_file_text, "utf8").unwrap(),
         "aYZ"
     );
+
+    fs::rm_sync(&root_text, true, false).unwrap();
+}
+
+#[test]
+fn fs_extended_callback_matrix_uses_real_file_io() {
+    let root = temp_root("callbacks");
+    let root_text = root.to_string_lossy().to_string();
+    fs::mkdir_sync(&root_text, true).unwrap();
+    let file = root.join("callback.txt");
+    let file_text = file.to_string_lossy().to_string();
+
+    let mut write_result = None;
+    fs::write_file_callback_string(&file_text, "hello", "utf8", |result| {
+        write_result = Some(result);
+    });
+    write_result.unwrap().unwrap();
+
+    let mut append_result = None;
+    fs::append_file_callback_string(&file_text, " world", "utf8", |result| {
+        append_result = Some(result);
+    });
+    append_result.unwrap().unwrap();
+
+    let mut read_result = None;
+    fs::read_file_callback_string(&file_text, "utf8", |result| {
+        read_result = Some(result);
+    });
+    assert_eq!(read_result.unwrap().unwrap(), "hello world");
+
+    let mut chmod_result = None;
+    fs::chmod_callback(&file_text, 0o600, |result| {
+        chmod_result = Some(result);
+    });
+    chmod_result.unwrap().unwrap();
+
+    let mut stat_result = None;
+    fs::stat_callback(&file_text, |result| {
+        stat_result = Some(result);
+    });
+    assert_eq!(stat_result.unwrap().unwrap().size, 11);
+
+    let mut statfs_result = None;
+    fs::statfs_callback(&file_text, |result| {
+        statfs_result = Some(result);
+    });
+    assert!(statfs_result.unwrap().unwrap().bsize > 0);
+
+    let mut fd_result = None;
+    fs::open_callback(&file_text, "r+", |result| {
+        fd_result = Some(result);
+    });
+    let fd = fd_result.unwrap().unwrap();
+
+    let mut fstat_result = None;
+    fs::fstat_callback(fd, |result| {
+        fstat_result = Some(result);
+    });
+    assert_eq!(fstat_result.unwrap().unwrap().size, 11);
+
+    let mut buffer = tsonic_node::buffer::Buffer::alloc(5);
+    let mut read_fd_result = None;
+    fs::read_callback(fd, &mut buffer, 0, 5, Some(6), |result| {
+        read_fd_result = Some(result);
+    });
+    assert_eq!(read_fd_result.unwrap().unwrap(), 5);
+    assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
+
+    let mut write_fd_result = None;
+    fs::write_callback_string(fd, "rust", Some(6), "utf8", |result| {
+        write_fd_result = Some(result);
+    });
+    assert_eq!(write_fd_result.unwrap().unwrap(), 4);
+
+    let mut fsync_result = None;
+    fs::fsync_callback(fd, |result| {
+        fsync_result = Some(result);
+    });
+    fsync_result.unwrap().unwrap();
+
+    let mut truncate_result = None;
+    fs::ftruncate_callback(fd, 10, |result| {
+        truncate_result = Some(result);
+    });
+    truncate_result.unwrap().unwrap();
+
+    let mut close_result = None;
+    fs::close_callback(fd, |result| {
+        close_result = Some(result);
+    });
+    close_result.unwrap().unwrap();
+
+    assert_eq!(
+        fs::read_file_sync_string(&file_text, "utf8").unwrap(),
+        "hello rust"
+    );
+
+    let copy = root.join("copy.txt");
+    let copy_text = copy.to_string_lossy().to_string();
+    let mut copy_result = None;
+    fs::copy_file_callback(&file_text, &copy_text, |result| {
+        copy_result = Some(result);
+    });
+    copy_result.unwrap().unwrap();
+
+    let renamed = root.join("renamed.txt");
+    let renamed_text = renamed.to_string_lossy().to_string();
+    let mut rename_result = None;
+    fs::rename_callback(&copy_text, &renamed_text, |result| {
+        rename_result = Some(result);
+    });
+    rename_result.unwrap().unwrap();
+
+    let mut realpath_result = None;
+    fs::realpath_callback(&renamed_text, |result| {
+        realpath_result = Some(result);
+    });
+    assert!(realpath_result.unwrap().unwrap().ends_with("renamed.txt"));
+
+    let made_prefix = root.join("callback-tmp-");
+    let mut mkdtemp_result = None;
+    fs::mkdtemp_callback(&made_prefix.to_string_lossy(), |result| {
+        mkdtemp_result = Some(result);
+    });
+    let made = mkdtemp_result.unwrap().unwrap();
+    let mut rmdir_result = None;
+    fs::rmdir_callback(&made, |result| {
+        rmdir_result = Some(result);
+    });
+    rmdir_result.unwrap().unwrap();
+
+    let mut unlink_result = None;
+    fs::unlink_callback(&renamed_text, |result| {
+        unlink_result = Some(result);
+    });
+    unlink_result.unwrap().unwrap();
 
     fs::rm_sync(&root_text, true, false).unwrap();
 }

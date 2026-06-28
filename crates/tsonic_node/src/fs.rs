@@ -3,6 +3,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::buffer::Buffer;
 use crate::error::{NodeError, NodeResult};
@@ -20,9 +21,22 @@ pub struct StatFs {
     pub ffree: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Stats {
     pub size: u64,
+    pub dev: u64,
+    pub ino: u64,
+    pub mode: u32,
+    pub nlink: u64,
+    pub uid: u32,
+    pub gid: u32,
+    pub rdev: u64,
+    pub blksize: u64,
+    pub blocks: u64,
+    pub atime_ms: f64,
+    pub mtime_ms: f64,
+    pub ctime_ms: f64,
+    pub birthtime_ms: f64,
     pub is_file: bool,
     pub is_directory: bool,
     pub is_symbolic_link: bool,
@@ -39,6 +53,55 @@ impl Stats {
 
     pub fn is_symbolic_link(&self) -> bool {
         self.is_symbolic_link
+    }
+
+    pub fn atime_ms(&self) -> f64 {
+        self.atime_ms
+    }
+
+    pub fn mtime_ms(&self) -> f64 {
+        self.mtime_ms
+    }
+
+    pub fn ctime_ms(&self) -> f64 {
+        self.ctime_ms
+    }
+
+    pub fn birthtime_ms(&self) -> f64 {
+        self.birthtime_ms
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FsConstants {
+    pub f_ok: i32,
+    pub r_ok: i32,
+    pub w_ok: i32,
+    pub x_ok: i32,
+    pub copyfile_excl: i32,
+    pub o_rdonly: i32,
+    pub o_wronly: i32,
+    pub o_rdwr: i32,
+    pub o_creat: i32,
+    pub o_excl: i32,
+    pub o_trunc: i32,
+    pub o_append: i32,
+}
+
+pub fn constants() -> FsConstants {
+    FsConstants {
+        f_ok: 0,
+        r_ok: 4,
+        w_ok: 2,
+        x_ok: 1,
+        copyfile_excl: 1,
+        o_rdonly: platform_constant_o_rdonly(),
+        o_wronly: platform_constant_o_wronly(),
+        o_rdwr: platform_constant_o_rdwr(),
+        o_creat: platform_constant_o_creat(),
+        o_excl: platform_constant_o_excl(),
+        o_trunc: platform_constant_o_trunc(),
+        o_append: platform_constant_o_append(),
     }
 }
 
@@ -162,22 +225,12 @@ fn append_bytes(path: &str, bytes: &[u8]) -> NodeResult<()> {
 
 pub fn stat_sync(path: &str) -> NodeResult<Stats> {
     let metadata = fs::metadata(path).map_err(map_io_error)?;
-    Ok(Stats {
-        size: metadata.len(),
-        is_file: metadata.is_file(),
-        is_directory: metadata.is_dir(),
-        is_symbolic_link: metadata.file_type().is_symlink(),
-    })
+    Ok(stats_from_metadata(&metadata))
 }
 
 pub fn lstat_sync(path: &str) -> NodeResult<Stats> {
     let metadata = fs::symlink_metadata(path).map_err(map_io_error)?;
-    Ok(Stats {
-        size: metadata.len(),
-        is_file: metadata.is_file(),
-        is_directory: metadata.is_dir(),
-        is_symbolic_link: metadata.file_type().is_symlink(),
-    })
+    Ok(stats_from_metadata(&metadata))
 }
 
 pub fn chmod_sync(path: &str, mode: u32) -> NodeResult<()> {
@@ -634,12 +687,7 @@ pub fn fstat_sync(fd: i32) -> NodeResult<Stats> {
         .get(&fd)
         .ok_or_else(|| NodeError::new("EBADF", "bad file descriptor"))?;
     let metadata = file.metadata().map_err(map_io_error)?;
-    Ok(Stats {
-        size: metadata.len(),
-        is_file: metadata.is_file(),
-        is_directory: metadata.is_dir(),
-        is_symbolic_link: metadata.file_type().is_symlink(),
-    })
+    Ok(stats_from_metadata(&metadata))
 }
 
 pub fn fsync_sync(fd: i32) -> NodeResult<()> {
@@ -711,6 +759,14 @@ pub fn access_callback(path: &str, callback: impl FnOnce(NodeResult<()>)) {
     callback(access_sync(path));
 }
 
+pub fn chmod_callback(path: &str, mode: u32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(chmod_sync(path, mode));
+}
+
+pub fn chown_callback(path: &str, uid: u32, gid: u32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(chown_sync(path, uid, gid));
+}
+
 pub fn append_file_callback_string(
     path: &str,
     value: &str,
@@ -724,8 +780,34 @@ pub fn stat_callback(path: &str, callback: impl FnOnce(NodeResult<Stats>)) {
     callback(stat_sync(path));
 }
 
+pub fn statfs_callback(path: &str, callback: impl FnOnce(NodeResult<StatFs>)) {
+    callback(statfs_sync(path));
+}
+
 pub fn lstat_callback(path: &str, callback: impl FnOnce(NodeResult<Stats>)) {
     callback(lstat_sync(path));
+}
+
+pub fn lchown_callback(path: &str, uid: u32, gid: u32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(lchown_sync(path, uid, gid));
+}
+
+pub fn utimes_callback(
+    path: &str,
+    atime_seconds: f64,
+    mtime_seconds: f64,
+    callback: impl FnOnce(NodeResult<()>),
+) {
+    callback(utimes_sync(path, atime_seconds, mtime_seconds));
+}
+
+pub fn lutimes_callback(
+    path: &str,
+    atime_seconds: f64,
+    mtime_seconds: f64,
+    callback: impl FnOnce(NodeResult<()>),
+) {
+    callback(lutimes_sync(path, atime_seconds, mtime_seconds));
 }
 
 pub fn readdir_callback(path: &str, callback: impl FnOnce(NodeResult<Vec<String>>)) {
@@ -736,12 +818,44 @@ pub fn mkdir_callback(path: &str, recursive: bool, callback: impl FnOnce(NodeRes
     callback(mkdir_sync(path, recursive));
 }
 
+pub fn mkdtemp_callback(prefix: &str, callback: impl FnOnce(NodeResult<String>)) {
+    callback(mkdtemp_sync(prefix));
+}
+
 pub fn copy_file_callback(from: &str, to: &str, callback: impl FnOnce(NodeResult<()>)) {
     callback(copy_file_sync(from, to));
 }
 
+pub fn cp_callback(from: &str, to: &str, recursive: bool, callback: impl FnOnce(NodeResult<()>)) {
+    callback(cp_sync(from, to, recursive));
+}
+
+pub fn link_callback(existing_path: &str, new_path: &str, callback: impl FnOnce(NodeResult<()>)) {
+    callback(link_sync(existing_path, new_path));
+}
+
 pub fn rename_callback(from: &str, to: &str, callback: impl FnOnce(NodeResult<()>)) {
     callback(rename_sync(from, to));
+}
+
+pub fn readlink_callback(path: &str, callback: impl FnOnce(NodeResult<String>)) {
+    callback(readlink_sync(path));
+}
+
+pub fn realpath_callback(path: &str, callback: impl FnOnce(NodeResult<String>)) {
+    callback(realpath_sync(path));
+}
+
+pub fn rmdir_callback(path: &str, callback: impl FnOnce(NodeResult<()>)) {
+    callback(rmdir_sync(path));
+}
+
+pub fn symlink_callback(target: &str, path: &str, callback: impl FnOnce(NodeResult<()>)) {
+    callback(symlink_sync(target, path));
+}
+
+pub fn truncate_callback(path: &str, len: u64, callback: impl FnOnce(NodeResult<()>)) {
+    callback(truncate_sync(path, len));
 }
 
 pub fn unlink_callback(path: &str, callback: impl FnOnce(NodeResult<()>)) {
@@ -755,6 +869,79 @@ pub fn rm_callback(
     callback: impl FnOnce(NodeResult<()>),
 ) {
     callback(rm_sync(path, recursive, force));
+}
+
+pub fn open_callback(path: &str, flags: &str, callback: impl FnOnce(NodeResult<i32>)) {
+    callback(open_sync(path, flags));
+}
+
+pub fn close_callback(fd: i32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(close_sync(fd));
+}
+
+pub fn read_callback(
+    fd: i32,
+    buffer: &mut Buffer,
+    offset: usize,
+    length: usize,
+    position: Option<u64>,
+    callback: impl FnOnce(NodeResult<usize>),
+) {
+    callback(read_sync(fd, buffer, offset, length, position));
+}
+
+pub fn write_callback_buffer(
+    fd: i32,
+    buffer: &Buffer,
+    offset: usize,
+    length: usize,
+    position: Option<u64>,
+    callback: impl FnOnce(NodeResult<usize>),
+) {
+    callback(write_sync_buffer(fd, buffer, offset, length, position));
+}
+
+pub fn write_callback_string(
+    fd: i32,
+    value: &str,
+    position: Option<u64>,
+    encoding: &str,
+    callback: impl FnOnce(NodeResult<usize>),
+) {
+    callback(write_sync_string(fd, value, position, encoding));
+}
+
+pub fn fstat_callback(fd: i32, callback: impl FnOnce(NodeResult<Stats>)) {
+    callback(fstat_sync(fd));
+}
+
+pub fn fchmod_callback(fd: i32, mode: u32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(fchmod_sync(fd, mode));
+}
+
+pub fn fchown_callback(fd: i32, uid: u32, gid: u32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(fchown_sync(fd, uid, gid));
+}
+
+pub fn fsync_callback(fd: i32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(fsync_sync(fd));
+}
+
+pub fn fdatasync_callback(fd: i32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(fdatasync_sync(fd));
+}
+
+pub fn ftruncate_callback(fd: i32, len: u64, callback: impl FnOnce(NodeResult<()>)) {
+    callback(ftruncate_sync(fd, len));
+}
+
+pub fn futimes_callback(
+    fd: i32,
+    atime_seconds: f64,
+    mtime_seconds: f64,
+    callback: impl FnOnce(NodeResult<()>),
+) {
+    callback(futimes_sync(fd, atime_seconds, mtime_seconds));
 }
 
 pub fn glob_sync(pattern: &str) -> NodeResult<Vec<String>> {
@@ -837,6 +1024,224 @@ static FILE_TABLE: OnceLock<Mutex<HashMap<i32, File>>> = OnceLock::new();
 
 fn file_table() -> &'static Mutex<HashMap<i32, File>> {
     FILE_TABLE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn stats_from_metadata(metadata: &fs::Metadata) -> Stats {
+    Stats {
+        size: metadata.len(),
+        dev: metadata_dev(metadata),
+        ino: metadata_ino(metadata),
+        mode: metadata_mode(metadata),
+        nlink: metadata_nlink(metadata),
+        uid: metadata_uid(metadata),
+        gid: metadata_gid(metadata),
+        rdev: metadata_rdev(metadata),
+        blksize: metadata_blksize(metadata),
+        blocks: metadata_blocks(metadata),
+        atime_ms: system_time_ms(metadata.accessed().ok()),
+        mtime_ms: system_time_ms(metadata.modified().ok()),
+        ctime_ms: system_time_ms(metadata_changed(metadata)),
+        birthtime_ms: system_time_ms(metadata.created().ok()),
+        is_file: metadata.is_file(),
+        is_directory: metadata.is_dir(),
+        is_symbolic_link: metadata.file_type().is_symlink(),
+    }
+}
+
+fn system_time_ms(value: Option<SystemTime>) -> f64 {
+    value
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs_f64() * 1000.0)
+        .unwrap_or(0.0)
+}
+
+#[cfg(unix)]
+fn metadata_dev(metadata: &fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.dev()
+}
+
+#[cfg(not(unix))]
+fn metadata_dev(_metadata: &fs::Metadata) -> u64 {
+    0
+}
+
+#[cfg(unix)]
+fn metadata_ino(metadata: &fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.ino()
+}
+
+#[cfg(not(unix))]
+fn metadata_ino(_metadata: &fs::Metadata) -> u64 {
+    0
+}
+
+#[cfg(unix)]
+fn metadata_mode(metadata: &fs::Metadata) -> u32 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.mode()
+}
+
+#[cfg(not(unix))]
+fn metadata_mode(metadata: &fs::Metadata) -> u32 {
+    if metadata.permissions().readonly() {
+        0o444
+    } else {
+        0o666
+    }
+}
+
+#[cfg(unix)]
+fn metadata_nlink(metadata: &fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.nlink()
+}
+
+#[cfg(not(unix))]
+fn metadata_nlink(_metadata: &fs::Metadata) -> u64 {
+    1
+}
+
+#[cfg(unix)]
+fn metadata_uid(metadata: &fs::Metadata) -> u32 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.uid()
+}
+
+#[cfg(not(unix))]
+fn metadata_uid(_metadata: &fs::Metadata) -> u32 {
+    0
+}
+
+#[cfg(unix)]
+fn metadata_gid(metadata: &fs::Metadata) -> u32 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.gid()
+}
+
+#[cfg(not(unix))]
+fn metadata_gid(_metadata: &fs::Metadata) -> u32 {
+    0
+}
+
+#[cfg(unix)]
+fn metadata_rdev(metadata: &fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.rdev()
+}
+
+#[cfg(not(unix))]
+fn metadata_rdev(_metadata: &fs::Metadata) -> u64 {
+    0
+}
+
+#[cfg(unix)]
+fn metadata_blksize(metadata: &fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.blksize()
+}
+
+#[cfg(not(unix))]
+fn metadata_blksize(_metadata: &fs::Metadata) -> u64 {
+    0
+}
+
+#[cfg(unix)]
+fn metadata_blocks(metadata: &fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    metadata.blocks()
+}
+
+#[cfg(not(unix))]
+fn metadata_blocks(_metadata: &fs::Metadata) -> u64 {
+    0
+}
+
+#[cfg(unix)]
+fn metadata_changed(metadata: &fs::Metadata) -> Option<SystemTime> {
+    use std::os::unix::fs::MetadataExt;
+    let seconds = metadata.ctime();
+    let nanos = metadata.ctime_nsec();
+    if seconds < 0 {
+        return None;
+    }
+    Some(UNIX_EPOCH + std::time::Duration::new(seconds as u64, nanos as u32))
+}
+
+#[cfg(not(unix))]
+fn metadata_changed(metadata: &fs::Metadata) -> Option<SystemTime> {
+    metadata.modified().ok()
+}
+
+#[cfg(unix)]
+fn platform_constant_o_rdonly() -> i32 {
+    libc::O_RDONLY
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_rdonly() -> i32 {
+    0
+}
+
+#[cfg(unix)]
+fn platform_constant_o_wronly() -> i32 {
+    libc::O_WRONLY
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_wronly() -> i32 {
+    1
+}
+
+#[cfg(unix)]
+fn platform_constant_o_rdwr() -> i32 {
+    libc::O_RDWR
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_rdwr() -> i32 {
+    2
+}
+
+#[cfg(unix)]
+fn platform_constant_o_creat() -> i32 {
+    libc::O_CREAT
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_creat() -> i32 {
+    0x100
+}
+
+#[cfg(unix)]
+fn platform_constant_o_excl() -> i32 {
+    libc::O_EXCL
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_excl() -> i32 {
+    0x400
+}
+
+#[cfg(unix)]
+fn platform_constant_o_trunc() -> i32 {
+    libc::O_TRUNC
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_trunc() -> i32 {
+    0x200
+}
+
+#[cfg(unix)]
+fn platform_constant_o_append() -> i32 {
+    libc::O_APPEND
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_append() -> i32 {
+    0x8
 }
 
 fn map_io_error(error: std::io::Error) -> NodeError {
