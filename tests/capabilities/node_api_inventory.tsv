@@ -491,10 +491,21 @@ NODE-STRING-DECODER-WRITE	string_decoder	StringDecoder.write	implemented	N69	tso
 NODE-STRING-DECODER-END	string_decoder	StringDecoder.end	implemented	N69	tsonic_node::string_decoder::StringDecoder::end	NODE-STRING-DECODER-001	StringDecoder end flushes replacement for incomplete UTF-8 sequences
 NODE-MODULE-TEST	test	module	hard-reject	N0	n/a	REJECT-NODE-TEST	test runner module excluded from generated runtime ABI
 NODE-MODULE-TIMERS	timers	module	implemented	N3	tsonic_node::timers	NODE-TIMERS-001	deterministic timer handles and callback execution
-NODE-TIMERS-OPTIONS	timers	TimerOptions/_onTimeout/_onImmediate	implemented	N30	tsonic_node::timers::{TimerOptions,set_timeout_with_options,set_immediate_with_options,set_interval_with_options}	NODE-TIMERS-002	ref/abort timer options and explicit callback handle methods
-NODE-TIMERS-HANDLE-METHODS	timers	Timeout/Immediate/Timer ref/unref/hasRef/refresh/close	implemented	N55	tsonic_node::timers::{Timeout,Immediate,Timer}	NODE-TIMERS-001,NODE-TIMERS-002	closed timer handle ref state, refresh, and close methods
-NODE-TIMERS-PROMISES	timers/promises	setTimeout/setImmediate/setInterval/scheduler.wait/scheduler.yield	implemented	N55	tsonic_node::timers::promises	NODE-TIMERS-002	promise-style blocking-now timer values and scheduler helpers
-WEB-TIMERS-CALLBACK-OPTIONS	web-globals/timers	callback/delay option shapes	implemented	N55	tsonic_node::timers::{set_timeout_with_options,set_interval_with_options,set_immediate_with_options,TimerOptions}	NODE-TIMERS-002	web-compatible timer callback and delay option carrier shape
+NODE-TIMERS-OPTIONS-REF	timers	TimerOptions.ref	implemented	N71	tsonic_node::timers::TimerOptions::ref	NODE-TIMERS-002	ref option controls active handle state
+NODE-TIMERS-OPTIONS-SIGNAL-ABORTED	timers	TimerOptions.signalAborted	implemented	N71	tsonic_node::timers::TimerOptions::signal_aborted	NODE-TIMERS-002	signal-aborted option suppresses callback and active handle state
+NODE-TIMERS-TIMEOUT-ID	timers	Timeout.id	implemented	N71	tsonic_node::timers::Timeout::id	NODE-TIMERS-001	closed timer id accessor
+NODE-TIMERS-TIMEOUT-HAS-REF	timers	Timeout.hasRef	implemented	N71	tsonic_node::timers::Timeout::has_ref	NODE-TIMERS-001	closed ref-state accessor
+NODE-TIMERS-TIMEOUT-UNREF	timers	Timeout.unref	implemented	N71	tsonic_node::timers::Timeout::unref	NODE-TIMERS-001	clears active ref state and returns handle
+NODE-TIMERS-TIMEOUT-REF	timers	Timeout.ref	implemented	N71	tsonic_node::timers::Timeout::ref	NODE-TIMERS-001	sets active ref state and returns handle
+NODE-TIMERS-TIMEOUT-REFRESH	timers	Timeout.refresh	implemented	N71	tsonic_node::timers::Timeout::refresh	NODE-TIMERS-001	refreshes handle by restoring active state
+NODE-TIMERS-TIMEOUT-CLOSE-METHOD	timers	Timeout.close	implemented	N71	tsonic_node::timers::Timeout::close	NODE-TIMERS-001	closes handle by clearing active ref state
+NODE-TIMERS-TIMEOUT-DELAY	timers	Timeout.delayMs	implemented	N71	tsonic_node::timers::Timeout::delay_ms	NODE-TIMERS-001	exposes explicit timer delay
+NODE-TIMERS-TIMEOUT-ON-TIMEOUT	timers	Timeout._onTimeout	implemented	N71	tsonic_node::timers::Timeout::on_timeout	NODE-TIMERS-002	explicit callback hook invokes generated Rust callback deterministically
+NODE-TIMERS-TIMEOUT-ON-IMMEDIATE	timers	Immediate._onImmediate	implemented	N71	tsonic_node::timers::Timeout::on_immediate	NODE-TIMERS-002	explicit immediate callback hook invokes generated Rust callback deterministically
+NODE-TIMERS-PROMISES-MODULE	timers/promises	module	implemented	N71	tsonic_node::timers::promises	NODE-TIMERS-002	promise-style blocking-now timer module
+NODE-TIMERS-PROMISES-SCHEDULER-MODULE	timers/promises	scheduler	implemented	N71	tsonic_node::timers::promises::scheduler	NODE-TIMERS-002	promise-style scheduler namespace
+WEB-TIMERS-CALLBACK-SHAPE	web-globals/timers	callback shape	implemented	N71	tsonic_node::timers::Timeout	NODE-TIMERS-002	web-compatible timer callback hook uses explicit generated Rust callback
+WEB-TIMERS-DELAY-SHAPE	web-globals/timers	delay option shape	implemented	N71	tsonic_node::timers::TimerOptions	NODE-TIMERS-002	web-compatible delay/options shape is closed TimerOptions plus delay value
 NODE-TIMERS-SET-TIMEOUT	timers	setTimeout	implemented	N71	tsonic_node::timers::set_timeout	NODE-TIMERS-001	deterministic setTimeout executes callback through explicit runtime helper
 NODE-TIMERS-SET-TIMEOUT-OPTIONS	timers	setTimeout options	implemented	N71	tsonic_node::timers::set_timeout_with_options	NODE-TIMERS-002	setTimeout options support ref and abort controls
 NODE-TIMERS-SET-IMMEDIATE	timers	setImmediate	implemented	N71	tsonic_node::timers::set_immediate	NODE-TIMERS-001	deterministic setImmediate executes callback through explicit runtime helper
