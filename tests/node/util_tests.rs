@@ -21,6 +21,11 @@ fn util_format_and_inspect_closed_values() {
         "\"x\""
     );
     assert_eq!(util::inspect(&JsValue::Null), "null");
+    assert_eq!(util::inspect_custom_symbol(), "nodejs.util.inspect.custom");
+    assert_eq!(
+        util::promisify_custom_symbol(),
+        "nodejs.util.promisify.custom"
+    );
     assert_eq!(
         util::inspect_with_options(&JsValue::Null, &JsValue::Null),
         "null"
@@ -31,6 +36,18 @@ fn util_format_and_inspect_closed_values() {
         util::inspect_with_struct_options(&JsValue::String("abcdef".to_string()), &options),
         "\"ab..."
     );
+    assert_eq!(
+        util::inspect_default_options(),
+        util::default_inspect_options()
+    );
+    let styles = util::inspect_styles();
+    assert!(styles
+        .iter()
+        .any(|entry| entry.kind == "number" && entry.style == "yellow"));
+    let colors = util::inspect_colors();
+    assert!(colors
+        .iter()
+        .any(|entry| entry.style == "cyan" && entry.open == 36 && entry.close == 39));
     let diff = util::diff("a\nb", "a\nc");
     assert_eq!(diff[0].operation, 0);
     assert_eq!(diff[1].operation, -1);
@@ -93,6 +110,10 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     assert_eq!(util::style_text("unknown", "x"), "x");
     assert_eq!(util::get_system_error_name(2), "ENOENT");
     assert_eq!(util::get_system_error_message(13), "permission denied");
+    let error_map = util::get_system_error_map();
+    assert!(error_map.iter().any(|entry| entry.code == 17
+        && entry.name == "EEXIST"
+        && entry.message == "file already exists"));
     assert_eq!(
         util::convert_process_signal_to_exit_code("SIGTERM"),
         Some(143)
@@ -128,6 +149,35 @@ fn util_mime_and_parse_args_cover_common_tooling_shapes() {
     assert_eq!(mime.params().get("charset"), Some("utf-8"));
     mime.params_mut().set("boundary", "abc");
     assert!(mime.to_string().contains("boundary=abc"));
+    assert_eq!(mime.to_string_value(), mime.to_string());
+    assert_eq!(
+        mime.params().to_string_value(),
+        "charset=utf-8;boundary=abc"
+    );
+    assert_eq!(
+        mime.params()
+            .entries()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("charset".to_string(), "utf-8".to_string()),
+            ("boundary".to_string(), "abc".to_string()),
+        ]
+    );
+    assert_eq!(
+        mime.params()
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        vec!["charset".to_string(), "boundary".to_string()]
+    );
+    assert_eq!(
+        mime.params()
+            .values()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        vec!["utf-8".to_string(), "abc".to_string()]
+    );
     mime.params_mut().delete("charset");
     assert!(!mime.params().has("charset"));
 
@@ -184,4 +234,22 @@ fn util_mime_and_parse_args_cover_common_tooling_shapes() {
         ]
     );
     assert_eq!(parsed.positionals, vec!["src/index.ts".to_string()]);
+
+    let env = util::parse_env(
+        r#"
+        # comment
+        A=1
+        export B="two words"
+        C='literal\ntext'
+        D=plain # trailing comment
+        E="line\nbreak"
+        1BAD=ignored
+        "#,
+    );
+    assert_eq!(env.get("A"), Some(&"1".to_string()));
+    assert_eq!(env.get("B"), Some(&"two words".to_string()));
+    assert_eq!(env.get("C"), Some(&"literal\\ntext".to_string()));
+    assert_eq!(env.get("D"), Some(&"plain".to_string()));
+    assert_eq!(env.get("E"), Some(&"line\nbreak".to_string()));
+    assert!(!env.contains_key("1BAD"));
 }

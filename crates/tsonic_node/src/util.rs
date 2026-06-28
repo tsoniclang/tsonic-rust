@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use tsonic_js::date::JsDate;
 use tsonic_js::json;
 use tsonic_js::regexp::JsRegExp;
@@ -57,6 +59,10 @@ impl MIMEParams {
 
     pub fn values(&self) -> impl Iterator<Item = &str> {
         self.pairs.iter().map(|(_, value)| value.as_str())
+    }
+
+    pub fn to_string_value(&self) -> String {
+        format!("{self}")
     }
 }
 
@@ -123,6 +129,10 @@ impl MIMEType {
 
     pub fn params_mut(&mut self) -> &mut MIMEParams {
         &mut self.params
+    }
+
+    pub fn to_string_value(&self) -> String {
+        format!("{self}")
     }
 }
 
@@ -194,6 +204,26 @@ impl Default for InspectOptions {
             max_string_length: Some(10_000),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InspectStyleEntry {
+    pub kind: &'static str,
+    pub style: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InspectColorEntry {
+    pub style: &'static str,
+    pub open: u8,
+    pub close: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SystemErrorEntry {
+    pub code: i32,
+    pub name: &'static str,
+    pub message: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -350,6 +380,118 @@ pub fn inspect_with_struct_options(value: &JsValue, options: &InspectOptions) ->
     } else {
         text
     }
+}
+
+pub fn inspect_custom_symbol() -> &'static str {
+    "nodejs.util.inspect.custom"
+}
+
+pub fn promisify_custom_symbol() -> &'static str {
+    "nodejs.util.promisify.custom"
+}
+
+pub fn inspect_default_options() -> InspectOptions {
+    InspectOptions::default()
+}
+
+pub fn inspect_styles() -> Vec<InspectStyleEntry> {
+    vec![
+        InspectStyleEntry {
+            kind: "special",
+            style: "cyan",
+        },
+        InspectStyleEntry {
+            kind: "number",
+            style: "yellow",
+        },
+        InspectStyleEntry {
+            kind: "bigint",
+            style: "yellow",
+        },
+        InspectStyleEntry {
+            kind: "boolean",
+            style: "yellow",
+        },
+        InspectStyleEntry {
+            kind: "undefined",
+            style: "grey",
+        },
+        InspectStyleEntry {
+            kind: "null",
+            style: "bold",
+        },
+        InspectStyleEntry {
+            kind: "string",
+            style: "green",
+        },
+        InspectStyleEntry {
+            kind: "symbol",
+            style: "green",
+        },
+        InspectStyleEntry {
+            kind: "date",
+            style: "magenta",
+        },
+        InspectStyleEntry {
+            kind: "regexp",
+            style: "red",
+        },
+    ]
+}
+
+pub fn inspect_colors() -> Vec<InspectColorEntry> {
+    vec![
+        InspectColorEntry {
+            style: "bold",
+            open: 1,
+            close: 22,
+        },
+        InspectColorEntry {
+            style: "italic",
+            open: 3,
+            close: 23,
+        },
+        InspectColorEntry {
+            style: "underline",
+            open: 4,
+            close: 24,
+        },
+        InspectColorEntry {
+            style: "red",
+            open: 31,
+            close: 39,
+        },
+        InspectColorEntry {
+            style: "green",
+            open: 32,
+            close: 39,
+        },
+        InspectColorEntry {
+            style: "yellow",
+            open: 33,
+            close: 39,
+        },
+        InspectColorEntry {
+            style: "blue",
+            open: 34,
+            close: 39,
+        },
+        InspectColorEntry {
+            style: "magenta",
+            open: 35,
+            close: 39,
+        },
+        InspectColorEntry {
+            style: "cyan",
+            open: 36,
+            close: 39,
+        },
+        InspectColorEntry {
+            style: "grey",
+            open: 90,
+            close: 39,
+        },
+    ]
 }
 
 pub fn is_deep_strict_equal(left: &JsValue, right: &JsValue) -> bool {
@@ -512,6 +654,17 @@ pub fn get_system_error_message(code: i32) -> &'static str {
     }
 }
 
+pub fn get_system_error_map() -> Vec<SystemErrorEntry> {
+    [1, 2, 13, 17, 22]
+        .into_iter()
+        .map(|code| SystemErrorEntry {
+            code,
+            name: get_system_error_name(code),
+            message: get_system_error_message(code),
+        })
+        .collect()
+}
+
 pub fn convert_process_signal_to_exit_code(signal: &str) -> Option<i32> {
     match signal {
         "SIGHUP" => Some(129),
@@ -582,6 +735,83 @@ pub fn parse_args(config: ParseArgsConfig) -> ParseArgsResult {
         index += 1;
     }
     result
+}
+
+pub fn parse_env(input: &str) -> BTreeMap<String, String> {
+    let mut result = BTreeMap::new();
+    for line in input.lines() {
+        let mut text = line.trim();
+        if text.is_empty() || text.starts_with('#') {
+            continue;
+        }
+        if let Some(rest) = text.strip_prefix("export ") {
+            text = rest.trim_start();
+        }
+        let Some((raw_key, raw_value)) = text.split_once('=') else {
+            continue;
+        };
+        let key = raw_key.trim();
+        if key.is_empty()
+            || !key
+                .chars()
+                .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+            || key.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+        {
+            continue;
+        }
+        result.insert(key.to_string(), parse_env_value(raw_value));
+    }
+    result
+}
+
+fn parse_env_value(raw_value: &str) -> String {
+    let value = raw_value.trim();
+    if value.len() >= 2 {
+        let bytes = value.as_bytes();
+        let first = bytes[0];
+        let last = bytes[value.len() - 1];
+        if matches!(first, b'\'' | b'"' | b'`') && first == last {
+            return unescape_env_quoted_value(&value[1..value.len() - 1], first);
+        }
+    }
+    let mut end = value.len();
+    let mut previous_was_space = false;
+    for (index, ch) in value.char_indices() {
+        if ch == '#' && (index == 0 || previous_was_space) {
+            end = index;
+            break;
+        }
+        previous_was_space = ch.is_whitespace();
+    }
+    value[..end].trim_end().to_string()
+}
+
+fn unescape_env_quoted_value(value: &str, quote: u8) -> String {
+    if quote == b'\'' {
+        return value.to_string();
+    }
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            output.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => output.push('\n'),
+            Some('r') => output.push('\r'),
+            Some('t') => output.push('\t'),
+            Some('\\') => output.push('\\'),
+            Some('"') if quote == b'"' => output.push('"'),
+            Some('`') if quote == b'`' => output.push('`'),
+            Some(other) => {
+                output.push('\\');
+                output.push(other);
+            }
+            None => output.push('\\'),
+        }
+    }
+    output
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

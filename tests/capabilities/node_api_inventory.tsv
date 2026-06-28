@@ -1876,6 +1876,7 @@ NODE-UTIL-MIMEPARAMS-DELETE	util	MIMEParams.delete	implemented	N60	tsonic_node::
 NODE-UTIL-MIMEPARAMS-ENTRIES	util	MIMEParams.entries	implemented	N60	tsonic_node::util::MIMEParams::entries	NODE-UTIL-006	ordered MIME parameter MIMEParams.entries helper
 NODE-UTIL-MIMEPARAMS-KEYS	util	MIMEParams.keys	implemented	N60	tsonic_node::util::MIMEParams::keys	NODE-UTIL-006	ordered MIME parameter MIMEParams.keys helper
 NODE-UTIL-MIMEPARAMS-VALUES	util	MIMEParams.values	implemented	N60	tsonic_node::util::MIMEParams::values	NODE-UTIL-006	ordered MIME parameter MIMEParams.values helper
+NODE-UTIL-MIMEPARAMS-TOSTRING	util	MIMEParams.toString	implemented	N76	tsonic_node::util::MIMEParams::to_string_value	NODE-UTIL-006	ordered MIME parameter serialization helper
 NODE-UTIL-MIMETYPE-CARRIER	util	MIMEType	implemented	N22	tsonic_node::util::MIMEType	NODE-UTIL-006	closed MIME type carrier
 NODE-UTIL-MIMETYPE-NEW	util	MIMEType.new	implemented	N22	tsonic_node::util::MIMEType::new	NODE-UTIL-006	parses MIME type string
 NODE-UTIL-MIMETYPE-ESSENCE	util	MIMEType.essence	implemented	N22	tsonic_node::util::MIMEType::essence	NODE-UTIL-006	closed MIME type MIMEType.essence helper
@@ -1883,11 +1884,14 @@ NODE-UTIL-MIMETYPE-TYPE	util	MIMEType.type	implemented	N22	tsonic_node::util::MI
 NODE-UTIL-MIMETYPE-SUBTYPE	util	MIMEType.subtype	implemented	N22	tsonic_node::util::MIMEType::subtype	NODE-UTIL-006	closed MIME type MIMEType.subtype helper
 NODE-UTIL-MIMETYPE-PARAMS	util	MIMEType.params	implemented	N22	tsonic_node::util::MIMEType::params	NODE-UTIL-006	closed MIME type MIMEType.params helper
 NODE-UTIL-MIMETYPE-PARAMS-MUT	util	MIMEType.paramsMut	implemented	N22	tsonic_node::util::MIMEType::params_mut	NODE-UTIL-006	closed MIME type MIMEType.paramsMut helper
+NODE-UTIL-MIMETYPE-TOSTRING	util	MIMEType.toString	implemented	N76	tsonic_node::util::MIMEType::to_string_value	NODE-UTIL-006	closed MIME type serialization helper
 NODE-UTIL-DEBUGLOG	util	debuglog	implemented	N60	tsonic_node::util::debuglog	NODE-UTIL-006	creates explicit DebugLogger
 NODE-UTIL-STYLE-TEXT	util	styleText	implemented	N60	tsonic_node::util::style_text	NODE-UTIL-006	applies explicit ANSI style
 NODE-UTIL-SYSTEM-ERROR-NAME	util	getSystemErrorName	implemented	N60	tsonic_node::util::get_system_error_name	NODE-UTIL-006	known system error name helper
 NODE-UTIL-SYSTEM-ERROR-MESSAGE	util	getSystemErrorMessage	implemented	N60	tsonic_node::util::get_system_error_message	NODE-UTIL-006	known system error message helper
+NODE-UTIL-SYSTEM-ERROR-MAP	util	getSystemErrorMap	implemented	N76	tsonic_node::util::get_system_error_map	NODE-UTIL-007	closed known system error map
 NODE-UTIL-PROMISIFY	util	promisify	implemented	N60	tsonic_node::util::promisify	NODE-UTIL-006	identity adapter for generated Rust function carrier
+NODE-UTIL-PROMISIFY-CUSTOM-SYMBOL	util	promisify.custom	implemented	N76	tsonic_node::util::promisify_custom_symbol	NODE-UTIL-001	closed util.promisify.custom symbol identity
 NODE-UTIL-CALLBACKIFY	util	callbackify	implemented	N60	tsonic_node::util::callbackify	NODE-UTIL-006	identity adapter for generated Rust function carrier
 NODE-UTIL-ABORTED	util	aborted	implemented	N60	tsonic_node::util::aborted	NODE-UTIL-007	AbortSignal aborted helper
 NODE-UTIL-TRANSFERABLE-ABORT-SIGNAL	util	transferableAbortSignal	implemented	N60	tsonic_node::util::transferable_abort_signal	NODE-UTIL-007	closed AbortSignal transfer helper
@@ -1911,6 +1915,9 @@ NODE-UTIL-INSPECTOPTIONS-CARRIER	util	InspectOptions	implemented	N60	tsonic_node
 NODE-UTIL-TEXTENCODERENCODE-INTORESULT-CARRIER	util	TextEncoderEncodeIntoResult	implemented	N60	tsonic_node::util::TextEncoderEncodeIntoResult	NODE-UTIL-008	closed TextEncoderEncodeIntoResult carrier
 NODE-UTIL-DIFFENTRY-CARRIER	util	DiffEntry	implemented	N60	tsonic_node::util::DiffEntry	NODE-UTIL-008	closed DiffEntry carrier
 NODE-UTIL-CALLSITE-CARRIER	util	CallSite	implemented	N60	tsonic_node::util::CallSite	NODE-UTIL-008	closed CallSite carrier
+NODE-UTIL-INSPECT-STYLE-ENTRY-CARRIER	util	InspectStyleEntry	implemented	N76	tsonic_node::util::InspectStyleEntry	NODE-UTIL-001	closed inspect style entry carrier
+NODE-UTIL-INSPECT-COLOR-ENTRY-CARRIER	util	InspectColorEntry	implemented	N76	tsonic_node::util::InspectColorEntry	NODE-UTIL-001	closed inspect color entry carrier
+NODE-UTIL-SYSTEM-ERROR-ENTRY-CARRIER	util	SystemErrorEntry	implemented	N76	tsonic_node::util::SystemErrorEntry	NODE-UTIL-007	closed system error entry carrier
 NODE-UTIL-TEXTENCODER-CARRIER	util	TextEncoder	implemented	N60	tsonic_node::util::TextEncoder	NODE-UTIL-008	closed TextEncoder carrier
 NODE-UTIL-TEXTDECODER-CARRIER	util	TextDecoder	implemented	N60	tsonic_node::util::TextDecoder	NODE-UTIL-008	closed TextDecoder carrier
 NODE-UTIL-CALLSITE-NEW	util	CallSite.new	implemented	N43	tsonic_node::util::CallSite::new	NODE-UTIL-007	closed CallSite CallSite.new helper
@@ -1957,8 +1964,13 @@ NODE-UTIL-TYPES-IS_PROMISE	util	types.isPromise	implemented	N60	tsonic_node::uti
 NODE-UTIL-TYPES-IS_NATIVE_ERROR	util	types.isNativeError	implemented	N60	tsonic_node::util::types::is_native_error	NODE-UTIL-001	closed util.types predicate types.isNativeError
 NODE-UTIL-TYPES-IS_PROXY	util	types.isProxy	implemented	N60	tsonic_node::util::types::is_proxy	NODE-UTIL-001	closed util.types predicate types.isProxy
 NODE-UTIL-PARSE-ARGS	util	parseArgs	implemented	N22	tsonic_node::util::parse_args	NODE-UTIL-006	closed CLI option parser over explicit config; no shell/runtime introspection
+NODE-UTIL-PARSE-ENV	util	parseEnv	implemented	N76	tsonic_node::util::parse_env	NODE-UTIL-007	closed dotenv-style environment parser over explicit input
 NODE-UTIL-FORMAT-OPTIONS	util	formatWithOptions	implemented	N60	tsonic_node::util::format_with_options	NODE-UTIL-001	formatWithOptions delegates to closed format semantics without object reflection
 NODE-UTIL-DEEP-EQUALITY	util	isDeepStrictEqual	implemented	N60	tsonic_node::util::is_deep_strict_equal	NODE-UTIL-001	closed JsValue deep strict equality
+NODE-UTIL-INSPECT-CUSTOM-SYMBOL	util	inspect.custom	implemented	N76	tsonic_node::util::inspect_custom_symbol	NODE-UTIL-001	closed util.inspect.custom symbol identity
+NODE-UTIL-INSPECT-DEFAULT-OPTIONS	util	inspect.defaultOptions	implemented	N76	tsonic_node::util::inspect_default_options	NODE-UTIL-001	closed inspect.defaultOptions carrier
+NODE-UTIL-INSPECT-STYLES	util	inspect.styles	implemented	N76	tsonic_node::util::inspect_styles	NODE-UTIL-001	closed inspect.styles metadata
+NODE-UTIL-INSPECT-COLORS	util	inspect.colors	implemented	N76	tsonic_node::util::inspect_colors	NODE-UTIL-001	closed inspect.colors metadata
 NODE-PROCESS-ENV-GET	process	env get	implemented	J	tsonic_node::process::env_get	NODE-PROC-001	environment variable getter
 NODE-PROCESS-ENV-SET	process	env set	implemented	J	tsonic_node::process::env_set	NODE-PROC-001	environment variable setter
 NODE-PROCESS-ENV-DELETE	process	env delete	implemented	J	tsonic_node::process::env_delete	NODE-PROC-001	environment variable deleter
