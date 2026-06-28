@@ -308,6 +308,8 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
         .contains("network_process_tests"));
     let output = child_process::spawn_sync(&current, &["--list"]).unwrap();
     assert!(output.success());
+    assert_eq!(output.output()[0], None);
+    assert!(!output.to_spawn_sync_returns().stdout.is_empty());
     assert!(child_process::exec_file_sync_string(&current, &["--list"])
         .unwrap()
         .contains("network_process_tests"));
@@ -321,6 +323,15 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
     assert!(child.pid.unwrap() > 0);
     assert_eq!(child.spawnfile, current);
     assert_eq!(child.spawnargs, vec!["--list"]);
+    assert_eq!(
+        child.stdio,
+        vec![
+            child_process::Stdio::Pipe,
+            child_process::Stdio::Pipe,
+            child_process::Stdio::Pipe
+        ]
+    );
+    assert_eq!(child.channel, Some("ipc".to_string()));
     assert!(child.stdin);
     assert!(child.connected);
     assert!(child.has_ref());
@@ -329,7 +340,17 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
     child.ref_process();
     assert!(child.has_ref());
     assert!(child.send("ready").unwrap());
+    assert!(!child
+        .send_with_options(
+            "ready",
+            &child_process::MessagingOptions {
+                keep_open: true,
+                kill_signal: Some("SIGTERM".to_string()),
+            },
+        )
+        .unwrap());
     child.disconnect();
+    assert_eq!(child.channel, None);
     assert!(child.send("ready").is_err());
 
     let output = child.wait().unwrap();
@@ -346,6 +367,27 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
         .stdout_string()
         .unwrap()
         .contains("network_process_tests"));
+    let promisified = child_process::exec_file_promisify(
+        &current,
+        &["--list"],
+        &child_process::SpawnOptions::default()
+            .with_stdio(child_process::StdioOptions::tuple(
+                child_process::Stdio::Pipe,
+                child_process::Stdio::Pipe,
+                child_process::Stdio::Pipe,
+            ))
+            .with_encoding(child_process::OutputEncoding::Utf8),
+    )
+    .unwrap();
+    assert!(promisified.value.success());
+    assert_eq!(promisified.child.spawnfile, current);
+    let forked = child_process::fork_file(
+        &promisified.child.spawnfile,
+        &["--list"],
+        &Default::default(),
+    )
+    .unwrap();
+    assert!(forked.pid.unwrap() > 0);
 
     let shell_reject = child_process::spawn_file_sync_with_options(
         &current,
@@ -358,21 +400,47 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
     assert!(shell_reject.is_err());
     assert!(child_process::exec_command_sync("echo forbidden").is_err());
     assert!(child_process::spawn_shell_sync("echo forbidden").is_err());
+    assert!(child_process::spawn_file_sync_with_options(
+        &current,
+        &["--list"],
+        &child_process::SpawnOptions::default().with_abort_signal(true),
+    )
+    .is_err());
+    assert!(child_process::spawn_file_sync_with_options(
+        &current,
+        &["--list"],
+        &child_process::SpawnOptions::default().with_max_buffer(1),
+    )
+    .is_err());
+    let ignored = child_process::spawn_file_sync_with_options(
+        &current,
+        &["--list"],
+        &child_process::SpawnOptions::default().with_stdio(child_process::StdioOptions {
+            stdin: child_process::Stdio::Ignore,
+            stdout: child_process::Stdio::Ignore,
+            stderr: child_process::Stdio::Ignore,
+        }),
+    )
+    .unwrap();
+    assert!(ignored.success());
+    assert_eq!(ignored.stdout, Vec::<u8>::new());
 
     if Path::new("/bin/cat").exists() {
         let output = child_process::spawn_file_sync_with_options(
             "/bin/cat",
             &[],
-            &child_process::SpawnOptions {
-                input: Some(b"stdin payload".to_vec()),
-                timeout_ms: Some(1_000),
-                kill_signal: Some("SIGTERM".to_string()),
-                env: BTreeMap::from([("TSONIC_CHILD_TEST".to_string(), "1".to_string())]),
-                ..child_process::SpawnOptions::default()
-            },
+            &child_process::SpawnOptions::default()
+                .with_input(b"stdin payload".to_vec())
+                .with_timeout_ms(1_000)
+                .with_kill_signal("SIGTERM")
+                .with_argv0("cat")
+                .with_env("TSONIC_CHILD_TEST", "1"),
         )
         .unwrap();
         assert_eq!(output.stdout, b"stdin payload".to_vec());
         assert!(output.success());
+        let exception = child_process::exec_exception("cat", &output);
+        assert_eq!(exception.cmd, "cat");
+        assert_eq!(exception.code, Some(0));
     }
 }

@@ -177,18 +177,102 @@ NODE-DGRAM-SOCKET-ADD-MEMBERSHIP	dgram	Socket.addMembership	implemented	N18	tson
 NODE-DGRAM-SOCKET-DROP-MEMBERSHIP	dgram	Socket.dropMembership	implemented	N18	tsonic_node::dgram::Socket::drop_membership	NODE-DGRAM-002	records membership removal API as closed no-op carrier operation
 NODE-DGRAM-CREATE-SOCKET	dgram	createSocket	implemented	N18	tsonic_node::dgram::create_socket	NODE-DGRAM-001	creates UDP socket bound to loopback ephemeral port
 NODE-CHILD-SPAWN-OPTIONS-CARRIER	child_process	SpawnOptions	implemented	N33	tsonic_node::child_process::SpawnOptions	NODE-CHILD-003	closed spawn option carrier with explicit shell rejection
+NODE-CHILD-SPAWN-OPTIONS-CWD	child_process	SpawnOptions.cwd	implemented	N81	tsonic_node::child_process::SpawnOptions::cwd	NODE-CHILD-003	closed child process current-working-directory option
+NODE-CHILD-SPAWN-OPTIONS-ENV	child_process	SpawnOptions.env	implemented	N81	tsonic_node::child_process::SpawnOptions::env	NODE-CHILD-003	closed child process environment map option
+NODE-CHILD-SPAWN-OPTIONS-ARGV0	child_process	SpawnOptions.argv0	implemented	N81	tsonic_node::child_process::SpawnOptions::argv0	NODE-CHILD-003	explicit argv0 metadata option for generated calls
+NODE-CHILD-SPAWN-OPTIONS-DETACHED	child_process	SpawnOptions.detached	implemented	N81	tsonic_node::child_process::SpawnOptions::detached	NODE-CHILD-003	detached option captured as closed metadata
+NODE-CHILD-SPAWN-OPTIONS-INPUT	child_process	SpawnOptions.input	implemented	N81	tsonic_node::child_process::SpawnOptions::input	NODE-CHILD-003	closed stdin input option
+NODE-CHILD-SPAWN-OPTIONS-STDIO	child_process	SpawnOptions.stdio	implemented	N81	tsonic_node::child_process::SpawnOptions::stdio	NODE-CHILD-003	closed stdio tuple option
+NODE-CHILD-SPAWN-OPTIONS-ENCODING	child_process	SpawnOptions.encoding	implemented	N81	tsonic_node::child_process::SpawnOptions::encoding	NODE-CHILD-003	closed output encoding option
+NODE-CHILD-SPAWN-OPTIONS-MAX-BUFFER	child_process	SpawnOptions.maxBuffer	implemented	N81	tsonic_node::child_process::SpawnOptions::max_buffer	NODE-CHILD-003	maxBuffer enforced for captured child output
+NODE-CHILD-SPAWN-OPTIONS-TIMEOUT	child_process	SpawnOptions.timeout	implemented	N81	tsonic_node::child_process::SpawnOptions::timeout_ms	NODE-CHILD-003	timeout option captured as closed metadata
+NODE-CHILD-SPAWN-OPTIONS-KILL-SIGNAL	child_process	SpawnOptions.killSignal	implemented	N81	tsonic_node::child_process::SpawnOptions::kill_signal	NODE-CHILD-003	closed killSignal metadata option
+NODE-CHILD-SPAWN-OPTIONS-SHELL	child_process	SpawnOptions.shell	implemented	N33	tsonic_node::child_process::SpawnOptions::shell	NODE-CHILD-003	shell option is explicit and rejected when enabled
+NODE-CHILD-SPAWN-OPTIONS-SIGNAL	child_process	SpawnOptions.signal	implemented	N81	tsonic_node::child_process::SpawnOptions::signal_aborted	NODE-CHILD-003	abort signal state rejects process start explicitly
+NODE-CHILD-SPAWN-OPTIONS-WINDOWS-VERBATIM	child_process	SpawnOptions.windowsVerbatimArguments	implemented	N81	tsonic_node::child_process::SpawnOptions::windows_verbatim_arguments	NODE-CHILD-003	windowsVerbatimArguments captured as closed metadata
+NODE-CHILD-SPAWN-OPTIONS-WINDOWS-HIDE	child_process	SpawnOptions.windowsHide	implemented	N81	tsonic_node::child_process::SpawnOptions::windows_hide	NODE-CHILD-003	windowsHide captured as closed metadata
+NODE-CHILD-SPAWN-OPTIONS-WITH-CWD	child_process	SpawnOptions.withCwd	implemented	N81	tsonic_node::child_process::SpawnOptions::with_cwd	NODE-CHILD-003	spawn option builder for cwd
+NODE-CHILD-SPAWN-OPTIONS-WITH-ENV	child_process	SpawnOptions.withEnv	implemented	N81	tsonic_node::child_process::SpawnOptions::with_env	NODE-CHILD-003	spawn option builder for environment entries
+NODE-CHILD-SPAWN-OPTIONS-WITH-INPUT	child_process	SpawnOptions.withInput	implemented	N81	tsonic_node::child_process::SpawnOptions::with_input	NODE-CHILD-003	spawn option builder for stdin input
+NODE-CHILD-SPAWN-OPTIONS-WITH-STDIO	child_process	SpawnOptions.withStdio	implemented	N81	tsonic_node::child_process::SpawnOptions::with_stdio	NODE-CHILD-003	spawn option builder for stdio tuple
+NODE-CHILD-SPAWN-OPTIONS-WITH-ENCODING	child_process	SpawnOptions.withEncoding	implemented	N81	tsonic_node::child_process::SpawnOptions::with_encoding	NODE-CHILD-003	spawn option builder for output encoding
+NODE-CHILD-SPAWN-OPTIONS-WITH-MAX-BUFFER	child_process	SpawnOptions.withMaxBuffer	implemented	N81	tsonic_node::child_process::SpawnOptions::with_max_buffer	NODE-CHILD-003	spawn option builder for maxBuffer
+NODE-CHILD-SPAWN-OPTIONS-WITH-TIMEOUT	child_process	SpawnOptions.withTimeout	implemented	N81	tsonic_node::child_process::SpawnOptions::with_timeout_ms	NODE-CHILD-003	spawn option builder for timeout
+NODE-CHILD-SPAWN-OPTIONS-WITH-KILL-SIGNAL	child_process	SpawnOptions.withKillSignal	implemented	N81	tsonic_node::child_process::SpawnOptions::with_kill_signal	NODE-CHILD-003	spawn option builder for killSignal
+NODE-CHILD-SPAWN-OPTIONS-WITH-ARGV0	child_process	SpawnOptions.withArgv0	implemented	N81	tsonic_node::child_process::SpawnOptions::with_argv0	NODE-CHILD-003	spawn option builder for argv0
+NODE-CHILD-SPAWN-OPTIONS-WITH-ABORT	child_process	SpawnOptions.withAbortSignal	implemented	N81	tsonic_node::child_process::SpawnOptions::with_abort_signal	NODE-CHILD-003	spawn option builder for abort signal state
+NODE-CHILD-OUTPUT-ENCODING-CARRIER	child_process	OutputEncoding	implemented	N81	tsonic_node::child_process::OutputEncoding	NODE-CHILD-003	closed child output encoding carrier
+NODE-CHILD-OUTPUT-ENCODING-BUFFER	child_process	OutputEncoding.Buffer	implemented	N81	tsonic_node::child_process::OutputEncoding::Buffer	NODE-CHILD-003	buffer output encoding
+NODE-CHILD-OUTPUT-ENCODING-UTF8	child_process	OutputEncoding.Utf8	implemented	N81	tsonic_node::child_process::OutputEncoding::Utf8	NODE-CHILD-003	UTF-8 output encoding
+NODE-CHILD-STDIO-CARRIER	child_process	Stdio	implemented	N81	tsonic_node::child_process::Stdio	NODE-CHILD-003	closed stdio policy carrier
+NODE-CHILD-STDIO-PIPE	child_process	Stdio.pipe	implemented	N81	tsonic_node::child_process::Stdio::Pipe	NODE-CHILD-003	pipe stdio policy
+NODE-CHILD-STDIO-IGNORE	child_process	Stdio.ignore	implemented	N81	tsonic_node::child_process::Stdio::Ignore	NODE-CHILD-003	ignore stdio policy
+NODE-CHILD-STDIO-INHERIT	child_process	Stdio.inherit	implemented	N81	tsonic_node::child_process::Stdio::Inherit	NODE-CHILD-003	inherit stdio policy
+NODE-CHILD-STDIO-IPC	child_process	Stdio.ipc	implemented	N81	tsonic_node::child_process::Stdio::Ipc	NODE-CHILD-003	IPC stdio policy marker
+NODE-CHILD-STDIO-OPTIONS-CARRIER	child_process	StdioOptions	implemented	N81	tsonic_node::child_process::StdioOptions	NODE-CHILD-003	closed stdio tuple carrier
+NODE-CHILD-STDIO-OPTIONS-STDIN	child_process	StdioOptions.stdin	implemented	N81	tsonic_node::child_process::StdioOptions::stdin	NODE-CHILD-003	stdin stdio policy
+NODE-CHILD-STDIO-OPTIONS-STDOUT	child_process	StdioOptions.stdout	implemented	N81	tsonic_node::child_process::StdioOptions::stdout	NODE-CHILD-003	stdout stdio policy
+NODE-CHILD-STDIO-OPTIONS-STDERR	child_process	StdioOptions.stderr	implemented	N81	tsonic_node::child_process::StdioOptions::stderr	NODE-CHILD-003	stderr stdio policy
+NODE-CHILD-STDIO-OPTIONS-ALL	child_process	StdioOptions.all	implemented	N81	tsonic_node::child_process::StdioOptions::all	NODE-CHILD-003	constructs uniform stdio policy
+NODE-CHILD-STDIO-OPTIONS-TUPLE	child_process	StdioOptions.tuple	implemented	N81	tsonic_node::child_process::StdioOptions::tuple	NODE-CHILD-003	constructs tuple stdio policy
+NODE-CHILD-MESSAGING-OPTIONS-CARRIER	child_process	MessagingOptions	implemented	N81	tsonic_node::child_process::MessagingOptions	NODE-CHILD-002	closed IPC message options carrier
+NODE-CHILD-MESSAGING-OPTIONS-KEEP-OPEN	child_process	MessagingOptions.keepOpen	implemented	N81	tsonic_node::child_process::MessagingOptions::keep_open	NODE-CHILD-002	closed keepOpen message option
+NODE-CHILD-MESSAGING-OPTIONS-KILL-SIGNAL	child_process	MessagingOptions.killSignal	implemented	N81	tsonic_node::child_process::MessagingOptions::kill_signal	NODE-CHILD-002	closed message killSignal metadata
 NODE-CHILD-SPAWN-OUTPUT-CARRIER	child_process	SpawnOutput	implemented	N14	tsonic_node::child_process::SpawnOutput	NODE-CHILD-001	closed spawn output carrier
+NODE-CHILD-SPAWN-OUTPUT-OUTPUT	child_process	SpawnOutput.output	implemented	N81	tsonic_node::child_process::SpawnOutput::output	NODE-CHILD-001	Node-style [stdin,stdout,stderr] output tuple
+NODE-CHILD-SPAWN-OUTPUT-TO-SPAWN-SYNC	child_process	SpawnOutput.toSpawnSyncReturns	implemented	N81	tsonic_node::child_process::SpawnOutput::to_spawn_sync_returns	NODE-CHILD-001	converts output to SpawnSyncReturns carrier
 NODE-CHILD-SPAWN-OUTPUT-STDOUT-STRING	child_process	SpawnOutput.stdoutString	implemented	N14	tsonic_node::child_process::SpawnOutput::stdout_string	NODE-CHILD-001	decodes stdout as UTF-8 explicitly
 NODE-CHILD-SPAWN-OUTPUT-STDERR-STRING	child_process	SpawnOutput.stderrString	implemented	N14	tsonic_node::child_process::SpawnOutput::stderr_string	NODE-CHILD-001	decodes stderr as UTF-8 explicitly
 NODE-CHILD-SPAWN-OUTPUT-SUCCESS	child_process	SpawnOutput.success	implemented	N14	tsonic_node::child_process::SpawnOutput::success	NODE-CHILD-001	reports zero exit status
+NODE-CHILD-SPAWN-SYNC-RETURNS-CARRIER	child_process	SpawnSyncReturns	implemented	N81	tsonic_node::child_process::SpawnSyncReturns	NODE-CHILD-001	closed SpawnSyncReturns carrier
+NODE-CHILD-SPAWN-SYNC-RETURNS-PID	child_process	SpawnSyncReturns.pid	implemented	N81	tsonic_node::child_process::SpawnSyncReturns::pid	NODE-CHILD-001	spawn sync pid field
+NODE-CHILD-SPAWN-SYNC-RETURNS-OUTPUT	child_process	SpawnSyncReturns.output	implemented	N81	tsonic_node::child_process::SpawnSyncReturns::output	NODE-CHILD-001	spawn sync output tuple field
+NODE-CHILD-SPAWN-SYNC-RETURNS-STDOUT	child_process	SpawnSyncReturns.stdout	implemented	N81	tsonic_node::child_process::SpawnSyncReturns::stdout	NODE-CHILD-001	spawn sync stdout field
+NODE-CHILD-SPAWN-SYNC-RETURNS-STDERR	child_process	SpawnSyncReturns.stderr	implemented	N81	tsonic_node::child_process::SpawnSyncReturns::stderr	NODE-CHILD-001	spawn sync stderr field
+NODE-CHILD-SPAWN-SYNC-RETURNS-STATUS	child_process	SpawnSyncReturns.status	implemented	N81	tsonic_node::child_process::SpawnSyncReturns::status	NODE-CHILD-001	spawn sync status field
+NODE-CHILD-SPAWN-SYNC-RETURNS-SIGNAL	child_process	SpawnSyncReturns.signal	implemented	N81	tsonic_node::child_process::SpawnSyncReturns::signal	NODE-CHILD-001	spawn sync signal field
+NODE-CHILD-SPAWN-SYNC-RETURNS-ERROR	child_process	SpawnSyncReturns.error	implemented	N81	tsonic_node::child_process::SpawnSyncReturns::error	NODE-CHILD-001	spawn sync error field
+NODE-CHILD-EXEC-EXCEPTION-CARRIER	child_process	ExecException	implemented	N81	tsonic_node::child_process::ExecException	NODE-CHILD-001	closed exec exception data carrier
+NODE-CHILD-EXEC-EXCEPTION-CMD	child_process	ExecException.cmd	implemented	N81	tsonic_node::child_process::ExecException::cmd	NODE-CHILD-001	exec exception command field
+NODE-CHILD-EXEC-EXCEPTION-CODE	child_process	ExecException.code	implemented	N81	tsonic_node::child_process::ExecException::code	NODE-CHILD-001	exec exception code field
+NODE-CHILD-EXEC-EXCEPTION-KILLED	child_process	ExecException.killed	implemented	N81	tsonic_node::child_process::ExecException::killed	NODE-CHILD-001	exec exception killed field
+NODE-CHILD-EXEC-EXCEPTION-SIGNAL	child_process	ExecException.signal	implemented	N81	tsonic_node::child_process::ExecException::signal	NODE-CHILD-001	exec exception signal field
+NODE-CHILD-EXEC-EXCEPTION-STDOUT	child_process	ExecException.stdout	implemented	N81	tsonic_node::child_process::ExecException::stdout	NODE-CHILD-001	exec exception stdout field
+NODE-CHILD-EXEC-EXCEPTION-STDERR	child_process	ExecException.stderr	implemented	N81	tsonic_node::child_process::ExecException::stderr	NODE-CHILD-001	exec exception stderr field
+NODE-CHILD-PROMISE-WITH-CHILD-CARRIER	child_process	PromiseWithChild	implemented	N81	tsonic_node::child_process::PromiseWithChild	NODE-CHILD-002	closed promise-result-with-child carrier for generated usage
+NODE-CHILD-PROMISE-WITH-CHILD-VALUE	child_process	PromiseWithChild.value	implemented	N81	tsonic_node::child_process::PromiseWithChild::value	NODE-CHILD-002	promise result value field
+NODE-CHILD-PROMISE-WITH-CHILD-CHILD	child_process	PromiseWithChild.child	implemented	N81	tsonic_node::child_process::PromiseWithChild::child	NODE-CHILD-002	promise child snapshot field
+NODE-CHILD-PROCESS-SNAPSHOT-CARRIER	child_process	ChildProcessSnapshot	implemented	N81	tsonic_node::child_process::ChildProcessSnapshot	NODE-CHILD-002	closed child process snapshot carrier
+NODE-CHILD-PROCESS-SNAPSHOT-PID	child_process	ChildProcessSnapshot.pid	implemented	N81	tsonic_node::child_process::ChildProcessSnapshot::pid	NODE-CHILD-002	snapshot pid field
+NODE-CHILD-PROCESS-SNAPSHOT-SPAWNFILE	child_process	ChildProcessSnapshot.spawnfile	implemented	N81	tsonic_node::child_process::ChildProcessSnapshot::spawnfile	NODE-CHILD-002	snapshot spawnfile field
+NODE-CHILD-PROCESS-SNAPSHOT-SPAWNARGS	child_process	ChildProcessSnapshot.spawnargs	implemented	N81	tsonic_node::child_process::ChildProcessSnapshot::spawnargs	NODE-CHILD-002	snapshot spawnargs field
+NODE-CHILD-PROCESS-SNAPSHOT-CONNECTED	child_process	ChildProcessSnapshot.connected	implemented	N81	tsonic_node::child_process::ChildProcessSnapshot::connected	NODE-CHILD-002	snapshot connected field
+NODE-CHILD-PROCESS-SNAPSHOT-KILLED	child_process	ChildProcessSnapshot.killed	implemented	N81	tsonic_node::child_process::ChildProcessSnapshot::killed	NODE-CHILD-002	snapshot killed field
+NODE-CHILD-PROCESS-SNAPSHOT-EXIT-CODE	child_process	ChildProcessSnapshot.exitCode	implemented	N81	tsonic_node::child_process::ChildProcessSnapshot::exit_code	NODE-CHILD-002	snapshot exitCode field
+NODE-CHILD-PROCESS-SNAPSHOT-SIGNAL-CODE	child_process	ChildProcessSnapshot.signalCode	implemented	N81	tsonic_node::child_process::ChildProcessSnapshot::signal_code	NODE-CHILD-002	snapshot signalCode field
 NODE-CHILD-PROCESS-CARRIER	child_process	ChildProcess	implemented	N14	tsonic_node::child_process::ChildProcess	NODE-CHILD-002	closed running child process carrier
+NODE-CHILD-PROCESS-PID	child_process	ChildProcess.pid	implemented	N81	tsonic_node::child_process::ChildProcess::pid	NODE-CHILD-002	child pid field
+NODE-CHILD-PROCESS-SPAWNFILE	child_process	ChildProcess.spawnfile	implemented	N81	tsonic_node::child_process::ChildProcess::spawnfile	NODE-CHILD-002	child spawnfile field
+NODE-CHILD-PROCESS-SPAWNARGS	child_process	ChildProcess.spawnargs	implemented	N81	tsonic_node::child_process::ChildProcess::spawnargs	NODE-CHILD-002	child spawnargs field
+NODE-CHILD-PROCESS-STDIO	child_process	ChildProcess.stdio	implemented	N81	tsonic_node::child_process::ChildProcess::stdio	NODE-CHILD-002	child stdio field
+NODE-CHILD-PROCESS-CHANNEL	child_process	ChildProcess.channel	implemented	N81	tsonic_node::child_process::ChildProcess::channel	NODE-CHILD-002	child IPC channel field
+NODE-CHILD-PROCESS-STDOUT	child_process	ChildProcess.stdout	implemented	N81	tsonic_node::child_process::ChildProcess::stdout	NODE-CHILD-002	child stdout capture field
+NODE-CHILD-PROCESS-STDERR	child_process	ChildProcess.stderr	implemented	N81	tsonic_node::child_process::ChildProcess::stderr	NODE-CHILD-002	child stderr capture field
+NODE-CHILD-PROCESS-STDIN	child_process	ChildProcess.stdin	implemented	N81	tsonic_node::child_process::ChildProcess::stdin	NODE-CHILD-002	child stdin availability field
+NODE-CHILD-PROCESS-CONNECTED	child_process	ChildProcess.connected	implemented	N81	tsonic_node::child_process::ChildProcess::connected	NODE-CHILD-002	child connected field
+NODE-CHILD-PROCESS-KILLED	child_process	ChildProcess.killed	implemented	N81	tsonic_node::child_process::ChildProcess::killed	NODE-CHILD-002	child killed field
+NODE-CHILD-PROCESS-EXIT-CODE	child_process	ChildProcess.exitCode	implemented	N81	tsonic_node::child_process::ChildProcess::exit_code	NODE-CHILD-002	child exitCode field
+NODE-CHILD-PROCESS-SIGNAL-CODE	child_process	ChildProcess.signalCode	implemented	N81	tsonic_node::child_process::ChildProcess::signal_code	NODE-CHILD-002	child signalCode field
 NODE-CHILD-PROCESS-KILL	child_process	ChildProcess.kill	implemented	N14	tsonic_node::child_process::ChildProcess::kill	NODE-CHILD-002	kills child process explicitly
+NODE-CHILD-PROCESS-KILL-WITH-SIGNAL	child_process	ChildProcess.kill(signal)	implemented	N81	tsonic_node::child_process::ChildProcess::kill_with_signal	NODE-CHILD-002	kills child process and records explicit signal metadata
 NODE-CHILD-PROCESS-WAIT	child_process	ChildProcess.wait	implemented	N14	tsonic_node::child_process::ChildProcess::wait	NODE-CHILD-002	waits for child and captures output
 NODE-CHILD-PROCESS-REF	child_process	ChildProcess.ref	implemented	N14	tsonic_node::child_process::ChildProcess::ref_process	NODE-CHILD-002	sets child ref state
 NODE-CHILD-PROCESS-UNREF	child_process	ChildProcess.unref	implemented	N14	tsonic_node::child_process::ChildProcess::unref_process	NODE-CHILD-002	clears child ref state
 NODE-CHILD-PROCESS-HAS-REF	child_process	ChildProcess.hasRef	implemented	N14	tsonic_node::child_process::ChildProcess::has_ref	NODE-CHILD-002	reads child ref state
 NODE-CHILD-PROCESS-DISCONNECT	child_process	ChildProcess.disconnect	implemented	N14	tsonic_node::child_process::ChildProcess::disconnect	NODE-CHILD-002	closes IPC connected state
 NODE-CHILD-PROCESS-SEND	child_process	ChildProcess.send	implemented	N14	tsonic_node::child_process::ChildProcess::send	NODE-CHILD-002	sends only over explicit connected IPC state
+NODE-CHILD-PROCESS-SEND-WITH-OPTIONS	child_process	ChildProcess.send options	implemented	N81	tsonic_node::child_process::ChildProcess::send_with_options	NODE-CHILD-002	sends with closed messaging options
+NODE-CHILD-PROCESS-SNAPSHOT	child_process	ChildProcess.snapshot	implemented	N81	tsonic_node::child_process::ChildProcess::snapshot	NODE-CHILD-002	captures backend-safe child process snapshot
 NODE-CHILD-SPAWN-FILE-SYNC	child_process	spawnFileSync	implemented	N14	tsonic_node::child_process::spawn_file_sync	NODE-CHILD-001	shell-free sync file process execution
 NODE-CHILD-SPAWN-FILE-SYNC-OPTIONS	child_process	spawnFileSync options	implemented	N33	tsonic_node::child_process::spawn_file_sync_with_options	NODE-CHILD-003	shell-free sync file process execution with closed options
 NODE-CHILD-SPAWN-SYNC	child_process	spawnSync	implemented	N14	tsonic_node::child_process::spawn_sync	NODE-CHILD-001	spawnSync alias over shell-free file process execution
@@ -196,9 +280,14 @@ NODE-CHILD-SPAWN-FILE	child_process	spawnFile	implemented	N14	tsonic_node::child
 NODE-CHILD-SPAWN	child_process	spawn	implemented	N14	tsonic_node::child_process::spawn	NODE-CHILD-002	spawn alias over shell-free file process execution
 NODE-CHILD-SPAWN-FILE-OPTIONS	child_process	spawnFile options	implemented	N33	tsonic_node::child_process::spawn_file_with_options	NODE-CHILD-003	starts shell-free child process with closed options
 NODE-CHILD-EXEC-FILE	child_process	execFile	implemented	N14	tsonic_node::child_process::exec_file	NODE-CHILD-002	execFile maps to shell-free file execution
+NODE-CHILD-EXEC-FILE-OPTIONS	child_process	execFile options	implemented	N81	tsonic_node::child_process::exec_file_with_options	NODE-CHILD-003	execFile with closed shell-free options
+NODE-CHILD-EXEC-FILE-PROMISIFY	child_process	execFile.__promisify__	implemented	N81	tsonic_node::child_process::exec_file_promisify	NODE-CHILD-002	closed PromiseWithChild-style execFile result
 NODE-CHILD-EXEC-FILE-SYNC	child_process	execFileSync	implemented	N14	tsonic_node::child_process::exec_file_sync	NODE-CHILD-001	returns stdout bytes for successful shell-free file execution
 NODE-CHILD-EXEC-FILE-SYNC-STRING	child_process	execFileSync string	implemented	N14	tsonic_node::child_process::exec_file_sync_string	NODE-CHILD-001	returns UTF-8 stdout string for successful shell-free file execution
 NODE-CHILD-EXEC-SYNC	child_process	execSync	implemented	N14	tsonic_node::child_process::exec_sync	NODE-CHILD-001	execSync closed ABI accepts explicit program and args only
+NODE-CHILD-EXEC-SYNC-OPTIONS	child_process	execSync options	implemented	N81	tsonic_node::child_process::exec_sync_with_options	NODE-CHILD-003	execSync with closed shell-free options
+NODE-CHILD-FORK-FILE	child_process	fork file	implemented	N81	tsonic_node::child_process::fork_file	NODE-CHILD-002	fork-style file process execution through explicit file path
+NODE-CHILD-EXEC-EXCEPTION-FROM-OUTPUT	child_process	exec exception from output	implemented	N81	tsonic_node::child_process::exec_exception	NODE-CHILD-001	constructs closed exec exception from captured output
 NODE-CHILD-EXEC-COMMAND-SYNC-REJECT	child_process	exec command string	implemented	N33	tsonic_node::child_process::exec_command_sync	NODE-CHILD-003	rejects shell command string execution explicitly
 NODE-CHILD-SPAWN-SHELL-SYNC-REJECT	child_process	spawn shell string	implemented	N33	tsonic_node::child_process::spawn_shell_sync	NODE-CHILD-003	rejects shell spawn execution explicitly
 NODE-CLUSTER-SETTINGS-CARRIER	cluster	ClusterSettings	implemented	N9	tsonic_node::cluster::ClusterSettings	NODE-CLUSTER-001	closed cluster primary settings carrier
