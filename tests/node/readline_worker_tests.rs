@@ -12,6 +12,26 @@ fn readline_interface_uses_explicit_input_and_output_buffers() {
         interface.output(),
         &["name?".to_string(), "done".to_string()]
     );
+    assert_eq!(interface.line(), "done");
+    assert_eq!(interface.cursor(), 4);
+    assert_eq!(interface.get_cursor_pos().cols, 4);
+    interface.set_prompt("next> ");
+    assert_eq!(interface.get_prompt(), "next> ");
+    interface.prompt(false);
+    assert_eq!(interface.output().last().unwrap(), "next> ");
+    interface.write_key(
+        None,
+        Some(readline::Key {
+            sequence: Some("!".to_string()),
+            name: Some("bang".to_string()),
+            ctrl: false,
+            meta: false,
+            shift: true,
+        }),
+    );
+    assert_eq!(interface.line(), "done!");
+    interface.set_terminal(true);
+    assert!(interface.terminal());
     assert_eq!(interface.next_line().as_deref(), Some("line2"));
     interface.pause();
     assert!(interface.paused());
@@ -23,6 +43,22 @@ fn readline_interface_uses_explicit_input_and_output_buffers() {
     interface.close();
     assert!(interface.closed());
     assert_eq!(interface.question("again?"), None);
+
+    let mut terminal = readline::promises::create_readline(false);
+    terminal
+        .clear_line(0)
+        .cursor_to(2, Some(1))
+        .move_cursor(-1, 0);
+    assert_eq!(terminal.stream().len(), 0);
+    assert_eq!(terminal.pending().len(), 3);
+    terminal.rollback();
+    assert_eq!(terminal.pending().len(), 0);
+    terminal.clear_screen_down().commit();
+    assert_eq!(terminal.stream(), &["clearScreenDown".to_string()]);
+
+    let mut auto = readline::Readline::new(true);
+    auto.cursor_to(1, None);
+    assert_eq!(auto.stream(), &["cursorTo:1:0".to_string()]);
 }
 
 #[test]

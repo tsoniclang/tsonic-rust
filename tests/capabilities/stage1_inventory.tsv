@@ -244,6 +244,7 @@ NODE-MOD-025	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001 through NOD
 NODE-MOD-026	implemented	N8	tsonic_node::abi::{punycode_to_ascii,punycode_to_unicode}	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MOD-027	implemented	M	tsonic_node::abi::{querystring_parse,querystring_stringify}	NODE-MISC-002	legacy URL query helper; URLSearchParams implemented first (completed in full-completion branch)
 NODE-MOD-028	implemented	N5	tsonic_node::abi::readline_create_interface	NODE-READLINE-001	closed buffered readline interface
+NODE-READLINE-002	implemented	N19	tsonic_node::abi::{ReadlineInterface,ReadlineKey,ReadlineCursorPos,ReadlinePromisesController,readline_promises}	NODE-READLINE-002	Interface prompt/cursor/key/terminal and promises controller commit/rollback APIs
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1
 NODE-MOD-030	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency
 NODE-MOD-031	implemented	N3	tsonic_node::abi::{Readable,Writable,stream_pipeline}	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate

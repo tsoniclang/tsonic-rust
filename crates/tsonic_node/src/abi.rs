@@ -192,7 +192,9 @@ pub use crate::querystring::{
     unescape as querystring_unescape, unescape_buffer as querystring_unescape_buffer,
 };
 pub use crate::readline::{
-    create_interface as readline_create_interface, Interface as ReadlineInterface,
+    create_interface as readline_create_interface, promises as readline_promises,
+    CursorPos as ReadlineCursorPos, Interface as ReadlineInterface, Key as ReadlineKey,
+    Readline as ReadlinePromisesController,
 };
 pub use crate::sqlite::{
     DatabaseSync as SqliteDatabaseSync, RunResult as SqliteRunResult, SqlValue,
