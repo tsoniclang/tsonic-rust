@@ -31,6 +31,43 @@ fn dom_exception_exposes_legacy_codes() {
     assert_eq!(error.message(), "nope");
     assert_eq!(error.code(), DomException::ABORT_ERR);
 
+    let legacy_codes = [
+        ("IndexSizeError", DomException::INDEX_SIZE_ERR),
+        ("DOMStringSizeError", DomException::DOMSTRING_SIZE_ERR),
+        ("HierarchyRequestError", DomException::HIERARCHY_REQUEST_ERR),
+        ("WrongDocumentError", DomException::WRONG_DOCUMENT_ERR),
+        ("InvalidCharacterError", DomException::INVALID_CHARACTER_ERR),
+        ("NoDataAllowedError", DomException::NO_DATA_ALLOWED_ERR),
+        (
+            "NoModificationAllowedError",
+            DomException::NO_MODIFICATION_ALLOWED_ERR,
+        ),
+        ("NotFoundError", DomException::NOT_FOUND_ERR),
+        ("NotSupportedError", DomException::NOT_SUPPORTED_ERR),
+        ("InUseAttributeError", DomException::INUSE_ATTRIBUTE_ERR),
+        ("InvalidStateError", DomException::INVALID_STATE_ERR),
+        ("SyntaxError", DomException::SYNTAX_ERR),
+        (
+            "InvalidModificationError",
+            DomException::INVALID_MODIFICATION_ERR,
+        ),
+        ("NamespaceError", DomException::NAMESPACE_ERR),
+        ("InvalidAccessError", DomException::INVALID_ACCESS_ERR),
+        ("ValidationError", DomException::VALIDATION_ERR),
+        ("TypeMismatchError", DomException::TYPE_MISMATCH_ERR),
+        ("SecurityError", DomException::SECURITY_ERR),
+        ("NetworkError", DomException::NETWORK_ERR),
+        ("AbortError", DomException::ABORT_ERR),
+        ("URLMismatchError", DomException::URL_MISMATCH_ERR),
+        ("QuotaExceededError", DomException::QUOTA_EXCEEDED_ERR),
+        ("TimeoutError", DomException::TIMEOUT_ERR),
+        ("InvalidNodeTypeError", DomException::INVALID_NODE_TYPE_ERR),
+        ("DataCloneError", DomException::DATA_CLONE_ERR),
+    ];
+    for (name, code) in legacy_codes {
+        assert_eq!(DomException::new("legacy", name).code(), code);
+    }
+
     let custom = DomException::new("custom", "ApplicationError");
     assert_eq!(custom.code(), 0);
 }

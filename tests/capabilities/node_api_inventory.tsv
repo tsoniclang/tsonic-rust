@@ -1408,6 +1408,35 @@ WEB-ABORT-SIGNAL-ABORT	web-globals/abortcontroller	AbortSignal.abort	implemented
 WEB-ABORT-SIGNAL-TIMEOUT	web-globals/abortcontroller	AbortSignal.timeout	implemented	N65	tsonic_js::web::AbortSignal::timeout	JS-WEB-001	closed timeout signal constructor
 WEB-ABORT-SIGNAL-ANY	web-globals/abortcontroller	AbortSignal.any	implemented	N65	tsonic_js::web::AbortSignal::any	JS-WEB-001	combines explicit signal set
 WEB-DOM-EXCEPTION	web-globals/domexception	DOMException	implemented	W1	tsonic_js::web::DomException	JS-WEB-002	DOMException name/message and legacy code constants
+WEB-DOM-EXCEPTION-NEW	web-globals/domexception	DOMException.new	implemented	N78	tsonic_js::web::DomException::new	JS-WEB-002	constructs DOMException with explicit message and name
+WEB-DOM-EXCEPTION-NAME	web-globals/domexception	DOMException.name	implemented	N78	tsonic_js::web::DomException::name	JS-WEB-002	reads DOMException name
+WEB-DOM-EXCEPTION-MESSAGE	web-globals/domexception	DOMException.message	implemented	N78	tsonic_js::web::DomException::message	JS-WEB-002	reads DOMException message
+WEB-DOM-EXCEPTION-CODE	web-globals/domexception	DOMException.code	implemented	N78	tsonic_js::web::DomException::code	JS-WEB-002	reads DOMException legacy numeric code
+WEB-DOM-EXCEPTION-INDEX-SIZE	web-globals/domexception	DOMException.INDEX_SIZE_ERR	implemented	N78	tsonic_js::web::DomException::INDEX_SIZE_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-DOMSTRING-SIZE	web-globals/domexception	DOMException.DOMSTRING_SIZE_ERR	implemented	N78	tsonic_js::web::DomException::DOMSTRING_SIZE_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-HIERARCHY-REQUEST	web-globals/domexception	DOMException.HIERARCHY_REQUEST_ERR	implemented	N78	tsonic_js::web::DomException::HIERARCHY_REQUEST_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-WRONG-DOCUMENT	web-globals/domexception	DOMException.WRONG_DOCUMENT_ERR	implemented	N78	tsonic_js::web::DomException::WRONG_DOCUMENT_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-INVALID-CHARACTER	web-globals/domexception	DOMException.INVALID_CHARACTER_ERR	implemented	N78	tsonic_js::web::DomException::INVALID_CHARACTER_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-NO-DATA-ALLOWED	web-globals/domexception	DOMException.NO_DATA_ALLOWED_ERR	implemented	N78	tsonic_js::web::DomException::NO_DATA_ALLOWED_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-NO-MODIFICATION-ALLOWED	web-globals/domexception	DOMException.NO_MODIFICATION_ALLOWED_ERR	implemented	N78	tsonic_js::web::DomException::NO_MODIFICATION_ALLOWED_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-NOT-FOUND	web-globals/domexception	DOMException.NOT_FOUND_ERR	implemented	N78	tsonic_js::web::DomException::NOT_FOUND_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-NOT-SUPPORTED	web-globals/domexception	DOMException.NOT_SUPPORTED_ERR	implemented	N78	tsonic_js::web::DomException::NOT_SUPPORTED_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-INUSE-ATTRIBUTE	web-globals/domexception	DOMException.INUSE_ATTRIBUTE_ERR	implemented	N78	tsonic_js::web::DomException::INUSE_ATTRIBUTE_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-INVALID-STATE	web-globals/domexception	DOMException.INVALID_STATE_ERR	implemented	N78	tsonic_js::web::DomException::INVALID_STATE_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-SYNTAX	web-globals/domexception	DOMException.SYNTAX_ERR	implemented	N78	tsonic_js::web::DomException::SYNTAX_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-INVALID-MODIFICATION	web-globals/domexception	DOMException.INVALID_MODIFICATION_ERR	implemented	N78	tsonic_js::web::DomException::INVALID_MODIFICATION_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-NAMESPACE	web-globals/domexception	DOMException.NAMESPACE_ERR	implemented	N78	tsonic_js::web::DomException::NAMESPACE_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-INVALID-ACCESS	web-globals/domexception	DOMException.INVALID_ACCESS_ERR	implemented	N78	tsonic_js::web::DomException::INVALID_ACCESS_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-VALIDATION	web-globals/domexception	DOMException.VALIDATION_ERR	implemented	N78	tsonic_js::web::DomException::VALIDATION_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-TYPE-MISMATCH	web-globals/domexception	DOMException.TYPE_MISMATCH_ERR	implemented	N78	tsonic_js::web::DomException::TYPE_MISMATCH_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-SECURITY	web-globals/domexception	DOMException.SECURITY_ERR	implemented	N78	tsonic_js::web::DomException::SECURITY_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-NETWORK	web-globals/domexception	DOMException.NETWORK_ERR	implemented	N78	tsonic_js::web::DomException::NETWORK_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-ABORT	web-globals/domexception	DOMException.ABORT_ERR	implemented	N78	tsonic_js::web::DomException::ABORT_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-URL-MISMATCH	web-globals/domexception	DOMException.URL_MISMATCH_ERR	implemented	N78	tsonic_js::web::DomException::URL_MISMATCH_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-QUOTA-EXCEEDED	web-globals/domexception	DOMException.QUOTA_EXCEEDED_ERR	implemented	N78	tsonic_js::web::DomException::QUOTA_EXCEEDED_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-TIMEOUT	web-globals/domexception	DOMException.TIMEOUT_ERR	implemented	N78	tsonic_js::web::DomException::TIMEOUT_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-INVALID-NODE-TYPE	web-globals/domexception	DOMException.INVALID_NODE_TYPE_ERR	implemented	N78	tsonic_js::web::DomException::INVALID_NODE_TYPE_ERR	JS-WEB-002	legacy DOMException constant
+WEB-DOM-EXCEPTION-DATA-CLONE	web-globals/domexception	DOMException.DATA_CLONE_ERR	implemented	N78	tsonic_js::web::DomException::DATA_CLONE_ERR	JS-WEB-002	legacy DOMException constant
 WEB-EVENT-CARRIER	web-globals/events	Event	implemented	N65	tsonic_js::web::Event	JS-WEB-002	closed Event carrier
 WEB-EVENT-NEW	web-globals/events	Event.new	implemented	N65	tsonic_js::web::Event::new	JS-WEB-002	constructs Event with explicit init
 WEB-EVENT-TYPE	web-globals/events	Event.type	implemented	N65	tsonic_js::web::Event::event_type	JS-WEB-002	event type accessor
