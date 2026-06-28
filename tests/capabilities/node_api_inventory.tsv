@@ -141,11 +141,28 @@ NODE-DNS-SOA-RECORD	dns	SoaRecord	implemented	N56	tsonic_node::dns::SoaRecord	NO
 NODE-DNS-TLSA-RECORD	dns	TlsaRecord	implemented	N56	tsonic_node::dns::TlsaRecord	NODE-DNS-002	typed TLSA record carrier
 NODE-DNS-ANY-RECORD	dns	AnyRecord	implemented	N56	tsonic_node::dns::AnyRecord	NODE-DNS-002	closed any-record enum carrier
 NODE-DNS-RESOLVER-CARRIER	dns	Resolver	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	resolver carrier with explicit server/local/cancel state
-NODE-DNS-RESOLVER-SERVERS	dns	Resolver setServers/getServers	implemented	N26	tsonic_node::dns::Resolver::{set_servers,get_servers}	NODE-DNS-002	resolver server state
-NODE-DNS-RESOLVER-LOCAL	dns	Resolver setLocalAddress/localAddresses	implemented	N26	tsonic_node::dns::Resolver::{set_local_address,local_addresses}	NODE-DNS-002	resolver local address state
-NODE-DNS-RESOLVER-CANCEL	dns	Resolver cancel/cancelled	implemented	N26	tsonic_node::dns::Resolver::{cancel,cancelled}	NODE-DNS-002	resolver cancellation state
-NODE-DNS-RESOLVER-COMMON	dns	Resolver lookup/resolve/reverse	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	resolver common methods delegate to deterministic implementations
-NODE-DNS-RESOLVER-RECORDS	dns	Resolver record methods	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	resolver record methods preserve explicit unsupported-record failures
+NODE-DNS-RESOLVER-SET-SERVERS	dns	Resolver.setServers	implemented	N33	tsonic_node::dns::Resolver::set_servers	NODE-DNS-002	sets explicit resolver server list
+NODE-DNS-RESOLVER-GET-SERVERS	dns	Resolver.getServers	implemented	N33	tsonic_node::dns::Resolver::get_servers	NODE-DNS-002	returns cloned resolver server list
+NODE-DNS-RESOLVER-SET-LOCAL-ADDRESS	dns	Resolver.setLocalAddress	implemented	N33	tsonic_node::dns::Resolver::set_local_address	NODE-DNS-002	sets explicit local IPv4 and IPv6 address hints
+NODE-DNS-RESOLVER-LOCAL-ADDRESSES	dns	Resolver.localAddresses	implemented	N33	tsonic_node::dns::Resolver::local_addresses	NODE-DNS-002	returns explicit local IPv4 and IPv6 address hints
+NODE-DNS-RESOLVER-CANCEL	dns	Resolver.cancel	implemented	N33	tsonic_node::dns::Resolver::cancel	NODE-DNS-002	sets explicit resolver cancellation state
+NODE-DNS-RESOLVER-CANCELLED	dns	Resolver.cancelled	implemented	N33	tsonic_node::dns::Resolver::cancelled	NODE-DNS-002	returns explicit resolver cancellation state
+NODE-DNS-RESOLVER-LOOKUP	dns	Resolver.lookup	implemented	N33	tsonic_node::dns::Resolver::lookup	NODE-DNS-002	resolver lookup delegates to deterministic lookup helper
+NODE-DNS-RESOLVER-RESOLVE4	dns	Resolver.resolve4	implemented	N33	tsonic_node::dns::Resolver::resolve4	NODE-DNS-002	resolver IPv4 lookup delegates to resolve4 helper
+NODE-DNS-RESOLVER-RESOLVE6	dns	Resolver.resolve6	implemented	N33	tsonic_node::dns::Resolver::resolve6	NODE-DNS-002	resolver IPv6 lookup delegates to resolve6 helper
+NODE-DNS-RESOLVER-RESOLVE	dns	Resolver.resolve	implemented	N33	tsonic_node::dns::Resolver::resolve	NODE-DNS-002	resolver record dispatch delegates to resolve helper
+NODE-DNS-RESOLVER-REVERSE	dns	Resolver.reverse	implemented	N33	tsonic_node::dns::Resolver::reverse	NODE-DNS-002	resolver reverse delegates to reverse helper
+NODE-DNS-RESOLVER-RESOLVE-CNAME	dns	Resolver.resolveCname	implemented	N33	tsonic_node::dns::Resolver::resolve_cname	NODE-DNS-002	resolver CNAME lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-MX	dns	Resolver.resolveMx	implemented	N33	tsonic_node::dns::Resolver::resolve_mx	NODE-DNS-002	resolver MX lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-TXT	dns	Resolver.resolveTxt	implemented	N33	tsonic_node::dns::Resolver::resolve_txt	NODE-DNS-002	resolver TXT lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-SRV	dns	Resolver.resolveSrv	implemented	N33	tsonic_node::dns::Resolver::resolve_srv	NODE-DNS-002	resolver SRV lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-NS	dns	Resolver.resolveNs	implemented	N33	tsonic_node::dns::Resolver::resolve_ns	NODE-DNS-002	resolver NS lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-PTR	dns	Resolver.resolvePtr	implemented	N33	tsonic_node::dns::Resolver::resolve_ptr	NODE-DNS-002	resolver PTR lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-CAA	dns	Resolver.resolveCaa	implemented	N33	tsonic_node::dns::Resolver::resolve_caa	NODE-DNS-002	resolver CAA lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-NAPTR	dns	Resolver.resolveNaptr	implemented	N33	tsonic_node::dns::Resolver::resolve_naptr	NODE-DNS-002	resolver NAPTR lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-SOA	dns	Resolver.resolveSoa	implemented	N33	tsonic_node::dns::Resolver::resolve_soa	NODE-DNS-002	resolver SOA lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-TLSA	dns	Resolver.resolveTlsa	implemented	N33	tsonic_node::dns::Resolver::resolve_tlsa	NODE-DNS-002	resolver TLSA lookup preserves explicit unsupported-record failure
+NODE-DNS-RESOLVER-RESOLVE-ANY	dns	Resolver.resolveAny	implemented	N33	tsonic_node::dns::Resolver::resolve_any	NODE-DNS-002	resolver ANY lookup delegates to explicit AnyRecord helper
 NODE-DNS-PROMISES-MODULE	dns/promises	module	implemented	N26	tsonic_node::dns::promises	NODE-DNS-002	blocking-now promise-shaped DNS module
 NODE-DNS-PROMISES-LOOKUP	dns/promises	lookup	implemented	N56	tsonic_node::dns::promises::lookup_now	NODE-DNS-002	promise-shaped lookup helper
 NODE-DNS-PROMISES-LOOKUP-SERVICE	dns/promises	lookupService	implemented	N56	tsonic_node::dns::promises::lookup_service_now	NODE-DNS-002	promise-shaped lookupService helper
@@ -153,7 +170,17 @@ NODE-DNS-PROMISES-RESOLVE	dns/promises	resolve	implemented	N56	tsonic_node::dns:
 NODE-DNS-PROMISES-RESOLVE4	dns/promises	resolve4	implemented	N56	tsonic_node::dns::promises::resolve4_now	NODE-DNS-002	promise-shaped resolve4 helper
 NODE-DNS-PROMISES-RESOLVE6	dns/promises	resolve6	implemented	N56	tsonic_node::dns::promises::resolve6_now	NODE-DNS-002	promise-shaped resolve6 helper
 NODE-DNS-PROMISES-REVERSE	dns/promises	reverse	implemented	N56	tsonic_node::dns::promises::reverse_now	NODE-DNS-002	promise-shaped reverse helper
-NODE-DNS-PROMISES-RECORDS	dns/promises	record helpers	implemented	N26	tsonic_node::dns::promises	NODE-DNS-002	promise-shaped record helpers preserve explicit unsupported-record failures
+NODE-DNS-PROMISES-RESOLVE-CNAME	dns/promises	resolveCname	implemented	N33	tsonic_node::dns::promises::resolve_cname_now	NODE-DNS-002	promise-shaped CNAME lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-MX	dns/promises	resolveMx	implemented	N33	tsonic_node::dns::promises::resolve_mx_now	NODE-DNS-002	promise-shaped MX lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-TXT	dns/promises	resolveTxt	implemented	N33	tsonic_node::dns::promises::resolve_txt_now	NODE-DNS-002	promise-shaped TXT lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-SRV	dns/promises	resolveSrv	implemented	N33	tsonic_node::dns::promises::resolve_srv_now	NODE-DNS-002	promise-shaped SRV lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-NS	dns/promises	resolveNs	implemented	N33	tsonic_node::dns::promises::resolve_ns_now	NODE-DNS-002	promise-shaped NS lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-PTR	dns/promises	resolvePtr	implemented	N33	tsonic_node::dns::promises::resolve_ptr_now	NODE-DNS-002	promise-shaped PTR lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-CAA	dns/promises	resolveCaa	implemented	N33	tsonic_node::dns::promises::resolve_caa_now	NODE-DNS-002	promise-shaped CAA lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-NAPTR	dns/promises	resolveNaptr	implemented	N33	tsonic_node::dns::promises::resolve_naptr_now	NODE-DNS-002	promise-shaped NAPTR lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-SOA	dns/promises	resolveSoa	implemented	N33	tsonic_node::dns::promises::resolve_soa_now	NODE-DNS-002	promise-shaped SOA lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-TLSA	dns/promises	resolveTlsa	implemented	N33	tsonic_node::dns::promises::resolve_tlsa_now	NODE-DNS-002	promise-shaped TLSA lookup preserves explicit unsupported-record failure
+NODE-DNS-PROMISES-RESOLVE-ANY	dns/promises	resolveAny	implemented	N33	tsonic_node::dns::promises::resolve_any_now	NODE-DNS-002	promise-shaped ANY lookup delegates to explicit AnyRecord helper
 NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded
 NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events	NODE-EVENTS-001	closed events module surface
 NODE-EVENTS-EMITTER-NEW	events	EventEmitter constructor	implemented	N3	tsonic_node::events::EventEmitter::new	NODE-EVENTS-001	closed EventEmitter listener carrier
@@ -191,14 +218,22 @@ NODE-EVENTS-GLOBAL-CAPTURE	events	events.captureRejections	implemented	N34	tsoni
 NODE-EVENTS-ERROR-MONITOR	events	events.errorMonitor	implemented	N34	tsonic_node::events::error_monitor	NODE-EVENTS-003	errorMonitor symbol name constant
 NODE-EVENTS-CAPTURE-SYMBOL	events	events.captureRejectionSymbol	implemented	N34	tsonic_node::events::capture_rejection_symbol	NODE-EVENTS-003	captureRejectionSymbol name constant
 NODE-EVENTS-TARGET-CARRIER	events	NodeEventTarget	implemented	N28	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	NodeEventTarget carrier forwards to EventEmitter
-NODE-EVENTS-TARGET-REGISTRATION	events	NodeEventTarget on/addListener/once	implemented	N57	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	NodeEventTarget registration helpers
-NODE-EVENTS-TARGET-REMOVAL	events	NodeEventTarget off/removeListener/removeAllListeners	implemented	N57	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	NodeEventTarget removal helpers
+NODE-EVENTS-TARGET-ON	events	NodeEventTarget.on	implemented	N29	tsonic_node::events::NodeEventTarget::on	NODE-EVENTS-002	NodeEventTarget on forwards to closed EventEmitter
+NODE-EVENTS-TARGET-ADD-LISTENER	events	NodeEventTarget.addListener	implemented	N29	tsonic_node::events::NodeEventTarget::add_listener	NODE-EVENTS-002	NodeEventTarget addListener forwards to on
+NODE-EVENTS-TARGET-ONCE	events	NodeEventTarget.once	implemented	N29	tsonic_node::events::NodeEventTarget::once	NODE-EVENTS-002	NodeEventTarget once forwards to closed EventEmitter once
+NODE-EVENTS-TARGET-OFF	events	NodeEventTarget.off	implemented	N29	tsonic_node::events::NodeEventTarget::off	NODE-EVENTS-002	NodeEventTarget off forwards to closed EventEmitter removal by id
+NODE-EVENTS-TARGET-REMOVE-LISTENER	events	NodeEventTarget.removeListener	implemented	N29	tsonic_node::events::NodeEventTarget::remove_listener	NODE-EVENTS-002	NodeEventTarget removeListener forwards to off
+NODE-EVENTS-TARGET-REMOVE-ALL-LISTENERS	events	NodeEventTarget.removeAllListeners	implemented	N29	tsonic_node::events::NodeEventTarget::remove_all_listeners	NODE-EVENTS-002	NodeEventTarget removeAllListeners forwards to closed EventEmitter
 NODE-EVENTS-TARGET-EMIT	events	NodeEventTarget emit	implemented	N57	tsonic_node::events::NodeEventTarget::emit	NODE-EVENTS-002	NodeEventTarget dispatch
-NODE-EVENTS-TARGET-INTROSPECTION	events	NodeEventTarget listenerCount/eventNames/maxListeners	implemented	N57	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	NodeEventTarget listener introspection and max listener policy
+NODE-EVENTS-TARGET-LISTENER-COUNT	events	NodeEventTarget.listenerCount	implemented	N29	tsonic_node::events::NodeEventTarget::listener_count	NODE-EVENTS-002	NodeEventTarget listener count forwards to closed EventEmitter
+NODE-EVENTS-TARGET-EVENT-NAMES	events	NodeEventTarget.eventNames	implemented	N29	tsonic_node::events::NodeEventTarget::event_names	NODE-EVENTS-002	NodeEventTarget event names forwards to closed EventEmitter
+NODE-EVENTS-TARGET-SET-MAX-LISTENERS	events	NodeEventTarget.setMaxListeners	implemented	N29	tsonic_node::events::NodeEventTarget::set_max_listeners	NODE-EVENTS-002	NodeEventTarget setMaxListeners forwards to closed EventEmitter
+NODE-EVENTS-TARGET-GET-MAX-LISTENERS	events	NodeEventTarget.getMaxListeners	implemented	N29	tsonic_node::events::NodeEventTarget::get_max_listeners	NODE-EVENTS-002	NodeEventTarget getMaxListeners forwards to closed EventEmitter
 NODE-EVENTS-ASYNC-RESOURCE-CARRIER	events	EventEmitterAsyncResource	implemented	N28	tsonic_node::events::{EventEmitterAsyncResource,EventEmitterAsyncResourceOptions}	NODE-EVENTS-002	EventEmitterAsyncResource over closed AsyncResource identity
 NODE-EVENTS-ASYNC-RESOURCE-EMITTER	events	EventEmitterAsyncResource eventEmitter	implemented	N57	tsonic_node::events::{EventEmitterAsyncResource::event_emitter,EventEmitterAsyncResource::event_emitter_mut}	NODE-EVENTS-002	access to inner EventEmitter carrier
 NODE-EVENTS-ASYNC-RESOURCE-RESOURCE	events	EventEmitterAsyncResource asyncResource	implemented	N57	tsonic_node::events::EventEmitterAsyncResource::async_resource	NODE-EVENTS-002	access to inner AsyncResource carrier
-NODE-EVENTS-ASYNC-RESOURCE-IDS	events	EventEmitterAsyncResource asyncId/triggerAsyncId	implemented	N57	tsonic_node::events::{EventEmitterAsyncResource::async_id,EventEmitterAsyncResource::trigger_async_id}	NODE-EVENTS-002	async resource id accessors
+NODE-EVENTS-ASYNC-RESOURCE-ASYNC-ID	events	EventEmitterAsyncResource.asyncId	implemented	N29	tsonic_node::events::EventEmitterAsyncResource::async_id	NODE-EVENTS-002	async resource id accessor
+NODE-EVENTS-ASYNC-RESOURCE-TRIGGER-ASYNC-ID	events	EventEmitterAsyncResource.triggerAsyncId	implemented	N29	tsonic_node::events::EventEmitterAsyncResource::trigger_async_id	NODE-EVENTS-002	trigger async resource id accessor
 NODE-EVENTS-ASYNC-RESOURCE-DESTROY	events	EventEmitterAsyncResource.emitDestroy	implemented	N57	tsonic_node::events::EventEmitterAsyncResource::emit_destroy	NODE-EVENTS-002	destroy lifecycle helper
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
 NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
