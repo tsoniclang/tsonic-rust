@@ -317,13 +317,32 @@ fn stream_state_options_and_backpressure_are_explicit_carriers() {
     readable.unshift(Buffer::from_string("a", Some("utf8")).unwrap());
     assert_eq!(readable.readable_length(), 2);
     assert_eq!(readable.readable_high_water_mark(), 2);
+    assert!(!readable.readable_object_mode());
+    assert_eq!(readable.readable_flowing(), Some(true));
+    assert!(!readable.readable_did_read());
     readable.set_encoding("UTF8");
     assert_eq!(readable.readable_encoding(), Some("utf8"));
+    readable
+        .add_listener("data")
+        .once("end")
+        .prepend_listener("close");
+    assert_eq!(readable.listener_count("data"), 1);
+    assert!(readable.emit("data"));
+    assert_eq!(readable.listeners("end"), vec!["end".to_string()]);
+    assert_eq!(readable.raw_listeners("close"), vec!["close".to_string()]);
+    assert_eq!(
+        readable.event_names(),
+        vec!["close".to_string(), "data".to_string(), "end".to_string()]
+    );
+    readable.off("data");
+    assert_eq!(readable.listener_count("data"), 0);
     readable.pause();
     assert!(readable.is_paused());
+    assert_eq!(readable.readable_flowing(), Some(false));
     assert!(readable.read().is_none());
     readable.resume();
     assert_eq!(readable.take(1)[0].to_string(Some("utf8")).unwrap(), "a");
+    assert!(readable.readable_did_read());
     assert!(!readable.push(Buffer::from_string("c", Some("utf8")).unwrap()));
     assert_eq!(readable.to_array().len(), 2);
     assert!(readable.readable_ended());
@@ -334,13 +353,23 @@ fn stream_state_options_and_backpressure_are_explicit_carriers() {
 
     let mut writable = stream::Writable::with_options(stream::StreamOptions {
         high_water_mark: 1,
-        object_mode: false,
+        object_mode: true,
         emit_close: true,
         auto_destroy: true,
         allow_half_open: false,
         default_encoding: "utf8".to_string(),
     });
     assert_eq!(writable.writable_high_water_mark(), 1);
+    assert!(writable.writable_object_mode());
+    writable
+        .add_listener("drain")
+        .prepend_once_listener("finish")
+        .on("finish");
+    assert_eq!(writable.listener_count("finish"), 2);
+    assert!(writable.emit("finish"));
+    assert_eq!(writable.raw_listeners("drain"), vec!["drain".to_string()]);
+    writable.remove_all_listeners(Some("finish"));
+    assert_eq!(writable.listener_count("finish"), 0);
     assert!(!writable.write(Buffer::from_string("x", Some("utf8")).unwrap()));
     assert!(writable.writable_need_drain());
     writable.clear_drain();
@@ -369,6 +398,14 @@ fn stream_state_options_and_backpressure_are_explicit_carriers() {
     writable.destroy_with_error("closed");
     assert!(writable.destroyed());
     assert_eq!(writable.errored(), Some("closed"));
+    assert!(stream::is_destroyed(
+        &stream::Readable::from(vec![]),
+        &writable
+    ));
+    assert!(stream::is_errored(
+        &stream::Readable::from(vec![]),
+        &writable
+    ));
 }
 
 #[test]
@@ -459,6 +496,13 @@ fn stream_readable_functional_operators_are_closed_buffer_transforms() {
             .collect::<Vec<_>>(),
         vec![1, 2, 3]
     );
+    let composed = stream::compose(chunks(), |mut readable| {
+        stream::Readable::from(readable.take(2))
+    });
+    assert_eq!(composed.to_vec().len(), 2);
+    let mut aborted = chunks();
+    stream::add_abort_signal(&mut aborted, true);
+    assert_eq!(aborted.errored(), Some("aborted"));
 }
 
 #[test]
@@ -471,17 +515,32 @@ fn web_streams_support_reader_writer_pipe_and_transform_shapes() {
     {
         let mut reader = readable.get_reader().unwrap();
         assert_eq!(reader.read().unwrap().to_string(Some("utf8")).unwrap(), "a");
+        let next = reader.read_result();
+        assert!(!next.done);
+        assert_eq!(next.value.unwrap().to_string(Some("utf8")).unwrap(), "b");
+        assert!(reader.read_result().done);
+        assert!(reader.closed());
         reader.release_lock();
     }
     assert!(!readable.locked());
+    let (_left, _right) = readable.tee();
+    let mut cancelable =
+        stream::web::ReadableStream::from_chunks(vec![
+            Buffer::from_string("x", Some("utf8")).unwrap()
+        ]);
+    cancelable.cancel_with_reason("done");
+    assert!(cancelable.canceled());
 
     let mut writable = stream::web::WritableStream::new();
     {
         let mut writer = writable.get_writer().unwrap();
+        assert!(writer.ready());
+        assert!(writer.desired_size().is_some());
         writer
             .write(Buffer::from_string("x", Some("utf8")).unwrap())
             .unwrap();
         writer.close();
+        assert!(writer.closed());
     }
     assert!(writable.closed());
     assert_eq!(writable.chunks().len(), 1);
@@ -494,7 +553,9 @@ fn web_streams_support_reader_writer_pipe_and_transform_shapes() {
         Buffer::from_string("q", Some("utf8")).unwrap(),
     ]);
     let mut destination = stream::web::WritableStream::new();
-    source.pipe_to(&mut destination).unwrap();
+    source
+        .pipe_to_with_options(&mut destination, &stream::web::StreamPipeOptions::default())
+        .unwrap();
     assert!(destination.closed());
     assert_eq!(destination.chunks().len(), 2);
 
@@ -504,6 +565,60 @@ fn web_streams_support_reader_writer_pipe_and_transform_shapes() {
         .unwrap();
     assert_eq!(transform.readable().chunks().len(), 1);
     assert_eq!(transform.writable().chunks().len(), 1);
+
+    let mut default_controller = stream::web::ReadableStreamDefaultController::new();
+    default_controller
+        .enqueue(Buffer::from_string("c", Some("utf8")).unwrap())
+        .unwrap();
+    assert!(default_controller.desired_size().is_some());
+    default_controller.close();
+    assert!(default_controller.desired_size().is_none());
+
+    let mut byte_controller = stream::web::ReadableByteStreamController::new();
+    byte_controller
+        .enqueue(Buffer::from_string("bytes", Some("utf8")).unwrap())
+        .unwrap();
+    let mut byob = stream::web::ReadableStreamBYOBRequest::new(Buffer::alloc(8));
+    byob.respond(4);
+    assert_eq!(byob.bytes_written(), 4);
+    byob.respond_with_new_view(Buffer::from_bytes(vec![1, 2, 3]));
+    assert_eq!(byob.view().unwrap().len(), 3);
+    byte_controller.set_byob_request(byob);
+    assert!(byte_controller.byob_request().is_some());
+
+    let mut writable_controller = stream::web::WritableStreamDefaultController::new();
+    assert!(!writable_controller.signal_aborted());
+    writable_controller.abort_signal();
+    writable_controller.error("closed");
+    assert_eq!(writable_controller.errored(), Some("closed"));
+
+    let mut transform_controller = stream::web::TransformStreamDefaultController::new();
+    transform_controller
+        .enqueue(Buffer::from_string("t", Some("utf8")).unwrap())
+        .unwrap();
+    assert_eq!(transform_controller.chunks().len(), 1);
+    transform_controller.terminate();
+    assert!(transform_controller.desired_size().is_none());
+
+    let count = stream::web::CountQueuingStrategy::new(stream::web::QueuingStrategyInit {
+        high_water_mark: 2,
+    });
+    assert_eq!(count.high_water_mark(), 2);
+    assert_eq!(count.size(), 1);
+    let byte_length =
+        stream::web::ByteLengthQueuingStrategy::new(stream::web::QueuingStrategyInit {
+            high_water_mark: 10,
+        });
+    assert_eq!(
+        byte_length.size(&Buffer::from_string("abc", Some("utf8")).unwrap()),
+        3
+    );
+    let encoder = stream::web::TextEncoderStream::default();
+    assert!(!encoder.readable().locked());
+    let decoder = stream::web::TextDecoderStream::default();
+    assert!(!decoder.writable().closed());
+    let gzip = stream::web::CompressionStream::new("gzip");
+    assert_eq!(gzip.format(), "gzip");
 }
 
 #[test]

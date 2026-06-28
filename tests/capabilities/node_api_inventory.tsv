@@ -1381,6 +1381,153 @@ NODE-STREAM-WEB-TRANSFORM-NEW	stream/web	TransformStream.new	implemented	N69	tso
 NODE-STREAM-WEB-TRANSFORM-READABLE	stream/web	TransformStream.readable	implemented	N69	tsonic_node::stream::web::TransformStream::readable	NODE-STREAM-004	reads transform readable side
 NODE-STREAM-WEB-TRANSFORM-WRITABLE	stream/web	TransformStream.writable	implemented	N69	tsonic_node::stream::web::TransformStream::writable	NODE-STREAM-004	reads transform writable side
 NODE-STREAM-WEB-TRANSFORM-WRITE-PASSTHROUGH	stream/web	TransformStream.writePassthrough	implemented	N69	tsonic_node::stream::web::TransformStream::write_passthrough	NODE-STREAM-004	passes chunk from writable to readable side
+NODE-STREAM-EVENT-STATE-CARRIER	stream	StreamEventState	implemented	N89	tsonic_node::stream::StreamEventState	NODE-STREAM-006	closed stream event-count state without dynamic listener dispatch
+NODE-STREAM-EVENT-STATE-ADD	stream	StreamEventState.addListener	implemented	N89	tsonic_node::stream::StreamEventState::add_listener	NODE-STREAM-006	records explicit listener count for event-shaped stream APIs
+NODE-STREAM-EVENT-STATE-REMOVE	stream	StreamEventState.removeListener	implemented	N89	tsonic_node::stream::StreamEventState::remove_listener	NODE-STREAM-006	removes explicit listener count for event-shaped stream APIs
+NODE-STREAM-EVENT-STATE-REMOVE-ALL	stream	StreamEventState.removeAllListeners	implemented	N89	tsonic_node::stream::StreamEventState::remove_all_listeners	NODE-STREAM-006	removes selected or all event listener counts
+NODE-STREAM-EVENT-STATE-LISTENER-COUNT	stream	StreamEventState.listenerCount	implemented	N89	tsonic_node::stream::StreamEventState::listener_count	NODE-STREAM-006	reads closed listener count
+NODE-STREAM-EVENT-STATE-LISTENERS	stream	StreamEventState.listeners	implemented	N89	tsonic_node::stream::StreamEventState::listeners	NODE-STREAM-006	returns deterministic listener marker vector
+NODE-STREAM-EVENT-STATE-EVENT-NAMES	stream	StreamEventState.eventNames	implemented	N89	tsonic_node::stream::StreamEventState::event_names	NODE-STREAM-006	returns deterministic event name list
+NODE-STREAM-EVENT-STATE-EMIT	stream	StreamEventState.emit	implemented	N89	tsonic_node::stream::StreamEventState::emit	NODE-STREAM-006	returns whether explicit listeners exist without dynamic callback dispatch
+NODE-STREAM-ABORTABLE-CARRIER	stream	Abortable	implemented	N89	tsonic_node::stream::Abortable	NODE-STREAM-006	closed abortable option carrier
+NODE-STREAM-READABLE-OPERATOR-OPTIONS-CARRIER	stream	ReadableOperatorOptions	implemented	N89	tsonic_node::stream::ReadableOperatorOptions	NODE-STREAM-006	closed readable operator options carrier
+NODE-STREAM-READABLE-ITERATOR-OPTIONS-CARRIER	stream	ReadableIteratorOptions	implemented	N89	tsonic_node::stream::ReadableIteratorOptions	NODE-STREAM-006	closed readable iterator options carrier
+NODE-STREAM-PIPE-OPTIONS-CARRIER	stream	PipeOptions	implemented	N89	tsonic_node::stream::PipeOptions	NODE-STREAM-006	closed stream pipe options carrier
+NODE-STREAM-READABLE-OPTIONS-CARRIER	stream	ReadableOptions	implemented	N89	tsonic_node::stream::ReadableOptions	NODE-STREAM-006	closed ReadableOptions carrier
+NODE-STREAM-WRITABLE-OPTIONS-CARRIER	stream	WritableOptions	implemented	N89	tsonic_node::stream::WritableOptions	NODE-STREAM-006	closed WritableOptions carrier
+NODE-STREAM-DUPLEX-OPTIONS-CARRIER	stream	DuplexOptions	implemented	N89	tsonic_node::stream::DuplexOptions	NODE-STREAM-006	closed DuplexOptions carrier
+NODE-STREAM-TRANSFORM-OPTIONS-CARRIER	stream	TransformOptions	implemented	N89	tsonic_node::stream::TransformOptions	NODE-STREAM-006	closed TransformOptions carrier
+NODE-STREAM-READABLE-TO-WEB-OPTIONS-CARRIER	stream	ReadableToWebOptions	implemented	N89	tsonic_node::stream::ReadableToWebOptions	NODE-STREAM-006	closed Readable.toWeb options carrier
+NODE-STREAM-WRITABLE-TO-WEB-OPTIONS-CARRIER	stream	WritableToWebOptions	implemented	N89	tsonic_node::stream::WritableToWebOptions	NODE-STREAM-006	closed Writable.toWeb options carrier
+NODE-STREAM-READABLE-OBJECT-MODE	stream	Readable.readableObjectMode	implemented	N89	tsonic_node::stream::Readable::readable_object_mode	NODE-STREAM-006	readable objectMode accessor from explicit options
+NODE-STREAM-READABLE-FLOWING	stream	Readable.readableFlowing	implemented	N89	tsonic_node::stream::Readable::readable_flowing	NODE-STREAM-006	readable flowing state accessor
+NODE-STREAM-READABLE-DID-READ	stream	Readable.readableDidRead	implemented	N89	tsonic_node::stream::Readable::readable_did_read	NODE-STREAM-006	readable did-read state accessor
+NODE-STREAM-READABLE-ABORTED	stream	Readable.readableAborted	implemented	N89	tsonic_node::stream::Readable::readable_aborted	NODE-STREAM-006	readable aborted state accessor
+NODE-STREAM-READABLE-ADD-LISTENER	stream	Readable.addListener	implemented	N89	tsonic_node::stream::Readable::add_listener	NODE-STREAM-006	readable event-count addListener helper
+NODE-STREAM-READABLE-ON	stream	Readable.on	implemented	N89	tsonic_node::stream::Readable::on	NODE-STREAM-006	readable event-count on helper
+NODE-STREAM-READABLE-ONCE	stream	Readable.once	implemented	N89	tsonic_node::stream::Readable::once	NODE-STREAM-006	readable event-count once helper
+NODE-STREAM-READABLE-PREPEND-LISTENER	stream	Readable.prependListener	implemented	N89	tsonic_node::stream::Readable::prepend_listener	NODE-STREAM-006	readable event-count prepend helper
+NODE-STREAM-READABLE-PREPEND-ONCE	stream	Readable.prependOnceListener	implemented	N89	tsonic_node::stream::Readable::prepend_once_listener	NODE-STREAM-006	readable event-count prependOnce helper
+NODE-STREAM-READABLE-REMOVE-LISTENER	stream	Readable.removeListener	implemented	N89	tsonic_node::stream::Readable::remove_listener	NODE-STREAM-006	readable event-count remove helper
+NODE-STREAM-READABLE-OFF	stream	Readable.off	implemented	N89	tsonic_node::stream::Readable::off	NODE-STREAM-006	readable event-count off helper
+NODE-STREAM-READABLE-REMOVE-ALL-LISTENERS	stream	Readable.removeAllListeners	implemented	N89	tsonic_node::stream::Readable::remove_all_listeners	NODE-STREAM-006	readable event-count clear helper
+NODE-STREAM-READABLE-LISTENERS	stream	Readable.listeners	implemented	N89	tsonic_node::stream::Readable::listeners	NODE-STREAM-006	readable event-count listeners helper
+NODE-STREAM-READABLE-RAW-LISTENERS	stream	Readable.rawListeners	implemented	N89	tsonic_node::stream::Readable::raw_listeners	NODE-STREAM-006	readable event-count rawListeners helper
+NODE-STREAM-READABLE-LISTENER-COUNT	stream	Readable.listenerCount	implemented	N89	tsonic_node::stream::Readable::listener_count	NODE-STREAM-006	readable event-count listenerCount helper
+NODE-STREAM-READABLE-EVENT-NAMES	stream	Readable.eventNames	implemented	N89	tsonic_node::stream::Readable::event_names	NODE-STREAM-006	readable eventNames helper
+NODE-STREAM-READABLE-EMIT	stream	Readable.emit	implemented	N89	tsonic_node::stream::Readable::emit	NODE-STREAM-006	readable emit returns whether explicit listeners exist
+NODE-STREAM-WRITABLE-OBJECT-MODE	stream	Writable.writableObjectMode	implemented	N89	tsonic_node::stream::Writable::writable_object_mode	NODE-STREAM-006	writable objectMode accessor from explicit options
+NODE-STREAM-WRITABLE-ADD-LISTENER	stream	Writable.addListener	implemented	N89	tsonic_node::stream::Writable::add_listener	NODE-STREAM-006	writable event-count addListener helper
+NODE-STREAM-WRITABLE-ON	stream	Writable.on	implemented	N89	tsonic_node::stream::Writable::on	NODE-STREAM-006	writable event-count on helper
+NODE-STREAM-WRITABLE-ONCE	stream	Writable.once	implemented	N89	tsonic_node::stream::Writable::once	NODE-STREAM-006	writable event-count once helper
+NODE-STREAM-WRITABLE-PREPEND-LISTENER	stream	Writable.prependListener	implemented	N89	tsonic_node::stream::Writable::prepend_listener	NODE-STREAM-006	writable event-count prepend helper
+NODE-STREAM-WRITABLE-PREPEND-ONCE	stream	Writable.prependOnceListener	implemented	N89	tsonic_node::stream::Writable::prepend_once_listener	NODE-STREAM-006	writable event-count prependOnce helper
+NODE-STREAM-WRITABLE-REMOVE-LISTENER	stream	Writable.removeListener	implemented	N89	tsonic_node::stream::Writable::remove_listener	NODE-STREAM-006	writable event-count remove helper
+NODE-STREAM-WRITABLE-OFF	stream	Writable.off	implemented	N89	tsonic_node::stream::Writable::off	NODE-STREAM-006	writable event-count off helper
+NODE-STREAM-WRITABLE-REMOVE-ALL-LISTENERS	stream	Writable.removeAllListeners	implemented	N89	tsonic_node::stream::Writable::remove_all_listeners	NODE-STREAM-006	writable event-count clear helper
+NODE-STREAM-WRITABLE-LISTENERS	stream	Writable.listeners	implemented	N89	tsonic_node::stream::Writable::listeners	NODE-STREAM-006	writable event-count listeners helper
+NODE-STREAM-WRITABLE-RAW-LISTENERS	stream	Writable.rawListeners	implemented	N89	tsonic_node::stream::Writable::raw_listeners	NODE-STREAM-006	writable event-count rawListeners helper
+NODE-STREAM-WRITABLE-LISTENER-COUNT	stream	Writable.listenerCount	implemented	N89	tsonic_node::stream::Writable::listener_count	NODE-STREAM-006	writable event-count listenerCount helper
+NODE-STREAM-WRITABLE-EVENT-NAMES	stream	Writable.eventNames	implemented	N89	tsonic_node::stream::Writable::event_names	NODE-STREAM-006	writable eventNames helper
+NODE-STREAM-WRITABLE-EMIT	stream	Writable.emit	implemented	N89	tsonic_node::stream::Writable::emit	NODE-STREAM-006	writable emit returns whether explicit listeners exist
+NODE-STREAM-DUPLEX-WITH-OPTIONS	stream	Duplex.withOptions	implemented	N89	tsonic_node::stream::Duplex::with_options	NODE-STREAM-006	constructs Duplex from explicit options carrier
+NODE-STREAM-DUPLEX-ALLOW-HALF-OPEN	stream	Duplex.allowHalfOpen	implemented	N89	tsonic_node::stream::Duplex::allow_half_open	NODE-STREAM-006	duplex allowHalfOpen option accessor
+NODE-STREAM-DUPLEX-READABLE-ACTIVE	stream	Duplex.readable	implemented	N89	tsonic_node::stream::Duplex::readable	NODE-STREAM-006	duplex readable-side active state accessor
+NODE-STREAM-DUPLEX-WRITABLE-ACTIVE	stream	Duplex.writable	implemented	N89	tsonic_node::stream::Duplex::writable	NODE-STREAM-006	duplex writable-side active state accessor
+NODE-STREAM-DUPLEX-DESTROY	stream	Duplex.destroy	implemented	N89	tsonic_node::stream::Duplex::destroy	NODE-STREAM-006	destroys both duplex sides
+NODE-STREAM-DUPLEX-DESTROYED	stream	Duplex.destroyed	implemented	N89	tsonic_node::stream::Duplex::destroyed	NODE-STREAM-006	duplex destroyed state accessor
+NODE-STREAM-DUPLEX-ADD-LISTENER	stream	Duplex.addListener	implemented	N89	tsonic_node::stream::Duplex::add_listener	NODE-STREAM-006	duplex event-count addListener helper
+NODE-STREAM-DUPLEX-ON	stream	Duplex.on	implemented	N89	tsonic_node::stream::Duplex::on	NODE-STREAM-006	duplex event-count on helper
+NODE-STREAM-DUPLEX-ONCE	stream	Duplex.once	implemented	N89	tsonic_node::stream::Duplex::once	NODE-STREAM-006	duplex event-count once helper
+NODE-STREAM-DUPLEX-PREPEND-LISTENER	stream	Duplex.prependListener	implemented	N89	tsonic_node::stream::Duplex::prepend_listener	NODE-STREAM-006	duplex event-count prepend helper
+NODE-STREAM-DUPLEX-PREPEND-ONCE	stream	Duplex.prependOnceListener	implemented	N89	tsonic_node::stream::Duplex::prepend_once_listener	NODE-STREAM-006	duplex event-count prependOnce helper
+NODE-STREAM-DUPLEX-REMOVE-LISTENER	stream	Duplex.removeListener	implemented	N89	tsonic_node::stream::Duplex::remove_listener	NODE-STREAM-006	duplex event-count remove helper
+NODE-STREAM-DUPLEX-OFF	stream	Duplex.off	implemented	N89	tsonic_node::stream::Duplex::off	NODE-STREAM-006	duplex event-count off helper
+NODE-STREAM-DUPLEX-REMOVE-ALL-LISTENERS	stream	Duplex.removeAllListeners	implemented	N89	tsonic_node::stream::Duplex::remove_all_listeners	NODE-STREAM-006	duplex event-count clear helper
+NODE-STREAM-DUPLEX-LISTENERS	stream	Duplex.listeners	implemented	N89	tsonic_node::stream::Duplex::listeners	NODE-STREAM-006	duplex event-count listeners helper
+NODE-STREAM-DUPLEX-RAW-LISTENERS	stream	Duplex.rawListeners	implemented	N89	tsonic_node::stream::Duplex::raw_listeners	NODE-STREAM-006	duplex event-count rawListeners helper
+NODE-STREAM-DUPLEX-LISTENER-COUNT	stream	Duplex.listenerCount	implemented	N89	tsonic_node::stream::Duplex::listener_count	NODE-STREAM-006	duplex event-count listenerCount helper
+NODE-STREAM-DUPLEX-EVENT-NAMES	stream	Duplex.eventNames	implemented	N89	tsonic_node::stream::Duplex::event_names	NODE-STREAM-006	duplex eventNames helper
+NODE-STREAM-DUPLEX-EMIT	stream	Duplex.emit	implemented	N89	tsonic_node::stream::Duplex::emit	NODE-STREAM-006	duplex emit returns whether explicit listeners exist
+NODE-STREAM-IS-READABLE	stream	isReadable	implemented	N89	tsonic_node::stream::is_readable	NODE-STREAM-006	static readable-state helper
+NODE-STREAM-IS-WRITABLE	stream	isWritable	implemented	N89	tsonic_node::stream::is_writable	NODE-STREAM-006	static writable-state helper
+NODE-STREAM-IS-ERRORED	stream	isErrored	implemented	N89	tsonic_node::stream::is_errored	NODE-STREAM-006	static errored-state helper over closed stream carriers
+NODE-STREAM-IS-DESTROYED	stream	isDestroyed	implemented	N89	tsonic_node::stream::is_destroyed	NODE-STREAM-006	static destroyed-state helper over closed stream carriers
+NODE-STREAM-COMPOSE-FN	stream	compose	implemented	N89	tsonic_node::stream::compose	NODE-STREAM-006	static composition helper over closed Readable carrier
+NODE-STREAM-ADD-ABORT-SIGNAL	stream	addAbortSignal	implemented	N89	tsonic_node::stream::add_abort_signal	NODE-STREAM-006	static abort helper records explicit aborted state
+NODE-STREAM-WEB-QUEUING-STRATEGY-CARRIER	stream/web	QueuingStrategy	implemented	N89	tsonic_node::stream::web::QueuingStrategy	NODE-STREAM-WEB-002	closed Web queuing strategy carrier
+NODE-STREAM-WEB-QUEUING-STRATEGY-INIT-CARRIER	stream/web	QueuingStrategyInit	implemented	N89	tsonic_node::stream::web::QueuingStrategyInit	NODE-STREAM-WEB-002	closed Web queuing strategy init carrier
+NODE-STREAM-WEB-COUNT-QUEUING-STRATEGY-CARRIER	stream/web	CountQueuingStrategy	implemented	N89	tsonic_node::stream::web::CountQueuingStrategy	NODE-STREAM-WEB-002	closed count queuing strategy carrier
+NODE-STREAM-WEB-COUNT-QUEUING-STRATEGY-NEW	stream/web	CountQueuingStrategy.new	implemented	N89	tsonic_node::stream::web::CountQueuingStrategy::new	NODE-STREAM-WEB-002	constructs count queuing strategy from explicit init
+NODE-STREAM-WEB-COUNT-QUEUING-STRATEGY-HWM	stream/web	CountQueuingStrategy.highWaterMark	implemented	N89	tsonic_node::stream::web::CountQueuingStrategy::high_water_mark	NODE-STREAM-WEB-002	reads count queuing highWaterMark
+NODE-STREAM-WEB-COUNT-QUEUING-STRATEGY-SIZE	stream/web	CountQueuingStrategy.size	implemented	N89	tsonic_node::stream::web::CountQueuingStrategy::size	NODE-STREAM-WEB-002	count queuing strategy returns unit size
+NODE-STREAM-WEB-BYTE-LENGTH-QUEUING-STRATEGY-CARRIER	stream/web	ByteLengthQueuingStrategy	implemented	N89	tsonic_node::stream::web::ByteLengthQueuingStrategy	NODE-STREAM-WEB-002	closed byte-length queuing strategy carrier
+NODE-STREAM-WEB-BYTE-LENGTH-QUEUING-STRATEGY-NEW	stream/web	ByteLengthQueuingStrategy.new	implemented	N89	tsonic_node::stream::web::ByteLengthQueuingStrategy::new	NODE-STREAM-WEB-002	constructs byte-length strategy from explicit init
+NODE-STREAM-WEB-BYTE-LENGTH-QUEUING-STRATEGY-HWM	stream/web	ByteLengthQueuingStrategy.highWaterMark	implemented	N89	tsonic_node::stream::web::ByteLengthQueuingStrategy::high_water_mark	NODE-STREAM-WEB-002	reads byte-length queuing highWaterMark
+NODE-STREAM-WEB-BYTE-LENGTH-QUEUING-STRATEGY-SIZE	stream/web	ByteLengthQueuingStrategy.size	implemented	N89	tsonic_node::stream::web::ByteLengthQueuingStrategy::size	NODE-STREAM-WEB-002	byte-length queuing strategy returns Buffer length
+NODE-STREAM-WEB-PIPE-OPTIONS-CARRIER	stream/web	StreamPipeOptions	implemented	N89	tsonic_node::stream::web::StreamPipeOptions	NODE-STREAM-WEB-002	closed Web pipe options carrier
+NODE-STREAM-WEB-GET-READER-OPTIONS-CARRIER	stream/web	ReadableStreamGetReaderOptions	implemented	N89	tsonic_node::stream::web::ReadableStreamGetReaderOptions	NODE-STREAM-WEB-002	closed getReader options carrier
+NODE-STREAM-WEB-ITERATOR-OPTIONS-CARRIER	stream/web	ReadableStreamIteratorOptions	implemented	N89	tsonic_node::stream::web::ReadableStreamIteratorOptions	NODE-STREAM-WEB-002	closed values iterator options carrier
+NODE-STREAM-WEB-BYOB-READ-OPTIONS-CARRIER	stream/web	ReadableStreamBYOBReaderReadOptions	implemented	N89	tsonic_node::stream::web::ReadableStreamBYOBReaderReadOptions	NODE-STREAM-WEB-002	closed BYOB reader options carrier
+NODE-STREAM-WEB-READ-RESULT-CARRIER	stream/web	ReadableStreamReadResult	implemented	N89	tsonic_node::stream::web::ReadableStreamReadResult	NODE-STREAM-WEB-002	closed Web read result carrier
+NODE-STREAM-WEB-READABLE-GET-READER-OPTIONS	stream/web	ReadableStream.getReader options	implemented	N89	tsonic_node::stream::web::ReadableStream::get_reader_with_options	NODE-STREAM-WEB-002	getReader rejects unsupported BYOB mode explicitly
+NODE-STREAM-WEB-READABLE-CANCEL-REASON	stream/web	ReadableStream.cancel reason	implemented	N89	tsonic_node::stream::web::ReadableStream::cancel_with_reason	NODE-STREAM-WEB-002	cancel accepts explicit reason without dynamic dispatch
+NODE-STREAM-WEB-READABLE-VALUES-OPTIONS	stream/web	ReadableStream.values options	implemented	N89	tsonic_node::stream::web::ReadableStream::values_with_options	NODE-STREAM-WEB-002	values accepts explicit iterator options carrier
+NODE-STREAM-WEB-READABLE-PIPE-TO-OPTIONS	stream/web	ReadableStream.pipeTo options	implemented	N89	tsonic_node::stream::web::ReadableStream::pipe_to_with_options	NODE-STREAM-WEB-002	pipeTo applies explicit preventClose/preventAbort/preventCancel/abort options
+NODE-STREAM-WEB-READABLE-TEE	stream/web	ReadableStream.tee	implemented	N89	tsonic_node::stream::web::ReadableStream::tee	NODE-STREAM-WEB-002	tee clones closed readable stream state
+NODE-STREAM-WEB-DEFAULT-CONTROLLER-CARRIER	stream/web	ReadableStreamDefaultController	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultController	NODE-STREAM-WEB-002	closed readable stream default controller carrier
+NODE-STREAM-WEB-DEFAULT-CONTROLLER-NEW	stream/web	ReadableStreamDefaultController.new	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultController::new	NODE-STREAM-WEB-002	constructs default controller
+NODE-STREAM-WEB-DEFAULT-CONTROLLER-ENQUEUE	stream/web	ReadableStreamDefaultController.enqueue	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultController::enqueue	NODE-STREAM-WEB-002	enqueues explicit Buffer chunk into controller
+NODE-STREAM-WEB-DEFAULT-CONTROLLER-CLOSE	stream/web	ReadableStreamDefaultController.close	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultController::close	NODE-STREAM-WEB-002	closes readable stream controller
+NODE-STREAM-WEB-DEFAULT-CONTROLLER-ERROR	stream/web	ReadableStreamDefaultController.error	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultController::error	NODE-STREAM-WEB-002	records controller error and closes it
+NODE-STREAM-WEB-DEFAULT-CONTROLLER-DESIRED-SIZE	stream/web	ReadableStreamDefaultController.desiredSize	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultController::desired_size	NODE-STREAM-WEB-002	reads controller desiredSize state
+NODE-STREAM-WEB-BYTE-CONTROLLER-CARRIER	stream/web	ReadableByteStreamController	implemented	N89	tsonic_node::stream::web::ReadableByteStreamController	NODE-STREAM-WEB-002	closed readable byte controller carrier
+NODE-STREAM-WEB-BYTE-CONTROLLER-NEW	stream/web	ReadableByteStreamController.new	implemented	N89	tsonic_node::stream::web::ReadableByteStreamController::new	NODE-STREAM-WEB-002	constructs byte controller
+NODE-STREAM-WEB-BYTE-CONTROLLER-ENQUEUE	stream/web	ReadableByteStreamController.enqueue	implemented	N89	tsonic_node::stream::web::ReadableByteStreamController::enqueue	NODE-STREAM-WEB-002	enqueues explicit byte Buffer chunk
+NODE-STREAM-WEB-BYTE-CONTROLLER-CLOSE	stream/web	ReadableByteStreamController.close	implemented	N89	tsonic_node::stream::web::ReadableByteStreamController::close	NODE-STREAM-WEB-002	closes byte controller
+NODE-STREAM-WEB-BYTE-CONTROLLER-ERROR	stream/web	ReadableByteStreamController.error	implemented	N89	tsonic_node::stream::web::ReadableByteStreamController::error	NODE-STREAM-WEB-002	records byte controller error
+NODE-STREAM-WEB-BYTE-CONTROLLER-DESIRED-SIZE	stream/web	ReadableByteStreamController.desiredSize	implemented	N89	tsonic_node::stream::web::ReadableByteStreamController::desired_size	NODE-STREAM-WEB-002	reads byte controller desiredSize
+NODE-STREAM-WEB-BYTE-CONTROLLER-BYOB	stream/web	ReadableByteStreamController.byobRequest	implemented	N89	tsonic_node::stream::web::ReadableByteStreamController::byob_request	NODE-STREAM-WEB-002	reads explicit BYOB request carrier
+NODE-STREAM-WEB-BYTE-CONTROLLER-SET-BYOB	stream/web	ReadableByteStreamController.setByobRequest	implemented	N89	tsonic_node::stream::web::ReadableByteStreamController::set_byob_request	NODE-STREAM-WEB-002	sets explicit BYOB request carrier
+NODE-STREAM-WEB-BYOB-REQUEST-CARRIER	stream/web	ReadableStreamBYOBRequest	implemented	N89	tsonic_node::stream::web::ReadableStreamBYOBRequest	NODE-STREAM-WEB-002	closed BYOB request carrier
+NODE-STREAM-WEB-BYOB-REQUEST-NEW	stream/web	ReadableStreamBYOBRequest.new	implemented	N89	tsonic_node::stream::web::ReadableStreamBYOBRequest::new	NODE-STREAM-WEB-002	constructs BYOB request from explicit view buffer
+NODE-STREAM-WEB-BYOB-REQUEST-VIEW	stream/web	ReadableStreamBYOBRequest.view	implemented	N89	tsonic_node::stream::web::ReadableStreamBYOBRequest::view	NODE-STREAM-WEB-002	reads BYOB request view
+NODE-STREAM-WEB-BYOB-REQUEST-RESPOND	stream/web	ReadableStreamBYOBRequest.respond	implemented	N89	tsonic_node::stream::web::ReadableStreamBYOBRequest::respond	NODE-STREAM-WEB-002	records explicit bytesWritten
+NODE-STREAM-WEB-BYOB-REQUEST-RESPOND-WITH-NEW-VIEW	stream/web	ReadableStreamBYOBRequest.respondWithNewView	implemented	N89	tsonic_node::stream::web::ReadableStreamBYOBRequest::respond_with_new_view	NODE-STREAM-WEB-002	replaces BYOB request view
+NODE-STREAM-WEB-BYOB-REQUEST-BYTES-WRITTEN	stream/web	ReadableStreamBYOBRequest.bytesWritten	implemented	N89	tsonic_node::stream::web::ReadableStreamBYOBRequest::bytes_written	NODE-STREAM-WEB-002	reads BYOB bytesWritten state
+NODE-STREAM-WEB-DEFAULT-READER-READ-RESULT	stream/web	ReadableStreamDefaultReader.readResult	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultReader::read_result	NODE-STREAM-WEB-002	reads closed Web result carrier
+NODE-STREAM-WEB-DEFAULT-READER-CLOSED	stream/web	ReadableStreamDefaultReader.closed	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultReader::closed	NODE-STREAM-WEB-002	reads reader closed state
+NODE-STREAM-WEB-DEFAULT-READER-CANCEL	stream/web	ReadableStreamDefaultReader.cancel	implemented	N89	tsonic_node::stream::web::ReadableStreamDefaultReader::cancel	NODE-STREAM-WEB-002	cancels underlying readable stream
+NODE-STREAM-WEB-WRITER-READY	stream/web	WritableStreamDefaultWriter.ready	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultWriter::ready	NODE-STREAM-WEB-002	reads writer ready state
+NODE-STREAM-WEB-WRITER-CLOSED	stream/web	WritableStreamDefaultWriter.closed	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultWriter::closed	NODE-STREAM-WEB-002	reads writer closed state
+NODE-STREAM-WEB-WRITER-DESIRED-SIZE	stream/web	WritableStreamDefaultWriter.desiredSize	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultWriter::desired_size	NODE-STREAM-WEB-002	reads writer desiredSize state
+NODE-STREAM-WEB-WRITABLE-CONTROLLER-CARRIER	stream/web	WritableStreamDefaultController	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultController	NODE-STREAM-WEB-002	closed writable controller carrier
+NODE-STREAM-WEB-WRITABLE-CONTROLLER-NEW	stream/web	WritableStreamDefaultController.new	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultController::new	NODE-STREAM-WEB-002	constructs writable controller
+NODE-STREAM-WEB-WRITABLE-CONTROLLER-SIGNAL	stream/web	WritableStreamDefaultController.signal	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultController::signal_aborted	NODE-STREAM-WEB-002	reads explicit abort signal state
+NODE-STREAM-WEB-WRITABLE-CONTROLLER-ABORT-SIGNAL	stream/web	WritableStreamDefaultController.abortSignal	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultController::abort_signal	NODE-STREAM-WEB-002	sets explicit abort signal state
+NODE-STREAM-WEB-WRITABLE-CONTROLLER-ERROR	stream/web	WritableStreamDefaultController.error	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultController::error	NODE-STREAM-WEB-002	records writable controller error
+NODE-STREAM-WEB-WRITABLE-CONTROLLER-ERRORED	stream/web	WritableStreamDefaultController.errored	implemented	N89	tsonic_node::stream::web::WritableStreamDefaultController::errored	NODE-STREAM-WEB-002	reads writable controller error state
+NODE-STREAM-WEB-TRANSFORM-CONTROLLER-CARRIER	stream/web	TransformStreamDefaultController	implemented	N89	tsonic_node::stream::web::TransformStreamDefaultController	NODE-STREAM-WEB-002	closed transform controller carrier
+NODE-STREAM-WEB-TRANSFORM-CONTROLLER-NEW	stream/web	TransformStreamDefaultController.new	implemented	N89	tsonic_node::stream::web::TransformStreamDefaultController::new	NODE-STREAM-WEB-002	constructs transform controller
+NODE-STREAM-WEB-TRANSFORM-CONTROLLER-ENQUEUE	stream/web	TransformStreamDefaultController.enqueue	implemented	N89	tsonic_node::stream::web::TransformStreamDefaultController::enqueue	NODE-STREAM-WEB-002	enqueues explicit transform output chunk
+NODE-STREAM-WEB-TRANSFORM-CONTROLLER-ERROR	stream/web	TransformStreamDefaultController.error	implemented	N89	tsonic_node::stream::web::TransformStreamDefaultController::error	NODE-STREAM-WEB-002	records transform controller error
+NODE-STREAM-WEB-TRANSFORM-CONTROLLER-TERMINATE	stream/web	TransformStreamDefaultController.terminate	implemented	N89	tsonic_node::stream::web::TransformStreamDefaultController::terminate	NODE-STREAM-WEB-002	terminates transform controller
+NODE-STREAM-WEB-TRANSFORM-CONTROLLER-DESIRED-SIZE	stream/web	TransformStreamDefaultController.desiredSize	implemented	N89	tsonic_node::stream::web::TransformStreamDefaultController::desired_size	NODE-STREAM-WEB-002	reads transform controller desiredSize
+NODE-STREAM-WEB-TRANSFORM-CONTROLLER-CHUNKS	stream/web	TransformStreamDefaultController.chunks	implemented	N89	tsonic_node::stream::web::TransformStreamDefaultController::chunks	NODE-STREAM-WEB-002	reads transform controller output chunks
+NODE-STREAM-WEB-GENERIC-TRANSFORM-CARRIER	stream/web	GenericTransformStream	implemented	N89	tsonic_node::stream::web::GenericTransformStream	NODE-STREAM-WEB-002	closed generic transform stream pair carrier
+NODE-STREAM-WEB-READABLE-WRITABLE-PAIR-CARRIER	stream/web	ReadableWritablePair	implemented	N89	tsonic_node::stream::web::ReadableWritablePair	NODE-STREAM-WEB-002	closed readable/writable pair alias
+NODE-STREAM-WEB-TEXT-ENCODER-STREAM-CARRIER	stream/web	TextEncoderStream	implemented	N89	tsonic_node::stream::web::TextEncoderStream	NODE-STREAM-WEB-002	closed TextEncoderStream carrier
+NODE-STREAM-WEB-TEXT-ENCODER-STREAM-READABLE	stream/web	TextEncoderStream.readable	implemented	N89	tsonic_node::stream::web::TextEncoderStream::readable	NODE-STREAM-WEB-002	reads TextEncoderStream readable side
+NODE-STREAM-WEB-TEXT-ENCODER-STREAM-WRITABLE	stream/web	TextEncoderStream.writable	implemented	N89	tsonic_node::stream::web::TextEncoderStream::writable	NODE-STREAM-WEB-002	reads TextEncoderStream writable side
+NODE-STREAM-WEB-TEXT-DECODER-STREAM-CARRIER	stream/web	TextDecoderStream	implemented	N89	tsonic_node::stream::web::TextDecoderStream	NODE-STREAM-WEB-002	closed TextDecoderStream carrier
+NODE-STREAM-WEB-TEXT-DECODER-STREAM-READABLE	stream/web	TextDecoderStream.readable	implemented	N89	tsonic_node::stream::web::TextDecoderStream::readable	NODE-STREAM-WEB-002	reads TextDecoderStream readable side
+NODE-STREAM-WEB-TEXT-DECODER-STREAM-WRITABLE	stream/web	TextDecoderStream.writable	implemented	N89	tsonic_node::stream::web::TextDecoderStream::writable	NODE-STREAM-WEB-002	reads TextDecoderStream writable side
+NODE-STREAM-WEB-COMPRESSION-STREAM-CARRIER	stream/web	CompressionStream	implemented	N89	tsonic_node::stream::web::CompressionStream	NODE-STREAM-WEB-002	closed CompressionStream carrier
+NODE-STREAM-WEB-COMPRESSION-STREAM-NEW	stream/web	CompressionStream.new	implemented	N89	tsonic_node::stream::web::CompressionStream::new	NODE-STREAM-WEB-002	constructs CompressionStream with explicit format
+NODE-STREAM-WEB-COMPRESSION-STREAM-READABLE	stream/web	CompressionStream.readable	implemented	N89	tsonic_node::stream::web::CompressionStream::readable	NODE-STREAM-WEB-002	reads CompressionStream readable side
+NODE-STREAM-WEB-COMPRESSION-STREAM-WRITABLE	stream/web	CompressionStream.writable	implemented	N89	tsonic_node::stream::web::CompressionStream::writable	NODE-STREAM-WEB-002	reads CompressionStream writable side
+NODE-STREAM-WEB-COMPRESSION-STREAM-FORMAT	stream/web	CompressionStream.format	implemented	N89	tsonic_node::stream::web::CompressionStream::format	NODE-STREAM-WEB-002	reads CompressionStream explicit format
+NODE-STREAM-WEB-DECOMPRESSION-STREAM-CARRIER	stream/web	DecompressionStream	implemented	N89	tsonic_node::stream::web::DecompressionStream	NODE-STREAM-WEB-002	closed DecompressionStream alias over compression stream carrier
 WEB-STREAM-READABLE-CARRIER	web-globals/streams	ReadableStream	implemented	N69	tsonic_node::stream::web::ReadableStream	NODE-STREAM-004	closed readable web stream carrier
 WEB-STREAM-READABLE-FROM-CHUNKS	web-globals/streams	ReadableStream.fromChunks	implemented	N69	tsonic_node::stream::web::ReadableStream::from_chunks	NODE-STREAM-004	constructs readable web stream from explicit chunks
 WEB-STREAM-READABLE-CHUNKS	web-globals/streams	ReadableStream.chunks	implemented	N69	tsonic_node::stream::web::ReadableStream::chunks	NODE-STREAM-004	reads web stream backing chunks
