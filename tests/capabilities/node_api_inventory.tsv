@@ -1497,29 +1497,100 @@ NODE-URL-CANPARSE	url	URL.canParse	implemented	N59	tsonic_node::url::can_parse	N
 NODE-UTIL-FORMAT	util	format	implemented	L	tsonic_node::util::format	NODE-UTIL-001	format subset
 NODE-UTIL-INSPECT	util	inspect	implemented	L	tsonic_node::util::inspect	NODE-UTIL-001	closed value inspection
 NODE-UTIL-TYPES	util	types	implemented	L	tsonic_node::util::types	NODE-UTIL-002	type predicates
-NODE-UTIL-MIME	util	MIMEType/MIMEParams	implemented	N22	tsonic_node::util::{MIMEType,MIMEParams}	NODE-UTIL-006	closed MIME parser and mutable parameter carrier
+NODE-UTIL-MIMEPARAMS-CARRIER	util	MIMEParams	implemented	N60	tsonic_node::util::MIMEParams	NODE-UTIL-006	closed MIME parameter carrier
+NODE-UTIL-MIMEPARAMS-NEW	util	MIMEParams.new	implemented	N60	tsonic_node::util::MIMEParams::new	NODE-UTIL-006	constructs empty MIMEParams
+NODE-UTIL-MIMEPARAMS-GET	util	MIMEParams.get	implemented	N60	tsonic_node::util::MIMEParams::get	NODE-UTIL-006	ordered MIME parameter MIMEParams.get helper
+NODE-UTIL-MIMEPARAMS-HAS	util	MIMEParams.has	implemented	N60	tsonic_node::util::MIMEParams::has	NODE-UTIL-006	ordered MIME parameter MIMEParams.has helper
+NODE-UTIL-MIMEPARAMS-SET	util	MIMEParams.set	implemented	N60	tsonic_node::util::MIMEParams::set	NODE-UTIL-006	ordered MIME parameter MIMEParams.set helper
+NODE-UTIL-MIMEPARAMS-DELETE	util	MIMEParams.delete	implemented	N60	tsonic_node::util::MIMEParams::delete	NODE-UTIL-006	ordered MIME parameter MIMEParams.delete helper
+NODE-UTIL-MIMEPARAMS-ENTRIES	util	MIMEParams.entries	implemented	N60	tsonic_node::util::MIMEParams::entries	NODE-UTIL-006	ordered MIME parameter MIMEParams.entries helper
+NODE-UTIL-MIMEPARAMS-KEYS	util	MIMEParams.keys	implemented	N60	tsonic_node::util::MIMEParams::keys	NODE-UTIL-006	ordered MIME parameter MIMEParams.keys helper
+NODE-UTIL-MIMEPARAMS-VALUES	util	MIMEParams.values	implemented	N60	tsonic_node::util::MIMEParams::values	NODE-UTIL-006	ordered MIME parameter MIMEParams.values helper
+NODE-UTIL-MIMETYPE-CARRIER	util	MIMEType	implemented	N22	tsonic_node::util::MIMEType	NODE-UTIL-006	closed MIME type carrier
+NODE-UTIL-MIMETYPE-NEW	util	MIMEType.new	implemented	N22	tsonic_node::util::MIMEType::new	NODE-UTIL-006	parses MIME type string
+NODE-UTIL-MIMETYPE-ESSENCE	util	MIMEType.essence	implemented	N22	tsonic_node::util::MIMEType::essence	NODE-UTIL-006	closed MIME type MIMEType.essence helper
+NODE-UTIL-MIMETYPE-TYPE	util	MIMEType.type	implemented	N22	tsonic_node::util::MIMEType::type	NODE-UTIL-006	closed MIME type MIMEType.type helper
+NODE-UTIL-MIMETYPE-SUBTYPE	util	MIMEType.subtype	implemented	N22	tsonic_node::util::MIMEType::subtype	NODE-UTIL-006	closed MIME type MIMEType.subtype helper
+NODE-UTIL-MIMETYPE-PARAMS	util	MIMEType.params	implemented	N22	tsonic_node::util::MIMEType::params	NODE-UTIL-006	closed MIME type MIMEType.params helper
+NODE-UTIL-MIMETYPE-PARAMS-MUT	util	MIMEType.paramsMut	implemented	N22	tsonic_node::util::MIMEType::params_mut	NODE-UTIL-006	closed MIME type MIMEType.paramsMut helper
+NODE-UTIL-DEBUGLOG	util	debuglog	implemented	N60	tsonic_node::util::debuglog	NODE-UTIL-006	creates explicit DebugLogger
+NODE-UTIL-STYLE-TEXT	util	styleText	implemented	N60	tsonic_node::util::style_text	NODE-UTIL-006	applies explicit ANSI style
+NODE-UTIL-SYSTEM-ERROR-NAME	util	getSystemErrorName	implemented	N60	tsonic_node::util::get_system_error_name	NODE-UTIL-006	known system error name helper
+NODE-UTIL-SYSTEM-ERROR-MESSAGE	util	getSystemErrorMessage	implemented	N60	tsonic_node::util::get_system_error_message	NODE-UTIL-006	known system error message helper
+NODE-UTIL-PROMISIFY	util	promisify	implemented	N60	tsonic_node::util::promisify	NODE-UTIL-006	identity adapter for generated Rust function carrier
+NODE-UTIL-CALLBACKIFY	util	callbackify	implemented	N60	tsonic_node::util::callbackify	NODE-UTIL-006	identity adapter for generated Rust function carrier
+NODE-UTIL-ABORTED	util	aborted	implemented	N60	tsonic_node::util::aborted	NODE-UTIL-007	AbortSignal aborted helper
+NODE-UTIL-TRANSFERABLE-ABORT-SIGNAL	util	transferableAbortSignal	implemented	N60	tsonic_node::util::transferable_abort_signal	NODE-UTIL-007	closed AbortSignal transfer helper
+NODE-UTIL-TRANSFERABLE-ABORT-CONTROLLER	util	transferableAbortController	implemented	N60	tsonic_node::util::transferable_abort_controller	NODE-UTIL-007	closed AbortController transfer helper
+NODE-UTIL-GET-CALL-SITES	util	getCallSites	implemented	N60	tsonic_node::util::get_call_sites	NODE-UTIL-007	closed generated call-site metadata helper
+NODE-UTIL-DIFF	util	diff	implemented	N60	tsonic_node::util::diff	NODE-UTIL-008	closed diff helper
+NODE-UTIL-DEFAULT-INSPECT-OPTIONS	util	defaultOptions	implemented	N60	tsonic_node::util::default_inspect_options	NODE-UTIL-008	default inspect options carrier
+NODE-UTIL-INSPECT-WITH-STRUCT-OPTIONS	util	inspectWithStructOptions	implemented	N60	tsonic_node::util::inspect_with_struct_options	NODE-UTIL-008	inspect with typed options carrier
+NODE-UTIL-STRIP-VT	util	stripVTControlCharacters	implemented	N60	tsonic_node::util::strip_vt_control_characters	NODE-UTIL-007	ANSI control stripping helper
+NODE-UTIL-TO-USV-STRING	util	toUSVString	implemented	N60	tsonic_node::util::to_usv_string	NODE-UTIL-008	USV string normalization helper
+NODE-UTIL-DEPRECATE	util	deprecate	implemented	N60	tsonic_node::util::deprecate	NODE-UTIL-007	identity deprecate helper without runtime warning system
+NODE-UTIL-INHERITS	util	inherits	implemented	N60	tsonic_node::util::inherits	NODE-UTIL-007	closed generated-code inheritance metadata helper
+NODE-UTIL-CONVERT-SIGNAL	util	convertProcessSignalToExitCode	implemented	N60	tsonic_node::util::convert_process_signal_to_exit_code	NODE-UTIL-008	signal to exit-code mapping
+NODE-UTIL-SET-TRACE-SIGINT	util	setTraceSigInt	implemented	N60	tsonic_node::util::set_trace_sigint	NODE-UTIL-008	explicit no-op trace SIGINT toggle
+NODE-UTIL-PARSEARGSOPTIONTYPE-CARRIER	util	ParseArgsOptionType	implemented	N60	tsonic_node::util::ParseArgsOptionType	NODE-UTIL-008	closed ParseArgsOptionType carrier
+NODE-UTIL-PARSEARGSOPTIONDESCRIPTOR-CARRIER	util	ParseArgsOptionDescriptor	implemented	N60	tsonic_node::util::ParseArgsOptionDescriptor	NODE-UTIL-008	closed ParseArgsOptionDescriptor carrier
+NODE-UTIL-PARSEARGSCONFIG-CARRIER	util	ParseArgsConfig	implemented	N60	tsonic_node::util::ParseArgsConfig	NODE-UTIL-008	closed ParseArgsConfig carrier
+NODE-UTIL-PARSEARGSRESULT-CARRIER	util	ParseArgsResult	implemented	N60	tsonic_node::util::ParseArgsResult	NODE-UTIL-008	closed ParseArgsResult carrier
+NODE-UTIL-DEBUGLOGGER-CARRIER	util	DebugLogger	implemented	N60	tsonic_node::util::DebugLogger	NODE-UTIL-008	closed DebugLogger carrier
+NODE-UTIL-INSPECTOPTIONS-CARRIER	util	InspectOptions	implemented	N60	tsonic_node::util::InspectOptions	NODE-UTIL-008	closed InspectOptions carrier
+NODE-UTIL-TEXTENCODERENCODE-INTORESULT-CARRIER	util	TextEncoderEncodeIntoResult	implemented	N60	tsonic_node::util::TextEncoderEncodeIntoResult	NODE-UTIL-008	closed TextEncoderEncodeIntoResult carrier
+NODE-UTIL-DIFFENTRY-CARRIER	util	DiffEntry	implemented	N60	tsonic_node::util::DiffEntry	NODE-UTIL-008	closed DiffEntry carrier
+NODE-UTIL-CALLSITE-CARRIER	util	CallSite	implemented	N60	tsonic_node::util::CallSite	NODE-UTIL-008	closed CallSite carrier
+NODE-UTIL-TEXTENCODER-CARRIER	util	TextEncoder	implemented	N60	tsonic_node::util::TextEncoder	NODE-UTIL-008	closed TextEncoder carrier
+NODE-UTIL-TEXTDECODER-CARRIER	util	TextDecoder	implemented	N60	tsonic_node::util::TextDecoder	NODE-UTIL-008	closed TextDecoder carrier
+NODE-UTIL-CALLSITE-NEW	util	CallSite.new	implemented	N43	tsonic_node::util::CallSite::new	NODE-UTIL-007	closed CallSite CallSite.new helper
+NODE-UTIL-CALLSITE-WITH-POSITION	util	CallSite.withPosition	implemented	N43	tsonic_node::util::CallSite::with_position	NODE-UTIL-007	closed CallSite CallSite.withPosition helper
+NODE-UTIL-CALLSITE-FUNCTION-NAME	util	CallSite.getFunctionName	implemented	N43	tsonic_node::util::CallSite::get_function_name	NODE-UTIL-007	closed CallSite CallSite.getFunctionName helper
+NODE-UTIL-CALLSITE-FILE-NAME	util	CallSite.getFileName	implemented	N43	tsonic_node::util::CallSite::get_file_name	NODE-UTIL-007	closed CallSite CallSite.getFileName helper
+NODE-UTIL-CALLSITE-SCRIPT-NAME	util	CallSite.getScriptNameOrSourceURL	implemented	N43	tsonic_node::util::CallSite::get_script_name_or_source_url	NODE-UTIL-007	closed CallSite CallSite.getScriptNameOrSourceURL helper
+NODE-UTIL-CALLSITE-LINE	util	CallSite.getLineNumber	implemented	N43	tsonic_node::util::CallSite::get_line_number	NODE-UTIL-007	closed CallSite CallSite.getLineNumber helper
+NODE-UTIL-CALLSITE-COLUMN	util	CallSite.getColumnNumber	implemented	N43	tsonic_node::util::CallSite::get_column_number	NODE-UTIL-007	closed CallSite CallSite.getColumnNumber helper
+NODE-UTIL-CALLSITE-IS-EVAL	util	CallSite.isEval	implemented	N43	tsonic_node::util::CallSite::is_eval	NODE-UTIL-007	closed CallSite CallSite.isEval helper
+NODE-UTIL-CALLSITE-IS-NATIVE	util	CallSite.isNative	implemented	N43	tsonic_node::util::CallSite::is_native	NODE-UTIL-007	closed CallSite CallSite.isNative helper
+NODE-UTIL-CALLSITE-IS-CONSTRUCTOR	util	CallSite.isConstructor	implemented	N43	tsonic_node::util::CallSite::is_constructor	NODE-UTIL-007	closed CallSite CallSite.isConstructor helper
+NODE-UTIL-CALLSITE-IS-ASYNC	util	CallSite.isAsync	implemented	N43	tsonic_node::util::CallSite::is_async	NODE-UTIL-007	closed CallSite CallSite.isAsync helper
+NODE-UTIL-DEBUGLOGGER-ENABLED	util	DebugLogger.enabled	implemented	N22	tsonic_node::util::DebugLogger::enabled	NODE-UTIL-006	DebugLogger DebugLogger.enabled helper
+NODE-UTIL-DEBUGLOGGER-LOG	util	DebugLogger.log	implemented	N22	tsonic_node::util::DebugLogger::log	NODE-UTIL-006	DebugLogger DebugLogger.log helper
+NODE-UTIL-TEXT-ENCODER-NEW	util	TextEncoder.new	implemented	N60	tsonic_node::util::TextEncoder::new	NODE-UTIL-008	closed UTF-8 TextEncoder.new helper
+NODE-UTIL-TEXT-ENCODER-ENCODING	util	TextEncoder.encoding	implemented	N60	tsonic_node::util::TextEncoder::encoding	NODE-UTIL-008	closed UTF-8 TextEncoder.encoding helper
+NODE-UTIL-TEXT-ENCODER-ENCODE	util	TextEncoder.encode	implemented	N60	tsonic_node::util::TextEncoder::encode	NODE-UTIL-008	closed UTF-8 TextEncoder.encode helper
+NODE-UTIL-TEXT-ENCODER-ENCODE-INTO	util	TextEncoder.encodeInto	implemented	N60	tsonic_node::util::TextEncoder::encode_into	NODE-UTIL-008	closed UTF-8 TextEncoder.encodeInto helper
+NODE-UTIL-TEXT-DECODER-NEW	util	TextDecoder.new	implemented	N60	tsonic_node::util::TextDecoder::new	NODE-UTIL-008	closed TextDecoder TextDecoder.new helper
+NODE-UTIL-TEXT-DECODER-NEW-OPTIONS	util	TextDecoder.newWithOptions	implemented	N60	tsonic_node::util::TextDecoder::new_with_options	NODE-UTIL-008	closed TextDecoder TextDecoder.newWithOptions helper
+NODE-UTIL-TEXT-DECODER-ENCODING	util	TextDecoder.encoding	implemented	N60	tsonic_node::util::TextDecoder::encoding	NODE-UTIL-008	closed TextDecoder TextDecoder.encoding helper
+NODE-UTIL-TEXT-DECODER-FATAL	util	TextDecoder.fatal	implemented	N60	tsonic_node::util::TextDecoder::fatal	NODE-UTIL-008	closed TextDecoder TextDecoder.fatal helper
+NODE-UTIL-TEXT-DECODER-IGNORE-BOM	util	TextDecoder.ignoreBOM	implemented	N60	tsonic_node::util::TextDecoder::ignore_bom	NODE-UTIL-008	closed TextDecoder TextDecoder.ignoreBOM helper
+NODE-UTIL-TEXT-DECODER-DECODE	util	TextDecoder.decode	implemented	N60	tsonic_node::util::TextDecoder::decode	NODE-UTIL-008	closed TextDecoder TextDecoder.decode helper
+NODE-UTIL-TYPES-IS_BOOLEAN	util	types.isBoolean	implemented	N60	tsonic_node::util::types::is_boolean	NODE-UTIL-001	closed util.types predicate types.isBoolean
+NODE-UTIL-TYPES-IS_NULL	util	types.isNull	implemented	N60	tsonic_node::util::types::is_null	NODE-UTIL-001	closed util.types predicate types.isNull
+NODE-UTIL-TYPES-IS_NULL_OR_UNDEFINED	util	types.isNullOrUndefined	implemented	N60	tsonic_node::util::types::is_null_or_undefined	NODE-UTIL-001	closed util.types predicate types.isNullOrUndefined
+NODE-UTIL-TYPES-IS_UNDEFINED	util	types.isUndefined	implemented	N60	tsonic_node::util::types::is_undefined	NODE-UTIL-001	closed util.types predicate types.isUndefined
+NODE-UTIL-TYPES-IS_NUMBER	util	types.isNumber	implemented	N60	tsonic_node::util::types::is_number	NODE-UTIL-001	closed util.types predicate types.isNumber
+NODE-UTIL-TYPES-IS_STRING	util	types.isString	implemented	N60	tsonic_node::util::types::is_string	NODE-UTIL-001	closed util.types predicate types.isString
+NODE-UTIL-TYPES-IS_OBJECT	util	types.isObject	implemented	N60	tsonic_node::util::types::is_object	NODE-UTIL-001	closed util.types predicate types.isObject
+NODE-UTIL-TYPES-IS_ARRAY	util	types.isArray	implemented	N60	tsonic_node::util::types::is_array	NODE-UTIL-001	closed util.types predicate types.isArray
+NODE-UTIL-TYPES-IS_ARRAY_BUFFER	util	types.isArrayBuffer	implemented	N60	tsonic_node::util::types::is_array_buffer	NODE-UTIL-001	closed util.types predicate types.isArrayBuffer
+NODE-UTIL-TYPES-IS_ANY_ARRAY_BUFFER	util	types.isAnyArrayBuffer	implemented	N60	tsonic_node::util::types::is_any_array_buffer	NODE-UTIL-001	closed util.types predicate types.isAnyArrayBuffer
+NODE-UTIL-TYPES-IS_ARRAY_BUFFER_VIEW	util	types.isArrayBufferView	implemented	N60	tsonic_node::util::types::is_array_buffer_view	NODE-UTIL-001	closed util.types predicate types.isArrayBufferView
+NODE-UTIL-TYPES-IS_TYPED_ARRAY	util	types.isTypedArray	implemented	N60	tsonic_node::util::types::is_typed_array	NODE-UTIL-001	closed util.types predicate types.isTypedArray
+NODE-UTIL-TYPES-IS_UINT8_ARRAY	util	types.isUint8Array	implemented	N60	tsonic_node::util::types::is_uint8_array	NODE-UTIL-001	closed util.types predicate types.isUint8Array
+NODE-UTIL-TYPES-IS_REG_EXP	util	types.isRegExp	implemented	N60	tsonic_node::util::types::is_reg_exp	NODE-UTIL-001	closed util.types predicate types.isRegExp
+NODE-UTIL-TYPES-IS_DATE	util	types.isDate	implemented	N60	tsonic_node::util::types::is_date	NODE-UTIL-001	closed util.types predicate types.isDate
+NODE-UTIL-TYPES-IS_MAP	util	types.isMap	implemented	N60	tsonic_node::util::types::is_map	NODE-UTIL-001	closed util.types predicate types.isMap
+NODE-UTIL-TYPES-IS_SET	util	types.isSet	implemented	N60	tsonic_node::util::types::is_set	NODE-UTIL-001	closed util.types predicate types.isSet
+NODE-UTIL-TYPES-IS_PROMISE	util	types.isPromise	implemented	N60	tsonic_node::util::types::is_promise	NODE-UTIL-001	closed util.types predicate types.isPromise
+NODE-UTIL-TYPES-IS_NATIVE_ERROR	util	types.isNativeError	implemented	N60	tsonic_node::util::types::is_native_error	NODE-UTIL-001	closed util.types predicate types.isNativeError
+NODE-UTIL-TYPES-IS_PROXY	util	types.isProxy	implemented	N60	tsonic_node::util::types::is_proxy	NODE-UTIL-001	closed util.types predicate types.isProxy
 NODE-UTIL-PARSE-ARGS	util	parseArgs	implemented	N22	tsonic_node::util::parse_args	NODE-UTIL-006	closed CLI option parser over explicit config; no shell/runtime introspection
-NODE-UTIL-DEBUG-STYLE	util	debuglog/styleText/system errors	implemented	N22	tsonic_node::util::{debuglog,style_text,get_system_error_name,get_system_error_message}	NODE-UTIL-006	debug logger, ANSI styling, and known system error string helpers
 NODE-ASSERT-DEEP	assert	deepStrictEqual/notDeepStrictEqual	implemented	N2	tsonic_node::assert::{deep_strict_equal,not_deep_strict_equal}	NODE-ASSERT-001	closed JsValue deep strict assertions
 NODE-ASSERT-NOT	assert	notStrictEqual	implemented	N2	tsonic_node::assert::not_strict_equal	NODE-ASSERT-001	strict inequality assertion
-NODE-UTIL-PROMISIFY	util	promisify/callbackify	implemented	N22	tsonic_node::util::{promisify,callbackify}	NODE-UTIL-006	closed identity adapters for generated Rust function carriers; no dynamic Promise runtime
-NODE-UTIL-ABORT	util	aborted/transferableAbortSignal/transferableAbortController	implemented	N43	tsonic_node::util::{aborted,transferable_abort_signal,transferable_abort_controller}	NODE-UTIL-007	closed AbortSignal helpers over Web abort carriers without cross-thread object mutation
-NODE-UTIL-CALLSITES	util	getCallSites/CallSite	implemented	N43	tsonic_node::util::{get_call_sites,CallSite}	NODE-UTIL-007	closed generated call-site metadata carrier; no host stack introspection
-NODE-UTIL-DIFF	util	diff	implemented	N48	tsonic_node::util::{diff,DiffEntry}	NODE-UTIL-008	closed line/string diff carrier with operation/value rows
-NODE-UTIL-INSPECT-OPTIONS	util	InspectOptions/defaultOptions	implemented	N48	tsonic_node::util::{InspectOptions,default_inspect_options,inspect_with_struct_options}	NODE-UTIL-008	closed inspect option carrier controlling truncation/color without object reflection
-NODE-UTIL-TEXT-ENCODER-INTO	util	TextEncoder.encodeInto/TextEncoderEncodeIntoResult	implemented	N48	tsonic_node::util::{TextEncoder,TextEncoderEncodeIntoResult}	NODE-UTIL-008	closed UTF-8 encodeInto result carrier with read/written counts
-NODE-UTIL-TEXT-DECODER-OPTIONS	util	TextDecoder fatal/ignoreBOM options	implemented	N48	tsonic_node::util::TextDecoder	NODE-UTIL-008	closed TextDecoder option carrier for fatal and ignoreBOM flags
-NODE-UTIL-SIGNALS	util	convertProcessSignalToExitCode/setTraceSigInt	implemented	N48	tsonic_node::util::{convert_process_signal_to_exit_code,set_trace_sigint}	NODE-UTIL-008	closed signal-to-exit-code mapping and no-op trace SIGINT toggle
 NODE-UTIL-FORMAT-OPTIONS	util	formatWithOptions	implemented	N60	tsonic_node::util::format_with_options	NODE-UTIL-001	formatWithOptions delegates to closed format semantics without object reflection
-NODE-UTIL-INSPECT-STRUCT	util	inspectWithOptions/defaultOptions/InspectOptions	implemented	N60	tsonic_node::util::{inspect_with_options,inspect_with_struct_options,default_inspect_options,InspectOptions}	NODE-UTIL-001,NODE-UTIL-008	closed inspect option carrier for string truncation and color controls
 NODE-UTIL-DEEP-EQUALITY	util	isDeepStrictEqual	implemented	N60	tsonic_node::util::is_deep_strict_equal	NODE-UTIL-001	closed JsValue deep strict equality
-NODE-UTIL-CONTROL-STRINGS	util	stripVTControlCharacters/toUSVString/styleText	implemented	N60	tsonic_node::util::{strip_vt_control_characters,to_usv_string,style_text}	NODE-UTIL-007,NODE-UTIL-008	ANSI control stripping, USV normalization, and explicit ANSI styling
-NODE-UTIL-INHERITS-DEPRECATE	util	inherits/deprecate	implemented	N60	tsonic_node::util::{inherits,deprecate}	NODE-UTIL-007	closed generated-code helpers without prototype mutation or runtime warnings
-NODE-UTIL-TEXT-ENCODER	util	TextEncoder.encode/encoding	implemented	N60	tsonic_node::util::TextEncoder	NODE-UTIL-007,NODE-UTIL-008	UTF-8 TextEncoder carrier and encode helper
-NODE-UTIL-TEXT-DECODER	util	TextDecoder.decode/encoding/fatal/ignoreBOM	implemented	N60	tsonic_node::util::TextDecoder	NODE-UTIL-007,NODE-UTIL-008	UTF-8 TextDecoder carrier with explicit option state
-NODE-UTIL-PARSE-ARGS-SHAPES	util	ParseArgsConfig/ParseArgsOptionDescriptor/ParseArgsResult	implemented	N60	tsonic_node::util::{ParseArgsConfig,ParseArgsOptionDescriptor,ParseArgsResult,ParseArgsOptionType}	NODE-UTIL-006	closed parseArgs configuration/result carrier shapes
-NODE-UTIL-MIME-PARAMS	util	MIMEParams get/set/delete/has	implemented	N60	tsonic_node::util::MIMEParams	NODE-UTIL-006	ordered MIME parameter mutation and lookup carrier
-NODE-UTIL-RUNTIME-PREDICATES	util	util.types common predicates	implemented	N60	tsonic_node::util::types	NODE-UTIL-001,NODE-UTIL-007	closed runtime predicate helpers for JsValue, ArrayBuffer, typed array, date, regexp, promise/error/proxy negatives
 NODE-PROCESS-ENV-GET	process	env get	implemented	J	tsonic_node::process::env_get	NODE-PROC-001	environment variable getter
 NODE-PROCESS-ENV-SET	process	env set	implemented	J	tsonic_node::process::env_set	NODE-PROC-001	environment variable setter
 NODE-PROCESS-ENV-DELETE	process	env delete	implemented	J	tsonic_node::process::env_delete	NODE-PROC-001	environment variable deleter
