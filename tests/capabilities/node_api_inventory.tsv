@@ -1833,6 +1833,55 @@ NODE-FS-CONSTANT-S-IROTH	fs	constants.S_IROTH	implemented	N83	tsonic_node::fs::F
 NODE-FS-CONSTANT-S-IWOTH	fs	constants.S_IWOTH	implemented	N83	tsonic_node::fs::FsConstants::s_iwoth	NODE-FS-001	fs mode S_IWOTH constant
 NODE-FS-CONSTANT-S-IXOTH	fs	constants.S_IXOTH	implemented	N83	tsonic_node::fs::FsConstants::s_ixoth	NODE-FS-001	fs mode S_IXOTH constant
 NODE-FS-CONSTANT-UV-FS-O-FILEMAP	fs	constants.UV_FS_O_FILEMAP	implemented	N83	tsonic_node::fs::FsConstants::uv_fs_o_filemap	NODE-FS-001	fs UV_FS_O_FILEMAP constant represented as zero when unavailable
+NODE-FS-OBJECT-ENCODING-OPTIONS	fs	ObjectEncodingOptions	implemented	N84	tsonic_node::fs::ObjectEncodingOptions	NODE-FS-OPTIONS-001	closed encoding option carrier for file reads
+NODE-FS-BIGINT-OPTIONS	fs	BigIntOptions	implemented	N84	tsonic_node::fs::BigIntOptions	NODE-FS-OPTIONS-001	closed bigint option carrier with explicit field
+NODE-FS-STAT-OPTIONS	fs	StatOptions	implemented	N84	tsonic_node::fs::StatOptions	NODE-FS-OPTIONS-001	closed stat options carrier with bigint and throwIfNoEntry
+NODE-FS-STATFS-OPTIONS	fs	StatFsOptions	implemented	N84	tsonic_node::fs::StatFsOptions	NODE-FS-OPTIONS-001	closed statfs options carrier
+NODE-FS-MAKE-DIRECTORY-OPTIONS	fs	MakeDirectoryOptions	implemented	N84	tsonic_node::fs::MakeDirectoryOptions	NODE-FS-OPTIONS-002	closed mkdir options carrier with recursive and mode
+NODE-FS-RM-OPTIONS	fs	RmOptions	implemented	N84	tsonic_node::fs::RmOptions	NODE-FS-OPTIONS-002	closed rm options carrier with force recursive retry fields
+NODE-FS-COPY-FILTER	fs	CopyFilter	implemented	N84	tsonic_node::fs::CopyFilter	NODE-FS-OPTIONS-002	closed copy filter carrier without dynamic JS execution
+NODE-FS-COPY-OPTIONS-BASE	fs	CopyOptionsBase	implemented	N84	tsonic_node::fs::CopyOptionsBase	NODE-FS-OPTIONS-002	closed copy options base carrier
+NODE-FS-COPY-OPTIONS	fs	CopyOptions	implemented	N84	tsonic_node::fs::CopyOptions	NODE-FS-OPTIONS-002	closed async-copy shaped options carrier
+NODE-FS-COPY-SYNC-OPTIONS	fs	CopySyncOptions	implemented	N84	tsonic_node::fs::CopySyncOptions	NODE-FS-OPTIONS-002	closed sync-copy options carrier
+NODE-FS-OPEN-DIR-OPTIONS	fs	OpenDirOptions	implemented	N84	tsonic_node::fs::OpenDirOptions	NODE-FS-OPTIONS-002	closed opendir options carrier
+NODE-FS-READ-OPTIONS	fs	ReadOptions	implemented	N84	tsonic_node::fs::ReadOptions	NODE-FS-OPTIONS-001	closed read options carrier
+NODE-FS-READ-RESULT	fs	ReadResult	implemented	N84	tsonic_node::fs::ReadResult	NODE-FS-OPTIONS-001	read result carrier with bytesRead and buffer
+NODE-FS-READV-RESULT	fs	ReadVResult	implemented	N84	tsonic_node::fs::ReadVResult	NODE-FS-OPTIONS-001	readv result carrier with bytesRead and buffers
+NODE-FS-WRITE-OPTIONS	fs	WriteOptions	implemented	N84	tsonic_node::fs::WriteOptions	NODE-FS-OPTIONS-001	closed write options carrier
+NODE-FS-WRITE-RESULT	fs	WriteResult	implemented	N84	tsonic_node::fs::WriteResult	NODE-FS-OPTIONS-001	write result carrier with bytesWritten
+NODE-FS-WRITEV-RESULT	fs	WriteVResult	implemented	N84	tsonic_node::fs::WriteVResult	NODE-FS-OPTIONS-001	writev result carrier with bytesWritten and buffers
+NODE-FS-STREAM-OPTIONS	fs	StreamOptions	implemented	N84	tsonic_node::fs::FsStreamOptions	NODE-FS-STREAM-002	closed fs stream option carrier
+NODE-FS-READ-STREAM-OPTIONS	fs	ReadStreamOptions	implemented	N84	tsonic_node::fs::ReadStreamOptions	NODE-FS-STREAM-002	closed createReadStream option carrier
+NODE-FS-WRITE-STREAM-OPTIONS	fs	WriteStreamOptions	implemented	N84	tsonic_node::fs::WriteStreamOptions	NODE-FS-STREAM-002	closed createWriteStream option carrier
+NODE-FS-WATCH-OPTIONS	fs	WatchOptions	implemented	N84	tsonic_node::fs::WatchOptions	NODE-FS-OPTIONS-003	closed watch options carrier
+NODE-FS-WATCH-FILE-OPTIONS	fs	WatchFileOptions	implemented	N84	tsonic_node::fs::WatchFileOptions	NODE-FS-OPTIONS-003	closed watchFile options carrier
+NODE-FS-STATS-BASE	fs	StatsBase	implemented	N84	tsonic_node::fs::StatsBase	NODE-FS-OPTIONS-001	Stats alias for documented base stat shape
+NODE-FS-BIGINT-STATS	fs	BigIntStats	implemented	N84	tsonic_node::fs::BigIntStats	NODE-FS-OPTIONS-001	Stats alias exposing nanosecond accessors
+NODE-FS-STATSFS-BASE	fs	StatsFsBase	implemented	N84	tsonic_node::fs::StatsFsBase	NODE-FS-OPTIONS-001	StatFs alias for documented filesystem stat shape
+NODE-FS-STAT-WITH-OPTIONS	fs	statSync options	implemented	N84	tsonic_node::fs::stat_sync_with_options	NODE-FS-OPTIONS-001	stat with throwIfNoEntry carrier behavior
+NODE-FS-LSTAT-WITH-OPTIONS	fs	lstatSync options	implemented	N84	tsonic_node::fs::lstat_sync_with_options	NODE-FS-OPTIONS-001	lstat with throwIfNoEntry carrier behavior
+NODE-FS-FSTAT-WITH-OPTIONS	fs	fstatSync options	implemented	N84	tsonic_node::fs::fstat_sync_with_options	NODE-FS-OPTIONS-001	fstat with explicit options carrier
+NODE-FS-STATFS-WITH-OPTIONS	fs	statfsSync options	implemented	N84	tsonic_node::fs::statfs_sync_with_options	NODE-FS-OPTIONS-001	statfs with explicit options carrier
+NODE-FS-MKDIR-WITH-OPTIONS	fs	mkdirSync options	implemented	N84	tsonic_node::fs::mkdir_sync_with_options	NODE-FS-OPTIONS-002	mkdir with recursive and mode options
+NODE-FS-RM-WITH-OPTIONS	fs	rmSync options	implemented	N84	tsonic_node::fs::rm_sync_with_options	NODE-FS-OPTIONS-002	rm with retry force recursive options
+NODE-FS-COPYFILE-WITH-MODE	fs	copyFileSync mode	implemented	N84	tsonic_node::fs::copy_file_sync_with_mode	NODE-FS-OPTIONS-002	copyFile mode carrier honors exclusive destination
+NODE-FS-CP-WITH-OPTIONS	fs	cpSync options	implemented	N84	tsonic_node::fs::cp_sync_with_options	NODE-FS-OPTIONS-002	cp with closed copy option carrier
+NODE-FS-COPY-WITH-OPTIONS	fs	cp options	implemented	N84	tsonic_node::fs::copy_sync	NODE-FS-OPTIONS-002	copy shaped helper over closed options carrier
+NODE-FS-READ-WITH-OPTIONS	fs	readSync options	implemented	N84	tsonic_node::fs::read_sync_with_options	NODE-FS-OPTIONS-001	read with options and result carrier
+NODE-FS-READV-RESULT-FN	fs	readvSync result	implemented	N84	tsonic_node::fs::readv_sync_result	NODE-FS-OPTIONS-001	readv result helper
+NODE-FS-WRITE-BUFFER-WITH-OPTIONS	fs	writeSync buffer options	implemented	N84	tsonic_node::fs::write_sync_buffer_with_options	NODE-FS-OPTIONS-001	write buffer with options and result carrier
+NODE-FS-WRITE-STRING-WITH-OPTIONS	fs	writeSync string options	implemented	N84	tsonic_node::fs::write_sync_string_with_options	NODE-FS-OPTIONS-001	write string with options and result carrier
+NODE-FS-WRITEV-RESULT-FN	fs	writevSync result	implemented	N84	tsonic_node::fs::writev_sync_result	NODE-FS-OPTIONS-001	writev result helper
+NODE-FS-CREATE-READ-STREAM-OPTIONS	fs	createReadStream options	implemented	N84	tsonic_node::fs::create_read_stream_with_options	NODE-FS-STREAM-002	createReadStream with closed options carrier
+NODE-FS-CREATE-WRITE-STREAM-OPTIONS	fs	createWriteStream options	implemented	N84	tsonic_node::fs::create_write_stream_with_options	NODE-FS-STREAM-002	createWriteStream with closed options carrier
+NODE-FS-WATCH-WITH-OPTIONS	fs	watch options	implemented	N84	tsonic_node::fs::watch_with_options	NODE-FS-OPTIONS-003	watch with closed options carrier
+NODE-FS-WATCH-FILE-WITH-OPTIONS	fs	watchFile options	implemented	N84	tsonic_node::fs::watch_file_with_options	NODE-FS-OPTIONS-003	watchFile with closed options carrier
+NODE-FS-STAT-WATCHER-CARRIER	fs	StatWatcher	implemented	N84	tsonic_node::fs::StatWatcher	NODE-FS-OPTIONS-003	closed stat watcher alias over polling watcher
+NODE-FS-WATCHER-CLOSE	fs	FsWatcher.close	implemented	N84	tsonic_node::fs::FsWatcher::close	NODE-FS-OPTIONS-003	closes watcher carrier
+NODE-FS-WATCHER-REF	fs	FsWatcher.ref	implemented	N84	tsonic_node::fs::FsWatcher::ref_	NODE-FS-OPTIONS-003	marks watcher persistent
+NODE-FS-WATCHER-UNREF	fs	FsWatcher.unref	implemented	N84	tsonic_node::fs::FsWatcher::unref	NODE-FS-OPTIONS-003	marks watcher nonpersistent
+NODE-FS-WATCHER-HASREF	fs	FsWatcher.hasRef	implemented	N84	tsonic_node::fs::FsWatcher::has_ref	NODE-FS-OPTIONS-003	reads watcher persistence state
+NODE-FS-WATCHER-CLOSED	fs	FsWatcher.closed	implemented	N84	tsonic_node::fs::FsWatcher::closed	NODE-FS-OPTIONS-003	reads watcher closed state
 NODE-FS-PROMISES	fs	promises APIs	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-FSP-ACCESS	fs/promises	access	implemented	N65	tsonic_node::fs_promises::access	NODE-FSP-001	promise-shaped access helper over real filesystem checks
 NODE-FSP-READFILE-STRING	fs/promises	readFile string	implemented	N65	tsonic_node::fs_promises::read_file_string	NODE-FSP-001	promise-shaped readFile string helper with explicit encoding

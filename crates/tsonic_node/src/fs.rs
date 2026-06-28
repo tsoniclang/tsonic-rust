@@ -288,6 +288,300 @@ pub enum FsWriteData<'a> {
     Bytes(&'a [u8]),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectEncodingOptions {
+    pub encoding: Option<String>,
+}
+
+impl ObjectEncodingOptions {
+    pub fn buffer() -> Self {
+        Self { encoding: None }
+    }
+
+    pub fn string(encoding: &str) -> Self {
+        Self {
+            encoding: Some(encoding.to_string()),
+        }
+    }
+}
+
+impl Default for ObjectEncodingOptions {
+    fn default() -> Self {
+        Self::buffer()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BigIntOptions {
+    pub bigint: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatOptions {
+    pub bigint: bool,
+    pub throw_if_no_entry: bool,
+}
+
+impl Default for StatOptions {
+    fn default() -> Self {
+        Self {
+            bigint: false,
+            throw_if_no_entry: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatFsOptions {
+    pub bigint: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MakeDirectoryOptions {
+    pub recursive: bool,
+    pub mode: u32,
+}
+
+impl Default for MakeDirectoryOptions {
+    fn default() -> Self {
+        Self {
+            recursive: false,
+            mode: 0o777,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RmOptions {
+    pub recursive: bool,
+    pub force: bool,
+    pub max_retries: u32,
+    pub retry_delay_ms: u64,
+}
+
+impl Default for RmOptions {
+    fn default() -> Self {
+        Self {
+            recursive: false,
+            force: false,
+            max_retries: 0,
+            retry_delay_ms: 100,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CopyFilter {
+    AcceptAll,
+    RejectAll,
+}
+
+impl CopyFilter {
+    pub fn accepts(&self, _source: &str, _destination: &str) -> bool {
+        matches!(self, Self::AcceptAll)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopyOptionsBase {
+    pub dereference: bool,
+    pub error_on_exist: bool,
+    pub force: bool,
+    pub mode: i32,
+    pub preserve_timestamps: bool,
+    pub recursive: bool,
+    pub verbatim_symlinks: bool,
+}
+
+impl Default for CopyOptionsBase {
+    fn default() -> Self {
+        Self {
+            dereference: false,
+            error_on_exist: false,
+            force: true,
+            mode: 0,
+            preserve_timestamps: false,
+            recursive: false,
+            verbatim_symlinks: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CopyOptions {
+    pub base: CopyOptionsBase,
+    pub filter: Option<CopyFilter>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CopySyncOptions {
+    pub base: CopyOptionsBase,
+    pub filter: Option<CopyFilter>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenDirOptions {
+    pub encoding: Option<String>,
+    pub buffer_size: usize,
+    pub recursive: bool,
+}
+
+impl Default for OpenDirOptions {
+    fn default() -> Self {
+        Self {
+            encoding: Some("utf8".to_string()),
+            buffer_size: 32,
+            recursive: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadOptions {
+    pub offset: usize,
+    pub length: usize,
+    pub position: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadResult {
+    pub bytes_read: usize,
+    pub buffer: Buffer,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadVResult {
+    pub bytes_read: usize,
+    pub buffers: Vec<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WriteOptions {
+    pub offset: usize,
+    pub length: usize,
+    pub position: Option<u64>,
+    pub encoding: String,
+}
+
+impl WriteOptions {
+    pub fn buffer(offset: usize, length: usize, position: Option<u64>) -> Self {
+        Self {
+            offset,
+            length,
+            position,
+            encoding: "utf8".to_string(),
+        }
+    }
+
+    pub fn string(position: Option<u64>, encoding: &str) -> Self {
+        Self {
+            offset: 0,
+            length: usize::MAX,
+            position,
+            encoding: encoding.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WriteResult {
+    pub bytes_written: usize,
+    pub buffer: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WriteVResult {
+    pub bytes_written: usize,
+    pub buffers: Vec<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FsStreamOptions {
+    pub flags: String,
+    pub encoding: Option<String>,
+    pub fd: Option<i32>,
+    pub mode: u32,
+    pub auto_close: bool,
+    pub emit_close: bool,
+    pub start: Option<u64>,
+    pub end: Option<u64>,
+    pub high_water_mark: usize,
+    pub flush: bool,
+    pub signal_aborted: bool,
+}
+
+impl Default for FsStreamOptions {
+    fn default() -> Self {
+        Self {
+            flags: "r".to_string(),
+            encoding: None,
+            fd: None,
+            mode: 0o666,
+            auto_close: true,
+            emit_close: true,
+            start: None,
+            end: None,
+            high_water_mark: 64 * 1024,
+            flush: false,
+            signal_aborted: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ReadStreamOptions {
+    pub stream: FsStreamOptions,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct WriteStreamOptions {
+    pub stream: FsStreamOptions,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WatchOptions {
+    pub persistent: bool,
+    pub recursive: bool,
+    pub encoding: Option<String>,
+    pub signal_aborted: bool,
+    pub max_queue: usize,
+    pub overflow: String,
+}
+
+impl Default for WatchOptions {
+    fn default() -> Self {
+        Self {
+            persistent: true,
+            recursive: false,
+            encoding: Some("utf8".to_string()),
+            signal_aborted: false,
+            max_queue: usize::MAX,
+            overflow: "ignore".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WatchFileOptions {
+    pub bigint: bool,
+    pub persistent: bool,
+    pub interval_ms: u64,
+}
+
+impl Default for WatchFileOptions {
+    fn default() -> Self {
+        Self {
+            bigint: false,
+            persistent: true,
+            interval_ms: 5007,
+        }
+    }
+}
+
+pub type StatsBase = Stats;
+pub type BigIntStats = Stats;
+pub type StatsFsBase = StatFs;
+
 pub fn exists_sync(path: &str) -> bool {
     std::path::Path::new(path).exists()
 }
@@ -330,6 +624,13 @@ pub fn read_file_sync_buffer(path: &str) -> NodeResult<Buffer> {
             "readFileSync buffer overload returned a string",
         )),
     }
+}
+
+pub fn read_file_sync_with_options(
+    path: &str,
+    options: &ObjectEncodingOptions,
+) -> NodeResult<FsReadResult> {
+    read_file_sync(path, options.encoding.as_deref())
 }
 
 pub fn write_file_sync(
@@ -376,9 +677,25 @@ pub fn stat_sync(path: &str) -> NodeResult<Stats> {
     Ok(stats_from_metadata(&metadata))
 }
 
+pub fn stat_sync_with_options(path: &str, options: StatOptions) -> NodeResult<Option<Stats>> {
+    match stat_sync(path) {
+        Ok(stats) => Ok(Some(stats)),
+        Err(error) if !options.throw_if_no_entry && error.code == "ENOENT" => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 pub fn lstat_sync(path: &str) -> NodeResult<Stats> {
     let metadata = fs::symlink_metadata(path).map_err(map_io_error)?;
     Ok(stats_from_metadata(&metadata))
+}
+
+pub fn lstat_sync_with_options(path: &str, options: StatOptions) -> NodeResult<Option<Stats>> {
+    match lstat_sync(path) {
+        Ok(stats) => Ok(Some(stats)),
+        Err(error) if !options.throw_if_no_entry && error.code == "ENOENT" => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 pub fn chmod_sync(path: &str, mode: u32) -> NodeResult<()> {
@@ -411,6 +728,10 @@ pub fn fchown_sync(fd: i32, uid: u32, gid: u32) -> NodeResult<()> {
 
 pub fn statfs_sync(path: &str) -> NodeResult<StatFs> {
     statfs_impl(path)
+}
+
+pub fn statfs_sync_with_options(path: &str, _options: StatFsOptions) -> NodeResult<StatFs> {
+    statfs_sync(path)
 }
 
 pub fn utimes_sync(path: &str, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
@@ -586,6 +907,11 @@ pub fn mkdir_sync(path: &str, recursive: bool) -> NodeResult<()> {
     }
 }
 
+pub fn mkdir_sync_with_options(path: &str, options: MakeDirectoryOptions) -> NodeResult<()> {
+    mkdir_sync(path, options.recursive)?;
+    chmod_sync(path, options.mode)
+}
+
 pub fn rm_sync(path: &str, recursive: bool, force: bool) -> NodeResult<()> {
     let path_ref = std::path::Path::new(path);
     if !path_ref.exists() {
@@ -603,6 +929,25 @@ pub fn rm_sync(path: &str, recursive: bool, force: bool) -> NodeResult<()> {
         }
     } else {
         fs::remove_file(path_ref).map_err(map_io_error)
+    }
+}
+
+pub fn rm_sync_with_options(path: &str, options: RmOptions) -> NodeResult<()> {
+    let mut attempts = 0;
+    loop {
+        match rm_sync(path, options.recursive, options.force) {
+            Ok(()) => return Ok(()),
+            Err(error) if attempts < options.max_retries => {
+                attempts += 1;
+                if options.retry_delay_ms > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(options.retry_delay_ms));
+                }
+                if error.code == "ENOENT" && options.force {
+                    return Ok(());
+                }
+            }
+            Err(error) => return Err(error),
+        }
     }
 }
 
@@ -628,6 +973,13 @@ pub fn copy_file_sync(from: &str, to: &str) -> NodeResult<()> {
     fs::copy(from, to).map(|_| ()).map_err(map_io_error)
 }
 
+pub fn copy_file_sync_with_mode(from: &str, to: &str, mode: i32) -> NodeResult<()> {
+    if mode & constants().copyfile_excl != 0 && std::path::Path::new(to).exists() {
+        return Err(NodeError::new("EEXIST", "destination already exists"));
+    }
+    copy_file_sync(from, to)
+}
+
 pub fn cp_sync(from: &str, to: &str, recursive: bool) -> NodeResult<()> {
     let metadata = fs::metadata(from).map_err(map_io_error)?;
     if metadata.is_dir() {
@@ -649,6 +1001,36 @@ pub fn cp_sync(from: &str, to: &str, recursive: bool) -> NodeResult<()> {
     } else {
         copy_file_sync(from, to)
     }
+}
+
+pub fn cp_sync_with_options(from: &str, to: &str, options: &CopySyncOptions) -> NodeResult<()> {
+    if let Some(filter) = &options.filter {
+        if !filter.accepts(from, to) {
+            return Ok(());
+        }
+    }
+    if std::path::Path::new(to).exists() && options.base.error_on_exist {
+        return Err(NodeError::new("EEXIST", "destination already exists"));
+    }
+    if std::path::Path::new(to).exists() && !options.base.force {
+        return Ok(());
+    }
+    if options.base.mode != 0 {
+        copy_file_sync_with_mode(from, to, options.base.mode)
+    } else {
+        cp_sync(from, to, options.base.recursive)
+    }
+}
+
+pub fn copy_sync(from: &str, to: &str, options: &CopyOptions) -> NodeResult<()> {
+    cp_sync_with_options(
+        from,
+        to,
+        &CopySyncOptions {
+            base: options.base.clone(),
+            filter: options.filter.clone(),
+        },
+    )
 }
 
 pub fn link_sync(existing_path: &str, new_path: &str) -> NodeResult<()> {
@@ -797,6 +1179,21 @@ pub fn read_sync(
     Ok(read)
 }
 
+pub fn read_sync_with_options(
+    fd: i32,
+    mut buffer: Buffer,
+    options: ReadOptions,
+) -> NodeResult<ReadResult> {
+    let bytes_read = read_sync(
+        fd,
+        &mut buffer,
+        options.offset,
+        options.length,
+        options.position,
+    )?;
+    Ok(ReadResult { bytes_read, buffer })
+}
+
 pub fn readv_sync(fd: i32, buffers: &mut [Buffer], position: Option<u64>) -> NodeResult<usize> {
     let mut total = 0;
     let mut next_position = position;
@@ -811,6 +1208,18 @@ pub fn readv_sync(fd: i32, buffers: &mut [Buffer], position: Option<u64>) -> Nod
         }
     }
     Ok(total)
+}
+
+pub fn readv_sync_result(
+    fd: i32,
+    buffers: &mut [Buffer],
+    position: Option<u64>,
+) -> NodeResult<ReadVResult> {
+    let bytes_read = readv_sync(fd, buffers, position)?;
+    Ok(ReadVResult {
+        bytes_read,
+        buffers: buffers.to_vec(),
+    })
 }
 
 pub fn write_sync_buffer(
@@ -838,6 +1247,22 @@ pub fn write_sync_buffer(
     file.write(&bytes[offset..end]).map_err(map_io_error)
 }
 
+pub fn write_sync_buffer_with_options(
+    fd: i32,
+    buffer: &Buffer,
+    options: WriteOptions,
+) -> NodeResult<WriteResult> {
+    let bytes_written =
+        write_sync_buffer(fd, buffer, options.offset, options.length, options.position)?;
+    Ok(WriteResult {
+        bytes_written,
+        buffer: Some(Buffer::from_bytes(
+            buffer.as_bytes()[options.offset..options.offset.saturating_add(bytes_written)]
+                .to_vec(),
+        )),
+    })
+}
+
 pub fn write_sync_string(
     fd: i32,
     value: &str,
@@ -847,6 +1272,18 @@ pub fn write_sync_string(
     let bytes = crate::buffer::encode_string(value, Some(encoding))?;
     let buffer = Buffer::from_bytes(bytes);
     write_sync_buffer(fd, &buffer, 0, buffer.len(), position)
+}
+
+pub fn write_sync_string_with_options(
+    fd: i32,
+    value: &str,
+    options: WriteOptions,
+) -> NodeResult<WriteResult> {
+    let bytes_written = write_sync_string(fd, value, options.position, &options.encoding)?;
+    Ok(WriteResult {
+        bytes_written,
+        buffer: None,
+    })
 }
 
 pub fn writev_sync(fd: i32, buffers: &[Buffer], position: Option<u64>) -> NodeResult<usize> {
@@ -865,6 +1302,18 @@ pub fn writev_sync(fd: i32, buffers: &[Buffer], position: Option<u64>) -> NodeRe
     Ok(total)
 }
 
+pub fn writev_sync_result(
+    fd: i32,
+    buffers: &[Buffer],
+    position: Option<u64>,
+) -> NodeResult<WriteVResult> {
+    let bytes_written = writev_sync(fd, buffers, position)?;
+    Ok(WriteVResult {
+        bytes_written,
+        buffers: buffers.to_vec(),
+    })
+}
+
 pub fn fstat_sync(fd: i32) -> NodeResult<Stats> {
     let table = file_table().lock().unwrap();
     let file = table
@@ -872,6 +1321,10 @@ pub fn fstat_sync(fd: i32) -> NodeResult<Stats> {
         .ok_or_else(|| NodeError::new("EBADF", "bad file descriptor"))?;
     let metadata = file.metadata().map_err(map_io_error)?;
     Ok(stats_from_metadata(&metadata))
+}
+
+pub fn fstat_sync_with_options(fd: i32, _options: StatOptions) -> NodeResult<Stats> {
+    fstat_sync(fd)
 }
 
 pub fn fsync_sync(fd: i32) -> NodeResult<()> {
@@ -902,8 +1355,46 @@ pub fn create_read_stream(path: &str) -> NodeResult<Readable> {
     Ok(Readable::from_chunks(vec![read_file_sync_buffer(path)?]))
 }
 
+pub fn create_read_stream_with_options(
+    path: &str,
+    options: ReadStreamOptions,
+) -> NodeResult<Readable> {
+    if options.stream.signal_aborted {
+        return Err(NodeError::new(
+            "ABORT_ERR",
+            "read stream creation was aborted",
+        ));
+    }
+    let mut buffer = read_file_sync_buffer(path)?;
+    if let Some(start) = options.stream.start {
+        let start = start as usize;
+        let end = options
+            .stream
+            .end
+            .map(|end| end as usize + 1)
+            .unwrap_or_else(|| buffer.len())
+            .min(buffer.len());
+        buffer = if start >= buffer.len() || start >= end {
+            Buffer::from_bytes(Vec::new())
+        } else {
+            Buffer::from_bytes(buffer.as_bytes()[start..end].to_vec())
+        };
+    }
+    Ok(Readable::from_chunks(vec![buffer]))
+}
+
 pub fn create_write_stream() -> Writable {
     Writable::new()
+}
+
+pub fn create_write_stream_with_options(options: WriteStreamOptions) -> NodeResult<Writable> {
+    if options.stream.signal_aborted {
+        return Err(NodeError::new(
+            "ABORT_ERR",
+            "write stream creation was aborted",
+        ));
+    }
+    Ok(Writable::new())
 }
 
 pub fn read_file_callback_string(
@@ -1169,10 +1660,15 @@ pub struct FsWatchEvent {
 pub struct FsWatcher {
     path: String,
     previous: Option<WatchSnapshot>,
+    closed: bool,
+    refed: bool,
 }
 
 impl FsWatcher {
     pub fn poll(&mut self) -> NodeResult<Option<FsWatchEvent>> {
+        if self.closed {
+            return Err(NodeError::new("ERR_WATCHER_CLOSED", "watcher is closed"));
+        }
         let next = WatchSnapshot::read(&self.path);
         let event_type = match (&self.previous, &next) {
             (None, None) => None,
@@ -1190,18 +1686,57 @@ impl FsWatcher {
                 .unwrap_or_else(|| self.path.clone()),
         }))
     }
+
+    pub fn close(&mut self) {
+        self.closed = true;
+    }
+
+    pub fn ref_(&mut self) -> &mut Self {
+        self.refed = true;
+        self
+    }
+
+    pub fn unref(&mut self) -> &mut Self {
+        self.refed = false;
+        self
+    }
+
+    pub fn has_ref(&self) -> bool {
+        self.refed
+    }
+
+    pub fn closed(&self) -> bool {
+        self.closed
+    }
 }
 
 pub fn watch(path: &str) -> NodeResult<FsWatcher> {
+    watch_with_options(path, WatchOptions::default())
+}
+
+pub fn watch_with_options(path: &str, options: WatchOptions) -> NodeResult<FsWatcher> {
+    if options.signal_aborted {
+        return Err(NodeError::new("ABORT_ERR", "watch was aborted"));
+    }
     Ok(FsWatcher {
         path: path.to_string(),
         previous: WatchSnapshot::read(path),
+        closed: false,
+        refed: options.persistent,
     })
 }
 
 pub fn watch_file(path: &str) -> NodeResult<FsWatcher> {
     watch(path)
 }
+
+pub fn watch_file_with_options(path: &str, options: WatchFileOptions) -> NodeResult<FsWatcher> {
+    let mut watcher = watch(path)?;
+    watcher.refed = options.persistent;
+    Ok(watcher)
+}
+
+pub type StatWatcher = FsWatcher;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct WatchSnapshot {

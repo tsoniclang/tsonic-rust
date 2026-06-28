@@ -58,6 +58,20 @@ fn fs_extended_sync_file_lifecycle() {
         fs::read_file_sync_string(&file_text, "utf8").unwrap(),
         "hello world"
     );
+    assert_eq!(
+        fs::read_file_sync_with_options(&file_text, &fs::ObjectEncodingOptions::string("utf8"))
+            .unwrap(),
+        FsReadResult::String("hello world".to_string())
+    );
+    assert!(fs::stat_sync_with_options(
+        &root.join("missing.txt").to_string_lossy(),
+        fs::StatOptions {
+            bigint: false,
+            throw_if_no_entry: false,
+        },
+    )
+    .unwrap()
+    .is_none());
     let constants = fs::constants();
     assert_eq!(constants.f_ok, 0);
     assert_eq!(constants.copyfile_excl, 1);
@@ -93,6 +107,12 @@ fn fs_extended_sync_file_lifecycle() {
     assert!(filesystem.bsize > 0);
     assert!(filesystem.blocks > 0);
     assert!(filesystem.bavail <= filesystem.blocks);
+    assert_eq!(
+        fs::statfs_sync_with_options(&file_text, fs::StatFsOptions { bigint: false })
+            .unwrap()
+            .bsize,
+        filesystem.bsize
+    );
     let stats = fs::stat_sync(&file_text).unwrap();
     assert_eq!(stats.size, 11);
     assert!(stats.mode & 0o600 != 0);
@@ -110,6 +130,12 @@ fn fs_extended_sync_file_lifecycle() {
 
     let fd = fs::open_sync(&file_text, "r+").unwrap();
     assert_eq!(fs::fstat_sync(fd).unwrap().size, 11);
+    assert_eq!(
+        fs::fstat_sync_with_options(fd, fs::StatOptions::default())
+            .unwrap()
+            .size,
+        11
+    );
     fs::fchmod_sync(fd, 0o600).unwrap();
     #[cfg(unix)]
     {
@@ -124,6 +150,18 @@ fn fs_extended_sync_file_lifecycle() {
     let mut buffer = tsonic_node::buffer::Buffer::alloc(5);
     assert_eq!(fs::read_sync(fd, &mut buffer, 0, 5, Some(6)).unwrap(), 5);
     assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
+    let read_result = fs::read_sync_with_options(
+        fd,
+        tsonic_node::buffer::Buffer::alloc(5),
+        fs::ReadOptions {
+            offset: 0,
+            length: 5,
+            position: Some(0),
+        },
+    )
+    .unwrap();
+    assert_eq!(read_result.bytes_read, 5);
+    assert_eq!(read_result.buffer.to_string(Some("utf8")).unwrap(), "hello");
     let mut vector_buffers = [
         tsonic_node::buffer::Buffer::alloc(5),
         tsonic_node::buffer::Buffer::alloc(1),
@@ -131,10 +169,24 @@ fn fs_extended_sync_file_lifecycle() {
     assert_eq!(fs::readv_sync(fd, &mut vector_buffers, Some(0)).unwrap(), 6);
     assert_eq!(vector_buffers[0].to_string(Some("utf8")).unwrap(), "hello");
     assert_eq!(vector_buffers[1].to_string(Some("utf8")).unwrap(), " ");
+    let mut result_buffers = [
+        tsonic_node::buffer::Buffer::alloc(5),
+        tsonic_node::buffer::Buffer::alloc(1),
+    ];
+    let readv_result = fs::readv_sync_result(fd, &mut result_buffers, Some(0)).unwrap();
+    assert_eq!(readv_result.bytes_read, 6);
+    assert_eq!(
+        readv_result.buffers[0].to_string(Some("utf8")).unwrap(),
+        "hello"
+    );
     assert_eq!(
         fs::write_sync_string(fd, "rust", Some(6), "utf8").unwrap(),
         4
     );
+    let write_string_result =
+        fs::write_sync_string_with_options(fd, "TS", fs::WriteOptions::string(Some(6), "utf8"))
+            .unwrap();
+    assert_eq!(write_string_result.bytes_written, 2);
     assert_eq!(
         fs::writev_sync(
             fd,
@@ -147,13 +199,24 @@ fn fs_extended_sync_file_lifecycle() {
         .unwrap(),
         2
     );
+    let writev_result = fs::writev_sync_result(
+        fd,
+        &[
+            tsonic_node::buffer::Buffer::from_string("O", Some("utf8")).unwrap(),
+            tsonic_node::buffer::Buffer::from_string("K", Some("utf8")).unwrap(),
+        ],
+        Some(8),
+    )
+    .unwrap();
+    assert_eq!(writev_result.bytes_written, 2);
+    assert_eq!(writev_result.buffers.len(), 2);
     fs::fsync_sync(fd).unwrap();
     fs::fdatasync_sync(fd).unwrap();
     fs::ftruncate_sync(fd, 10).unwrap();
     fs::close_sync(fd).unwrap();
     assert_eq!(
         fs::read_file_sync_string(&file_text, "utf8").unwrap(),
-        "hello rust"
+        "hello TSOK"
     );
     assert!(modified_seconds(&file) >= 1_600_000_002);
     fs::utimes_sync(&file_text, 1_600_000_003.0, 1_600_000_004.0).unwrap();
@@ -172,10 +235,17 @@ fn fs_extended_sync_file_lifecycle() {
         fs::write_sync_buffer(fd, &write_buffer, 1, 2, Some(1)).unwrap(),
         2
     );
+    let write_buffer_result = fs::write_sync_buffer_with_options(
+        fd,
+        &write_buffer,
+        fs::WriteOptions::buffer(0, 1, Some(0)),
+    )
+    .unwrap();
+    assert_eq!(write_buffer_result.bytes_written, 1);
     fs::close_sync(fd).unwrap();
     assert_eq!(
         fs::read_file_sync_string(&buffer_file_text, "utf8").unwrap(),
-        "aYZ"
+        "XYZ"
     );
 
     fs::rm_sync(&root_text, true, false).unwrap();
@@ -350,23 +420,61 @@ fn fs_extended_sync_directory_lifecycle() {
 
     let source = root.join("source");
     let source_text = source.to_string_lossy().to_string();
-    fs::mkdir_sync(&source_text, false).unwrap();
+    fs::mkdir_sync_with_options(
+        &source_text,
+        fs::MakeDirectoryOptions {
+            recursive: false,
+            mode: 0o755,
+        },
+    )
+    .unwrap();
     let nested = source.join("nested.txt");
     let nested_text = nested.to_string_lossy().to_string();
     fs::write_file_sync_string(&nested_text, "nested", "utf8").unwrap();
 
     let copied = root.join("copied");
     let copied_text = copied.to_string_lossy().to_string();
-    fs::cp_sync(&source_text, &copied_text, true).unwrap();
+    fs::cp_sync_with_options(
+        &source_text,
+        &copied_text,
+        &fs::CopySyncOptions {
+            base: fs::CopyOptionsBase {
+                recursive: true,
+                ..fs::CopyOptionsBase::default()
+            },
+            filter: Some(fs::CopyFilter::AcceptAll),
+        },
+    )
+    .unwrap();
     assert_eq!(
         fs::read_file_sync_string(&copied.join("nested.txt").to_string_lossy(), "utf8").unwrap(),
         "nested"
     );
+    let filtered = root.join("filtered");
+    fs::cp_sync_with_options(
+        &source_text,
+        &filtered.to_string_lossy(),
+        &fs::CopySyncOptions {
+            base: fs::CopyOptionsBase {
+                recursive: true,
+                ..fs::CopyOptionsBase::default()
+            },
+            filter: Some(fs::CopyFilter::RejectAll),
+        },
+    )
+    .unwrap();
+    assert!(!filtered.exists());
 
     let entries = fs::opendir_sync(&copied_text).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].name, "nested.txt");
     assert!(entries[0].is_file());
+    let open_dir_options = fs::OpenDirOptions {
+        encoding: Some("utf8".to_string()),
+        buffer_size: 8,
+        recursive: false,
+    };
+    assert_eq!(open_dir_options.buffer_size, 8);
 
     let link = root.join("hardlink.txt");
     let link_text = link.to_string_lossy().to_string();
@@ -382,6 +490,26 @@ fn fs_extended_sync_directory_lifecycle() {
     let truncate = root.join("truncate.txt");
     let truncate_text = truncate.to_string_lossy().to_string();
     fs::write_file_sync_string(&truncate_text, "abcdef", "utf8").unwrap();
+    fs::copy_file_sync_with_mode(
+        &truncate_text,
+        &root.join("truncate-copy.txt").to_string_lossy(),
+        fs::constants().copyfile_excl,
+    )
+    .unwrap();
+    let copy_options = fs::CopyOptions {
+        base: fs::CopyOptionsBase {
+            recursive: false,
+            mode: fs::constants().copyfile_excl,
+            ..fs::CopyOptionsBase::default()
+        },
+        filter: Some(fs::CopyFilter::AcceptAll),
+    };
+    fs::copy_sync(
+        &truncate_text,
+        &root.join("truncate-copy-2.txt").to_string_lossy(),
+        &copy_options,
+    )
+    .unwrap();
     fs::truncate_sync(&truncate_text, 3).unwrap();
     assert_eq!(
         fs::read_file_sync_string(&truncate_text, "utf8").unwrap(),
@@ -391,6 +519,18 @@ fn fs_extended_sync_directory_lifecycle() {
     let made = fs::mkdtemp_sync(&root.join("tmp-").to_string_lossy()).unwrap();
     assert!(fs::stat_sync(&made).unwrap().is_directory());
     fs::rmdir_sync(&made).unwrap();
+    let remove_me = root.join("remove-me");
+    fs::mkdir_sync(&remove_me.to_string_lossy(), false).unwrap();
+    fs::rm_sync_with_options(
+        &remove_me.to_string_lossy(),
+        fs::RmOptions {
+            recursive: false,
+            force: true,
+            max_retries: 1,
+            retry_delay_ms: 0,
+        },
+    )
+    .unwrap();
 
     #[cfg(unix)]
     {
@@ -425,17 +565,93 @@ fn fs_glob_and_watchers_are_closed_polling_apis() {
     assert_eq!(matches.len(), 1);
     assert!(matches[0].ends_with("alpha.txt"));
 
-    let mut watcher = fs::watch(&alpha.to_string_lossy()).unwrap();
+    let mut watcher = fs::watch_with_options(
+        &alpha.to_string_lossy(),
+        fs::WatchOptions {
+            persistent: false,
+            recursive: false,
+            encoding: Some("utf8".to_string()),
+            signal_aborted: false,
+            max_queue: 16,
+            overflow: "ignore".to_string(),
+        },
+    )
+    .unwrap();
+    assert!(!watcher.has_ref());
+    watcher.ref_();
+    assert!(watcher.has_ref());
+    watcher.unref();
+    assert!(!watcher.has_ref());
     assert_eq!(watcher.poll().unwrap(), None);
     fs::write_file_sync_string(&alpha.to_string_lossy(), "changed", "utf8").unwrap();
     let event = watcher.poll().unwrap().unwrap();
     assert_eq!(event.event_type, "change");
     assert_eq!(event.filename, "alpha.txt");
+    watcher.close();
+    assert!(watcher.closed());
+    assert!(watcher.poll().is_err());
 
-    let mut file_watcher = fs::watch_file(&root.join("new.txt").to_string_lossy()).unwrap();
+    let mut file_watcher = fs::watch_file_with_options(
+        &root.join("new.txt").to_string_lossy(),
+        fs::WatchFileOptions {
+            bigint: false,
+            persistent: false,
+            interval_ms: 250,
+        },
+    )
+    .unwrap();
+    assert!(!file_watcher.has_ref());
     assert_eq!(file_watcher.poll().unwrap(), None);
     fs::write_file_sync_string(&root.join("new.txt").to_string_lossy(), "new", "utf8").unwrap();
     assert_eq!(file_watcher.poll().unwrap().unwrap().event_type, "rename");
+
+    fs::rm_sync(&root_text, true, false).unwrap();
+}
+
+#[test]
+fn fs_stream_option_carriers_are_closed_shapes() {
+    let root = temp_root("streams");
+    let root_text = root.to_string_lossy().to_string();
+    fs::mkdir_sync(&root_text, true).unwrap();
+    let file = root.join("stream.txt");
+    let file_text = file.to_string_lossy().to_string();
+    fs::write_file_sync_string(&file_text, "abcdef", "utf8").unwrap();
+
+    let readable = fs::create_read_stream_with_options(
+        &file_text,
+        fs::ReadStreamOptions {
+            stream: fs::FsStreamOptions {
+                start: Some(1),
+                end: Some(3),
+                high_water_mark: 4,
+                ..fs::FsStreamOptions::default()
+            },
+        },
+    )
+    .unwrap();
+    assert_eq!(readable.to_vec()[0].to_string(Some("utf8")).unwrap(), "bcd");
+
+    let write_options = fs::WriteStreamOptions {
+        stream: fs::FsStreamOptions {
+            flags: "w".to_string(),
+            flush: true,
+            ..fs::FsStreamOptions::default()
+        },
+    };
+    let mut writable = fs::create_write_stream_with_options(write_options).unwrap();
+    assert!(writable.write(tsonic_node::buffer::Buffer::from_string("x", Some("utf8")).unwrap()));
+    assert_eq!(writable.chunks().len(), 1);
+
+    assert!(fs::create_read_stream_with_options(
+        &file_text,
+        fs::ReadStreamOptions {
+            stream: fs::FsStreamOptions {
+                signal_aborted: true,
+                ..fs::FsStreamOptions::default()
+            },
+        },
+    )
+    .is_err());
 
     fs::rm_sync(&root_text, true, false).unwrap();
 }
