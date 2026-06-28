@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 const INVENTORY: &str = include_str!("capabilities/node_api_inventory.tsv");
-const EXPECTED_ROW_COUNT: usize = 1880;
+const EXPECTED_ROW_COUNT: usize = 1894;
 
 #[derive(Debug)]
 struct NodeApiRow<'a> {
@@ -37,7 +37,7 @@ fn node_api_inventory_is_complete_classified_and_owned() {
         *by_status.entry(row.status).or_default() += 1;
     }
 
-    assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 1870);
+    assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 1884);
     assert_eq!(by_status.get("later").copied().unwrap_or(0), 0);
     assert_eq!(by_status.get("hard-reject").copied().unwrap_or(0), 10);
 }
@@ -85,7 +85,7 @@ fn broad_synchronous_fs_surface_is_not_missing_from_inventory() {
     let implemented_fs_apis = rows
         .iter()
         .filter(|row| row.module == "fs" && row.status == "implemented")
-        .map(|row| row.api)
+        .map(|row| row.api.split_whitespace().next().unwrap_or(row.api))
         .collect::<BTreeSet<_>>();
 
     for api in [
