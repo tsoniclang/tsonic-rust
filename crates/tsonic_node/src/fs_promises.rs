@@ -32,6 +32,10 @@ impl FileHandle {
         fs::fchmod_sync(self.fd, mode)
     }
 
+    pub fn chown(&self, uid: u32, gid: u32) -> NodeResult<()> {
+        fs::fchown_sync(self.fd, uid, gid)
+    }
+
     pub fn utimes(&self, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
         fs::futimes_sync(self.fd, atime_seconds, mtime_seconds)
     }
@@ -100,6 +104,14 @@ pub fn append_file_buffer(path: &str, value: &Buffer) -> NodeResult<()> {
 
 pub fn chmod(path: &str, mode: u32) -> NodeResult<()> {
     fs::chmod_sync(path, mode)
+}
+
+pub fn chown(path: &str, uid: u32, gid: u32) -> NodeResult<()> {
+    fs::chown_sync(path, uid, gid)
+}
+
+pub fn lchown(path: &str, uid: u32, gid: u32) -> NodeResult<()> {
+    fs::lchown_sync(path, uid, gid)
 }
 
 pub fn utimes(path: &str, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {

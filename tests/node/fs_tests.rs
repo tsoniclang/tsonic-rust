@@ -51,6 +51,15 @@ fn fs_extended_sync_file_lifecycle() {
 
     fs::access_sync(&file_text).unwrap();
     fs::chmod_sync(&file_text, 0o600).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = std::fs::metadata(&file_text).unwrap();
+        let uid = metadata.uid();
+        let gid = metadata.gid();
+        fs::chown_sync(&file_text, uid, gid).unwrap();
+    }
     let filesystem = fs::statfs_sync(&file_text).unwrap();
     assert!(filesystem.bsize > 0);
     assert!(filesystem.blocks > 0);
@@ -58,6 +67,15 @@ fn fs_extended_sync_file_lifecycle() {
     let fd = fs::open_sync(&file_text, "r+").unwrap();
     assert_eq!(fs::fstat_sync(fd).unwrap().size, 11);
     fs::fchmod_sync(fd, 0o600).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = std::fs::metadata(&file_text).unwrap();
+        let uid = metadata.uid();
+        let gid = metadata.gid();
+        fs::fchown_sync(fd, uid, gid).unwrap();
+    }
     fs::futimes_sync(fd, 1_600_000_001.0, 1_600_000_002.0).unwrap();
     let mut buffer = tsonic_node::buffer::Buffer::alloc(5);
     assert_eq!(fs::read_sync(fd, &mut buffer, 0, 5, Some(6)).unwrap(), 5);
@@ -156,6 +174,12 @@ fn fs_extended_sync_directory_lifecycle() {
         let symlink_text = symlink.to_string_lossy().to_string();
         fs::symlink_sync(&nested_text, &symlink_text).unwrap();
         fs::lutimes_sync(&symlink_text, 1_600_000_005.0, 1_600_000_006.0).unwrap();
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = std::fs::symlink_metadata(&symlink_text).unwrap();
+        let uid = metadata.uid();
+        let gid = metadata.gid();
+        fs::lchown_sync(&symlink_text, uid, gid).unwrap();
         assert_eq!(fs::readlink_sync(&symlink_text).unwrap(), nested_text);
         assert!(fs::lstat_sync(&symlink_text).unwrap().is_symbolic_link());
     }

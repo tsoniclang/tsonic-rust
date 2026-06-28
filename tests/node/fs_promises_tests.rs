@@ -27,6 +27,15 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     assert_eq!(fs_promises::stat(&file_text).unwrap().size, 12);
     fs_promises::access(&file_text).unwrap();
     fs_promises::chmod(&file_text, 0o600).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = std::fs::metadata(&file_text).unwrap();
+        let uid = metadata.uid();
+        let gid = metadata.gid();
+        fs_promises::chown(&file_text, uid, gid).unwrap();
+    }
     fs_promises::utimes(&file_text, 1_600_000_011.0, 1_600_000_012.0).unwrap();
     assert!(
         std::fs::metadata(&file_text)
@@ -57,6 +66,15 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     let handle = fs_promises::open(&file_text, "r+").unwrap();
     assert_eq!(handle.stat().unwrap().size, 12);
     handle.chmod(0o600).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = std::fs::metadata(&file_text).unwrap();
+        let uid = metadata.uid();
+        let gid = metadata.gid();
+        handle.chown(uid, gid).unwrap();
+    }
     handle.utimes(1_600_000_013.0, 1_600_000_014.0).unwrap();
     let mut buffer = Buffer::alloc(5);
     assert_eq!(handle.read(&mut buffer, 0, 5, Some(6)).unwrap(), 5);

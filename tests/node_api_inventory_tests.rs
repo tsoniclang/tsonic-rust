@@ -37,9 +37,9 @@ fn node_api_inventory_is_complete_classified_and_owned() {
         *by_status.entry(row.status).or_default() += 1;
     }
 
-    assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 132);
+    assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 135);
     assert_eq!(by_status.get("later").copied().unwrap_or(0), 0);
-    assert_eq!(by_status.get("hard-reject").copied().unwrap_or(0), 14);
+    assert_eq!(by_status.get("hard-reject").copied().unwrap_or(0), 11);
 }
 
 #[test]

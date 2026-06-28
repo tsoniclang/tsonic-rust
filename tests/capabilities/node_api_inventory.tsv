@@ -46,20 +46,20 @@ NODE-MODULE-ZLIB	zlib	module	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip
 NODE-FS-ACCESS	fs	accessSync	implemented	K	tsonic_node::fs::access_sync	NODE-FS-EXT-001	existence/access validation
 NODE-FS-APPEND-FILE	fs	appendFileSync	implemented	K	tsonic_node::fs::{append_file_sync_string,append_file_sync_buffer}	NODE-FS-EXT-001	string and buffer overloads
 NODE-FS-CHMOD	fs	chmodSync	implemented	K	tsonic_node::fs::chmod_sync	NODE-FS-EXT-001	numeric mode accepted; Windows maps writable bit
-NODE-FS-CHOWN	fs	chownSync	hard-reject	N0	n/a	REJECT-NODE-FS-OWNERSHIP	owner/group mutation requires platform-specific privileged APIs
+NODE-FS-CHOWN	fs	chownSync	implemented	N13	tsonic_node::fs::chown_sync	NODE-FS-OWNER-001	Unix owner/group mutation through explicit platform binding; unsupported platforms fail explicitly
 NODE-FS-CLOSE	fs	closeSync	implemented	K	tsonic_node::fs::close_sync	NODE-FS-EXT-001	closed fd table
 NODE-FS-COPY-FILE	fs	copyFileSync	implemented	K	tsonic_node::fs::copy_file_sync	NODE-FS-001	file copy
 NODE-FS-CP	fs	cpSync	implemented	K	tsonic_node::fs::cp_sync	NODE-FS-EXT-002	recursive directory copy
 NODE-FS-EXISTS	fs	existsSync	implemented	K	tsonic_node::fs::exists_sync	NODE-FS-001	boolean existence
 NODE-FS-FCHMOD	fs	fchmodSync	implemented	K	tsonic_node::fs::fchmod_sync	NODE-FS-EXT-003	fd permission mutation through closed fd table
-NODE-FS-FCHOWN	fs	fchownSync	hard-reject	N0	n/a	REJECT-NODE-FS-OWNERSHIP	owner/group mutation requires platform-specific privileged APIs
+NODE-FS-FCHOWN	fs	fchownSync	implemented	N13	tsonic_node::fs::fchown_sync	NODE-FS-OWNER-001	fd owner/group mutation through explicit platform binding; unsupported platforms fail explicitly
 NODE-FS-FDATASYNC	fs	fdatasyncSync	implemented	K	tsonic_node::fs::fdatasync_sync	NODE-FS-EXT-001	file data sync
 NODE-FS-FSTAT	fs	fstatSync	implemented	K	tsonic_node::fs::fstat_sync	NODE-FS-EXT-001	fd stat
 NODE-FS-FSYNC	fs	fsyncSync	implemented	K	tsonic_node::fs::fsync_sync	NODE-FS-EXT-001	file sync
 NODE-FS-FTRUNCATE	fs	ftruncateSync	implemented	K	tsonic_node::fs::ftruncate_sync	NODE-FS-EXT-001	fd truncate
 NODE-FS-FUTIMES	fs	futimesSync	implemented	N13	tsonic_node::fs::futimes_sync	NODE-FS-TIME-001	fd timestamp mutation through approved filetime dependency
 NODE-FS-GLOB	fs	globSync	implemented	N10	tsonic_node::fs::glob_sync	NODE-FS-GLOB-001	deterministic glob expansion through approved dependency
-NODE-FS-LCHOWN	fs	lchownSync	hard-reject	N0	n/a	REJECT-NODE-FS-OWNERSHIP	owner/group mutation requires platform-specific privileged APIs
+NODE-FS-LCHOWN	fs	lchownSync	implemented	N13	tsonic_node::fs::lchown_sync	NODE-FS-OWNER-001	link owner/group mutation through explicit platform binding; unsupported platforms fail explicitly
 NODE-FS-LCHMOD	fs	lchmodSync	hard-reject	N0	n/a	REJECT-NODE-FS-LCHMOD	link permission mutation is platform-specific and unavailable on many targets
 NODE-FS-LSTAT	fs	lstatSync	implemented	K	tsonic_node::fs::lstat_sync	NODE-FS-001	symlink-aware stat
 NODE-FS-LUTIMES	fs	lutimesSync	implemented	N13	tsonic_node::fs::lutimes_sync	NODE-FS-TIME-001	link timestamp mutation through approved filetime dependency

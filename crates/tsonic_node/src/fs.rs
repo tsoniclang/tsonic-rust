@@ -196,6 +196,18 @@ pub fn fchmod_sync(fd: i32, mode: u32) -> NodeResult<()> {
     file.set_permissions(permissions).map_err(map_io_error)
 }
 
+pub fn chown_sync(path: &str, uid: u32, gid: u32) -> NodeResult<()> {
+    chown_impl(path, uid, gid)
+}
+
+pub fn lchown_sync(path: &str, uid: u32, gid: u32) -> NodeResult<()> {
+    lchown_impl(path, uid, gid)
+}
+
+pub fn fchown_sync(fd: i32, uid: u32, gid: u32) -> NodeResult<()> {
+    fchown_impl(fd, uid, gid)
+}
+
 pub fn statfs_sync(path: &str) -> NodeResult<StatFs> {
     statfs_impl(path)
 }
@@ -260,19 +272,86 @@ fn file_time_from_seconds(value: f64) -> NodeResult<FileTime> {
     Ok(FileTime::from_unix_time(seconds, nanos))
 }
 
-#[cfg(target_os = "linux")]
-fn statfs_impl(path: &str) -> NodeResult<StatFs> {
-    use std::ffi::CString;
-    use std::mem::MaybeUninit;
+#[cfg(unix)]
+fn chown_impl(path: &str, uid: u32, gid: u32) -> NodeResult<()> {
+    let path = path_cstring(path)?;
+    let result = unsafe { libc::chown(path.as_ptr(), uid, gid) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(map_io_error(std::io::Error::last_os_error()))
+    }
+}
+
+#[cfg(not(unix))]
+fn chown_impl(_path: &str, _uid: u32, _gid: u32) -> NodeResult<()> {
+    Err(NodeError::new(
+        "ERR_FEATURE_UNAVAILABLE",
+        "chown is currently implemented for Unix targets",
+    ))
+}
+
+#[cfg(unix)]
+fn lchown_impl(path: &str, uid: u32, gid: u32) -> NodeResult<()> {
+    let path = path_cstring(path)?;
+    let result = unsafe { libc::lchown(path.as_ptr(), uid, gid) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(map_io_error(std::io::Error::last_os_error()))
+    }
+}
+
+#[cfg(not(unix))]
+fn lchown_impl(_path: &str, _uid: u32, _gid: u32) -> NodeResult<()> {
+    Err(NodeError::new(
+        "ERR_FEATURE_UNAVAILABLE",
+        "lchown is currently implemented for Unix targets",
+    ))
+}
+
+#[cfg(unix)]
+fn fchown_impl(fd: i32, uid: u32, gid: u32) -> NodeResult<()> {
+    use std::os::fd::AsRawFd;
+
+    let table = file_table().lock().unwrap();
+    let file = table
+        .get(&fd)
+        .ok_or_else(|| NodeError::new("EBADF", "bad file descriptor"))?;
+    let result = unsafe { libc::fchown(file.as_raw_fd(), uid, gid) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(map_io_error(std::io::Error::last_os_error()))
+    }
+}
+
+#[cfg(not(unix))]
+fn fchown_impl(_fd: i32, _uid: u32, _gid: u32) -> NodeResult<()> {
+    Err(NodeError::new(
+        "ERR_FEATURE_UNAVAILABLE",
+        "fchown is currently implemented for Unix targets",
+    ))
+}
+
+#[cfg(unix)]
+fn path_cstring(path: &str) -> NodeResult<std::ffi::CString> {
     use std::os::unix::ffi::OsStrExt;
 
     let path = std::path::Path::new(path);
-    let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {
+    std::ffi::CString::new(path.as_os_str().as_bytes()).map_err(|_| {
         NodeError::new(
             "ERR_INVALID_ARG_VALUE",
             "path contains an interior NUL byte",
         )
-    })?;
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn statfs_impl(path: &str) -> NodeResult<StatFs> {
+    use std::mem::MaybeUninit;
+
+    let path = path_cstring(path)?;
     let mut stats = MaybeUninit::<libc::statfs>::uninit();
     let result = unsafe { libc::statfs(path.as_ptr(), stats.as_mut_ptr()) };
     if result != 0 {
