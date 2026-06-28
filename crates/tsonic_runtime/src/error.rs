@@ -52,3 +52,39 @@ impl fmt::Display for JsError {
 }
 
 impl std::error::Error for JsError {}
+
+/// Unified error type for generated Rust emitted by Tsonic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TsonicError {
+    Js(JsError),
+    Node { code: String, message: String },
+    Unsupported { message: String },
+}
+
+pub type TsonicResult<T> = Result<T, TsonicError>;
+
+impl TsonicError {
+    pub fn unsupported(message: impl Into<String>) -> Self {
+        Self::Unsupported {
+            message: message.into(),
+        }
+    }
+}
+
+impl From<JsError> for TsonicError {
+    fn from(value: JsError) -> Self {
+        Self::Js(value)
+    }
+}
+
+impl fmt::Display for TsonicError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TsonicError::Js(error) => write!(f, "{error}"),
+            TsonicError::Node { code, message } => write!(f, "{code}: {message}"),
+            TsonicError::Unsupported { message } => write!(f, "Unsupported: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for TsonicError {}

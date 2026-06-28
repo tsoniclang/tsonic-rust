@@ -1,5 +1,6 @@
 //! JS-facing closed APIs.
 
+pub mod abi;
 pub mod array;
 pub mod array_buffer;
 pub mod console;

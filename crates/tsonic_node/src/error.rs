@@ -32,3 +32,12 @@ impl fmt::Display for NodeError {
 impl std::error::Error for NodeError {}
 
 pub type NodeResult<T> = Result<T, NodeError>;
+
+impl From<NodeError> for tsonic_runtime::TsonicError {
+    fn from(value: NodeError) -> Self {
+        tsonic_runtime::TsonicError::Node {
+            code: value.code,
+            message: value.message,
+        }
+    }
+}

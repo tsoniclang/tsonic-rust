@@ -1,5 +1,6 @@
 //! Node runtime error surface.
 
+pub mod abi;
 pub mod buffer;
 pub mod crypto;
 pub mod error;

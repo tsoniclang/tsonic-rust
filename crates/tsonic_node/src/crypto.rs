@@ -81,6 +81,26 @@ impl Hash {
             Some(encoding) => Ok(DigestResult::String(decode_bytes(&bytes, Some(encoding))?)),
         }
     }
+
+    pub fn digest_string(self, encoding: &str) -> NodeResult<String> {
+        match self.digest(Some(encoding))? {
+            DigestResult::String(value) => Ok(value),
+            DigestResult::Buffer(_) => Err(NodeError::new(
+                "ERR_INVALID_RETURN_VALUE",
+                "hash string digest returned a buffer",
+            )),
+        }
+    }
+
+    pub fn digest_buffer(self) -> NodeResult<Buffer> {
+        match self.digest(None)? {
+            DigestResult::Buffer(value) => Ok(value),
+            DigestResult::String(_) => Err(NodeError::new(
+                "ERR_INVALID_RETURN_VALUE",
+                "hash buffer digest returned a string",
+            )),
+        }
+    }
 }
 
 fn sha1(input: &[u8]) -> [u8; 20] {

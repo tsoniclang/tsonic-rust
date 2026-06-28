@@ -48,6 +48,26 @@ pub fn read_file_sync(path: &str, encoding: Option<&str>) -> NodeResult<FsReadRe
     }
 }
 
+pub fn read_file_sync_string(path: &str, encoding: &str) -> NodeResult<String> {
+    match read_file_sync(path, Some(encoding))? {
+        FsReadResult::String(value) => Ok(value),
+        FsReadResult::Buffer(_) => Err(NodeError::new(
+            "ERR_INVALID_RETURN_VALUE",
+            "readFileSync string overload returned a buffer",
+        )),
+    }
+}
+
+pub fn read_file_sync_buffer(path: &str) -> NodeResult<Buffer> {
+    match read_file_sync(path, None)? {
+        FsReadResult::Buffer(value) => Ok(value),
+        FsReadResult::String(_) => Err(NodeError::new(
+            "ERR_INVALID_RETURN_VALUE",
+            "readFileSync buffer overload returned a string",
+        )),
+    }
+}
+
 pub fn write_file_sync(
     path: &str,
     data: FsWriteData<'_>,
@@ -59,6 +79,14 @@ pub fn write_file_sync(
         FsWriteData::Bytes(value) => value.to_vec(),
     };
     fs::write(path, bytes).map_err(map_io_error)
+}
+
+pub fn write_file_sync_string(path: &str, value: &str, encoding: &str) -> NodeResult<()> {
+    write_file_sync(path, FsWriteData::String(value), Some(encoding))
+}
+
+pub fn write_file_sync_buffer(path: &str, value: &Buffer) -> NodeResult<()> {
+    write_file_sync(path, FsWriteData::Buffer(value), None)
 }
 
 pub fn stat_sync(path: &str) -> NodeResult<Stats> {
