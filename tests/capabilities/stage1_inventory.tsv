@@ -168,6 +168,7 @@ NODE-PROCESS-005	implemented	J	tsonic_node::abi::process_*	NODE-PROC-006	testabl
 NODE-PROCESS-006	implemented	M	tsonic_node::abi::process_exit	completion tests	test-wrapper only until explicit process termination policy exists (completed in full-completion branch)
 NODE-PROCESS-007	implemented	N10	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	closed process event emitter shape for generated runtimes
 NODE-PROCESS-008	implemented	N13	tsonic_node::abi::{process_getuid,process_getgid,process_geteuid,process_getegid,process_getgroups}	NODE-PROC-IDENTITY-001	Unix process identity/group queries with explicit unsupported-target absence
+NODE-PROCESS-009	implemented	N13	tsonic_node::abi::process_kill	NODE-PROC-SIGNAL-001	Unix signal dispatch/probe with explicit unsupported-target failure
 NODE-OS-001	implemented	J	tsonic_node::abi::os_*	NODE-OS-001, NODE-OS-003	host shape tests
 NODE-OS-002	implemented	J	tsonic_node::abi::os_*	NODE-OS-002	no shared mutation assumptions
 NODE-OS-003	implemented	M	tsonic_node::abi::{os_cpus,os_loadavg,os_totalmem,os_freemem}	NODE-OS-004	platform inventory (completed in full-completion branch)
@@ -255,4 +256,4 @@ NODE-MOD-043	implemented	N5	tsonic_node::abi::{MessageChannel,Worker}	NODE-WORKE
 NODE-MOD-044	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
 NODE-MOD-045	hard-reject	M	n/a	REJECT-NODE-NAPI	native addon ABI not runtime surface
 NODE-MOD-046	hard-reject	M	n/a	REJECT-NODE-LOADER	module resolution belongs to compiler/provider, not runtime crate
-NODE-PROCESS-009	implemented	N5	tsonic_node::abi::process_next_tick	NODE-PROC-007	deterministic nextTick callback hook
+NODE-PROCESS-010	implemented	N5	tsonic_node::abi::process_next_tick	NODE-PROC-007	deterministic nextTick callback hook

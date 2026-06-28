@@ -134,6 +134,7 @@ NODE-PROCESS-PLATFORM	process	platform/arch	implemented	J	tsonic_node::process::
 NODE-PROCESS-EXIT	process	exit/exitCode	implemented	J	tsonic_node::process::{exit,exit_code,set_exit_code}	NODE-PROC-001	exit code state
 NODE-PROCESS-PID	process	pid	implemented	J	tsonic_node::process::pid	NODE-PROC-002	process id
 NODE-PROCESS-IDENTITY	process	getuid/getgid/geteuid/getegid/getgroups	implemented	N13	tsonic_node::process::{getuid,getgid,geteuid,getegid,getgroups}	NODE-PROC-IDENTITY-001	Unix process identity/group queries; unsupported platforms return explicit absence
+NODE-PROCESS-SIGNAL	process	kill	implemented	N13	tsonic_node::process::kill	NODE-PROC-SIGNAL-001	Unix process signal dispatch/probe; unsupported platforms fail explicitly
 NODE-PROCESS-VERSION	process	version/versions	implemented	J	tsonic_node::process::{version,versions}	NODE-PROC-002	stable tsonic runtime version shape
 NODE-PROCESS-TIME	process	uptime/hrtime/hrtime.bigint	implemented	J	tsonic_node::process::{uptime,hrtime,hrtime_bigint}	NODE-PROC-002	monotonic process timers
 NODE-PROCESS-MEMORY	process	memoryUsage	implemented	J	tsonic_node::process::memory_usage	NODE-PROC-002	RSS plus closed heap fields

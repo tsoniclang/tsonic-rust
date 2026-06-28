@@ -155,14 +155,14 @@ pub use crate::process::{
     exec_path as process_exec_path, exit as process_exit, exit_code as process_exit_code,
     getegid as process_getegid, geteuid as process_geteuid, getgid as process_getgid,
     getgroups as process_getgroups, getuid as process_getuid, hrtime as process_hrtime,
-    hrtime_bigint as process_hrtime_bigint, memory_usage as process_memory_usage,
-    next_tick as process_next_tick, pid as process_pid, platform as process_platform,
-    ppid as process_ppid, release as process_release, resource_usage as process_resource_usage,
-    set_exit_code as process_set_exit_code, stderr as process_stderr,
-    stdin_is_tty as process_stdin_is_tty, stdout as process_stdout, uptime as process_uptime,
-    version as process_version, versions as process_versions, CpuUsage as ProcessCpuUsage,
-    MemoryUsage as ProcessMemoryUsage, ProcessEvents, Release as ProcessRelease,
-    ResourceUsage as ProcessResourceUsage,
+    hrtime_bigint as process_hrtime_bigint, kill as process_kill,
+    memory_usage as process_memory_usage, next_tick as process_next_tick, pid as process_pid,
+    platform as process_platform, ppid as process_ppid, release as process_release,
+    resource_usage as process_resource_usage, set_exit_code as process_set_exit_code,
+    stderr as process_stderr, stdin_is_tty as process_stdin_is_tty, stdout as process_stdout,
+    uptime as process_uptime, version as process_version, versions as process_versions,
+    CpuUsage as ProcessCpuUsage, MemoryUsage as ProcessMemoryUsage, ProcessEvents,
+    Release as ProcessRelease, ResourceUsage as ProcessResourceUsage,
 };
 pub use crate::punycode::{to_ascii as punycode_to_ascii, to_unicode as punycode_to_unicode};
 pub use crate::querystring::{

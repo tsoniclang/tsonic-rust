@@ -116,6 +116,10 @@ pub fn getgroups() -> NodeResult<Vec<u32>> {
     getgroups_impl()
 }
 
+pub fn kill(pid: u32, signal: Option<i32>) -> NodeResult<bool> {
+    kill_impl(pid, signal.unwrap_or(15))
+}
+
 pub fn exec_path() -> NodeResult<String> {
     std::env::current_exe()
         .map(|path| path.to_string_lossy().to_string())
@@ -340,6 +344,31 @@ fn getgroups_impl() -> NodeResult<Vec<u32>> {
 #[cfg(not(unix))]
 fn getgroups_impl() -> NodeResult<Vec<u32>> {
     Ok(Vec::new())
+}
+
+#[cfg(unix)]
+fn kill_impl(pid: u32, signal: i32) -> NodeResult<bool> {
+    if pid > i32::MAX as u32 {
+        return Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "pid is outside pid_t range",
+        ));
+    }
+    let result = unsafe { libc::kill(pid as libc::pid_t, signal) };
+    if result == 0 {
+        Ok(true)
+    } else {
+        let error = std::io::Error::last_os_error();
+        Err(NodeError::new("ESRCH", error.to_string()))
+    }
+}
+
+#[cfg(not(unix))]
+fn kill_impl(_pid: u32, _signal: i32) -> NodeResult<bool> {
+    Err(NodeError::new(
+        "ERR_FEATURE_UNAVAILABLE",
+        "process.kill is currently implemented for Unix targets",
+    ))
 }
 
 #[cfg(target_os = "linux")]

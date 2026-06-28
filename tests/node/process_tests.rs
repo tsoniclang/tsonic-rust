@@ -46,6 +46,19 @@ fn process_identity_queries_use_platform_values() {
 }
 
 #[test]
+fn process_kill_exposes_signal_zero_probe() {
+    #[cfg(unix)]
+    {
+        assert!(process::kill(process::pid(), Some(0)).unwrap());
+        assert!(process::kill(u32::MAX, Some(0)).is_err());
+    }
+    #[cfg(not(unix))]
+    {
+        assert!(process::kill(process::pid(), Some(0)).is_err());
+    }
+}
+
+#[test]
 fn process_runtime_queries_have_stable_shapes() {
     assert!(process::pid() > 0);
     assert!(!process::version().is_empty());
