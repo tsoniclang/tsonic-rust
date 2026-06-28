@@ -186,6 +186,70 @@ impl<T> JsArray<T> {
             .map(|index| (index, self.get(index)))
             .collect()
     }
+
+    pub fn sort_by_js_string(&mut self)
+    where
+        T: Clone + crate::string::JsToString,
+    {
+        let mut present = self
+            .slots
+            .iter()
+            .filter_map(|slot| slot.as_ref().cloned())
+            .collect::<Vec<_>>();
+        present.sort_by_key(|item| item.to_js_string());
+        let present_len = present.len();
+        self.slots = present.into_iter().map(JsSlot::Present).collect();
+        self.slots
+            .resize_with(self.length.max(present_len), || JsSlot::Hole);
+    }
+
+    pub fn map<U, F>(&self, mut mapper: F) -> JsArray<U>
+    where
+        F: FnMut(&T) -> U,
+    {
+        let mut out = JsArray::with_length(self.length);
+        for (index, value) in self.values().into_iter().enumerate() {
+            if let Some(value) = value {
+                out.set(index, mapper(value));
+            }
+        }
+        out
+    }
+
+    pub fn filter<F>(&self, mut predicate: F) -> JsArray<T>
+    where
+        T: Clone,
+        F: FnMut(&T) -> bool,
+    {
+        JsArray::from_dense(
+            self.values()
+                .into_iter()
+                .flatten()
+                .filter(|value| predicate(value))
+                .cloned()
+                .collect(),
+        )
+    }
+
+    pub fn reduce<U, F>(&self, initial: U, mut reducer: F) -> U
+    where
+        F: FnMut(U, &T) -> U,
+    {
+        let mut acc = initial;
+        for value in self.values().into_iter().flatten() {
+            acc = reducer(acc, value);
+        }
+        acc
+    }
+
+    pub fn to_reversed(&self) -> Self
+    where
+        T: Clone,
+    {
+        let mut out = self.clone();
+        out.reverse();
+        out
+    }
 }
 
 impl<T> Default for JsArray<T> {

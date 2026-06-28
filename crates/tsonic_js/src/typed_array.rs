@@ -188,6 +188,26 @@ impl<T: TypedElement> TypedArray<T> {
         value.write_bytes(&mut bytes[start..end]);
     }
 
+    pub fn set_from_slice(&mut self, source: &[T], offset: usize) -> crate::JsResult<()> {
+        if offset + source.len() > self.len() {
+            return Err(crate::range_error("typed array set source out of bounds"));
+        }
+        for (index, value) in source.iter().copied().enumerate() {
+            self.set_index(offset + index, value);
+        }
+        Ok(())
+    }
+
+    pub fn map<U, F>(&self, mut mapper: F) -> Vec<U>
+    where
+        F: FnMut(T) -> U,
+    {
+        (0..self.len())
+            .filter_map(|index| self.get(index))
+            .map(&mut mapper)
+            .collect()
+    }
+
     pub fn fill(&mut self, value: T, start: isize, end: Option<isize>) {
         let (start, end) = normalize_range(self.len(), start, end);
         for index in start..end {

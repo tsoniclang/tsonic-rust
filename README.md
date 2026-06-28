@@ -9,5 +9,5 @@ Rust backend for Tsonic
 ## Stage 1 surface contract
 
 - `tests/capabilities/stage1_inventory.tsv` is the committed JS/Node surface ledger.
-- The ledger classifies every tracked surface row as `implemented`, `deferred`, or `hard-reject`.
+- The ledger classifies every tracked surface row as `implemented` or `hard-reject`; no deferred rows are allowed.
 - `tests/capability_ledger_tests.rs` gates API evidence, dead nested tests, dependency policy, and explicit unsupported classifications.

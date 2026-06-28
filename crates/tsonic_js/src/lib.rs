@@ -4,9 +4,11 @@ pub mod abi;
 pub mod array;
 pub mod array_buffer;
 pub mod console;
+pub mod data_view;
 pub mod date;
 pub mod equality;
 pub mod errors;
+pub mod globals;
 pub mod json;
 pub mod map;
 pub mod math;
@@ -16,11 +18,17 @@ pub mod regexp;
 pub mod set;
 pub mod string;
 pub mod typed_array;
+pub mod uri;
 pub mod value;
+pub mod wrappers;
 
 pub use array::{JsArray, JsSlot};
 pub use array_buffer::ArrayBuffer;
-pub use errors::{range_error, syntax_error, type_error, unsupported, JsResult};
+pub use data_view::DataView;
+pub use errors::{
+    aggregate_error, eval_error, range_error, reference_error, syntax_error, type_error,
+    unsupported, uri_error, JsResult,
+};
 pub use map::JsMap;
 pub use object::{JsObject, JsPropertyValue};
 pub use set::JsSet;

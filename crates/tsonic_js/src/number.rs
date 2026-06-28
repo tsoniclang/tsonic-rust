@@ -195,6 +195,33 @@ pub fn to_fixed(value: f64, digits: usize) -> Result<String, JsError> {
     Ok(format!("{value:.precision$}", precision = digits))
 }
 
+pub fn to_exponential(value: f64, digits: Option<usize>) -> Result<String, JsError> {
+    if let Some(digits) = digits {
+        if digits > 100 {
+            return Err(JsError::new(
+                JsErrorKind::RangeError,
+                "toExponential digits must be between 0 and 100",
+            ));
+        }
+        Ok(format!("{value:.digits$e}"))
+    } else {
+        Ok(format!("{value:e}"))
+    }
+}
+
+pub fn to_precision(value: f64, precision: Option<usize>) -> Result<String, JsError> {
+    let Some(precision) = precision else {
+        return Ok(value.to_string());
+    };
+    if !(1..=100).contains(&precision) {
+        return Err(JsError::new(
+            JsErrorKind::RangeError,
+            "toPrecision precision must be between 1 and 100",
+        ));
+    }
+    Ok(format!("{value:.precision$}"))
+}
+
 pub fn to_string_radix(value: f64, radix: Option<i32>) -> Result<String, JsError> {
     let base = radix.unwrap_or(10);
     if !(2..=36).contains(&base) {

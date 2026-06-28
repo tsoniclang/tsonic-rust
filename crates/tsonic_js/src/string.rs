@@ -109,6 +109,22 @@ pub fn substring(value: &str, start: isize, end: Option<isize>) -> String {
     from_units(&units[start as usize..end as usize])
 }
 
+pub fn substr(value: &str, start: isize, length: Option<usize>) -> String {
+    let units = utf16_units(value);
+    if units.is_empty() {
+        return String::new();
+    }
+    let start = if start < 0 {
+        (units.len() as isize + start).max(0) as usize
+    } else {
+        (start as usize).min(units.len())
+    };
+    let end = length
+        .map(|length| start.saturating_add(length).min(units.len()))
+        .unwrap_or(units.len());
+    from_units(&units[start..end])
+}
+
 pub fn index_of(value: &str, search: &str, position: isize) -> isize {
     if search.is_empty() {
         let len = js_len(value) as isize;
@@ -335,4 +351,15 @@ pub fn from_code_point(code_points: &[u32]) -> Result<String, JsError> {
         }
     }
     Ok(out)
+}
+
+pub fn raw(raw_parts: &[&str], substitutions: &[&str]) -> String {
+    let mut out = String::new();
+    for (index, part) in raw_parts.iter().enumerate() {
+        out.push_str(part);
+        if let Some(value) = substitutions.get(index) {
+            out.push_str(value);
+        }
+    }
+    out
 }

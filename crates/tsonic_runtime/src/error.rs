@@ -3,18 +3,26 @@ use std::fmt;
 /// Kinds of JS runtime errors supported by the closed Packet A runtime layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JsErrorKind {
+    AggregateError,
+    EvalError,
+    ReferenceError,
     TypeError,
     RangeError,
     SyntaxError,
+    URIError,
     Unsupported,
 }
 
 impl fmt::Display for JsErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let kind = match self {
+            JsErrorKind::AggregateError => "AggregateError",
+            JsErrorKind::EvalError => "EvalError",
+            JsErrorKind::ReferenceError => "ReferenceError",
             JsErrorKind::TypeError => "TypeError",
             JsErrorKind::RangeError => "RangeError",
             JsErrorKind::SyntaxError => "SyntaxError",
+            JsErrorKind::URIError => "URIError",
             JsErrorKind::Unsupported => "Unsupported",
         };
         write!(f, "{kind}")

@@ -12,6 +12,17 @@ impl<T> JsSet<T> {
         Self { values: Vec::new() }
     }
 
+    pub fn from_values(values: impl IntoIterator<Item = T>) -> Self
+    where
+        T: JsSameValueZero,
+    {
+        let mut set = Self::new();
+        for value in values {
+            set.add(value);
+        }
+        set
+    }
+
     pub fn len(&self) -> usize {
         self.values.len()
     }
@@ -67,6 +78,15 @@ impl<T> JsSet<T> {
 
     pub fn entries(&self) -> Vec<(&T, &T)> {
         self.values.iter().map(|value| (value, value)).collect()
+    }
+
+    pub fn for_each<F>(&self, mut callback: F)
+    where
+        F: FnMut(&T, &T, &Self),
+    {
+        for value in &self.values {
+            callback(value, value, self);
+        }
     }
 }
 

@@ -14,6 +14,18 @@ impl<K, V> JsMap<K, V> {
         }
     }
 
+    pub fn from_entries(entries: impl IntoIterator<Item = (K, V)>) -> Self
+    where
+        K: JsSameValueZero + Clone,
+        V: Clone,
+    {
+        let mut map = Self::new();
+        for (key, value) in entries {
+            map.set(key, value);
+        }
+        map
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -93,6 +105,15 @@ impl<K, V> JsMap<K, V> {
             .iter()
             .map(|(key, value)| (key, value))
             .collect()
+    }
+
+    pub fn for_each<F>(&self, mut callback: F)
+    where
+        F: FnMut(&V, &K, &Self),
+    {
+        for (key, value) in &self.entries {
+            callback(value, key, self);
+        }
     }
 
     pub fn into_entries(self) -> Vec<(K, V)> {

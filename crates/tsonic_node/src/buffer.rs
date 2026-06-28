@@ -117,6 +117,24 @@ impl Buffer {
         Buffer::from_bytes(out)
     }
 
+    pub fn read_uint32_le(&self, offset: usize) -> NodeResult<u32> {
+        let bytes = self.read_exact(offset, 4)?;
+        Ok(u32::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_uint32_be(&self, offset: usize) -> NodeResult<u32> {
+        let bytes = self.read_exact(offset, 4)?;
+        Ok(u32::from_be_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn write_uint32_le(&mut self, value: u32, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_le_bytes())
+    }
+
+    pub fn write_uint32_be(&mut self, value: u32, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_be_bytes())
+    }
+
     fn view(&self, start: isize, end: Option<isize>) -> Self {
         let (start, end) = normalize_range(self.len, start, end);
         Self {
@@ -129,13 +147,44 @@ impl Buffer {
     fn to_vec(&self) -> Vec<u8> {
         self.storage.borrow()[self.offset..self.offset + self.len].to_vec()
     }
+
+    fn read_exact(&self, offset: usize, len: usize) -> NodeResult<Vec<u8>> {
+        if offset + len > self.len {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "buffer offset out of range",
+            ));
+        }
+        Ok(self.storage.borrow()[self.offset + offset..self.offset + offset + len].to_vec())
+    }
+
+    fn write_exact(&mut self, offset: usize, bytes: &[u8]) -> NodeResult<()> {
+        if offset + bytes.len() > self.len {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "buffer offset out of range",
+            ));
+        }
+        self.storage.borrow_mut()[self.offset + offset..self.offset + offset + bytes.len()]
+            .copy_from_slice(bytes);
+        Ok(())
+    }
 }
 
 pub fn encode_string(value: &str, encoding: Option<&str>) -> NodeResult<Vec<u8>> {
     match normalize_encoding(encoding)? {
         Encoding::Utf8 => Ok(value.as_bytes().to_vec()),
+        Encoding::Latin1 => Ok(value.chars().map(|ch| (ch as u32 & 0xff) as u8).collect()),
+        Encoding::Utf16Le => Ok(value.encode_utf16().flat_map(u16::to_le_bytes).collect()),
         Encoding::Hex => decode_hex(value),
         Encoding::Base64 => decode_base64(value),
+        Encoding::Base64Url => {
+            let mut value = value.replace('-', "+").replace('_', "/");
+            while !value.len().is_multiple_of(4) {
+                value.push('=');
+            }
+            decode_base64(&value)
+        }
     }
 }
 
@@ -143,23 +192,42 @@ pub fn decode_bytes(bytes: &[u8], encoding: Option<&str>) -> NodeResult<String> 
     match normalize_encoding(encoding)? {
         Encoding::Utf8 => String::from_utf8(bytes.to_vec())
             .map_err(|error| NodeError::new("ERR_INVALID_ARG_VALUE", error.to_string())),
+        Encoding::Latin1 => Ok(bytes.iter().map(|byte| *byte as char).collect()),
+        Encoding::Utf16Le => {
+            let units = bytes
+                .chunks_exact(2)
+                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                .collect::<Vec<_>>();
+            Ok(String::from_utf16_lossy(&units))
+        }
         Encoding::Hex => Ok(encode_hex(bytes)),
         Encoding::Base64 => Ok(encode_base64(bytes)),
+        Encoding::Base64Url => Ok(encode_base64(bytes)
+            .replace('+', "-")
+            .replace('/', "_")
+            .trim_end_matches('=')
+            .to_string()),
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Encoding {
     Utf8,
+    Latin1,
+    Utf16Le,
     Hex,
     Base64,
+    Base64Url,
 }
 
 fn normalize_encoding(encoding: Option<&str>) -> NodeResult<Encoding> {
     match encoding.unwrap_or("utf8").to_ascii_lowercase().as_str() {
         "utf8" | "utf-8" => Ok(Encoding::Utf8),
+        "ascii" | "latin1" | "binary" => Ok(Encoding::Latin1),
+        "utf16le" | "ucs2" | "ucs-2" => Ok(Encoding::Utf16Le),
         "hex" => Ok(Encoding::Hex),
         "base64" => Ok(Encoding::Base64),
+        "base64url" => Ok(Encoding::Base64Url),
         other => Err(NodeError::new(
             "ERR_UNKNOWN_ENCODING",
             format!("unknown encoding `{other}`"),

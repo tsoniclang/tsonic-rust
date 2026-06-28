@@ -1,5 +1,11 @@
 use crate::error::{NodeError, NodeResult};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CpuInfo {
+    pub model: String,
+    pub speed: u32,
+}
+
 pub fn platform() -> String {
     crate::process::platform()
 }
@@ -26,6 +32,84 @@ pub fn homedir() -> Option<String> {
         .or_else(|| std::env::var("USERPROFILE").ok())
 }
 
+pub fn hostname() -> String {
+    std::env::var("HOSTNAME")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| std::fs::read_to_string("/etc/hostname").ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "localhost".to_string())
+}
+
+pub fn r#type() -> String {
+    if cfg!(target_os = "windows") {
+        "Windows_NT"
+    } else if cfg!(target_os = "macos") {
+        "Darwin"
+    } else if cfg!(target_os = "linux") {
+        "Linux"
+    } else {
+        std::env::consts::OS
+    }
+    .to_string()
+}
+
+pub fn release() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(value) = std::fs::read_to_string("/proc/sys/kernel/osrelease") {
+            return value.trim().to_string();
+        }
+    }
+    String::new()
+}
+
+pub fn cpus() -> Vec<CpuInfo> {
+    let count = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1);
+    (0..count)
+        .map(|_| CpuInfo {
+            model: std::env::consts::ARCH.to_string(),
+            speed: 0,
+        })
+        .collect()
+}
+
+pub fn loadavg() -> [f64; 3] {
+    [0.0, 0.0, 0.0]
+}
+
+pub fn totalmem() -> u64 {
+    meminfo_kb("MemTotal").map(|kb| kb * 1024).unwrap_or(0)
+}
+
+pub fn freemem() -> u64 {
+    meminfo_kb("MemAvailable")
+        .or_else(|| meminfo_kb("MemFree"))
+        .map(|kb| kb * 1024)
+        .unwrap_or(0)
+}
+
 pub fn unavailable(message: &str) -> NodeError {
     NodeError::new("ERR_UNSUPPORTED_OPERATION", message)
+}
+
+#[cfg(target_os = "linux")]
+fn meminfo_kb(key: &str) -> Option<u64> {
+    let meminfo = std::fs::read_to_string("/proc/meminfo").ok()?;
+    for line in meminfo.lines() {
+        let (name, rest) = line.split_once(':')?;
+        if name != key {
+            continue;
+        }
+        return rest.split_whitespace().next()?.parse::<u64>().ok();
+    }
+    None
+}
+
+#[cfg(not(target_os = "linux"))]
+fn meminfo_kb(_key: &str) -> Option<u64> {
+    None
 }

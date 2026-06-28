@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 
 const INVENTORY: &str = include_str!("capabilities/stage1_inventory.tsv");
 const EXPECTED_ROW_COUNT: usize = 238;
-const EXPECTED_IMPLEMENTED_COUNT: usize = 114;
-const EXPECTED_DEFERRED_COUNT: usize = 68;
-const EXPECTED_HARD_REJECT_COUNT: usize = 56;
+const EXPECTED_IMPLEMENTED_COUNT: usize = 156;
+const EXPECTED_DEFERRED_COUNT: usize = 0;
+const EXPECTED_HARD_REJECT_COUNT: usize = 82;
 
 #[derive(Clone, Debug)]
 struct CapabilityRow {
@@ -32,10 +32,7 @@ fn stage1_inventory_has_complete_classification() {
             row.id
         );
         assert!(
-            matches!(
-                row.status.as_str(),
-                "implemented" | "deferred" | "hard-reject"
-            ),
+            matches!(row.status.as_str(), "implemented" | "hard-reject"),
             "unexpected status {} for {}",
             row.status,
             row.id
@@ -74,7 +71,7 @@ fn implemented_rows_have_api_and_test_evidence() {
             row.id
         );
         assert!(
-            !row.evidence.starts_with("DEFER-") && !row.evidence.starts_with("REJECT-"),
+            !row.evidence.contains("DEFER-") && !row.evidence.contains("REJECT-"),
             "implemented row {} points at non-implemented evidence {}",
             row.id,
             row.evidence
@@ -96,24 +93,18 @@ fn implemented_rows_have_api_and_test_evidence() {
 fn deferred_and_hard_reject_rows_are_explicit() {
     for row in inventory_rows()
         .into_iter()
-        .filter(|row| row.status == "deferred" || row.status == "hard-reject")
+        .filter(|row| row.status == "hard-reject")
     {
         assert_eq!(
             row.rust_api, "n/a",
             "{} should not expose a Rust API",
             row.id
         );
-        let required_prefix = if row.status == "deferred" {
-            "DEFER-"
-        } else {
-            "REJECT-"
-        };
         assert!(
-            row.evidence.starts_with(required_prefix),
-            "{} row {} must use {} evidence, got {}",
+            row.evidence.starts_with("REJECT-"),
+            "{} row {} must use REJECT evidence, got {}",
             row.status,
             row.id,
-            required_prefix,
             row.evidence
         );
         assert!(!row.notes.is_empty(), "{} needs a reason", row.id);

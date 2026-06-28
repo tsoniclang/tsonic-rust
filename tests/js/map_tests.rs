@@ -22,3 +22,13 @@ fn map_uses_same_value_zero_for_nan() {
     map.set(-0.0, "zero");
     assert_eq!(map.get(&0.0), Some(&"zero"));
 }
+
+#[test]
+fn map_iterable_constructor_and_for_each_are_closed() {
+    let map = tsonic_js::JsMap::from_entries([(1, "a"), (1, "b"), (2, "c")]);
+    assert_eq!(map.len(), 2);
+    assert_eq!(map.get(&1), Some(&"b"));
+    let mut seen = Vec::new();
+    map.for_each(|value, key, _| seen.push((*key, *value)));
+    assert_eq!(seen, vec![(1, "b"), (2, "c")]);
+}

@@ -230,6 +230,119 @@ pub fn clear<T>(array: &mut Vec<T>) {
     array.clear();
 }
 
+pub fn sort_by_js_string<T>(array: &mut [T])
+where
+    T: crate::string::JsToString,
+{
+    array.sort_by_key(|item| item.to_js_string());
+}
+
+pub fn sort_by<T, F>(array: &mut [T], compare: F)
+where
+    F: FnMut(&T, &T) -> std::cmp::Ordering,
+{
+    array.sort_by(compare);
+}
+
+pub fn to_sorted_by_js_string<T>(array: &[T]) -> Vec<T>
+where
+    T: Clone + crate::string::JsToString,
+{
+    let mut out = array.to_vec();
+    sort_by_js_string(&mut out);
+    out
+}
+
+pub fn to_reversed<T: Clone>(array: &[T]) -> Vec<T> {
+    let mut out = array.to_vec();
+    out.reverse();
+    out
+}
+
+pub fn to_spliced<T: Clone>(
+    array: &[T],
+    start: isize,
+    delete_count: usize,
+    items: Vec<T>,
+) -> Vec<T> {
+    let mut out = array.to_vec();
+    splice(&mut out, start, delete_count, items);
+    out
+}
+
+pub fn with<T: Clone>(array: &[T], index: isize, value: T) -> Option<Vec<T>> {
+    let index = normalize_index(array.len(), index)?;
+    let mut out = array.to_vec();
+    out[index] = value;
+    Some(out)
+}
+
+pub fn map<T, U, F>(array: &[T], mapper: F) -> Vec<U>
+where
+    F: FnMut(&T) -> U,
+{
+    array.iter().map(mapper).collect()
+}
+
+pub fn filter<T, F>(array: &[T], mut predicate: F) -> Vec<T>
+where
+    T: Clone,
+    F: FnMut(&T) -> bool,
+{
+    array
+        .iter()
+        .filter(|item| predicate(item))
+        .cloned()
+        .collect()
+}
+
+pub fn reduce<T, U, F>(array: &[T], initial: U, reducer: F) -> U
+where
+    F: FnMut(U, &T) -> U,
+{
+    array.iter().fold(initial, reducer)
+}
+
+pub fn some<T, F>(array: &[T], predicate: F) -> bool
+where
+    F: FnMut(&T) -> bool,
+{
+    array.iter().any(predicate)
+}
+
+pub fn every<T, F>(array: &[T], predicate: F) -> bool
+where
+    F: FnMut(&T) -> bool,
+{
+    array.iter().all(predicate)
+}
+
+pub fn find<T, F>(array: &[T], mut predicate: F) -> Option<&T>
+where
+    F: FnMut(&T) -> bool,
+{
+    array.iter().find(|item| predicate(item))
+}
+
+pub fn for_each<T, F>(array: &[T], callback: F)
+where
+    F: FnMut(&T),
+{
+    array.iter().for_each(callback);
+}
+
+pub fn flat_one<T: Clone>(array: &[Vec<T>]) -> Vec<T> {
+    array.iter().flat_map(|item| item.iter().cloned()).collect()
+}
+
+pub fn flat_map_one<T, U, F>(array: &[T], mut mapper: F) -> Vec<U>
+where
+    U: Clone,
+    F: FnMut(&T) -> Vec<U>,
+{
+    array.iter().flat_map(&mut mapper).collect()
+}
+
 fn normalize_index(len: usize, index: isize) -> Option<usize> {
     if len == 0 {
         return None;

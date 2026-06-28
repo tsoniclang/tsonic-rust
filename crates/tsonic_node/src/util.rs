@@ -42,6 +42,54 @@ pub fn is_deep_strict_equal(left: &JsValue, right: &JsValue) -> bool {
     left == right
 }
 
+pub mod types {
+    use tsonic_js::value::JsValue;
+
+    pub fn is_boolean(value: &JsValue) -> bool {
+        matches!(value, JsValue::Bool(_))
+    }
+
+    pub fn is_null(value: &JsValue) -> bool {
+        matches!(value, JsValue::Null)
+    }
+
+    pub fn is_null_or_undefined(value: &JsValue) -> bool {
+        matches!(value, JsValue::Null | JsValue::Undefined)
+    }
+
+    pub fn is_undefined(value: &JsValue) -> bool {
+        matches!(value, JsValue::Undefined)
+    }
+
+    pub fn is_number(value: &JsValue) -> bool {
+        matches!(value, JsValue::Number(_))
+    }
+
+    pub fn is_string(value: &JsValue) -> bool {
+        matches!(value, JsValue::String(_))
+    }
+
+    pub fn is_object(value: &JsValue) -> bool {
+        matches!(value, JsValue::Object(_))
+    }
+
+    pub fn is_array(value: &JsValue) -> bool {
+        matches!(value, JsValue::Array(_))
+    }
+
+    pub fn is_any_array_buffer(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_reg_exp(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_date(_value: &JsValue) -> bool {
+        false
+    }
+}
+
 fn next_arg<'a>(args: &'a [JsValue], index: &mut usize) -> &'a JsValue {
     let value = args.get(*index).unwrap_or(&JsValue::Undefined);
     *index += 1;
