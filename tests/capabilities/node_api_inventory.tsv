@@ -42,6 +42,7 @@ NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluat
 NODE-MODULE-SQLITE	sqlite	module	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency
 NODE-MODULE-STREAM	stream	module	implemented	N3	tsonic_node::stream	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
 NODE-MODULE-STRING-DECODER	string_decoder	module	implemented	N1	tsonic_node::string_decoder	NODE-MISC-003	UTF-8 string decoder subset
+NODE-STRING-DECODER-STATE	string_decoder	StringDecoder streaming state	implemented	N29	tsonic_node::string_decoder::StringDecoder	NODE-STRING-DECODER-001	streaming UTF-8 partial sequence buffering and replacement on end
 NODE-MODULE-TEST	test	module	hard-reject	N0	n/a	REJECT-NODE-TEST	test runner module excluded from generated runtime ABI
 NODE-MODULE-TIMERS	timers	module	implemented	N3	tsonic_node::timers	NODE-TIMERS-001	deterministic timer handles and callback execution
 NODE-MODULE-TLS	tls	module	implemented	N9	tsonic_node::tls	NODE-TLS-001	TLS identity/options and HTTPS connect helper over approved rustls transport

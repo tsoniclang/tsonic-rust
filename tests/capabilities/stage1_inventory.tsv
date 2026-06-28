@@ -259,6 +259,7 @@ NODE-MOD-031	implemented	N3	tsonic_node::abi::{Readable,Writable,stream_pipeline
 NODE-STREAM-CONSUMERS-001	implemented	N11	tsonic_node::stream::consumers::{buffer,text,array_buffer,blob,json}	NODE-STREAM-002	closed stream consumers over Buffer, ArrayBuffer, Blob, text, and JSON carriers
 NODE-STREAM-WEB-001	implemented	N11	tsonic_node::stream::web::{ReadableStream,WritableStream,TransformStream}	NODE-STREAM-003	closed Web stream reader, writer, pipe, and transform carrier shape
 NODE-MOD-032	implemented	M	tsonic_node::abi::StringDecoder	NODE-MISC-002	Buffer encoding subset first; decoder state machine later (completed in full-completion branch)
+NODE-STRING-DECODER-001	implemented	N29	tsonic_node::abi::StringDecoder	NODE-STRING-DECODER-001	streaming UTF-8 partial sequence buffering and replacement on end
 NODE-MOD-033	hard-reject	M	n/a	REJECT-NODE-TEST	test runner/reporters not runtime surface
 NODE-MOD-034	implemented	N3	tsonic_node::abi::{set_timeout,set_immediate,Timeout}	NODE-TIMERS-001	deterministic timer handles and callback execution
 NODE-MOD-035	implemented	N9	tsonic_node::tls	NODE-TLS-001	TLS identity/options and HTTPS connect helper over approved rustls transport

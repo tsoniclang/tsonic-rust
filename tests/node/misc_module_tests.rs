@@ -131,8 +131,15 @@ fn querystring_and_string_decoder_use_existing_closed_parsers() {
         b"hello world".to_vec()
     );
 
-    let decoder = string_decoder::StringDecoder::new(Some("utf8"));
+    let mut decoder = string_decoder::StringDecoder::new(Some("utf8"));
+    assert_eq!(decoder.encoding(), "utf8");
     assert_eq!(decoder.write(b"hi").unwrap(), "hi");
+    assert_eq!(decoder.write(&[0xE2]).unwrap(), "");
+    assert_eq!(decoder.pending_len(), 1);
+    assert_eq!(decoder.write(&[0x82, 0xAC]).unwrap(), "€");
+    assert_eq!(decoder.pending_len(), 0);
+    assert_eq!(decoder.write(&[0xF0, 0x9F]).unwrap(), "");
+    assert_eq!(decoder.end(None).unwrap(), "�");
     assert_eq!(decoder.end(None).unwrap(), "");
 }
 
