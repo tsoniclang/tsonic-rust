@@ -1,13 +1,52 @@
 use std::collections::BTreeMap;
 
 use crate::error::{NodeError, NodeResult};
-use crate::http::Response;
+use crate::http::{IncomingMessage, Response, ServerResponse};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestOptions {
     pub url: String,
     pub method: String,
     pub headers: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ServerOptions {
+    pub key: Option<String>,
+    pub cert: Option<String>,
+    pub ca: Vec<String>,
+    pub alpn_protocols: Vec<String>,
+}
+
+type HttpsRequestHandler = dyn Fn(IncomingMessage, &mut ServerResponse) + Send + Sync;
+
+pub struct Server {
+    options: ServerOptions,
+    handler: Box<HttpsRequestHandler>,
+}
+
+impl Server {
+    pub fn new(
+        options: ServerOptions,
+        handler: impl Fn(IncomingMessage, &mut ServerResponse) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            options,
+            handler: Box::new(handler),
+        }
+    }
+
+    pub fn options(&self) -> &ServerOptions {
+        &self.options
+    }
+
+    pub fn handle(&self, request: IncomingMessage) -> Response {
+        let mut response = ServerResponse::new();
+        (self.handler)(request, &mut response);
+        response.to_response()
+    }
+
+    pub fn close(&self) {}
 }
 
 impl RequestOptions {
@@ -18,6 +57,13 @@ impl RequestOptions {
             headers: BTreeMap::new(),
         }
     }
+}
+
+pub fn create_server(
+    options: ServerOptions,
+    handler: impl Fn(IncomingMessage, &mut ServerResponse) + Send + Sync + 'static,
+) -> Server {
+    Server::new(options, handler)
 }
 
 pub fn get(url: &str) -> NodeResult<Response> {

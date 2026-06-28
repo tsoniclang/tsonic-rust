@@ -95,11 +95,15 @@ pub use crate::http::{
     ServerResponse as HttpServerResponse,
 };
 pub use crate::http2::{
-    connect as http2_connect, request as http2_request,
-    ClientSessionOptions as Http2ClientSessionOptions,
+    connect as http2_connect, connect_session as http2_connect_session,
+    create_secure_server as http2_create_secure_server, create_server as http2_create_server,
+    request as http2_request, ClientSessionOptions as Http2ClientSessionOptions, Http2Server,
+    Http2Session, Http2Stream, ServerOptions as Http2ServerOptions,
 };
 pub use crate::https::{
-    get as https_get, request as https_request, RequestOptions as HttpsRequestOptions,
+    create_server as https_create_server, get as https_get, request as https_request,
+    RequestOptions as HttpsRequestOptions, Server as HttpsServer,
+    ServerOptions as HttpsServerOptions,
 };
 pub use crate::module::{
     builtin_modules as module_builtin_modules, create_require as module_create_require,
@@ -167,8 +171,10 @@ pub use crate::timers::{
     set_interval, set_timeout, Immediate, Timeout, Timer,
 };
 pub use crate::tls::{
-    check_server_identity as tls_check_server_identity, connect_get as tls_connect_get,
+    check_server_identity as tls_check_server_identity, connect as tls_connect,
+    connect_get as tls_connect_get, create_secure_context as tls_create_secure_context,
     default_port as tls_default_port, ConnectOptions as TlsConnectOptions,
+    SecureContext as TlsSecureContext, SecureContextOptions as TlsSecureContextOptions, TlsSocket,
 };
 pub use crate::tty::{
     isatty as tty_isatty, ReadStream as TtyReadStream, WriteStream as TtyWriteStream,

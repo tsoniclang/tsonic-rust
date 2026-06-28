@@ -45,14 +45,47 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     assert_eq!(tsonic_node::tls::default_port(), 443);
     assert!(tsonic_node::tls::check_server_identity("example.com").is_ok());
     assert!(tsonic_node::tls::check_server_identity("https://example.com").is_err());
+    let mut tls_options = tsonic_node::tls::ConnectOptions::new("example.com", 443);
+    tls_options.alpn_protocols.push("h2".to_string());
+    let socket = tsonic_node::tls::connect(&tls_options).unwrap();
+    assert_eq!(socket.servername(), "example.com");
+    assert!(socket.authorized());
+    assert_eq!(socket.alpn_protocol(), Some("h2"));
+    let context = tsonic_node::tls::create_secure_context(tsonic_node::tls::SecureContextOptions {
+        key: Some("key".to_string()),
+        cert: Some("cert".to_string()),
+        ca: vec!["ca".to_string()],
+        alpn_protocols: vec!["h2".to_string()],
+    });
+    assert_eq!(context.options().alpn_protocols, vec!["h2".to_string()]);
 
     let https_options = tsonic_node::https::RequestOptions::get("https://example.com/");
     assert_eq!(https_options.method, "GET");
     assert!(tsonic_node::https::get("http://example.com/").is_err());
+    let https_server = tsonic_node::https::create_server(
+        tsonic_node::https::ServerOptions::default(),
+        |_, response| response.end(None),
+    );
+    assert!(https_server.options().ca.is_empty());
 
     let http2 = tsonic_node::http2::connect("https://example.com").unwrap();
     assert_eq!(http2.authority, "https://example.com");
     assert!(tsonic_node::http2::connect("example.com").is_err());
+    let mut session = tsonic_node::http2::connect_session("https://example.com").unwrap();
+    assert_eq!(session.authority(), "https://example.com");
+    assert!(!session.closed());
+    session.close();
+    assert!(session.closed());
+    let server = tsonic_node::http2::create_secure_server(tsonic_node::http2::ServerOptions {
+        allow_http1: true,
+        settings: BTreeMap::new(),
+    });
+    assert!(server.secure());
+    assert!(server.options().allow_http1);
+    let mut stream = tsonic_node::http2::Http2Stream::new(BTreeMap::new());
+    stream.write(b"hello");
+    assert_eq!(stream.data(), b"hello");
+    stream.end();
 }
 
 #[test]
