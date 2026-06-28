@@ -645,8 +645,91 @@ NODE-MODULE-STRIP-TS-MODE	module	StripTypeScriptMode	implemented	N74	tsonic_node
 NODE-MODULE-STRIP-TS-OPTIONS	module	StripTypeScriptTypesOptions	implemented	N74	tsonic_node::module::StripTypeScriptTypesOptions	NODE-MODULE-002	closed strip TypeScript options carrier
 NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
 NODE-MODULE-OS	os	module	implemented	J	tsonic_node::os	NODE-OS-001	closed OS query helpers
-NODE-OS-CONSTANTS	os	constants/userInfo options	implemented	N31	tsonic_node::os::{constants,user_info_with_options,OsConstants,UserInfoOptions}	NODE-OS-004	errno, signal, priority, dlopen, uv constants and userInfo option shape
-NODE-OS-CONSTANTS-EXT	os	errno Windows aliases and extended POSIX names	implemented	N50	tsonic_node::os::constants	NODE-OS-005	expanded closed errno constants table including high-use POSIX names and WSA aliases without host introspection
+NODE-PATH-POSIX-SEP	path	posix.sep	implemented	N61	tsonic_node::path::posix::sep	NODE-PATH-001	explicit posix path sep helper
+NODE-PATH-POSIX-DELIMITER	path	posix.delimiter	implemented	N61	tsonic_node::path::posix::delimiter	NODE-PATH-001	explicit posix path delimiter helper
+NODE-PATH-POSIX-BASENAME	path	posix.basename	implemented	N61	tsonic_node::path::posix::basename	NODE-PATH-001	explicit posix path basename helper
+NODE-PATH-POSIX-DIRNAME	path	posix.dirname	implemented	N61	tsonic_node::path::posix::dirname	NODE-PATH-001	explicit posix path dirname helper
+NODE-PATH-POSIX-EXTNAME	path	posix.extname	implemented	N61	tsonic_node::path::posix::extname	NODE-PATH-001	explicit posix path extname helper
+NODE-PATH-POSIX-FORMAT	path	posix.format	implemented	N61	tsonic_node::path::posix::format	NODE-PATH-001	explicit posix path format helper
+NODE-PATH-POSIX-ISABSOLUTE	path	posix.isAbsolute	implemented	N61	tsonic_node::path::posix::is_absolute	NODE-PATH-001	explicit posix path isAbsolute helper
+NODE-PATH-POSIX-JOIN	path	posix.join	implemented	N61	tsonic_node::path::posix::join	NODE-PATH-001	explicit posix path join helper
+NODE-PATH-POSIX-NORMALIZE	path	posix.normalize	implemented	N61	tsonic_node::path::posix::normalize	NODE-PATH-001	explicit posix path normalize helper
+NODE-PATH-POSIX-PARSE	path	posix.parse	implemented	N61	tsonic_node::path::posix::parse	NODE-PATH-001	explicit posix path parse helper
+NODE-PATH-POSIX-RELATIVE	path	posix.relative	implemented	N61	tsonic_node::path::posix::relative	NODE-PATH-001	explicit posix path relative helper
+NODE-PATH-WIN32-SEP	path	win32.sep	implemented	N61	tsonic_node::path::win32::sep	NODE-PATH-001	explicit win32 path sep helper
+NODE-PATH-WIN32-DELIMITER	path	win32.delimiter	implemented	N61	tsonic_node::path::win32::delimiter	NODE-PATH-001	explicit win32 path delimiter helper
+NODE-PATH-WIN32-BASENAME	path	win32.basename	implemented	N61	tsonic_node::path::win32::basename	NODE-PATH-001	explicit win32 path basename helper
+NODE-PATH-WIN32-DIRNAME	path	win32.dirname	implemented	N61	tsonic_node::path::win32::dirname	NODE-PATH-001	explicit win32 path dirname helper
+NODE-PATH-WIN32-EXTNAME	path	win32.extname	implemented	N61	tsonic_node::path::win32::extname	NODE-PATH-001	explicit win32 path extname helper
+NODE-PATH-WIN32-FORMAT	path	win32.format	implemented	N61	tsonic_node::path::win32::format	NODE-PATH-001	explicit win32 path format helper
+NODE-PATH-WIN32-ISABSOLUTE	path	win32.isAbsolute	implemented	N61	tsonic_node::path::win32::is_absolute	NODE-PATH-001	explicit win32 path isAbsolute helper
+NODE-PATH-WIN32-JOIN	path	win32.join	implemented	N61	tsonic_node::path::win32::join	NODE-PATH-001	explicit win32 path join helper
+NODE-PATH-WIN32-NORMALIZE	path	win32.normalize	implemented	N61	tsonic_node::path::win32::normalize	NODE-PATH-001	explicit win32 path normalize helper
+NODE-PATH-WIN32-PARSE	path	win32.parse	implemented	N61	tsonic_node::path::win32::parse	NODE-PATH-001	explicit win32 path parse helper
+NODE-PATH-WIN32-RELATIVE	path	win32.relative	implemented	N61	tsonic_node::path::win32::relative	NODE-PATH-001	explicit win32 path relative helper
+NODE-PATH-SEP	path	sep	implemented	J	tsonic_node::path::sep	NODE-PATH-001	platform path separator
+NODE-PATH-DELIMITER	path	delimiter	implemented	J	tsonic_node::path::delimiter	NODE-PATH-001	platform path delimiter
+NODE-PATH-PARSED-PATH-CARRIER	path	ParsedPath	implemented	N61	tsonic_node::path::ParsedPath	NODE-PATH-001	closed ParsedPath carrier
+NODE-PATH-PARSED-PATH-ROOT	path	ParsedPath.root	implemented	N61	tsonic_node::path::ParsedPath::root	NODE-PATH-001	parsed path root field
+NODE-PATH-PARSED-PATH-DIR	path	ParsedPath.dir	implemented	N61	tsonic_node::path::ParsedPath::dir	NODE-PATH-001	parsed path dir field
+NODE-PATH-PARSED-PATH-BASE	path	ParsedPath.base	implemented	N61	tsonic_node::path::ParsedPath::base	NODE-PATH-001	parsed path base field
+NODE-PATH-PARSED-PATH-EXT	path	ParsedPath.ext	implemented	N61	tsonic_node::path::ParsedPath::ext	NODE-PATH-001	parsed path ext field
+NODE-PATH-PARSED-PATH-NAME	path	ParsedPath.name	implemented	N61	tsonic_node::path::ParsedPath::name	NODE-PATH-001	parsed path name field
+NODE-OS-CPUTIMES-CARRIER	os	CpuTimes	implemented	N67	tsonic_node::os::CpuTimes	NODE-OS-001	closed CPU times carrier
+NODE-OS-CPUTIMES-USER	os	CpuTimes.user	implemented	N67	tsonic_node::os::CpuTimes::user	NODE-OS-001	CPU user time field
+NODE-OS-CPUTIMES-NICE	os	CpuTimes.nice	implemented	N67	tsonic_node::os::CpuTimes::nice	NODE-OS-001	CPU nice time field
+NODE-OS-CPUTIMES-SYS	os	CpuTimes.sys	implemented	N67	tsonic_node::os::CpuTimes::sys	NODE-OS-001	CPU system time field
+NODE-OS-CPUTIMES-IDLE	os	CpuTimes.idle	implemented	N67	tsonic_node::os::CpuTimes::idle	NODE-OS-001	CPU idle time field
+NODE-OS-CPUTIMES-IRQ	os	CpuTimes.irq	implemented	N67	tsonic_node::os::CpuTimes::irq	NODE-OS-001	CPU IRQ time field
+NODE-OS-CPUINFO-CARRIER	os	CpuInfo	implemented	N67	tsonic_node::os::CpuInfo	NODE-OS-001	closed CPU info carrier
+NODE-OS-CPUINFO-MODEL	os	CpuInfo.model	implemented	N67	tsonic_node::os::CpuInfo::model	NODE-OS-001	CPU model field
+NODE-OS-CPUINFO-SPEED	os	CpuInfo.speed	implemented	N67	tsonic_node::os::CpuInfo::speed	NODE-OS-001	CPU speed field
+NODE-OS-CPUINFO-TIMES	os	CpuInfo.times	implemented	N67	tsonic_node::os::CpuInfo::times	NODE-OS-001	CPU times field
+NODE-OS-NETWORK-INFO-CARRIER	os	NetworkInterfaceInfo	implemented	N50	tsonic_node::os::NetworkInterfaceInfo	NODE-OS-005	closed network interface info carrier
+NODE-OS-NETWORK-INFO-ADDRESS	os	NetworkInterfaceInfo.address	implemented	N50	tsonic_node::os::NetworkInterfaceInfo::address	NODE-OS-005	network interface address field
+NODE-OS-NETWORK-INFO-NETMASK	os	NetworkInterfaceInfo.netmask	implemented	N50	tsonic_node::os::NetworkInterfaceInfo::netmask	NODE-OS-005	network interface netmask field
+NODE-OS-NETWORK-INFO-FAMILY	os	NetworkInterfaceInfo.family	implemented	N50	tsonic_node::os::NetworkInterfaceInfo::family	NODE-OS-005	network interface family field
+NODE-OS-NETWORK-INFO-MAC	os	NetworkInterfaceInfo.mac	implemented	N50	tsonic_node::os::NetworkInterfaceInfo::mac	NODE-OS-005	network interface MAC field
+NODE-OS-NETWORK-INFO-INTERNAL	os	NetworkInterfaceInfo.internal	implemented	N50	tsonic_node::os::NetworkInterfaceInfo::internal	NODE-OS-005	network interface internal field
+NODE-OS-NETWORK-INFO-CIDR	os	NetworkInterfaceInfo.cidr	implemented	N50	tsonic_node::os::NetworkInterfaceInfo::cidr	NODE-OS-005	network interface CIDR field
+NODE-OS-NETWORK-INFO-SCOPEID	os	NetworkInterfaceInfo.scopeid	implemented	N50	tsonic_node::os::NetworkInterfaceInfo::scopeid	NODE-OS-005	network interface scope id field
+NODE-OS-USERINFO-CARRIER	os	UserInfo	implemented	N67	tsonic_node::os::UserInfo	NODE-OS-004	closed user info carrier
+NODE-OS-USERINFO-USERNAME	os	UserInfo.username	implemented	N67	tsonic_node::os::UserInfo::username	NODE-OS-004	user name field
+NODE-OS-USERINFO-HOMEDIR	os	UserInfo.homedir	implemented	N67	tsonic_node::os::UserInfo::homedir	NODE-OS-004	user home directory field
+NODE-OS-USERINFO-SHELL	os	UserInfo.shell	implemented	N67	tsonic_node::os::UserInfo::shell	NODE-OS-004	user shell field
+NODE-OS-USERINFO-UID	os	UserInfo.uid	implemented	N67	tsonic_node::os::UserInfo::uid	NODE-OS-004	user uid field
+NODE-OS-USERINFO-GID	os	UserInfo.gid	implemented	N67	tsonic_node::os::UserInfo::gid	NODE-OS-004	user gid field
+NODE-OS-USERINFO-OPTIONS-CARRIER	os	UserInfoOptions	implemented	N67	tsonic_node::os::UserInfoOptions	NODE-OS-004	closed userInfo options carrier
+NODE-OS-USERINFO-OPTIONS-ENCODING	os	UserInfoOptions.encoding	implemented	N67	tsonic_node::os::UserInfoOptions::encoding	NODE-OS-004	userInfo encoding option
+NODE-OS-PRIORITY-CONSTANTS-CARRIER	os	PriorityConstants	implemented	N67	tsonic_node::os::PriorityConstants	NODE-OS-004	closed priority constants carrier
+NODE-OS-CONSTANTS-CARRIER	os	OsConstants	implemented	N67	tsonic_node::os::OsConstants	NODE-OS-004	closed OS constants carrier
+NODE-OS-CONSTANTS-ERRNO	os	constants.errno	implemented	N67	tsonic_node::os::OsConstants::errno	NODE-OS-004	errno constants map
+NODE-OS-CONSTANTS-SIGNALS	os	constants.signals	implemented	N67	tsonic_node::os::OsConstants::signals	NODE-OS-004	signal constants map
+NODE-OS-CONSTANTS-PRIORITY	os	constants.priority	implemented	N67	tsonic_node::os::OsConstants::priority	NODE-OS-004	priority constants object
+NODE-OS-CONSTANTS-DLOPEN	os	constants.dlopen	implemented	N67	tsonic_node::os::OsConstants::dlopen	NODE-OS-004	dlopen constants map
+NODE-OS-CONSTANTS-UV	os	constants.uv	implemented	N67	tsonic_node::os::OsConstants::uv	NODE-OS-004	uv constants map
+NODE-QUERYSTRING-PARSE-OPTIONS-DECODE	querystring	ParseOptions.decodeURIComponent	implemented	N69	tsonic_node::querystring::ParseOptions::decode_uri_component	NODE-QUERYSTRING-001	custom query decoder callback field
+NODE-QUERYSTRING-PARSE-OPTIONS-MAXKEYS	querystring	ParseOptions.maxKeys	implemented	N69	tsonic_node::querystring::ParseOptions::max_keys	NODE-QUERYSTRING-001	maxKeys parse limit field
+NODE-QUERYSTRING-STRINGIFY-OPTIONS-ENCODE	querystring	StringifyOptions.encodeURIComponent	implemented	N69	tsonic_node::querystring::StringifyOptions::encode_uri_component	NODE-QUERYSTRING-001	custom query encoder callback field
+NODE-STRING-DECODER-CARRIER	string_decoder	StringDecoder	implemented	N69	tsonic_node::string_decoder::StringDecoder	NODE-STRING-DECODER-001	closed streaming string decoder carrier
+NODE-READLINE-INTERFACE-CARRIER	readline	Interface	implemented	N72	tsonic_node::readline::Interface	NODE-READLINE-002	closed buffered readline Interface carrier
+NODE-READLINE-INTERFACE-NEW	readline	Interface.new	implemented	N72	tsonic_node::readline::Interface::new	NODE-READLINE-001	constructs Interface over explicit line queue
+NODE-READLINE-INTERFACE-PAUSE	readline	Interface.pause	implemented	N72	tsonic_node::readline::Interface::pause	NODE-READLINE-002	pauses line consumption
+NODE-READLINE-INTERFACE-RESUME	readline	Interface.resume	implemented	N72	tsonic_node::readline::Interface::resume	NODE-READLINE-002	resumes line consumption
+NODE-READLINE-INTERFACE-IS-PAUSED	readline	Interface.isPaused	implemented	N72	tsonic_node::readline::Interface::paused	NODE-READLINE-002	reads paused state
+NODE-READLINE-INTERFACE-CLOSE	readline	Interface.close	implemented	N72	tsonic_node::readline::Interface::close	NODE-READLINE-002	closes interface
+NODE-READLINE-INTERFACE-CLOSED	readline	Interface.closed	implemented	N72	tsonic_node::readline::Interface::closed	NODE-READLINE-002	reads closed state
+NODE-READLINE-INTERFACE-SET-PROMPT	readline	Interface.setPrompt	implemented	N72	tsonic_node::readline::Interface::set_prompt	NODE-READLINE-002	sets explicit prompt text
+NODE-READLINE-INTERFACE-GET-PROMPT	readline	Interface.getPrompt	implemented	N72	tsonic_node::readline::Interface::get_prompt	NODE-READLINE-002	reads prompt text
+NODE-READLINE-INTERFACE-PROMPT-CALL	readline	Interface.prompt	implemented	N72	tsonic_node::readline::Interface::prompt	NODE-READLINE-002	writes prompt to output buffer
+NODE-READLINE-INTERFACE-LINE	readline	Interface.line	implemented	N72	tsonic_node::readline::Interface::line	NODE-READLINE-002	reads line buffer
+NODE-READLINE-INTERFACE-CURSOR	readline	Interface.cursor	implemented	N72	tsonic_node::readline::Interface::cursor	NODE-READLINE-002	reads cursor index
+NODE-READLINE-INTERFACE-GET-CURSOR-POS	readline	Interface.getCursorPos	implemented	N72	tsonic_node::readline::Interface::get_cursor_pos	NODE-READLINE-002	returns closed cursor position carrier
+NODE-READLINE-INTERFACE-NEXT-LINE	readline	Interface.nextLine	implemented	N72	tsonic_node::readline::Interface::next_line	NODE-READLINE-002	pops next explicit input line
+NODE-READLINE-INTERFACE-REMAINING-LINES	readline	Interface.remainingLines	implemented	N72	tsonic_node::readline::Interface::remaining_lines	NODE-READLINE-002	returns remaining input lines
+NODE-READLINE-PROMISES-READLINE-NEW	readline/promises	Readline.new	implemented	N72	tsonic_node::readline::Readline::new	NODE-READLINE-002	constructs promises Readline queue
+NODE-READLINE-PROMISES-STREAM	readline/promises	Readline.stream	implemented	N72	tsonic_node::readline::Readline::stream	NODE-READLINE-002	reads committed command stream
+NODE-READLINE-PROMISES-PENDING	readline/promises	Readline.pending	implemented	N72	tsonic_node::readline::Readline::pending	NODE-READLINE-002	reads pending command queue
 NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers
 NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	NODE-MISC-001	performance.now subset
 NODE-PERF-RESOURCE-TIMING	perf_hooks	PerformanceResourceTiming/nodeTiming/timerify/constants	implemented	N31	tsonic_node::perf_hooks::{PerformanceResourceTiming,node_timing,timerify,CONSTANTS}	NODE-PERF-003	resource timing entries, node timing shape, GC constants, and function timing
@@ -687,7 +770,6 @@ NODE-MODULE-PUNYCODE	punycode	module	implemented	N8	tsonic_node::punycode	NODE-P
 NODE-PUNYCODE-TO-ASCII	punycode	toASCII	implemented	N74	tsonic_node::punycode::to_ascii	NODE-PUNYCODE-001	punycode toASCII helper uses known-vector IDNA conversion
 NODE-PUNYCODE-TO-UNICODE	punycode	toUnicode	implemented	N74	tsonic_node::punycode::to_unicode	NODE-PUNYCODE-001	punycode toUnicode helper uses known-vector IDNA conversion
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
-NODE-QUERYSTRING-OPTIONS	querystring	parse/stringify options	implemented	N31	tsonic_node::querystring::{ParseOptions,StringifyOptions,parse_with_options,stringify_records_with_options}	NODE-QUERYSTRING-001	custom separators, maxKeys, and codec callback options
 NODE-QUERYSTRING-PARSE	querystring	parse	implemented	N69	tsonic_node::querystring::parse	NODE-QUERYSTRING-001	closed query parser into URLSearchParams carrier
 NODE-QUERYSTRING-PARSE-WITH-OPTIONS	querystring	parse options	implemented	N69	tsonic_node::querystring::parse_with_options	NODE-QUERYSTRING-001	parse helper with explicit separators, maxKeys, and decoder callback
 NODE-QUERYSTRING-PARSE-WITH-SEPARATORS	querystring	parse custom separators	implemented	N69	tsonic_node::querystring::parse_with_separators	NODE-QUERYSTRING-001	parse helper with explicit separator and equals strings
@@ -806,7 +888,6 @@ WEB-STREAM-READABLE	web-globals/streams	ReadableStream reader/values/pipeTo/canc
 WEB-STREAM-WRITABLE	web-globals/streams	WritableStream writer/write/close/abort	implemented	N56	tsonic_node::stream::web::WritableStream	NODE-STREAM-003	closed writable stream carrier, lock state, writer, write, close, and abort
 WEB-STREAM-TRANSFORM	web-globals/streams	TransformStream readable/writable passthrough	implemented	N56	tsonic_node::stream::web::TransformStream	NODE-STREAM-003	closed transform stream carrier with explicit passthrough semantics
 NODE-MODULE-STRING-DECODER	string_decoder	module	implemented	N1	tsonic_node::string_decoder	NODE-MISC-003	UTF-8 string decoder subset
-NODE-STRING-DECODER-STATE	string_decoder	StringDecoder streaming state	implemented	N29	tsonic_node::string_decoder::StringDecoder	NODE-STRING-DECODER-001	streaming UTF-8 partial sequence buffering and replacement on end
 NODE-STRING-DECODER-CONSTRUCTOR	string_decoder	StringDecoder constructor	implemented	N69	tsonic_node::string_decoder::StringDecoder::new	NODE-STRING-DECODER-001	closed StringDecoder constructor with default utf8 encoding
 NODE-STRING-DECODER-ENCODING	string_decoder	StringDecoder.encoding	implemented	N69	tsonic_node::string_decoder::StringDecoder::encoding	NODE-STRING-DECODER-001	StringDecoder exposes selected encoding
 NODE-STRING-DECODER-PENDING-LEN	string_decoder	StringDecoder pending length	implemented	N69	tsonic_node::string_decoder::StringDecoder::pending_len	NODE-STRING-DECODER-001	StringDecoder exposes pending partial sequence length for generated runtime bookkeeping
@@ -1072,12 +1153,7 @@ NODE-PATH-PARSE	path	parse	implemented	J	tsonic_node::path::parse	NODE-PATH-001	
 NODE-PATH-RELATIVE	path	relative	implemented	J	tsonic_node::path::relative	NODE-PATH-001	path helper
 NODE-PATH-RESOLVE	path	resolve	implemented	J	tsonic_node::path::resolve	NODE-PATH-001	path helper
 NODE-PATH-TO-NAMESPACED	path	toNamespacedPath	implemented	J	tsonic_node::path::to_namespaced_path	NODE-PATH-001	path helper
-NODE-PATH-SEP-DELIMITER	path	sep/delimiter	implemented	J	tsonic_node::path::{sep,delimiter}	NODE-PATH-001	platform separators
 NODE-PATH-MATCH-GLOB	path	matchesGlob	implemented	N8	tsonic_node::path::matches_glob	NODE-PATH-GLOB-001	common star/question glob matcher
-NODE-PATH-POSIX	path	posix basename/dirname/extname/format/isAbsolute/join/normalize/parse/relative/sep/delimiter	implemented	N61	tsonic_node::path::posix	NODE-PATH-001	explicit POSIX path helper namespace over pure string semantics
-NODE-PATH-WIN32	path	win32 basename/dirname/extname/format/isAbsolute/join/normalize/parse/relative/sep/delimiter	implemented	N61	tsonic_node::path::win32	NODE-PATH-001	explicit Win32 path helper namespace over pure string semantics
-NODE-PATH-PARSED-PATH	path	ParsedPath root/dir/base/ext/name	implemented	N61	tsonic_node::path::ParsedPath	NODE-PATH-001	closed ParsedPath carrier for parse/format
-NODE-PATH-PLATFORM	path	platform basename/dirname/extname/format/isAbsolute/join/normalize/parse/relative/resolve/sep/delimiter	implemented	N61	tsonic_node::path	NODE-PATH-001	host platform path helper namespace using std path separator policy
 NODE-BUFFER-ALLOC	buffer	Buffer.alloc	implemented	K	tsonic_node::buffer::Buffer::alloc	NODE-BUF-001	zero-filled closed byte carrier
 NODE-BUFFER-ALLOC-UNSAFE	buffer	Buffer.allocUnsafe	implemented	K	tsonic_node::buffer::Buffer::alloc_unsafe	NODE-BUF-010	closed runtime maps unsafe allocation to deterministic zero-filled carrier
 NODE-BUFFER-FROM-BYTES	buffer	Buffer.from bytes	implemented	K	tsonic_node::buffer::Buffer::from_bytes	NODE-BUF-003	constructs closed Buffer from byte vector
@@ -1298,13 +1374,7 @@ NODE-PROCESS-EVENTS-CARRIER	process	ProcessEvents	implemented	N62	tsonic_node::p
 NODE-PROCESS-EVENTS-ON	process	ProcessEvents.on	implemented	N62	tsonic_node::process::ProcessEvents::on	NODE-PROC-EVENTS-001	process event listener registration
 NODE-PROCESS-EVENTS-EMIT	process	ProcessEvents.emit	implemented	N62	tsonic_node::process::ProcessEvents::emit	NODE-PROC-EVENTS-001	process event dispatch
 NODE-PROCESS-EVENTS-LISTENER-COUNT	process	ProcessEvents.listenerCount	implemented	N62	tsonic_node::process::ProcessEvents::listener_count	NODE-PROC-EVENTS-001	process event listener count
-NODE-OS-PLATFORM	os	platform/arch	implemented	J	tsonic_node::os::{platform,arch}	NODE-OS-001	platform helpers
-NODE-OS-MEM	os	freemem/totalmem	implemented	J	tsonic_node::os::{freemem,totalmem}	NODE-OS-001	memory helpers
-NODE-OS-HOME-TMP	os	homedir/tmpdir	implemented	J	tsonic_node::os::{homedir,tmpdir}	NODE-OS-001	directory helpers
-NODE-OS-HOST-RELEASE	os	hostname/type/release	implemented	J	tsonic_node::os::{hostname,type,release}	NODE-OS-001	host identity helpers
-NODE-OS-CPU	os	cpus/loadavg	implemented	J	tsonic_node::os::{cpus,loadavg}	NODE-OS-001	CPU/load helpers
 NODE-OS-NETWORK	os	networkInterfaces	implemented	N10	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface query through approved dependency
-NODE-OS-NETWORK-FIELDS	os	NetworkInterfaceInfo address/netmask/mac/internal/cidr/scopeid	implemented	N50	tsonic_node::os::{network_interfaces,NetworkInterfaceInfo}	NODE-OS-005	closed network interface field carrier with provider data where available and deterministic zero MAC/scope fallback
 NODE-OS-PLATFORM-FN	os	platform	implemented	N67	tsonic_node::os::platform	NODE-OS-001	closed Node platform spelling helper
 NODE-OS-ARCH-FN	os	arch	implemented	N67	tsonic_node::os::arch	NODE-OS-001	closed Node architecture spelling helper
 NODE-OS-EOL-FN	os	EOL	implemented	N67	tsonic_node::os::eol	NODE-OS-001	platform newline constant
@@ -1327,22 +1397,12 @@ NODE-OS-TOTALMEM-FN	os	totalmem	implemented	N67	tsonic_node::os::totalmem	NODE-O
 NODE-OS-FREEMEM-FN	os	freemem	implemented	N67	tsonic_node::os::freemem	NODE-OS-001	free memory helper
 NODE-OS-NETWORK-INTERFACES-FN	os	networkInterfaces	implemented	N67	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface map helper
 NODE-OS-CONSTANTS-FN	os	constants	implemented	N67	tsonic_node::os::constants	NODE-OS-004	closed errno, signal, priority, dlopen, and uv constants
-NODE-OS-CPUINFO-CARRIER	os	CpuInfo/CpuTimes	implemented	N67	tsonic_node::os::{CpuInfo,CpuTimes}	NODE-OS-001	CPU info and CPU times carriers
-NODE-OS-USERINFO-CARRIER	os	UserInfo/UserInfoOptions	implemented	N67	tsonic_node::os::{UserInfo,UserInfoOptions}	NODE-OS-004	user info and options carriers
-NODE-OS-CONSTANTS-CARRIER	os	OsConstants/PriorityConstants	implemented	N67	tsonic_node::os::{OsConstants,PriorityConstants}	NODE-OS-004	OS constants carrier objects
-NODE-READLINE-INTERFACE	readline	Interface prompt/cursor/key/terminal methods	implemented	N19	tsonic_node::readline::Interface	NODE-READLINE-002	buffered Interface prompt, cursor, key-write, terminal, pause/resume, and close behavior
-NODE-READLINE-PROMISES	readline/promises	Readline commit/rollback/cursor methods	implemented	N19	tsonic_node::readline::promises	NODE-READLINE-002	promises Readline controller command queue with commit/rollback semantics
 NODE-READLINE-CREATE-INTERFACE	readline	createInterface	implemented	N72	tsonic_node::readline::create_interface	NODE-READLINE-001	closed readline interface factory over explicit input lines
 NODE-READLINE-INTERFACE-QUESTION	readline	Interface.question	implemented	N72	tsonic_node::readline::Interface::question	NODE-READLINE-002	question writes prompt and consumes next explicit input line
 NODE-READLINE-INTERFACE-WRITE	readline	Interface.write	implemented	N72	tsonic_node::readline::Interface::write	NODE-READLINE-002	write appends explicit output and line buffer text
 NODE-READLINE-INTERFACE-WRITE-KEY	readline	Interface.writeKey	implemented	N72	tsonic_node::readline::Interface::write_key	NODE-READLINE-002	writeKey writes explicit text or key sequence
-NODE-READLINE-INTERFACE-PAUSE-RESUME	readline	Interface.pause/resume/isPaused	implemented	N72	tsonic_node::readline::Interface::{pause,resume,paused}	NODE-READLINE-002	pause and resume gate reads/writes without hidden terminal state
-NODE-READLINE-INTERFACE-CLOSE	readline	Interface.close/closed	implemented	N72	tsonic_node::readline::Interface::{close,closed}	NODE-READLINE-002	close marks interface closed and blocks reads
 NODE-READLINE-INTERFACE-OUTPUT	readline	Interface output	implemented	N72	tsonic_node::readline::Interface::output	NODE-READLINE-002	output exposes deterministic written prompt/text buffer
-NODE-READLINE-INTERFACE-PROMPT	readline	Interface prompt	implemented	N72	tsonic_node::readline::Interface::{set_prompt,get_prompt,prompt}	NODE-READLINE-002	prompt helpers use explicit prompt buffer
-NODE-READLINE-INTERFACE-LINE-CURSOR	readline	Interface line/cursor/getCursorPos	implemented	N72	tsonic_node::readline::Interface::{line,cursor,get_cursor_pos}	NODE-READLINE-002	line and cursor helpers expose closed input edit state
 NODE-READLINE-INTERFACE-TERMINAL	readline	Interface terminal	implemented	N72	tsonic_node::readline::Interface::{terminal,set_terminal}	NODE-READLINE-002	terminal flag is explicit carrier state
-NODE-READLINE-INTERFACE-NEXT-LINE	readline	Interface nextLine/remainingLines	implemented	N72	tsonic_node::readline::Interface::{next_line,remaining_lines}	NODE-READLINE-002	explicit input queue line iteration helpers
 NODE-READLINE-CURSOR-POS	readline	CursorPos	implemented	N72	tsonic_node::readline::CursorPos	NODE-READLINE-002	closed cursor position carrier
 NODE-READLINE-KEY	readline	Key	implemented	N72	tsonic_node::readline::Key	NODE-READLINE-002	closed key carrier with sequence/name/modifier fields
 NODE-READLINE-PROMISES-CREATE-READLINE	readline/promises	createReadline	implemented	N72	tsonic_node::readline::promises::create_readline	NODE-READLINE-002	promises controller factory
@@ -1353,7 +1413,6 @@ NODE-READLINE-PROMISES-CURSOR-TO	readline/promises	Readline.cursorTo	implemented
 NODE-READLINE-PROMISES-MOVE-CURSOR	readline/promises	Readline.moveCursor	implemented	N72	tsonic_node::readline::Readline::move_cursor	NODE-READLINE-002	moveCursor queues deterministic cursor command
 NODE-READLINE-PROMISES-COMMIT	readline/promises	Readline.commit	implemented	N72	tsonic_node::readline::Readline::commit	NODE-READLINE-002	commit flushes pending terminal commands
 NODE-READLINE-PROMISES-ROLLBACK	readline/promises	Readline.rollback	implemented	N72	tsonic_node::readline::Readline::rollback	NODE-READLINE-002	rollback clears pending terminal commands
-NODE-READLINE-PROMISES-STREAM	readline/promises	Readline.stream/pending	implemented	N72	tsonic_node::readline::Readline::{stream,pending}	NODE-READLINE-002	stream and pending expose deterministic command queues
 NODE-PERF-HISTOGRAM	perf_hooks	Histogram/RecordableHistogram/IntervalHistogram	implemented	N20	tsonic_node::perf_hooks::{Histogram,create_histogram}	NODE-PERF-002	closed histogram count/min/max/mean/stddev/percentile/enable/disable/reset helpers
 NODE-PERF-EVENTLOOP	perf_hooks	eventLoopUtilization/resource timing controls	implemented	N20	tsonic_node::perf_hooks::{event_loop_utilization,set_resource_timing_buffer_size,clear_resource_timings}	NODE-PERF-002	closed event-loop utilization and resource timing control shape
 NODE-PROCESS-NEXTTICK	process	nextTick	implemented	N5	tsonic_node::process::next_tick	NODE-PROC-007	deterministic nextTick callback hook
