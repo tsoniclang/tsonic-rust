@@ -1379,28 +1379,78 @@ NODE-BUFFER-TRANSCODE	buffer	transcode	implemented	N8	tsonic_node::buffer::trans
 NODE-BUFFER-IS-BUFFER	buffer	Buffer.isBuffer	implemented	N58	tsonic_node::buffer::is_buffer	NODE-BUF-010	closed Buffer predicate over known carrier
 NODE-BUFFER-IS-ENCODING	buffer	Buffer.isEncoding	implemented	N58	tsonic_node::buffer::is_encoding	NODE-BUF-010	supported encoding predicate
 NODE-CRYPTO-RANDOM-BYTES	crypto	randomBytes	implemented	L	tsonic_node::crypto::random_bytes	NODE-CRYPTO-001	OS randomness
-NODE-CRYPTO-RANDOM-FILL	crypto	randomFill/randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	buffer random fill
-NODE-CRYPTO-RANDOM-INT	crypto	randomInt	implemented	L	tsonic_node::crypto::{random_int,random_int_range}	NODE-CRYPTO-001	range-limited random integer
-NODE-CRYPTO-CREATE-HASH	crypto	createHash	implemented	L	tsonic_node::crypto::Hash	NODE-CRYPTO-001	stable hash subset
-NODE-CRYPTO-HASH-UPDATE-DIGEST	crypto	Hash update/updateString/digest/digestString/copy	implemented	N63	tsonic_node::crypto::Hash	NODE-CRYPTO-001,NODE-CRYPTO-006	closed streaming hash update, copy, and digest result helpers over supported algorithms
-NODE-CRYPTO-HMAC	crypto	createHmac	implemented	L	tsonic_node::crypto::hmac_digest	NODE-CRYPTO-002	HMAC subset
-NODE-CRYPTO-HMAC-STREAMING	crypto	Hmac update/updateString/digest/digestString	implemented	N63	tsonic_node::crypto::Hmac	NODE-CRYPTO-004	streaming HMAC update and digest helpers over supported algorithms
+NODE-CRYPTO-RANDOM-FILL	crypto	randomFill	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	fills Buffer with OS randomness
+NODE-CRYPTO-RANDOM-FILL-SYNC	crypto	randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	sync randomFill alias over same closed helper
+NODE-CRYPTO-RANDOM-INT-MAX	crypto	randomInt max	implemented	L	tsonic_node::crypto::random_int	NODE-CRYPTO-001	range-limited random integer from zero to max
+NODE-CRYPTO-RANDOM-INT-RANGE	crypto	randomInt range	implemented	L	tsonic_node::crypto::random_int_range	NODE-CRYPTO-001	range-limited random integer from min to max
+NODE-CRYPTO-CREATE-HASH-FN	crypto	createHash	implemented	L	tsonic_node::crypto::create_hash	NODE-CRYPTO-001	creates streaming hash over supported algorithms
+NODE-CRYPTO-DIGEST-RESULT-CARRIER	crypto	DigestResult	implemented	N63	tsonic_node::crypto::DigestResult	NODE-CRYPTO-006	closed digest result carrier for Buffer or string output
+NODE-CRYPTO-HASH-CARRIER	crypto	Hash	implemented	N63	tsonic_node::crypto::Hash	NODE-CRYPTO-001	closed streaming hash carrier
+NODE-CRYPTO-HASH-CREATE	crypto	Hash.create	implemented	N63	tsonic_node::crypto::Hash::create	NODE-CRYPTO-001	closed streaming hash Hash.create helper
+NODE-CRYPTO-HASH-UPDATE-BYTES	crypto	Hash.update bytes	implemented	N63	tsonic_node::crypto::Hash::update_bytes	NODE-CRYPTO-001	closed streaming hash Hash.update bytes helper
+NODE-CRYPTO-HASH-UPDATE-STRING	crypto	Hash.update string	implemented	N63	tsonic_node::crypto::Hash::update_string	NODE-CRYPTO-001	closed streaming hash Hash.update string helper
+NODE-CRYPTO-HASH-COPY	crypto	Hash.copy	implemented	N63	tsonic_node::crypto::Hash::copy	NODE-CRYPTO-001	closed streaming hash Hash.copy helper
+NODE-CRYPTO-HASH-DIGEST	crypto	Hash.digest	implemented	N63	tsonic_node::crypto::Hash::digest	NODE-CRYPTO-001	closed streaming hash Hash.digest helper
+NODE-CRYPTO-HASH-DIGEST-STRING	crypto	Hash.digest string	implemented	N63	tsonic_node::crypto::Hash::digest_string	NODE-CRYPTO-001	closed streaming hash Hash.digest string helper
+NODE-CRYPTO-HASH-DIGEST-BUFFER	crypto	Hash.digest Buffer	implemented	N63	tsonic_node::crypto::Hash::digest_buffer	NODE-CRYPTO-001	closed streaming hash Hash.digest Buffer helper
+NODE-CRYPTO-HASH-ONESHOT-FN	crypto	hash	implemented	N45	tsonic_node::crypto::hash	NODE-CRYPTO-006	one-shot digest helper over closed algorithms
+NODE-CRYPTO-HMAC-CARRIER	crypto	Hmac	implemented	N63	tsonic_node::crypto::Hmac	NODE-CRYPTO-004	closed streaming HMAC carrier
+NODE-CRYPTO-CREATE-HMAC-FN	crypto	createHmac	implemented	L	tsonic_node::crypto::create_hmac	NODE-CRYPTO-004	creates streaming HMAC over supported algorithms
+NODE-CRYPTO-HMAC-DIGEST-FN	crypto	hmacDigest	implemented	L	tsonic_node::crypto::hmac_digest	NODE-CRYPTO-002	one-shot HMAC digest helper
+NODE-CRYPTO-HMAC-CREATE	crypto	Hmac.create	implemented	N63	tsonic_node::crypto::Hmac::create	NODE-CRYPTO-004	closed streaming HMAC Hmac.create helper
+NODE-CRYPTO-HMAC-UPDATE-BYTES	crypto	Hmac.update bytes	implemented	N63	tsonic_node::crypto::Hmac::update_bytes	NODE-CRYPTO-004	closed streaming HMAC Hmac.update bytes helper
+NODE-CRYPTO-HMAC-UPDATE-STRING	crypto	Hmac.update string	implemented	N63	tsonic_node::crypto::Hmac::update_string	NODE-CRYPTO-004	closed streaming HMAC Hmac.update string helper
+NODE-CRYPTO-HMAC-DIGEST	crypto	Hmac.digest	implemented	N63	tsonic_node::crypto::Hmac::digest	NODE-CRYPTO-004	closed streaming HMAC Hmac.digest helper
+NODE-CRYPTO-HMAC-DIGEST-STRING	crypto	Hmac.digest string	implemented	N63	tsonic_node::crypto::Hmac::digest_string	NODE-CRYPTO-004	closed streaming HMAC Hmac.digest string helper
+NODE-CRYPTO-HMAC-DIGEST-BUFFER	crypto	Hmac.digest Buffer	implemented	N63	tsonic_node::crypto::Hmac::digest_buffer	NODE-CRYPTO-004	closed streaming HMAC Hmac.digest Buffer helper
+NODE-CRYPTO-GET-CIPHERS	crypto	getCiphers	implemented	N45	tsonic_node::crypto::get_ciphers	NODE-CRYPTO-006	closed crypto runtime metadata helper getCiphers
+NODE-CRYPTO-GET-CURVES	crypto	getCurves	implemented	N45	tsonic_node::crypto::get_curves	NODE-CRYPTO-006	closed crypto runtime metadata helper getCurves
+NODE-CRYPTO-GET-FIPS	crypto	getFips	implemented	N45	tsonic_node::crypto::get_fips	NODE-CRYPTO-006	closed crypto runtime metadata helper getFips
+NODE-CRYPTO-SET-FIPS	crypto	setFips	implemented	N45	tsonic_node::crypto::set_fips	NODE-CRYPTO-006	closed crypto runtime metadata helper setFips
+NODE-CRYPTO-SECURE-HEAP-USED	crypto	secureHeapUsed	implemented	N45	tsonic_node::crypto::secure_heap_used	NODE-CRYPTO-006	closed crypto runtime metadata helper secureHeapUsed
+NODE-CRYPTO-SECURE-HEAP-USAGE-CARRIER	crypto	SecureHeapUsage	implemented	N45	tsonic_node::crypto::SecureHeapUsage	NODE-CRYPTO-006	closed secure heap usage carrier
+NODE-CRYPTO-KEYOBJECT-CARRIER	crypto	KeyObject	implemented	N45	tsonic_node::crypto::KeyObject	NODE-CRYPTO-006	closed key object carrier
+NODE-CRYPTO-KEYOBJECT-TYPE	crypto	KeyObject.type	implemented	N45	tsonic_node::crypto::KeyObject::key_type	NODE-CRYPTO-006	closed KeyObject KeyObject.type helper
+NODE-CRYPTO-KEYOBJECT-SYMMETRIC-SIZE	crypto	KeyObject.symmetricKeySize	implemented	N45	tsonic_node::crypto::KeyObject::symmetric_key_size	NODE-CRYPTO-006	closed KeyObject KeyObject.symmetricKeySize helper
+NODE-CRYPTO-KEYOBJECT-ASYMMETRIC-TYPE	crypto	KeyObject.asymmetricKeyType	implemented	N45	tsonic_node::crypto::KeyObject::asymmetric_key_type	NODE-CRYPTO-006	closed KeyObject KeyObject.asymmetricKeyType helper
+NODE-CRYPTO-KEYOBJECT-EXPORT	crypto	KeyObject.export	implemented	N45	tsonic_node::crypto::KeyObject::export	NODE-CRYPTO-006	closed KeyObject KeyObject.export helper
+NODE-CRYPTO-KEYOBJECT-EXPORT-STRING	crypto	KeyObject.export string	implemented	N45	tsonic_node::crypto::KeyObject::export_string	NODE-CRYPTO-006	closed KeyObject KeyObject.export string helper
+NODE-CRYPTO-KEYOBJECT-EQUALS	crypto	KeyObject.equals	implemented	N45	tsonic_node::crypto::KeyObject::equals	NODE-CRYPTO-006	closed KeyObject KeyObject.equals helper
+NODE-CRYPTO-CREATE-SECRET-KEY	crypto	createSecretKey	implemented	N45	tsonic_node::crypto::create_secret_key	NODE-CRYPTO-006	creates secret KeyObject from Buffer
+NODE-CRYPTO-CREATE-SECRET-KEY-BYTES	crypto	createSecretKey bytes	implemented	N45	tsonic_node::crypto::create_secret_key_bytes	NODE-CRYPTO-006	creates secret KeyObject from bytes
+NODE-CRYPTO-AES-GCM-CIPHERTEXT-CARRIER	crypto	AesGcmCiphertext	implemented	N63	tsonic_node::crypto::AesGcmCiphertext	NODE-CRYPTO-CIPHER-001	closed AES-GCM ciphertext carrier
+NODE-CRYPTO-AES-GCM-CIPHERTEXT-BYTES	crypto	AesGcmCiphertext.ciphertext	implemented	N63	tsonic_node::crypto::AesGcmCiphertext::ciphertext	NODE-CRYPTO-CIPHER-001	AES-GCM ciphertext field
+NODE-CRYPTO-AES-GCM-AUTH-TAG	crypto	AesGcmCiphertext.authTag	implemented	N63	tsonic_node::crypto::AesGcmCiphertext::auth_tag	NODE-CRYPTO-CIPHER-001	AES-GCM authTag field
+NODE-CRYPTO-AES-256-GCM-ENCRYPT	crypto	aes256GcmEncrypt	implemented	N9	tsonic_node::crypto::aes_256_gcm_encrypt	NODE-CRYPTO-CIPHER-001	closed AES-256-GCM encrypt helper
+NODE-CRYPTO-AES-256-GCM-DECRYPT	crypto	aes256GcmDecrypt	implemented	N9	tsonic_node::crypto::aes_256_gcm_decrypt	NODE-CRYPTO-CIPHER-001	closed AES-256-GCM decrypt helper
+NODE-CRYPTO-RSA-KEYPAIR-CARRIER	crypto	RsaKeyPair	implemented	N63	tsonic_node::crypto::RsaKeyPair	NODE-CRYPTO-PKI-001	closed RSA keypair carrier
+NODE-CRYPTO-RSA-KEYPAIR-PUBLIC	crypto	RsaKeyPair.publicKey	implemented	N63	tsonic_node::crypto::RsaKeyPair::public_key	NODE-CRYPTO-PKI-001	returns RSA public key view
+NODE-CRYPTO-GENERATE-RSA-KEYPAIR	crypto	generateRsaKeyPair	implemented	N9	tsonic_node::crypto::generate_rsa_key_pair	NODE-CRYPTO-PKI-001	generates RSA keypair through approved dependency
+NODE-CRYPTO-SIGN-SHA256	crypto	signSha256	implemented	N9	tsonic_node::crypto::sign_sha256	NODE-CRYPTO-PKI-001	signs data using RSA-SHA256
+NODE-CRYPTO-VERIFY-SHA256	crypto	verifySha256	implemented	N9	tsonic_node::crypto::verify_sha256	NODE-CRYPTO-PKI-001	verifies RSA-SHA256 signature
+NODE-CRYPTO-SIGN-GENERIC	crypto	sign	implemented	N45	tsonic_node::crypto::sign	NODE-CRYPTO-PKI-002	generic sign entrypoint with explicit algorithm rejection
+NODE-CRYPTO-VERIFY-GENERIC	crypto	verify	implemented	N45	tsonic_node::crypto::verify	NODE-CRYPTO-PKI-002	generic verify entrypoint with explicit algorithm rejection
+NODE-CRYPTO-PBKDF2-SYNC	crypto	pbkdf2Sync	implemented	N63	tsonic_node::crypto::pbkdf2_sync	NODE-CRYPTO-KDF-001	PBKDF2 derivation helper over approved digest algorithms
+NODE-CRYPTO-HKDF-SYNC	crypto	hkdfSync	implemented	N63	tsonic_node::crypto::hkdf_sync	NODE-CRYPTO-KDF-001	HKDF derivation helper over approved digest algorithms
+NODE-CRYPTO-X509-CARRIER	crypto	X509Certificate	implemented	N45	tsonic_node::crypto::X509Certificate	NODE-CRYPTO-006	closed X509 raw/fingerprint carrier
+NODE-CRYPTO-X509-NEW	crypto	X509Certificate.new	implemented	N63	tsonic_node::crypto::X509Certificate::new	NODE-CRYPTO-006	closed X509 X509Certificate.new helper
+NODE-CRYPTO-X509-RAW	crypto	X509Certificate.raw	implemented	N63	tsonic_node::crypto::X509Certificate::raw	NODE-CRYPTO-006	closed X509 X509Certificate.raw helper
+NODE-CRYPTO-X509-SUBJECT	crypto	X509Certificate.subject	implemented	N63	tsonic_node::crypto::X509Certificate::subject	NODE-CRYPTO-006	closed X509 X509Certificate.subject helper
+NODE-CRYPTO-X509-ISSUER	crypto	X509Certificate.issuer	implemented	N63	tsonic_node::crypto::X509Certificate::issuer	NODE-CRYPTO-006	closed X509 X509Certificate.issuer helper
+NODE-CRYPTO-X509-VALID-FROM	crypto	X509Certificate.validFrom	implemented	N63	tsonic_node::crypto::X509Certificate::valid_from	NODE-CRYPTO-006	closed X509 X509Certificate.validFrom helper
+NODE-CRYPTO-X509-VALID-TO	crypto	X509Certificate.validTo	implemented	N63	tsonic_node::crypto::X509Certificate::valid_to	NODE-CRYPTO-006	closed X509 X509Certificate.validTo helper
+NODE-CRYPTO-X509-FINGERPRINT256	crypto	X509Certificate.fingerprint256	implemented	N63	tsonic_node::crypto::X509Certificate::fingerprint256	NODE-CRYPTO-006	closed X509 X509Certificate.fingerprint256 helper
+NODE-CRYPTO-X509-LEGACY	crypto	X509Certificate.toLegacyObject	implemented	N63	tsonic_node::crypto::X509Certificate::to_legacy_object	NODE-CRYPTO-006	closed X509 X509Certificate.toLegacyObject helper
+NODE-CRYPTO-X509-LEGACY-CARRIER	crypto	X509CertificateLegacyObject	implemented	N63	tsonic_node::crypto::X509CertificateLegacyObject	NODE-CRYPTO-006	closed X509 legacy carrier
+NODE-CRYPTO-WEBCRYPTO-MODULE	crypto	webcrypto	implemented	N63	tsonic_node::crypto::webcrypto	NODE-CRYPTO-006	closed WebCrypto module subset
+NODE-CRYPTO-WEBCRYPTO-CRYPTO	crypto	webcrypto.crypto	implemented	N63	tsonic_node::crypto::webcrypto::crypto	NODE-CRYPTO-006	creates closed WebCrypto Crypto carrier
+WEB-CRYPTO-GET-RANDOM-VALUES	web-globals/crypto	crypto.getRandomValues	implemented	N63	tsonic_node::crypto::webcrypto	NODE-CRYPTO-006	Web global getRandomValues backed by closed crypto provider
+WEB-CRYPTO-RANDOM-UUID	web-globals/crypto	crypto.randomUUID	implemented	N63	tsonic_node::crypto::webcrypto	NODE-CRYPTO-006	Web global randomUUID backed by closed crypto provider
+WEB-CRYPTO-SUBTLE-DIGEST	web-globals/crypto	crypto.subtle.digest	implemented	N63	tsonic_node::crypto::webcrypto	NODE-CRYPTO-006	Web global subtle.digest backed by closed crypto provider
 NODE-CRYPTO-RANDOM-UUID	crypto	randomUUID	implemented	L	tsonic_node::crypto::random_uuid	NODE-CRYPTO-002	UUID v4 shape
 NODE-CRYPTO-TIMING-SAFE-EQUAL	crypto	timingSafeEqual	implemented	L	tsonic_node::crypto::timing_safe_equal	NODE-CRYPTO-002	constant-time same-length byte comparison
 NODE-CRYPTO-GET-HASHES	crypto	getHashes	implemented	L	tsonic_node::crypto::get_hashes	NODE-CRYPTO-002	declared supported hash algorithms
 NODE-CRYPTO-HASH-ONESHOT	crypto	hash	implemented	N45	tsonic_node::crypto::hash	NODE-CRYPTO-006	one-shot digest helper over same closed hash algorithms and encoding result carrier
-NODE-CRYPTO-RUNTIME-METADATA	crypto	getCiphers/getCurves/getFips/setFips/secureHeapUsed	implemented	N45	tsonic_node::crypto::{get_ciphers,get_curves,get_fips,set_fips,secure_heap_used}	NODE-CRYPTO-006	closed runtime capability metadata; unavailable FIPS mode fails explicitly
-NODE-CRYPTO-KEYOBJECT-METADATA	crypto	KeyObject symmetricKeySize/asymmetricKeyType/export/equals	implemented	N45	tsonic_node::crypto::KeyObject	NODE-CRYPTO-006	closed secret key object metadata and export helpers
-NODE-CRYPTO-CIPHER	crypto	cipher/decipher	implemented	N9	tsonic_node::crypto::{aes_256_gcm_encrypt,aes_256_gcm_decrypt}	NODE-CRYPTO-CIPHER-001	closed AES-256-GCM cipher/decipher over approved audited dependency
-NODE-CRYPTO-AES-GCM-CARRIER	crypto	AesGcmCiphertext ciphertext/authTag	implemented	N63	tsonic_node::crypto::AesGcmCiphertext	NODE-CRYPTO-CIPHER-001	closed AES-GCM ciphertext/authTag result carrier
-NODE-CRYPTO-KEYS	crypto	keys/certs/sign/verify	implemented	N9	tsonic_node::crypto::{generate_rsa_key_pair,sign_sha256,verify_sha256}	NODE-CRYPTO-PKI-001	closed RSA-SHA256 sign/verify over approved audited dependency
-NODE-CRYPTO-RSA-KEYPAIR	crypto	RsaKeyPair publicKey/privateKey	implemented	N63	tsonic_node::crypto::RsaKeyPair	NODE-CRYPTO-PKI-001	closed RSA keypair carrier for generated sign/verify calls
-NODE-CRYPTO-SIGN-VERIFY-GENERIC	crypto	sign/verify generic algorithm entrypoints	implemented	N45	tsonic_node::crypto::{sign,verify}	NODE-CRYPTO-PKI-002	closed generic sign/verify dispatch that rejects unsupported algorithms explicitly
-NODE-CRYPTO-X509-CERTIFICATE	crypto	X509Certificate	implemented	N45	tsonic_node::crypto::X509Certificate	NODE-CRYPTO-006	closed certificate raw/fingerprint carrier without full PKI path validation
-NODE-CRYPTO-X509-LEGACY	crypto	X509Certificate.toLegacyObject/fingerprint256/raw	implemented	N63	tsonic_node::crypto::{X509Certificate,X509CertificateLegacyObject}	NODE-CRYPTO-006	closed X509 raw and legacy fingerprint carrier without host certificate validation
-NODE-CRYPTO-KDF	crypto	pbkdf2Sync/hkdfSync	implemented	N63	tsonic_node::crypto::{pbkdf2_sync,hkdf_sync}	NODE-CRYPTO-KDF-001	approved PBKDF2/HKDF derivation helpers over supported digest algorithms
-NODE-CRYPTO-WEBCRYPTO	crypto	webcrypto.subtle.digest/getRandomValues/randomUUID	implemented	N63	tsonic_node::crypto::webcrypto	NODE-CRYPTO-006	closed WebCrypto digest and random helpers over same crypto runtime
-WEB-CRYPTO-GLOBAL	web-globals/crypto	crypto.getRandomValues/randomUUID/subtle.digest	implemented	N63	tsonic_node::crypto::webcrypto	NODE-CRYPTO-006	Web global crypto subset backed by closed crypto provider
 NODE-URL-CARRIER	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL carrier
 NODE-URL-PARSE	url	URL constructor	implemented	L	tsonic_node::url::Url::parse	NODE-URL-001	absolute and base-relative URL parse
 NODE-URL-HREF	url	URL.href	implemented	N59	tsonic_node::url::Url::href	NODE-URL-001,NODE-URL-009	href accessor and reserialization
