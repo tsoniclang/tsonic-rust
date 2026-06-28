@@ -219,6 +219,14 @@ NODE-CRYPTO-X509-CERTIFICATE	crypto	X509Certificate	implemented	N45	tsonic_node:
 NODE-URL-URL	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL parser/mutators
 NODE-URL-SEARCH-PARAMS	url	URLSearchParams	implemented	L	tsonic_node::url::UrlSearchParams	NODE-URL-002	query parameter carrier
 NODE-URL-FILE	url	fileURLToPath/pathToFileURL	implemented	L	tsonic_node::url::{file_url_to_path,path_to_file_url}	NODE-URL-003	file URL helpers
+NODE-URL-PARSE-BASE	url	URL constructor with base	implemented	N59	tsonic_node::url::Url	NODE-URL-001	absolute and base-relative URL parse with accessors for protocol/auth/host/path/search/hash
+NODE-URL-MUTATORS	url	URL set pathname/search/hash	implemented	N59	tsonic_node::url::Url	NODE-URL-009	closed URL mutation and href reserialization
+NODE-URL-SEARCH-PARAMS-OPS	url	URLSearchParams append/set/get/getAll/size/sort/toString	implemented	N59	tsonic_node::url::UrlSearchParams	NODE-URL-002,NODE-URL-005	ordered query parameter mutation and serialization
+NODE-URL-SEARCH-PARAMS-ITERATION	url	URLSearchParams keys/values/entries/forEach	implemented	N59	tsonic_node::url::UrlSearchParams	NODE-URL-002,NODE-URL-005	closed URLSearchParams iteration snapshots without JS iterator runtime
+NODE-URL-LEGACY	url	parse/format/resolve/LegacyUrlObject	implemented	N59	tsonic_node::url::{parse,format,resolve,LegacyUrlObject}	NODE-URL-004	legacy Node url.parse/format/resolve shape
+NODE-URL-DOMAIN	url	domainToASCII/domainToUnicode	implemented	N59	tsonic_node::url::{domain_to_ascii,domain_to_unicode}	NODE-URL-011	IDNA domain conversion through approved URL dependency
+NODE-URL-HTTP-OPTIONS	url	urlToHttpOptions	implemented	N59	tsonic_node::url::{url_to_http_options,HttpOptions}	NODE-URL-011	closed HTTP options carrier derived from URL state
+NODE-URL-CANPARSE	url	URL.canParse	implemented	N59	tsonic_node::url::can_parse	NODE-URL-004	boolean parse validation without throwing
 NODE-UTIL-FORMAT	util	format	implemented	L	tsonic_node::util::format	NODE-UTIL-001	format subset
 NODE-UTIL-INSPECT	util	inspect	implemented	L	tsonic_node::util::inspect	NODE-UTIL-001	closed value inspection
 NODE-UTIL-TYPES	util	types	implemented	L	tsonic_node::util::types	NODE-UTIL-002	type predicates

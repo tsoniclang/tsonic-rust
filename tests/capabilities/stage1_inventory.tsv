@@ -209,6 +209,8 @@ NODE-URL-003	implemented	M	tsonic_node::abi::Url setters	NODE-URL-009	mutation/r
 NODE-URL-004	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-005 through NODE-URL-008	ordered params
 NODE-URL-005	implemented	M	tsonic_node::abi::UrlSearchParams operations	NODE-URL-005 through NODE-URL-008	iterator ABI (completed in full-completion branch)
 NODE-URL-006	implemented	M	tsonic_node::abi::{path_to_file_url,file_url_to_path}	NODE-URL-010	path/URL integration (completed in full-completion branch)
+NODE-URL-007	implemented	N59	tsonic_node::abi::{Url,UrlSearchParams,url_can_parse,url_parse,url_format,url_resolve}	NODE-URL-001,NODE-URL-002,NODE-URL-004,NODE-URL-005,NODE-URL-009	URL parse/base/mutation, URLSearchParams operations/iteration, and legacy parse/format/resolve
+NODE-URL-008	implemented	N59	tsonic_node::abi::{url_domain_to_ascii,url_domain_to_unicode,url_to_http_options,UrlHttpOptions}	NODE-URL-010,NODE-URL-011	file URL conversion, IDNA domain conversion, and URL to HTTP options carrier
 NODE-UTIL-001	implemented	L	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-001, NODE-UTIL-002	closed `JsValue`
 NODE-UTIL-002	implemented	L	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-003	no Rust reflection
 NODE-UTIL-003	implemented	L	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-004	closed equality
