@@ -36,10 +36,16 @@ fn os_wrappers_have_stable_shapes() {
     assert_eq!(constants.priority.priority_normal, 0);
     assert!(constants.errno.contains_key("ENOENT"));
     assert!(constants.errno.contains_key("ENOSYS"));
+    assert!(constants.errno.contains_key("EBADMSG"));
+    assert!(constants.errno.contains_key("EDQUOT"));
     assert!(constants.errno.contains_key("EWOULDBLOCK"));
     assert!(constants.errno.contains_key("WSAEADDRINUSE"));
+    assert!(constants.errno.contains_key("WSAETOOMANYREFS"));
+    assert!(constants.errno.contains_key("WSANOTINITIALISED"));
+    assert!(constants.errno.contains_key("WSA_E_NO_MORE"));
     assert!(constants.signals.contains_key("SIGTERM") || cfg!(not(unix)));
     assert!(constants.dlopen.contains_key("RTLD_NOW") || cfg!(not(unix)));
+    assert!(constants.dlopen.contains_key("RTLD_DEEPBIND") || cfg!(not(unix)));
     assert_eq!(constants.uv.get("UV_UDP_REUSEADDR"), Some(&4));
     assert_eq!(
         os::errno_constant("ENOENT"),
@@ -48,6 +54,10 @@ fn os_wrappers_have_stable_shapes() {
     assert_eq!(
         os::errno_constant("WSAEADDRINUSE"),
         constants.errno.get("WSAEADDRINUSE").copied()
+    );
+    assert_eq!(
+        os::errno_constant("WSA_E_NO_MORE"),
+        constants.errno.get("WSA_E_NO_MORE").copied()
     );
     assert_eq!(
         os::priority_constant("PRIORITY_NORMAL"),

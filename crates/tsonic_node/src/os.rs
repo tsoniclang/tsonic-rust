@@ -360,6 +360,7 @@ fn errno_constants() -> BTreeMap<&'static str, i32> {
         ("EAFNOSUPPORT", libc::EAFNOSUPPORT),
         ("EALREADY", libc::EALREADY),
         ("EAGAIN", libc::EAGAIN),
+        ("EBADMSG", errno_or_zero("EBADMSG")),
         ("EBADF", libc::EBADF),
         ("EBUSY", libc::EBUSY),
         ("ECANCELED", libc::ECANCELED),
@@ -369,6 +370,7 @@ fn errno_constants() -> BTreeMap<&'static str, i32> {
         ("ECONNRESET", libc::ECONNRESET),
         ("EDEADLK", libc::EDEADLK),
         ("EDESTADDRREQ", libc::EDESTADDRREQ),
+        ("EDQUOT", errno_or_zero("EDQUOT")),
         ("EDOM", libc::EDOM),
         ("EEXIST", libc::EEXIST),
         ("EFAULT", libc::EFAULT),
@@ -434,15 +436,22 @@ fn errno_constants() -> BTreeMap<&'static str, i32> {
         ("WSAEADDRNOTAVAIL", libc::EADDRNOTAVAIL),
         ("WSAEAFNOSUPPORT", libc::EAFNOSUPPORT),
         ("WSAEALREADY", libc::EALREADY),
+        ("WSAEBADF", libc::EBADF),
+        ("WSAECANCELLED", 0),
         ("WSAECONNABORTED", libc::ECONNABORTED),
         ("WSAECONNREFUSED", libc::ECONNREFUSED),
         ("WSAECONNRESET", libc::ECONNRESET),
         ("WSAEDESTADDRREQ", libc::EDESTADDRREQ),
+        ("WSAEDISCON", 0),
+        ("WSAEDQUOT", errno_or_zero("EDQUOT")),
         ("WSAEFAULT", libc::EFAULT),
+        ("WSAEHOSTDOWN", 0),
         ("WSAEHOSTUNREACH", libc::EHOSTUNREACH),
         ("WSAEINPROGRESS", libc::EINPROGRESS),
         ("WSAEINTR", libc::EINTR),
         ("WSAEINVAL", libc::EINVAL),
+        ("WSAEINVALIDPROCTABLE", 0),
+        ("WSAEINVALIDPROVIDER", 0),
         ("WSAEISCONN", libc::EISCONN),
         ("WSAELOOP", libc::ELOOP),
         ("WSAEMFILE", libc::EMFILE),
@@ -452,14 +461,33 @@ fn errno_constants() -> BTreeMap<&'static str, i32> {
         ("WSAENETRESET", libc::ENETRESET),
         ("WSAENETUNREACH", libc::ENETUNREACH),
         ("WSAENOBUFS", libc::ENOBUFS),
+        ("WSAENOMORE", 0),
         ("WSAENOPROTOOPT", libc::ENOPROTOOPT),
         ("WSAENOTCONN", libc::ENOTCONN),
+        ("WSAENOTEMPTY", libc::ENOTEMPTY),
         ("WSAENOTSOCK", libc::ENOTSOCK),
         ("WSAEOPNOTSUPP", libc::EOPNOTSUPP),
+        ("WSAEPFNOSUPPORT", 0),
+        ("WSAEPROCLIM", 0),
+        ("WSAEPROVIDERFAILEDINIT", 0),
         ("WSAEPROTONOSUPPORT", libc::EPROTONOSUPPORT),
         ("WSAEPROTOTYPE", libc::EPROTOTYPE),
+        ("WSAEREFUSED", 0),
+        ("WSAEREMOTE", 0),
+        ("WSAESHUTDOWN", 0),
+        ("WSAESOCKTNOSUPPORT", 0),
         ("WSAETIMEDOUT", libc::ETIMEDOUT),
+        ("WSAETOOMANYREFS", 0),
+        ("WSAEUSERS", 0),
         ("WSAEWOULDBLOCK", libc::EWOULDBLOCK),
+        ("WSANOTINITIALISED", 0),
+        ("WSASERVICE_NOT_FOUND", 0),
+        ("WSASYSCALLFAILURE", 0),
+        ("WSASYSNOTREADY", 0),
+        ("WSATYPE_NOT_FOUND", 0),
+        ("WSAVERNOTSUPPORTED", 0),
+        ("WSA_E_CANCELLED", 0),
+        ("WSA_E_NO_MORE", 0),
     ])
 }
 
@@ -506,12 +534,23 @@ fn dlopen_constants() -> BTreeMap<&'static str, i32> {
         ("RTLD_NOW", libc::RTLD_NOW),
         ("RTLD_GLOBAL", libc::RTLD_GLOBAL),
         ("RTLD_LOCAL", libc::RTLD_LOCAL),
+        ("RTLD_DEEPBIND", rtld_deepbind_constant()),
     ])
 }
 
 #[cfg(not(unix))]
 fn dlopen_constants() -> BTreeMap<&'static str, i32> {
     BTreeMap::new()
+}
+
+#[cfg(target_os = "linux")]
+fn rtld_deepbind_constant() -> i32 {
+    libc::RTLD_DEEPBIND
+}
+
+#[cfg(not(target_os = "linux"))]
+fn rtld_deepbind_constant() -> i32 {
+    0
 }
 
 #[cfg(target_os = "linux")]
