@@ -43,7 +43,9 @@ pub use crate::crypto::{
     webcrypto as crypto_webcrypto, AesGcmCiphertext, DigestResult, Hash, Hmac, KeyObject,
     RsaKeyPair,
 };
-pub use crate::dgram::{create_socket as dgram_create_socket, Socket as DgramSocket};
+pub use crate::dgram::{
+    create_socket as dgram_create_socket, AddressInfo as DgramAddressInfo, Socket as DgramSocket,
+};
 pub use crate::diagnostics_channel::{
     channel as diagnostics_channel, has_subscribers as diagnostics_has_subscribers,
     publish as diagnostics_publish, subscribe as diagnostics_subscribe,

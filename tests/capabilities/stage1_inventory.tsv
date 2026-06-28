@@ -222,6 +222,7 @@ NODE-MOD-006	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary
 NODE-MOD-007	implemented	F/M	tsonic_js::abi::console_*_to	JS-CON-001, JS-CON-002	injectable writer runtime API through JS console support
 NODE-MOD-008	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001 through NODE-CRYPTO-003	randomBytes/hash subset implemented; broader crypto has explicit hard-reject rows
 NODE-MOD-009	implemented	N7	tsonic_node::abi::dgram_create_socket	NODE-DGRAM-001	UDP datagram socket over std net
+NODE-DGRAM-002	implemented	N18	tsonic_node::abi::{DgramSocket,DgramAddressInfo}	NODE-DGRAM-002	UDP socket address/connect/send/close/ref/ttl/buffer metadata
 NODE-MOD-010	implemented	N3	tsonic_node::abi::{diagnostics_channel,diagnostics_publish}	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
 NODE-MOD-011	implemented	N3	tsonic_node::abi::{dns_lookup,dns_resolve4,dns_resolve6}	NODE-DNS-001	platform resolver lookup and address helpers
 NODE-MOD-012	hard-reject	M	n/a	REJECT-NODE-DOMAIN	legacy async error domain runtime out of Stage 1
