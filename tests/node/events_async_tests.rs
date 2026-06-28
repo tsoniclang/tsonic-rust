@@ -38,6 +38,43 @@ fn event_emitter_dispatches_in_registration_order() {
 }
 
 #[test]
+fn event_emitter_supports_prepend_remove_and_static_helpers() {
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let mut emitter = EventEmitter::new();
+
+    let first = Rc::clone(&seen);
+    let first_id = emitter.on_with_id("ready", move |_| first.borrow_mut().push("first"));
+    let prepended = Rc::clone(&seen);
+    let prepended_id = emitter
+        .prepend_listener_with_id("ready", move |_| prepended.borrow_mut().push("prepended"));
+    let once = Rc::clone(&seen);
+    emitter.prepend_once_listener("ready", move |_| once.borrow_mut().push("once"));
+
+    assert_eq!(emitter.listeners("ready"), vec![3, prepended_id, first_id]);
+    assert_eq!(
+        tsonic_node::events::get_event_listeners(&emitter, "ready"),
+        emitter.raw_listeners("ready")
+    );
+    assert!(emitter.emit("ready", &[]));
+    assert!(emitter.emit("ready", &[]));
+    assert_eq!(
+        seen.borrow().as_slice(),
+        &["once", "prepended", "first", "prepended", "first"]
+    );
+
+    emitter.off("ready", prepended_id);
+    assert_eq!(emitter.listeners("ready"), vec![first_id]);
+    emitter.remove_listener("ready", first_id);
+    assert_eq!(emitter.listener_count("ready"), 0);
+
+    let mut one = EventEmitter::new();
+    let mut two = EventEmitter::new();
+    tsonic_node::events::set_max_listeners(7, &mut [&mut one, &mut two]);
+    assert_eq!(one.get_max_listeners(), Some(7));
+    assert_eq!(two.get_max_listeners(), Some(7));
+}
+
+#[test]
 fn async_local_storage_tracks_nested_store_scope() {
     let storage = AsyncLocalStorage::new();
     assert_eq!(storage.get_store(), None);
