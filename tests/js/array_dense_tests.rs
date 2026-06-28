@@ -63,7 +63,10 @@ fn mutating_dense_helpers() {
     assert_eq!(spliced, vec![1, 9, 10, 4]);
 
     let mut clamped = vec![1, 2, 3];
-    assert_eq!(dense::splice(&mut clamped, 99, 100, vec![7]), vec![]);
+    assert_eq!(
+        dense::splice(&mut clamped, 99, 100, vec![7]),
+        Vec::<i32>::new()
+    );
     assert_eq!(clamped, vec![1, 2, 3, 7]);
     assert_eq!(
         dense::splice(&mut clamped, -1, 10, Vec::<i32>::new()),

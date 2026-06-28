@@ -14,3 +14,4 @@ edition = "2021"
 [dev-dependencies]
 tsonic_runtime = { path = "crates/tsonic_runtime" }
 tsonic_js = { path = "crates/tsonic_js" }
+tsonic_node = { path = "crates/tsonic_node" }
