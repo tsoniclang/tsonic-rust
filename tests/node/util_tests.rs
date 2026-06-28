@@ -17,4 +17,10 @@ fn util_format_and_inspect_closed_values() {
     assert!(util::types::is_string(&JsValue::String("x".to_string())));
     assert!(util::types::is_number(&JsValue::Number(1.0)));
     assert!(util::types::is_boolean(&JsValue::Bool(true)));
+    assert!(util::types::is_null(&JsValue::Null));
+    assert!(util::types::is_undefined(&JsValue::Undefined));
+    assert!(util::types::is_null_or_undefined(&JsValue::Undefined));
+    assert!(!util::types::is_date(&JsValue::Null));
+    assert!(!util::types::is_reg_exp(&JsValue::Null));
+    assert!(!util::types::is_any_array_buffer(&JsValue::Null));
 }

@@ -25,6 +25,55 @@ pub fn random_bytes(size: usize) -> NodeResult<Buffer> {
     }
 }
 
+pub fn random_fill(buffer: &mut Buffer, offset: usize, size: usize) -> NodeResult<()> {
+    if offset > buffer.len() || offset.saturating_add(size) > buffer.len() {
+        return Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "randomFill range is outside buffer",
+        ));
+    }
+    let bytes = random_bytes(size)?;
+    for index in 0..size {
+        buffer.set(offset + index, bytes.get(index).unwrap())?;
+    }
+    Ok(())
+}
+
+pub fn random_int(max: u64) -> NodeResult<u64> {
+    random_int_range(0, max)
+}
+
+pub fn random_int_range(min: u64, max: u64) -> NodeResult<u64> {
+    if min >= max {
+        return Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "randomInt requires min < max",
+        ));
+    }
+    let range = max - min;
+    let bytes = random_bytes(8)?.as_bytes();
+    let value = u64::from_le_bytes(bytes.try_into().unwrap());
+    Ok(min + value % range)
+}
+
+pub fn timing_safe_equal(left: &Buffer, right: &Buffer) -> NodeResult<bool> {
+    if left.len() != right.len() {
+        return Err(NodeError::new(
+            "ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH",
+            "inputs must have equal byte length",
+        ));
+    }
+    let mut diff = 0_u8;
+    for (left, right) in left.as_bytes().iter().zip(right.as_bytes().iter()) {
+        diff |= left ^ right;
+    }
+    Ok(diff == 0)
+}
+
+pub fn get_hashes() -> Vec<&'static str> {
+    vec!["sha1", "sha256"]
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DigestResult {
     Buffer(Buffer),

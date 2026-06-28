@@ -3,6 +3,11 @@ use tsonic_node::crypto::{DigestResult, Hash};
 #[test]
 fn crypto_random_bytes_returns_requested_length() {
     assert_eq!(tsonic_node::crypto::random_bytes(8).unwrap().len(), 8);
+    let mut buffer = tsonic_node::buffer::Buffer::alloc(4);
+    tsonic_node::crypto::random_fill(&mut buffer, 1, 2).unwrap();
+    assert!(tsonic_node::crypto::random_int(10).unwrap() < 10);
+    let ranged = tsonic_node::crypto::random_int_range(10, 20).unwrap();
+    assert!((10..20).contains(&ranged));
 }
 
 #[test]
@@ -44,4 +49,11 @@ fn crypto_hmac_and_uuid_helpers_are_closed_runtime_apis() {
     assert_eq!(uuid.len(), 36);
     assert_eq!(&uuid[14..15], "4");
     assert!(matches!(&uuid[19..20], "8" | "9" | "a" | "b"));
+
+    assert!(tsonic_node::crypto::get_hashes().contains(&"sha256"));
+    let left = tsonic_node::buffer::Buffer::from_string("abc", Some("utf8")).unwrap();
+    let right = tsonic_node::buffer::Buffer::from_string("abc", Some("utf8")).unwrap();
+    let different = tsonic_node::buffer::Buffer::from_string("abd", Some("utf8")).unwrap();
+    assert!(tsonic_node::crypto::timing_safe_equal(&left, &right).unwrap());
+    assert!(!tsonic_node::crypto::timing_safe_equal(&left, &different).unwrap());
 }

@@ -1,9 +1,13 @@
+use tsonic_js::JsValue;
 use tsonic_node::{assert, perf_hooks, querystring, string_decoder, tty};
 
 #[test]
 fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     assert::ok(true, None).unwrap();
     assert::strict_equal(&1, &1, None).unwrap();
+    assert::not_strict_equal(&1, &2, None).unwrap();
+    assert::deep_strict_equal(&JsValue::Null, &JsValue::Null, None).unwrap();
+    assert::not_deep_strict_equal(&JsValue::Null, &JsValue::Undefined, None).unwrap();
     assert!(assert::ok(false, Some("no")).is_err());
     assert!(perf_hooks::performance_now() >= 0.0);
 }

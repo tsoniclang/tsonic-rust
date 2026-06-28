@@ -1,0 +1,146 @@
+id	module	api	status	packet	rust_api	evidence	reason
+NODE-MODULE-ASSERT	assert	module	implemented	N2	tsonic_node::assert	NODE-ASSERT-001	closed assertion helpers
+NODE-MODULE-ASYNC-CONTEXT	async_context	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation is outside closed runtime externals
+NODE-MODULE-ASYNC-HOOKS	async_hooks	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-HOOKS	event loop instrumentation is outside closed runtime externals
+NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	closed Buffer carrier
+NODE-MODULE-CHILD-PROCESS	child_process	module	hard-reject	N0	n/a	REJECT-NODE-CHILD-PROCESS	process spawning is explicitly excluded
+NODE-MODULE-CLUSTER	cluster	module	hard-reject	N0	n/a	REJECT-NODE-CLUSTER	multi-process orchestration is outside runtime helpers
+NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
+NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
+NODE-MODULE-DGRAM	dgram	module	hard-reject	N0	n/a	REJECT-NODE-DGRAM	network sockets excluded from Stage 1 runtime externals
+NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	hard-reject	N0	n/a	REJECT-NODE-DIAGNOSTICS	Node instrumentation channel outside emitted-code ABI
+NODE-MODULE-DNS	dns	module	hard-reject	N0	n/a	REJECT-NODE-DNS	network DNS excluded from Stage 1 runtime externals
+NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded
+NODE-MODULE-EVENTS	events	module	hard-reject	N0	n/a	REJECT-NODE-EVENTS	EventEmitter object model belongs to higher-level runtime design
+NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
+NODE-MODULE-FS-PROMISES	fs/promises	module	hard-reject	N0	n/a	REJECT-NODE-FS-PROMISES	Promise async runtime excluded
+NODE-MODULE-HTTP	http	module	hard-reject	N0	n/a	REJECT-NODE-HTTP	network server/client stack excluded
+NODE-MODULE-HTTP2	http2	module	hard-reject	N0	n/a	REJECT-NODE-HTTP2	network server/client stack excluded
+NODE-MODULE-HTTPS	https	module	hard-reject	N0	n/a	REJECT-NODE-HTTPS	network server/client stack excluded
+NODE-MODULE-INSPECTOR	inspector	module	hard-reject	N0	n/a	REJECT-NODE-INSPECTOR	debugger protocol excluded
+NODE-MODULE-MODULE	module	module	hard-reject	N0	n/a	REJECT-NODE-MODULE	Node loader/module mutation excluded
+NODE-MODULE-NET	net	module	hard-reject	N0	n/a	REJECT-NODE-NET	network sockets excluded
+NODE-MODULE-OS	os	module	implemented	J	tsonic_node::os	NODE-OS-001	closed OS query helpers
+NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers
+NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	NODE-MISC-001	performance.now subset
+NODE-MODULE-PROCESS	process	module	implemented	J	tsonic_node::process	NODE-PROC-001	closed process/env helpers
+NODE-MODULE-PUNYCODE	punycode	module	hard-reject	N0	n/a	REJECT-NODE-PUNYCODE	deprecated compatibility module excluded
+NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
+NODE-MODULE-READLINE	readline	module	hard-reject	N0	n/a	REJECT-NODE-READLINE	interactive terminal/event runtime excluded
+NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
+NODE-MODULE-SQLITE	sqlite	module	hard-reject	N0	n/a	REJECT-NODE-SQLITE	database binding excluded from runtime externals
+NODE-MODULE-STREAM	stream	module	hard-reject	N0	n/a	REJECT-NODE-STREAM	stream/event async model excluded
+NODE-MODULE-STRING-DECODER	string_decoder	module	implemented	N1	tsonic_node::string_decoder	NODE-MISC-003	UTF-8 string decoder subset
+NODE-MODULE-TEST	test	module	hard-reject	N0	n/a	REJECT-NODE-TEST	test runner module excluded from generated runtime ABI
+NODE-MODULE-TIMERS	timers	module	hard-reject	N0	n/a	REJECT-NODE-TIMERS	event loop scheduling excluded
+NODE-MODULE-TLS	tls	module	hard-reject	N0	n/a	REJECT-NODE-TLS	network TLS stack excluded
+NODE-MODULE-TRACE-EVENTS	trace_events	module	hard-reject	N0	n/a	REJECT-NODE-TRACE-EVENTS	instrumentation excluded
+NODE-MODULE-TTY	tty	module	implemented	N1	tsonic_node::tty	NODE-MISC-004	isatty helper
+NODE-MODULE-URL	url	module	implemented	L	tsonic_node::url	NODE-URL-001	URL and URLSearchParams helpers
+NODE-MODULE-UTIL	util	module	implemented	L	tsonic_node::util	NODE-UTIL-001	format/inspect/types subset
+NODE-MODULE-V8	v8	module	hard-reject	N0	n/a	REJECT-NODE-V8	V8-specific APIs irrelevant to Rust runtime
+NODE-MODULE-VM	vm	module	hard-reject	N0	n/a	REJECT-NODE-VM	dynamic code execution excluded
+NODE-MODULE-WASI	wasi	module	hard-reject	N0	n/a	REJECT-NODE-WASI	WASI runtime embedding excluded
+NODE-MODULE-WORKER-THREADS	worker_threads	module	hard-reject	N0	n/a	REJECT-NODE-WORKERS	thread/event worker runtime excluded
+NODE-MODULE-ZLIB	zlib	module	hard-reject	N0	n/a	REJECT-NODE-ZLIB	compression dependency not approved
+NODE-FS-ACCESS	fs	accessSync	implemented	K	tsonic_node::fs::access_sync	NODE-FS-EXT-001	existence/access validation
+NODE-FS-APPEND-FILE	fs	appendFileSync	implemented	K	tsonic_node::fs::{append_file_sync_string,append_file_sync_buffer}	NODE-FS-EXT-001	string and buffer overloads
+NODE-FS-CHMOD	fs	chmodSync	implemented	K	tsonic_node::fs::chmod_sync	NODE-FS-EXT-001	numeric mode accepted; Windows maps writable bit
+NODE-FS-CHOWN	fs	chownSync	hard-reject	N0	n/a	REJECT-NODE-FS-OWNERSHIP	owner/group mutation requires platform-specific privileged APIs
+NODE-FS-CLOSE	fs	closeSync	implemented	K	tsonic_node::fs::close_sync	NODE-FS-EXT-001	closed fd table
+NODE-FS-COPY-FILE	fs	copyFileSync	implemented	K	tsonic_node::fs::copy_file_sync	NODE-FS-001	file copy
+NODE-FS-CP	fs	cpSync	implemented	K	tsonic_node::fs::cp_sync	NODE-FS-EXT-002	recursive directory copy
+NODE-FS-EXISTS	fs	existsSync	implemented	K	tsonic_node::fs::exists_sync	NODE-FS-001	boolean existence
+NODE-FS-FCHMOD	fs	fchmodSync	hard-reject	N0	n/a	REJECT-NODE-FS-FD-PERMISSIONS	fd permission mutation not in closed fd table
+NODE-FS-FCHOWN	fs	fchownSync	hard-reject	N0	n/a	REJECT-NODE-FS-OWNERSHIP	owner/group mutation requires platform-specific privileged APIs
+NODE-FS-FDATASYNC	fs	fdatasyncSync	implemented	K	tsonic_node::fs::fdatasync_sync	NODE-FS-EXT-001	file data sync
+NODE-FS-FSTAT	fs	fstatSync	implemented	K	tsonic_node::fs::fstat_sync	NODE-FS-EXT-001	fd stat
+NODE-FS-FSYNC	fs	fsyncSync	implemented	K	tsonic_node::fs::fsync_sync	NODE-FS-EXT-001	file sync
+NODE-FS-FTRUNCATE	fs	ftruncateSync	implemented	K	tsonic_node::fs::ftruncate_sync	NODE-FS-EXT-001	fd truncate
+NODE-FS-FUTIMES	fs	futimesSync	hard-reject	N0	n/a	REJECT-NODE-FS-TIMES	file timestamp mutation needs non-std platform APIs
+NODE-FS-GLOB	fs	globSync	hard-reject	N0	n/a	REJECT-NODE-FS-GLOB	glob engine excluded from runtime externals
+NODE-FS-LCHOWN	fs	lchownSync	hard-reject	N0	n/a	REJECT-NODE-FS-OWNERSHIP	owner/group mutation requires platform-specific privileged APIs
+NODE-FS-LCHMOD	fs	lchmodSync	hard-reject	N0	n/a	REJECT-NODE-FS-LCHMOD	link permission mutation is platform-specific and unavailable on many targets
+NODE-FS-LSTAT	fs	lstatSync	implemented	K	tsonic_node::fs::lstat_sync	NODE-FS-001	symlink-aware stat
+NODE-FS-LUTIMES	fs	lutimesSync	hard-reject	N0	n/a	REJECT-NODE-FS-TIMES	link timestamp mutation needs non-std platform APIs
+NODE-FS-MKDIR	fs	mkdirSync	implemented	K	tsonic_node::fs::mkdir_sync	NODE-FS-001	recursive and non-recursive
+NODE-FS-MKDTEMP	fs	mkdtempSync	implemented	K	tsonic_node::fs::mkdtemp_sync	NODE-FS-EXT-002	unique temp directory from prefix
+NODE-FS-OPEN	fs	openSync	implemented	K	tsonic_node::fs::open_sync	NODE-FS-EXT-001	closed fd table flags r/r+/w/w+/a/a+
+NODE-FS-OPENDIR	fs	opendirSync	implemented	K	tsonic_node::fs::opendir_sync	NODE-FS-EXT-002	Dirent vector
+NODE-FS-READ	fs	readSync	implemented	K	tsonic_node::fs::read_sync	NODE-FS-EXT-001	buffer read from fd
+NODE-FS-READDIR	fs	readdirSync	implemented	K	tsonic_node::fs::readdir_sync	NODE-FS-001	sorted names
+NODE-FS-READFILE	fs	readFileSync	implemented	K	tsonic_node::fs::{read_file_sync_string,read_file_sync_buffer}	NODE-FS-001	string/buffer overloads
+NODE-FS-READLINK	fs	readlinkSync	implemented	K	tsonic_node::fs::readlink_sync	NODE-FS-EXT-002	symlink target string
+NODE-FS-REALPATH	fs	realpathSync	implemented	K	tsonic_node::fs::realpath_sync	NODE-FS-EXT-002	canonical path
+NODE-FS-RENAME	fs	renameSync	implemented	K	tsonic_node::fs::rename_sync	NODE-FS-001	rename
+NODE-FS-RM	fs	rmSync	implemented	K	tsonic_node::fs::rm_sync	NODE-FS-001	recursive/force controls
+NODE-FS-RMDIR	fs	rmdirSync	implemented	K	tsonic_node::fs::rmdir_sync	NODE-FS-EXT-002	empty directory removal
+NODE-FS-STAT	fs	statSync	implemented	K	tsonic_node::fs::stat_sync	NODE-FS-001	basic Stats
+NODE-FS-STATFS	fs	statfsSync	hard-reject	N0	n/a	REJECT-NODE-FS-STATFS	exact statvfs needs platform binding/dependency; fake zeros banned
+NODE-FS-SYMLINK	fs	symlinkSync	implemented	K	tsonic_node::fs::symlink_sync	NODE-FS-EXT-002	platform symlink helper
+NODE-FS-TRUNCATE	fs	truncateSync	implemented	K	tsonic_node::fs::truncate_sync	NODE-FS-EXT-002	path truncate
+NODE-FS-UNLINK	fs	unlinkSync	implemented	K	tsonic_node::fs::unlink_sync	NODE-FS-001	remove file
+NODE-FS-UTIMES	fs	utimesSync	hard-reject	N0	n/a	REJECT-NODE-FS-TIMES	file timestamp mutation needs non-std platform APIs
+NODE-FS-WATCH	fs	watch	hard-reject	N0	n/a	REJECT-NODE-FS-WATCH	watchers require async/event runtime
+NODE-FS-WATCH-FILE	fs	watchFile	hard-reject	N0	n/a	REJECT-NODE-FS-WATCH	watchers require async/event runtime
+NODE-FS-WRITE	fs	writeSync	implemented	K	tsonic_node::fs::{write_sync_string,write_sync_buffer}	NODE-FS-EXT-001	string/buffer fd writes
+NODE-FS-WRITEFILE	fs	writeFileSync	implemented	K	tsonic_node::fs::{write_file_sync_string,write_file_sync_buffer}	NODE-FS-001	string/buffer overloads
+NODE-FS-CREATE-READ-STREAM	fs	createReadStream	hard-reject	N0	n/a	REJECT-NODE-FS-STREAMS	stream runtime excluded
+NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	hard-reject	N0	n/a	REJECT-NODE-FS-STREAMS	stream runtime excluded
+NODE-FS-ASYNC-CALLBACKS	fs	callback APIs	hard-reject	N0	n/a	REJECT-NODE-FS-ASYNC	callback async runtime excluded
+NODE-FS-PROMISES	fs	promises APIs	hard-reject	N0	n/a	REJECT-NODE-FS-PROMISES	Promise async runtime excluded
+NODE-PATH-BASENAME	path	basename	implemented	J	tsonic_node::path::basename	NODE-PATH-001	path helper
+NODE-PATH-DIRNAME	path	dirname	implemented	J	tsonic_node::path::dirname	NODE-PATH-001	path helper
+NODE-PATH-EXTNAME	path	extname	implemented	J	tsonic_node::path::extname	NODE-PATH-001	path helper
+NODE-PATH-FORMAT	path	format	implemented	J	tsonic_node::path::format	NODE-PATH-001	path helper
+NODE-PATH-IS-ABSOLUTE	path	isAbsolute	implemented	J	tsonic_node::path::is_absolute	NODE-PATH-001	path helper
+NODE-PATH-JOIN	path	join	implemented	J	tsonic_node::path::join	NODE-PATH-001	path helper
+NODE-PATH-NORMALIZE	path	normalize	implemented	J	tsonic_node::path::normalize	NODE-PATH-001	path helper
+NODE-PATH-PARSE	path	parse	implemented	J	tsonic_node::path::parse	NODE-PATH-001	path helper
+NODE-PATH-RELATIVE	path	relative	implemented	J	tsonic_node::path::relative	NODE-PATH-001	path helper
+NODE-PATH-RESOLVE	path	resolve	implemented	J	tsonic_node::path::resolve	NODE-PATH-001	path helper
+NODE-PATH-TO-NAMESPACED	path	toNamespacedPath	implemented	J	tsonic_node::path::to_namespaced_path	NODE-PATH-001	path helper
+NODE-PATH-SEP-DELIMITER	path	sep/delimiter	implemented	J	tsonic_node::path::{sep,delimiter}	NODE-PATH-001	platform separators
+NODE-PATH-MATCH-GLOB	path	matchesGlob	hard-reject	N0	n/a	REJECT-NODE-PATH-GLOB	glob engine excluded
+NODE-BUFFER-ALLOC	buffer	alloc/from	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-001	closed byte carrier
+NODE-BUFFER-ENCODING	buffer	encodings	implemented	K	tsonic_node::buffer::{encode_string,decode_bytes}	NODE-BUF-001	utf8/latin1/utf16le/hex/base64/base64url
+NODE-BUFFER-SLICE	buffer	slice/subarray	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-002	shared views
+NODE-BUFFER-COMPARE	buffer	equals/compare/concat	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-003	byte comparisons
+NODE-BUFFER-INTEGERS	buffer	read/write integers	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-004	uint32 endian helpers
+NODE-BUFFER-TRANSCODE	buffer	transcode	hard-reject	N0	n/a	REJECT-NODE-BUFFER-TRANSCODE	encoding conversion matrix excluded beyond supported encodings
+NODE-CRYPTO-RANDOM-BYTES	crypto	randomBytes	implemented	L	tsonic_node::crypto::random_bytes	NODE-CRYPTO-001	OS randomness
+NODE-CRYPTO-RANDOM-FILL	crypto	randomFill/randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	buffer random fill
+NODE-CRYPTO-RANDOM-INT	crypto	randomInt	implemented	L	tsonic_node::crypto::{random_int,random_int_range}	NODE-CRYPTO-001	range-limited random integer
+NODE-CRYPTO-CREATE-HASH	crypto	createHash	implemented	L	tsonic_node::crypto::Hash	NODE-CRYPTO-001	stable hash subset
+NODE-CRYPTO-HMAC	crypto	createHmac	implemented	L	tsonic_node::crypto::hmac_digest	NODE-CRYPTO-002	HMAC subset
+NODE-CRYPTO-RANDOM-UUID	crypto	randomUUID	implemented	L	tsonic_node::crypto::random_uuid	NODE-CRYPTO-002	UUID v4 shape
+NODE-CRYPTO-TIMING-SAFE-EQUAL	crypto	timingSafeEqual	implemented	L	tsonic_node::crypto::timing_safe_equal	NODE-CRYPTO-002	constant-time same-length byte comparison
+NODE-CRYPTO-GET-HASHES	crypto	getHashes	implemented	L	tsonic_node::crypto::get_hashes	NODE-CRYPTO-002	declared supported hash algorithms
+NODE-CRYPTO-CIPHER	crypto	cipher/decipher	hard-reject	N0	n/a	REJECT-NODE-CRYPTO-CIPHER	full cipher suite/dependencies not approved
+NODE-CRYPTO-KEYS	crypto	keys/certs/sign/verify	hard-reject	N0	n/a	REJECT-NODE-CRYPTO-PKI	PKI/key object model out of runtime externals
+NODE-URL-URL	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL parser/mutators
+NODE-URL-SEARCH-PARAMS	url	URLSearchParams	implemented	L	tsonic_node::url::UrlSearchParams	NODE-URL-002	query parameter carrier
+NODE-URL-FILE	url	fileURLToPath/pathToFileURL	implemented	L	tsonic_node::url::{file_url_to_path,path_to_file_url}	NODE-URL-003	file URL helpers
+NODE-UTIL-FORMAT	util	format	implemented	L	tsonic_node::util::format	NODE-UTIL-001	format subset
+NODE-UTIL-INSPECT	util	inspect	implemented	L	tsonic_node::util::inspect	NODE-UTIL-001	closed value inspection
+NODE-UTIL-TYPES	util	types	implemented	L	tsonic_node::util::types	NODE-UTIL-002	type predicates
+NODE-ASSERT-DEEP	assert	deepStrictEqual/notDeepStrictEqual	implemented	N2	tsonic_node::assert::{deep_strict_equal,not_deep_strict_equal}	NODE-ASSERT-001	closed JsValue deep strict assertions
+NODE-ASSERT-NOT	assert	notStrictEqual	implemented	N2	tsonic_node::assert::not_strict_equal	NODE-ASSERT-001	strict inequality assertion
+NODE-UTIL-PROMISIFY	util	promisify/callbackify	hard-reject	N0	n/a	REJECT-NODE-UTIL-ASYNC	callback/Promise adaptation excluded
+NODE-PROCESS-ENV	process	env	implemented	J	tsonic_node::process::{env_get,env_set,env_delete}	NODE-PROC-001	env helpers
+NODE-PROCESS-CWD	process	cwd/chdir	implemented	J	tsonic_node::process::{cwd,chdir}	NODE-PROC-001	cwd helpers
+NODE-PROCESS-ARGS	process	argv/execPath	implemented	J	tsonic_node::process::{argv,exec_path}	NODE-PROC-001	process args
+NODE-PROCESS-PLATFORM	process	platform/arch	implemented	J	tsonic_node::process::{platform,arch}	NODE-PROC-001	platform helpers
+NODE-PROCESS-EXIT	process	exit/exitCode	implemented	J	tsonic_node::process::{exit,exit_code,set_exit_code}	NODE-PROC-001	exit code state
+NODE-PROCESS-PID	process	pid	implemented	J	tsonic_node::process::pid	NODE-PROC-002	process id
+NODE-PROCESS-VERSION	process	version/versions	implemented	J	tsonic_node::process::{version,versions}	NODE-PROC-002	stable tsonic runtime version shape
+NODE-PROCESS-TIME	process	uptime/hrtime/hrtime.bigint	implemented	J	tsonic_node::process::{uptime,hrtime,hrtime_bigint}	NODE-PROC-002	monotonic process timers
+NODE-PROCESS-MEMORY	process	memoryUsage	implemented	J	tsonic_node::process::memory_usage	NODE-PROC-002	RSS plus closed heap fields
+NODE-PROCESS-IO	process	stdin/stdout/stderr	hard-reject	N0	n/a	REJECT-NODE-PROCESS-STREAMS	stream handles excluded
+NODE-PROCESS-EVENTS	process	on/emit/nextTick	hard-reject	N0	n/a	REJECT-NODE-PROCESS-EVENTS	event loop excluded
+NODE-OS-PLATFORM	os	platform/arch	implemented	J	tsonic_node::os::{platform,arch}	NODE-OS-001	platform helpers
+NODE-OS-MEM	os	freemem/totalmem	implemented	J	tsonic_node::os::{freemem,totalmem}	NODE-OS-001	memory helpers
+NODE-OS-HOME-TMP	os	homedir/tmpdir	implemented	J	tsonic_node::os::{homedir,tmpdir}	NODE-OS-001	directory helpers
+NODE-OS-HOST-RELEASE	os	hostname/type/release	implemented	J	tsonic_node::os::{hostname,type,release}	NODE-OS-001	host identity helpers
+NODE-OS-CPU	os	cpus/loadavg	implemented	J	tsonic_node::os::{cpus,loadavg}	NODE-OS-001	CPU/load helpers
+NODE-OS-NETWORK	os	networkInterfaces	hard-reject	N0	n/a	REJECT-NODE-OS-NETWORK	network introspection excluded

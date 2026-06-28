@@ -20,3 +20,19 @@ fn process_platform_and_arch_use_node_spellings() {
     assert!(!process::arch().is_empty());
     assert!(process::exec_path().unwrap().contains('/'));
 }
+
+#[test]
+fn process_runtime_queries_have_stable_shapes() {
+    assert!(process::pid() > 0);
+    assert!(!process::version().is_empty());
+    assert!(process::versions()
+        .iter()
+        .any(|(name, _)| name == "tsonic_rust"));
+    assert!(process::uptime() >= 0.0);
+    let (seconds, nanos) = process::hrtime(None);
+    assert!(nanos < 1_000_000_000);
+    assert!(process::hrtime(Some((seconds, nanos))).1 < 1_000_000_000);
+    assert!(process::hrtime_bigint() > 0);
+    let memory = process::memory_usage();
+    assert!(memory.rss <= memory.rss + memory.heap_total);
+}

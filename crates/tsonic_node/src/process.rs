@@ -1,8 +1,20 @@
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::OnceLock;
+use std::time::Instant;
 
 use crate::error::{NodeError, NodeResult};
 
 static EXIT_CODE: AtomicI32 = AtomicI32::new(i32::MIN);
+static START: OnceLock<Instant> = OnceLock::new();
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryUsage {
+    pub rss: u64,
+    pub heap_total: u64,
+    pub heap_used: u64,
+    pub external: u64,
+    pub array_buffers: u64,
+}
 
 pub fn cwd() -> NodeResult<String> {
     std::env::current_dir()
@@ -16,6 +28,10 @@ pub fn chdir(path: &str) -> NodeResult<()> {
 
 pub fn argv() -> Vec<String> {
     std::env::args().collect()
+}
+
+pub fn pid() -> u32 {
+    std::process::id()
 }
 
 pub fn exec_path() -> NodeResult<String> {
@@ -47,6 +63,58 @@ pub fn arch() -> String {
     .to_string()
 }
 
+pub fn version() -> String {
+    "tsonic-rust".to_string()
+}
+
+pub fn versions() -> Vec<(String, String)> {
+    vec![
+        ("node".to_string(), version()),
+        (
+            "tsonic_rust".to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
+        ),
+    ]
+}
+
+pub fn uptime() -> f64 {
+    START.get_or_init(Instant::now).elapsed().as_secs_f64()
+}
+
+pub fn hrtime(previous: Option<(u64, u32)>) -> (u64, u32) {
+    let elapsed = START.get_or_init(Instant::now).elapsed();
+    let mut seconds = elapsed.as_secs();
+    let mut nanos = elapsed.subsec_nanos();
+    if let Some((previous_seconds, previous_nanos)) = previous {
+        seconds = seconds.saturating_sub(previous_seconds);
+        if nanos >= previous_nanos {
+            nanos -= previous_nanos;
+        } else if seconds > 0 {
+            seconds -= 1;
+            nanos = 1_000_000_000 + nanos - previous_nanos;
+        } else {
+            nanos = 0;
+        }
+    }
+    (seconds, nanos)
+}
+
+pub fn hrtime_bigint() -> u128 {
+    let elapsed = START.get_or_init(Instant::now).elapsed();
+    u128::from(elapsed.as_secs()) * 1_000_000_000 + u128::from(elapsed.subsec_nanos())
+}
+
+pub fn memory_usage() -> MemoryUsage {
+    let rss = current_rss_bytes().unwrap_or(0);
+    MemoryUsage {
+        rss,
+        heap_total: 0,
+        heap_used: 0,
+        external: 0,
+        array_buffers: 0,
+    }
+}
+
 pub fn env_get(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
@@ -74,4 +142,16 @@ pub fn set_exit_code(code: i32) {
 
 pub fn exit(code: Option<i32>) -> ! {
     std::process::exit(code.unwrap_or_else(|| exit_code().unwrap_or(0)));
+}
+
+#[cfg(target_os = "linux")]
+fn current_rss_bytes() -> Option<u64> {
+    let statm = std::fs::read_to_string("/proc/self/statm").ok()?;
+    let pages = statm.split_whitespace().nth(1)?.parse::<u64>().ok()?;
+    Some(pages * 4096)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn current_rss_bytes() -> Option<u64> {
+    None
 }

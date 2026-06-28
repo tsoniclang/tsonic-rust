@@ -33,3 +33,133 @@ fn fs_sync_file_lifecycle() {
     fs::unlink_sync(&file_text).unwrap();
     fs::rm_sync(&root_text, true, false).unwrap();
 }
+
+#[test]
+fn fs_extended_sync_file_lifecycle() {
+    let root = temp_root("extended");
+    let root_text = root.to_string_lossy().to_string();
+    fs::mkdir_sync(&root_text, true).unwrap();
+
+    let file = root.join("fd.txt");
+    let file_text = file.to_string_lossy().to_string();
+    fs::write_file_sync_string(&file_text, "hello", "utf8").unwrap();
+    fs::append_file_sync_string(&file_text, " world", "utf8").unwrap();
+    assert_eq!(
+        fs::read_file_sync_string(&file_text, "utf8").unwrap(),
+        "hello world"
+    );
+
+    fs::access_sync(&file_text).unwrap();
+    fs::chmod_sync(&file_text, 0o600).unwrap();
+
+    let fd = fs::open_sync(&file_text, "r+").unwrap();
+    assert_eq!(fs::fstat_sync(fd).unwrap().size, 11);
+    let mut buffer = tsonic_node::buffer::Buffer::alloc(5);
+    assert_eq!(fs::read_sync(fd, &mut buffer, 0, 5, Some(6)).unwrap(), 5);
+    assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
+    assert_eq!(
+        fs::write_sync_string(fd, "rust", Some(6), "utf8").unwrap(),
+        4
+    );
+    fs::fsync_sync(fd).unwrap();
+    fs::fdatasync_sync(fd).unwrap();
+    fs::ftruncate_sync(fd, 10).unwrap();
+    fs::close_sync(fd).unwrap();
+    assert_eq!(
+        fs::read_file_sync_string(&file_text, "utf8").unwrap(),
+        "hello rust"
+    );
+
+    let buffer_file = root.join("buffer.txt");
+    let buffer_file_text = buffer_file.to_string_lossy().to_string();
+    fs::append_file_sync_buffer(
+        &buffer_file_text,
+        &tsonic_node::buffer::Buffer::from_string("abc", Some("utf8")).unwrap(),
+    )
+    .unwrap();
+    let fd = fs::open_sync(&buffer_file_text, "r+").unwrap();
+    let write_buffer = tsonic_node::buffer::Buffer::from_string("XYZ", Some("utf8")).unwrap();
+    assert_eq!(
+        fs::write_sync_buffer(fd, &write_buffer, 1, 2, Some(1)).unwrap(),
+        2
+    );
+    fs::close_sync(fd).unwrap();
+    assert_eq!(
+        fs::read_file_sync_string(&buffer_file_text, "utf8").unwrap(),
+        "aYZ"
+    );
+
+    fs::rm_sync(&root_text, true, false).unwrap();
+}
+
+#[test]
+fn fs_extended_sync_directory_lifecycle() {
+    let root = temp_root("directory");
+    let root_text = root.to_string_lossy().to_string();
+    fs::mkdir_sync(&root_text, true).unwrap();
+
+    let source = root.join("source");
+    let source_text = source.to_string_lossy().to_string();
+    fs::mkdir_sync(&source_text, false).unwrap();
+    let nested = source.join("nested.txt");
+    let nested_text = nested.to_string_lossy().to_string();
+    fs::write_file_sync_string(&nested_text, "nested", "utf8").unwrap();
+
+    let copied = root.join("copied");
+    let copied_text = copied.to_string_lossy().to_string();
+    fs::cp_sync(&source_text, &copied_text, true).unwrap();
+    assert_eq!(
+        fs::read_file_sync_string(&copied.join("nested.txt").to_string_lossy(), "utf8").unwrap(),
+        "nested"
+    );
+
+    let entries = fs::opendir_sync(&copied_text).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "nested.txt");
+    assert!(entries[0].is_file());
+
+    let link = root.join("hardlink.txt");
+    let link_text = link.to_string_lossy().to_string();
+    fs::link_sync(&nested_text, &link_text).unwrap();
+    assert_eq!(
+        fs::read_file_sync_string(&link_text, "utf8").unwrap(),
+        "nested"
+    );
+    assert!(fs::realpath_sync(&link_text)
+        .unwrap()
+        .ends_with("hardlink.txt"));
+
+    let truncate = root.join("truncate.txt");
+    let truncate_text = truncate.to_string_lossy().to_string();
+    fs::write_file_sync_string(&truncate_text, "abcdef", "utf8").unwrap();
+    fs::truncate_sync(&truncate_text, 3).unwrap();
+    assert_eq!(
+        fs::read_file_sync_string(&truncate_text, "utf8").unwrap(),
+        "abc"
+    );
+
+    let made = fs::mkdtemp_sync(&root.join("tmp-").to_string_lossy()).unwrap();
+    assert!(fs::stat_sync(&made).unwrap().is_directory());
+    fs::rmdir_sync(&made).unwrap();
+
+    #[cfg(unix)]
+    {
+        let symlink = root.join("symlink.txt");
+        let symlink_text = symlink.to_string_lossy().to_string();
+        fs::symlink_sync(&nested_text, &symlink_text).unwrap();
+        assert_eq!(fs::readlink_sync(&symlink_text).unwrap(), nested_text);
+        assert!(fs::lstat_sync(&symlink_text).unwrap().is_symbolic_link());
+    }
+
+    fs::rm_sync(&root_text, true, false).unwrap();
+}
+
+fn temp_root(label: &str) -> std::path::PathBuf {
+    std::env::current_dir().unwrap().join(".temp").join(format!(
+        "tsonic-rust-fs-{label}-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ))
+}
