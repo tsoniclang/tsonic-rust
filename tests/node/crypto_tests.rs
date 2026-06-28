@@ -13,6 +13,17 @@ fn crypto_random_bytes_returns_requested_length() {
 #[test]
 fn crypto_sha256_known_vector() {
     assert_eq!(tsonic_node::crypto::constants().rsa_pkcs1_padding, 1);
+    assert_eq!(tsonic_node::crypto::constants().rsa_sslv23_padding, 2);
+    assert_eq!(tsonic_node::crypto::constants().rsa_ssl_v23_padding, 2);
+    assert_eq!(
+        tsonic_node::crypto::constants().ssl_op_no_tlsv1_3,
+        536_870_912
+    );
+    assert_eq!(tsonic_node::crypto::constants().ssl_op_no_ticket, 16_384);
+    assert_eq!(
+        tsonic_node::crypto::constants().ssl_op_legacy_server_connect,
+        4
+    );
     assert_eq!(
         tsonic_node::crypto::constants().point_conversion_uncompressed,
         4
