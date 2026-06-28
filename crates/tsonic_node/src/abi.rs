@@ -154,11 +154,14 @@ pub use crate::fs_promises::{
     FileHandle as FsPromisesFileHandle,
 };
 pub use crate::http::{
-    create_server as http_create_server, get as http_get, parse_response as http_parse_response,
-    request as http_request, Agent as HttpAgent, AgentOptions as HttpAgentOptions,
-    ClientRequest as HttpClientRequest, IncomingMessage as HttpIncomingMessage,
-    RequestOptions as HttpRequestOptions, Response as HttpResponse, Server as HttpServer,
-    ServerResponse as HttpServerResponse,
+    create_server as http_create_server, get as http_get, methods as http_methods,
+    parse_response as http_parse_response, request as http_request,
+    status_codes as http_status_codes, validate_header_name as http_validate_header_name,
+    validate_header_value as http_validate_header_value, Agent as HttpAgent,
+    AgentOptions as HttpAgentOptions, ClientRequest as HttpClientRequest,
+    IncomingMessage as HttpIncomingMessage, RequestOptions as HttpRequestOptions,
+    Response as HttpResponse, Server as HttpServer, ServerResponse as HttpServerResponse,
+    MAX_HEADER_SIZE as HTTP_MAX_HEADER_SIZE,
 };
 pub use crate::http2::{
     connect as http2_connect, connect_session as http2_connect_session,

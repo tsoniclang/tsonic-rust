@@ -161,11 +161,27 @@ fn net_option_and_policy_shapes_are_closed_and_fact_backed() {
 
 #[test]
 fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
+    assert!(http::methods().contains(&"GET"));
+    assert_eq!(http::status_codes().get(&201), Some(&"Created"));
+    assert_eq!(http::MAX_HEADER_SIZE, 16 * 1024);
+    http::validate_header_name("x-token").unwrap();
+    http::validate_header_value("x-token", "ok").unwrap();
+    assert!(http::validate_header_name("bad header").is_err());
+    assert!(http::validate_header_value("x-token", "bad\nvalue").is_err());
+
     let server = http::create_server(|request, response| {
         assert_eq!(request.method, "POST");
         assert_eq!(request.url, "/submit");
         assert_eq!(request.http_version, "1.1");
         assert!(request.complete);
+        assert_eq!(
+            request.get_header("content-type"),
+            Some("text/plain".to_string())
+        );
+        assert_eq!(
+            request.headers_distinct().get("content-type").unwrap(),
+            &vec!["text/plain".to_string()]
+        );
         response.set_header("content-type", "text/plain");
         response.append_header("vary", "accept");
         response.append_header("vary", "encoding");
@@ -259,6 +275,11 @@ fn http_agent_and_client_request_expose_common_state() {
     assert!(request.reused_socket);
     request.abort();
     assert!(request.aborted);
+    request.set_header("x-client", "1");
+    assert_eq!(request.get_header("x-client"), Some("1".to_string()));
+    request.remove_header("x-client");
+    assert_eq!(request.get_header("x-client"), None);
+    assert!(request.get_headers().is_empty());
 }
 
 #[test]

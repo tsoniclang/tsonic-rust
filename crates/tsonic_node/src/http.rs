@@ -5,6 +5,90 @@ use crate::error::{NodeError, NodeResult};
 use crate::net;
 use crate::stream::{Readable, Writable};
 
+pub const MAX_HEADER_SIZE: usize = 16 * 1024;
+
+pub fn methods() -> Vec<&'static str> {
+    vec![
+        "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT",
+    ]
+}
+
+pub fn status_codes() -> BTreeMap<u16, &'static str> {
+    [
+        (100, "Continue"),
+        (101, "Switching Protocols"),
+        (102, "Processing"),
+        (103, "Early Hints"),
+        (200, "OK"),
+        (201, "Created"),
+        (202, "Accepted"),
+        (204, "No Content"),
+        (301, "Moved Permanently"),
+        (302, "Found"),
+        (304, "Not Modified"),
+        (400, "Bad Request"),
+        (401, "Unauthorized"),
+        (403, "Forbidden"),
+        (404, "Not Found"),
+        (409, "Conflict"),
+        (418, "I'm a Teapot"),
+        (429, "Too Many Requests"),
+        (500, "Internal Server Error"),
+        (502, "Bad Gateway"),
+        (503, "Service Unavailable"),
+        (504, "Gateway Timeout"),
+    ]
+    .into_iter()
+    .collect()
+}
+
+pub fn validate_header_name(name: &str) -> NodeResult<()> {
+    if name.is_empty()
+        || !name.bytes().all(|byte| {
+            matches!(
+                byte,
+                b'!' | b'#'
+                    | b'$'
+                    | b'%'
+                    | b'&'
+                    | b'\''
+                    | b'*'
+                    | b'+'
+                    | b'-'
+                    | b'.'
+                    | b'^'
+                    | b'_'
+                    | b'`'
+                    | b'|'
+                    | b'~'
+                    | b'0'..=b'9'
+                    | b'a'..=b'z'
+                    | b'A'..=b'Z'
+            )
+        })
+    {
+        return Err(NodeError::new(
+            "ERR_INVALID_HTTP_TOKEN",
+            "header name contains invalid characters",
+        ));
+    }
+    Ok(())
+}
+
+pub fn validate_header_value(name: &str, value: &str) -> NodeResult<()> {
+    validate_header_name(name)?;
+    if value
+        .bytes()
+        .any(|byte| matches!(byte, 0..=8 | 10..=31 | 127))
+    {
+        return Err(NodeError::new(
+            "ERR_INVALID_CHAR",
+            "header value contains invalid characters",
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentOptions {
     pub keep_alive: bool,
@@ -156,10 +240,30 @@ impl IncomingMessage {
     }
 
     pub fn set_header(&mut self, name: &str, value: &str) {
+        if validate_header_value(name, value).is_err() {
+            return;
+        }
         self.headers
             .insert(name.to_ascii_lowercase(), value.to_string());
         self.raw_headers.push(name.to_string());
         self.raw_headers.push(value.to_string());
+    }
+
+    pub fn get_header(&self, name: &str) -> Option<String> {
+        self.headers.get(&name.to_ascii_lowercase()).cloned()
+    }
+
+    pub fn headers_distinct(&self) -> BTreeMap<String, Vec<String>> {
+        let mut result = BTreeMap::new();
+        for pair in self.raw_headers.chunks(2) {
+            if let [name, value] = pair {
+                result
+                    .entry(name.to_ascii_lowercase())
+                    .or_insert_with(Vec::new)
+                    .push(value.clone());
+            }
+        }
+        result
     }
 
     pub fn set_timeout(&mut self, msecs: u64, callback: Option<impl FnOnce()>) -> &mut Self {
@@ -225,6 +329,9 @@ impl ServerResponse {
     }
 
     pub fn set_header(&mut self, name: &str, value: &str) {
+        if validate_header_value(name, value).is_err() {
+            return;
+        }
         self.headers
             .insert(name.to_ascii_lowercase(), value.to_string());
     }
@@ -385,6 +492,29 @@ impl ClientRequest {
         }
     }
 
+    pub fn set_header(&mut self, name: &str, value: &str) {
+        if validate_header_value(name, value).is_ok() {
+            self.options
+                .headers
+                .insert(name.to_ascii_lowercase(), value.to_string());
+        }
+    }
+
+    pub fn get_header(&self, name: &str) -> Option<String> {
+        self.options
+            .headers
+            .get(&name.to_ascii_lowercase())
+            .cloned()
+    }
+
+    pub fn remove_header(&mut self, name: &str) {
+        self.options.headers.remove(&name.to_ascii_lowercase());
+    }
+
+    pub fn get_headers(&self) -> BTreeMap<String, String> {
+        self.options.headers.clone()
+    }
+
     pub fn set_timeout(&mut self, timeout: u64, callback: Option<impl FnOnce()>) -> &mut Self {
         self.timeout = Some(timeout);
         if let Some(callback) = callback {
@@ -476,19 +606,7 @@ pub fn request(options: &RequestOptions, body: &[u8]) -> NodeResult<Response> {
 }
 
 fn canonical_status_message(status_code: u16) -> &'static str {
-    match status_code {
-        200 => "OK",
-        201 => "Created",
-        204 => "No Content",
-        301 => "Moved Permanently",
-        302 => "Found",
-        400 => "Bad Request",
-        401 => "Unauthorized",
-        403 => "Forbidden",
-        404 => "Not Found",
-        500 => "Internal Server Error",
-        _ => "",
-    }
+    status_codes().get(&status_code).copied().unwrap_or("")
 }
 
 pub fn get(host: &str, port: u16, path: &str) -> NodeResult<Response> {
