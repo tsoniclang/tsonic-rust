@@ -525,6 +525,28 @@ NODE-NET-SOCKET-ADDRESS	net	SocketAddress	implemented	N37	tsonic_node::net::Sock
 NODE-DGRAM-SOCKET	dgram	Socket address/connect/send/close/ref/ttl/buffer metadata	implemented	N18	tsonic_node::dgram::Socket	NODE-DGRAM-002	UDP socket address, connected send, ref/unref, close, queue, buffer, TTL, and broadcast helpers
 NODE-READLINE-INTERFACE	readline	Interface prompt/cursor/key/terminal methods	implemented	N19	tsonic_node::readline::Interface	NODE-READLINE-002	buffered Interface prompt, cursor, key-write, terminal, pause/resume, and close behavior
 NODE-READLINE-PROMISES	readline/promises	Readline commit/rollback/cursor methods	implemented	N19	tsonic_node::readline::promises	NODE-READLINE-002	promises Readline controller command queue with commit/rollback semantics
+NODE-READLINE-CREATE-INTERFACE	readline	createInterface	implemented	N72	tsonic_node::readline::create_interface	NODE-READLINE-001	closed readline interface factory over explicit input lines
+NODE-READLINE-INTERFACE-QUESTION	readline	Interface.question	implemented	N72	tsonic_node::readline::Interface::question	NODE-READLINE-002	question writes prompt and consumes next explicit input line
+NODE-READLINE-INTERFACE-WRITE	readline	Interface.write	implemented	N72	tsonic_node::readline::Interface::write	NODE-READLINE-002	write appends explicit output and line buffer text
+NODE-READLINE-INTERFACE-WRITE-KEY	readline	Interface.writeKey	implemented	N72	tsonic_node::readline::Interface::write_key	NODE-READLINE-002	writeKey writes explicit text or key sequence
+NODE-READLINE-INTERFACE-PAUSE-RESUME	readline	Interface.pause/resume/isPaused	implemented	N72	tsonic_node::readline::Interface::{pause,resume,paused}	NODE-READLINE-002	pause and resume gate reads/writes without hidden terminal state
+NODE-READLINE-INTERFACE-CLOSE	readline	Interface.close/closed	implemented	N72	tsonic_node::readline::Interface::{close,closed}	NODE-READLINE-002	close marks interface closed and blocks reads
+NODE-READLINE-INTERFACE-OUTPUT	readline	Interface output	implemented	N72	tsonic_node::readline::Interface::output	NODE-READLINE-002	output exposes deterministic written prompt/text buffer
+NODE-READLINE-INTERFACE-PROMPT	readline	Interface prompt	implemented	N72	tsonic_node::readline::Interface::{set_prompt,get_prompt,prompt}	NODE-READLINE-002	prompt helpers use explicit prompt buffer
+NODE-READLINE-INTERFACE-LINE-CURSOR	readline	Interface line/cursor/getCursorPos	implemented	N72	tsonic_node::readline::Interface::{line,cursor,get_cursor_pos}	NODE-READLINE-002	line and cursor helpers expose closed input edit state
+NODE-READLINE-INTERFACE-TERMINAL	readline	Interface terminal	implemented	N72	tsonic_node::readline::Interface::{terminal,set_terminal}	NODE-READLINE-002	terminal flag is explicit carrier state
+NODE-READLINE-INTERFACE-NEXT-LINE	readline	Interface nextLine/remainingLines	implemented	N72	tsonic_node::readline::Interface::{next_line,remaining_lines}	NODE-READLINE-002	explicit input queue line iteration helpers
+NODE-READLINE-CURSOR-POS	readline	CursorPos	implemented	N72	tsonic_node::readline::CursorPos	NODE-READLINE-002	closed cursor position carrier
+NODE-READLINE-KEY	readline	Key	implemented	N72	tsonic_node::readline::Key	NODE-READLINE-002	closed key carrier with sequence/name/modifier fields
+NODE-READLINE-PROMISES-CREATE-READLINE	readline/promises	createReadline	implemented	N72	tsonic_node::readline::promises::create_readline	NODE-READLINE-002	promises controller factory
+NODE-READLINE-PROMISES-READLINE	readline/promises	Readline	implemented	N72	tsonic_node::readline::Readline	NODE-READLINE-002	closed promises Readline command queue carrier
+NODE-READLINE-PROMISES-CLEAR-LINE	readline/promises	Readline.clearLine	implemented	N72	tsonic_node::readline::Readline::clear_line	NODE-READLINE-002	clearLine queues deterministic terminal command
+NODE-READLINE-PROMISES-CLEAR-SCREEN-DOWN	readline/promises	Readline.clearScreenDown	implemented	N72	tsonic_node::readline::Readline::clear_screen_down	NODE-READLINE-002	clearScreenDown queues deterministic terminal command
+NODE-READLINE-PROMISES-CURSOR-TO	readline/promises	Readline.cursorTo	implemented	N72	tsonic_node::readline::Readline::cursor_to	NODE-READLINE-002	cursorTo queues deterministic cursor command
+NODE-READLINE-PROMISES-MOVE-CURSOR	readline/promises	Readline.moveCursor	implemented	N72	tsonic_node::readline::Readline::move_cursor	NODE-READLINE-002	moveCursor queues deterministic cursor command
+NODE-READLINE-PROMISES-COMMIT	readline/promises	Readline.commit	implemented	N72	tsonic_node::readline::Readline::commit	NODE-READLINE-002	commit flushes pending terminal commands
+NODE-READLINE-PROMISES-ROLLBACK	readline/promises	Readline.rollback	implemented	N72	tsonic_node::readline::Readline::rollback	NODE-READLINE-002	rollback clears pending terminal commands
+NODE-READLINE-PROMISES-STREAM	readline/promises	Readline.stream/pending	implemented	N72	tsonic_node::readline::Readline::{stream,pending}	NODE-READLINE-002	stream and pending expose deterministic command queues
 NODE-PERF-HISTOGRAM	perf_hooks	Histogram/RecordableHistogram/IntervalHistogram	implemented	N20	tsonic_node::perf_hooks::{Histogram,create_histogram}	NODE-PERF-002	closed histogram count/min/max/mean/stddev/percentile/enable/disable/reset helpers
 NODE-PERF-EVENTLOOP	perf_hooks	eventLoopUtilization/resource timing controls	implemented	N20	tsonic_node::perf_hooks::{event_loop_utilization,set_resource_timing_buffer_size,clear_resource_timings}	NODE-PERF-002	closed event-loop utilization and resource timing control shape
 NODE-PROCESS-NEXTTICK	process	nextTick	implemented	N5	tsonic_node::process::next_tick	NODE-PROC-007	deterministic nextTick callback hook

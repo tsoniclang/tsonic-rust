@@ -324,6 +324,8 @@ NODE-QUERYSTRING-003	implemented	N69	tsonic_node::abi::{querystring_stringify,qu
 NODE-QUERYSTRING-004	implemented	N69	tsonic_node::abi::{querystring_escape,querystring_unescape,querystring_unescape_buffer,ParseOptions,StringifyOptions}	NODE-QUERYSTRING-001	querystring codec helpers and options carriers are individually inventoried
 NODE-MOD-028	implemented	N5	tsonic_node::abi::readline_create_interface	NODE-READLINE-001	closed buffered readline interface
 NODE-READLINE-002	implemented	N19	tsonic_node::abi::{ReadlineInterface,ReadlineKey,ReadlineCursorPos,ReadlinePromisesController,readline_promises}	NODE-READLINE-002	Interface prompt/cursor/key/terminal and promises controller commit/rollback APIs
+NODE-READLINE-003	implemented	N72	tsonic_node::abi::{readline_create_interface,ReadlineInterface,ReadlineKey,ReadlineCursorPos}	NODE-READLINE-001,NODE-READLINE-002	readline Interface, Key, CursorPos, question/write/prompt/line/cursor/terminal/close helpers are individually inventoried
+NODE-READLINE-004	implemented	N72	tsonic_node::abi::{readline_promises,ReadlinePromisesController}	NODE-READLINE-002	readline promises createReadline, clearLine, clearScreenDown, cursorTo, moveCursor, commit, rollback, stream, and pending helpers are individually inventoried
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1
 NODE-MOD-030	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency
 NODE-MOD-031	implemented	N3	tsonic_node::abi::{Readable,Writable,stream_pipeline}	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
