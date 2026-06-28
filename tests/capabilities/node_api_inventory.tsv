@@ -790,11 +790,96 @@ NODE-STREAM-READABLE-CARRIER	stream	Readable	implemented	N38	tsonic_node::stream
 NODE-STREAM-READABLE-FROM-CHUNKS	stream	Readable.from_chunks	implemented	N38	tsonic_node::stream::Readable::from_chunks	NODE-STREAM-004	constructs readable from closed Buffer chunk vector
 NODE-STREAM-READABLE-FROM-CHUNKS-OPTIONS	stream	Readable.from_chunks_with_options	implemented	N38	tsonic_node::stream::Readable::from_chunks_with_options	NODE-STREAM-004	constructs readable with explicit StreamOptions carrier
 NODE-STREAM-READABLE-READ	stream	Readable.read	implemented	N38	tsonic_node::stream::Readable::read	NODE-STREAM-004	reads next Buffer chunk unless paused/destroyed
-NODE-STREAM-READABLE-ENDED	stream	Readable.isEnded/readableEnded	implemented	N38	tsonic_node::stream::Readable::{is_ended,readable_ended}	NODE-STREAM-004	closed readable end-state query
+NODE-FS-CALLBACK-ACCESS	fs	access callback	implemented	N16	tsonic_node::fs::access_callback	NODE-FS-CALLBACK-001	callback-shaped access executes real sync IO deterministically
+NODE-FS-CALLBACK-EXISTS	fs	exists callback	implemented	N16	tsonic_node::fs::exists_callback	NODE-FS-CALLBACK-001	callback-shaped exists executes real sync IO deterministically
+NODE-FS-CALLBACK-READFILE-STRING	fs	readFile string callback	implemented	N16	tsonic_node::fs::read_file_callback_string	NODE-FS-CALLBACK-001	callback-shaped readFile string executes real sync IO deterministically
+NODE-FS-CALLBACK-READFILE-BUFFER	fs	readFile Buffer callback	implemented	N16	tsonic_node::fs::read_file_callback_buffer	NODE-FS-CALLBACK-001	callback-shaped readFile Buffer executes real sync IO deterministically
+NODE-FS-CALLBACK-WRITEFILE-STRING	fs	writeFile string callback	implemented	N16	tsonic_node::fs::write_file_callback_string	NODE-FS-CALLBACK-001	callback-shaped writeFile string executes real sync IO deterministically
+NODE-FS-CALLBACK-WRITEFILE-BUFFER	fs	writeFile Buffer callback	implemented	N16	tsonic_node::fs::write_file_callback_buffer	NODE-FS-CALLBACK-001	callback-shaped writeFile Buffer executes real sync IO deterministically
+NODE-FS-CALLBACK-APPENDFILE-STRING	fs	appendFile string callback	implemented	N16	tsonic_node::fs::append_file_callback_string	NODE-FS-CALLBACK-001	callback-shaped appendFile string executes real sync IO deterministically
+NODE-FS-CALLBACK-STAT	fs	stat callback	implemented	N16	tsonic_node::fs::stat_callback	NODE-FS-CALLBACK-001	callback-shaped stat executes real sync IO deterministically
+NODE-FS-CALLBACK-LSTAT	fs	lstat callback	implemented	N16	tsonic_node::fs::lstat_callback	NODE-FS-CALLBACK-001	callback-shaped lstat executes real sync IO deterministically
+NODE-FS-CALLBACK-READDIR	fs	readdir callback	implemented	N16	tsonic_node::fs::readdir_callback	NODE-FS-CALLBACK-001	callback-shaped readdir executes real sync IO deterministically
+NODE-FS-CALLBACK-MKDIR	fs	mkdir callback	implemented	N16	tsonic_node::fs::mkdir_callback	NODE-FS-CALLBACK-001	callback-shaped mkdir executes real sync IO deterministically
+NODE-FS-CALLBACK-COPYFILE	fs	copyFile callback	implemented	N16	tsonic_node::fs::copy_file_callback	NODE-FS-CALLBACK-001	callback-shaped copyFile executes real sync IO deterministically
+NODE-FS-CALLBACK-RENAME	fs	rename callback	implemented	N16	tsonic_node::fs::rename_callback	NODE-FS-CALLBACK-001	callback-shaped rename executes real sync IO deterministically
+NODE-FS-CALLBACK-UNLINK	fs	unlink callback	implemented	N16	tsonic_node::fs::unlink_callback	NODE-FS-CALLBACK-001	callback-shaped unlink executes real sync IO deterministically
+NODE-FS-CALLBACK-RM	fs	rm callback	implemented	N16	tsonic_node::fs::rm_callback	NODE-FS-CALLBACK-001	callback-shaped rm executes real sync IO deterministically
+NODE-FS-CALLBACK-CHMOD	fs	chmod callback	implemented	N44	tsonic_node::fs::chmod_callback	NODE-FS-CALLBACK-002	callback-shaped chmod executes real sync IO deterministically
+NODE-FS-CALLBACK-CHOWN	fs	chown callback	implemented	N44	tsonic_node::fs::chown_callback	NODE-FS-CALLBACK-002	callback-shaped chown executes real sync IO deterministically
+NODE-FS-CALLBACK-STATFS	fs	statfs callback	implemented	N44	tsonic_node::fs::statfs_callback	NODE-FS-CALLBACK-002	callback-shaped statfs executes real sync IO deterministically
+NODE-FS-CALLBACK-LCHOWN	fs	lchown callback	implemented	N44	tsonic_node::fs::lchown_callback	NODE-FS-CALLBACK-002	callback-shaped lchown executes real sync IO deterministically
+NODE-FS-CALLBACK-UTIMES	fs	utimes callback	implemented	N44	tsonic_node::fs::utimes_callback	NODE-FS-CALLBACK-002	callback-shaped utimes executes real sync IO deterministically
+NODE-FS-CALLBACK-LUTIMES	fs	lutimes callback	implemented	N44	tsonic_node::fs::lutimes_callback	NODE-FS-CALLBACK-002	callback-shaped lutimes executes real sync IO deterministically
+NODE-FS-CALLBACK-MKDTEMP	fs	mkdtemp callback	implemented	N44	tsonic_node::fs::mkdtemp_callback	NODE-FS-CALLBACK-002	callback-shaped mkdtemp executes real sync IO deterministically
+NODE-FS-CALLBACK-CP	fs	cp callback	implemented	N44	tsonic_node::fs::cp_callback	NODE-FS-CALLBACK-002	callback-shaped cp executes real sync IO deterministically
+NODE-FS-CALLBACK-LINK	fs	link callback	implemented	N44	tsonic_node::fs::link_callback	NODE-FS-CALLBACK-002	callback-shaped link executes real sync IO deterministically
+NODE-FS-CALLBACK-READLINK	fs	readlink callback	implemented	N44	tsonic_node::fs::readlink_callback	NODE-FS-CALLBACK-002	callback-shaped readlink executes real sync IO deterministically
+NODE-FS-CALLBACK-REALPATH	fs	realpath callback	implemented	N44	tsonic_node::fs::realpath_callback	NODE-FS-CALLBACK-002	callback-shaped realpath executes real sync IO deterministically
+NODE-FS-CALLBACK-RMDIR	fs	rmdir callback	implemented	N44	tsonic_node::fs::rmdir_callback	NODE-FS-CALLBACK-002	callback-shaped rmdir executes real sync IO deterministically
+NODE-FS-CALLBACK-SYMLINK	fs	symlink callback	implemented	N44	tsonic_node::fs::symlink_callback	NODE-FS-CALLBACK-002	callback-shaped symlink executes real sync IO deterministically
+NODE-FS-CALLBACK-TRUNCATE	fs	truncate callback	implemented	N44	tsonic_node::fs::truncate_callback	NODE-FS-CALLBACK-002	callback-shaped truncate executes real sync IO deterministically
+NODE-FS-FD-CALLBACK-OPEN	fs	open callback	implemented	N44	tsonic_node::fs::open_callback	NODE-FS-CALLBACK-002	callback-shaped fd open uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-CLOSE	fs	close callback	implemented	N44	tsonic_node::fs::close_callback	NODE-FS-CALLBACK-002	callback-shaped fd close uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-READ	fs	read callback	implemented	N44	tsonic_node::fs::read_callback	NODE-FS-CALLBACK-002	callback-shaped fd read uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-WRITE-BUFFER	fs	write Buffer callback	implemented	N44	tsonic_node::fs::write_callback_buffer	NODE-FS-CALLBACK-002	callback-shaped fd write Buffer uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-WRITE-STRING	fs	write string callback	implemented	N44	tsonic_node::fs::write_callback_string	NODE-FS-CALLBACK-002	callback-shaped fd write string uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-FSTAT	fs	fstat callback	implemented	N44	tsonic_node::fs::fstat_callback	NODE-FS-CALLBACK-002	callback-shaped fd fstat uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-FCHMOD	fs	fchmod callback	implemented	N44	tsonic_node::fs::fchmod_callback	NODE-FS-CALLBACK-002	callback-shaped fd fchmod uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-FCHOWN	fs	fchown callback	implemented	N44	tsonic_node::fs::fchown_callback	NODE-FS-CALLBACK-002	callback-shaped fd fchown uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-FSYNC	fs	fsync callback	implemented	N44	tsonic_node::fs::fsync_callback	NODE-FS-CALLBACK-002	callback-shaped fd fsync uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-FDATASYNC	fs	fdatasync callback	implemented	N44	tsonic_node::fs::fdatasync_callback	NODE-FS-CALLBACK-002	callback-shaped fd fdatasync uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-FTRUNCATE	fs	ftruncate callback	implemented	N44	tsonic_node::fs::ftruncate_callback	NODE-FS-CALLBACK-002	callback-shaped fd ftruncate uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-FUTIMES	fs	futimes callback	implemented	N44	tsonic_node::fs::futimes_callback	NODE-FS-CALLBACK-002	callback-shaped fd futimes uses closed fd table and real file IO
+NODE-FS-STATS-FIELD-DEV	fs	Stats.dev	implemented	N44	tsonic_node::fs::Stats::dev	NODE-FS-META-001	Stats dev metadata field
+NODE-FS-STATS-FIELD-INO	fs	Stats.ino	implemented	N44	tsonic_node::fs::Stats::ino	NODE-FS-META-001	Stats ino metadata field
+NODE-FS-STATS-FIELD-MODE	fs	Stats.mode	implemented	N44	tsonic_node::fs::Stats::mode	NODE-FS-META-001	Stats mode metadata field
+NODE-FS-STATS-FIELD-NLINK	fs	Stats.nlink	implemented	N44	tsonic_node::fs::Stats::nlink	NODE-FS-META-001	Stats nlink metadata field
+NODE-FS-STATS-FIELD-UID	fs	Stats.uid	implemented	N44	tsonic_node::fs::Stats::uid	NODE-FS-META-001	Stats uid metadata field
+NODE-FS-STATS-FIELD-GID	fs	Stats.gid	implemented	N44	tsonic_node::fs::Stats::gid	NODE-FS-META-001	Stats gid metadata field
+NODE-FS-STATS-FIELD-RDEV	fs	Stats.rdev	implemented	N44	tsonic_node::fs::Stats::rdev	NODE-FS-META-001	Stats rdev metadata field
+NODE-FS-STATS-FIELD-SIZE	fs	Stats.size	implemented	N44	tsonic_node::fs::Stats::size	NODE-FS-META-001	Stats size metadata field
+NODE-FS-STATS-FIELD-BLKSIZE	fs	Stats.blksize	implemented	N44	tsonic_node::fs::Stats::blksize	NODE-FS-META-001	Stats blksize metadata field
+NODE-FS-STATS-FIELD-BLOCKS	fs	Stats.blocks	implemented	N44	tsonic_node::fs::Stats::blocks	NODE-FS-META-001	Stats blocks metadata field
+NODE-FS-STATS-FIELD-ATIME	fs	Stats.atime	implemented	N44	tsonic_node::fs::Stats::atime	NODE-FS-META-001	Stats atime metadata field
+NODE-FS-STATS-FIELD-MTIME	fs	Stats.mtime	implemented	N44	tsonic_node::fs::Stats::mtime	NODE-FS-META-001	Stats mtime metadata field
+NODE-FS-STATS-FIELD-CTIME	fs	Stats.ctime	implemented	N44	tsonic_node::fs::Stats::ctime	NODE-FS-META-001	Stats ctime metadata field
+NODE-FS-STATS-FIELD-BIRTHTIME	fs	Stats.birthtime	implemented	N44	tsonic_node::fs::Stats::birthtime	NODE-FS-META-001	Stats birthtime metadata field
+NODE-FS-STATS-IS-FILE	fs	Stats.isFile	implemented	N53	tsonic_node::fs::Stats::is_file	NODE-FS-META-001	Stats.isFile exposes platform-backed metadata where available
+NODE-FS-STATS-IS-DIRECTORY	fs	Stats.isDirectory	implemented	N53	tsonic_node::fs::Stats::is_directory	NODE-FS-META-001	Stats.isDirectory exposes platform-backed metadata where available
+NODE-FS-STATS-IS-SYMBOLIC-LINK	fs	Stats.isSymbolicLink	implemented	N53	tsonic_node::fs::Stats::is_symbolic_link	NODE-FS-META-001	Stats.isSymbolicLink exposes platform-backed metadata where available
+NODE-FS-STATS-IS-BLOCK-DEVICE	fs	Stats.isBlockDevice	implemented	N53	tsonic_node::fs::Stats::is_block_device	NODE-FS-META-002	Stats.isBlockDevice exposes platform-backed metadata where available
+NODE-FS-STATS-IS-CHARACTER-DEVICE	fs	Stats.isCharacterDevice	implemented	N53	tsonic_node::fs::Stats::is_character_device	NODE-FS-META-002	Stats.isCharacterDevice exposes platform-backed metadata where available
+NODE-FS-STATS-IS-FIFO	fs	Stats.isFIFO	implemented	N53	tsonic_node::fs::Stats::is_fifo	NODE-FS-META-002	Stats.isFIFO exposes platform-backed metadata where available
+NODE-FS-STATS-IS-SOCKET	fs	Stats.isSocket	implemented	N53	tsonic_node::fs::Stats::is_socket	NODE-FS-META-002	Stats.isSocket exposes platform-backed metadata where available
+NODE-FS-STATS-ATIME-MS	fs	Stats.atimeMs	implemented	N53	tsonic_node::fs::Stats::atime_ms	NODE-FS-META-001	Stats.atimeMs exposes platform-backed metadata where available
+NODE-FS-STATS-MTIME-MS	fs	Stats.mtimeMs	implemented	N53	tsonic_node::fs::Stats::mtime_ms	NODE-FS-META-001	Stats.mtimeMs exposes platform-backed metadata where available
+NODE-FS-STATS-CTIME-MS	fs	Stats.ctimeMs	implemented	N53	tsonic_node::fs::Stats::ctime_ms	NODE-FS-META-001	Stats.ctimeMs exposes platform-backed metadata where available
+NODE-FS-STATS-BIRTHTIME-MS	fs	Stats.birthtimeMs	implemented	N53	tsonic_node::fs::Stats::birthtime_ms	NODE-FS-META-001	Stats.birthtimeMs exposes platform-backed metadata where available
+NODE-FS-STATS-ATIME-NS	fs	Stats.atimeNs	implemented	N53	tsonic_node::fs::Stats::atime_ns	NODE-FS-META-002	Stats.atimeNs exposes platform-backed metadata where available
+NODE-FS-STATS-MTIME-NS	fs	Stats.mtimeNs	implemented	N53	tsonic_node::fs::Stats::mtime_ns	NODE-FS-META-002	Stats.mtimeNs exposes platform-backed metadata where available
+NODE-FS-STATS-CTIME-NS	fs	Stats.ctimeNs	implemented	N53	tsonic_node::fs::Stats::ctime_ns	NODE-FS-META-002	Stats.ctimeNs exposes platform-backed metadata where available
+NODE-FS-STATS-BIRTHTIME-NS	fs	Stats.birthtimeNs	implemented	N53	tsonic_node::fs::Stats::birthtime_ns	NODE-FS-META-002	Stats.birthtimeNs exposes platform-backed metadata where available
+NODE-FS-DIRENT-FIELD-NAME	fs	Dirent.name	implemented	N53	tsonic_node::fs::Dirent::name	NODE-FS-META-002	Dirent name carrier field
+NODE-FS-DIRENT-FIELD-PARENT-PATH	fs	Dirent.parentPath	implemented	N53	tsonic_node::fs::Dirent::parent_path_value	NODE-FS-META-002	Dirent parentPath carrier field
+NODE-FS-DIRENT-FIELD-FILETYPE	fs	Dirent.fileType	implemented	N53	tsonic_node::fs::Dirent::file_type	NODE-FS-META-002	Dirent fileType carrier field
+NODE-FS-DIRENT-IS-FILE	fs	Dirent.isFile	implemented	N53	tsonic_node::fs::Dirent::is_file	NODE-FS-META-002	Dirent.isFile closed Dirent helper
+NODE-FS-DIRENT-IS-DIRECTORY	fs	Dirent.isDirectory	implemented	N53	tsonic_node::fs::Dirent::is_directory	NODE-FS-META-002	Dirent.isDirectory closed Dirent helper
+NODE-FS-DIRENT-IS-SYMBOLIC-LINK	fs	Dirent.isSymbolicLink	implemented	N53	tsonic_node::fs::Dirent::is_symbolic_link	NODE-FS-META-002	Dirent.isSymbolicLink closed Dirent helper
+NODE-FS-DIRENT-IS-BLOCK-DEVICE	fs	Dirent.isBlockDevice	implemented	N53	tsonic_node::fs::Dirent::is_block_device	NODE-FS-META-002	Dirent.isBlockDevice closed Dirent helper
+NODE-FS-DIRENT-IS-CHARACTER-DEVICE	fs	Dirent.isCharacterDevice	implemented	N53	tsonic_node::fs::Dirent::is_character_device	NODE-FS-META-002	Dirent.isCharacterDevice closed Dirent helper
+NODE-FS-DIRENT-IS-FIFO	fs	Dirent.isFIFO	implemented	N53	tsonic_node::fs::Dirent::is_fifo	NODE-FS-META-002	Dirent.isFIFO closed Dirent helper
+NODE-FS-DIRENT-IS-SOCKET	fs	Dirent.isSocket	implemented	N53	tsonic_node::fs::Dirent::is_socket	NODE-FS-META-002	Dirent.isSocket closed Dirent helper
+NODE-FS-DIRENT-PARENT-PATH	fs	Dirent.parentPath	implemented	N53	tsonic_node::fs::Dirent::parent_path	NODE-FS-META-002	Dirent.parentPath closed Dirent helper
+NODE-FSP-FILEHANDLE-CARRIER	fs/promises	FileHandle	implemented	N42	tsonic_node::fs_promises::FileHandle	NODE-FSP-002	closed FileHandle carrier
+NODE-FSP-DIR-CARRIER	fs/promises	Dir	implemented	N42	tsonic_node::fs_promises::Dir	NODE-FSP-002	closed Dir handle carrier
+NODE-STREAM-READABLE-IS-ENDED	stream	Readable.isEnded	implemented	N38	tsonic_node::stream::Readable::is_ended	NODE-STREAM-004	readable end-state query
+NODE-STREAM-READABLE-READABLE-ENDED	stream	Readable.readableEnded	implemented	N38	tsonic_node::stream::Readable::readable_ended	NODE-STREAM-004	readableEnded state query
+NODE-STREAM-READABLE-READABLE-ENCODING	stream	Readable.readableEncoding	implemented	N38	tsonic_node::stream::Readable::readable_encoding	NODE-STREAM-004	readable encoding state accessor
+NODE-STREAM-READABLE-SET-ENCODING	stream	Readable.setEncoding	implemented	N38	tsonic_node::stream::Readable::set_encoding	NODE-STREAM-004	readable encoding state setter
 NODE-STREAM-READABLE-READABLE	stream	Readable.readable	implemented	N38	tsonic_node::stream::Readable::readable	NODE-STREAM-004	closed readable active-state query
 NODE-STREAM-READABLE-LENGTH	stream	Readable.readableLength	implemented	N38	tsonic_node::stream::Readable::readable_length	NODE-STREAM-004	remaining chunk count carrier
 NODE-STREAM-READABLE-HIGH-WATER-MARK	stream	Readable.readableHighWaterMark	implemented	N38	tsonic_node::stream::Readable::readable_high_water_mark	NODE-STREAM-004	highWaterMark accessor from explicit options
-NODE-STREAM-READABLE-ENCODING	stream	Readable.readableEncoding/setEncoding	implemented	N38	tsonic_node::stream::Readable::{readable_encoding,set_encoding}	NODE-STREAM-004	closed encoding state lowercases explicit encoding
 NODE-STREAM-READABLE-FROM	stream	Readable.from	implemented	N38	tsonic_node::stream::Readable::from	NODE-STREAM-004	constructor alias for generated Rust
 NODE-STREAM-READABLE-PIPE	stream	Readable.pipe	implemented	N38	tsonic_node::stream::Readable::pipe	NODE-STREAM-003	pipes closed Buffer chunks into Writable
 NODE-STREAM-READABLE-UNPIPE	stream	Readable.unpipe	implemented	N38	tsonic_node::stream::Readable::unpipe	NODE-STREAM-004	deterministic no-op unpipe helper
@@ -1079,16 +1164,8 @@ NODE-FS-WRITE	fs	writeSync	implemented	K	tsonic_node::fs::{write_sync_string,wri
 NODE-FS-WRITEFILE	fs	writeFileSync	implemented	K	tsonic_node::fs::{write_file_sync_string,write_file_sync_buffer}	NODE-FS-001	string/buffer overloads
 NODE-FS-CREATE-READ-STREAM	fs	createReadStream	implemented	N8	tsonic_node::fs::create_read_stream	NODE-FS-STREAM-001	file read stream backed by real file IO and closed Readable
 NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	implemented	N8	tsonic_node::fs::create_write_stream	NODE-FS-STREAM-001	closed Writable stream shape for generated output
-NODE-FS-ASYNC-CALLBACKS	fs	callback APIs	implemented	N16	tsonic_node::fs::{access_callback,exists_callback,read_file_callback_string,write_file_callback_string,append_file_callback_string,stat_callback,lstat_callback,readdir_callback,mkdir_callback,copy_file_callback,rename_callback,unlink_callback,rm_callback}	NODE-FS-CALLBACK-001	callback-shaped fs APIs execute real sync IO deterministically
-NODE-FS-CALLBACKS-EXTENDED	fs	chmod/chown/statfs/lchown/utimes/lutimes/mkdtemp/cp/link/readlink/realpath/rmdir/symlink/truncate callbacks	implemented	N44	tsonic_node::fs::{chmod_callback,chown_callback,statfs_callback,lchown_callback,utimes_callback,lutimes_callback,mkdtemp_callback,cp_callback,link_callback,readlink_callback,realpath_callback,rmdir_callback,symlink_callback,truncate_callback}	NODE-FS-CALLBACK-002	callback-shaped extended fs APIs execute real sync IO deterministically
-NODE-FS-FD-CALLBACKS	fs	open/close/read/write/fstat/fchmod/fchown/fsync/fdatasync/ftruncate/futimes callbacks	implemented	N44	tsonic_node::fs::{open_callback,close_callback,read_callback,write_callback_string,write_callback_buffer,fstat_callback,fchmod_callback,fchown_callback,fsync_callback,fdatasync_callback,ftruncate_callback,futimes_callback}	NODE-FS-CALLBACK-002	callback-shaped fd APIs use closed fd table and real file IO
 NODE-FS-CONSTANTS	fs	constants	implemented	N44	tsonic_node::fs::{constants,FsConstants}	NODE-FS-META-001	closed common fs access/open/copy constants with platform-backed open flag values
-NODE-FS-STATS-METADATA	fs	Stats metadata fields and time accessors	implemented	N44	tsonic_node::fs::Stats	NODE-FS-META-001	Stats exposes size, mode, link count, uid/gid, device/inode, block, and time metadata where platform-backed
-NODE-FS-STATS-TYPE-METHODS	fs	Stats isBlockDevice/isCharacterDevice/isFIFO/isSocket/nanosecond times	implemented	N53	tsonic_node::fs::Stats	NODE-FS-META-002	expanded Stats type predicate and nanosecond time carrier methods backed by platform metadata where available
-NODE-FS-DIRENT-TYPE-METHODS	fs	Dirent parentPath and type predicates	implemented	N53	tsonic_node::fs::Dirent	NODE-FS-META-002	expanded Dirent parent path and type predicate carrier methods
 NODE-FS-PROMISES	fs	promises APIs	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
-NODE-FSP-FILEHANDLE	fs/promises	FileHandle readFile/write/appendFile/web streams	implemented	N42	tsonic_node::fs_promises::FileHandle	NODE-FSP-002	FileHandle stat/sync/datasync/truncate/chmod/chown/utimes/read/write/readFile/appendFile and web stream carriers
-NODE-FSP-DIR	fs/promises	Dir read/close async iterator shape	implemented	N42	tsonic_node::fs_promises::{Dir,opendir_handle}	NODE-FSP-002	closed fs/promises Dir handle with read, entries, close, and closed-state errors
 NODE-FSP-ACCESS	fs/promises	access	implemented	N65	tsonic_node::fs_promises::access	NODE-FSP-001	promise-shaped access helper over real filesystem checks
 NODE-FSP-READFILE-STRING	fs/promises	readFile string	implemented	N65	tsonic_node::fs_promises::read_file_string	NODE-FSP-001	promise-shaped readFile string helper with explicit encoding
 NODE-FSP-READFILE-BUFFER	fs/promises	readFile Buffer	implemented	N65	tsonic_node::fs_promises::read_file_buffer	NODE-FSP-001	promise-shaped readFile buffer helper over closed Buffer carrier
