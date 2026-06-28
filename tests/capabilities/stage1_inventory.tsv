@@ -229,6 +229,7 @@ NODE-MOD-009	implemented	N7	tsonic_node::abi::dgram_create_socket	NODE-DGRAM-001
 NODE-DGRAM-002	implemented	N18	tsonic_node::abi::{DgramSocket,DgramAddressInfo}	NODE-DGRAM-002	UDP socket address/connect/send/close/ref/ttl/buffer metadata
 NODE-MOD-010	implemented	N3	tsonic_node::abi::{diagnostics_channel,diagnostics_publish}	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
 NODE-MOD-011	implemented	N3	tsonic_node::abi::{dns_lookup,dns_resolve4,dns_resolve6}	NODE-DNS-001	platform resolver lookup and address helpers
+NODE-DNS-002	implemented	N26	tsonic_node::abi::{dns_resolve_any,dns_resolve_ns,dns_resolve_ptr,dns_resolve_caa,dns_resolve_naptr,dns_resolve_soa,dns_resolve_tlsa,DnsResolver}	NODE-DNS-002	complete DNS record function shape with explicit unsupported-record failures and Resolver method coverage
 NODE-MOD-012	hard-reject	M	n/a	REJECT-NODE-DOMAIN	legacy async error domain runtime out of Stage 1
 NODE-MOD-013	implemented	N3	tsonic_node::abi::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-MOD-014	implemented	K	tsonic_node::abi::fs_*	NODE-FS-001 through NODE-FS-010	selected synchronous file APIs only

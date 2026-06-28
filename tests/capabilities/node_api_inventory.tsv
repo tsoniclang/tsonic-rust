@@ -14,6 +14,9 @@ NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-0
 NODE-MODULE-DGRAM	dgram	module	implemented	N7	tsonic_node::dgram	NODE-DGRAM-001	UDP datagram socket over std net
 NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	implemented	N3	tsonic_node::diagnostics_channel	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
 NODE-MODULE-DNS	dns	module	implemented	N3	tsonic_node::dns	NODE-DNS-001	platform resolver lookup and address helpers
+NODE-DNS-RECORDS	dns	resolveAny/NS/PTR/CAA/NAPTR/SOA/TLSA	implemented	N26	tsonic_node::dns::{resolve_any,resolve_ns,resolve_ptr,resolve_caa,resolve_naptr,resolve_soa,resolve_tlsa}	NODE-DNS-002	closed DNS record API shapes; unsupported record resolver types fail explicitly with ENODATA
+NODE-DNS-RESOLVER	dns	Resolver complete common shape	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	Resolver setLocalAddress/cancel/reverse/record methods and server state
+NODE-DNS-PROMISES	dns/promises	promise record helpers	implemented	N26	tsonic_node::dns::promises	NODE-DNS-002	blocking-now promise-shaped DNS record helpers over same closed resolver APIs
 NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded
 NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately

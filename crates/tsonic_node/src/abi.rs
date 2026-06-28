@@ -59,12 +59,17 @@ pub use crate::diagnostics_channel::{
 };
 pub use crate::dns::{
     get_default_result_order as dns_get_default_result_order, lookup as dns_lookup,
-    promises as dns_promises, resolve as dns_resolve, resolve4 as dns_resolve4,
-    resolve6 as dns_resolve6, resolve_cname as dns_resolve_cname, resolve_mx as dns_resolve_mx,
-    resolve_srv as dns_resolve_srv, resolve_txt as dns_resolve_txt, reverse as dns_reverse,
-    set_default_result_order as dns_set_default_result_order,
-    DefaultResultOrder as DnsDefaultResultOrder, LookupAddress as DnsLookupAddress,
-    MxRecord as DnsMxRecord, Resolver as DnsResolver, SrvRecord as DnsSrvRecord,
+    lookup_service as dns_lookup_service, promises as dns_promises, resolve as dns_resolve,
+    resolve4 as dns_resolve4, resolve6 as dns_resolve6, resolve_any as dns_resolve_any,
+    resolve_caa as dns_resolve_caa, resolve_cname as dns_resolve_cname,
+    resolve_mx as dns_resolve_mx, resolve_naptr as dns_resolve_naptr, resolve_ns as dns_resolve_ns,
+    resolve_ptr as dns_resolve_ptr, resolve_soa as dns_resolve_soa, resolve_srv as dns_resolve_srv,
+    resolve_tlsa as dns_resolve_tlsa, resolve_txt as dns_resolve_txt, reverse as dns_reverse,
+    set_default_result_order as dns_set_default_result_order, AnyRecord as DnsAnyRecord,
+    CaaRecord as DnsCaaRecord, DefaultResultOrder as DnsDefaultResultOrder,
+    LookupAddress as DnsLookupAddress, MxRecord as DnsMxRecord, NaptrRecord as DnsNaptrRecord,
+    Resolver as DnsResolver, SoaRecord as DnsSoaRecord, SrvRecord as DnsSrvRecord,
+    TlsaRecord as DnsTlsaRecord,
 };
 pub use crate::events::{
     get_event_listeners as events_get_event_listeners, listener_count as events_listener_count,

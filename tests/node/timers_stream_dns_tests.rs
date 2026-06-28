@@ -211,17 +211,45 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
     let mut resolver = dns::Resolver::new();
     resolver.set_servers(&["1.1.1.1", "8.8.8.8"]);
     assert_eq!(resolver.get_servers(), vec!["1.1.1.1", "8.8.8.8"]);
+    resolver.set_local_address(Some("127.0.0.1"), Some("::1"));
+    assert_eq!(resolver.local_addresses(), (Some("127.0.0.1"), Some("::1")));
     assert!(resolver.lookup("localhost").is_ok());
     assert!(resolver.resolve4("localhost").is_ok() || resolver.resolve6("localhost").is_ok());
+    assert!(
+        resolver.resolve("localhost", Some("A")).is_ok()
+            || resolver.resolve("localhost", Some("AAAA")).is_ok()
+    );
+    assert!(resolver.reverse("127.0.0.1").is_ok());
+    resolver.cancel();
+    assert!(resolver.cancelled());
 
     assert!(dns::resolve_cname("localhost").is_err());
     assert!(dns::resolve_mx("localhost").is_err());
     assert!(dns::resolve_txt("localhost").is_err());
     assert!(dns::resolve_srv("localhost").is_err());
+    assert!(dns::resolve_ns("localhost").is_err());
+    assert!(dns::resolve_ptr("localhost").is_err());
+    assert!(dns::resolve_caa("localhost").is_err());
+    assert!(dns::resolve_naptr("localhost").is_err());
+    assert!(dns::resolve_soa("localhost").is_err());
+    assert!(dns::resolve_tlsa("localhost").is_err());
+    assert!(dns::resolve_any("localhost").is_ok());
+    assert_eq!(
+        dns::lookup_service("127.0.0.1", 80).unwrap(),
+        ("127.0.0.1".to_string(), "80".to_string())
+    );
     assert!(dns::promises::lookup_now("localhost").is_ok());
     assert!(
         dns::promises::resolve_now("localhost", Some("A")).is_ok()
             || dns::promises::resolve_now("localhost", Some("AAAA")).is_ok()
     );
+    assert!(dns::promises::resolve_ns_now("localhost").is_err());
+    assert!(dns::promises::resolve_ptr_now("localhost").is_err());
+    assert!(dns::promises::resolve_caa_now("localhost").is_err());
+    assert!(dns::promises::resolve_naptr_now("localhost").is_err());
+    assert!(dns::promises::resolve_soa_now("localhost").is_err());
+    assert!(dns::promises::resolve_tlsa_now("localhost").is_err());
+    assert!(dns::promises::resolve_any_now("localhost").is_ok());
+    assert!(dns::promises::lookup_service_now("127.0.0.1", 443).is_ok());
     assert!(dns::promises::reverse_now("127.0.0.1").is_ok());
 }
