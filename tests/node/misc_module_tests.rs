@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tsonic_js::JsValue;
 use tsonic_node::{assert, module, perf_hooks, querystring, string_decoder, tty};
 
@@ -277,6 +278,15 @@ fn module_helpers_cover_safe_common_node_shapes() {
     );
     assert_eq!(source_map.payload(), &payload);
     assert_eq!(source_map.line_lengths(), Some(&[12, 20][..]));
+    assert!(module::SourceMap::new(payload.clone(), None)
+        .find_entry(1, 0)
+        .is_none());
+    assert_eq!(
+        source_map
+            .find_entry(2, 4)
+            .map(|entry| entry.name.as_deref()),
+        Some(Some("main"))
+    );
     assert_eq!(
         source_map.find_origin(2, 4),
         Some(module::SourceOrigin {
@@ -308,6 +318,26 @@ fn module_helpers_cover_safe_common_node_shapes() {
             generated_code: true,
         }
     );
+    let root = std::env::current_dir().unwrap().join(".temp").join(format!(
+        "tsonic-rust-module-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let package_dir = root.join("pkg");
+    std::fs::create_dir_all(&package_dir).unwrap();
+    std::fs::write(package_dir.join("package.json"), "{\"name\":\"pkg\"}").unwrap();
+    assert_eq!(
+        module::find_package_json("pkg", Some(&root.to_string_lossy())),
+        Some(
+            package_dir
+                .join("package.json")
+                .to_string_lossy()
+                .into_owned()
+        )
+    );
+    std::fs::remove_dir_all(&root).unwrap();
     let stripped = module::strip_type_script_types(
         "type T = number;\nconst x: number = 1;\nfunction f(y: string) { return y as const; }",
         Some(module::StripTypeScriptTypesOptions {

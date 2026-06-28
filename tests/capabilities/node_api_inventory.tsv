@@ -82,6 +82,29 @@ NODE-MODULE-MODULE	module	module	implemented	N4	tsonic_node::module	NODE-MODULE-
 NODE-MODULE-SOURCEMAP	module	SourceMap/source map support	implemented	N21	tsonic_node::module::{SourceMap,SourceMapPayload,SourceMapping,SourceMapsSupport}	NODE-MODULE-002	closed source map carrier and global source map support toggles without loader execution
 NODE-MODULE-SOURCEMAP-EXT	module	SourceMapPayload.file/SourceMapsSupport.enabled/setSourceMapsSupport options	implemented	N51	tsonic_node::module::{SourceMapPayload,SourceMapsSupport,SetSourceMapsSupportOptions,set_source_maps_support_with_options}	NODE-MODULE-003	expanded source map carrier fields and option-based support updates without loader execution
 NODE-MODULE-STRIP-TS	module	stripTypeScriptTypes	implemented	N21	tsonic_node::module::strip_type_script_types	NODE-MODULE-002	safe TypeScript type stripping helper; no evaluation or loader hook execution
+NODE-MODULE-BUILTIN-MODULES	module	builtinModules	implemented	N74	tsonic_node::module::builtin_modules	NODE-MODULE-001	closed builtin module list for supported runtime modules
+NODE-MODULE-CREATE-REQUIRE	module	createRequire	implemented	N74	tsonic_node::module::create_require	NODE-MODULE-001	createRequire returns safe Require carrier without executing loaders
+NODE-MODULE-REQUIRE-CARRIER	module	Require	implemented	N74	tsonic_node::module::Require	NODE-MODULE-001	closed Require carrier with base and resolve helpers
+NODE-MODULE-REQUIRE-BASE	module	Require.base	implemented	N74	tsonic_node::module::Require::base	NODE-MODULE-001	Require exposes explicit base path
+NODE-MODULE-REQUIRE-RESOLVE	module	Require.resolve	implemented	N74	tsonic_node::module::Require::resolve	NODE-MODULE-001	Require resolves relative specifiers by string policy and leaves package/node specifiers untouched
+NODE-MODULE-IS-BUILTIN	module	isBuiltin	implemented	N74	tsonic_node::module::is_builtin	NODE-MODULE-001	isBuiltin checks normalized node: builtin names
+NODE-MODULE-SYNC-BUILTIN-ESM-EXPORTS	module	syncBuiltinESMExports	implemented	N74	tsonic_node::module::sync_builtin_esm_exports	NODE-MODULE-001	safe no-op helper; no dynamic ESM runtime mutation
+NODE-MODULE-FIND-PACKAGE-JSON	module	findPackageJSON	implemented	N74	tsonic_node::module::find_package_json	NODE-MODULE-003	deterministic package.json search helper without loader execution
+NODE-MODULE-SOURCEMAP-PAYLOAD	module	SourceMapPayload	implemented	N74	tsonic_node::module::SourceMapPayload	NODE-MODULE-002	closed source map payload carrier
+NODE-MODULE-SOURCEMAP-PAYLOAD-NEW	module	SourceMapPayload.new	implemented	N74	tsonic_node::module::SourceMapPayload::new	NODE-MODULE-002	SourceMapPayload constructor initializes optional fields explicitly
+NODE-MODULE-SOURCEMAP-OPTIONS	module	SourceMapConstructorOptions	implemented	N74	tsonic_node::module::SourceMapConstructorOptions	NODE-MODULE-002	closed source map constructor options carrier
+NODE-MODULE-SOURCEMAP-MAPPING	module	SourceMapping	implemented	N74	tsonic_node::module::SourceMapping	NODE-MODULE-002	closed decoded source mapping carrier
+NODE-MODULE-SOURCEMAP-ORIGIN	module	SourceOrigin	implemented	N74	tsonic_node::module::SourceOrigin	NODE-MODULE-002	closed source origin lookup carrier
+NODE-MODULE-SOURCEMAP-CARRIER	module	SourceMap	implemented	N74	tsonic_node::module::SourceMap	NODE-MODULE-002	closed source map carrier
+NODE-MODULE-SOURCEMAP-NEW	module	SourceMap.new/withDecodedMappings	implemented	N74	tsonic_node::module::SourceMap::{new,with_decoded_mappings}	NODE-MODULE-002	SourceMap constructors keep payload/options/mappings closed
+NODE-MODULE-SOURCEMAP-QUERIES	module	SourceMap payload/lineLengths/findEntry/findOrigin	implemented	N74	tsonic_node::module::SourceMap::{payload,line_lengths,find_entry,find_origin}	NODE-MODULE-002	SourceMap lookup helpers are deterministic over decoded mappings
+NODE-MODULE-SOURCEMAP-SUPPORT-CARRIER	module	SourceMapsSupport	implemented	N74	tsonic_node::module::SourceMapsSupport	NODE-MODULE-002	closed source map support state carrier
+NODE-MODULE-SOURCEMAP-SUPPORT-GET	module	getSourceMapsSupport	implemented	N74	tsonic_node::module::get_source_maps_support	NODE-MODULE-002	source map support getter reads explicit runtime state
+NODE-MODULE-SOURCEMAP-SUPPORT-SET	module	setSourceMapsSupport	implemented	N74	tsonic_node::module::set_source_maps_support	NODE-MODULE-002	source map support setter writes explicit runtime state
+NODE-MODULE-SOURCEMAP-SUPPORT-OPTIONS	module	SetSourceMapsSupportOptions	implemented	N74	tsonic_node::module::SetSourceMapsSupportOptions	NODE-MODULE-003	closed source map support options carrier
+NODE-MODULE-SOURCEMAP-SUPPORT-SET-OPTIONS	module	setSourceMapsSupport options	implemented	N74	tsonic_node::module::set_source_maps_support_with_options	NODE-MODULE-003	option-based source map support setter writes explicit runtime state
+NODE-MODULE-STRIP-TS-MODE	module	StripTypeScriptMode	implemented	N74	tsonic_node::module::StripTypeScriptMode	NODE-MODULE-002	closed strip/transform mode carrier
+NODE-MODULE-STRIP-TS-OPTIONS	module	StripTypeScriptTypesOptions	implemented	N74	tsonic_node::module::StripTypeScriptTypesOptions	NODE-MODULE-002	closed strip TypeScript options carrier
 NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
 NODE-NET-CONNECT	net	connect/createConnection/connectWithOptions	implemented	N64	tsonic_node::net::{connect,connect_with_options,create_connection,create_connection_with_options}	NODE-NET-001,NODE-NET-003	real TCP connect helpers with explicit option carrier
 NODE-NET-SERVER-CREATE	net	createServer/createServerWithOptions/listen/accept/close	implemented	N64	tsonic_node::net::{create_server,create_server_with_options,Server}	NODE-NET-001,NODE-NET-002,NODE-NET-003	TCP server creation, accept, address, close, and connection count carrier
@@ -125,6 +148,8 @@ NODE-PERF-OBSERVER-CARRIER	perf_hooks	PerformanceObserver	implemented	N70	tsonic
 NODE-PERF-OBSERVER-LIST-CARRIER	perf_hooks	PerformanceObserverEntryList	implemented	N70	tsonic_node::perf_hooks::PerformanceObserverEntryList	NODE-PERF-001	closed performance observer entry list carrier
 NODE-MODULE-PROCESS	process	module	implemented	J	tsonic_node::process	NODE-PROC-001	closed process/env helpers
 NODE-MODULE-PUNYCODE	punycode	module	implemented	N8	tsonic_node::punycode	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
+NODE-PUNYCODE-TO-ASCII	punycode	toASCII	implemented	N74	tsonic_node::punycode::to_ascii	NODE-PUNYCODE-001	punycode toASCII helper uses known-vector IDNA conversion
+NODE-PUNYCODE-TO-UNICODE	punycode	toUnicode	implemented	N74	tsonic_node::punycode::to_unicode	NODE-PUNYCODE-001	punycode toUnicode helper uses known-vector IDNA conversion
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
 NODE-QUERYSTRING-OPTIONS	querystring	parse/stringify options	implemented	N31	tsonic_node::querystring::{ParseOptions,StringifyOptions,parse_with_options,stringify_records_with_options}	NODE-QUERYSTRING-001	custom separators, maxKeys, and codec callback options
 NODE-QUERYSTRING-PARSE	querystring	parse	implemented	N69	tsonic_node::querystring::parse	NODE-QUERYSTRING-001	closed query parser into URLSearchParams carrier
