@@ -41,6 +41,33 @@ fn os_wrappers_have_stable_shapes() {
     assert!(constants.signals.contains_key("SIGTERM") || cfg!(not(unix)));
     assert!(constants.dlopen.contains_key("RTLD_NOW") || cfg!(not(unix)));
     assert_eq!(constants.uv.get("UV_UDP_REUSEADDR"), Some(&4));
+    assert_eq!(
+        os::errno_constant("ENOENT"),
+        constants.errno.get("ENOENT").copied()
+    );
+    assert_eq!(
+        os::errno_constant("WSAEADDRINUSE"),
+        constants.errno.get("WSAEADDRINUSE").copied()
+    );
+    assert_eq!(
+        os::priority_constant("PRIORITY_NORMAL"),
+        Some(constants.priority.priority_normal)
+    );
+    assert_eq!(
+        os::priority_constant("PRIORITY_HIGHEST"),
+        Some(constants.priority.priority_highest)
+    );
+    assert_eq!(os::uv_constant("UV_UDP_REUSEADDR"), Some(4));
+    assert_eq!(
+        os::signal_constant("SIGTERM"),
+        constants.signals.get("SIGTERM").copied()
+    );
+    assert_eq!(
+        os::dlopen_constant("RTLD_NOW"),
+        constants.dlopen.get("RTLD_NOW").copied()
+    );
+    assert_eq!(os::errno_constant("NO_SUCH_ERRNO"), None);
+    assert_eq!(os::priority_constant("NO_SUCH_PRIORITY"), None);
     let interfaces = os::network_interfaces().unwrap();
     assert!(interfaces
         .values()

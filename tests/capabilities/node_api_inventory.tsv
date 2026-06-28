@@ -2072,6 +2072,50 @@ NODE-OS-TOTALMEM-FN	os	totalmem	implemented	N67	tsonic_node::os::totalmem	NODE-O
 NODE-OS-FREEMEM-FN	os	freemem	implemented	N67	tsonic_node::os::freemem	NODE-OS-001	free memory helper
 NODE-OS-NETWORK-INTERFACES-FN	os	networkInterfaces	implemented	N67	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface map helper
 NODE-OS-CONSTANTS-FN	os	constants	implemented	N67	tsonic_node::os::constants	NODE-OS-004	closed errno, signal, priority, dlopen, and uv constants
+NODE-OS-ERRNO-CONSTANT-FN	os	errnoConstant	implemented	N78	tsonic_node::os::errno_constant	NODE-OS-004	closed errno constant lookup helper
+NODE-OS-SIGNAL-CONSTANT-FN	os	signalConstant	implemented	N78	tsonic_node::os::signal_constant	NODE-OS-004	closed signal constant lookup helper
+NODE-OS-PRIORITY-CONSTANT-FN	os	priorityConstant	implemented	N78	tsonic_node::os::priority_constant	NODE-OS-004	closed priority constant lookup helper
+NODE-OS-DLOPEN-CONSTANT-FN	os	dlopenConstant	implemented	N78	tsonic_node::os::dlopen_constant	NODE-OS-004	closed dlopen constant lookup helper
+NODE-OS-UV-CONSTANT-FN	os	uvConstant	implemented	N78	tsonic_node::os::uv_constant	NODE-OS-004	closed libuv constant lookup helper
+NODE-OS-PRIORITY-LOW	os	priority.PRIORITY_LOW	implemented	N78	tsonic_node::os::priority_constant("PRIORITY_LOW")	NODE-OS-004	priority low constant
+NODE-OS-PRIORITY-BELOW-NORMAL	os	priority.PRIORITY_BELOW_NORMAL	implemented	N78	tsonic_node::os::priority_constant("PRIORITY_BELOW_NORMAL")	NODE-OS-004	priority below normal constant
+NODE-OS-PRIORITY-NORMAL	os	priority.PRIORITY_NORMAL	implemented	N78	tsonic_node::os::priority_constant("PRIORITY_NORMAL")	NODE-OS-004	priority normal constant
+NODE-OS-PRIORITY-ABOVE-NORMAL	os	priority.PRIORITY_ABOVE_NORMAL	implemented	N78	tsonic_node::os::priority_constant("PRIORITY_ABOVE_NORMAL")	NODE-OS-004	priority above normal constant
+NODE-OS-PRIORITY-HIGH	os	priority.PRIORITY_HIGH	implemented	N78	tsonic_node::os::priority_constant("PRIORITY_HIGH")	NODE-OS-004	priority high constant
+NODE-OS-PRIORITY-HIGHEST	os	priority.PRIORITY_HIGHEST	implemented	N78	tsonic_node::os::priority_constant("PRIORITY_HIGHEST")	NODE-OS-004	priority highest constant
+NODE-OS-DLOPEN-RTLD-LAZY	os	dlopen.RTLD_LAZY	implemented	N78	tsonic_node::os::dlopen_constant("RTLD_LAZY")	NODE-OS-004	RTLD_LAZY dlopen constant when platform-supported
+NODE-OS-DLOPEN-RTLD-NOW	os	dlopen.RTLD_NOW	implemented	N78	tsonic_node::os::dlopen_constant("RTLD_NOW")	NODE-OS-004	RTLD_NOW dlopen constant when platform-supported
+NODE-OS-DLOPEN-RTLD-GLOBAL	os	dlopen.RTLD_GLOBAL	implemented	N78	tsonic_node::os::dlopen_constant("RTLD_GLOBAL")	NODE-OS-004	RTLD_GLOBAL dlopen constant when platform-supported
+NODE-OS-DLOPEN-RTLD-LOCAL	os	dlopen.RTLD_LOCAL	implemented	N78	tsonic_node::os::dlopen_constant("RTLD_LOCAL")	NODE-OS-004	RTLD_LOCAL dlopen constant when platform-supported
+NODE-OS-UV-UDP-REUSEADDR	os	constants.UV_UDP_REUSEADDR	implemented	N78	tsonic_node::os::uv_constant("UV_UDP_REUSEADDR")	NODE-OS-004	UV_UDP_REUSEADDR libuv constant
+NODE-OS-ERRNO-EACCES	os	errno.EACCES	implemented	N78	tsonic_node::os::errno_constant("EACCES")	NODE-OS-004	EACCES errno constant
+NODE-OS-ERRNO-EADDRINUSE	os	errno.EADDRINUSE	implemented	N78	tsonic_node::os::errno_constant("EADDRINUSE")	NODE-OS-004	EADDRINUSE errno constant
+NODE-OS-ERRNO-EADDRNOTAVAIL	os	errno.EADDRNOTAVAIL	implemented	N78	tsonic_node::os::errno_constant("EADDRNOTAVAIL")	NODE-OS-004	EADDRNOTAVAIL errno constant
+NODE-OS-ERRNO-EAGAIN	os	errno.EAGAIN	implemented	N78	tsonic_node::os::errno_constant("EAGAIN")	NODE-OS-004	EAGAIN errno constant
+NODE-OS-ERRNO-EBADF	os	errno.EBADF	implemented	N78	tsonic_node::os::errno_constant("EBADF")	NODE-OS-004	EBADF errno constant
+NODE-OS-ERRNO-EBUSY	os	errno.EBUSY	implemented	N78	tsonic_node::os::errno_constant("EBUSY")	NODE-OS-004	EBUSY errno constant
+NODE-OS-ERRNO-ECONNREFUSED	os	errno.ECONNREFUSED	implemented	N78	tsonic_node::os::errno_constant("ECONNREFUSED")	NODE-OS-004	ECONNREFUSED errno constant
+NODE-OS-ERRNO-ECONNRESET	os	errno.ECONNRESET	implemented	N78	tsonic_node::os::errno_constant("ECONNRESET")	NODE-OS-004	ECONNRESET errno constant
+NODE-OS-ERRNO-EEXIST	os	errno.EEXIST	implemented	N78	tsonic_node::os::errno_constant("EEXIST")	NODE-OS-004	EEXIST errno constant
+NODE-OS-ERRNO-EFAULT	os	errno.EFAULT	implemented	N78	tsonic_node::os::errno_constant("EFAULT")	NODE-OS-004	EFAULT errno constant
+NODE-OS-ERRNO-EHOSTUNREACH	os	errno.EHOSTUNREACH	implemented	N78	tsonic_node::os::errno_constant("EHOSTUNREACH")	NODE-OS-004	EHOSTUNREACH errno constant
+NODE-OS-ERRNO-EINTR	os	errno.EINTR	implemented	N78	tsonic_node::os::errno_constant("EINTR")	NODE-OS-004	EINTR errno constant
+NODE-OS-ERRNO-EINVAL	os	errno.EINVAL	implemented	N78	tsonic_node::os::errno_constant("EINVAL")	NODE-OS-004	EINVAL errno constant
+NODE-OS-ERRNO-EISDIR	os	errno.EISDIR	implemented	N78	tsonic_node::os::errno_constant("EISDIR")	NODE-OS-004	EISDIR errno constant
+NODE-OS-ERRNO-ELOOP	os	errno.ELOOP	implemented	N78	tsonic_node::os::errno_constant("ELOOP")	NODE-OS-004	ELOOP errno constant
+NODE-OS-ERRNO-EMFILE	os	errno.EMFILE	implemented	N78	tsonic_node::os::errno_constant("EMFILE")	NODE-OS-004	EMFILE errno constant
+NODE-OS-ERRNO-ENOENT	os	errno.ENOENT	implemented	N78	tsonic_node::os::errno_constant("ENOENT")	NODE-OS-004	ENOENT errno constant
+NODE-OS-ERRNO-ENOTDIR	os	errno.ENOTDIR	implemented	N78	tsonic_node::os::errno_constant("ENOTDIR")	NODE-OS-004	ENOTDIR errno constant
+NODE-OS-ERRNO-ENOTEMPTY	os	errno.ENOTEMPTY	implemented	N78	tsonic_node::os::errno_constant("ENOTEMPTY")	NODE-OS-004	ENOTEMPTY errno constant
+NODE-OS-ERRNO-ENOTSUP	os	errno.ENOTSUP	implemented	N78	tsonic_node::os::errno_constant("ENOTSUP")	NODE-OS-004	ENOTSUP errno constant
+NODE-OS-ERRNO-EPERM	os	errno.EPERM	implemented	N78	tsonic_node::os::errno_constant("EPERM")	NODE-OS-004	EPERM errno constant
+NODE-OS-ERRNO-EPIPE	os	errno.EPIPE	implemented	N78	tsonic_node::os::errno_constant("EPIPE")	NODE-OS-004	EPIPE errno constant
+NODE-OS-ERRNO-ETIMEDOUT	os	errno.ETIMEDOUT	implemented	N78	tsonic_node::os::errno_constant("ETIMEDOUT")	NODE-OS-004	ETIMEDOUT errno constant
+NODE-OS-ERRNO-EWOULDBLOCK	os	errno.EWOULDBLOCK	implemented	N78	tsonic_node::os::errno_constant("EWOULDBLOCK")	NODE-OS-004	EWOULDBLOCK errno constant
+NODE-OS-ERRNO-WSAEADDRINUSE	os	errno.WSAEADDRINUSE	implemented	N78	tsonic_node::os::errno_constant("WSAEADDRINUSE")	NODE-OS-004	WSAEADDRINUSE errno alias constant
+NODE-OS-ERRNO-WSAECONNRESET	os	errno.WSAECONNRESET	implemented	N78	tsonic_node::os::errno_constant("WSAECONNRESET")	NODE-OS-004	WSAECONNRESET errno alias constant
+NODE-OS-ERRNO-WSAETIMEDOUT	os	errno.WSAETIMEDOUT	implemented	N78	tsonic_node::os::errno_constant("WSAETIMEDOUT")	NODE-OS-004	WSAETIMEDOUT errno alias constant
+NODE-OS-ERRNO-WSAEWOULDBLOCK	os	errno.WSAEWOULDBLOCK	implemented	N78	tsonic_node::os::errno_constant("WSAEWOULDBLOCK")	NODE-OS-004	WSAEWOULDBLOCK errno alias constant
 NODE-READLINE-CREATE-INTERFACE	readline	createInterface	implemented	N72	tsonic_node::readline::create_interface	NODE-READLINE-001	closed readline interface factory over explicit input lines
 NODE-READLINE-INTERFACE-QUESTION	readline	Interface.question	implemented	N72	tsonic_node::readline::Interface::question	NODE-READLINE-002	question writes prompt and consumes next explicit input line
 NODE-READLINE-INTERFACE-WRITE	readline	Interface.write	implemented	N72	tsonic_node::readline::Interface::write	NODE-READLINE-002	write appends explicit output and line buffer text

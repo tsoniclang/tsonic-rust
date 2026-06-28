@@ -298,6 +298,35 @@ pub fn constants() -> OsConstants {
     }
 }
 
+pub fn errno_constant(name: &str) -> Option<i32> {
+    errno_constants().get(name).copied()
+}
+
+pub fn signal_constant(name: &str) -> Option<i32> {
+    signal_constants().get(name).copied()
+}
+
+pub fn priority_constant(name: &str) -> Option<i32> {
+    let priority = constants().priority;
+    match name {
+        "PRIORITY_LOW" => Some(priority.priority_low),
+        "PRIORITY_BELOW_NORMAL" => Some(priority.priority_below_normal),
+        "PRIORITY_NORMAL" => Some(priority.priority_normal),
+        "PRIORITY_ABOVE_NORMAL" => Some(priority.priority_above_normal),
+        "PRIORITY_HIGH" => Some(priority.priority_high),
+        "PRIORITY_HIGHEST" => Some(priority.priority_highest),
+        _ => None,
+    }
+}
+
+pub fn dlopen_constant(name: &str) -> Option<i32> {
+    dlopen_constants().get(name).copied()
+}
+
+pub fn uv_constant(name: &str) -> Option<i32> {
+    constants().uv.get(name).copied()
+}
+
 pub fn unavailable(message: &str) -> NodeError {
     NodeError::new("ERR_UNSUPPORTED_OPERATION", message)
 }
