@@ -207,9 +207,15 @@ NODE-PROCESS-SIGNAL	process	kill	implemented	N13	tsonic_node::process::kill	NODE
 NODE-PROCESS-VERSION	process	version/versions	implemented	J	tsonic_node::process::{version,versions}	NODE-PROC-002	stable tsonic runtime version shape
 NODE-PROCESS-TIME	process	uptime/hrtime/hrtime.bigint	implemented	J	tsonic_node::process::{uptime,hrtime,hrtime_bigint}	NODE-PROC-002	monotonic process timers
 NODE-PROCESS-MEMORY	process	memoryUsage	implemented	J	tsonic_node::process::memory_usage	NODE-PROC-002	RSS plus closed heap fields
+NODE-PROCESS-MEMORY-RSS	process	memoryUsage.rss/constrainedMemory	implemented	N49	tsonic_node::process::{memory_usage_rss,constrained_memory}	NODE-PROC-013	closed RSS and constrained memory helpers backed by platform memory query where available
+NODE-PROCESS-THREAD-CPU	process	threadCpuUsage	implemented	N49	tsonic_node::process::thread_cpu_usage	NODE-PROC-013	thread CPU shape mirrors closed process CPU usage in single-runtime carrier
 NODE-PROCESS-METADATA	process	title/features/config/release	implemented	N15	tsonic_node::process::{title,set_title,features,config,release}	NODE-PROC-METADATA-001	closed runtime metadata and compile configuration shape
+NODE-PROCESS-METADATA-EXT	process	sourceMapsEnabled/debugPort/getBuiltinModule/ref/unref	implemented	N49	tsonic_node::process::{source_maps_enabled,debug_port,get_builtin_module,ref_handle,unref_handle}	NODE-PROC-013	closed metadata and ref/unref helpers without loader execution or host introspection
 NODE-PROCESS-WARNINGS	process	emitWarning/warnings	implemented	N15	tsonic_node::process::{emit_warning,emitted_warnings,clear_warnings}	NODE-PROC-METADATA-001	closed warning capture for generated runtime diagnostics
 NODE-PROCESS-RESOURCES	process	availableMemory/getActiveResourcesInfo/allowedNodeEnvironmentFlags	implemented	N15	tsonic_node::process::{available_memory,get_active_resources_info,allowed_node_environment_flags}	NODE-PROC-METADATA-001	closed resource and environment flag metadata without host introspection
+NODE-PROCESS-RESOURCE-USAGE-EXT	process	resourceUsage extended fields	implemented	N49	tsonic_node::process::ResourceUsage	NODE-PROC-013	closed ResourceUsage full field carrier with platform-backed CPU/RSS and zeroed unavailable counters
+NODE-PROCESS-LOAD-ENV-FILE	process	loadEnvFile	implemented	N49	tsonic_node::process::load_env_file	NODE-PROC-013	deterministic .env loader for key=value lines; no shell expansion
+NODE-PROCESS-UMASK	process	umask	implemented	N49	tsonic_node::process::umask	NODE-PROC-013	platform umask get/set on Unix; zero fallback elsewhere
 NODE-PROCESS-IO	process	stdin/stdout/stderr	implemented	N8	tsonic_node::process::{stdout,stderr,stdin_is_tty}	NODE-PROC-IO-001	closed stdio stream shapes
 NODE-PROCESS-EVENTS	process	on/emit	implemented	N10	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	closed process event emitter shape for generated runtimes
 NODE-OS-PLATFORM	os	platform/arch	implemented	J	tsonic_node::os::{platform,arch}	NODE-OS-001	platform helpers

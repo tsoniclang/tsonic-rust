@@ -31,6 +31,19 @@ pub struct ResourceUsage {
     pub user_cpu_time: u64,
     pub system_cpu_time: u64,
     pub max_rss: u64,
+    pub shared_memory_size: u64,
+    pub unshared_data_size: u64,
+    pub unshared_stack_size: u64,
+    pub minor_page_fault: u64,
+    pub major_page_fault: u64,
+    pub swapped_out: u64,
+    pub fs_read: u64,
+    pub fs_write: u64,
+    pub ipc_sent: u64,
+    pub ipc_received: u64,
+    pub signals_count: u64,
+    pub voluntary_context_switches: u64,
+    pub involuntary_context_switches: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -327,7 +340,32 @@ pub fn resource_usage() -> ResourceUsage {
         user_cpu_time: cpu.user,
         system_cpu_time: cpu.system,
         max_rss: memory_usage().rss,
+        shared_memory_size: 0,
+        unshared_data_size: 0,
+        unshared_stack_size: 0,
+        minor_page_fault: 0,
+        major_page_fault: 0,
+        swapped_out: 0,
+        fs_read: 0,
+        fs_write: 0,
+        ipc_sent: 0,
+        ipc_received: 0,
+        signals_count: 0,
+        voluntary_context_switches: 0,
+        involuntary_context_switches: 0,
     }
+}
+
+pub fn memory_usage_rss() -> u64 {
+    memory_usage().rss
+}
+
+pub fn constrained_memory() -> u64 {
+    available_memory()
+}
+
+pub fn thread_cpu_usage(previous: Option<CpuUsage>) -> CpuUsage {
+    cpu_usage(previous)
 }
 
 pub fn env_get(name: &str) -> Option<String> {
@@ -340,6 +378,23 @@ pub fn env_set(name: &str, value: &str) {
 
 pub fn env_delete(name: &str) {
     std::env::remove_var(name);
+}
+
+pub fn load_env_file(path: &str) -> NodeResult<()> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| NodeError::new("ENOENT", error.to_string()))?;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let Some((name, value)) = trimmed.split_once('=') else {
+            continue;
+        };
+        let value = value.trim().trim_matches('"').trim_matches('\'');
+        env_set(name.trim(), value);
+    }
+    Ok(())
 }
 
 pub fn exit_code() -> Option<i32> {
@@ -370,6 +425,28 @@ pub fn stderr() -> Writable {
 pub fn stdin_is_tty() -> bool {
     false
 }
+
+pub fn umask(mask: Option<u32>) -> u32 {
+    umask_impl(mask)
+}
+
+pub fn source_maps_enabled() -> bool {
+    false
+}
+
+pub fn debug_port() -> u16 {
+    0
+}
+
+pub fn get_builtin_module(id: &str) -> Option<&'static str> {
+    crate::module::builtin_modules()
+        .into_iter()
+        .find(|module| *module == id || format!("node:{module}") == id)
+}
+
+pub fn ref_handle<T>(_value: &T) {}
+
+pub fn unref_handle<T>(_value: &T) {}
 
 #[derive(Default)]
 pub struct ProcessEvents {
@@ -465,6 +542,22 @@ fn kill_impl(_pid: u32, _signal: i32) -> NodeResult<bool> {
         "ERR_FEATURE_UNAVAILABLE",
         "process.kill is currently implemented for Unix targets",
     ))
+}
+
+#[cfg(unix)]
+fn umask_impl(mask: Option<u32>) -> u32 {
+    let current = unsafe { libc::umask(mask.unwrap_or(0) as libc::mode_t) } as u32;
+    if mask.is_none() {
+        unsafe {
+            libc::umask(current as libc::mode_t);
+        }
+    }
+    current
+}
+
+#[cfg(not(unix))]
+fn umask_impl(_mask: Option<u32>) -> u32 {
+    0
 }
 
 #[cfg(target_os = "linux")]

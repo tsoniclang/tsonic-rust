@@ -10,6 +10,26 @@ fn process_env_and_exit_code_are_testable() {
     process::env_delete("TSONIC_RUST_TEST_ENV");
     assert_eq!(process::env_get("TSONIC_RUST_TEST_ENV"), None);
 
+    let env_file = std::env::current_dir()
+        .unwrap()
+        .join(".temp")
+        .join("tsonic-rust-process-env");
+    std::fs::create_dir_all(env_file.parent().unwrap()).unwrap();
+    std::fs::write(
+        &env_file,
+        "TSONIC_RUST_ENV_FILE=loaded\n# ignored\nQUOTED=\"ok\"\n",
+    )
+    .unwrap();
+    process::load_env_file(&env_file.to_string_lossy()).unwrap();
+    assert_eq!(
+        process::env_get("TSONIC_RUST_ENV_FILE").as_deref(),
+        Some("loaded")
+    );
+    assert_eq!(process::env_get("QUOTED").as_deref(), Some("ok"));
+    process::env_delete("TSONIC_RUST_ENV_FILE");
+    process::env_delete("QUOTED");
+    std::fs::remove_file(env_file).unwrap();
+
     process::set_exit_code(23);
     assert_eq!(process::exit_code(), Some(23));
 }
@@ -76,6 +96,11 @@ fn process_runtime_queries_have_stable_shapes() {
     assert!(process::cpu_usage(Some(cpu.clone())).user <= process::cpu_usage(None).user);
     let resource = process::resource_usage();
     assert!(resource.user_cpu_time >= cpu.user);
+    assert_eq!(resource.fs_read, 0);
+    assert_eq!(resource.ipc_sent, 0);
+    assert!(process::memory_usage_rss() <= memory.rss + process::memory_usage_rss());
+    assert!(process::constrained_memory() > 0);
+    assert!(process::thread_cpu_usage(None).user <= process::cpu_usage(None).user);
 }
 
 #[test]
@@ -99,6 +124,15 @@ fn process_metadata_warnings_and_feature_shapes_are_closed() {
     assert!(process::allowed_node_environment_flags().contains(&"--trace-warnings"));
     assert!(process::available_memory() > 0);
     assert!(process::get_active_resources_info().contains(&"Process"));
+    assert!(!process::source_maps_enabled());
+    assert_eq!(process::debug_port(), 0);
+    assert_eq!(process::get_builtin_module("node:fs"), Some("fs"));
+    assert_eq!(process::get_builtin_module("missing"), None);
+    process::ref_handle(&features);
+    process::unref_handle(&features);
+    let current_umask = process::umask(None);
+    let old_umask = process::umask(Some(current_umask));
+    assert_eq!(old_umask, current_umask);
 
     process::clear_warnings();
     process::emit_warning(
