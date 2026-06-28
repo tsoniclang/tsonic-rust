@@ -4,10 +4,30 @@ use tsonic_node::{assert, module, perf_hooks, querystring, string_decoder, tty};
 #[test]
 fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     assert::ok(true, None).unwrap();
+    assert::equal(&1, &1, None).unwrap();
+    assert::not_equal(&1, &2, None).unwrap();
     assert::strict_equal(&1, &1, None).unwrap();
     assert::not_strict_equal(&1, &2, None).unwrap();
+    assert::deep_equal(&JsValue::Null, &JsValue::Null, None).unwrap();
     assert::deep_strict_equal(&JsValue::Null, &JsValue::Null, None).unwrap();
+    assert::not_deep_equal(&JsValue::Null, &JsValue::Undefined, None).unwrap();
     assert::not_deep_strict_equal(&JsValue::Null, &JsValue::Undefined, None).unwrap();
+    assert::throws(
+        || Err(tsonic_node::error::NodeError::new("E", "boom")),
+        None,
+    )
+    .unwrap();
+    assert::does_not_throw(|| Ok(()), None).unwrap();
+    assert::rejects(
+        || Err(tsonic_node::error::NodeError::new("E", "boom")),
+        None,
+    )
+    .unwrap();
+    assert::does_not_reject(|| Ok(()), None).unwrap();
+    assert::match_string("hello world", "world", None).unwrap();
+    assert::does_not_match_string("hello world", "mars", None).unwrap();
+    assert::if_error(None).unwrap();
+    assert!(assert::fail(Some("explicit")).is_err());
     assert!(assert::ok(false, Some("no")).is_err());
     assert!(perf_hooks::performance_now() >= 0.0);
     assert_eq!(perf_hooks::time_origin(), 0.0);

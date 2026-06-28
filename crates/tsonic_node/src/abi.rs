@@ -1,10 +1,14 @@
 //! Backend-legal ABI re-exports for generated Rust.
 
 pub use crate::assert::{
-    deep_strict_equal as assert_deep_strict_equal,
-    not_deep_strict_equal as assert_not_deep_strict_equal,
-    not_strict_equal as assert_not_strict_equal, ok as assert_ok,
-    strict_equal as assert_strict_equal,
+    deep_equal as assert_deep_equal, deep_strict_equal as assert_deep_strict_equal,
+    does_not_match_string as assert_does_not_match_string,
+    does_not_reject as assert_does_not_reject, does_not_throw as assert_does_not_throw,
+    equal as assert_equal, fail as assert_fail, if_error as assert_if_error,
+    match_string as assert_match_string, not_deep_equal as assert_not_deep_equal,
+    not_deep_strict_equal as assert_not_deep_strict_equal, not_equal as assert_not_equal,
+    not_strict_equal as assert_not_strict_equal, ok as assert_ok, rejects as assert_rejects,
+    strict_equal as assert_strict_equal, throws as assert_throws,
 };
 pub use crate::async_hooks::AsyncLocalStorage;
 pub use crate::buffer::Buffer;
@@ -157,8 +161,12 @@ pub use crate::url::{
 };
 pub use crate::util::types as util_types;
 pub use crate::util::{
-    format as util_format, inspect as util_inspect,
-    is_deep_strict_equal as util_is_deep_strict_equal,
+    callbackify as util_callbackify, deprecate as util_deprecate, format as util_format,
+    format_with_options as util_format_with_options, inherits as util_inherits,
+    inspect as util_inspect, inspect_with_options as util_inspect_with_options,
+    is_deep_strict_equal as util_is_deep_strict_equal, promisify as util_promisify,
+    strip_vt_control_characters as util_strip_vt_control_characters,
+    to_usv_string as util_to_usv_string, TextDecoder, TextEncoder,
 };
 pub use crate::worker_threads::{
     receive_message_on_port as worker_receive_message_on_port, MessageChannel, MessagePort, Worker,
