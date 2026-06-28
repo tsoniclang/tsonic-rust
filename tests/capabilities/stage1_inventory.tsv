@@ -231,6 +231,7 @@ NODE-MOD-028	implemented	N5	tsonic_node::abi::readline_create_interface	NODE-REA
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1
 NODE-MOD-030	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency
 NODE-MOD-031	implemented	N3	tsonic_node::abi::{Readable,Writable,stream_pipeline}	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
+NODE-STREAM-CONSUMERS-001	implemented	N11	tsonic_node::stream::consumers::{buffer,text,array_buffer,blob,json}	NODE-STREAM-002	closed stream consumers over Buffer, ArrayBuffer, Blob, text, and JSON carriers
 NODE-MOD-032	implemented	M	tsonic_node::abi::StringDecoder	NODE-MISC-002	Buffer encoding subset first; decoder state machine later (completed in full-completion branch)
 NODE-MOD-033	hard-reject	M	n/a	REJECT-NODE-TEST	test runner/reporters not runtime surface
 NODE-MOD-034	implemented	N3	tsonic_node::abi::{set_timeout,set_immediate,Timeout}	NODE-TIMERS-001	deterministic timer handles and callback execution

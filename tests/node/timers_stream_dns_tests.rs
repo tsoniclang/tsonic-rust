@@ -64,6 +64,46 @@ fn stream_pipeline_moves_closed_buffer_chunks() {
 }
 
 #[test]
+fn stream_consumers_cover_buffer_text_array_buffer_blob_and_json() {
+    let chunks = || {
+        stream::Readable::from_chunks(vec![
+            Buffer::from_string("{\"ok\":", Some("utf8")).unwrap(),
+            Buffer::from_string("true}", Some("utf8")).unwrap(),
+        ])
+    };
+
+    let mut readable = chunks();
+    assert_eq!(
+        stream::consumers::buffer(&mut readable)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "{\"ok\":true}"
+    );
+
+    let mut readable = chunks();
+    assert_eq!(
+        stream::consumers::array_buffer(&mut readable)
+            .unwrap()
+            .as_bytes(),
+        b"{\"ok\":true}"
+    );
+
+    let mut readable = chunks();
+    let blob = stream::consumers::blob(&mut readable, "application/json").unwrap();
+    assert_eq!(blob.content_type(), "application/json");
+    assert_eq!(blob.text().unwrap(), "{\"ok\":true}");
+
+    let mut readable = chunks();
+    assert_eq!(
+        stream::consumers::json(&mut readable, Some("utf8"))
+            .unwrap()
+            .inspect(),
+        "{ok: true}"
+    );
+}
+
+#[test]
 fn stream_classes_promises_and_web_bridges_use_closed_buffers() {
     let mut pass = stream::PassThrough::new();
     assert!(pass.write(Buffer::from_string("a", Some("utf8")).unwrap()));
