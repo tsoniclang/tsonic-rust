@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::buffer::Buffer;
 use crate::error::{NodeError, NodeResult};
 use crate::http::Response;
 use crate::https::response_to_node;
@@ -19,12 +20,80 @@ pub const NGHTTP2_NO_ERROR: u32 = 0;
 pub const NGHTTP2_CANCEL: u32 = 8;
 pub const NGHTTP2_PROTOCOL_ERROR: u32 = 1;
 pub const NGHTTP2_REFUSED_STREAM: u32 = 7;
+pub const NGHTTP2_DEFAULT_WEIGHT: u32 = 16;
+pub const NGHTTP2_STREAM_STATE_IDLE: u32 = 1;
+pub const NGHTTP2_STREAM_STATE_OPEN: u32 = 2;
+pub const NGHTTP2_STREAM_STATE_RESERVED_LOCAL: u32 = 3;
+pub const NGHTTP2_STREAM_STATE_RESERVED_REMOTE: u32 = 4;
+pub const NGHTTP2_STREAM_STATE_HALF_CLOSED_LOCAL: u32 = 5;
+pub const NGHTTP2_STREAM_STATE_HALF_CLOSED_REMOTE: u32 = 6;
+pub const NGHTTP2_STREAM_STATE_CLOSED: u32 = 7;
+pub const NGHTTP2_SESSION_SERVER: u32 = 0;
+pub const NGHTTP2_SESSION_CLIENT: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientSessionOptions {
     pub authority: String,
     pub headers: BTreeMap<String, String>,
     pub prior_knowledge: bool,
+    pub protocol: Option<String>,
+    pub max_reserved_remote_streams: Option<usize>,
+    pub session: SessionOptions,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SessionOptions {
+    pub max_deflate_dynamic_table_size: Option<usize>,
+    pub max_header_list_pairs: Option<usize>,
+    pub max_outstanding_pings: Option<usize>,
+    pub max_send_header_block_length: Option<usize>,
+    pub max_session_memory: Option<usize>,
+    pub max_settings: Option<usize>,
+    pub padding_strategy: Option<u32>,
+    pub peer_max_concurrent_streams: Option<u32>,
+    pub remote_custom_settings: Vec<u32>,
+    pub settings: Option<Http2Settings>,
+    pub strict_field_whitespace_validation: bool,
+    pub unknown_protocol_timeout: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ClientSessionRequestOptions {
+    pub end_stream: bool,
+    pub exclusive: bool,
+    pub parent: Option<u32>,
+    pub signal_aborted: bool,
+    pub wait_for_trailers: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AlternativeServiceOptions {
+    pub origin: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ServerStreamResponseOptions {
+    pub end_stream: bool,
+    pub wait_for_trailers: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ServerStreamFileResponseOptions {
+    pub offset: Option<u64>,
+    pub length: Option<u64>,
+    pub wait_for_trailers: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ServerStreamFileResponseOptionsWithError {
+    pub options: ServerStreamFileResponseOptions,
+    pub on_error: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StatOptions {
+    pub offset: u64,
+    pub length: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +107,13 @@ pub struct Http2Session {
     remote_settings: Http2Settings,
     timeout: Option<u64>,
     pending_streams: usize,
+    connecting: bool,
+    encrypted: bool,
+    alpn_protocol: Option<String>,
+    origin_set: Vec<String>,
+    pending_settings_ack: bool,
+    refed: bool,
+    session_type: u32,
 }
 
 impl Http2Session {
@@ -55,6 +131,30 @@ impl Http2Session {
 
     pub fn destroyed(&self) -> bool {
         self.destroyed
+    }
+
+    pub fn connecting(&self) -> bool {
+        self.connecting
+    }
+
+    pub fn encrypted(&self) -> bool {
+        self.encrypted
+    }
+
+    pub fn alpn_protocol(&self) -> Option<&str> {
+        self.alpn_protocol.as_deref()
+    }
+
+    pub fn origin_set(&self) -> &[String] {
+        &self.origin_set
+    }
+
+    pub fn pending_settings_ack(&self) -> bool {
+        self.pending_settings_ack
+    }
+
+    pub fn session_type(&self) -> u32 {
+        self.session_type
     }
 
     pub fn state(&self) -> Http2SessionState {
@@ -81,6 +181,15 @@ impl Http2Session {
 
     pub fn settings(&mut self, settings: Http2Settings) {
         self.local_settings = settings;
+        self.pending_settings_ack = true;
+    }
+
+    pub fn acknowledge_settings(&mut self) {
+        self.pending_settings_ack = false;
+    }
+
+    pub fn set_local_window_size(&mut self, window_size: u32) {
+        self.local_settings.initial_window_size = window_size;
     }
 
     pub fn set_timeout(&mut self, timeout_millis: u64, callback: Option<impl FnOnce()>) {
@@ -119,9 +228,33 @@ impl Http2Session {
         self.closed = true;
     }
 
+    pub fn close_with_callback(&mut self, callback: Option<impl FnOnce()>) {
+        self.close();
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
     pub fn destroy(&mut self) {
         self.destroyed = true;
         self.closed = true;
+    }
+
+    pub fn destroy_with_code(&mut self, code: u32) {
+        self.goaway_code = Some(code);
+        self.destroy();
+    }
+
+    pub fn ref_(&mut self) {
+        self.refed = true;
+    }
+
+    pub fn unref(&mut self) {
+        self.refed = false;
+    }
+
+    pub fn has_ref(&self) -> bool {
+        self.refed
     }
 }
 
@@ -130,12 +263,17 @@ pub struct Http2Stream {
     id: u64,
     headers: BTreeMap<String, String>,
     data: Vec<u8>,
+    aborted: bool,
     closed: bool,
     destroyed: bool,
+    end_after_headers: bool,
+    pending: bool,
     sent_headers: Vec<BTreeMap<String, String>>,
+    sent_info_headers: Vec<BTreeMap<String, String>>,
     sent_trailers: BTreeMap<String, String>,
     rst_code: u32,
     timeout: Option<u64>,
+    priority: Option<StreamPriorityOptions>,
 }
 
 impl Http2Stream {
@@ -144,12 +282,17 @@ impl Http2Stream {
             id: NEXT_HTTP2_ID.fetch_add(1, Ordering::SeqCst),
             headers,
             data: Vec::new(),
+            aborted: false,
             closed: false,
             destroyed: false,
+            end_after_headers: false,
+            pending: false,
             sent_headers: Vec::new(),
+            sent_info_headers: Vec::new(),
             sent_trailers: BTreeMap::new(),
             rst_code: NGHTTP2_NO_ERROR,
             timeout: None,
+            priority: None,
         }
     }
 
@@ -179,8 +322,51 @@ impl Http2Stream {
         !self.sent_headers.is_empty()
     }
 
+    pub fn aborted(&self) -> bool {
+        self.aborted
+    }
+
+    pub fn buffer_size(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn end_after_headers(&self) -> bool {
+        self.end_after_headers
+    }
+
+    pub fn pending(&self) -> bool {
+        self.pending
+    }
+
+    pub fn state(&self) -> StreamState {
+        StreamState {
+            state: Some(if self.closed {
+                NGHTTP2_STREAM_STATE_CLOSED
+            } else {
+                NGHTTP2_STREAM_STATE_OPEN
+            }),
+            weight: self.priority.as_ref().map(|priority| priority.weight),
+            sum_dependency_weight: None,
+            local_close: Some(u32::from(self.closed)),
+            remote_close: Some(0),
+            local_window_size: Some(self.data.len() as u32),
+        }
+    }
+
     pub fn sent_headers(&self) -> &[BTreeMap<String, String>] {
         &self.sent_headers
+    }
+
+    pub fn sent_info_headers(&self) -> &[BTreeMap<String, String>] {
+        &self.sent_info_headers
+    }
+
+    pub fn sent_trailers(&self) -> Option<&BTreeMap<String, String>> {
+        if self.sent_trailers.is_empty() {
+            None
+        } else {
+            Some(&self.sent_trailers)
+        }
     }
 
     pub fn trailers(&self) -> &BTreeMap<String, String> {
@@ -199,14 +385,41 @@ impl Http2Stream {
         self.sent_headers.push(headers.clone());
     }
 
+    pub fn respond_with_options(
+        &mut self,
+        headers: &BTreeMap<String, String>,
+        options: ServerStreamResponseOptions,
+    ) {
+        self.end_after_headers = options.end_stream;
+        self.respond(headers);
+    }
+
     pub fn respond_with_file(&mut self, path: &str, headers: &BTreeMap<String, String>) {
         let mut sent = headers.clone();
         sent.insert("x-tsonic-file".to_string(), path.to_string());
         self.sent_headers.push(sent);
     }
 
+    pub fn respond_with_file_options(
+        &mut self,
+        path: &str,
+        headers: &BTreeMap<String, String>,
+        options: ServerStreamFileResponseOptions,
+    ) {
+        let mut sent = headers.clone();
+        sent.insert("x-tsonic-file".to_string(), path.to_string());
+        if let Some(offset) = options.offset {
+            sent.insert("x-tsonic-offset".to_string(), offset.to_string());
+        }
+        if let Some(length) = options.length {
+            sent.insert("x-tsonic-length".to_string(), length.to_string());
+        }
+        self.end_after_headers = options.wait_for_trailers;
+        self.sent_headers.push(sent);
+    }
+
     pub fn additional_headers(&mut self, headers: &BTreeMap<String, String>) {
-        self.sent_headers.push(headers.clone());
+        self.sent_info_headers.push(headers.clone());
     }
 
     pub fn send_trailers(&mut self, trailers: &BTreeMap<String, String>) {
@@ -228,9 +441,24 @@ impl Http2Stream {
         self.rst_code
     }
 
+    pub fn priority(&mut self, options: StreamPriorityOptions) {
+        self.priority = Some(options);
+    }
+
+    pub fn priority_options(&self) -> Option<&StreamPriorityOptions> {
+        self.priority.as_ref()
+    }
+
     pub fn close_with_code(&mut self, code: u32) {
         self.rst_code = code;
         self.closed = true;
+    }
+
+    pub fn close(&mut self, code: Option<u32>, callback: Option<impl FnOnce()>) {
+        self.close_with_code(code.unwrap_or(NGHTTP2_NO_ERROR));
+        if let Some(callback) = callback {
+            callback();
+        }
     }
 
     pub fn end(&mut self) {
@@ -250,6 +478,39 @@ impl Http2Stream {
         self.closed = true;
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamPriorityOptions {
+    pub exclusive: bool,
+    pub parent: Option<u32>,
+    pub weight: u32,
+    pub silent: bool,
+}
+
+impl Default for StreamPriorityOptions {
+    fn default() -> Self {
+        Self {
+            exclusive: false,
+            parent: None,
+            weight: NGHTTP2_DEFAULT_WEIGHT,
+            silent: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StreamState {
+    pub state: Option<u32>,
+    pub weight: Option<u32>,
+    pub sum_dependency_weight: Option<u32>,
+    pub local_close: Option<u32>,
+    pub remote_close: Option<u32>,
+    pub local_window_size: Option<u32>,
+}
+
+pub type ClientHttp2Stream = Http2Stream;
+pub type ServerHttp2Stream = Http2Stream;
+pub type ClientHttp2Session = Http2Session;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ServerOptions {
@@ -330,12 +591,253 @@ impl Http2Server {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Http2ServerRequest {
+    pub stream: ServerHttp2Stream,
+    pub headers: BTreeMap<String, String>,
+    pub raw_headers: Vec<String>,
+    pub trailers: BTreeMap<String, String>,
+    pub raw_trailers: Vec<String>,
+    pub method: String,
+    pub url: String,
+    pub authority: String,
+    pub scheme: String,
+    pub http_version: String,
+    pub http_version_major: u8,
+    pub http_version_minor: u8,
+    pub aborted: bool,
+    pub complete: bool,
+    body: Vec<Buffer>,
+    timeout: Option<u64>,
+}
+
+impl Http2ServerRequest {
+    pub fn new(stream: ServerHttp2Stream) -> Self {
+        let headers = stream.headers().clone();
+        let method = headers
+            .get(HTTP2_HEADER_METHOD)
+            .cloned()
+            .unwrap_or_else(|| HTTP2_METHOD_GET.to_string());
+        let url = headers
+            .get(HTTP2_HEADER_PATH)
+            .cloned()
+            .unwrap_or_else(|| "/".to_string());
+        let authority = headers
+            .get(HTTP2_HEADER_AUTHORITY)
+            .cloned()
+            .unwrap_or_default();
+        Self {
+            stream,
+            headers,
+            raw_headers: Vec::new(),
+            trailers: BTreeMap::new(),
+            raw_trailers: Vec::new(),
+            method,
+            url,
+            authority,
+            scheme: "https".to_string(),
+            http_version: "2.0".to_string(),
+            http_version_major: 2,
+            http_version_minor: 0,
+            aborted: false,
+            complete: true,
+            body: Vec::new(),
+            timeout: None,
+        }
+    }
+
+    pub fn push_body(&mut self, chunk: Buffer) {
+        self.body.push(chunk);
+    }
+
+    pub fn read(&mut self, _size: Option<usize>) -> Option<Buffer> {
+        if self.body.is_empty() {
+            None
+        } else {
+            Some(self.body.remove(0))
+        }
+    }
+
+    pub fn set_timeout(&mut self, timeout_millis: u64, callback: Option<impl FnOnce()>) {
+        self.timeout = Some(timeout_millis);
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
+    pub fn timeout(&self) -> Option<u64> {
+        self.timeout
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Http2ServerResponse {
+    stream: ServerHttp2Stream,
+    headers: BTreeMap<String, String>,
+    trailers: BTreeMap<String, String>,
+    body: Vec<Buffer>,
+    status_code: u16,
+    status_message: String,
+    send_date: bool,
+    finished: bool,
+    timeout: Option<u64>,
+}
+
+impl Http2ServerResponse {
+    pub fn new(stream: ServerHttp2Stream) -> Self {
+        Self {
+            stream,
+            headers: BTreeMap::new(),
+            trailers: BTreeMap::new(),
+            body: Vec::new(),
+            status_code: HTTP_STATUS_OK,
+            status_message: String::new(),
+            send_date: true,
+            finished: false,
+            timeout: None,
+        }
+    }
+
+    pub fn stream(&self) -> &ServerHttp2Stream {
+        &self.stream
+    }
+
+    pub fn status_code(&self) -> u16 {
+        self.status_code
+    }
+
+    pub fn set_status_code(&mut self, value: u16) {
+        self.status_code = value;
+    }
+
+    pub fn status_message(&self) -> &str {
+        &self.status_message
+    }
+
+    pub fn set_status_message(&mut self, value: &str) {
+        self.status_message = value.to_string();
+    }
+
+    pub fn send_date(&self) -> bool {
+        self.send_date
+    }
+
+    pub fn set_send_date(&mut self, value: bool) {
+        self.send_date = value;
+    }
+
+    pub fn finished(&self) -> bool {
+        self.finished
+    }
+
+    pub fn headers_sent(&self) -> bool {
+        self.stream.headers_sent()
+    }
+
+    pub fn set_header(&mut self, name: &str, value: impl ToString) {
+        self.headers
+            .insert(name.to_ascii_lowercase(), value.to_string());
+    }
+
+    pub fn append_header(&mut self, name: &str, value: impl ToString) {
+        let name = name.to_ascii_lowercase();
+        self.headers
+            .entry(name)
+            .and_modify(|existing| {
+                existing.push_str(", ");
+                existing.push_str(&value.to_string());
+            })
+            .or_insert_with(|| value.to_string());
+    }
+
+    pub fn get_header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .get(&name.to_ascii_lowercase())
+            .map(String::as_str)
+    }
+
+    pub fn get_header_names(&self) -> Vec<String> {
+        self.headers.keys().cloned().collect()
+    }
+
+    pub fn get_headers(&self) -> &BTreeMap<String, String> {
+        &self.headers
+    }
+
+    pub fn has_header(&self, name: &str) -> bool {
+        self.headers.contains_key(&name.to_ascii_lowercase())
+    }
+
+    pub fn remove_header(&mut self, name: &str) {
+        self.headers.remove(&name.to_ascii_lowercase());
+    }
+
+    pub fn write_head(
+        &mut self,
+        status_code: u16,
+        headers: &BTreeMap<String, String>,
+    ) -> &mut Self {
+        self.status_code = status_code;
+        self.headers.extend(headers.clone());
+        self.stream.respond(&self.headers);
+        self
+    }
+
+    pub fn write_continue(&mut self) {
+        self.stream.additional_headers(&BTreeMap::from([(
+            HTTP2_HEADER_STATUS.to_string(),
+            "100".to_string(),
+        )]));
+    }
+
+    pub fn write_early_hints(&mut self, hints: &BTreeMap<String, String>) {
+        self.stream.additional_headers(hints);
+    }
+
+    pub fn write(&mut self, chunk: impl AsRef<[u8]>) -> bool {
+        self.body.push(Buffer::from_bytes(chunk.as_ref().to_vec()));
+        true
+    }
+
+    pub fn end(&mut self, chunk: Option<impl AsRef<[u8]>>) -> &mut Self {
+        if let Some(chunk) = chunk {
+            self.write(chunk);
+        }
+        self.finished = true;
+        self.stream.end();
+        self
+    }
+
+    pub fn add_trailers(&mut self, trailers: &BTreeMap<String, String>) {
+        self.trailers.extend(trailers.clone());
+        self.stream.send_trailers(trailers);
+    }
+
+    pub fn body(&self) -> &[Buffer] {
+        &self.body
+    }
+
+    pub fn set_timeout(&mut self, timeout_millis: u64, callback: Option<impl FnOnce()>) {
+        self.timeout = Some(timeout_millis);
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
+    pub fn timeout(&self) -> Option<u64> {
+        self.timeout
+    }
+}
+
 impl ClientSessionOptions {
     pub fn connect(authority: impl Into<String>) -> Self {
         Self {
             authority: authority.into(),
             headers: BTreeMap::new(),
             prior_knowledge: false,
+            protocol: None,
+            max_reserved_remote_streams: None,
+            session: SessionOptions::default(),
         }
     }
 }
@@ -385,6 +887,7 @@ pub fn connect(authority: &str) -> NodeResult<ClientSessionOptions> {
 
 pub fn connect_session(authority: &str) -> NodeResult<Http2Session> {
     connect(authority)?;
+    let encrypted = authority.starts_with("https://");
     Ok(Http2Session {
         id: NEXT_HTTP2_ID.fetch_add(1, Ordering::SeqCst),
         authority: authority.to_string(),
@@ -395,6 +898,17 @@ pub fn connect_session(authority: &str) -> NodeResult<Http2Session> {
         remote_settings: Http2Settings::default(),
         timeout: None,
         pending_streams: 0,
+        connecting: false,
+        encrypted,
+        alpn_protocol: if encrypted {
+            Some("h2".to_string())
+        } else {
+            None
+        },
+        origin_set: vec![authority.to_string()],
+        pending_settings_ack: false,
+        refed: true,
+        session_type: NGHTTP2_SESSION_CLIENT,
     })
 }
 

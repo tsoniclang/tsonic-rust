@@ -155,6 +155,19 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     let mut session = tsonic_node::http2::connect_session("https://example.com").unwrap();
     assert_eq!(session.authority(), "https://example.com");
     assert!(!session.closed());
+    assert!(!session.connecting());
+    assert!(session.encrypted());
+    assert_eq!(session.alpn_protocol(), Some("h2"));
+    assert_eq!(session.origin_set(), &["https://example.com".to_string()]);
+    assert_eq!(
+        session.session_type(),
+        tsonic_node::http2::NGHTTP2_SESSION_CLIENT
+    );
+    assert!(session.has_ref());
+    session.unref();
+    assert!(!session.has_ref());
+    session.ref_();
+    assert!(session.has_ref());
     assert_eq!(session.local_settings().initial_window_size, 65_535);
     session.settings(tsonic_node::http2::Http2Settings {
         enable_push: false,
@@ -162,6 +175,11 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
         ..tsonic_node::http2::Http2Settings::default()
     });
     assert!(!session.local_settings().enable_push);
+    assert!(session.pending_settings_ack());
+    session.acknowledge_settings();
+    assert!(!session.pending_settings_ack());
+    session.set_local_window_size(100_000);
+    assert_eq!(session.local_settings().initial_window_size, 100_000);
     assert_eq!(session.ping(b"123").unwrap(), b"123\0\0\0\0\0".to_vec());
     assert!(session.ping(b"too-long-payload").is_err());
     let timed = std::cell::Cell::new(false);
@@ -169,7 +187,7 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     assert_eq!(session.timeout(), Some(50));
     assert!(timed.get());
     let state = session.state();
-    assert_eq!(state.local_window_size, 65_535);
+    assert_eq!(state.local_window_size, 100_000);
     session.goaway(tsonic_node::http2::NGHTTP2_CANCEL);
     assert_eq!(
         session.goaway_code(),
@@ -205,6 +223,17 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     assert!(stream
         .get_header_names()
         .contains(&tsonic_node::http2::HTTP2_HEADER_PATH.to_string()));
+    assert!(!stream.aborted());
+    assert!(!stream.pending());
+    assert_eq!(stream.buffer_size(), 0);
+    stream.priority(tsonic_node::http2::StreamPriorityOptions {
+        exclusive: true,
+        parent: Some(1),
+        weight: 32,
+        silent: false,
+    });
+    assert_eq!(stream.priority_options().unwrap().weight, 32);
+    assert_eq!(stream.state().weight, Some(32));
     let headers = BTreeMap::from([(
         tsonic_node::http2::HTTP2_HEADER_STATUS.to_string(),
         tsonic_node::http2::HTTP_STATUS_OK.to_string(),
@@ -213,22 +242,107 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     stream.additional_headers(&BTreeMap::from([("x-extra".to_string(), "1".to_string())]));
     stream.respond_with_file("/tmp/file.txt", &BTreeMap::new());
     assert!(stream.headers_sent());
-    assert_eq!(stream.sent_headers().len(), 3);
+    assert_eq!(stream.sent_headers().len(), 2);
+    assert_eq!(stream.sent_info_headers().len(), 1);
     stream.send_trailers(&BTreeMap::from([(
         "x-trailer".to_string(),
         "done".to_string(),
     )]));
     assert_eq!(stream.trailers().get("x-trailer").unwrap(), "done");
+    assert_eq!(
+        stream.sent_trailers().unwrap().get("x-trailer").unwrap(),
+        "done"
+    );
     stream.set_timeout(25, Some(|| {}));
     assert_eq!(stream.timeout(), Some(25));
     stream.write(b"hello");
     assert_eq!(stream.data(), b"hello");
+    assert_eq!(stream.buffer_size(), 5);
+    stream.respond_with_options(
+        &headers,
+        tsonic_node::http2::ServerStreamResponseOptions {
+            end_stream: true,
+            wait_for_trailers: false,
+        },
+    );
+    assert!(stream.end_after_headers());
+    stream.respond_with_file_options(
+        "/tmp/file.txt",
+        &BTreeMap::new(),
+        tsonic_node::http2::ServerStreamFileResponseOptions {
+            offset: Some(2),
+            length: Some(4),
+            wait_for_trailers: true,
+        },
+    );
+    assert!(stream
+        .sent_headers()
+        .last()
+        .unwrap()
+        .contains_key("x-tsonic-offset"));
     stream.close_with_code(tsonic_node::http2::NGHTTP2_NO_ERROR);
     assert_eq!(stream.rst_code(), tsonic_node::http2::NGHTTP2_NO_ERROR);
     assert!(stream.closed());
     stream.destroy();
     assert!(stream.destroyed());
     stream.end();
+
+    let request_stream = tsonic_node::http2::Http2Stream::new(BTreeMap::from([
+        (
+            tsonic_node::http2::HTTP2_HEADER_METHOD.to_string(),
+            "POST".to_string(),
+        ),
+        (
+            tsonic_node::http2::HTTP2_HEADER_PATH.to_string(),
+            "/submit".to_string(),
+        ),
+        (
+            tsonic_node::http2::HTTP2_HEADER_AUTHORITY.to_string(),
+            "example.com".to_string(),
+        ),
+    ]));
+    let mut request = tsonic_node::http2::Http2ServerRequest::new(request_stream.clone());
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.url, "/submit");
+    assert_eq!(request.http_version, "2.0");
+    request.push_body(Buffer::from_string("body", Some("utf8")).unwrap());
+    assert_eq!(
+        request.read(None).unwrap().to_string(Some("utf8")).unwrap(),
+        "body"
+    );
+    request.set_timeout(10, Some(|| {}));
+    assert_eq!(request.timeout(), Some(10));
+
+    let mut response = tsonic_node::http2::Http2ServerResponse::new(request_stream);
+    response.set_status_code(201);
+    response.set_status_message("Created");
+    response.set_send_date(false);
+    response.set_header("Content-Type", "text/plain");
+    response.append_header("Content-Type", "charset=utf8");
+    assert!(response.has_header("content-type"));
+    assert_eq!(
+        response.get_header("CONTENT-TYPE"),
+        Some("text/plain, charset=utf8")
+    );
+    response.write_head(
+        201,
+        &BTreeMap::from([("x-id".to_string(), "1".to_string())]),
+    );
+    response.write_continue();
+    response.write_early_hints(&BTreeMap::from([("link".to_string(), "</a>".to_string())]));
+    assert!(response.write("created"));
+    response.add_trailers(&BTreeMap::from([(
+        "x-trailer".to_string(),
+        "ok".to_string(),
+    )]));
+    response.set_timeout(20, Some(|| {}));
+    response.end(None::<&[u8]>);
+    assert_eq!(response.status_code(), 201);
+    assert_eq!(response.status_message(), "Created");
+    assert!(!response.send_date());
+    assert!(response.finished());
+    assert_eq!(response.timeout(), Some(20));
+    assert_eq!(response.body().len(), 1);
 }
 
 #[test]

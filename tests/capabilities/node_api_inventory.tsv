@@ -787,6 +787,55 @@ NODE-HTTP2-CREATE-SERVER	http2	createServer	implemented	N64	tsonic_node::http2::
 NODE-HTTP2-CREATE-SECURE-SERVER	http2	createSecureServer	implemented	N64	tsonic_node::http2::create_secure_server	NODE-HTTP2-002	creates secure HTTP2 server carrier
 NODE-HTTP2-SETTINGS-CARRIER	http2	Http2Settings	implemented	N64	tsonic_node::http2::Http2Settings	NODE-HTTP2-002	closed HTTP2 settings carrier
 NODE-HTTP2-SESSION-STATE-CARRIER	http2	Http2SessionState	implemented	N64	tsonic_node::http2::Http2SessionState	NODE-HTTP2-002	closed HTTP2 session state snapshot carrier
+NODE-HTTP2-SESSION-OPTIONS	http2	SessionOptions	implemented	N86	tsonic_node::http2::SessionOptions	NODE-HTTP2-003	closed session options carrier
+NODE-HTTP2-CLIENT-SESSION-REQUEST-OPTIONS	http2	ClientSessionRequestOptions	implemented	N86	tsonic_node::http2::ClientSessionRequestOptions	NODE-HTTP2-003	closed client request options carrier
+NODE-HTTP2-ALTERNATIVE-SERVICE-OPTIONS	http2	AlternativeServiceOptions	implemented	N86	tsonic_node::http2::AlternativeServiceOptions	NODE-HTTP2-003	closed alternative service options carrier
+NODE-HTTP2-SERVER-STREAM-RESPONSE-OPTIONS	http2	ServerStreamResponseOptions	implemented	N86	tsonic_node::http2::ServerStreamResponseOptions	NODE-HTTP2-003	closed server stream response options carrier
+NODE-HTTP2-SERVER-STREAM-FILE-OPTIONS	http2	ServerStreamFileResponseOptions	implemented	N86	tsonic_node::http2::ServerStreamFileResponseOptions	NODE-HTTP2-003	closed server stream file response options carrier
+NODE-HTTP2-SERVER-STREAM-FILE-ERROR-OPTIONS	http2	ServerStreamFileResponseOptionsWithError	implemented	N86	tsonic_node::http2::ServerStreamFileResponseOptionsWithError	NODE-HTTP2-003	closed server stream file error options carrier
+NODE-HTTP2-STAT-OPTIONS	http2	StatOptions	implemented	N86	tsonic_node::http2::StatOptions	NODE-HTTP2-003	closed HTTP2 stat options carrier
+NODE-HTTP2-SESSION-CONNECTING	http2	Http2Session.connecting	implemented	N86	tsonic_node::http2::Http2Session::connecting	NODE-HTTP2-003	HTTP2 session connecting-state accessor
+NODE-HTTP2-SESSION-ENCRYPTED	http2	Http2Session.encrypted	implemented	N86	tsonic_node::http2::Http2Session::encrypted	NODE-HTTP2-003	HTTP2 session encrypted-state accessor
+NODE-HTTP2-SESSION-ALPN	http2	Http2Session.alpnProtocol	implemented	N86	tsonic_node::http2::Http2Session::alpn_protocol	NODE-HTTP2-003	HTTP2 session ALPN accessor
+NODE-HTTP2-SESSION-ORIGIN-SET	http2	Http2Session.originSet	implemented	N86	tsonic_node::http2::Http2Session::origin_set	NODE-HTTP2-003	HTTP2 session origin set accessor
+NODE-HTTP2-SESSION-PENDING-SETTINGS-ACK	http2	Http2Session.pendingSettingsAck	implemented	N86	tsonic_node::http2::Http2Session::pending_settings_ack	NODE-HTTP2-003	HTTP2 pending settings ACK accessor
+NODE-HTTP2-SESSION-TYPE	http2	Http2Session.type	implemented	N86	tsonic_node::http2::Http2Session::session_type	NODE-HTTP2-003	HTTP2 session type accessor
+NODE-HTTP2-SESSION-SET-LOCAL-WINDOW-SIZE	http2	Http2Session.setLocalWindowSize	implemented	N86	tsonic_node::http2::Http2Session::set_local_window_size	NODE-HTTP2-003	sets local window size in closed session carrier
+NODE-HTTP2-SESSION-REF	http2	Http2Session.ref	implemented	N86	tsonic_node::http2::Http2Session::ref_	NODE-HTTP2-003	marks session persistent
+NODE-HTTP2-SESSION-UNREF	http2	Http2Session.unref	implemented	N86	tsonic_node::http2::Http2Session::unref	NODE-HTTP2-003	marks session nonpersistent
+NODE-HTTP2-SESSION-HAS-REF	http2	Http2Session.hasRef	implemented	N86	tsonic_node::http2::Http2Session::has_ref	NODE-HTTP2-003	reads session persistence state
+NODE-HTTP2-STREAM-ABORTED	http2	Http2Stream.aborted	implemented	N86	tsonic_node::http2::Http2Stream::aborted	NODE-HTTP2-003	HTTP2 stream aborted-state accessor
+NODE-HTTP2-STREAM-BUFFER-SIZE	http2	Http2Stream.bufferSize	implemented	N86	tsonic_node::http2::Http2Stream::buffer_size	NODE-HTTP2-003	HTTP2 stream buffered byte length accessor
+NODE-HTTP2-STREAM-END-AFTER-HEADERS	http2	Http2Stream.endAfterHeaders	implemented	N86	tsonic_node::http2::Http2Stream::end_after_headers	NODE-HTTP2-003	HTTP2 stream end-after-headers state accessor
+NODE-HTTP2-STREAM-PENDING	http2	Http2Stream.pending	implemented	N86	tsonic_node::http2::Http2Stream::pending	NODE-HTTP2-003	HTTP2 stream pending-state accessor
+NODE-HTTP2-STREAM-STATE	http2	Http2Stream.state	implemented	N86	tsonic_node::http2::Http2Stream::state	NODE-HTTP2-003	HTTP2 stream state snapshot carrier
+NODE-HTTP2-STREAM-SENT-INFO-HEADERS	http2	Http2Stream.sentInfoHeaders	implemented	N86	tsonic_node::http2::Http2Stream::sent_info_headers	NODE-HTTP2-003	HTTP2 stream informational headers accessor
+NODE-HTTP2-STREAM-SENT-TRAILERS	http2	Http2Stream.sentTrailers	implemented	N86	tsonic_node::http2::Http2Stream::sent_trailers	NODE-HTTP2-003	HTTP2 stream sent trailers accessor
+NODE-HTTP2-STREAM-RESPOND-OPTIONS	http2	Http2Stream.respond options	implemented	N86	tsonic_node::http2::Http2Stream::respond_with_options	NODE-HTTP2-003	respond with closed options carrier
+NODE-HTTP2-STREAM-RESPOND-FILE-OPTIONS	http2	Http2Stream.respondWithFile options	implemented	N86	tsonic_node::http2::Http2Stream::respond_with_file_options	NODE-HTTP2-003	respondWithFile with closed file options carrier
+NODE-HTTP2-STREAM-PRIORITY	http2	Http2Stream.priority	implemented	N86	tsonic_node::http2::Http2Stream::priority	NODE-HTTP2-003	records explicit stream priority options
+NODE-HTTP2-STREAM-PRIORITY-OPTIONS	http2	StreamPriorityOptions	implemented	N86	tsonic_node::http2::StreamPriorityOptions	NODE-HTTP2-003	closed stream priority options carrier
+NODE-HTTP2-STREAM-PRIORITY-ACCESSOR	http2	Http2Stream.priorityOptions	implemented	N86	tsonic_node::http2::Http2Stream::priority_options	NODE-HTTP2-003	HTTP2 stream priority options accessor
+NODE-HTTP2-STREAM-CLOSE-CALLBACK	http2	Http2Stream.close	implemented	N86	tsonic_node::http2::Http2Stream::close	NODE-HTTP2-003	close stream with optional code and callback
+NODE-HTTP2-STREAM-STATE-CARRIER	http2	StreamState	implemented	N86	tsonic_node::http2::StreamState	NODE-HTTP2-003	closed stream state carrier
+NODE-HTTP2-CLIENT-STREAM-ALIAS	http2	ClientHttp2Stream	implemented	N86	tsonic_node::http2::ClientHttp2Stream	NODE-HTTP2-003	client stream alias over closed stream carrier
+NODE-HTTP2-SERVER-STREAM-ALIAS	http2	ServerHttp2Stream	implemented	N86	tsonic_node::http2::ServerHttp2Stream	NODE-HTTP2-003	server stream alias over closed stream carrier
+NODE-HTTP2-CLIENT-SESSION-ALIAS	http2	ClientHttp2Session	implemented	N86	tsonic_node::http2::ClientHttp2Session	NODE-HTTP2-003	client session alias over closed session carrier
+NODE-HTTP2-SERVER-REQUEST-CARRIER	http2	Http2ServerRequest	implemented	N86	tsonic_node::http2::Http2ServerRequest	NODE-HTTP2-004	closed HTTP2 server request carrier
+NODE-HTTP2-SERVER-REQUEST-READ	http2	Http2ServerRequest.read	implemented	N86	tsonic_node::http2::Http2ServerRequest::read	NODE-HTTP2-004	reads closed request body chunks
+NODE-HTTP2-SERVER-REQUEST-SET-TIMEOUT	http2	Http2ServerRequest.setTimeout	implemented	N86	tsonic_node::http2::Http2ServerRequest::set_timeout	NODE-HTTP2-004	sets request timeout and invokes callback
+NODE-HTTP2-SERVER-RESPONSE-CARRIER	http2	Http2ServerResponse	implemented	N86	tsonic_node::http2::Http2ServerResponse	NODE-HTTP2-004	closed HTTP2 server response carrier
+NODE-HTTP2-SERVER-RESPONSE-SET-HEADER	http2	Http2ServerResponse.setHeader	implemented	N86	tsonic_node::http2::Http2ServerResponse::set_header	NODE-HTTP2-004	sets response header
+NODE-HTTP2-SERVER-RESPONSE-APPEND-HEADER	http2	Http2ServerResponse.appendHeader	implemented	N86	tsonic_node::http2::Http2ServerResponse::append_header	NODE-HTTP2-004	appends response header value
+NODE-HTTP2-SERVER-RESPONSE-GET-HEADER	http2	Http2ServerResponse.getHeader	implemented	N86	tsonic_node::http2::Http2ServerResponse::get_header	NODE-HTTP2-004	gets response header
+NODE-HTTP2-SERVER-RESPONSE-WRITE-HEAD	http2	Http2ServerResponse.writeHead	implemented	N86	tsonic_node::http2::Http2ServerResponse::write_head	NODE-HTTP2-004	writes response head
+NODE-HTTP2-SERVER-RESPONSE-WRITE-CONTINUE	http2	Http2ServerResponse.writeContinue	implemented	N86	tsonic_node::http2::Http2ServerResponse::write_continue	NODE-HTTP2-004	writes 100 informational headers
+NODE-HTTP2-SERVER-RESPONSE-WRITE-EARLY-HINTS	http2	Http2ServerResponse.writeEarlyHints	implemented	N86	tsonic_node::http2::Http2ServerResponse::write_early_hints	NODE-HTTP2-004	writes early hints as informational headers
+NODE-HTTP2-SERVER-RESPONSE-WRITE	http2	Http2ServerResponse.write	implemented	N86	tsonic_node::http2::Http2ServerResponse::write	NODE-HTTP2-004	writes response body chunk
+NODE-HTTP2-SERVER-RESPONSE-END	http2	Http2ServerResponse.end	implemented	N86	tsonic_node::http2::Http2ServerResponse::end	NODE-HTTP2-004	ends response with optional body
+NODE-HTTP2-SERVER-RESPONSE-ADD-TRAILERS	http2	Http2ServerResponse.addTrailers	implemented	N86	tsonic_node::http2::Http2ServerResponse::add_trailers	NODE-HTTP2-004	adds response trailers
+NODE-HTTP2-SERVER-RESPONSE-BODY	http2	Http2ServerResponse.body	implemented	N86	tsonic_node::http2::Http2ServerResponse::body	NODE-HTTP2-004	reads closed response body chunks
+NODE-HTTP2-SERVER-RESPONSE-SET-TIMEOUT	http2	Http2ServerResponse.setTimeout	implemented	N86	tsonic_node::http2::Http2ServerResponse::set_timeout	NODE-HTTP2-004	sets response timeout and invokes callback
 NODE-MODULE-HTTPS	https	module	implemented	N9	tsonic_node::https	NODE-HTTPS-001	HTTPS client request shape over approved reqwest rustls dependency
 NODE-HTTPS-AGENT-OPTIONS	https	AgentOptions	implemented	N41	tsonic_node::https::AgentOptions	NODE-HTTPS-002	closed HTTPS agent options carrier
 NODE-HTTPS-AGENT-CARRIER	https	Agent	implemented	N41	tsonic_node::https::Agent	NODE-HTTPS-002	closed HTTPS agent carrier
