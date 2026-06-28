@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 
 const INVENTORY: &str = include_str!("capabilities/stage1_inventory.tsv");
 const EXPECTED_ROW_COUNT: usize = 238;
-const EXPECTED_IMPLEMENTED_COUNT: usize = 156;
+const EXPECTED_IMPLEMENTED_COUNT: usize = 163;
 const EXPECTED_DEFERRED_COUNT: usize = 0;
-const EXPECTED_HARD_REJECT_COUNT: usize = 82;
+const EXPECTED_HARD_REJECT_COUNT: usize = 75;
 
 #[derive(Clone, Debug)]
 struct CapabilityRow {

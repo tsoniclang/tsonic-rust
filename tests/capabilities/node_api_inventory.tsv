@@ -1,19 +1,19 @@
 id	module	api	status	packet	rust_api	evidence	reason
 NODE-MODULE-ASSERT	assert	module	implemented	N2	tsonic_node::assert	NODE-ASSERT-001	closed assertion helpers
 NODE-MODULE-ASYNC-CONTEXT	async_context	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation is outside closed runtime externals
-NODE-MODULE-ASYNC-HOOKS	async_hooks	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-HOOKS	event loop instrumentation is outside closed runtime externals
+NODE-MODULE-ASYNC-HOOKS	async_hooks	module	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
 NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	closed Buffer carrier
 NODE-MODULE-CHILD-PROCESS	child_process	module	hard-reject	N0	n/a	REJECT-NODE-CHILD-PROCESS	process spawning is explicitly excluded
 NODE-MODULE-CLUSTER	cluster	module	hard-reject	N0	n/a	REJECT-NODE-CLUSTER	multi-process orchestration is outside runtime helpers
 NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
 NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
 NODE-MODULE-DGRAM	dgram	module	hard-reject	N0	n/a	REJECT-NODE-DGRAM	network sockets excluded from Stage 1 runtime externals
-NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	hard-reject	N0	n/a	REJECT-NODE-DIAGNOSTICS	Node instrumentation channel outside emitted-code ABI
-NODE-MODULE-DNS	dns	module	hard-reject	N0	n/a	REJECT-NODE-DNS	network DNS excluded from Stage 1 runtime externals
+NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	implemented	N3	tsonic_node::diagnostics_channel	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
+NODE-MODULE-DNS	dns	module	implemented	N3	tsonic_node::dns	NODE-DNS-001	platform resolver lookup and address helpers
 NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded
-NODE-MODULE-EVENTS	events	module	hard-reject	N0	n/a	REJECT-NODE-EVENTS	EventEmitter object model belongs to higher-level runtime design
+NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
-NODE-MODULE-FS-PROMISES	fs/promises	module	hard-reject	N0	n/a	REJECT-NODE-FS-PROMISES	Promise async runtime excluded
+NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-MODULE-HTTP	http	module	hard-reject	N0	n/a	REJECT-NODE-HTTP	network server/client stack excluded
 NODE-MODULE-HTTP2	http2	module	hard-reject	N0	n/a	REJECT-NODE-HTTP2	network server/client stack excluded
 NODE-MODULE-HTTPS	https	module	hard-reject	N0	n/a	REJECT-NODE-HTTPS	network server/client stack excluded
@@ -29,10 +29,10 @@ NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystri
 NODE-MODULE-READLINE	readline	module	hard-reject	N0	n/a	REJECT-NODE-READLINE	interactive terminal/event runtime excluded
 NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
 NODE-MODULE-SQLITE	sqlite	module	hard-reject	N0	n/a	REJECT-NODE-SQLITE	database binding excluded from runtime externals
-NODE-MODULE-STREAM	stream	module	hard-reject	N0	n/a	REJECT-NODE-STREAM	stream/event async model excluded
+NODE-MODULE-STREAM	stream	module	implemented	N3	tsonic_node::stream	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
 NODE-MODULE-STRING-DECODER	string_decoder	module	implemented	N1	tsonic_node::string_decoder	NODE-MISC-003	UTF-8 string decoder subset
 NODE-MODULE-TEST	test	module	hard-reject	N0	n/a	REJECT-NODE-TEST	test runner module excluded from generated runtime ABI
-NODE-MODULE-TIMERS	timers	module	hard-reject	N0	n/a	REJECT-NODE-TIMERS	event loop scheduling excluded
+NODE-MODULE-TIMERS	timers	module	implemented	N3	tsonic_node::timers	NODE-TIMERS-001	deterministic timer handles and callback execution
 NODE-MODULE-TLS	tls	module	hard-reject	N0	n/a	REJECT-NODE-TLS	network TLS stack excluded
 NODE-MODULE-TRACE-EVENTS	trace_events	module	hard-reject	N0	n/a	REJECT-NODE-TRACE-EVENTS	instrumentation excluded
 NODE-MODULE-TTY	tty	module	implemented	N1	tsonic_node::tty	NODE-MISC-004	isatty helper

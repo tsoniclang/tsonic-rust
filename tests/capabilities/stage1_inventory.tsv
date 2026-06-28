@@ -193,19 +193,19 @@ NODE-CRYPTO-003	implemented	M	tsonic_node::abi::{crypto_hmac_digest,crypto_rando
 NODE-CRYPTO-004	hard-reject	M	n/a	REJECT-NODE-CRYPTO-BROAD	broad crypto surface
 NODE-MOD-001	implemented	M	tsonic_node::abi::{assert_ok,assert_strict_equal}	NODE-MISC-001	assertion formatting/deep equality policy separate from runtime surface (completed in full-completion branch)
 NODE-MOD-002	hard-reject	M	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation runtime out of Stage 1
-NODE-MOD-003	hard-reject	M	n/a	REJECT-NODE-ASYNC-HOOKS	async lifecycle hooks require event loop/runtime integration
+NODE-MOD-003	implemented	N3	tsonic_node::abi::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
 NODE-MOD-004	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-001 through NODE-BUF-009	closed `Buffer` subset in Stage 1
 NODE-MOD-005	hard-reject	M	n/a	REJECT-NODE-CHILD-PROCESS	process spawning/shellouts violate runtime contract
 NODE-MOD-006	hard-reject	M	n/a	REJECT-NODE-CLUSTER	multi-process orchestration out of Stage 1
 NODE-MOD-007	implemented	F/M	tsonic_js::abi::console_*_to	JS-CON-001, JS-CON-002	injectable writer runtime API through JS console support
 NODE-MOD-008	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001 through NODE-CRYPTO-003	randomBytes/hash subset implemented; broader crypto has explicit hard-reject rows
 NODE-MOD-009	hard-reject	M	n/a	REJECT-NODE-DGRAM	UDP networking runtime out of Stage 1
-NODE-MOD-010	hard-reject	M	n/a	REJECT-NODE-DIAGNOSTICS-CHANNEL	diagnostics/event-channel runtime out of Stage 1
-NODE-MOD-011	hard-reject	M	n/a	REJECT-NODE-DNS	network resolution and async APIs out of Stage 1
+NODE-MOD-010	implemented	N3	tsonic_node::abi::{diagnostics_channel,diagnostics_publish}	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
+NODE-MOD-011	implemented	N3	tsonic_node::abi::{dns_lookup,dns_resolve4,dns_resolve6}	NODE-DNS-001	platform resolver lookup and address helpers
 NODE-MOD-012	hard-reject	M	n/a	REJECT-NODE-DOMAIN	legacy async error domain runtime out of Stage 1
-NODE-MOD-013	hard-reject	M	n/a	REJECT-NODE-EVENTS	event emitter semantics require event runtime/policy
+NODE-MOD-013	implemented	N3	tsonic_node::abi::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-MOD-014	implemented	K	tsonic_node::abi::fs_*	NODE-FS-001 through NODE-FS-010	selected synchronous file APIs only
-NODE-MOD-015	hard-reject	M	n/a	REJECT-NODE-FS-PROMISES	async runtime out of Stage 1
+NODE-MOD-015	implemented	N3	tsonic_node::abi::fs_promises_*	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-MOD-016	hard-reject	M	n/a	REJECT-NODE-HTTP	networking/server runtime out of Stage 1
 NODE-MOD-017	hard-reject	M	n/a	REJECT-NODE-HTTP2	networking/server runtime out of Stage 1
 NODE-MOD-018	hard-reject	M	n/a	REJECT-NODE-HTTPS	networking/TLS runtime out of Stage 1
@@ -221,10 +221,10 @@ NODE-MOD-027	implemented	M	tsonic_node::abi::{querystring_parse,querystring_stri
 NODE-MOD-028	hard-reject	M	n/a	REJECT-NODE-READLINE	interactive streams/async runtime out of Stage 1
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1
 NODE-MOD-030	hard-reject	M	n/a	REJECT-NODE-SQLITE	database runtime/dependency requires separate product decision (closed as principled non-runtime surface)
-NODE-MOD-031	hard-reject	M	n/a	REJECT-NODE-STREAM	stream/event/async runtime out of Stage 1
+NODE-MOD-031	implemented	N3	tsonic_node::abi::{Readable,Writable,stream_pipeline}	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
 NODE-MOD-032	implemented	M	tsonic_node::abi::StringDecoder	NODE-MISC-002	Buffer encoding subset first; decoder state machine later (completed in full-completion branch)
 NODE-MOD-033	hard-reject	M	n/a	REJECT-NODE-TEST	test runner/reporters not runtime surface
-NODE-MOD-034	hard-reject	M	n/a	REJECT-NODE-TIMERS	event loop/async runtime out of Stage 1
+NODE-MOD-034	implemented	N3	tsonic_node::abi::{set_timeout,set_immediate,Timeout}	NODE-TIMERS-001	deterministic timer handles and callback execution
 NODE-MOD-035	hard-reject	M	n/a	REJECT-NODE-TLS	TLS networking runtime out of Stage 1
 NODE-MOD-036	hard-reject	M	n/a	REJECT-NODE-TRACE-EVENTS	tracing integration out of Stage 1
 NODE-MOD-037	implemented	M	tsonic_node::abi::tty_isatty	NODE-MISC-003	terminal capability/runtime policy not first wave (completed in full-completion branch)

@@ -6,6 +6,7 @@ pub use crate::assert::{
     not_strict_equal as assert_not_strict_equal, ok as assert_ok,
     strict_equal as assert_strict_equal,
 };
+pub use crate::async_hooks::AsyncLocalStorage;
 pub use crate::buffer::Buffer;
 pub use crate::crypto::{
     get_hashes as crypto_get_hashes, hmac_digest as crypto_hmac_digest,
@@ -13,6 +14,18 @@ pub use crate::crypto::{
     random_int as crypto_random_int, random_int_range as crypto_random_int_range,
     random_uuid as crypto_random_uuid, timing_safe_equal as crypto_timing_safe_equal, DigestResult,
     Hash,
+};
+pub use crate::diagnostics_channel::{
+    channel as diagnostics_channel, has_subscribers as diagnostics_has_subscribers,
+    publish as diagnostics_publish, subscribe as diagnostics_subscribe,
+    Channel as DiagnosticsChannel,
+};
+pub use crate::dns::{
+    lookup as dns_lookup, resolve4 as dns_resolve4, resolve6 as dns_resolve6,
+    LookupAddress as DnsLookupAddress,
+};
+pub use crate::events::{
+    listener_count as events_listener_count, once as events_once, EventEmitter,
 };
 pub use crate::fs::{
     access_sync as fs_access_sync, append_file_sync_buffer as fs_append_file_sync_buffer,
@@ -31,6 +44,14 @@ pub use crate::fs::{
     write_file_sync_buffer as fs_write_file_sync_buffer,
     write_file_sync_string as fs_write_file_sync_string, write_sync_buffer as fs_write_sync_buffer,
     write_sync_string as fs_write_sync_string, Dirent, Stats,
+};
+pub use crate::fs_promises::{
+    append_file_string as fs_promises_append_file_string, mkdir as fs_promises_mkdir,
+    opendir as fs_promises_opendir, read_file_buffer as fs_promises_read_file_buffer,
+    read_file_string as fs_promises_read_file_string, readdir as fs_promises_readdir,
+    rm as fs_promises_rm, stat as fs_promises_stat,
+    write_file_buffer as fs_promises_write_file_buffer,
+    write_file_string as fs_promises_write_file_string,
 };
 pub use crate::os::{
     arch as os_arch, cpus as os_cpus, eol as os_eol, freemem as os_freemem, homedir as os_homedir,
@@ -55,7 +76,13 @@ pub use crate::process::{
     versions as process_versions, MemoryUsage as ProcessMemoryUsage,
 };
 pub use crate::querystring::{parse as querystring_parse, stringify as querystring_stringify};
+pub use crate::stream::{
+    consumers as stream_consumers, pipeline as stream_pipeline, Readable, Writable,
+};
 pub use crate::string_decoder::StringDecoder;
+pub use crate::timers::{
+    clear_timeout, promises as timers_promises, set_immediate, set_timeout, Timeout,
+};
 pub use crate::tty::isatty as tty_isatty;
 pub use crate::url::{file_url_to_path, path_to_file_url, Url, UrlSearchParams};
 pub use crate::util::types as util_types;
