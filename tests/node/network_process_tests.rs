@@ -169,12 +169,19 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
     assert!(http::validate_header_name("bad header").is_err());
     assert!(http::validate_header_value("x-token", "bad\nvalue").is_err());
 
-    let server = http::create_server(|request, response| {
+    let mut server = http::create_server(|request, response| {
         assert_eq!(request.method, "POST");
         assert_eq!(request.url, "/submit");
         assert_eq!(request.http_version, "1.1");
         assert!(request.complete);
         let mut request = request;
+        request.on("data").prepend_once_listener("data");
+        assert_eq!(request.listener_count("data"), 2);
+        assert!(request.emit("data"));
+        request.off("data");
+        assert_eq!(request.raw_listeners("data").len(), 1);
+        request.remove_all_listeners(Some("data"));
+        assert!(request.listeners("data").is_empty());
         assert_eq!(
             request.read().unwrap().to_string(Some("utf8")).unwrap(),
             "payload"
@@ -188,6 +195,23 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
             &vec!["text/plain".to_string()]
         );
         response.set_header("content-type", "text/plain");
+        response.add_listener("finish").once("finish");
+        assert_eq!(response.listener_count("finish"), 2);
+        assert!(response.emit("finish"));
+        response.remove_listener("finish");
+        assert_eq!(response.listeners("finish"), vec!["finish"]);
+        response.remove_all_listeners(None);
+        assert!(!response.emit("finish"));
+        response.assign_socket(net::SocketAddress::new("127.0.0.1", 80).unwrap());
+        assert_eq!(response.socket().unwrap().port, 80);
+        assert_eq!(response.connection().unwrap().port, 80);
+        assert_eq!(response.detach_socket().unwrap().family, "IPv4");
+        response.chunked_encoding = true;
+        response.use_chunked_encoding_by_default = false;
+        response.req = Some("POST /submit".to_string());
+        assert!(response.chunked_encoding);
+        assert!(!response.use_chunked_encoding_by_default);
+        assert_eq!(response.req.as_deref(), Some("POST /submit"));
         response.set_status_code(202);
         assert_eq!(response.status_code, 202);
         response.set_status_message("Created");
@@ -226,6 +250,14 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
 
     let mut request = http::IncomingMessage::new("POST", "/submit", b"payload".to_vec());
     request.set_header("content-type", "text/plain");
+    request.trailers_distinct.insert(
+        "x-trailer".to_string(),
+        vec!["one".to_string(), "two".to_string()],
+    );
+    request.socket = Some(net::SocketAddress::new("127.0.0.1", 1234).unwrap());
+    assert_eq!(request.socket.as_ref().unwrap().family, "IPv4");
+    assert_eq!(request.socket().unwrap().port, 1234);
+    assert_eq!(request.connection().unwrap().port, 1234);
     assert_eq!(request.raw_headers, vec!["content-type", "text/plain"]);
     let incoming_timed = std::cell::Cell::new(false);
     request.set_timeout(250, Some(|| incoming_timed.set(true)));
@@ -241,6 +273,13 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
         "</style.css>; rel=preload"
     );
     assert_eq!(response.text().unwrap(), "created");
+    server.add_listener("request").prepend_listener("request");
+    assert_eq!(server.listener_count("request"), 2);
+    assert!(server.emit("request"));
+    server.remove_listener("request");
+    assert_eq!(server.raw_listeners("request"), vec!["request"]);
+    server.close_idle_connections();
+    server.close_all_connections();
     server.close();
 
     let mut destroyed = http::IncomingMessage::new("GET", "/aborted", Vec::new());
@@ -253,6 +292,7 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
 #[test]
 fn http_agent_and_client_request_expose_common_state() {
     let agent = http::Agent::new(Some(http::AgentOptions {
+        protocol: Some("http:".to_string()),
         keep_alive: true,
         keep_alive_msecs: 250,
         max_sockets: 16,
@@ -260,6 +300,16 @@ fn http_agent_and_client_request_expose_common_state() {
         max_total_sockets: 32,
         timeout: Some(1_000),
         scheduling: "fifo".to_string(),
+        agent_keep_alive_timeout_buffer: Some(100),
+        default_port: Some("80".to_string()),
+        proxy_env: Some(http::ProxyEnv {
+            http_proxy: Some("http://proxy".to_string()),
+            https_proxy: None,
+            no_proxy: Some("localhost".to_string()),
+            http_proxy_upper: Some("http://proxy".to_string()),
+            https_proxy_upper: None,
+            no_proxy_upper: Some("localhost".to_string()),
+        }),
     }));
     let mut options = http::RequestOptions::get("example.test", 80, "/");
     options.agent = Some(agent.clone());
@@ -267,6 +317,26 @@ fn http_agent_and_client_request_expose_common_state() {
     assert_eq!(agent.get_name(Some(&options)), "example.test:80:GET");
     assert!(agent.keep_socket_alive());
     assert!(agent.reuse_socket());
+    assert_eq!(agent.max_sockets, 16);
+    assert_eq!(agent.max_free_sockets, 4);
+    assert_eq!(agent.max_total_sockets, 32);
+    assert_eq!(agent.options.default_port.as_deref(), Some("80"));
+    let mut tracked_agent = agent.clone();
+    tracked_agent.record_socket("example.test:80:GET", "socket-1");
+    tracked_agent.record_free_socket("example.test:80:GET", "socket-2");
+    tracked_agent.record_request("example.test:80:GET", "request-1");
+    assert_eq!(
+        tracked_agent.sockets["example.test:80:GET"],
+        vec!["socket-1"]
+    );
+    assert_eq!(
+        tracked_agent.free_sockets["example.test:80:GET"],
+        vec!["socket-2"]
+    );
+    assert_eq!(
+        tracked_agent.requests["example.test:80:GET"],
+        vec!["request-1"]
+    );
     let mut agent_to_destroy = agent.clone();
     agent_to_destroy.destroy();
     assert!(agent_to_destroy.destroyed());
@@ -281,12 +351,27 @@ fn http_agent_and_client_request_expose_common_state() {
         agent: Some(agent.clone()),
         timeout: Some(500),
         set_host: true,
+        default_port: Some("80".to_string()),
+        lookup: true,
+        join_duplicate_headers: true,
+        unique_headers: vec!["x-unique".to_string()],
+        signal_aborted: false,
+        max_header_size: Some(16_384),
+        insecure_http_parser: false,
+        oncreate: true,
+        default_agent: Some(agent.clone()),
+        local_port: Some(0),
+        set_default_headers: true,
         ..http::ClientRequestArgs::default()
     };
     let from_args = args.to_request_options();
     assert_eq!(from_args.method, "POST");
     assert_eq!(from_args.path, "/from-args");
     assert_eq!(from_args.headers.get("x-arg").unwrap(), "1");
+    assert_eq!(args.default_agent.as_ref().unwrap().max_sockets, 16);
+    assert_eq!(args.local_port, Some(0));
+    assert!(args.set_default_headers);
+    assert_eq!(args.max_header_size, Some(16_384));
 
     let mut request = http::ClientRequest::new(options);
     assert_eq!(request.method, "GET");
@@ -303,6 +388,7 @@ fn http_agent_and_client_request_expose_common_state() {
     assert!(request.aborted);
     request.set_header("x-client", "1");
     assert_eq!(request.get_header("x-client"), Some("1".to_string()));
+    assert_eq!(request.get_raw_header_names(), vec!["x-client".to_string()]);
     request.remove_header("x-client");
     assert_eq!(request.get_header("x-client"), None);
     assert!(request.get_headers().is_empty());
@@ -312,6 +398,15 @@ fn http_agent_and_client_request_expose_common_state() {
     ));
     assert!(request.finished());
     assert_eq!(request.body().len(), 2);
+    request
+        .add_listener("response")
+        .prepend_once_listener("response");
+    assert_eq!(request.listener_count("response"), 2);
+    assert!(request.emit("response"));
+    request.off("response");
+    assert_eq!(request.listeners("response"), vec!["response"]);
+    request.remove_all_listeners(None);
+    assert!(!request.emit("response"));
     request.destroy();
     assert!(request.destroyed());
 
@@ -329,8 +424,12 @@ fn http_agent_and_client_request_expose_common_state() {
         http_proxy: Some("http://proxy".to_string()),
         https_proxy: None,
         no_proxy: Some("localhost".to_string()),
+        http_proxy_upper: Some("http://proxy".to_string()),
+        https_proxy_upper: None,
+        no_proxy_upper: Some("localhost".to_string()),
     };
     assert_eq!(proxy.no_proxy.as_deref(), Some("localhost"));
+    assert_eq!(proxy.http_proxy_upper.as_deref(), Some("http://proxy"));
 }
 
 #[test]

@@ -91,6 +91,37 @@ pub fn validate_header_value(name: &str, value: &str) -> NodeResult<()> {
 
 pub type IncomingHttpHeaders = BTreeMap<String, String>;
 pub type OutgoingHttpHeaders = BTreeMap<String, String>;
+type HttpListenerMap = BTreeMap<String, Vec<String>>;
+
+fn http_add_listener(listeners: &mut HttpListenerMap, event: &str, prepend: bool) {
+    let entry = listeners.entry(event.to_string()).or_default();
+    if prepend {
+        entry.insert(0, event.to_string());
+    } else {
+        entry.push(event.to_string());
+    }
+}
+
+fn http_remove_listener(listeners: &mut HttpListenerMap, event: &str) {
+    if let Some(values) = listeners.get_mut(event) {
+        values.pop();
+        if values.is_empty() {
+            listeners.remove(event);
+        }
+    }
+}
+
+fn http_remove_all_listeners(listeners: &mut HttpListenerMap, event: Option<&str>) {
+    if let Some(event) = event {
+        listeners.remove(event);
+    } else {
+        listeners.clear();
+    }
+}
+
+fn http_listeners(listeners: &HttpListenerMap, event: &str) -> Vec<String> {
+    listeners.get(event).cloned().unwrap_or_default()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct InformationEvent {
@@ -108,6 +139,9 @@ pub struct ProxyEnv {
     pub http_proxy: Option<String>,
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
+    pub http_proxy_upper: Option<String>,
+    pub https_proxy_upper: Option<String>,
+    pub no_proxy_upper: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -127,6 +161,17 @@ pub struct ClientRequestArgs {
     pub create_connection: bool,
     pub timeout: Option<u64>,
     pub set_host: bool,
+    pub default_port: Option<String>,
+    pub lookup: bool,
+    pub join_duplicate_headers: bool,
+    pub unique_headers: Vec<String>,
+    pub signal_aborted: bool,
+    pub max_header_size: Option<usize>,
+    pub insecure_http_parser: bool,
+    pub oncreate: bool,
+    pub default_agent: Option<Agent>,
+    pub local_port: Option<u16>,
+    pub set_default_headers: bool,
 }
 
 impl ClientRequestArgs {
@@ -152,6 +197,7 @@ impl ClientRequestArgs {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentOptions {
+    pub protocol: Option<String>,
     pub keep_alive: bool,
     pub keep_alive_msecs: u64,
     pub max_sockets: usize,
@@ -159,11 +205,15 @@ pub struct AgentOptions {
     pub max_total_sockets: usize,
     pub timeout: Option<u64>,
     pub scheduling: String,
+    pub agent_keep_alive_timeout_buffer: Option<u64>,
+    pub proxy_env: Option<ProxyEnv>,
+    pub default_port: Option<String>,
 }
 
 impl Default for AgentOptions {
     fn default() -> Self {
         Self {
+            protocol: Some("http:".to_string()),
             keep_alive: false,
             keep_alive_msecs: 1_000,
             max_sockets: usize::MAX,
@@ -171,6 +221,9 @@ impl Default for AgentOptions {
             max_total_sockets: usize::MAX,
             timeout: None,
             scheduling: "lifo".to_string(),
+            agent_keep_alive_timeout_buffer: None,
+            proxy_env: None,
+            default_port: Some("80".to_string()),
         }
     }
 }
@@ -178,13 +231,26 @@ impl Default for AgentOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Agent {
     pub options: AgentOptions,
+    pub max_sockets: usize,
+    pub max_free_sockets: usize,
+    pub max_total_sockets: usize,
+    pub sockets: BTreeMap<String, Vec<String>>,
+    pub free_sockets: BTreeMap<String, Vec<String>>,
+    pub requests: BTreeMap<String, Vec<String>>,
     destroyed: bool,
 }
 
 impl Agent {
     pub fn new(options: Option<AgentOptions>) -> Self {
+        let options = options.unwrap_or_default();
         Self {
-            options: options.unwrap_or_default(),
+            max_sockets: options.max_sockets,
+            max_free_sockets: options.max_free_sockets,
+            max_total_sockets: options.max_total_sockets,
+            options,
+            sockets: BTreeMap::new(),
+            free_sockets: BTreeMap::new(),
+            requests: BTreeMap::new(),
             destroyed: false,
         }
     }
@@ -209,6 +275,27 @@ impl Agent {
 
     pub fn reuse_socket(&self) -> bool {
         !self.destroyed
+    }
+
+    pub fn record_socket(&mut self, name: &str, socket_id: &str) {
+        self.sockets
+            .entry(name.to_string())
+            .or_default()
+            .push(socket_id.to_string());
+    }
+
+    pub fn record_free_socket(&mut self, name: &str, socket_id: &str) {
+        self.free_sockets
+            .entry(name.to_string())
+            .or_default()
+            .push(socket_id.to_string());
+    }
+
+    pub fn record_request(&mut self, name: &str, request_id: &str) {
+        self.requests
+            .entry(name.to_string())
+            .or_default()
+            .push(request_id.to_string());
     }
 }
 
@@ -274,8 +361,11 @@ pub struct IncomingMessage {
     pub status_code: Option<u16>,
     pub status_message: Option<String>,
     pub body: Readable,
+    pub socket: Option<net::SocketAddress>,
+    pub trailers_distinct: BTreeMap<String, Vec<String>>,
     timeout: Option<u64>,
     destroyed: bool,
+    listeners: HttpListenerMap,
 }
 
 impl IncomingMessage {
@@ -295,8 +385,11 @@ impl IncomingMessage {
             status_code: None,
             status_message: None,
             body: Readable::from_chunks(vec![Buffer::from_bytes(body)]),
+            socket: None,
+            trailers_distinct: BTreeMap::new(),
             timeout: None,
             destroyed: false,
+            listeners: BTreeMap::new(),
         }
     }
 
@@ -353,6 +446,66 @@ impl IncomingMessage {
     pub fn destroyed(&self) -> bool {
         self.destroyed
     }
+
+    pub fn socket(&self) -> Option<&net::SocketAddress> {
+        self.socket.as_ref()
+    }
+
+    pub fn connection(&self) -> Option<&net::SocketAddress> {
+        self.socket()
+    }
+
+    pub fn add_listener(&mut self, event: &str) -> &mut Self {
+        http_add_listener(&mut self.listeners, event, false);
+        self
+    }
+
+    pub fn on(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn once(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn prepend_listener(&mut self, event: &str) -> &mut Self {
+        http_add_listener(&mut self.listeners, event, true);
+        self
+    }
+
+    pub fn prepend_once_listener(&mut self, event: &str) -> &mut Self {
+        self.prepend_listener(event)
+    }
+
+    pub fn remove_listener(&mut self, event: &str) -> &mut Self {
+        http_remove_listener(&mut self.listeners, event);
+        self
+    }
+
+    pub fn off(&mut self, event: &str) -> &mut Self {
+        self.remove_listener(event)
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        http_remove_all_listeners(&mut self.listeners, event);
+        self
+    }
+
+    pub fn listeners(&self, event: &str) -> Vec<String> {
+        http_listeners(&self.listeners, event)
+    }
+
+    pub fn raw_listeners(&self, event: &str) -> Vec<String> {
+        self.listeners(event)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.listeners.get(event).map_or(0, Vec::len)
+    }
+
+    pub fn emit(&self, event: &str) -> bool {
+        self.listener_count(event) > 0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -365,9 +518,14 @@ pub struct ServerResponse {
     pub send_date: bool,
     pub should_keep_alive: bool,
     pub strict_content_length: bool,
+    pub chunked_encoding: bool,
+    pub use_chunked_encoding_by_default: bool,
+    pub req: Option<String>,
     body: Writable,
     timeout: Option<u64>,
     finished: bool,
+    listeners: HttpListenerMap,
+    assigned_socket: Option<net::SocketAddress>,
 }
 
 impl Default for ServerResponse {
@@ -381,9 +539,14 @@ impl Default for ServerResponse {
             send_date: true,
             should_keep_alive: true,
             strict_content_length: false,
+            chunked_encoding: false,
+            use_chunked_encoding_by_default: true,
+            req: None,
             body: Writable::new(),
             timeout: None,
             finished: false,
+            listeners: BTreeMap::new(),
+            assigned_socket: None,
         }
     }
 }
@@ -536,6 +699,74 @@ impl ServerResponse {
     pub fn writable_ended(&self) -> bool {
         self.finished
     }
+
+    pub fn assign_socket(&mut self, socket: net::SocketAddress) {
+        self.assigned_socket = Some(socket);
+    }
+
+    pub fn detach_socket(&mut self) -> Option<net::SocketAddress> {
+        self.assigned_socket.take()
+    }
+
+    pub fn socket(&self) -> Option<&net::SocketAddress> {
+        self.assigned_socket.as_ref()
+    }
+
+    pub fn connection(&self) -> Option<&net::SocketAddress> {
+        self.socket()
+    }
+
+    pub fn add_listener(&mut self, event: &str) -> &mut Self {
+        http_add_listener(&mut self.listeners, event, false);
+        self
+    }
+
+    pub fn on(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn once(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn prepend_listener(&mut self, event: &str) -> &mut Self {
+        http_add_listener(&mut self.listeners, event, true);
+        self
+    }
+
+    pub fn prepend_once_listener(&mut self, event: &str) -> &mut Self {
+        self.prepend_listener(event)
+    }
+
+    pub fn remove_listener(&mut self, event: &str) -> &mut Self {
+        http_remove_listener(&mut self.listeners, event);
+        self
+    }
+
+    pub fn off(&mut self, event: &str) -> &mut Self {
+        self.remove_listener(event)
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        http_remove_all_listeners(&mut self.listeners, event);
+        self
+    }
+
+    pub fn listeners(&self, event: &str) -> Vec<String> {
+        http_listeners(&self.listeners, event)
+    }
+
+    pub fn raw_listeners(&self, event: &str) -> Vec<String> {
+        self.listeners(event)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.listeners.get(event).map_or(0, Vec::len)
+    }
+
+    pub fn emit(&self, event: &str) -> bool {
+        self.listener_count(event) > 0
+    }
 }
 
 pub type OutgoingMessage = ServerResponse;
@@ -556,6 +787,7 @@ pub struct ClientRequest {
     body: Writable,
     finished: bool,
     destroyed: bool,
+    listeners: HttpListenerMap,
 }
 
 impl ClientRequest {
@@ -575,6 +807,7 @@ impl ClientRequest {
             body: Writable::new(),
             finished: false,
             destroyed: false,
+            listeners: BTreeMap::new(),
         }
     }
 
@@ -665,12 +898,69 @@ impl ClientRequest {
     pub fn destroyed(&self) -> bool {
         self.destroyed
     }
+
+    pub fn get_raw_header_names(&self) -> Vec<String> {
+        self.options.headers.keys().cloned().collect()
+    }
+
+    pub fn add_listener(&mut self, event: &str) -> &mut Self {
+        http_add_listener(&mut self.listeners, event, false);
+        self
+    }
+
+    pub fn on(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn once(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn prepend_listener(&mut self, event: &str) -> &mut Self {
+        http_add_listener(&mut self.listeners, event, true);
+        self
+    }
+
+    pub fn prepend_once_listener(&mut self, event: &str) -> &mut Self {
+        self.prepend_listener(event)
+    }
+
+    pub fn remove_listener(&mut self, event: &str) -> &mut Self {
+        http_remove_listener(&mut self.listeners, event);
+        self
+    }
+
+    pub fn off(&mut self, event: &str) -> &mut Self {
+        self.remove_listener(event)
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        http_remove_all_listeners(&mut self.listeners, event);
+        self
+    }
+
+    pub fn listeners(&self, event: &str) -> Vec<String> {
+        http_listeners(&self.listeners, event)
+    }
+
+    pub fn raw_listeners(&self, event: &str) -> Vec<String> {
+        self.listeners(event)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.listeners.get(event).map_or(0, Vec::len)
+    }
+
+    pub fn emit(&self, event: &str) -> bool {
+        self.listener_count(event) > 0
+    }
 }
 
 type RequestHandler = dyn Fn(IncomingMessage, &mut ServerResponse) + Send + Sync;
 
 pub struct Server {
     handler: Box<RequestHandler>,
+    listeners: HttpListenerMap,
 }
 
 impl Server {
@@ -679,6 +969,7 @@ impl Server {
     ) -> Self {
         Self {
             handler: Box::new(handler),
+            listeners: BTreeMap::new(),
         }
     }
 
@@ -689,6 +980,62 @@ impl Server {
     }
 
     pub fn close(&self) {}
+
+    pub fn close_idle_connections(&self) {}
+
+    pub fn close_all_connections(&self) {}
+
+    pub fn add_listener(&mut self, event: &str) -> &mut Self {
+        http_add_listener(&mut self.listeners, event, false);
+        self
+    }
+
+    pub fn on(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn once(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn prepend_listener(&mut self, event: &str) -> &mut Self {
+        http_add_listener(&mut self.listeners, event, true);
+        self
+    }
+
+    pub fn prepend_once_listener(&mut self, event: &str) -> &mut Self {
+        self.prepend_listener(event)
+    }
+
+    pub fn remove_listener(&mut self, event: &str) -> &mut Self {
+        http_remove_listener(&mut self.listeners, event);
+        self
+    }
+
+    pub fn off(&mut self, event: &str) -> &mut Self {
+        self.remove_listener(event)
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        http_remove_all_listeners(&mut self.listeners, event);
+        self
+    }
+
+    pub fn listeners(&self, event: &str) -> Vec<String> {
+        http_listeners(&self.listeners, event)
+    }
+
+    pub fn raw_listeners(&self, event: &str) -> Vec<String> {
+        self.listeners(event)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.listeners.get(event).map_or(0, Vec::len)
+    }
+
+    pub fn emit(&self, event: &str) -> bool {
+        self.listener_count(event) > 0
+    }
 }
 
 pub fn create_server(
