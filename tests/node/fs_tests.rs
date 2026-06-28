@@ -55,6 +55,7 @@ fn fs_extended_sync_file_lifecycle() {
     let fd = fs::open_sync(&file_text, "r+").unwrap();
     assert_eq!(fs::fstat_sync(fd).unwrap().size, 11);
     fs::fchmod_sync(fd, 0o600).unwrap();
+    fs::futimes_sync(fd, 1_600_000_001.0, 1_600_000_002.0).unwrap();
     let mut buffer = tsonic_node::buffer::Buffer::alloc(5);
     assert_eq!(fs::read_sync(fd, &mut buffer, 0, 5, Some(6)).unwrap(), 5);
     assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
@@ -70,6 +71,9 @@ fn fs_extended_sync_file_lifecycle() {
         fs::read_file_sync_string(&file_text, "utf8").unwrap(),
         "hello rust"
     );
+    assert!(modified_seconds(&file) >= 1_600_000_002);
+    fs::utimes_sync(&file_text, 1_600_000_003.0, 1_600_000_004.0).unwrap();
+    assert!(modified_seconds(&file) >= 1_600_000_004);
 
     let buffer_file = root.join("buffer.txt");
     let buffer_file_text = buffer_file.to_string_lossy().to_string();
@@ -148,6 +152,7 @@ fn fs_extended_sync_directory_lifecycle() {
         let symlink = root.join("symlink.txt");
         let symlink_text = symlink.to_string_lossy().to_string();
         fs::symlink_sync(&nested_text, &symlink_text).unwrap();
+        fs::lutimes_sync(&symlink_text, 1_600_000_005.0, 1_600_000_006.0).unwrap();
         assert_eq!(fs::readlink_sync(&symlink_text).unwrap(), nested_text);
         assert!(fs::lstat_sync(&symlink_text).unwrap().is_symbolic_link());
     }
@@ -192,4 +197,14 @@ fn temp_root(label: &str) -> std::path::PathBuf {
             .unwrap()
             .as_nanos()
     ))
+}
+
+fn modified_seconds(path: &std::path::Path) -> u64 {
+    std::fs::metadata(path)
+        .unwrap()
+        .modified()
+        .unwrap()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }

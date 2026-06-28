@@ -7,6 +7,7 @@ use std::sync::{Mutex, OnceLock};
 use crate::buffer::Buffer;
 use crate::error::{NodeError, NodeResult};
 use crate::stream::{Readable, Writable};
+use filetime::FileTime;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stats {
@@ -184,6 +185,28 @@ pub fn fchmod_sync(fd: i32, mode: u32) -> NodeResult<()> {
     file.set_permissions(permissions).map_err(map_io_error)
 }
 
+pub fn utimes_sync(path: &str, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
+    let atime = file_time_from_seconds(atime_seconds)?;
+    let mtime = file_time_from_seconds(mtime_seconds)?;
+    filetime::set_file_times(path, atime, mtime).map_err(map_io_error)
+}
+
+pub fn lutimes_sync(path: &str, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
+    let atime = file_time_from_seconds(atime_seconds)?;
+    let mtime = file_time_from_seconds(mtime_seconds)?;
+    filetime::set_symlink_file_times(path, atime, mtime).map_err(map_io_error)
+}
+
+pub fn futimes_sync(fd: i32, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
+    let atime = file_time_from_seconds(atime_seconds)?;
+    let mtime = file_time_from_seconds(mtime_seconds)?;
+    let table = file_table().lock().unwrap();
+    let file = table
+        .get(&fd)
+        .ok_or_else(|| NodeError::new("EBADF", "bad file descriptor"))?;
+    filetime::set_file_handle_times(file, Some(atime), Some(mtime)).map_err(map_io_error)
+}
+
 fn set_permissions_mode(permissions: &mut fs::Permissions, mode: u32) {
     #[cfg(unix)]
     {
@@ -194,6 +217,32 @@ fn set_permissions_mode(permissions: &mut fs::Permissions, mode: u32) {
     {
         permissions.set_readonly(mode & 0o200 == 0);
     }
+}
+
+fn file_time_from_seconds(value: f64) -> NodeResult<FileTime> {
+    if !value.is_finite() {
+        return Err(NodeError::new(
+            "ERR_INVALID_ARG_VALUE",
+            "file time must be finite",
+        ));
+    }
+    let seconds = value.floor();
+    if seconds < i64::MIN as f64 || seconds > i64::MAX as f64 {
+        return Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "file time is outside supported range",
+        ));
+    }
+    let nanos = ((value - seconds) * 1_000_000_000.0).round();
+    let mut seconds = seconds as i64;
+    let mut nanos = nanos as u32;
+    if nanos >= 1_000_000_000 {
+        seconds = seconds
+            .checked_add(1)
+            .ok_or_else(|| NodeError::new("ERR_OUT_OF_RANGE", "file time overflow"))?;
+        nanos -= 1_000_000_000;
+    }
+    Ok(FileTime::from_unix_time(seconds, nanos))
 }
 
 pub fn mkdir_sync(path: &str, recursive: bool) -> NodeResult<()> {

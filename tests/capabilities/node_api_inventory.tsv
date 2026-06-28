@@ -57,12 +57,12 @@ NODE-FS-FDATASYNC	fs	fdatasyncSync	implemented	K	tsonic_node::fs::fdatasync_sync
 NODE-FS-FSTAT	fs	fstatSync	implemented	K	tsonic_node::fs::fstat_sync	NODE-FS-EXT-001	fd stat
 NODE-FS-FSYNC	fs	fsyncSync	implemented	K	tsonic_node::fs::fsync_sync	NODE-FS-EXT-001	file sync
 NODE-FS-FTRUNCATE	fs	ftruncateSync	implemented	K	tsonic_node::fs::ftruncate_sync	NODE-FS-EXT-001	fd truncate
-NODE-FS-FUTIMES	fs	futimesSync	hard-reject	N0	n/a	REJECT-NODE-FS-TIMES	file timestamp mutation needs non-std platform APIs
+NODE-FS-FUTIMES	fs	futimesSync	implemented	N13	tsonic_node::fs::futimes_sync	NODE-FS-TIME-001	fd timestamp mutation through approved filetime dependency
 NODE-FS-GLOB	fs	globSync	implemented	N10	tsonic_node::fs::glob_sync	NODE-FS-GLOB-001	deterministic glob expansion through approved dependency
 NODE-FS-LCHOWN	fs	lchownSync	hard-reject	N0	n/a	REJECT-NODE-FS-OWNERSHIP	owner/group mutation requires platform-specific privileged APIs
 NODE-FS-LCHMOD	fs	lchmodSync	hard-reject	N0	n/a	REJECT-NODE-FS-LCHMOD	link permission mutation is platform-specific and unavailable on many targets
 NODE-FS-LSTAT	fs	lstatSync	implemented	K	tsonic_node::fs::lstat_sync	NODE-FS-001	symlink-aware stat
-NODE-FS-LUTIMES	fs	lutimesSync	hard-reject	N0	n/a	REJECT-NODE-FS-TIMES	link timestamp mutation needs non-std platform APIs
+NODE-FS-LUTIMES	fs	lutimesSync	implemented	N13	tsonic_node::fs::lutimes_sync	NODE-FS-TIME-001	link timestamp mutation through approved filetime dependency
 NODE-FS-MKDIR	fs	mkdirSync	implemented	K	tsonic_node::fs::mkdir_sync	NODE-FS-001	recursive and non-recursive
 NODE-FS-MKDTEMP	fs	mkdtempSync	implemented	K	tsonic_node::fs::mkdtemp_sync	NODE-FS-EXT-002	unique temp directory from prefix
 NODE-FS-OPEN	fs	openSync	implemented	K	tsonic_node::fs::open_sync	NODE-FS-EXT-001	closed fd table flags r/r+/w/w+/a/a+
@@ -80,7 +80,7 @@ NODE-FS-STATFS	fs	statfsSync	hard-reject	N0	n/a	REJECT-NODE-FS-STATFS	exact stat
 NODE-FS-SYMLINK	fs	symlinkSync	implemented	K	tsonic_node::fs::symlink_sync	NODE-FS-EXT-002	platform symlink helper
 NODE-FS-TRUNCATE	fs	truncateSync	implemented	K	tsonic_node::fs::truncate_sync	NODE-FS-EXT-002	path truncate
 NODE-FS-UNLINK	fs	unlinkSync	implemented	K	tsonic_node::fs::unlink_sync	NODE-FS-001	remove file
-NODE-FS-UTIMES	fs	utimesSync	hard-reject	N0	n/a	REJECT-NODE-FS-TIMES	file timestamp mutation needs non-std platform APIs
+NODE-FS-UTIMES	fs	utimesSync	implemented	N13	tsonic_node::fs::utimes_sync	NODE-FS-TIME-001	path timestamp mutation through approved filetime dependency
 NODE-FS-WATCH	fs	watch	implemented	N10	tsonic_node::fs::{watch,FsWatcher}	NODE-FS-WATCH-001	closed polling watcher without hidden async runtime
 NODE-FS-WATCH-FILE	fs	watchFile	implemented	N10	tsonic_node::fs::{watch_file,FsWatcher}	NODE-FS-WATCH-001	closed polling watcher without hidden async runtime
 NODE-FS-WRITE	fs	writeSync	implemented	K	tsonic_node::fs::{write_sync_string,write_sync_buffer}	NODE-FS-EXT-001	string/buffer fd writes

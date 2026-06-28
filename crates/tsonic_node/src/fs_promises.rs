@@ -32,6 +32,10 @@ impl FileHandle {
         fs::fchmod_sync(self.fd, mode)
     }
 
+    pub fn utimes(&self, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
+        fs::futimes_sync(self.fd, atime_seconds, mtime_seconds)
+    }
+
     pub fn read(
         &self,
         buffer: &mut Buffer,
@@ -96,6 +100,10 @@ pub fn append_file_buffer(path: &str, value: &Buffer) -> NodeResult<()> {
 
 pub fn chmod(path: &str, mode: u32) -> NodeResult<()> {
     fs::chmod_sync(path, mode)
+}
+
+pub fn utimes(path: &str, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
+    fs::utimes_sync(path, atime_seconds, mtime_seconds)
 }
 
 pub fn copy_file(from: &str, to: &str) -> NodeResult<()> {

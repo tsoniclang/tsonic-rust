@@ -1,5 +1,6 @@
 crate	package	reason
 tsonic_node	flate2	approved zlib/gzip/deflate runtime implementation; no shellout or embedded JS engine
+tsonic_node	filetime	approved fs timestamp mutation implementation for utimes/futimes/lutimes; platform file metadata only, no shellout or dynamic execution
 tsonic_node	get_if_addrs	approved os.networkInterfaces runtime implementation; platform query only, no reflection/dynamic execution
 tsonic_node	glob	approved fs.globSync runtime implementation; deterministic filesystem pattern expansion, no shellout
 tsonic_node	brotli	approved zlib Brotli runtime implementation; no shellout or embedded JS engine
