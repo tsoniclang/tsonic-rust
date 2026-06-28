@@ -185,16 +185,99 @@ NODE-EVENTS-ASYNC-RESOURCE-DESTROY	events	EventEmitterAsyncResource.emitDestroy	
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
 NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-MODULE-HTTP	http	module	implemented	N4	tsonic_node::http	NODE-HTTP-001	HTTP/1 client request/response over real TCP
-NODE-HTTP-METADATA	http	Agent/ClientRequest/headers/trailers/timeouts	implemented	N36	tsonic_node::http::{Agent,AgentOptions,ClientRequest,IncomingMessage,ServerResponse}	NODE-HTTP-002	common HTTP state carriers, header operations, trailers, timeout/abort metadata, and agent options
-NODE-HTTP-CONSTANTS	http	METHODS/STATUS_CODES/maxHeaderSize	implemented	N46	tsonic_node::http::{methods,status_codes,MAX_HEADER_SIZE}	NODE-HTTP-003	closed common HTTP method, status code, and max header size constants
-NODE-HTTP-HEADER-VALIDATION	http	validateHeaderName/validateHeaderValue	implemented	N46	tsonic_node::http::{validate_header_name,validate_header_value}	NODE-HTTP-003	Node-style header token/value validation for generated Rust callers
-NODE-HTTP-REQUEST-HEADERS	http	ClientRequest/IncomingMessage header accessors	implemented	N46	tsonic_node::http::{ClientRequest,IncomingMessage}	NODE-HTTP-003	client and incoming header get/set/remove/distinct helpers over closed header maps
-NODE-HTTP-SERVER	http	createServer/Server handle/close	implemented	N64	tsonic_node::http::{create_server,Server}	NODE-HTTP-002	closed in-memory HTTP server request handler and close lifecycle
-NODE-HTTP-INCOMING-MESSAGE	http	IncomingMessage method/url/version/body/headers/timeout/destroy	implemented	N64	tsonic_node::http::IncomingMessage	NODE-HTTP-002,NODE-HTTP-003	closed incoming request carrier with body, header, timeout, abort, complete, and destroy state
-NODE-HTTP-SERVER-RESPONSE	http	ServerResponse status/header/writeHead/earlyHints/trailers/timeout/end	implemented	N64	tsonic_node::http::ServerResponse	NODE-HTTP-002,NODE-HTTP-003	closed server response carrier with headers, trailers, timeout, continue/processing, and body finalization
-NODE-HTTP-CLIENT-REQUEST	http	ClientRequest timeout/noDelay/keepAlive/socket/abort/headers	implemented	N64	tsonic_node::http::ClientRequest	NODE-HTTP-002,NODE-HTTP-003	closed client request carrier with socket metadata and header mutation helpers
-NODE-HTTP-AGENT	http	Agent/AgentOptions keepAlive/reuse/destroy/getName	implemented	N64	tsonic_node::http::{Agent,AgentOptions}	NODE-HTTP-002	closed HTTP agent option and reuse policy carrier
-NODE-HTTP-CLIENT	http	request/get/parseResponse/Response	implemented	N64	tsonic_node::http::{request,get,parse_response,Response}	NODE-HTTP-001	HTTP/1 client helpers and parsed response carrier over real TCP
+NODE-HTTP-METHODS	http	METHODS	implemented	N46	tsonic_node::http::methods	NODE-HTTP-003	closed common HTTP method constants
+NODE-HTTP-STATUS-CODES	http	STATUS_CODES	implemented	N46	tsonic_node::http::status_codes	NODE-HTTP-003	closed common HTTP status code map
+NODE-HTTP-MAX-HEADER-SIZE	http	maxHeaderSize	implemented	N46	tsonic_node::http::MAX_HEADER_SIZE	NODE-HTTP-003	closed max header size constant
+NODE-HTTP-VALIDATE-HEADER-NAME	http	validateHeaderName	implemented	N46	tsonic_node::http::validate_header_name	NODE-HTTP-003	Node-style header token validation for generated Rust callers
+NODE-HTTP-VALIDATE-HEADER-VALUE	http	validateHeaderValue	implemented	N46	tsonic_node::http::validate_header_value	NODE-HTTP-003	Node-style header value validation for generated Rust callers
+NODE-HTTP-AGENT-OPTIONS-CARRIER	http	AgentOptions	implemented	N64	tsonic_node::http::AgentOptions	NODE-HTTP-002	closed HTTP agent options carrier
+NODE-HTTP-AGENT-CARRIER	http	Agent	implemented	N64	tsonic_node::http::Agent	NODE-HTTP-002	closed HTTP agent carrier
+NODE-HTTP-AGENT-NEW	http	Agent.new	implemented	N64	tsonic_node::http::Agent::new	NODE-HTTP-002	constructs Agent from explicit options
+NODE-HTTP-AGENT-GET-NAME	http	Agent.getName	implemented	N64	tsonic_node::http::Agent::get_name	NODE-HTTP-002	deterministic agent cache key from explicit request options
+NODE-HTTP-AGENT-DESTROY	http	Agent.destroy	implemented	N64	tsonic_node::http::Agent::destroy	NODE-HTTP-002	marks Agent destroyed without hidden socket runtime
+NODE-HTTP-AGENT-DESTROYED	http	Agent.destroyed	implemented	N64	tsonic_node::http::Agent::destroyed	NODE-HTTP-002	agent destroyed-state accessor
+NODE-HTTP-AGENT-KEEP-SOCKET-ALIVE	http	Agent.keepSocketAlive	implemented	N64	tsonic_node::http::Agent::keep_socket_alive	NODE-HTTP-002	keepAlive policy accessor from explicit options
+NODE-HTTP-AGENT-REUSE-SOCKET	http	Agent.reuseSocket	implemented	N64	tsonic_node::http::Agent::reuse_socket	NODE-HTTP-002	reuse policy accessor rejects destroyed agents
+NODE-HTTP-REQUEST-OPTIONS-CARRIER	http	RequestOptions	implemented	N64	tsonic_node::http::RequestOptions	NODE-HTTP-001	closed HTTP request options carrier
+NODE-HTTP-REQUEST-OPTIONS-GET	http	RequestOptions.get	implemented	N64	tsonic_node::http::RequestOptions::get	NODE-HTTP-001	constructs GET request options with host/port/path
+NODE-HTTP-RESPONSE-CARRIER	http	Response	implemented	N64	tsonic_node::http::Response	NODE-HTTP-001	closed HTTP response carrier with status headers and body bytes
+NODE-HTTP-RESPONSE-TEXT	http	Response.text	implemented	N64	tsonic_node::http::Response::text	NODE-HTTP-001	decodes response body as UTF-8 string
+NODE-HTTP-INCOMING-CARRIER	http	IncomingMessage	implemented	N64	tsonic_node::http::IncomingMessage	NODE-HTTP-002	closed incoming message carrier
+NODE-HTTP-INCOMING-NEW	http	IncomingMessage.new	implemented	N64	tsonic_node::http::IncomingMessage::new	NODE-HTTP-002	constructs incoming message from method URL and body bytes
+NODE-HTTP-INCOMING-METHOD	http	IncomingMessage.method	implemented	N64	tsonic_node::http::IncomingMessage::method	NODE-HTTP-002	method field is explicit carrier data
+NODE-HTTP-INCOMING-URL	http	IncomingMessage.url	implemented	N64	tsonic_node::http::IncomingMessage::url	NODE-HTTP-002	URL field is explicit carrier data
+NODE-HTTP-INCOMING-HEADERS	http	IncomingMessage.headers	implemented	N46	tsonic_node::http::IncomingMessage::headers	NODE-HTTP-003	header map is explicit lowercase carrier data
+NODE-HTTP-INCOMING-RAW-HEADERS	http	IncomingMessage.rawHeaders	implemented	N46	tsonic_node::http::IncomingMessage::raw_headers	NODE-HTTP-003	raw header vector preserves input spelling order
+NODE-HTTP-INCOMING-TRAILERS	http	IncomingMessage.trailers	implemented	N64	tsonic_node::http::IncomingMessage::trailers	NODE-HTTP-002	trailer map is explicit carrier data
+NODE-HTTP-INCOMING-RAW-TRAILERS	http	IncomingMessage.rawTrailers	implemented	N64	tsonic_node::http::IncomingMessage::raw_trailers	NODE-HTTP-002	raw trailer vector is explicit carrier data
+NODE-HTTP-INCOMING-VERSION	http	IncomingMessage.httpVersion	implemented	N64	tsonic_node::http::IncomingMessage::http_version	NODE-HTTP-002	HTTP version string is explicit carrier data
+NODE-HTTP-INCOMING-VERSION-MAJOR	http	IncomingMessage.httpVersionMajor	implemented	N64	tsonic_node::http::IncomingMessage::http_version_major	NODE-HTTP-002	HTTP major version field is explicit carrier data
+NODE-HTTP-INCOMING-VERSION-MINOR	http	IncomingMessage.httpVersionMinor	implemented	N64	tsonic_node::http::IncomingMessage::http_version_minor	NODE-HTTP-002	HTTP minor version field is explicit carrier data
+NODE-HTTP-INCOMING-ABORTED	http	IncomingMessage.aborted	implemented	N64	tsonic_node::http::IncomingMessage::aborted	NODE-HTTP-002	aborted-state field is explicit carrier data
+NODE-HTTP-INCOMING-COMPLETE	http	IncomingMessage.complete	implemented	N64	tsonic_node::http::IncomingMessage::complete	NODE-HTTP-002	complete-state field is explicit carrier data
+NODE-HTTP-INCOMING-STATUS-CODE	http	IncomingMessage.statusCode	implemented	N64	tsonic_node::http::IncomingMessage::status_code	NODE-HTTP-002	response-style status field is explicit carrier data
+NODE-HTTP-INCOMING-STATUS-MESSAGE	http	IncomingMessage.statusMessage	implemented	N64	tsonic_node::http::IncomingMessage::status_message	NODE-HTTP-002	response-style status message field is explicit carrier data
+NODE-HTTP-INCOMING-BODY	http	IncomingMessage.body	implemented	N64	tsonic_node::http::IncomingMessage::body	NODE-HTTP-002	body is closed Readable carrier
+NODE-HTTP-INCOMING-SET-HEADER	http	IncomingMessage.setHeader	implemented	N46	tsonic_node::http::IncomingMessage::set_header	NODE-HTTP-003	sets validated lowercase header and records raw header pair
+NODE-HTTP-INCOMING-GET-HEADER	http	IncomingMessage.getHeader	implemented	N46	tsonic_node::http::IncomingMessage::get_header	NODE-HTTP-003	gets header by case-insensitive name
+NODE-HTTP-INCOMING-HEADERS-DISTINCT	http	IncomingMessage.headersDistinct	implemented	N46	tsonic_node::http::IncomingMessage::headers_distinct	NODE-HTTP-003	groups raw headers into lowercase distinct vectors
+NODE-HTTP-INCOMING-SET-TIMEOUT	http	IncomingMessage.setTimeout	implemented	N64	tsonic_node::http::IncomingMessage::set_timeout	NODE-HTTP-002	sets timeout and invokes explicit callback deterministically
+NODE-HTTP-INCOMING-TIMEOUT	http	IncomingMessage.timeout	implemented	N64	tsonic_node::http::IncomingMessage::timeout	NODE-HTTP-002	timeout accessor over explicit timeout field
+NODE-HTTP-INCOMING-DESTROY	http	IncomingMessage.destroy	implemented	N64	tsonic_node::http::IncomingMessage::destroy	NODE-HTTP-002	marks incoming message destroyed/aborted/incomplete
+NODE-HTTP-INCOMING-DESTROYED	http	IncomingMessage.destroyed	implemented	N64	tsonic_node::http::IncomingMessage::destroyed	NODE-HTTP-002	destroyed-state accessor
+NODE-HTTP-SERVER-RESPONSE-CARRIER	http	ServerResponse	implemented	N64	tsonic_node::http::ServerResponse	NODE-HTTP-002	closed server response carrier
+NODE-HTTP-SERVER-RESPONSE-NEW	http	ServerResponse.new	implemented	N64	tsonic_node::http::ServerResponse::new	NODE-HTTP-002	constructs default server response carrier
+NODE-HTTP-SERVER-RESPONSE-STATUS-CODE	http	ServerResponse.statusCode	implemented	N64	tsonic_node::http::ServerResponse::status_code	NODE-HTTP-002	status code field is explicit carrier data
+NODE-HTTP-SERVER-RESPONSE-STATUS-MESSAGE	http	ServerResponse.statusMessage	implemented	N64	tsonic_node::http::ServerResponse::status_message	NODE-HTTP-002	status message field is explicit carrier data
+NODE-HTTP-SERVER-RESPONSE-HEADERS	http	ServerResponse.headers	implemented	N64	tsonic_node::http::ServerResponse::headers	NODE-HTTP-003	header map is explicit lowercase carrier data
+NODE-HTTP-SERVER-RESPONSE-TRAILERS	http	ServerResponse.trailers	implemented	N64	tsonic_node::http::ServerResponse::trailers	NODE-HTTP-002	trailer map is explicit carrier data
+NODE-HTTP-SERVER-RESPONSE-HEADERS-SENT	http	ServerResponse.headersSent	implemented	N64	tsonic_node::http::ServerResponse::headers_sent	NODE-HTTP-002	headersSent field is explicit carrier data
+NODE-HTTP-SERVER-RESPONSE-SEND-DATE	http	ServerResponse.sendDate	implemented	N64	tsonic_node::http::ServerResponse::send_date	NODE-HTTP-002	sendDate field is explicit carrier data
+NODE-HTTP-SERVER-RESPONSE-SHOULD-KEEP-ALIVE	http	ServerResponse.shouldKeepAlive	implemented	N64	tsonic_node::http::ServerResponse::should_keep_alive	NODE-HTTP-002	keep-alive field is explicit carrier data
+NODE-HTTP-SERVER-RESPONSE-STRICT-CONTENT-LENGTH	http	ServerResponse.strictContentLength	implemented	N64	tsonic_node::http::ServerResponse::strict_content_length	NODE-HTTP-002	strictContentLength field is explicit carrier data
+NODE-HTTP-SERVER-RESPONSE-SET-HEADER	http	ServerResponse.setHeader	implemented	N46	tsonic_node::http::ServerResponse::set_header	NODE-HTTP-003	sets validated lowercase header
+NODE-HTTP-SERVER-RESPONSE-APPEND-HEADER	http	ServerResponse.appendHeader	implemented	N46	tsonic_node::http::ServerResponse::append_header	NODE-HTTP-003	appends comma-separated header value
+NODE-HTTP-SERVER-RESPONSE-SET-HEADERS	http	ServerResponse.setHeaders	implemented	N46	tsonic_node::http::ServerResponse::set_headers	NODE-HTTP-003	sets header map through validation helper
+NODE-HTTP-SERVER-RESPONSE-GET-HEADER	http	ServerResponse.getHeader	implemented	N46	tsonic_node::http::ServerResponse::get_header	NODE-HTTP-003	gets response header by case-insensitive name
+NODE-HTTP-SERVER-RESPONSE-HAS-HEADER	http	ServerResponse.hasHeader	implemented	N46	tsonic_node::http::ServerResponse::has_header	NODE-HTTP-003	checks response header by case-insensitive name
+NODE-HTTP-SERVER-RESPONSE-REMOVE-HEADER	http	ServerResponse.removeHeader	implemented	N46	tsonic_node::http::ServerResponse::remove_header	NODE-HTTP-003	removes response header by case-insensitive name
+NODE-HTTP-SERVER-RESPONSE-GET-HEADER-NAMES	http	ServerResponse.getHeaderNames	implemented	N46	tsonic_node::http::ServerResponse::get_header_names	NODE-HTTP-003	returns response header names from closed map
+NODE-HTTP-SERVER-RESPONSE-GET-HEADERS	http	ServerResponse.getHeaders	implemented	N46	tsonic_node::http::ServerResponse::get_headers	NODE-HTTP-003	returns cloned response header map
+NODE-HTTP-SERVER-RESPONSE-WRITE-HEAD	http	ServerResponse.writeHead	implemented	N64	tsonic_node::http::ServerResponse::write_head	NODE-HTTP-002	sets status and headersSent with explicit header pairs
+NODE-HTTP-SERVER-RESPONSE-WRITE-CONTINUE	http	ServerResponse.writeContinue	implemented	N64	tsonic_node::http::ServerResponse::write_continue	NODE-HTTP-002	invokes explicit continue callback deterministically
+NODE-HTTP-SERVER-RESPONSE-WRITE-PROCESSING	http	ServerResponse.writeProcessing	implemented	N64	tsonic_node::http::ServerResponse::write_processing	NODE-HTTP-002	invokes explicit processing callback deterministically
+NODE-HTTP-SERVER-RESPONSE-WRITE-EARLY-HINTS	http	ServerResponse.writeEarlyHints	implemented	N64	tsonic_node::http::ServerResponse::write_early_hints	NODE-HTTP-002	invokes explicit early-hints callback with closed hint headers
+NODE-HTTP-SERVER-RESPONSE-ADD-TRAILERS	http	ServerResponse.addTrailers	implemented	N64	tsonic_node::http::ServerResponse::add_trailers	NODE-HTTP-002	merges explicit trailer map
+NODE-HTTP-SERVER-RESPONSE-FLUSH-HEADERS	http	ServerResponse.flushHeaders	implemented	N64	tsonic_node::http::ServerResponse::flush_headers	NODE-HTTP-002	marks headersSent deterministically
+NODE-HTTP-SERVER-RESPONSE-SET-TIMEOUT	http	ServerResponse.setTimeout	implemented	N64	tsonic_node::http::ServerResponse::set_timeout	NODE-HTTP-002	sets timeout and invokes explicit callback deterministically
+NODE-HTTP-SERVER-RESPONSE-TIMEOUT	http	ServerResponse.timeout	implemented	N64	tsonic_node::http::ServerResponse::timeout	NODE-HTTP-002	timeout accessor over explicit timeout field
+NODE-HTTP-SERVER-RESPONSE-WRITE	http	ServerResponse.write	implemented	N64	tsonic_node::http::ServerResponse::write	NODE-HTTP-002	writes Buffer into closed Writable response body
+NODE-HTTP-SERVER-RESPONSE-END	http	ServerResponse.end	implemented	N64	tsonic_node::http::ServerResponse::end	NODE-HTTP-002	optionally writes final Buffer and marks response finished
+NODE-HTTP-SERVER-RESPONSE-BODY	http	ServerResponse.body	implemented	N64	tsonic_node::http::ServerResponse::body	NODE-HTTP-002	exposes closed Buffer chunks written to body
+NODE-HTTP-SERVER-RESPONSE-TO-RESPONSE	http	ServerResponse.toResponse	implemented	N64	tsonic_node::http::ServerResponse::to_response	NODE-HTTP-002	converts server response carrier to client Response carrier
+NODE-HTTP-SERVER-RESPONSE-FINISHED	http	ServerResponse.finished	implemented	N64	tsonic_node::http::ServerResponse::finished	NODE-HTTP-002	finished-state accessor
+NODE-HTTP-CLIENT-REQUEST-CARRIER	http	ClientRequest	implemented	N64	tsonic_node::http::ClientRequest	NODE-HTTP-002	closed client request carrier
+NODE-HTTP-CLIENT-REQUEST-NEW	http	ClientRequest.new	implemented	N64	tsonic_node::http::ClientRequest::new	NODE-HTTP-002	constructs client request from explicit options
+NODE-HTTP-CLIENT-REQUEST-SET-HEADER	http	ClientRequest.setHeader	implemented	N46	tsonic_node::http::ClientRequest::set_header	NODE-HTTP-003	sets validated lowercase header
+NODE-HTTP-CLIENT-REQUEST-GET-HEADER	http	ClientRequest.getHeader	implemented	N46	tsonic_node::http::ClientRequest::get_header	NODE-HTTP-003	gets request header by case-insensitive name
+NODE-HTTP-CLIENT-REQUEST-REMOVE-HEADER	http	ClientRequest.removeHeader	implemented	N46	tsonic_node::http::ClientRequest::remove_header	NODE-HTTP-003	removes request header by case-insensitive name
+NODE-HTTP-CLIENT-REQUEST-GET-HEADERS	http	ClientRequest.getHeaders	implemented	N46	tsonic_node::http::ClientRequest::get_headers	NODE-HTTP-003	returns cloned request header map
+NODE-HTTP-CLIENT-REQUEST-SET-TIMEOUT	http	ClientRequest.setTimeout	implemented	N64	tsonic_node::http::ClientRequest::set_timeout	NODE-HTTP-002	sets timeout and invokes explicit callback deterministically
+NODE-HTTP-CLIENT-REQUEST-TIMEOUT	http	ClientRequest.timeout	implemented	N64	tsonic_node::http::ClientRequest::timeout	NODE-HTTP-002	timeout accessor over explicit timeout field
+NODE-HTTP-CLIENT-REQUEST-SET-NO-DELAY	http	ClientRequest.setNoDelay	implemented	N64	tsonic_node::http::ClientRequest::set_no_delay	NODE-HTTP-002	sets noDelay metadata without hidden socket runtime
+NODE-HTTP-CLIENT-REQUEST-NO-DELAY	http	ClientRequest.noDelay	implemented	N64	tsonic_node::http::ClientRequest::no_delay	NODE-HTTP-002	noDelay metadata accessor
+NODE-HTTP-CLIENT-REQUEST-KEEP-ALIVE	http	ClientRequest.setSocketKeepAlive	implemented	N64	tsonic_node::http::ClientRequest::set_socket_keep_alive	NODE-HTTP-002	records keepAlive initial delay when enabled
+NODE-HTTP-CLIENT-REQUEST-KEEP-ALIVE-DELAY	http	ClientRequest.keepAliveDelay	implemented	N64	tsonic_node::http::ClientRequest::keep_alive_delay	NODE-HTTP-002	keepAlive delay accessor
+NODE-HTTP-CLIENT-REQUEST-ABORT	http	ClientRequest.abort	implemented	N64	tsonic_node::http::ClientRequest::abort	NODE-HTTP-002	marks client request aborted
+NODE-HTTP-CLIENT-REQUEST-ON-SOCKET	http	ClientRequest.onSocket	implemented	N64	tsonic_node::http::ClientRequest::on_socket	NODE-HTTP-002	records explicit socket attachment metadata
+NODE-HTTP-SERVER-CARRIER	http	Server	implemented	N64	tsonic_node::http::Server	NODE-HTTP-002	closed in-memory HTTP server carrier
+NODE-HTTP-SERVER-NEW	http	Server.new	implemented	N64	tsonic_node::http::Server::new	NODE-HTTP-002	constructs server with explicit request handler
+NODE-HTTP-SERVER-HANDLE	http	Server.handle	implemented	N64	tsonic_node::http::Server::handle	NODE-HTTP-002	invokes explicit handler and returns closed Response carrier
+NODE-HTTP-SERVER-CLOSE	http	Server.close	implemented	N64	tsonic_node::http::Server::close	NODE-HTTP-002	closed server lifecycle close hook
+NODE-HTTP-CREATE-SERVER	http	createServer	implemented	N64	tsonic_node::http::create_server	NODE-HTTP-002	constructs in-memory server from explicit handler
+NODE-HTTP-REQUEST	http	request	implemented	N64	tsonic_node::http::request	NODE-HTTP-001	HTTP/1 client helper over real TCP
+NODE-HTTP-GET	http	get	implemented	N64	tsonic_node::http::get	NODE-HTTP-001	GET convenience helper over request options
+NODE-HTTP-PARSE-RESPONSE	http	parseResponse	implemented	N64	tsonic_node::http::parse_response	NODE-HTTP-001	parses raw HTTP response bytes into closed Response carrier
 NODE-MODULE-HTTP2	http2	module	implemented	N9	tsonic_node::http2	NODE-HTTP2-001	HTTP/2 client request/session shape over approved reqwest rustls/http2 dependency
 NODE-HTTP2-CONSTANTS	http2	constants/header/method/status/error codes	implemented	N39	tsonic_node::http2::{HTTP2_HEADER_METHOD,HTTP2_HEADER_PATH,HTTP2_HEADER_STATUS,NGHTTP2_NO_ERROR}	NODE-HTTP2-002	common HTTP2 header, method, status, and nghttp2 constants
 NODE-HTTP2-SESSION-STATE	http2	session settings/state/ping/goaway/timeout	implemented	N39	tsonic_node::http2::{Http2Session,Http2Settings,Http2SessionState}	NODE-HTTP2-002	closed HTTP2 session settings, state snapshot, ping, goaway, timeout, close, and destroy metadata
@@ -297,14 +380,105 @@ NODE-MODULE-READLINE	readline	module	implemented	N5	tsonic_node::readline	NODE-R
 NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
 NODE-MODULE-SQLITE	sqlite	module	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency
 NODE-MODULE-STREAM	stream	module	implemented	N3	tsonic_node::stream	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
-NODE-STREAM-READABLE-STATE	stream	Readable options/pause/push/unshift/iterator	implemented	N38	tsonic_node::stream::Readable	NODE-STREAM-004	readable highWaterMark, encoding, pause/resume, push/unshift, take/toArray, destroy/error state
-NODE-STREAM-WRITABLE-STATE	stream	Writable options/cork/drain/writev/final	implemented	N38	tsonic_node::stream::Writable	NODE-STREAM-004	writable highWaterMark, defaultEncoding, cork/uncork, writev, drain, final/construct callbacks, destroy/error state
-NODE-STREAM-READABLE-OPERATORS	stream	Readable map/filter/flatMap/drop/every/some/find/forEach/reduce/compose	implemented	N47	tsonic_node::stream::Readable	NODE-STREAM-005	closed Readable functional operators over Buffer chunks without dynamic callback dispatch or source guessing
-NODE-STREAM-CORE-CLASSES	stream	Readable/Writable/Duplex/Transform/PassThrough	implemented	N56	tsonic_node::stream::{Readable,Writable,Duplex,Transform,PassThrough}	NODE-STREAM-001,NODE-STREAM-003	closed stream class carriers over Buffer chunks
-NODE-STREAM-PIPELINE-FINISHED	stream	pipeline/finished	implemented	N56	tsonic_node::stream::{pipeline,finished}	NODE-STREAM-001,NODE-STREAM-003	pipeline moves Buffer chunks and finished checks closed readable/writable state
-NODE-STREAM-PROMISES	stream/promises	pipeline/finished	implemented	N56	tsonic_node::stream::promises::{pipeline,finished}	NODE-STREAM-003	blocking-now promise-shaped stream helpers over same closed stream runtime
-NODE-STREAM-CONSUMERS	stream/consumers	buffer/text/arrayBuffer/blob/json	implemented	N56	tsonic_node::stream::consumers::{buffer,text,array_buffer,blob,json}	NODE-STREAM-002	closed consumers materialize Buffer, text, ArrayBuffer, Blob, and parsed JSON carriers
-NODE-STREAM-WEB-BRIDGES	stream/web	Readable.toWeb/fromWeb Writable.toWeb/fromWeb	implemented	N56	tsonic_node::stream::web::{readable_to_web,readable_from_web,writable_to_web,writable_from_web}	NODE-STREAM-003	closed Node/Web stream bridges without external runtime
+NODE-STREAM-OPTIONS	stream	StreamOptions	implemented	N38	tsonic_node::stream::StreamOptions	NODE-STREAM-004	closed stream option carrier with highWaterMark/objectMode/emitClose/autoDestroy/allowHalfOpen/defaultEncoding
+NODE-STREAM-READABLE-CARRIER	stream	Readable	implemented	N38	tsonic_node::stream::Readable	NODE-STREAM-004	closed readable carrier over Buffer chunks
+NODE-STREAM-READABLE-FROM-CHUNKS	stream	Readable.from_chunks	implemented	N38	tsonic_node::stream::Readable::from_chunks	NODE-STREAM-004	constructs readable from closed Buffer chunk vector
+NODE-STREAM-READABLE-FROM-CHUNKS-OPTIONS	stream	Readable.from_chunks_with_options	implemented	N38	tsonic_node::stream::Readable::from_chunks_with_options	NODE-STREAM-004	constructs readable with explicit StreamOptions carrier
+NODE-STREAM-READABLE-READ	stream	Readable.read	implemented	N38	tsonic_node::stream::Readable::read	NODE-STREAM-004	reads next Buffer chunk unless paused/destroyed
+NODE-STREAM-READABLE-ENDED	stream	Readable.isEnded/readableEnded	implemented	N38	tsonic_node::stream::Readable::{is_ended,readable_ended}	NODE-STREAM-004	closed readable end-state query
+NODE-STREAM-READABLE-READABLE	stream	Readable.readable	implemented	N38	tsonic_node::stream::Readable::readable	NODE-STREAM-004	closed readable active-state query
+NODE-STREAM-READABLE-LENGTH	stream	Readable.readableLength	implemented	N38	tsonic_node::stream::Readable::readable_length	NODE-STREAM-004	remaining chunk count carrier
+NODE-STREAM-READABLE-HIGH-WATER-MARK	stream	Readable.readableHighWaterMark	implemented	N38	tsonic_node::stream::Readable::readable_high_water_mark	NODE-STREAM-004	highWaterMark accessor from explicit options
+NODE-STREAM-READABLE-ENCODING	stream	Readable.readableEncoding/setEncoding	implemented	N38	tsonic_node::stream::Readable::{readable_encoding,set_encoding}	NODE-STREAM-004	closed encoding state lowercases explicit encoding
+NODE-STREAM-READABLE-FROM	stream	Readable.from	implemented	N38	tsonic_node::stream::Readable::from	NODE-STREAM-004	constructor alias for generated Rust
+NODE-STREAM-READABLE-PIPE	stream	Readable.pipe	implemented	N38	tsonic_node::stream::Readable::pipe	NODE-STREAM-003	pipes closed Buffer chunks into Writable
+NODE-STREAM-READABLE-UNPIPE	stream	Readable.unpipe	implemented	N38	tsonic_node::stream::Readable::unpipe	NODE-STREAM-004	deterministic no-op unpipe helper
+NODE-STREAM-READABLE-DESTROY	stream	Readable.destroy	implemented	N38	tsonic_node::stream::Readable::destroy	NODE-STREAM-004	marks readable destroyed and consumed
+NODE-STREAM-READABLE-DESTROY-ERROR	stream	Readable.destroyWithError	implemented	N38	tsonic_node::stream::Readable::destroy_with_error	NODE-STREAM-004	records explicit error string and destroys readable
+NODE-STREAM-READABLE-DESTROYED	stream	Readable.destroyed	implemented	N38	tsonic_node::stream::Readable::destroyed	NODE-STREAM-004	destroyed-state accessor
+NODE-STREAM-READABLE-CLOSED	stream	Readable.closed	implemented	N38	tsonic_node::stream::Readable::closed	NODE-STREAM-004	closed-state accessor over destroyed/end state
+NODE-STREAM-READABLE-ERRORED	stream	Readable.errored	implemented	N38	tsonic_node::stream::Readable::errored	NODE-STREAM-004	error-state accessor
+NODE-STREAM-READABLE-PAUSE	stream	Readable.pause	implemented	N38	tsonic_node::stream::Readable::pause	NODE-STREAM-004	sets paused state without event-loop dependency
+NODE-STREAM-READABLE-RESUME	stream	Readable.resume	implemented	N38	tsonic_node::stream::Readable::resume	NODE-STREAM-004	clears paused state
+NODE-STREAM-READABLE-IS-PAUSED	stream	Readable.isPaused	implemented	N38	tsonic_node::stream::Readable::is_paused	NODE-STREAM-004	paused-state accessor
+NODE-STREAM-READABLE-PUSH	stream	Readable.push	implemented	N38	tsonic_node::stream::Readable::push	NODE-STREAM-004	pushes Buffer and returns highWaterMark backpressure boolean
+NODE-STREAM-READABLE-UNSHIFT	stream	Readable.unshift	implemented	N38	tsonic_node::stream::Readable::unshift	NODE-STREAM-004	inserts Buffer before current read index
+NODE-STREAM-READABLE-WRAP	stream	Readable.wrap	implemented	N38	tsonic_node::stream::Readable::wrap	NODE-STREAM-004	wrap preserves closed readable carrier
+NODE-STREAM-READABLE-ITERATOR	stream	Readable.iterator	implemented	N38	tsonic_node::stream::Readable::iterator	NODE-STREAM-004	drains remaining chunks to vector iterator shape
+NODE-STREAM-READABLE-TAKE	stream	Readable.take	implemented	N47	tsonic_node::stream::Readable::take	NODE-STREAM-005	takes limited number of chunks
+NODE-STREAM-READABLE-DROP	stream	Readable.drop	implemented	N47	tsonic_node::stream::Readable::drop	NODE-STREAM-005	drops leading chunks and returns remaining chunks
+NODE-STREAM-READABLE-MAP	stream	Readable.map	implemented	N47	tsonic_node::stream::Readable::map	NODE-STREAM-005	closed Buffer-to-Buffer transform selected by generated Rust callback
+NODE-STREAM-READABLE-FILTER	stream	Readable.filter	implemented	N47	tsonic_node::stream::Readable::filter	NODE-STREAM-005	closed Buffer predicate filter selected by generated Rust callback
+NODE-STREAM-READABLE-FLAT-MAP	stream	Readable.flatMap	implemented	N47	tsonic_node::stream::Readable::flat_map	NODE-STREAM-005	closed Buffer-to-Buffer-vector transform selected by generated Rust callback
+NODE-STREAM-READABLE-FOR-EACH	stream	Readable.forEach	implemented	N47	tsonic_node::stream::Readable::for_each	NODE-STREAM-005	closed callback consumption over remaining chunks
+NODE-STREAM-READABLE-EVERY	stream	Readable.every	implemented	N47	tsonic_node::stream::Readable::every	NODE-STREAM-005	closed predicate all over remaining chunks
+NODE-STREAM-READABLE-SOME	stream	Readable.some	implemented	N47	tsonic_node::stream::Readable::some	NODE-STREAM-005	closed predicate any over remaining chunks
+NODE-STREAM-READABLE-FIND	stream	Readable.find	implemented	N47	tsonic_node::stream::Readable::find	NODE-STREAM-005	closed predicate find over remaining chunks
+NODE-STREAM-READABLE-REDUCE	stream	Readable.reduce	implemented	N47	tsonic_node::stream::Readable::reduce	NODE-STREAM-005	closed reducer over remaining chunks
+NODE-STREAM-READABLE-COMPOSE	stream	Readable.compose	implemented	N47	tsonic_node::stream::Readable::compose	NODE-STREAM-005	explicit generated Rust composition callback over closed Readable
+NODE-STREAM-READABLE-TO-ARRAY	stream	Readable.toArray	implemented	N47	tsonic_node::stream::Readable::to_array	NODE-STREAM-005	drains remaining chunks into vector
+NODE-STREAM-READABLE-TO-VEC	stream	Readable.to_vec	implemented	N47	tsonic_node::stream::Readable::to_vec	NODE-STREAM-005	owned generated Rust vector conversion
+NODE-STREAM-WRITABLE-CARRIER	stream	Writable	implemented	N38	tsonic_node::stream::Writable	NODE-STREAM-004	closed writable carrier over Buffer chunks
+NODE-STREAM-WRITABLE-NEW	stream	Writable.new	implemented	N38	tsonic_node::stream::Writable::new	NODE-STREAM-004	constructs default Writable carrier
+NODE-STREAM-WRITABLE-WITH-OPTIONS	stream	Writable.with_options	implemented	N38	tsonic_node::stream::Writable::with_options	NODE-STREAM-004	constructs Writable with explicit StreamOptions carrier
+NODE-STREAM-WRITABLE-WRITE	stream	Writable.write	implemented	N38	tsonic_node::stream::Writable::write	NODE-STREAM-004	writes Buffer and returns backpressure boolean
+NODE-STREAM-WRITABLE-WRITEV	stream	Writable.writev	implemented	N38	tsonic_node::stream::Writable::writev	NODE-STREAM-004	writes Buffer vector through same closed carrier
+NODE-STREAM-WRITABLE-CORK	stream	Writable.cork	implemented	N38	tsonic_node::stream::Writable::cork	NODE-STREAM-004	increments explicit corked count
+NODE-STREAM-WRITABLE-UNCORK	stream	Writable.uncork	implemented	N38	tsonic_node::stream::Writable::uncork	NODE-STREAM-004	decrements explicit corked count
+NODE-STREAM-WRITABLE-CORKED	stream	Writable.writableCorked	implemented	N38	tsonic_node::stream::Writable::writable_corked	NODE-STREAM-004	corked-count accessor
+NODE-STREAM-WRITABLE-SET-DEFAULT-ENCODING	stream	Writable.setDefaultEncoding	implemented	N38	tsonic_node::stream::Writable::set_default_encoding	NODE-STREAM-004	default encoding state setter
+NODE-STREAM-WRITABLE-DEFAULT-ENCODING	stream	Writable.defaultEncoding	implemented	N38	tsonic_node::stream::Writable::default_encoding	NODE-STREAM-004	default encoding state accessor
+NODE-STREAM-WRITABLE-HIGH-WATER-MARK	stream	Writable.writableHighWaterMark	implemented	N38	tsonic_node::stream::Writable::writable_high_water_mark	NODE-STREAM-004	highWaterMark accessor from explicit options
+NODE-STREAM-WRITABLE-LENGTH	stream	Writable.writableLength	implemented	N38	tsonic_node::stream::Writable::writable_length	NODE-STREAM-004	buffered chunk count accessor
+NODE-STREAM-WRITABLE-NEED-DRAIN	stream	Writable.writableNeedDrain	implemented	N38	tsonic_node::stream::Writable::writable_need_drain	NODE-STREAM-004	backpressure-state accessor
+NODE-STREAM-WRITABLE-ACTIVE	stream	Writable.writable	implemented	N38	tsonic_node::stream::Writable::writable	NODE-STREAM-004	active writable-state accessor
+NODE-STREAM-WRITABLE-ENDED	stream	Writable.writableEnded	implemented	N38	tsonic_node::stream::Writable::writable_ended	NODE-STREAM-004	ended-state accessor
+NODE-STREAM-WRITABLE-FINISHED	stream	Writable.writableFinished	implemented	N38	tsonic_node::stream::Writable::writable_finished	NODE-STREAM-004	finished-state accessor
+NODE-STREAM-WRITABLE-ABORTED	stream	Writable.writableAborted	implemented	N38	tsonic_node::stream::Writable::writable_aborted	NODE-STREAM-004	aborted-state accessor
+NODE-STREAM-WRITABLE-EMIT-CLOSE	stream	Writable.emitClose	implemented	N38	tsonic_node::stream::Writable::emit_close	NODE-STREAM-004	emitClose option accessor
+NODE-STREAM-WRITABLE-ERRORED	stream	Writable.errored	implemented	N38	tsonic_node::stream::Writable::errored	NODE-STREAM-004	error-state accessor
+NODE-STREAM-WRITABLE-CLOSED	stream	Writable.closed	implemented	N38	tsonic_node::stream::Writable::closed	NODE-STREAM-004	closed-state accessor
+NODE-STREAM-WRITABLE-DESTROYED	stream	Writable.destroyed	implemented	N38	tsonic_node::stream::Writable::destroyed	NODE-STREAM-004	destroyed-state accessor
+NODE-STREAM-WRITABLE-CLEAR-DRAIN	stream	Writable.clearDrain	implemented	N38	tsonic_node::stream::Writable::clear_drain	NODE-STREAM-004	clears needDrain state
+NODE-STREAM-WRITABLE-FINAL-CALLBACK	stream	Writable.finalCallback	implemented	N38	tsonic_node::stream::Writable::final_callback	NODE-STREAM-004	explicit final callback ends stream deterministically
+NODE-STREAM-WRITABLE-CONSTRUCT-CALLBACK	stream	Writable.constructCallback	implemented	N38	tsonic_node::stream::Writable::construct_callback	NODE-STREAM-004	explicit construct callback invocation
+NODE-STREAM-WRITABLE-DESTROY-ERROR	stream	Writable.destroyWithError	implemented	N38	tsonic_node::stream::Writable::destroy_with_error	NODE-STREAM-004	records explicit error string and destroys writable
+NODE-STREAM-WRITABLE-ADD-CHUNK	stream	Writable.addChunk	implemented	N38	tsonic_node::stream::Writable::add_chunk	NODE-STREAM-004	generated Rust alias for Buffer write
+NODE-STREAM-WRITABLE-WRITE-STR	stream	Writable.writeStr	implemented	N38	tsonic_node::stream::Writable::write_str	NODE-STREAM-004	string write helper goes through Buffer encoding path
+NODE-STREAM-WRITABLE-FLUSH	stream	Writable.flush	implemented	N38	tsonic_node::stream::Writable::flush	NODE-STREAM-004	clears drain state deterministically
+NODE-STREAM-WRITABLE-END	stream	Writable.end	implemented	N38	tsonic_node::stream::Writable::end	NODE-STREAM-004	marks writable ended
+NODE-STREAM-WRITABLE-DESTROY	stream	Writable.destroy	implemented	N38	tsonic_node::stream::Writable::destroy	NODE-STREAM-004	marks writable destroyed and ended
+NODE-STREAM-WRITABLE-IS-ENDED	stream	Writable.isEnded	implemented	N38	tsonic_node::stream::Writable::is_ended	NODE-STREAM-004	ended-state generated Rust alias
+NODE-STREAM-WRITABLE-CHUNKS	stream	Writable.chunks	implemented	N38	tsonic_node::stream::Writable::chunks	NODE-STREAM-004	exposes captured Buffer chunks for generated Rust tests/emission
+NODE-STREAM-DUPLEX-CARRIER	stream	Duplex	implemented	N56	tsonic_node::stream::Duplex	NODE-STREAM-003	closed Duplex carrier combining Readable and Writable
+NODE-STREAM-DUPLEX-NEW	stream	Duplex.new	implemented	N56	tsonic_node::stream::Duplex::new	NODE-STREAM-003	constructs Duplex from closed readable/writable carriers
+NODE-STREAM-DUPLEX-READ	stream	Duplex.read	implemented	N56	tsonic_node::stream::Duplex::read	NODE-STREAM-003	reads from inner readable carrier
+NODE-STREAM-DUPLEX-WRITE	stream	Duplex.write	implemented	N56	tsonic_node::stream::Duplex::write	NODE-STREAM-003	writes to inner writable carrier
+NODE-STREAM-DUPLEX-END	stream	Duplex.end	implemented	N56	tsonic_node::stream::Duplex::end	NODE-STREAM-003	ends inner writable carrier
+NODE-STREAM-DUPLEX-WRITABLE-CHUNKS	stream	Duplex.writableChunks	implemented	N56	tsonic_node::stream::Duplex::writable_chunks	NODE-STREAM-003	exposes inner writable chunks
+NODE-STREAM-TRANSFORM-CARRIER	stream	Transform	implemented	N56	tsonic_node::stream::Transform	NODE-STREAM-003	closed Transform carrier with explicit generated Rust transform callback
+NODE-STREAM-TRANSFORM-NEW	stream	Transform.new	implemented	N56	tsonic_node::stream::Transform::new	NODE-STREAM-003	constructs Transform with explicit Buffer transform function
+NODE-STREAM-TRANSFORM-WRITE	stream	Transform.write	implemented	N56	tsonic_node::stream::Transform::write	NODE-STREAM-003	writes input Buffer and enqueues transformed output
+NODE-STREAM-TRANSFORM-READ	stream	Transform.read	implemented	N56	tsonic_node::stream::Transform::read	NODE-STREAM-003	reads transformed output Buffer
+NODE-STREAM-TRANSFORM-END	stream	Transform.end	implemented	N56	tsonic_node::stream::Transform::end	NODE-STREAM-003	ends inner writable side
+NODE-STREAM-PASSTHROUGH-CARRIER	stream	PassThrough	implemented	N56	tsonic_node::stream::PassThrough	NODE-STREAM-003	closed PassThrough carrier preserving Buffer chunks
+NODE-STREAM-PASSTHROUGH-NEW	stream	PassThrough.new	implemented	N56	tsonic_node::stream::PassThrough::new	NODE-STREAM-003	constructs empty PassThrough carrier
+NODE-STREAM-PASSTHROUGH-WRITE	stream	PassThrough.write	implemented	N56	tsonic_node::stream::PassThrough::write	NODE-STREAM-003	writes and exposes same Buffer on readable side
+NODE-STREAM-PASSTHROUGH-READ	stream	PassThrough.read	implemented	N56	tsonic_node::stream::PassThrough::read	NODE-STREAM-003	reads passthrough Buffer output
+NODE-STREAM-PASSTHROUGH-END	stream	PassThrough.end	implemented	N56	tsonic_node::stream::PassThrough::end	NODE-STREAM-003	ends passthrough writable side
+NODE-STREAM-PIPELINE	stream	pipeline	implemented	N56	tsonic_node::stream::pipeline	NODE-STREAM-001	pipeline moves Buffer chunks from Readable to Writable
+NODE-STREAM-FINISHED	stream	finished	implemented	N56	tsonic_node::stream::finished	NODE-STREAM-001	finished checks closed readable/writable end state
+NODE-STREAM-PROMISES-PIPELINE	stream/promises	pipeline	implemented	N56	tsonic_node::stream::promises::pipeline	NODE-STREAM-003	blocking-now promise-shaped pipeline over same closed stream runtime
+NODE-STREAM-PROMISES-FINISHED	stream/promises	finished	implemented	N56	tsonic_node::stream::promises::finished	NODE-STREAM-003	blocking-now promise-shaped finished helper over same closed stream runtime
+NODE-STREAM-CONSUMERS-BUFFER	stream/consumers	buffer	implemented	N56	tsonic_node::stream::consumers::buffer	NODE-STREAM-002	materializes remaining chunks into Buffer
+NODE-STREAM-CONSUMERS-TEXT	stream/consumers	text	implemented	N56	tsonic_node::stream::consumers::text	NODE-STREAM-002	materializes remaining chunks into string through explicit encoding
+NODE-STREAM-CONSUMERS-ARRAY-BUFFER	stream/consumers	arrayBuffer	implemented	N56	tsonic_node::stream::consumers::array_buffer	NODE-STREAM-002	materializes remaining chunks into ArrayBuffer
+NODE-STREAM-CONSUMERS-BLOB	stream/consumers	blob	implemented	N56	tsonic_node::stream::consumers::blob	NODE-STREAM-002	materializes remaining chunks into Blob with explicit content type
+NODE-STREAM-CONSUMERS-JSON	stream/consumers	json	implemented	N56	tsonic_node::stream::consumers::json	NODE-STREAM-002	parses remaining chunks into closed JsValue JSON carrier
+NODE-STREAM-WEB-READABLE-TO-WEB	stream/web	Readable.toWeb	implemented	N56	tsonic_node::stream::web::readable_to_web	NODE-STREAM-003	converts closed Node Readable to closed Web ReadableStream
+NODE-STREAM-WEB-READABLE-FROM-WEB	stream/web	Readable.fromWeb	implemented	N56	tsonic_node::stream::web::readable_from_web	NODE-STREAM-003	converts closed Web ReadableStream to closed Node Readable
+NODE-STREAM-WEB-WRITABLE-TO-WEB	stream/web	Writable.toWeb	implemented	N56	tsonic_node::stream::web::writable_to_web	NODE-STREAM-003	converts closed Node Writable to closed Web WritableStream
+NODE-STREAM-WEB-WRITABLE-FROM-WEB	stream/web	Writable.fromWeb	implemented	N56	tsonic_node::stream::web::writable_from_web	NODE-STREAM-003	converts closed Web WritableStream to closed Node Writable
 WEB-STREAM-READABLE	web-globals/streams	ReadableStream reader/values/pipeTo/cancel	implemented	N56	tsonic_node::stream::web::ReadableStream	NODE-STREAM-003	closed readable stream carrier, lock state, reader, cancellation, values, and pipeTo
 WEB-STREAM-WRITABLE	web-globals/streams	WritableStream writer/write/close/abort	implemented	N56	tsonic_node::stream::web::WritableStream	NODE-STREAM-003	closed writable stream carrier, lock state, writer, write, close, and abort
 WEB-STREAM-TRANSFORM	web-globals/streams	TransformStream readable/writable passthrough	implemented	N56	tsonic_node::stream::web::TransformStream	NODE-STREAM-003	closed transform stream carrier with explicit passthrough semantics
