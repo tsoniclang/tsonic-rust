@@ -194,6 +194,8 @@ fn querystring_and_string_decoder_use_existing_closed_parsers() {
     let params = querystring::parse("a=1&a=2");
     assert_eq!(params.get_all("a"), vec!["1".to_string(), "2".to_string()]);
     assert_eq!(querystring::stringify(&params), "a=1&a=2");
+    let separated = querystring::parse_with_separators("x:10;y:20", ";", ":");
+    assert_eq!(separated.get("x"), Some("10".to_string()));
     let parsed = querystring::parse_with_options(
         "a:1;b:2;c:3",
         ";",
@@ -209,6 +211,10 @@ fn querystring_and_string_decoder_use_existing_closed_parsers() {
     let mut records = BTreeMap::new();
     records.insert("hello world".to_string(), "x/y".to_string());
     records.insert("z".to_string(), "last".to_string());
+    assert_eq!(
+        querystring::stringify_records(&records),
+        "hello+world=x%2Fy&z=last"
+    );
     assert_eq!(
         querystring::stringify_records_with_options(
             &records,

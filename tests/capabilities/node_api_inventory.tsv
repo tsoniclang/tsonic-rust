@@ -98,6 +98,17 @@ NODE-MODULE-PROCESS	process	module	implemented	J	tsonic_node::process	NODE-PROC-
 NODE-MODULE-PUNYCODE	punycode	module	implemented	N8	tsonic_node::punycode	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
 NODE-QUERYSTRING-OPTIONS	querystring	parse/stringify options	implemented	N31	tsonic_node::querystring::{ParseOptions,StringifyOptions,parse_with_options,stringify_records_with_options}	NODE-QUERYSTRING-001	custom separators, maxKeys, and codec callback options
+NODE-QUERYSTRING-PARSE	querystring	parse	implemented	N69	tsonic_node::querystring::parse	NODE-QUERYSTRING-001	closed query parser into URLSearchParams carrier
+NODE-QUERYSTRING-PARSE-WITH-OPTIONS	querystring	parse options	implemented	N69	tsonic_node::querystring::parse_with_options	NODE-QUERYSTRING-001	parse helper with explicit separators, maxKeys, and decoder callback
+NODE-QUERYSTRING-PARSE-WITH-SEPARATORS	querystring	parse custom separators	implemented	N69	tsonic_node::querystring::parse_with_separators	NODE-QUERYSTRING-001	parse helper with explicit separator and equals strings
+NODE-QUERYSTRING-STRINGIFY	querystring	stringify	implemented	N69	tsonic_node::querystring::stringify	NODE-QUERYSTRING-001	URLSearchParams stringify helper
+NODE-QUERYSTRING-STRINGIFY-RECORDS	querystring	stringify records	implemented	N69	tsonic_node::querystring::stringify_records	NODE-QUERYSTRING-001	record-map stringify helper
+NODE-QUERYSTRING-STRINGIFY-RECORDS-WITH-OPTIONS	querystring	stringify records options	implemented	N69	tsonic_node::querystring::stringify_records_with_options	NODE-QUERYSTRING-001	record-map stringify helper with explicit separators and encoder callback
+NODE-QUERYSTRING-ESCAPE	querystring	escape	implemented	N69	tsonic_node::querystring::escape	NODE-QUERYSTRING-001	querystring escape helper using plus-for-space encoding
+NODE-QUERYSTRING-UNESCAPE	querystring	unescape	implemented	N69	tsonic_node::querystring::unescape	NODE-QUERYSTRING-001	querystring unescape helper
+NODE-QUERYSTRING-UNESCAPE-BUFFER	querystring	unescapeBuffer	implemented	N69	tsonic_node::querystring::unescape_buffer	NODE-QUERYSTRING-001	querystring unescapeBuffer helper returning bytes
+NODE-QUERYSTRING-PARSE-OPTIONS-CARRIER	querystring	ParseOptions	implemented	N69	tsonic_node::querystring::ParseOptions	NODE-QUERYSTRING-001	closed ParseOptions carrier with decodeUriComponent and maxKeys
+NODE-QUERYSTRING-STRINGIFY-OPTIONS-CARRIER	querystring	StringifyOptions	implemented	N69	tsonic_node::querystring::StringifyOptions	NODE-QUERYSTRING-001	closed StringifyOptions carrier with encodeUriComponent
 NODE-MODULE-READLINE	readline	module	implemented	N5	tsonic_node::readline	NODE-READLINE-001	closed buffered readline interface
 NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
 NODE-MODULE-SQLITE	sqlite	module	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency
@@ -115,6 +126,11 @@ WEB-STREAM-WRITABLE	web-globals/streams	WritableStream writer/write/close/abort	
 WEB-STREAM-TRANSFORM	web-globals/streams	TransformStream readable/writable passthrough	implemented	N56	tsonic_node::stream::web::TransformStream	NODE-STREAM-003	closed transform stream carrier with explicit passthrough semantics
 NODE-MODULE-STRING-DECODER	string_decoder	module	implemented	N1	tsonic_node::string_decoder	NODE-MISC-003	UTF-8 string decoder subset
 NODE-STRING-DECODER-STATE	string_decoder	StringDecoder streaming state	implemented	N29	tsonic_node::string_decoder::StringDecoder	NODE-STRING-DECODER-001	streaming UTF-8 partial sequence buffering and replacement on end
+NODE-STRING-DECODER-CONSTRUCTOR	string_decoder	StringDecoder constructor	implemented	N69	tsonic_node::string_decoder::StringDecoder::new	NODE-STRING-DECODER-001	closed StringDecoder constructor with default utf8 encoding
+NODE-STRING-DECODER-ENCODING	string_decoder	StringDecoder.encoding	implemented	N69	tsonic_node::string_decoder::StringDecoder::encoding	NODE-STRING-DECODER-001	StringDecoder exposes selected encoding
+NODE-STRING-DECODER-PENDING-LEN	string_decoder	StringDecoder pending length	implemented	N69	tsonic_node::string_decoder::StringDecoder::pending_len	NODE-STRING-DECODER-001	StringDecoder exposes pending partial sequence length for generated runtime bookkeeping
+NODE-STRING-DECODER-WRITE	string_decoder	StringDecoder.write	implemented	N69	tsonic_node::string_decoder::StringDecoder::write	NODE-STRING-DECODER-001	StringDecoder write buffers partial UTF-8 sequences
+NODE-STRING-DECODER-END	string_decoder	StringDecoder.end	implemented	N69	tsonic_node::string_decoder::StringDecoder::end	NODE-STRING-DECODER-001	StringDecoder end flushes replacement for incomplete UTF-8 sequences
 NODE-MODULE-TEST	test	module	hard-reject	N0	n/a	REJECT-NODE-TEST	test runner module excluded from generated runtime ABI
 NODE-MODULE-TIMERS	timers	module	implemented	N3	tsonic_node::timers	NODE-TIMERS-001	deterministic timer handles and callback execution
 NODE-TIMERS-OPTIONS	timers	TimerOptions/_onTimeout/_onImmediate	implemented	N30	tsonic_node::timers::{TimerOptions,set_timeout_with_options,set_immediate_with_options,set_interval_with_options}	NODE-TIMERS-002	ref/abort timer options and explicit callback handle methods

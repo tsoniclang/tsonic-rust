@@ -313,6 +313,9 @@ NODE-MOD-025	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001 through NOD
 NODE-MOD-026	implemented	N8	tsonic_node::abi::{punycode_to_ascii,punycode_to_unicode}	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MOD-027	implemented	M	tsonic_node::abi::{querystring_parse,querystring_stringify}	NODE-MISC-002	legacy URL query helper; URLSearchParams implemented first (completed in full-completion branch)
 NODE-QUERYSTRING-001	implemented	N31	tsonic_node::abi::{ParseOptions,StringifyOptions,querystring_parse_with_options,querystring_stringify_records_with_options}	NODE-QUERYSTRING-001	custom separators, maxKeys, and codec callback options
+NODE-QUERYSTRING-002	implemented	N69	tsonic_node::abi::{querystring_parse,querystring_parse_with_options,querystring_parse_with_separators}	NODE-QUERYSTRING-001	querystring parse helpers are individually inventoried
+NODE-QUERYSTRING-003	implemented	N69	tsonic_node::abi::{querystring_stringify,querystring_stringify_records,querystring_stringify_records_with_options}	NODE-QUERYSTRING-001	querystring stringify helpers are individually inventoried
+NODE-QUERYSTRING-004	implemented	N69	tsonic_node::abi::{querystring_escape,querystring_unescape,querystring_unescape_buffer,ParseOptions,StringifyOptions}	NODE-QUERYSTRING-001	querystring codec helpers and options carriers are individually inventoried
 NODE-MOD-028	implemented	N5	tsonic_node::abi::readline_create_interface	NODE-READLINE-001	closed buffered readline interface
 NODE-READLINE-002	implemented	N19	tsonic_node::abi::{ReadlineInterface,ReadlineKey,ReadlineCursorPos,ReadlinePromisesController,readline_promises}	NODE-READLINE-002	Interface prompt/cursor/key/terminal and promises controller commit/rollback APIs
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1
@@ -326,6 +329,7 @@ NODE-STREAM-006	implemented	N56	tsonic_node::abi::{Readable,Writable,Duplex,Tran
 NODE-STREAM-007	implemented	N56	tsonic_node::abi::{ReadableStream,WritableStream,TransformStream,ReadableStreamDefaultReader,WritableStreamDefaultWriter}	NODE-STREAM-003	Web Readable/Writable/Transform stream reader, writer, lock, pipe, cancel, close, abort, and bridge shapes
 NODE-MOD-032	implemented	M	tsonic_node::abi::StringDecoder	NODE-MISC-002	Buffer encoding subset first; decoder state machine later (completed in full-completion branch)
 NODE-STRING-DECODER-001	implemented	N29	tsonic_node::abi::StringDecoder	NODE-STRING-DECODER-001	streaming UTF-8 partial sequence buffering and replacement on end
+NODE-STRING-DECODER-002	implemented	N69	tsonic_node::abi::StringDecoder	NODE-STRING-DECODER-001	StringDecoder constructor, encoding, pending length, write, and end methods are individually inventoried
 NODE-MOD-033	hard-reject	M	n/a	REJECT-NODE-TEST	test runner/reporters not runtime surface
 NODE-MOD-034	implemented	N3	tsonic_node::abi::{set_timeout,set_immediate,Timeout}	NODE-TIMERS-001	deterministic timer handles and callback execution
 NODE-TIMERS-002	implemented	N30	tsonic_node::abi::{TimerOptions,set_timeout_with_options,set_immediate_with_options,set_interval_with_options}	NODE-TIMERS-002	ref/abort timer options and explicit _onTimeout/_onImmediate handle methods
