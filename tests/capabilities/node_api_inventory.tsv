@@ -106,7 +106,7 @@ NODE-BUFFER-ALLOC	buffer	alloc/from	implemented	K	tsonic_node::buffer::Buffer	NO
 NODE-BUFFER-ENCODING	buffer	encodings	implemented	K	tsonic_node::buffer::{encode_string,decode_bytes}	NODE-BUF-001	utf8/latin1/utf16le/hex/base64/base64url
 NODE-BUFFER-SLICE	buffer	slice/subarray	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-002	shared views
 NODE-BUFFER-COMPARE	buffer	equals/compare/concat	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-003	byte comparisons
-NODE-BUFFER-INTEGERS	buffer	read/write integers	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-004	uint32 endian helpers
+NODE-BUFFER-INTEGERS	buffer	read/write integers	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-004	fixed-width and variable-width endian integer helpers
 NODE-BUFFER-TRANSCODE	buffer	transcode	implemented	N8	tsonic_node::buffer::transcode	NODE-BUF-TRANSCODE-001	transcode across supported encodings
 NODE-CRYPTO-RANDOM-BYTES	crypto	randomBytes	implemented	L	tsonic_node::crypto::random_bytes	NODE-CRYPTO-001	OS randomness
 NODE-CRYPTO-RANDOM-FILL	crypto	randomFill/randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	buffer random fill

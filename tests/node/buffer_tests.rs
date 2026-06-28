@@ -92,3 +92,32 @@ fn buffer_numeric_read_write_matrix() {
     big.write_double_be(-0.5, 0).unwrap();
     assert_eq!(big.read_double_be(0).unwrap(), -0.5);
 }
+
+#[test]
+fn buffer_variable_width_integer_matrix() {
+    let mut buffer = Buffer::alloc(16);
+    buffer.write_uint_le(0x01_02_03_04_05_06, 0, 6).unwrap();
+    assert_eq!(buffer.as_bytes()[..6], [0x06, 0x05, 0x04, 0x03, 0x02, 0x01]);
+    assert_eq!(buffer.read_uint_le(0, 6).unwrap(), 0x01_02_03_04_05_06);
+    assert_eq!(buffer.read_uint_be(0, 6).unwrap(), 0x06_05_04_03_02_01);
+
+    buffer.write_uint_be(0x0a_0b_0c, 6, 3).unwrap();
+    assert_eq!(buffer.as_bytes()[6..9], [0x0a, 0x0b, 0x0c]);
+    assert_eq!(buffer.read_uint_be(6, 3).unwrap(), 0x0a_0b_0c);
+    assert_eq!(buffer.read_uint_le(6, 3).unwrap(), 0x0c_0b_0a);
+
+    buffer.write_int_le(-2, 9, 2).unwrap();
+    assert_eq!(buffer.as_bytes()[9..11], [0xfe, 0xff]);
+    assert_eq!(buffer.read_int_le(9, 2).unwrap(), -2);
+    assert_eq!(buffer.read_uint_le(9, 2).unwrap(), 65_534);
+
+    buffer.write_int_be(-128, 11, 1).unwrap();
+    assert_eq!(buffer.read_int_be(11, 1).unwrap(), -128);
+    assert_eq!(buffer.read_uint_be(11, 1).unwrap(), 128);
+
+    assert!(buffer.read_uint_le(0, 0).is_err());
+    assert!(buffer.read_uint_le(0, 7).is_err());
+    assert!(buffer.write_uint_le(256, 0, 1).is_err());
+    assert!(buffer.write_int_be(128, 0, 1).is_err());
+    assert!(buffer.write_int_be(-129, 0, 1).is_err());
+}

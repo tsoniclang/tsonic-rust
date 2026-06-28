@@ -200,6 +200,36 @@ impl Buffer {
         Ok(u32::from_le_bytes(bytes.try_into().unwrap()))
     }
 
+    pub fn read_uint_le(&self, offset: usize, byte_length: usize) -> NodeResult<u64> {
+        validate_integer_byte_length(byte_length)?;
+        let bytes = self.read_exact(offset, byte_length)?;
+        let mut value = 0_u64;
+        for (index, byte) in bytes.into_iter().enumerate() {
+            value |= u64::from(byte) << (index * 8);
+        }
+        Ok(value)
+    }
+
+    pub fn read_uint_be(&self, offset: usize, byte_length: usize) -> NodeResult<u64> {
+        validate_integer_byte_length(byte_length)?;
+        let bytes = self.read_exact(offset, byte_length)?;
+        let mut value = 0_u64;
+        for byte in bytes {
+            value = (value << 8) | u64::from(byte);
+        }
+        Ok(value)
+    }
+
+    pub fn read_int_le(&self, offset: usize, byte_length: usize) -> NodeResult<i64> {
+        let value = self.read_uint_le(offset, byte_length)?;
+        sign_extend(value, byte_length)
+    }
+
+    pub fn read_int_be(&self, offset: usize, byte_length: usize) -> NodeResult<i64> {
+        let value = self.read_uint_be(offset, byte_length)?;
+        sign_extend(value, byte_length)
+    }
+
     pub fn read_uint8(&self, offset: usize) -> NodeResult<u8> {
         Ok(self.read_exact(offset, 1)?[0])
     }
@@ -260,6 +290,53 @@ impl Buffer {
 
     pub fn write_uint8(&mut self, value: u8, offset: usize) -> NodeResult<()> {
         self.write_exact(offset, &[value])
+    }
+
+    pub fn write_uint_le(
+        &mut self,
+        value: u64,
+        offset: usize,
+        byte_length: usize,
+    ) -> NodeResult<()> {
+        validate_unsigned_integer_value(value, byte_length)?;
+        let bytes = (0..byte_length)
+            .map(|index| ((value >> (index * 8)) & 0xff) as u8)
+            .collect::<Vec<_>>();
+        self.write_exact(offset, &bytes)
+    }
+
+    pub fn write_uint_be(
+        &mut self,
+        value: u64,
+        offset: usize,
+        byte_length: usize,
+    ) -> NodeResult<()> {
+        validate_unsigned_integer_value(value, byte_length)?;
+        let bytes = (0..byte_length)
+            .rev()
+            .map(|index| ((value >> (index * 8)) & 0xff) as u8)
+            .collect::<Vec<_>>();
+        self.write_exact(offset, &bytes)
+    }
+
+    pub fn write_int_le(
+        &mut self,
+        value: i64,
+        offset: usize,
+        byte_length: usize,
+    ) -> NodeResult<()> {
+        let encoded = encode_signed_integer_value(value, byte_length)?;
+        self.write_uint_le(encoded, offset, byte_length)
+    }
+
+    pub fn write_int_be(
+        &mut self,
+        value: i64,
+        offset: usize,
+        byte_length: usize,
+    ) -> NodeResult<()> {
+        let encoded = encode_signed_integer_value(value, byte_length)?;
+        self.write_uint_be(encoded, offset, byte_length)
     }
 
     pub fn write_int8(&mut self, value: i8, offset: usize) -> NodeResult<()> {
@@ -439,6 +516,59 @@ fn normalize_range(len: usize, start: isize, end: Option<isize>) -> (usize, usiz
         (start, start)
     } else {
         (start, end)
+    }
+}
+
+fn validate_integer_byte_length(byte_length: usize) -> NodeResult<()> {
+    if (1..=6).contains(&byte_length) {
+        Ok(())
+    } else {
+        Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "byteLength must be between 1 and 6",
+        ))
+    }
+}
+
+fn validate_unsigned_integer_value(value: u64, byte_length: usize) -> NodeResult<()> {
+    validate_integer_byte_length(byte_length)?;
+    let max_exclusive = 1_u64 << (byte_length * 8);
+    if value < max_exclusive {
+        Ok(())
+    } else {
+        Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "value is outside unsigned integer range",
+        ))
+    }
+}
+
+fn encode_signed_integer_value(value: i64, byte_length: usize) -> NodeResult<u64> {
+    validate_integer_byte_length(byte_length)?;
+    let bits = byte_length * 8;
+    let min = -(1_i64 << (bits - 1));
+    let max = (1_i64 << (bits - 1)) - 1;
+    if value < min || value > max {
+        return Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "value is outside signed integer range",
+        ));
+    }
+    if value < 0 {
+        Ok(((1_i128 << bits) + i128::from(value)) as u64)
+    } else {
+        Ok(value as u64)
+    }
+}
+
+fn sign_extend(value: u64, byte_length: usize) -> NodeResult<i64> {
+    validate_integer_byte_length(byte_length)?;
+    let bits = byte_length * 8;
+    let sign_bit = 1_u64 << (bits - 1);
+    if value & sign_bit == 0 {
+        Ok(value as i64)
+    } else {
+        Ok((i128::from(value) - (1_i128 << bits)) as i64)
     }
 }
 
