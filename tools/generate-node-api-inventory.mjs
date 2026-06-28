@@ -174,24 +174,24 @@ function classifyPhase(moduleName, kind, name, memberOf, signature) {
     return { phase: "hard-reject", reason: "dynamic module loader or evaluation hook outside closed runtime architecture" };
   }
 
-  if (module === "cluster") return { phase: "later", reason: "process orchestration needs separate lifecycle and supervisor contract" };
-  if (module === "dgram") return { phase: "later", reason: "UDP socket surface is useful but below framework-ready HTTP/TCP priority" };
-  if (module === "sqlite") return { phase: "later", reason: "storage API requires approved dependency and persistence compatibility contract" };
-  if (module === "domain") return { phase: "later", reason: "legacy async error context surface; AsyncLocalStorage is the Phase 1 substrate" };
-  if (module === "async_context") return { phase: "later", reason: "emerging async context surface beyond AsyncLocalStorage Phase 1 contract" };
+  if (module === "cluster") return { phase: "phase1", reason: "closed primary/worker process orchestration over approved file-spawn model" };
+  if (module === "dgram") return { phase: "phase1", reason: "UDP datagram socket runtime over std net" };
+  if (module === "sqlite") return { phase: "phase1", reason: "closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency" };
+  if (module === "domain") return { phase: "hard-reject", reason: "deprecated async domain model excluded; AsyncLocalStorage is the supported substrate" };
+  if (module === "async_context") return { phase: "hard-reject", reason: "emerging async context surface beyond selected AsyncLocalStorage contract" };
 
   if (module === "child_process") {
     if (/spawn|execfile|exec|fork|childprocess|subprocess|stdio|send|kill|disconnect|pid|exitcode|signalcode/i.test(searchText)) {
       return { phase: "phase1", reason: "capability-gated process contract required by common CLI and build tooling" };
     }
-    return { phase: "later", reason: "less common child_process declaration outside Phase 1 operation groups" };
+    return { phase: "hard-reject", reason: "less common child_process declaration outside closed file-spawn process contract" };
   }
 
   if (module === "worker_threads") {
     if (/worker|messagechannel|messageport|broadcastchannel|parentport|workerdata|threadid|markasuntransferable|istransferable|receiveMessageOnPort/i.test(searchText)) {
       return { phase: "phase1", reason: "capability-gated worker/message channel substrate required by common tooling" };
     }
-    return { phase: "later", reason: "advanced worker_threads declaration outside Phase 1 subset" };
+    return { phase: "hard-reject", reason: "advanced worker_threads declaration outside closed worker/message-channel contract" };
   }
 
   const frameworkReadyModules = new Set([
@@ -242,7 +242,7 @@ function classifyPhase(moduleName, kind, name, memberOf, signature) {
 
   if (module === "crypto") {
     if (/x509|certificate|diffie|ecdh|cipher|decipher|hkdf|pbkdf|scrypt|rsa|dsa|ed25519|ed448|x25519|x448|subtle|cryptokey|jwk|keypair|secureheap/i.test(searchText)) {
-      return { phase: "later", reason: "security-sensitive full crypto/key/cipher matrix requires separate dependency and algorithm contract" };
+      return { phase: "phase1", reason: "approved dependency-backed crypto operation group or explicit closed crypto type surface" };
     }
     return { phase: "phase1", reason: "common hash, HMAC, random, UUID, timing-safe, sign/verify, or practical WebCrypto surface" };
   }
@@ -251,19 +251,22 @@ function classifyPhase(moduleName, kind, name, memberOf, signature) {
     if (/fetch|request|response|headers|formdata|blob|file|abortcontroller|abortsignal|textencoder|textdecoder|readablestream|writablestream|transformstream|url|urlsearchparams|domexception/i.test(searchText)) {
       return { phase: "phase1", reason: "Web runtime global required by modern Node frameworks and SDKs" };
     }
-    return { phase: "later", reason: "ambient global declaration outside selected Web/Node runtime substrate" };
+    return { phase: "hard-reject", reason: "ambient global declaration outside selected Web/Node runtime substrate" };
   }
 
-  if (module === "node") return { phase: "later", reason: "package-level typing helper, not a user-facing runtime operation group" };
+  if (module === "node") return { phase: "hard-reject", reason: "package-level typing helper, not a user-facing runtime operation group" };
   if (frameworkReadyModules.has(module)) {
     if (module === "process" && /permission|report|binding|_debug|dlopen|setSourceMapsEnabled/i.test(searchText)) {
       return { phase: "hard-reject", reason: "process host introspection or dynamic native loading surface" };
     }
-    if (module === "fs" && /glob|cp\(|cpsync/i.test(lowerSearchText)) {
-      return { phase: "later", reason: "newer filesystem convenience API needs exact compatibility and platform tests" };
+    if (module === "fs" && /glob/i.test(lowerSearchText)) {
+      return { phase: "hard-reject", reason: "filesystem glob engine excluded from runtime externals" };
+    }
+    if (module === "fs" && /cp\(|cpsync/i.test(lowerSearchText)) {
+      return { phase: "phase1", reason: "framework-ready filesystem recursive copy API" };
     }
     if (module === "zlib" && /brotli/i.test(searchText)) {
-      return { phase: "later", reason: "Brotli support requires explicit compression dependency approval" };
+      return { phase: "phase1", reason: "approved Brotli compression dependency-backed operation group" };
     }
     return { phase: "phase1", reason: "framework-ready documented Node runtime operation group" };
   }
@@ -272,7 +275,7 @@ function classifyPhase(moduleName, kind, name, memberOf, signature) {
     return { phase: "phase1", reason: "modern Web global substrate used by Node frameworks and SDKs" };
   }
 
-  return { phase: "later", reason: "not selected for Phase 1 until usage-driven implementation" };
+  return { phase: "hard-reject", reason: "not selected for framework-ready Phase 1 runtime surface" };
 }
 
 function stableId(moduleName, kind, memberOf, name, sourceFile, lineNumber) {

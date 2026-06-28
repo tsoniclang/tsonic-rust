@@ -31,6 +31,17 @@ fn zlib_string_helpers_use_buffer_encodings() {
 }
 
 #[test]
+fn zlib_brotli_round_trips_buffers() {
+    let input = Buffer::from_string("brotli payload", Some("utf8")).unwrap();
+    let compressed = tsonic_node::zlib::brotli_compress_sync(&input).unwrap();
+    let decompressed = tsonic_node::zlib::brotli_decompress_sync(&compressed).unwrap();
+    assert_eq!(
+        decompressed.to_string(Some("utf8")).unwrap(),
+        "brotli payload"
+    );
+}
+
+#[test]
 fn sqlite_database_sync_exec_run_get_and_all() {
     let database = DatabaseSync::open(":memory:").unwrap();
     database

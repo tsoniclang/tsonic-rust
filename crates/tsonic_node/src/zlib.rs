@@ -51,6 +51,25 @@ pub fn gunzip_string_sync(input: &Buffer, encoding: &str) -> NodeResult<String> 
     gunzip_sync(input)?.to_string(Some(encoding))
 }
 
+pub fn brotli_compress_sync(input: &Buffer) -> NodeResult<Buffer> {
+    let mut output = Vec::new();
+    {
+        let mut writer = brotli::CompressorWriter::new(&mut output, 4096, 5, 22);
+        writer
+            .write_all(&input.as_bytes())
+            .map_err(map_zlib_error)?;
+    }
+    Ok(Buffer::from_bytes(output))
+}
+
+pub fn brotli_decompress_sync(input: &Buffer) -> NodeResult<Buffer> {
+    let bytes = input.as_bytes();
+    let mut decoder = brotli::Decompressor::new(bytes.as_slice(), 4096);
+    let mut output = Vec::new();
+    decoder.read_to_end(&mut output).map_err(map_zlib_error)?;
+    Ok(Buffer::from_bytes(output))
+}
+
 fn map_zlib_error(error: std::io::Error) -> NodeError {
     NodeError::new("Z_DATA_ERROR", error.to_string())
 }

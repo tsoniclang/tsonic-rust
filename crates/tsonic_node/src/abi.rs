@@ -139,7 +139,9 @@ pub use crate::worker_threads::{
     receive_message_on_port as worker_receive_message_on_port, MessageChannel, MessagePort, Worker,
 };
 pub use crate::zlib::{
-    deflate_sync as zlib_deflate_sync, gunzip_string_sync as zlib_gunzip_string_sync,
-    gunzip_sync as zlib_gunzip_sync, gzip_string_sync as zlib_gzip_string_sync,
-    gzip_sync as zlib_gzip_sync, inflate_sync as zlib_inflate_sync,
+    brotli_compress_sync as zlib_brotli_compress_sync,
+    brotli_decompress_sync as zlib_brotli_decompress_sync, deflate_sync as zlib_deflate_sync,
+    gunzip_string_sync as zlib_gunzip_string_sync, gunzip_sync as zlib_gunzip_sync,
+    gzip_string_sync as zlib_gzip_string_sync, gzip_sync as zlib_gzip_sync,
+    inflate_sync as zlib_inflate_sync,
 };

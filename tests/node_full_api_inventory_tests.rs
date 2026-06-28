@@ -2,9 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 const INVENTORY: &str = include_str!("capabilities/node_api_full_inventory.csv");
 const EXPECTED_ROW_COUNT: usize = 8_671;
-const EXPECTED_PHASE1_COUNT: usize = 5_582;
-const EXPECTED_LATER_COUNT: usize = 976;
-const EXPECTED_HARD_REJECT_COUNT: usize = 2_113;
+const EXPECTED_PHASE1_COUNT: usize = 6_322;
+const EXPECTED_LATER_COUNT: usize = 0;
+const EXPECTED_HARD_REJECT_COUNT: usize = 2_349;
 
 #[derive(Debug)]
 struct FullInventoryRow {
@@ -30,7 +30,7 @@ fn full_node_api_inventory_is_visible_and_phase_classified() {
     for row in &rows {
         assert!(ids.insert(row.id.clone()), "duplicate id {}", row.id);
         assert!(
-            matches!(row.phase.as_str(), "phase1" | "later" | "hard-reject"),
+            matches!(row.phase.as_str(), "phase1" | "hard-reject"),
             "bad phase for {}: {}",
             row.id,
             row.phase
