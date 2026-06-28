@@ -2806,6 +2806,100 @@ NODE-CRYPTO-ECDSA-PARAMS	crypto	EcdsaParams	implemented	N85	tsonic_node::crypto:
 NODE-CRYPTO-ECDH-DERIVE-PARAMS	crypto	EcdhKeyDeriveParams	implemented	N85	tsonic_node::crypto::EcdhKeyDeriveParams	NODE-CRYPTO-WEB-002	closed ECDH derive params carrier
 NODE-CRYPTO-WEBCRYPTO-IMPORT-SECRET	crypto	SubtleCrypto.importKey secret	implemented	N85	tsonic_node::crypto::webcrypto::SubtleCrypto::import_secret_key	NODE-CRYPTO-WEB-002	imports closed secret CryptoKey
 NODE-CRYPTO-WEBCRYPTO-EXPORT-KEY	crypto	SubtleCrypto.exportKey	implemented	N85	tsonic_node::crypto::webcrypto::SubtleCrypto::export_key	NODE-CRYPTO-WEB-002	exports closed CryptoKey as raw or JWK string
+NODE-CRYPTO-SECURE-HEAP-USAGE-TOTAL	crypto	SecureHeapUsage.total	implemented	N85	tsonic_node::crypto::SecureHeapUsage::total	NODE-CRYPTO-006	secure heap total field
+NODE-CRYPTO-SECURE-HEAP-USAGE-USED	crypto	SecureHeapUsage.used	implemented	N85	tsonic_node::crypto::SecureHeapUsage::used	NODE-CRYPTO-006	secure heap used field
+NODE-CRYPTO-SECURE-HEAP-USAGE-UTILIZATION	crypto	SecureHeapUsage.utilization	implemented	N85	tsonic_node::crypto::SecureHeapUsage::utilization	NODE-CRYPTO-006	secure heap utilization field
+NODE-CRYPTO-SECURE-HEAP-USAGE-MIN	crypto	SecureHeapUsage.min	implemented	N85	tsonic_node::crypto::SecureHeapUsage::min	NODE-CRYPTO-006	secure heap min field
+NODE-CRYPTO-RANDOM-UUID-OPTIONS-DISABLE-ENTROPY-CACHE	crypto	RandomUUIDOptions.disableEntropyCache	implemented	N85	tsonic_node::crypto::RandomUUIDOptions::disable_entropy_cache	NODE-CRYPTO-007	randomUUID disableEntropyCache option field
+NODE-CRYPTO-HASH-OPTIONS-OUTPUT-LENGTH	crypto	HashOptions.outputLength	implemented	N85	tsonic_node::crypto::HashOptions::output_length	NODE-CRYPTO-007	HashOptions outputLength field
+NODE-CRYPTO-ONESHOT-DIGEST-OPTIONS-OUTPUT-LENGTH	crypto	OneShotDigestOptions.outputLength	implemented	N85	tsonic_node::crypto::OneShotDigestOptions::output_length	NODE-CRYPTO-007	one-shot digest outputLength field
+NODE-CRYPTO-ONESHOT-DIGEST-OPTIONS-ENCODING	crypto	OneShotDigestOptions.encoding	implemented	N85	tsonic_node::crypto::OneShotDigestOptions::encoding	NODE-CRYPTO-007	one-shot digest encoding field
+NODE-CRYPTO-CIPHER-INFO-OPTIONS-KEY-LENGTH	crypto	CipherInfoOptions.keyLength	implemented	N85	tsonic_node::crypto::CipherInfoOptions::key_length	NODE-CRYPTO-007	CipherInfoOptions keyLength field
+NODE-CRYPTO-CIPHER-INFO-OPTIONS-IV-LENGTH	crypto	CipherInfoOptions.ivLength	implemented	N85	tsonic_node::crypto::CipherInfoOptions::iv_length	NODE-CRYPTO-007	CipherInfoOptions ivLength field
+NODE-CRYPTO-CIPHER-INFO-NAME	crypto	CipherInfo.name	implemented	N85	tsonic_node::crypto::CipherInfo::name	NODE-CRYPTO-007	CipherInfo name field
+NODE-CRYPTO-CIPHER-INFO-NID	crypto	CipherInfo.nid	implemented	N85	tsonic_node::crypto::CipherInfo::nid	NODE-CRYPTO-007	CipherInfo nid field
+NODE-CRYPTO-CIPHER-INFO-BLOCK-SIZE	crypto	CipherInfo.blockSize	implemented	N85	tsonic_node::crypto::CipherInfo::block_size	NODE-CRYPTO-007	CipherInfo blockSize field
+NODE-CRYPTO-CIPHER-INFO-IV-LENGTH	crypto	CipherInfo.ivLength	implemented	N85	tsonic_node::crypto::CipherInfo::iv_length	NODE-CRYPTO-007	CipherInfo ivLength field
+NODE-CRYPTO-CIPHER-INFO-KEY-LENGTH	crypto	CipherInfo.keyLength	implemented	N85	tsonic_node::crypto::CipherInfo::key_length	NODE-CRYPTO-007	CipherInfo keyLength field
+NODE-CRYPTO-CIPHER-INFO-MODE	crypto	CipherInfo.mode	implemented	N85	tsonic_node::crypto::CipherInfo::mode	NODE-CRYPTO-007	CipherInfo mode field
+NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-MODULUS-LENGTH	crypto	AsymmetricKeyDetails.modulusLength	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::modulus_length	NODE-CRYPTO-008	asymmetric key modulusLength field
+NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-PUBLIC-EXPONENT	crypto	AsymmetricKeyDetails.publicExponent	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::public_exponent	NODE-CRYPTO-008	asymmetric key publicExponent field
+NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-HASH-ALGORITHM	crypto	AsymmetricKeyDetails.hashAlgorithm	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::hash_algorithm	NODE-CRYPTO-008	asymmetric key hashAlgorithm field
+NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-MGF1-HASH-ALGORITHM	crypto	AsymmetricKeyDetails.mgf1HashAlgorithm	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::mgf1_hash_algorithm	NODE-CRYPTO-008	asymmetric key mgf1HashAlgorithm field
+NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-SALT-LENGTH	crypto	AsymmetricKeyDetails.saltLength	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::salt_length	NODE-CRYPTO-008	asymmetric key saltLength field
+NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-NAMED-CURVE	crypto	AsymmetricKeyDetails.namedCurve	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::named_curve	NODE-CRYPTO-008	asymmetric key namedCurve field
+NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-DIVISOR-LENGTH	crypto	AsymmetricKeyDetails.divisorLength	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::divisor_length	NODE-CRYPTO-008	asymmetric key divisorLength field
+NODE-CRYPTO-KEY-EXPORT-OPTIONS-FORMAT	crypto	KeyExportOptions.format	implemented	N85	tsonic_node::crypto::KeyExportOptions::format	NODE-CRYPTO-008	key export format field
+NODE-CRYPTO-KEY-EXPORT-OPTIONS-TYPE	crypto	KeyExportOptions.type	implemented	N85	tsonic_node::crypto::KeyExportOptions::key_type	NODE-CRYPTO-008	key export type field
+NODE-CRYPTO-KEY-EXPORT-OPTIONS-CIPHER	crypto	KeyExportOptions.cipher	implemented	N85	tsonic_node::crypto::KeyExportOptions::cipher	NODE-CRYPTO-008	key export cipher field
+NODE-CRYPTO-KEY-EXPORT-OPTIONS-PASSPHRASE	crypto	KeyExportOptions.passphrase	implemented	N85	tsonic_node::crypto::KeyExportOptions::passphrase	NODE-CRYPTO-008	key export passphrase field
+NODE-CRYPTO-KEY-EXPORT-OPTIONS-ENCODING	crypto	KeyExportOptions.encoding	implemented	N85	tsonic_node::crypto::KeyExportOptions::encoding	NODE-CRYPTO-008	key export encoding field
+NODE-CRYPTO-JSONWEBKEY-KTY	crypto	JsonWebKey.kty	implemented	N85	tsonic_node::crypto::JsonWebKey::kty	NODE-CRYPTO-008	JWK kty field
+NODE-CRYPTO-JSONWEBKEY-CRV	crypto	JsonWebKey.crv	implemented	N85	tsonic_node::crypto::JsonWebKey::crv	NODE-CRYPTO-008	JWK crv field
+NODE-CRYPTO-JSONWEBKEY-X	crypto	JsonWebKey.x	implemented	N85	tsonic_node::crypto::JsonWebKey::x	NODE-CRYPTO-008	JWK x field
+NODE-CRYPTO-JSONWEBKEY-Y	crypto	JsonWebKey.y	implemented	N85	tsonic_node::crypto::JsonWebKey::y	NODE-CRYPTO-008	JWK y field
+NODE-CRYPTO-JSONWEBKEY-D	crypto	JsonWebKey.d	implemented	N85	tsonic_node::crypto::JsonWebKey::d	NODE-CRYPTO-008	JWK d field
+NODE-CRYPTO-JSONWEBKEY-N	crypto	JsonWebKey.n	implemented	N85	tsonic_node::crypto::JsonWebKey::n	NODE-CRYPTO-008	JWK n field
+NODE-CRYPTO-JSONWEBKEY-E	crypto	JsonWebKey.e	implemented	N85	tsonic_node::crypto::JsonWebKey::e	NODE-CRYPTO-008	JWK e field
+NODE-CRYPTO-JSONWEBKEY-K	crypto	JsonWebKey.k	implemented	N85	tsonic_node::crypto::JsonWebKey::k	NODE-CRYPTO-008	JWK k field
+NODE-CRYPTO-JSONWEBKEY-ALG	crypto	JsonWebKey.alg	implemented	N85	tsonic_node::crypto::JsonWebKey::alg	NODE-CRYPTO-008	JWK alg field
+NODE-CRYPTO-JSONWEBKEY-KEY-OPS	crypto	JsonWebKey.key_ops	implemented	N85	tsonic_node::crypto::JsonWebKey::key_ops	NODE-CRYPTO-008	JWK key_ops field
+NODE-CRYPTO-JSONWEBKEY-EXT	crypto	JsonWebKey.ext	implemented	N85	tsonic_node::crypto::JsonWebKey::ext	NODE-CRYPTO-008	JWK ext field
+NODE-CRYPTO-JSONWEBKEY-INPUT-JWK	crypto	JsonWebKeyInput.jwk	implemented	N85	tsonic_node::crypto::JsonWebKeyInput::jwk	NODE-CRYPTO-008	JWK input field
+NODE-CRYPTO-JWK-EXPORT-OPTIONS-FORMAT	crypto	JwkKeyExportOptions.format	implemented	N85	tsonic_node::crypto::JwkKeyExportOptions::format	NODE-CRYPTO-008	JWK export format field
+NODE-CRYPTO-SIGNING-OPTIONS-PADDING	crypto	SigningOptions.padding	implemented	N85	tsonic_node::crypto::SigningOptions::padding	NODE-CRYPTO-009	SigningOptions padding field
+NODE-CRYPTO-SIGNING-OPTIONS-SALT-LENGTH	crypto	SigningOptions.saltLength	implemented	N85	tsonic_node::crypto::SigningOptions::salt_length	NODE-CRYPTO-009	SigningOptions saltLength field
+NODE-CRYPTO-SIGNING-OPTIONS-DSA-ENCODING	crypto	SigningOptions.dsaEncoding	implemented	N85	tsonic_node::crypto::SigningOptions::dsa_encoding	NODE-CRYPTO-009	SigningOptions dsaEncoding field
+NODE-CRYPTO-VERIFY-KEYOBJECT-INPUT-PADDING	crypto	VerifyKeyObjectInput.padding	implemented	N85	tsonic_node::crypto::VerifyKeyObjectInput::padding	NODE-CRYPTO-009	VerifyKeyObjectInput padding field
+NODE-CRYPTO-VERIFY-KEYOBJECT-INPUT-SALT-LENGTH	crypto	VerifyKeyObjectInput.saltLength	implemented	N85	tsonic_node::crypto::VerifyKeyObjectInput::salt_length	NODE-CRYPTO-009	VerifyKeyObjectInput saltLength field
+NODE-CRYPTO-PBKDF2-PARAMS-PASSWORD	crypto	Pbkdf2Params.password	implemented	N85	tsonic_node::crypto::Pbkdf2Params::password	NODE-CRYPTO-KDF-002	PBKDF2 password field
+NODE-CRYPTO-PBKDF2-PARAMS-SALT	crypto	Pbkdf2Params.salt	implemented	N85	tsonic_node::crypto::Pbkdf2Params::salt	NODE-CRYPTO-KDF-002	PBKDF2 salt field
+NODE-CRYPTO-PBKDF2-PARAMS-ITERATIONS	crypto	Pbkdf2Params.iterations	implemented	N85	tsonic_node::crypto::Pbkdf2Params::iterations	NODE-CRYPTO-KDF-002	PBKDF2 iterations field
+NODE-CRYPTO-PBKDF2-PARAMS-KEY-LEN	crypto	Pbkdf2Params.keylen	implemented	N85	tsonic_node::crypto::Pbkdf2Params::key_len	NODE-CRYPTO-KDF-002	PBKDF2 key length field
+NODE-CRYPTO-PBKDF2-PARAMS-DIGEST	crypto	Pbkdf2Params.digest	implemented	N85	tsonic_node::crypto::Pbkdf2Params::digest	NODE-CRYPTO-KDF-002	PBKDF2 digest field
+NODE-CRYPTO-HKDF-PARAMS-DIGEST	crypto	HkdfParams.digest	implemented	N85	tsonic_node::crypto::HkdfParams::digest	NODE-CRYPTO-KDF-002	HKDF digest field
+NODE-CRYPTO-HKDF-PARAMS-IKM	crypto	HkdfParams.inputKeyingMaterial	implemented	N85	tsonic_node::crypto::HkdfParams::input_keying_material	NODE-CRYPTO-KDF-002	HKDF input keying material field
+NODE-CRYPTO-HKDF-PARAMS-SALT	crypto	HkdfParams.salt	implemented	N85	tsonic_node::crypto::HkdfParams::salt	NODE-CRYPTO-KDF-002	HKDF salt field
+NODE-CRYPTO-HKDF-PARAMS-INFO	crypto	HkdfParams.info	implemented	N85	tsonic_node::crypto::HkdfParams::info	NODE-CRYPTO-KDF-002	HKDF info field
+NODE-CRYPTO-HKDF-PARAMS-KEY-LEN	crypto	HkdfParams.keylen	implemented	N85	tsonic_node::crypto::HkdfParams::key_len	NODE-CRYPTO-KDF-002	HKDF key length field
+NODE-CRYPTO-SCRYPT-OPTIONS-COST	crypto	ScryptOptions.cost	implemented	N85	tsonic_node::crypto::ScryptOptions::cost	NODE-CRYPTO-KDF-002	Scrypt cost field
+NODE-CRYPTO-SCRYPT-OPTIONS-N	crypto	ScryptOptions.N	implemented	N85	tsonic_node::crypto::ScryptOptions::cost	NODE-CRYPTO-KDF-002	Scrypt N alias field
+NODE-CRYPTO-SCRYPT-OPTIONS-BLOCK-SIZE	crypto	ScryptOptions.blockSize	implemented	N85	tsonic_node::crypto::ScryptOptions::block_size	NODE-CRYPTO-KDF-002	Scrypt blockSize field
+NODE-CRYPTO-SCRYPT-OPTIONS-R	crypto	ScryptOptions.r	implemented	N85	tsonic_node::crypto::ScryptOptions::block_size	NODE-CRYPTO-KDF-002	Scrypt r alias field
+NODE-CRYPTO-SCRYPT-OPTIONS-PARALLELIZATION	crypto	ScryptOptions.parallelization	implemented	N85	tsonic_node::crypto::ScryptOptions::parallelization	NODE-CRYPTO-KDF-002	Scrypt parallelization field
+NODE-CRYPTO-SCRYPT-OPTIONS-P	crypto	ScryptOptions.p	implemented	N85	tsonic_node::crypto::ScryptOptions::parallelization	NODE-CRYPTO-KDF-002	Scrypt p alias field
+NODE-CRYPTO-SCRYPT-OPTIONS-MAXMEM	crypto	ScryptOptions.maxmem	implemented	N85	tsonic_node::crypto::ScryptOptions::maxmem	NODE-CRYPTO-KDF-002	Scrypt maxmem field
+NODE-CRYPTO-KEY-ALGORITHM-NAME	crypto	KeyAlgorithm.name	implemented	N85	tsonic_node::crypto::KeyAlgorithm::name	NODE-CRYPTO-WEB-002	KeyAlgorithm name field
+NODE-CRYPTO-RSA-KEY-ALGORITHM-NAME	crypto	RsaKeyAlgorithm.name	implemented	N85	tsonic_node::crypto::RsaKeyAlgorithm::name	NODE-CRYPTO-WEB-002	RSA key algorithm name field
+NODE-CRYPTO-RSA-KEY-ALGORITHM-MODULUS-LENGTH	crypto	RsaKeyAlgorithm.modulusLength	implemented	N85	tsonic_node::crypto::RsaKeyAlgorithm::modulus_length	NODE-CRYPTO-WEB-002	RSA key algorithm modulusLength field
+NODE-CRYPTO-RSA-KEY-ALGORITHM-PUBLIC-EXPONENT	crypto	RsaKeyAlgorithm.publicExponent	implemented	N85	tsonic_node::crypto::RsaKeyAlgorithm::public_exponent	NODE-CRYPTO-WEB-002	RSA key algorithm publicExponent field
+NODE-CRYPTO-RSA-HASHED-KEY-ALGORITHM-RSA	crypto	RsaHashedKeyAlgorithm.rsa	implemented	N85	tsonic_node::crypto::RsaHashedKeyAlgorithm::rsa	NODE-CRYPTO-WEB-002	RSA hashed key algorithm rsa field
+NODE-CRYPTO-RSA-HASHED-KEY-ALGORITHM-HASH	crypto	RsaHashedKeyAlgorithm.hash	implemented	N85	tsonic_node::crypto::RsaHashedKeyAlgorithm::hash	NODE-CRYPTO-WEB-002	RSA hashed key algorithm hash field
+NODE-CRYPTO-HMAC-KEY-ALGORITHM-NAME	crypto	HmacKeyAlgorithm.name	implemented	N85	tsonic_node::crypto::HmacKeyAlgorithm::name	NODE-CRYPTO-WEB-002	HMAC key algorithm name field
+NODE-CRYPTO-HMAC-KEY-ALGORITHM-HASH	crypto	HmacKeyAlgorithm.hash	implemented	N85	tsonic_node::crypto::HmacKeyAlgorithm::hash	NODE-CRYPTO-WEB-002	HMAC key algorithm hash field
+NODE-CRYPTO-HMAC-KEY-ALGORITHM-LENGTH	crypto	HmacKeyAlgorithm.length	implemented	N85	tsonic_node::crypto::HmacKeyAlgorithm::length	NODE-CRYPTO-WEB-002	HMAC key algorithm length field
+NODE-CRYPTO-CRYPTOKEY-TYPE	crypto	CryptoKey.type	implemented	N85	tsonic_node::crypto::CryptoKey::key_type	NODE-CRYPTO-WEB-002	CryptoKey type field
+NODE-CRYPTO-CRYPTOKEY-EXTRACTABLE	crypto	CryptoKey.extractable	implemented	N85	tsonic_node::crypto::CryptoKey::extractable	NODE-CRYPTO-WEB-002	CryptoKey extractable field
+NODE-CRYPTO-CRYPTOKEY-ALGORITHM	crypto	CryptoKey.algorithm	implemented	N85	tsonic_node::crypto::CryptoKey::algorithm	NODE-CRYPTO-WEB-002	CryptoKey algorithm field
+NODE-CRYPTO-CRYPTOKEY-USAGES	crypto	CryptoKey.usages	implemented	N85	tsonic_node::crypto::CryptoKey::usages	NODE-CRYPTO-WEB-002	CryptoKey usages field
+NODE-CRYPTO-CRYPTOKEY-DATA	crypto	CryptoKey.data	implemented	N85	tsonic_node::crypto::CryptoKey::data	NODE-CRYPTO-WEB-002	CryptoKey closed data accessor
+NODE-CRYPTO-CRYPTOKEYPAIR-PUBLIC	crypto	CryptoKeyPair.publicKey	implemented	N85	tsonic_node::crypto::CryptoKeyPair::public_key	NODE-CRYPTO-WEB-002	CryptoKeyPair publicKey field
+NODE-CRYPTO-CRYPTOKEYPAIR-PRIVATE	crypto	CryptoKeyPair.privateKey	implemented	N85	tsonic_node::crypto::CryptoKeyPair::private_key	NODE-CRYPTO-WEB-002	CryptoKeyPair privateKey field
+NODE-CRYPTO-AEAD-PARAMS-NAME	crypto	AeadParams.name	implemented	N85	tsonic_node::crypto::AeadParams::name	NODE-CRYPTO-WEB-002	AEAD params name field
+NODE-CRYPTO-AEAD-PARAMS-IV	crypto	AeadParams.iv	implemented	N85	tsonic_node::crypto::AeadParams::iv	NODE-CRYPTO-WEB-002	AEAD params iv field
+NODE-CRYPTO-AEAD-PARAMS-ADDITIONAL-DATA	crypto	AeadParams.additionalData	implemented	N85	tsonic_node::crypto::AeadParams::additional_data	NODE-CRYPTO-WEB-002	AEAD params additionalData field
+NODE-CRYPTO-AEAD-PARAMS-TAG-LENGTH	crypto	AeadParams.tagLength	implemented	N85	tsonic_node::crypto::AeadParams::tag_length	NODE-CRYPTO-WEB-002	AEAD params tagLength field
+NODE-CRYPTO-AES-CTR-PARAMS-NAME	crypto	AesCtrParams.name	implemented	N85	tsonic_node::crypto::AesCtrParams::name	NODE-CRYPTO-WEB-002	AES-CTR params name field
+NODE-CRYPTO-AES-CTR-PARAMS-COUNTER	crypto	AesCtrParams.counter	implemented	N85	tsonic_node::crypto::AesCtrParams::counter	NODE-CRYPTO-WEB-002	AES-CTR params counter field
+NODE-CRYPTO-AES-CTR-PARAMS-LENGTH	crypto	AesCtrParams.length	implemented	N85	tsonic_node::crypto::AesCtrParams::length	NODE-CRYPTO-WEB-002	AES-CTR params length field
+NODE-CRYPTO-RSA-PSS-PARAMS-NAME	crypto	RsaPssParams.name	implemented	N85	tsonic_node::crypto::RsaPssParams::name	NODE-CRYPTO-WEB-002	RSA-PSS params name field
+NODE-CRYPTO-RSA-PSS-PARAMS-SALT-LENGTH	crypto	RsaPssParams.saltLength	implemented	N85	tsonic_node::crypto::RsaPssParams::salt_length	NODE-CRYPTO-WEB-002	RSA-PSS params saltLength field
+NODE-CRYPTO-RSA-OAEP-PARAMS-NAME	crypto	RsaOaepParams.name	implemented	N85	tsonic_node::crypto::RsaOaepParams::name	NODE-CRYPTO-WEB-002	RSA-OAEP params name field
+NODE-CRYPTO-RSA-OAEP-PARAMS-LABEL	crypto	RsaOaepParams.label	implemented	N85	tsonic_node::crypto::RsaOaepParams::label	NODE-CRYPTO-WEB-002	RSA-OAEP params label field
+NODE-CRYPTO-ECDSA-PARAMS-NAME	crypto	EcdsaParams.name	implemented	N85	tsonic_node::crypto::EcdsaParams::name	NODE-CRYPTO-WEB-002	ECDSA params name field
+NODE-CRYPTO-ECDSA-PARAMS-HASH	crypto	EcdsaParams.hash	implemented	N85	tsonic_node::crypto::EcdsaParams::hash	NODE-CRYPTO-WEB-002	ECDSA params hash field
+NODE-CRYPTO-ECDH-DERIVE-PARAMS-NAME	crypto	EcdhKeyDeriveParams.name	implemented	N85	tsonic_node::crypto::EcdhKeyDeriveParams::name	NODE-CRYPTO-WEB-002	ECDH derive params name field
+NODE-CRYPTO-ECDH-DERIVE-PARAMS-PUBLIC	crypto	EcdhKeyDeriveParams.public	implemented	N85	tsonic_node::crypto::EcdhKeyDeriveParams::public	NODE-CRYPTO-WEB-002	ECDH derive params public field
 NODE-URL-CARRIER	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL carrier
 NODE-URL-PARSE	url	URL constructor	implemented	L	tsonic_node::url::Url::parse	NODE-URL-001	absolute and base-relative URL parse
 NODE-URL-HREF	url	URL.href	implemented	N59	tsonic_node::url::Url::href	NODE-URL-001,NODE-URL-009	href accessor and reserialization

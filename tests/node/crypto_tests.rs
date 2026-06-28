@@ -307,3 +307,199 @@ fn crypto_streaming_sign_and_verify_carriers_are_closed() {
         )
         .unwrap());
 }
+
+#[test]
+fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
+    let heap = tsonic_node::crypto::secure_heap_used();
+    assert_eq!(heap.total, 0);
+    assert_eq!(heap.used, 0);
+    assert_eq!(heap.utilization, 0);
+    assert_eq!(heap.min, 0);
+
+    let random_options = tsonic_node::crypto::RandomUUIDOptions {
+        disable_entropy_cache: true,
+    };
+    assert!(random_options.disable_entropy_cache);
+    let hash_options = tsonic_node::crypto::HashOptions {
+        output_length: None,
+    };
+    assert_eq!(hash_options.output_length, None);
+    let digest_options = tsonic_node::crypto::OneShotDigestOptions {
+        output_length: None,
+        encoding: Some("hex".to_string()),
+    };
+    assert_eq!(digest_options.encoding.as_deref(), Some("hex"));
+    let cipher_options = tsonic_node::crypto::CipherInfoOptions {
+        key_length: Some(32),
+        iv_length: Some(12),
+    };
+    let cipher_info =
+        tsonic_node::crypto::get_cipher_info("aes-256-gcm", Some(cipher_options)).unwrap();
+    assert_eq!(cipher_info.name, "aes-256-gcm");
+    assert_eq!(cipher_info.nid, 0);
+    assert_eq!(cipher_info.block_size, 1);
+    assert_eq!(cipher_info.iv_length, 12);
+    assert_eq!(cipher_info.key_length, 32);
+    assert_eq!(cipher_info.mode, "gcm");
+
+    let key_export = tsonic_node::crypto::KeyExportOptions {
+        format: "buffer".to_string(),
+        key_type: Some("secret".to_string()),
+        cipher: Some("aes-256-gcm".to_string()),
+        passphrase: Some("pass".to_string()),
+        encoding: Some("hex".to_string()),
+    };
+    assert_eq!(key_export.format, "buffer");
+    assert_eq!(key_export.key_type.as_deref(), Some("secret"));
+    assert_eq!(key_export.cipher.as_deref(), Some("aes-256-gcm"));
+    assert_eq!(key_export.passphrase.as_deref(), Some("pass"));
+    assert_eq!(key_export.encoding.as_deref(), Some("hex"));
+
+    let jwk = tsonic_node::crypto::JsonWebKey {
+        kty: "oct".to_string(),
+        crv: None,
+        x: None,
+        y: None,
+        d: None,
+        n: None,
+        e: None,
+        k: Some("abc".to_string()),
+        alg: Some("HS256".to_string()),
+        key_ops: vec!["sign".to_string()],
+        ext: true,
+    };
+    let jwk_input = tsonic_node::crypto::JsonWebKeyInput { jwk: jwk.clone() };
+    assert_eq!(jwk_input.jwk.kty, "oct");
+    assert_eq!(jwk.k.as_deref(), Some("abc"));
+    assert_eq!(jwk.alg.as_deref(), Some("HS256"));
+    assert_eq!(jwk.key_ops, vec!["sign"]);
+    assert!(jwk.ext);
+    let jwk_export = tsonic_node::crypto::JwkKeyExportOptions {
+        format: "jwk".to_string(),
+    };
+    assert_eq!(jwk_export.format, "jwk");
+
+    let asym = tsonic_node::crypto::AsymmetricKeyDetails {
+        modulus_length: Some(2048),
+        public_exponent: Some(65_537),
+        hash_algorithm: Some("sha256".to_string()),
+        mgf1_hash_algorithm: Some("sha256".to_string()),
+        salt_length: Some(32),
+        named_curve: Some("P-256".to_string()),
+        divisor_length: None,
+    };
+    assert_eq!(asym.modulus_length, Some(2048));
+    assert_eq!(asym.public_exponent, Some(65_537));
+    assert_eq!(asym.hash_algorithm.as_deref(), Some("sha256"));
+    assert_eq!(asym.mgf1_hash_algorithm.as_deref(), Some("sha256"));
+    assert_eq!(asym.salt_length, Some(32));
+    assert_eq!(asym.named_curve.as_deref(), Some("P-256"));
+    assert_eq!(asym.divisor_length, None);
+
+    let signing = tsonic_node::crypto::SigningOptions {
+        padding: Some(tsonic_node::crypto::constants().rsa_pkcs1_padding),
+        salt_length: Some(32),
+        dsa_encoding: Some("der".to_string()),
+    };
+    assert_eq!(
+        signing.padding,
+        Some(tsonic_node::crypto::constants().rsa_pkcs1_padding)
+    );
+    assert_eq!(signing.salt_length, Some(32));
+    assert_eq!(signing.dsa_encoding.as_deref(), Some("der"));
+    let verify = tsonic_node::crypto::VerifyKeyObjectInput {
+        padding: signing.padding,
+        salt_length: signing.salt_length,
+    };
+    assert_eq!(verify.padding, signing.padding);
+    assert_eq!(verify.salt_length, signing.salt_length);
+
+    let scrypt = tsonic_node::crypto::ScryptOptions {
+        cost: 1024,
+        block_size: 8,
+        parallelization: 2,
+        maxmem: 1 << 20,
+    };
+    assert_eq!(scrypt.cost, 1024);
+    assert_eq!(scrypt.block_size, 8);
+    assert_eq!(scrypt.parallelization, 2);
+    assert_eq!(scrypt.maxmem, 1 << 20);
+
+    let key_algorithm = tsonic_node::crypto::KeyAlgorithm {
+        name: "SHA-256".to_string(),
+    };
+    let rsa_algorithm = tsonic_node::crypto::RsaKeyAlgorithm {
+        name: "RSA-PSS".to_string(),
+        modulus_length: 2048,
+        public_exponent: vec![1, 0, 1],
+    };
+    let rsa_hashed = tsonic_node::crypto::RsaHashedKeyAlgorithm {
+        rsa: rsa_algorithm.clone(),
+        hash: key_algorithm.clone(),
+    };
+    assert_eq!(rsa_hashed.rsa.modulus_length, 2048);
+    assert_eq!(rsa_hashed.hash.name, "SHA-256");
+    let hmac_algorithm = tsonic_node::crypto::HmacKeyAlgorithm {
+        name: "HMAC".to_string(),
+        hash: key_algorithm.clone(),
+        length: 256,
+    };
+    assert_eq!(hmac_algorithm.hash.name, "SHA-256");
+    assert_eq!(hmac_algorithm.length, 256);
+
+    let crypto_key = tsonic_node::crypto::CryptoKey::secret(
+        "HMAC",
+        tsonic_node::buffer::Buffer::from_string("secret", Some("utf8")).unwrap(),
+        &["sign", "verify"],
+    );
+    assert_eq!(crypto_key.key_type, "secret");
+    assert!(crypto_key.extractable);
+    assert_eq!(crypto_key.algorithm.name, "HMAC");
+    assert_eq!(crypto_key.usages, vec!["sign", "verify"]);
+    assert_eq!(crypto_key.data().len(), 6);
+    let key_pair = tsonic_node::crypto::CryptoKeyPair {
+        public_key: crypto_key.clone(),
+        private_key: crypto_key.clone(),
+    };
+    assert_eq!(key_pair.public_key.key_type, "secret");
+    assert_eq!(key_pair.private_key.key_type, "secret");
+
+    let iv = tsonic_node::buffer::Buffer::from_bytes(vec![0; 12]);
+    let aead = tsonic_node::crypto::AeadParams {
+        name: "AES-GCM".to_string(),
+        iv: iv.clone(),
+        additional_data: Some(tsonic_node::buffer::Buffer::from_bytes(vec![1, 2])),
+        tag_length: Some(128),
+    };
+    assert_eq!(aead.name, "AES-GCM");
+    assert_eq!(aead.iv.len(), 12);
+    assert_eq!(aead.additional_data.as_ref().unwrap().len(), 2);
+    assert_eq!(aead.tag_length, Some(128));
+    let ctr = tsonic_node::crypto::AesCtrParams {
+        name: "AES-CTR".to_string(),
+        counter: iv.clone(),
+        length: 64,
+    };
+    assert_eq!(ctr.counter.len(), 12);
+    assert_eq!(ctr.length, 64);
+    let pss = tsonic_node::crypto::RsaPssParams {
+        name: "RSA-PSS".to_string(),
+        salt_length: 32,
+    };
+    assert_eq!(pss.salt_length, 32);
+    let oaep = tsonic_node::crypto::RsaOaepParams {
+        name: "RSA-OAEP".to_string(),
+        label: Some(iv.clone()),
+    };
+    assert_eq!(oaep.label.unwrap().len(), 12);
+    let ecdsa = tsonic_node::crypto::EcdsaParams {
+        name: "ECDSA".to_string(),
+        hash: key_algorithm,
+    };
+    assert_eq!(ecdsa.hash.name, "SHA-256");
+    let ecdh = tsonic_node::crypto::EcdhKeyDeriveParams {
+        name: "ECDH".to_string(),
+        public: crypto_key,
+    };
+    assert_eq!(ecdh.public.key_type, "secret");
+}
