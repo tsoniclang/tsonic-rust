@@ -6,6 +6,7 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::buffer::Buffer;
 use crate::error::{NodeError, NodeResult};
+use crate::stream::{Readable, Writable};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stats {
@@ -468,6 +469,31 @@ pub fn ftruncate_sync(fd: i32, len: u64) -> NodeResult<()> {
         .get(&fd)
         .ok_or_else(|| NodeError::new("EBADF", "bad file descriptor"))?;
     file.set_len(len).map_err(map_io_error)
+}
+
+pub fn create_read_stream(path: &str) -> NodeResult<Readable> {
+    Ok(Readable::from_chunks(vec![read_file_sync_buffer(path)?]))
+}
+
+pub fn create_write_stream() -> Writable {
+    Writable::new()
+}
+
+pub fn read_file_callback_string(
+    path: &str,
+    encoding: &str,
+    callback: impl FnOnce(NodeResult<String>),
+) {
+    callback(read_file_sync_string(path, encoding));
+}
+
+pub fn write_file_callback_string(
+    path: &str,
+    value: &str,
+    encoding: &str,
+    callback: impl FnOnce(NodeResult<()>),
+) {
+    callback(write_file_sync_string(path, value, encoding));
 }
 
 static NEXT_FD: AtomicI32 = AtomicI32::new(10);

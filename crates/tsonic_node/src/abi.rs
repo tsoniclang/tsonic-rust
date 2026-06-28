@@ -7,6 +7,7 @@ pub use crate::assert::{
     strict_equal as assert_strict_equal,
 };
 pub use crate::async_hooks::AsyncLocalStorage;
+pub use crate::buffer::transcode as buffer_transcode;
 pub use crate::buffer::Buffer;
 pub use crate::child_process::{
     spawn_file_sync as child_process_spawn_file_sync, SpawnOutput as ChildProcessOutput,
@@ -35,6 +36,7 @@ pub use crate::fs::{
     access_sync as fs_access_sync, append_file_sync_buffer as fs_append_file_sync_buffer,
     append_file_sync_string as fs_append_file_sync_string, chmod_sync as fs_chmod_sync,
     close_sync as fs_close_sync, copy_file_sync as fs_copy_file_sync, cp_sync as fs_cp_sync,
+    create_read_stream as fs_create_read_stream, create_write_stream as fs_create_write_stream,
     exists_sync as fs_exists_sync, fdatasync_sync as fs_fdatasync_sync,
     fstat_sync as fs_fstat_sync, fsync_sync as fs_fsync_sync, ftruncate_sync as fs_ftruncate_sync,
     link_sync as fs_link_sync, lstat_sync as fs_lstat_sync, mkdir_sync as fs_mkdir_sync,
@@ -77,9 +79,9 @@ pub use crate::os::{
 pub use crate::path::{
     basename as path_basename, delimiter as path_delimiter, dirname as path_dirname,
     extname as path_extname, format as path_format, is_absolute as path_is_absolute,
-    join as path_join, normalize as path_normalize, parse as path_parse, relative as path_relative,
-    resolve as path_resolve, sep as path_sep, to_namespaced_path as path_to_namespaced_path,
-    ParsedPath,
+    join as path_join, matches_glob as path_matches_glob, normalize as path_normalize,
+    parse as path_parse, relative as path_relative, resolve as path_resolve, sep as path_sep,
+    to_namespaced_path as path_to_namespaced_path, ParsedPath,
 };
 pub use crate::perf_hooks::performance_now;
 pub use crate::process::{
@@ -88,9 +90,11 @@ pub use crate::process::{
     exec_path as process_exec_path, exit as process_exit, exit_code as process_exit_code,
     hrtime as process_hrtime, hrtime_bigint as process_hrtime_bigint,
     memory_usage as process_memory_usage, next_tick as process_next_tick, pid as process_pid,
-    platform as process_platform, set_exit_code as process_set_exit_code, uptime as process_uptime,
+    platform as process_platform, set_exit_code as process_set_exit_code, stderr as process_stderr,
+    stdin_is_tty as process_stdin_is_tty, stdout as process_stdout, uptime as process_uptime,
     version as process_version, versions as process_versions, MemoryUsage as ProcessMemoryUsage,
 };
+pub use crate::punycode::{to_ascii as punycode_to_ascii, to_unicode as punycode_to_unicode};
 pub use crate::querystring::{parse as querystring_parse, stringify as querystring_stringify};
 pub use crate::readline::{
     create_interface as readline_create_interface, Interface as ReadlineInterface,

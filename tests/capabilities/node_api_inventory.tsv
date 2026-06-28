@@ -24,7 +24,7 @@ NODE-MODULE-OS	os	module	implemented	J	tsonic_node::os	NODE-OS-001	closed OS que
 NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers
 NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	NODE-MISC-001	performance.now subset
 NODE-MODULE-PROCESS	process	module	implemented	J	tsonic_node::process	NODE-PROC-001	closed process/env helpers
-NODE-MODULE-PUNYCODE	punycode	module	hard-reject	N0	n/a	REJECT-NODE-PUNYCODE	deprecated compatibility module excluded
+NODE-MODULE-PUNYCODE	punycode	module	implemented	N8	tsonic_node::punycode	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
 NODE-MODULE-READLINE	readline	module	implemented	N5	tsonic_node::readline	NODE-READLINE-001	closed buffered readline interface
 NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
@@ -85,9 +85,9 @@ NODE-FS-WATCH	fs	watch	hard-reject	N0	n/a	REJECT-NODE-FS-WATCH	watchers require 
 NODE-FS-WATCH-FILE	fs	watchFile	hard-reject	N0	n/a	REJECT-NODE-FS-WATCH	watchers require async/event runtime
 NODE-FS-WRITE	fs	writeSync	implemented	K	tsonic_node::fs::{write_sync_string,write_sync_buffer}	NODE-FS-EXT-001	string/buffer fd writes
 NODE-FS-WRITEFILE	fs	writeFileSync	implemented	K	tsonic_node::fs::{write_file_sync_string,write_file_sync_buffer}	NODE-FS-001	string/buffer overloads
-NODE-FS-CREATE-READ-STREAM	fs	createReadStream	hard-reject	N0	n/a	REJECT-NODE-FS-STREAMS	stream runtime excluded
-NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	hard-reject	N0	n/a	REJECT-NODE-FS-STREAMS	stream runtime excluded
-NODE-FS-ASYNC-CALLBACKS	fs	callback APIs	hard-reject	N0	n/a	REJECT-NODE-FS-ASYNC	callback async runtime excluded
+NODE-FS-CREATE-READ-STREAM	fs	createReadStream	implemented	N8	tsonic_node::fs::create_read_stream	NODE-FS-STREAM-001	file read stream backed by real file IO and closed Readable
+NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	implemented	N8	tsonic_node::fs::create_write_stream	NODE-FS-STREAM-001	closed Writable stream shape for generated output
+NODE-FS-ASYNC-CALLBACKS	fs	callback APIs	implemented	N8	tsonic_node::fs::{read_file_callback_string,write_file_callback_string}	NODE-FS-CALLBACK-001	callback-shaped fs APIs execute real sync IO deterministically
 NODE-FS-PROMISES	fs	promises APIs	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-PATH-BASENAME	path	basename	implemented	J	tsonic_node::path::basename	NODE-PATH-001	path helper
 NODE-PATH-DIRNAME	path	dirname	implemented	J	tsonic_node::path::dirname	NODE-PATH-001	path helper
@@ -101,13 +101,13 @@ NODE-PATH-RELATIVE	path	relative	implemented	J	tsonic_node::path::relative	NODE-
 NODE-PATH-RESOLVE	path	resolve	implemented	J	tsonic_node::path::resolve	NODE-PATH-001	path helper
 NODE-PATH-TO-NAMESPACED	path	toNamespacedPath	implemented	J	tsonic_node::path::to_namespaced_path	NODE-PATH-001	path helper
 NODE-PATH-SEP-DELIMITER	path	sep/delimiter	implemented	J	tsonic_node::path::{sep,delimiter}	NODE-PATH-001	platform separators
-NODE-PATH-MATCH-GLOB	path	matchesGlob	hard-reject	N0	n/a	REJECT-NODE-PATH-GLOB	glob engine excluded
+NODE-PATH-MATCH-GLOB	path	matchesGlob	implemented	N8	tsonic_node::path::matches_glob	NODE-PATH-GLOB-001	common star/question glob matcher
 NODE-BUFFER-ALLOC	buffer	alloc/from	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-001	closed byte carrier
 NODE-BUFFER-ENCODING	buffer	encodings	implemented	K	tsonic_node::buffer::{encode_string,decode_bytes}	NODE-BUF-001	utf8/latin1/utf16le/hex/base64/base64url
 NODE-BUFFER-SLICE	buffer	slice/subarray	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-002	shared views
 NODE-BUFFER-COMPARE	buffer	equals/compare/concat	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-003	byte comparisons
 NODE-BUFFER-INTEGERS	buffer	read/write integers	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-004	uint32 endian helpers
-NODE-BUFFER-TRANSCODE	buffer	transcode	hard-reject	N0	n/a	REJECT-NODE-BUFFER-TRANSCODE	encoding conversion matrix excluded beyond supported encodings
+NODE-BUFFER-TRANSCODE	buffer	transcode	implemented	N8	tsonic_node::buffer::transcode	NODE-BUF-TRANSCODE-001	transcode across supported encodings
 NODE-CRYPTO-RANDOM-BYTES	crypto	randomBytes	implemented	L	tsonic_node::crypto::random_bytes	NODE-CRYPTO-001	OS randomness
 NODE-CRYPTO-RANDOM-FILL	crypto	randomFill/randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	buffer random fill
 NODE-CRYPTO-RANDOM-INT	crypto	randomInt	implemented	L	tsonic_node::crypto::{random_int,random_int_range}	NODE-CRYPTO-001	range-limited random integer
@@ -136,7 +136,7 @@ NODE-PROCESS-PID	process	pid	implemented	J	tsonic_node::process::pid	NODE-PROC-0
 NODE-PROCESS-VERSION	process	version/versions	implemented	J	tsonic_node::process::{version,versions}	NODE-PROC-002	stable tsonic runtime version shape
 NODE-PROCESS-TIME	process	uptime/hrtime/hrtime.bigint	implemented	J	tsonic_node::process::{uptime,hrtime,hrtime_bigint}	NODE-PROC-002	monotonic process timers
 NODE-PROCESS-MEMORY	process	memoryUsage	implemented	J	tsonic_node::process::memory_usage	NODE-PROC-002	RSS plus closed heap fields
-NODE-PROCESS-IO	process	stdin/stdout/stderr	hard-reject	N0	n/a	REJECT-NODE-PROCESS-STREAMS	stream handles excluded
+NODE-PROCESS-IO	process	stdin/stdout/stderr	implemented	N8	tsonic_node::process::{stdout,stderr,stdin_is_tty}	NODE-PROC-IO-001	closed stdio stream shapes
 NODE-PROCESS-EVENTS	process	on/emit	hard-reject	N0	n/a	REJECT-NODE-PROCESS-EVENTS	process event emitter integration excluded; nextTick has NODE-PROCESS-NEXTTICK
 NODE-OS-PLATFORM	os	platform/arch	implemented	J	tsonic_node::os::{platform,arch}	NODE-OS-001	platform helpers
 NODE-OS-MEM	os	freemem/totalmem	implemented	J	tsonic_node::os::{freemem,totalmem}	NODE-OS-001	memory helpers

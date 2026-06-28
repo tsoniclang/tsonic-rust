@@ -1,5 +1,7 @@
 #[path = "node/buffer_tests.rs"]
 mod buffer_tests;
+#[path = "node/compat_gap_tests.rs"]
+mod compat_gap_tests;
 #[path = "node/crypto_tests.rs"]
 mod crypto_tests;
 #[path = "node/dgram_tests.rs"]

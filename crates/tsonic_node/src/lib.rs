@@ -22,6 +22,7 @@ pub mod path_posix;
 pub mod path_win32;
 pub mod perf_hooks;
 pub mod process;
+pub mod punycode;
 pub mod querystring;
 pub mod readline;
 pub mod stream;

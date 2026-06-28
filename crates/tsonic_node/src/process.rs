@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use crate::error::{NodeError, NodeResult};
+use crate::stream::Writable;
 
 static EXIT_CODE: AtomicI32 = AtomicI32::new(i32::MIN);
 static START: OnceLock<Instant> = OnceLock::new();
@@ -142,6 +143,18 @@ pub fn set_exit_code(code: i32) {
 
 pub fn next_tick(callback: impl FnOnce()) {
     callback();
+}
+
+pub fn stdout() -> Writable {
+    Writable::new()
+}
+
+pub fn stderr() -> Writable {
+    Writable::new()
+}
+
+pub fn stdin_is_tty() -> bool {
+    false
 }
 
 pub fn exit(code: Option<i32>) -> ! {

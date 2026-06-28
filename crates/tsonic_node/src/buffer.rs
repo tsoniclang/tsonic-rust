@@ -210,6 +210,11 @@ pub fn decode_bytes(bytes: &[u8], encoding: Option<&str>) -> NodeResult<String> 
     }
 }
 
+pub fn transcode(buffer: &Buffer, from_encoding: &str, to_encoding: &str) -> NodeResult<Buffer> {
+    let text = decode_bytes(&buffer.as_bytes(), Some(from_encoding))?;
+    Buffer::from_string(&text, Some(to_encoding))
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Encoding {
     Utf8,

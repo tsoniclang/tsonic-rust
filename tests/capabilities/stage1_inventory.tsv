@@ -168,7 +168,7 @@ NODE-FS-005	implemented	K	tsonic_node::abi::fs_*	NODE-FS-006, NODE-FS-007	recurs
 NODE-FS-006	implemented	K	tsonic_node::abi::fs_*	fs tests	names only first wave
 NODE-FS-007	implemented	K	tsonic_node::abi::fs_*	NODE-FS-008 through NODE-FS-010	sync file ops
 NODE-FS-008	implemented	M	tsonic_node::abi::fs_lstat_sync	NODE-FS-011	platform-sensitive (completed in full-completion branch)
-NODE-FS-009	hard-reject	M	n/a	REJECT-NODE-FS-ASYNC-STREAMS	async/event runtime
+NODE-FS-009	implemented	N8	tsonic_node::abi::{fs_create_read_stream,fs_create_write_stream}	NODE-FS-STREAM-001	closed stream/callback fs shapes over implemented stream runtime
 NODE-BUFFER-001	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-001 through NODE-BUF-003, NODE-BUF-006	utf8/hex/base64 first
 NODE-BUFFER-002	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-005	checked byte access
 NODE-BUFFER-003	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-007	shared views
@@ -216,7 +216,7 @@ NODE-MOD-022	implemented	J	tsonic_node::abi::os_*	NODE-OS-001 through NODE-OS-00
 NODE-MOD-023	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-008	pure string path helpers
 NODE-MOD-024	implemented	M	tsonic_node::abi::performance_now	NODE-MISC-001	performance timer/observer policy not first wave (completed in full-completion branch)
 NODE-MOD-025	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001 through NODE-PROC-006	cwd/env/argv/platform/exitCode; no event/stdio runtime
-NODE-MOD-026	hard-reject	M	n/a	REJECT-NODE-PUNYCODE	legacy encoding module; dependency/policy not first wave (closed as principled non-runtime surface)
+NODE-MOD-026	implemented	N8	tsonic_node::abi::{punycode_to_ascii,punycode_to_unicode}	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MOD-027	implemented	M	tsonic_node::abi::{querystring_parse,querystring_stringify}	NODE-MISC-002	legacy URL query helper; URLSearchParams implemented first (completed in full-completion branch)
 NODE-MOD-028	implemented	N5	tsonic_node::abi::readline_create_interface	NODE-READLINE-001	closed buffered readline interface
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1
