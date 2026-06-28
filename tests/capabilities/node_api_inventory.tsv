@@ -293,13 +293,35 @@ NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	implemented	N3	tsonic
 NODE-DIAG-CHANNEL	diagnostics_channel	channel	implemented	N3	tsonic_node::diagnostics_channel::channel	NODE-DIAG-001	channel constructor by name
 NODE-DIAG-CHANNEL-NAME	diagnostics_channel	Channel.name	implemented	N3	tsonic_node::diagnostics_channel::Channel::name	NODE-DIAG-001	channel name accessor
 NODE-DIAG-CHANNEL-SUBSCRIBE	diagnostics_channel	Channel.subscribe	implemented	N3	tsonic_node::diagnostics_channel::Channel::subscribe	NODE-DIAG-001	channel instance subscriber registration
+NODE-DIAG-CHANNEL-UNSUBSCRIBE	diagnostics_channel	Channel.unsubscribe	implemented	N79	tsonic_node::diagnostics_channel::Channel::unsubscribe	NODE-DIAG-002	channel instance deterministic subscriber removal by explicit id
 NODE-DIAG-CHANNEL-HAS-SUBSCRIBERS	diagnostics_channel	Channel.hasSubscribers	implemented	N3	tsonic_node::diagnostics_channel::Channel::has_subscribers	NODE-DIAG-001	channel instance subscriber predicate
 NODE-DIAG-CHANNEL-PUBLISH	diagnostics_channel	Channel.publish	implemented	N3	tsonic_node::diagnostics_channel::Channel::publish	NODE-DIAG-001	channel instance publish dispatch
+NODE-DIAG-CHANNEL-BIND-STORE	diagnostics_channel	Channel.bindStore	implemented	N79	tsonic_node::diagnostics_channel::Channel::bind_store	NODE-DIAG-002	channel instance explicit async-store binding marker
+NODE-DIAG-CHANNEL-UNBIND-STORE	diagnostics_channel	Channel.unbindStore	implemented	N79	tsonic_node::diagnostics_channel::Channel::unbind_store	NODE-DIAG-002	channel instance explicit async-store binding removal
+NODE-DIAG-CHANNEL-BOUND-STORE-COUNT	diagnostics_channel	Channel.boundStoreCount	implemented	N79	tsonic_node::diagnostics_channel::Channel::bound_store_count	NODE-DIAG-002	channel instance bound-store count accessor
 NODE-DIAG-SUBSCRIBE	diagnostics_channel	subscribe	implemented	N3	tsonic_node::diagnostics_channel::subscribe	NODE-DIAG-001	module-level subscriber registration
+NODE-DIAG-SUBSCRIBE-WITH-ID	diagnostics_channel	subscribeWithId	implemented	N79	tsonic_node::diagnostics_channel::subscribe_with_id	NODE-DIAG-002	module-level subscriber registration with explicit id
+NODE-DIAG-UNSUBSCRIBE	diagnostics_channel	unsubscribe	implemented	N79	tsonic_node::diagnostics_channel::unsubscribe	NODE-DIAG-002	module-level deterministic subscriber removal by explicit id
 NODE-DIAG-HAS-SUBSCRIBERS	diagnostics_channel	hasSubscribers	implemented	N3	tsonic_node::diagnostics_channel::has_subscribers	NODE-DIAG-001	module-level subscriber predicate
 NODE-DIAG-PUBLISH	diagnostics_channel	publish	implemented	N3	tsonic_node::diagnostics_channel::publish	NODE-DIAG-001	module-level publish dispatch
+NODE-DIAG-BIND-STORE	diagnostics_channel	bindStore	implemented	N79	tsonic_node::diagnostics_channel::bind_store	NODE-DIAG-002	module-level explicit async-store binding marker
+NODE-DIAG-UNBIND-STORE	diagnostics_channel	unbindStore	implemented	N79	tsonic_node::diagnostics_channel::unbind_store	NODE-DIAG-002	module-level explicit async-store binding removal
+NODE-DIAG-BOUND-STORE-COUNT	diagnostics_channel	boundStoreCount	implemented	N79	tsonic_node::diagnostics_channel::bound_store_count	NODE-DIAG-002	module-level bound-store count accessor
 NODE-DIAG-UNSUBSCRIBE-ALL	diagnostics_channel	unsubscribeAll	implemented	N3	tsonic_node::diagnostics_channel::unsubscribe_all	NODE-DIAG-001	explicit test/runtime cleanup helper
 NODE-DIAG-CHANNEL-NAMES	diagnostics_channel	channelNames	implemented	N3	tsonic_node::diagnostics_channel::channel_names	NODE-DIAG-001	known channel name introspection
+NODE-DIAG-TRACING-CHANNEL-CARRIER	diagnostics_channel	TracingChannel	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel	NODE-DIAG-002	closed tracing channel carrier over start/end/async/error channels
+NODE-DIAG-TRACING-CHANNEL-SUBSCRIBERS	diagnostics_channel	TracingChannelSubscribers	implemented	N79	tsonic_node::diagnostics_channel::TracingChannelSubscribers	NODE-DIAG-002	closed tracing subscriber callback carrier
+NODE-DIAG-TRACING-SUBSCRIPTION	diagnostics_channel	TracingSubscription	implemented	N79	tsonic_node::diagnostics_channel::TracingSubscription	NODE-DIAG-002	closed tracing subscription id carrier
+NODE-DIAG-TRACING-CHANNEL-FN	diagnostics_channel	tracingChannel	implemented	N79	tsonic_node::diagnostics_channel::tracing_channel	NODE-DIAG-002	constructs tracing channel collection by explicit base name
+NODE-DIAG-TRACING-NAME	diagnostics_channel	TracingChannel.name	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::name	NODE-DIAG-002	tracing channel base name accessor
+NODE-DIAG-TRACING-START	diagnostics_channel	TracingChannel.start	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::start	NODE-DIAG-002	tracing start channel accessor
+NODE-DIAG-TRACING-END	diagnostics_channel	TracingChannel.end	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::end	NODE-DIAG-002	tracing end channel accessor
+NODE-DIAG-TRACING-ASYNC-START	diagnostics_channel	TracingChannel.asyncStart	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::async_start	NODE-DIAG-002	tracing asyncStart channel accessor
+NODE-DIAG-TRACING-ASYNC-END	diagnostics_channel	TracingChannel.asyncEnd	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::async_end	NODE-DIAG-002	tracing asyncEnd channel accessor
+NODE-DIAG-TRACING-ERROR	diagnostics_channel	TracingChannel.error	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::error	NODE-DIAG-002	tracing error channel accessor
+NODE-DIAG-TRACING-HAS-SUBSCRIBERS	diagnostics_channel	TracingChannel.hasSubscribers	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::has_subscribers	NODE-DIAG-002	tracing channel aggregate subscriber predicate
+NODE-DIAG-TRACING-SUBSCRIBE	diagnostics_channel	TracingChannel.subscribe	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::subscribe	NODE-DIAG-002	tracing channel subscriber registration
+NODE-DIAG-TRACING-UNSUBSCRIBE	diagnostics_channel	TracingChannel.unsubscribe	implemented	N79	tsonic_node::diagnostics_channel::TracingChannel::unsubscribe	NODE-DIAG-002	tracing channel deterministic subscriber removal
 NODE-MODULE-DNS	dns	module	implemented	N3	tsonic_node::dns	NODE-DNS-001	platform resolver lookup and address helpers
 NODE-DNS-LOOKUP	dns	lookup	implemented	N3	tsonic_node::dns::lookup	NODE-DNS-001	platform-backed lookup without shelling out
 NODE-DNS-LOOKUP-ADDRESS	dns	LookupAddress	implemented	N56	tsonic_node::dns::LookupAddress	NODE-DNS-001	lookup address/family carrier

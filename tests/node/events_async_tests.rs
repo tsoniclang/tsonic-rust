@@ -254,22 +254,63 @@ fn diagnostics_channel_publishes_to_named_subscribers() {
     let target = Rc::clone(&seen);
     let channel = diagnostics_channel::channel(name);
     assert_eq!(channel.name(), name);
-    channel.subscribe(move |message| target.borrow_mut().push(message.to_string()));
+    let subscription =
+        channel.subscribe(move |message| target.borrow_mut().push(message.to_string()));
 
     assert!(channel.has_subscribers());
     assert!(channel.publish(&JsValue::String("payload".to_string())));
     assert_eq!(seen.borrow().as_slice(), &["\"payload\"".to_string()]);
     assert!(diagnostics_channel::channel_names().contains(&name.to_string()));
+    assert!(channel.unsubscribe(subscription));
+    assert!(!channel.has_subscribers());
+    channel.bind_store();
+    channel.bind_store();
+    assert_eq!(channel.bound_store_count(), 2);
+    assert!(channel.unbind_store());
+    assert_eq!(diagnostics_channel::bound_store_count(name), 1);
+    assert!(diagnostics_channel::unbind_store(name));
     diagnostics_channel::unsubscribe_all(name);
 
     let module_seen = Rc::new(RefCell::new(Vec::new()));
     let module_target = Rc::clone(&module_seen);
-    diagnostics_channel::subscribe(name, move |message| {
+    let module_subscription = diagnostics_channel::subscribe_with_id(name, move |message| {
         module_target.borrow_mut().push(message.inspect())
     });
     assert!(diagnostics_channel::has_subscribers(name));
     assert!(diagnostics_channel::publish(name, &JsValue::Number(7.0)));
     assert_eq!(module_seen.borrow().as_slice(), &["7".to_string()]);
+    assert!(diagnostics_channel::unsubscribe(name, module_subscription));
+    assert!(!diagnostics_channel::publish(name, &JsValue::Number(8.0)));
+
+    let tracing = diagnostics_channel::tracing_channel("tsonic.trace");
+    assert_eq!(tracing.name(), "tsonic.trace");
+    assert_eq!(tracing.start().name(), "tsonic.trace:start");
+    let trace_seen = Rc::new(RefCell::new(Vec::new()));
+    let start_seen = Rc::clone(&trace_seen);
+    let error_seen = Rc::clone(&trace_seen);
+    let subscription = tracing.subscribe(diagnostics_channel::TracingChannelSubscribers {
+        start: Some(Box::new(move |message| {
+            start_seen.borrow_mut().push(format!("start:{message}"))
+        })),
+        error: Some(Box::new(move |message| {
+            error_seen.borrow_mut().push(format!("error:{message}"))
+        })),
+        ..diagnostics_channel::TracingChannelSubscribers::empty()
+    });
+    assert!(tracing.has_subscribers());
+    assert!(tracing
+        .start()
+        .publish(&JsValue::String("work".to_string())));
+    assert!(tracing
+        .error()
+        .publish(&JsValue::String("boom".to_string())));
+    assert_eq!(
+        trace_seen.borrow().as_slice(),
+        &["start:\"work\"".to_string(), "error:\"boom\"".to_string()]
+    );
+    tracing.unsubscribe(&subscription);
+    assert!(!tracing.has_subscribers());
+
     diagnostics_channel::unsubscribe_all(name);
     assert!(!diagnostics_channel::has_subscribers(name));
 }
