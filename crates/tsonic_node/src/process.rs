@@ -1,9 +1,10 @@
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use crate::error::{NodeError, NodeResult};
 use crate::events::EventEmitter;
+use crate::os;
 use crate::stream::Writable;
 use tsonic_js::JsValue;
 
@@ -36,6 +37,32 @@ pub struct ResourceUsage {
 pub struct Release {
     pub name: String,
     pub source_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessFeatures {
+    pub inspector: bool,
+    pub ipv6: bool,
+    pub tls: bool,
+    pub tls_alpn: bool,
+    pub tls_sni: bool,
+    pub uv: bool,
+    pub cached_builtins: bool,
+    pub require_module: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessConfig {
+    pub target_defaults: Vec<(String, String)>,
+    pub variables: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessWarning {
+    pub name: String,
+    pub message: String,
+    pub code: Option<String>,
+    pub detail: Option<String>,
 }
 
 pub fn cwd() -> NodeResult<String> {
@@ -168,6 +195,75 @@ pub fn release() -> Release {
         name: "tsonic-rust".to_string(),
         source_url: "https://github.com/tsoniclang/tsonic-rust".to_string(),
     }
+}
+
+pub fn title() -> String {
+    process_title().lock().unwrap().clone()
+}
+
+pub fn set_title(value: &str) {
+    *process_title().lock().unwrap() = value.to_string();
+}
+
+pub fn features() -> ProcessFeatures {
+    ProcessFeatures {
+        inspector: false,
+        ipv6: true,
+        tls: true,
+        tls_alpn: true,
+        tls_sni: true,
+        uv: false,
+        cached_builtins: false,
+        require_module: true,
+    }
+}
+
+pub fn config() -> ProcessConfig {
+    ProcessConfig {
+        target_defaults: vec![
+            ("default_configuration".to_string(), "Release".to_string()),
+            ("target_arch".to_string(), arch()),
+            ("target_platform".to_string(), platform()),
+        ],
+        variables: vec![
+            ("host_arch".to_string(), std::env::consts::ARCH.to_string()),
+            ("host_os".to_string(), std::env::consts::OS.to_string()),
+        ],
+    }
+}
+
+pub fn allowed_node_environment_flags() -> Vec<&'static str> {
+    vec![
+        "--enable-source-maps",
+        "--no-warnings",
+        "--trace-warnings",
+        "--unhandled-rejections",
+    ]
+}
+
+pub fn available_memory() -> u64 {
+    os::freemem()
+}
+
+pub fn get_active_resources_info() -> Vec<&'static str> {
+    vec!["Process"]
+}
+
+pub fn emit_warning(message: &str, name: Option<&str>, code: Option<&str>, detail: Option<&str>) {
+    warnings().lock().unwrap().push(ProcessWarning {
+        name: name.unwrap_or("Warning").to_string(),
+        message: message.to_string(),
+        code: code.map(str::to_string),
+        detail: detail.map(str::to_string),
+    });
+}
+
+pub fn emitted_warnings() -> Vec<ProcessWarning> {
+    warnings().lock().unwrap().clone()
+}
+
+pub fn clear_warnings() {
+    warnings().lock().unwrap().clear();
 }
 
 pub fn uptime() -> f64 {
@@ -381,4 +477,15 @@ fn current_rss_bytes() -> Option<u64> {
 #[cfg(not(target_os = "linux"))]
 fn current_rss_bytes() -> Option<u64> {
     None
+}
+
+static PROCESS_TITLE: OnceLock<Mutex<String>> = OnceLock::new();
+static WARNINGS: OnceLock<Mutex<Vec<ProcessWarning>>> = OnceLock::new();
+
+fn process_title() -> &'static Mutex<String> {
+    PROCESS_TITLE.get_or_init(|| Mutex::new("tsonic-rust".to_string()))
+}
+
+fn warnings() -> &'static Mutex<Vec<ProcessWarning>> {
+    WARNINGS.get_or_init(|| Mutex::new(Vec::new()))
 }

@@ -142,6 +142,9 @@ NODE-PROCESS-SIGNAL	process	kill	implemented	N13	tsonic_node::process::kill	NODE
 NODE-PROCESS-VERSION	process	version/versions	implemented	J	tsonic_node::process::{version,versions}	NODE-PROC-002	stable tsonic runtime version shape
 NODE-PROCESS-TIME	process	uptime/hrtime/hrtime.bigint	implemented	J	tsonic_node::process::{uptime,hrtime,hrtime_bigint}	NODE-PROC-002	monotonic process timers
 NODE-PROCESS-MEMORY	process	memoryUsage	implemented	J	tsonic_node::process::memory_usage	NODE-PROC-002	RSS plus closed heap fields
+NODE-PROCESS-METADATA	process	title/features/config/release	implemented	N15	tsonic_node::process::{title,set_title,features,config,release}	NODE-PROC-METADATA-001	closed runtime metadata and compile configuration shape
+NODE-PROCESS-WARNINGS	process	emitWarning/warnings	implemented	N15	tsonic_node::process::{emit_warning,emitted_warnings,clear_warnings}	NODE-PROC-METADATA-001	closed warning capture for generated runtime diagnostics
+NODE-PROCESS-RESOURCES	process	availableMemory/getActiveResourcesInfo/allowedNodeEnvironmentFlags	implemented	N15	tsonic_node::process::{available_memory,get_active_resources_info,allowed_node_environment_flags}	NODE-PROC-METADATA-001	closed resource and environment flag metadata without host introspection
 NODE-PROCESS-IO	process	stdin/stdout/stderr	implemented	N8	tsonic_node::process::{stdout,stderr,stdin_is_tty}	NODE-PROC-IO-001	closed stdio stream shapes
 NODE-PROCESS-EVENTS	process	on/emit	implemented	N10	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	closed process event emitter shape for generated runtimes
 NODE-OS-PLATFORM	os	platform/arch	implemented	J	tsonic_node::os::{platform,arch}	NODE-OS-001	platform helpers

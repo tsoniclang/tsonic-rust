@@ -79,6 +79,43 @@ fn process_runtime_queries_have_stable_shapes() {
 }
 
 #[test]
+fn process_metadata_warnings_and_feature_shapes_are_closed() {
+    process::set_title("tsonic-test");
+    assert_eq!(process::title(), "tsonic-test");
+
+    let features = process::features();
+    assert!(features.ipv6);
+    assert!(features.tls);
+    assert!(features.require_module);
+    assert!(!features.inspector);
+
+    let config = process::config();
+    assert!(config
+        .target_defaults
+        .iter()
+        .any(|(name, _)| name == "target_platform"));
+    assert!(config.variables.iter().any(|(name, _)| name == "host_arch"));
+
+    assert!(process::allowed_node_environment_flags().contains(&"--trace-warnings"));
+    assert!(process::available_memory() > 0);
+    assert!(process::get_active_resources_info().contains(&"Process"));
+
+    process::clear_warnings();
+    process::emit_warning(
+        "careful",
+        Some("TsonicWarning"),
+        Some("TSONIC_WARN"),
+        Some("detail"),
+    );
+    let warnings = process::emitted_warnings();
+    assert_eq!(warnings.len(), 1);
+    assert_eq!(warnings[0].name, "TsonicWarning");
+    assert_eq!(warnings[0].message, "careful");
+    assert_eq!(warnings[0].code.as_deref(), Some("TSONIC_WARN"));
+    assert_eq!(warnings[0].detail.as_deref(), Some("detail"));
+}
+
+#[test]
 fn process_events_use_closed_event_emitter_shape() {
     let mut events = process::ProcessEvents::new();
     events.on("beforeExit", |_| {});

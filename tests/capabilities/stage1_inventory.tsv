@@ -169,6 +169,8 @@ NODE-PROCESS-006	implemented	M	tsonic_node::abi::process_exit	completion tests	t
 NODE-PROCESS-007	implemented	N10	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	closed process event emitter shape for generated runtimes
 NODE-PROCESS-008	implemented	N13	tsonic_node::abi::{process_getuid,process_getgid,process_geteuid,process_getegid,process_getgroups}	NODE-PROC-IDENTITY-001	Unix process identity/group queries with explicit unsupported-target absence
 NODE-PROCESS-009	implemented	N13	tsonic_node::abi::process_kill	NODE-PROC-SIGNAL-001	Unix signal dispatch/probe with explicit unsupported-target failure
+NODE-PROCESS-011	implemented	N15	tsonic_node::abi::{process_title,process_set_title,process_features,process_config,process_emit_warning,process_emitted_warnings}	NODE-PROC-METADATA-001	closed process metadata/warning shape
+NODE-PROCESS-012	implemented	N15	tsonic_node::abi::{process_available_memory,process_get_active_resources_info,process_allowed_node_environment_flags}	NODE-PROC-METADATA-001	closed process resource and flag metadata
 NODE-OS-001	implemented	J	tsonic_node::abi::os_*	NODE-OS-001, NODE-OS-003	host shape tests
 NODE-OS-002	implemented	J	tsonic_node::abi::os_*	NODE-OS-002	no shared mutation assumptions
 NODE-OS-003	implemented	M	tsonic_node::abi::{os_cpus,os_loadavg,os_totalmem,os_freemem}	NODE-OS-004	platform inventory (completed in full-completion branch)
