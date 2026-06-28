@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child as OsChild, Command, Stdio};
 
@@ -9,6 +10,10 @@ pub struct SpawnOptions {
     pub cwd: Option<PathBuf>,
     pub env: BTreeMap<String, String>,
     pub detached: bool,
+    pub input: Option<Vec<u8>>,
+    pub timeout_ms: Option<u64>,
+    pub kill_signal: Option<String>,
+    pub shell: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +23,7 @@ pub struct SpawnOutput {
     pub signal: Option<String>,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
+    pub error: Option<String>,
 }
 
 impl SpawnOutput {
@@ -72,6 +78,7 @@ impl ChildProcess {
                 signal: self.signal_code.clone(),
                 stdout: self.stdout.clone().unwrap_or_default(),
                 stderr: self.stderr.clone().unwrap_or_default(),
+                error: None,
             });
         };
         let pid = self.pid;
@@ -88,6 +95,7 @@ impl ChildProcess {
             signal: None,
             stdout: output.stdout,
             stderr: output.stderr,
+            error: None,
         })
     }
 
@@ -128,15 +136,36 @@ pub fn spawn_file_sync_with_options(
     args: &[&str],
     options: &SpawnOptions,
 ) -> NodeResult<SpawnOutput> {
-    let output = configure_command(program, args, options)
-        .output()
+    validate_options(options)?;
+    let mut command = configure_command(program, args, options);
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    if options.input.is_some() {
+        command.stdin(Stdio::piped());
+    }
+    let mut child = command
+        .spawn()
         .map_err(|error| NodeError::new("ENOENT", error.to_string()))?;
+    if let Some(input) = &options.input {
+        let Some(stdin) = child.stdin.as_mut() else {
+            return Err(NodeError::new(
+                "ERR_CHILD_PROCESS_STDIN",
+                "child stdin unavailable",
+            ));
+        };
+        stdin
+            .write_all(input)
+            .map_err(|error| NodeError::new("EPIPE", error.to_string()))?;
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|error| NodeError::new("ECHILD", error.to_string()))?;
     Ok(SpawnOutput {
         pid: None,
         status: output.status.code().unwrap_or(1),
         signal: None,
         stdout: output.stdout,
         stderr: output.stderr,
+        error: None,
     })
 }
 
@@ -157,6 +186,7 @@ pub fn spawn_file_with_options(
     args: &[&str],
     options: &SpawnOptions,
 ) -> NodeResult<ChildProcess> {
+    validate_options(options)?;
     let child = configure_command(program, args, options)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -205,6 +235,20 @@ pub fn exec_sync(program: &str, args: &[&str]) -> NodeResult<Vec<u8>> {
     exec_file_sync(program, args)
 }
 
+pub fn exec_command_sync(_command: &str) -> NodeResult<Vec<u8>> {
+    Err(NodeError::new(
+        "ERR_UNSUPPORTED_OPERATION",
+        "shell command execution is not part of the closed runtime ABI; use exec_file_sync",
+    ))
+}
+
+pub fn spawn_shell_sync(_command: &str) -> NodeResult<SpawnOutput> {
+    Err(NodeError::new(
+        "ERR_UNSUPPORTED_OPERATION",
+        "shell execution is explicitly unsupported in generated Rust externals",
+    ))
+}
+
 fn configure_command(program: &str, args: &[&str], options: &SpawnOptions) -> Command {
     let mut command = Command::new(program);
     command.args(args);
@@ -215,4 +259,14 @@ fn configure_command(program: &str, args: &[&str], options: &SpawnOptions) -> Co
         command.env(name, value);
     }
     command
+}
+
+fn validate_options(options: &SpawnOptions) -> NodeResult<()> {
+    if options.shell {
+        return Err(NodeError::new(
+            "ERR_UNSUPPORTED_OPERATION",
+            "shell execution is explicitly unsupported in generated Rust externals",
+        ));
+    }
+    Ok(())
 }

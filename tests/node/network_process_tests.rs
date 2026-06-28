@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::thread;
 
 use tsonic_node::{child_process, http, module, net};
@@ -96,6 +98,7 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
     let output = child_process::spawn_file_sync(&current, &["--list"]).unwrap();
     assert!(output.success());
     assert_eq!(output.status, 0);
+    assert_eq!(output.error, None);
     assert_eq!(output.stderr_string().unwrap(), "");
     assert!(output
         .stdout_string()
@@ -141,4 +144,33 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
         .stdout_string()
         .unwrap()
         .contains("network_process_tests"));
+
+    let shell_reject = child_process::spawn_file_sync_with_options(
+        &current,
+        &["--list"],
+        &child_process::SpawnOptions {
+            shell: true,
+            ..child_process::SpawnOptions::default()
+        },
+    );
+    assert!(shell_reject.is_err());
+    assert!(child_process::exec_command_sync("echo forbidden").is_err());
+    assert!(child_process::spawn_shell_sync("echo forbidden").is_err());
+
+    if Path::new("/bin/cat").exists() {
+        let output = child_process::spawn_file_sync_with_options(
+            "/bin/cat",
+            &[],
+            &child_process::SpawnOptions {
+                input: Some(b"stdin payload".to_vec()),
+                timeout_ms: Some(1_000),
+                kill_signal: Some("SIGTERM".to_string()),
+                env: BTreeMap::from([("TSONIC_CHILD_TEST".to_string(), "1".to_string())]),
+                ..child_process::SpawnOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(output.stdout, b"stdin payload".to_vec());
+        assert!(output.success());
+    }
 }

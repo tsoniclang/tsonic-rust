@@ -130,6 +130,7 @@ NODE-CHILD-SPAWN-SYNC	child_process	spawnSync/spawnFileSync	implemented	N14	tson
 NODE-CHILD-SPAWN	child_process	spawn/spawnFile	implemented	N14	tsonic_node::child_process::{spawn,spawn_file,spawn_file_with_options,ChildProcess}	NODE-CHILD-002	shell-free running child process shape with pid/stdio/wait/ref/unref/disconnect
 NODE-CHILD-EXEC-FILE	child_process	execFile/execFileSync	implemented	N14	tsonic_node::child_process::{exec_file,exec_file_sync,exec_file_sync_string}	NODE-CHILD-002	file execution helpers without shell evaluation
 NODE-CHILD-EXEC-SYNC	child_process	execSync	implemented	N14	tsonic_node::child_process::exec_sync	NODE-CHILD-001	closed shell-free exec alias for generated Rust ABI
+NODE-CHILD-OPTIONS	child_process	spawn/exec options and shell rejection	implemented	N33	tsonic_node::child_process::{SpawnOptions,spawn_file_sync_with_options,exec_command_sync,spawn_shell_sync}	NODE-CHILD-003	stdin input, cwd/env/timeout metadata, and explicit shell-command rejection
 NODE-CRYPTO-RANDOM-BYTES	crypto	randomBytes	implemented	L	tsonic_node::crypto::random_bytes	NODE-CRYPTO-001	OS randomness
 NODE-CRYPTO-RANDOM-FILL	crypto	randomFill/randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	buffer random fill
 NODE-CRYPTO-RANDOM-INT	crypto	randomInt	implemented	L	tsonic_node::crypto::{random_int,random_int_range}	NODE-CRYPTO-001	range-limited random integer
