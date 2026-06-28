@@ -2189,21 +2189,92 @@ NODE-PROCESS-RESOURCE-USAGE	process	resourceUsage	implemented	N62	tsonic_node::p
 NODE-PROCESS-MEMORY-RSS	process	memoryUsage.rss	implemented	N49	tsonic_node::process::memory_usage_rss	NODE-PROC-013	closed RSS helper backed by platform memory query where available
 NODE-PROCESS-CONSTRAINED-MEMORY	process	constrainedMemory	implemented	N49	tsonic_node::process::constrained_memory	NODE-PROC-013	closed constrained memory helper
 NODE-PROCESS-THREAD-CPU	process	threadCpuUsage	implemented	N49	tsonic_node::process::thread_cpu_usage	NODE-PROC-013	thread CPU shape mirrors closed process CPU usage in single-runtime carrier
+NODE-PROCESS-VERSIONS-CARRIER	process	ProcessVersions	implemented	N82	tsonic_node::process::ProcessVersions	NODE-PROC-013	closed process versions carrier
+NODE-PROCESS-VERSIONS-STRUCT	process	versions struct	implemented	N82	tsonic_node::process::versions_struct	NODE-PROC-013	closed ProcessVersions query
+NODE-PROCESS-VERSIONS-NODE	process	ProcessVersions.node	implemented	N82	tsonic_node::process::ProcessVersions::node	NODE-PROC-013	Node version field
+NODE-PROCESS-VERSIONS-TSONIC-RUST	process	ProcessVersions.tsonicRust	implemented	N82	tsonic_node::process::ProcessVersions::tsonic_rust	NODE-PROC-013	tsonic-rust version field
+NODE-PROCESS-VERSIONS-ARES	process	ProcessVersions.ares	implemented	N82	tsonic_node::process::ProcessVersions::ares	NODE-PROC-013	ares version field
+NODE-PROCESS-VERSIONS-HTTP-PARSER	process	ProcessVersions.httpParser	implemented	N82	tsonic_node::process::ProcessVersions::http_parser	NODE-PROC-013	http_parser version field
+NODE-PROCESS-VERSIONS-MODULES	process	ProcessVersions.modules	implemented	N82	tsonic_node::process::ProcessVersions::modules	NODE-PROC-013	modules version field
+NODE-PROCESS-VERSIONS-OPENSSL	process	ProcessVersions.openssl	implemented	N82	tsonic_node::process::ProcessVersions::openssl	NODE-PROC-013	openssl version field
+NODE-PROCESS-VERSIONS-UV	process	ProcessVersions.uv	implemented	N82	tsonic_node::process::ProcessVersions::uv	NODE-PROC-013	uv version field
+NODE-PROCESS-VERSIONS-V8	process	ProcessVersions.v8	implemented	N82	tsonic_node::process::ProcessVersions::js_engine	NODE-PROC-013	V8 version field exposed as empty closed metadata
+NODE-PROCESS-VERSIONS-ZLIB	process	ProcessVersions.zlib	implemented	N82	tsonic_node::process::ProcessVersions::zlib	NODE-PROC-013	zlib version field
 NODE-PROCESS-RELEASE-CARRIER	process	Release	implemented	N62	tsonic_node::process::Release	NODE-PROC-METADATA-001	release carrier
 NODE-PROCESS-RELEASE	process	release	implemented	N62	tsonic_node::process::release	NODE-PROC-002,NODE-PROC-METADATA-001	stable tsonic runtime release carrier
+NODE-PROCESS-RELEASE-NAME	process	ProcessRelease.name	implemented	N82	tsonic_node::process::Release::name	NODE-PROC-METADATA-001	release name field
+NODE-PROCESS-RELEASE-SOURCE-URL	process	ProcessRelease.sourceUrl	implemented	N82	tsonic_node::process::Release::source_url	NODE-PROC-METADATA-001	release sourceUrl field
+NODE-PROCESS-RELEASE-HEADERS-URL	process	ProcessRelease.headersUrl	implemented	N82	tsonic_node::process::Release::headers_url	NODE-PROC-METADATA-001	release headersUrl field
+NODE-PROCESS-RELEASE-LIB-URL	process	ProcessRelease.libUrl	implemented	N82	tsonic_node::process::Release::lib_url	NODE-PROC-METADATA-001	release libUrl field
+NODE-PROCESS-RELEASE-LTS	process	ProcessRelease.lts	implemented	N82	tsonic_node::process::Release::lts	NODE-PROC-METADATA-001	release lts field
 NODE-PROCESS-TITLE-GET	process	title get	implemented	N15	tsonic_node::process::title	NODE-PROC-METADATA-001	process title getter
 NODE-PROCESS-TITLE-SET	process	title set	implemented	N15	tsonic_node::process::set_title	NODE-PROC-METADATA-001	process title setter
 NODE-PROCESS-FEATURES-CARRIER	process	ProcessFeatures	implemented	N62	tsonic_node::process::ProcessFeatures	NODE-PROC-METADATA-001	closed process feature carrier
 NODE-PROCESS-FEATURES	process	features	implemented	N62	tsonic_node::process::features	NODE-PROC-METADATA-001	closed process feature query
+NODE-PROCESS-FEATURES-DEBUG	process	ProcessFeatures.debug	implemented	N82	tsonic_node::process::ProcessFeatures::debug	NODE-PROC-METADATA-001	process debug feature field
+NODE-PROCESS-FEATURES-INSPECTOR	process	ProcessFeatures.inspector	implemented	N82	tsonic_node::process::ProcessFeatures::inspector	NODE-PROC-METADATA-001	process inspector feature field
+NODE-PROCESS-FEATURES-IPV6	process	ProcessFeatures.ipv6	implemented	N82	tsonic_node::process::ProcessFeatures::ipv6	NODE-PROC-METADATA-001	process ipv6 feature field
+NODE-PROCESS-FEATURES-TLS	process	ProcessFeatures.tls	implemented	N82	tsonic_node::process::ProcessFeatures::tls	NODE-PROC-METADATA-001	process tls feature field
+NODE-PROCESS-FEATURES-TLS-ALPN	process	ProcessFeatures.tlsAlpn	implemented	N82	tsonic_node::process::ProcessFeatures::tls_alpn	NODE-PROC-METADATA-001	process tls_alpn feature field
+NODE-PROCESS-FEATURES-TLS-OCSP	process	ProcessFeatures.tlsOcsp	implemented	N82	tsonic_node::process::ProcessFeatures::tls_ocsp	NODE-PROC-METADATA-001	process tls_ocsp feature field
+NODE-PROCESS-FEATURES-TLS-SNI	process	ProcessFeatures.tlsSni	implemented	N82	tsonic_node::process::ProcessFeatures::tls_sni	NODE-PROC-METADATA-001	process tls_sni feature field
+NODE-PROCESS-FEATURES-UV	process	ProcessFeatures.uv	implemented	N82	tsonic_node::process::ProcessFeatures::uv	NODE-PROC-METADATA-001	process uv feature field
+NODE-PROCESS-FEATURES-CACHED-BUILTINS	process	ProcessFeatures.cachedBuiltins	implemented	N82	tsonic_node::process::ProcessFeatures::cached_builtins	NODE-PROC-METADATA-001	process cached_builtins feature field
+NODE-PROCESS-FEATURES-REQUIRE-MODULE	process	ProcessFeatures.requireModule	implemented	N82	tsonic_node::process::ProcessFeatures::require_module	NODE-PROC-METADATA-001	process require_module feature field
+NODE-PROCESS-FEATURES-TYPESCRIPT	process	ProcessFeatures.typescript	implemented	N82	tsonic_node::process::ProcessFeatures::typescript	NODE-PROC-METADATA-001	process typescript feature field
 NODE-PROCESS-CONFIG-CARRIER	process	ProcessConfig	implemented	N62	tsonic_node::process::ProcessConfig	NODE-PROC-METADATA-001	closed process compile configuration carrier
 NODE-PROCESS-CONFIG	process	config	implemented	N62	tsonic_node::process::config	NODE-PROC-METADATA-001	closed process compile configuration query
+NODE-PROCESS-CONFIG-CFLAGS	process	ProcessConfig.cflags	implemented	N82	tsonic_node::process::ProcessConfig::cflags	NODE-PROC-METADATA-001	process config cflags field
+NODE-PROCESS-CONFIG-DEFINES	process	ProcessConfig.defines	implemented	N82	tsonic_node::process::ProcessConfig::defines	NODE-PROC-METADATA-001	process config defines field
+NODE-PROCESS-CONFIG-INCLUDE-DIRS	process	ProcessConfig.includeDirs	implemented	N82	tsonic_node::process::ProcessConfig::include_dirs	NODE-PROC-METADATA-001	process config include_dirs field
+NODE-PROCESS-CONFIG-LIBRARIES	process	ProcessConfig.libraries	implemented	N82	tsonic_node::process::ProcessConfig::libraries	NODE-PROC-METADATA-001	process config libraries field
+NODE-PROCESS-CONFIG-DEFAULT-CONFIGURATION	process	ProcessConfig.defaultConfiguration	implemented	N82	tsonic_node::process::ProcessConfig::default_configuration	NODE-PROC-METADATA-001	process config default_configuration field
+NODE-PROCESS-CONFIG-HOST-ARCH	process	ProcessConfig.hostArch	implemented	N82	tsonic_node::process::ProcessConfig::host_arch	NODE-PROC-METADATA-001	process config host_arch field
+NODE-PROCESS-CONFIG-TARGET-ARCH	process	ProcessConfig.targetArch	implemented	N82	tsonic_node::process::ProcessConfig::target_arch	NODE-PROC-METADATA-001	process config target_arch field
+NODE-PROCESS-CONFIG-NODE-INSTALL-NPM	process	ProcessConfig.nodeInstallNpm	implemented	N82	tsonic_node::process::ProcessConfig::node_install_npm	NODE-PROC-METADATA-001	process config node_install_npm field
+NODE-PROCESS-CONFIG-NODE-INSTALL-WAF	process	ProcessConfig.nodeInstallWaf	implemented	N82	tsonic_node::process::ProcessConfig::node_install_waf	NODE-PROC-METADATA-001	process config node_install_waf field
+NODE-PROCESS-CONFIG-NODE-PREFIX	process	ProcessConfig.nodePrefix	implemented	N82	tsonic_node::process::ProcessConfig::node_prefix	NODE-PROC-METADATA-001	process config node_prefix field
+NODE-PROCESS-CONFIG-NODE-SHARED-OPENSSL	process	ProcessConfig.nodeSharedOpenSsl	implemented	N82	tsonic_node::process::ProcessConfig::node_shared_openssl	NODE-PROC-METADATA-001	process config node_shared_openssl field
+NODE-PROCESS-CONFIG-NODE-SHARED-V8	process	ProcessConfig.nodeSharedV8	implemented	N82	tsonic_node::process::ProcessConfig::node_shared_js_engine	NODE-PROC-METADATA-001	process config node_shared_v8 field
+NODE-PROCESS-CONFIG-NODE-SHARED-ZLIB	process	ProcessConfig.nodeSharedZlib	implemented	N82	tsonic_node::process::ProcessConfig::node_shared_zlib	NODE-PROC-METADATA-001	process config node_shared_zlib field
+NODE-PROCESS-CONFIG-NODE-USE-DTRACE	process	ProcessConfig.nodeUseDtrace	implemented	N82	tsonic_node::process::ProcessConfig::node_use_dtrace	NODE-PROC-METADATA-001	process config node_use_dtrace field
+NODE-PROCESS-CONFIG-NODE-USE-ETW	process	ProcessConfig.nodeUseEtw	implemented	N82	tsonic_node::process::ProcessConfig::node_use_etw	NODE-PROC-METADATA-001	process config node_use_etw field
+NODE-PROCESS-CONFIG-NODE-USE-OPENSSL	process	ProcessConfig.nodeUseOpenSsl	implemented	N82	tsonic_node::process::ProcessConfig::node_use_openssl	NODE-PROC-METADATA-001	process config node_use_openssl field
+NODE-PROCESS-CONFIG-V8-NO-STRICT-ALIASING	process	ProcessConfig.v8NoStrictAliasing	implemented	N82	tsonic_node::process::ProcessConfig::js_engine_no_strict_aliasing	NODE-PROC-METADATA-001	process config v8_no_strict_aliasing field
+NODE-PROCESS-CONFIG-V8-USE-SNAPSHOT	process	ProcessConfig.v8UseSnapshot	implemented	N82	tsonic_node::process::ProcessConfig::js_engine_use_snapshot	NODE-PROC-METADATA-001	process config v8_use_snapshot field
+NODE-PROCESS-CONFIG-VISIBILITY	process	ProcessConfig.visibility	implemented	N82	tsonic_node::process::ProcessConfig::visibility	NODE-PROC-METADATA-001	process config visibility field
 NODE-PROCESS-SOURCE-MAPS	process	sourceMapsEnabled	implemented	N49	tsonic_node::process::source_maps_enabled	NODE-PROC-013	closed source map support state
 NODE-PROCESS-DEBUG-PORT	process	debugPort	implemented	N49	tsonic_node::process::debug_port	NODE-PROC-013	closed debug port helper
 NODE-PROCESS-GET-BUILTIN-MODULE	process	getBuiltinModule	implemented	N49	tsonic_node::process::get_builtin_module	NODE-PROC-013	builtin module lookup without loader execution
+NODE-PROCESS-IPC-STATE-CARRIER	process	ProcessIpcState	implemented	N82	tsonic_node::process::ProcessIpcState	NODE-PROC-IPC-001	closed process IPC state carrier
+NODE-PROCESS-CONNECTED	process	connected	implemented	N82	tsonic_node::process::connected	NODE-PROC-IPC-001	closed process connected state
+NODE-PROCESS-CHANNEL	process	channel	implemented	N82	tsonic_node::process::channel	NODE-PROC-IPC-001	closed process IPC channel state
+NODE-PROCESS-MAIN-MODULE	process	mainModule	implemented	N82	tsonic_node::process::main_module	NODE-PROC-IPC-001	closed main module state
+NODE-PROCESS-DISCONNECT	process	disconnect	implemented	N82	tsonic_node::process::disconnect	NODE-PROC-IPC-001	closed IPC disconnect operation that fails when no channel exists
+NODE-PROCESS-SEND	process	send	implemented	N82	tsonic_node::process::send	NODE-PROC-IPC-001	closed IPC send operation that fails when no channel exists
+NODE-PROCESS-NO-DEPRECATION	process	noDeprecation	implemented	N82	tsonic_node::process::no_deprecation	NODE-PROC-METADATA-001	deprecation flag state
+NODE-PROCESS-THROW-DEPRECATION	process	throwDeprecation	implemented	N82	tsonic_node::process::throw_deprecation	NODE-PROC-METADATA-001	throw deprecation flag state
+NODE-PROCESS-TRACE-DEPRECATION	process	traceDeprecation	implemented	N82	tsonic_node::process::trace_deprecation	NODE-PROC-METADATA-001	trace deprecation flag state
+NODE-PROCESS-TRACE-PROCESS-WARNINGS	process	traceProcessWarnings	implemented	N82	tsonic_node::process::trace_process_warnings	NODE-PROC-METADATA-001	trace process warnings flag state
+NODE-PROCESS-HAS-UNCAUGHT-CAPTURE	process	hasUncaughtExceptionCaptureCallback	implemented	N82	tsonic_node::process::has_uncaught_exception_capture_callback	NODE-PROC-METADATA-001	uncaught exception capture callback state query
+NODE-PROCESS-SET-UNCAUGHT-CAPTURE	process	setUncaughtExceptionCaptureCallback	implemented	N82	tsonic_node::process::set_uncaught_exception_capture_callback	NODE-PROC-METADATA-001	uncaught exception capture callback state setter
+NODE-PROCESS-ADD-UNCAUGHT-CAPTURE	process	addUncaughtExceptionCaptureCallback	implemented	N82	tsonic_node::process::add_uncaught_exception_capture_callback	NODE-PROC-METADATA-001	uncaught exception capture callback registration marker
+NODE-PROCESS-ABORT	process	abort	implemented	N82	tsonic_node::process::abort	NODE-PROC-METADATA-001	explicit unsupported abort operation for generated runtime
+NODE-PROCESS-EXECVE	process	execve	implemented	N82	tsonic_node::process::execve	NODE-PROC-METADATA-001	explicit unsupported process image replacement operation
+NODE-PROCESS-FINALIZATION-CARRIER	process	ProcessFinalization	implemented	N82	tsonic_node::process::ProcessFinalization	NODE-PROC-METADATA-001	closed process finalization state carrier
+NODE-PROCESS-FINALIZATION	process	finalization	implemented	N82	tsonic_node::process::finalization	NODE-PROC-METADATA-001	closed finalization state query
+NODE-PROCESS-FINALIZATION-REGISTER	process	finalization.register	implemented	N82	tsonic_node::process::finalization_register	NODE-PROC-METADATA-001	closed finalization registration marker
+NODE-PROCESS-FINALIZATION-UNREGISTER	process	finalization.unregister	implemented	N82	tsonic_node::process::finalization_unregister	NODE-PROC-METADATA-001	closed finalization unregister marker
 NODE-PROCESS-REF-HANDLE	process	ref	implemented	N49	tsonic_node::process::ref_handle	NODE-PROC-013	no-op ref helper for explicit generated handles
 NODE-PROCESS-UNREF-HANDLE	process	unref	implemented	N49	tsonic_node::process::unref_handle	NODE-PROC-013	no-op unref helper for explicit generated handles
+NODE-PROCESS-WARNING-OPTIONS-CARRIER	process	EmitWarningOptions	implemented	N82	tsonic_node::process::EmitWarningOptions	NODE-PROC-METADATA-001	closed emitWarning options carrier
+NODE-PROCESS-WARNING-OPTIONS-TYPE	process	EmitWarningOptions.type	implemented	N82	tsonic_node::process::EmitWarningOptions::type	NODE-PROC-METADATA-001	warning type option
+NODE-PROCESS-WARNING-OPTIONS-CODE	process	EmitWarningOptions.code	implemented	N82	tsonic_node::process::EmitWarningOptions::code	NODE-PROC-METADATA-001	warning code option
+NODE-PROCESS-WARNING-OPTIONS-DETAIL	process	EmitWarningOptions.detail	implemented	N82	tsonic_node::process::EmitWarningOptions::detail	NODE-PROC-METADATA-001	warning detail option
+NODE-PROCESS-WARNING-OPTIONS-CTOR	process	EmitWarningOptions.ctor	implemented	N82	tsonic_node::process::EmitWarningOptions::ctor	NODE-PROC-METADATA-001	warning ctor metadata option
 NODE-PROCESS-WARNING-CARRIER	process	ProcessWarning	implemented	N15	tsonic_node::process::ProcessWarning	NODE-PROC-METADATA-001	warning carrier
 NODE-PROCESS-EMIT-WARNING	process	emitWarning	implemented	N15	tsonic_node::process::emit_warning	NODE-PROC-METADATA-001	closed warning capture helper
+NODE-PROCESS-EMIT-WARNING-OPTIONS	process	emitWarning options	implemented	N82	tsonic_node::process::emit_warning_with_options	NODE-PROC-METADATA-001	closed warning capture helper with EmitWarningOptions
 NODE-PROCESS-EMITTED-WARNINGS	process	warnings	implemented	N15	tsonic_node::process::emitted_warnings	NODE-PROC-METADATA-001	closed warning list accessor
 NODE-PROCESS-CLEAR-WARNINGS	process	clear warnings	implemented	N15	tsonic_node::process::clear_warnings	NODE-PROC-METADATA-001	warning list reset helper
 NODE-PROCESS-AVAILABLE-MEMORY	process	availableMemory	implemented	N15	tsonic_node::process::available_memory	NODE-PROC-METADATA-001	closed available memory query
@@ -2216,7 +2287,18 @@ NODE-PROCESS-STDERR	process	stderr	implemented	N62	tsonic_node::process::stderr	
 NODE-PROCESS-STDIN-ISTTY	process	stdin isTTY	implemented	N62	tsonic_node::process::stdin_is_tty	NODE-PROC-IO-001	closed stdin TTY probe
 NODE-PROCESS-EVENTS-CARRIER	process	ProcessEvents	implemented	N62	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	process lifecycle events use closed EventEmitter carrier
 NODE-PROCESS-EVENTS-ON	process	ProcessEvents.on	implemented	N62	tsonic_node::process::ProcessEvents::on	NODE-PROC-EVENTS-001	process event listener registration
+NODE-PROCESS-EVENTS-ADD-LISTENER	process	ProcessEvents.addListener	implemented	N82	tsonic_node::process::ProcessEvents::add_listener	NODE-PROC-EVENTS-001	process addListener alias
+NODE-PROCESS-EVENTS-ON-WITH-ID	process	ProcessEvents.onWithId	implemented	N82	tsonic_node::process::ProcessEvents::on_with_id	NODE-PROC-EVENTS-001	process listener registration with removable id
+NODE-PROCESS-EVENTS-ONCE	process	ProcessEvents.once	implemented	N82	tsonic_node::process::ProcessEvents::once	NODE-PROC-EVENTS-001	process once listener registration
+NODE-PROCESS-EVENTS-PREPEND-LISTENER	process	ProcessEvents.prependListener	implemented	N82	tsonic_node::process::ProcessEvents::prepend_listener	NODE-PROC-EVENTS-001	process prependListener registration
+NODE-PROCESS-EVENTS-PREPEND-ONCE	process	ProcessEvents.prependOnceListener	implemented	N82	tsonic_node::process::ProcessEvents::prepend_once_listener	NODE-PROC-EVENTS-001	process prependOnceListener registration
 NODE-PROCESS-EVENTS-EMIT	process	ProcessEvents.emit	implemented	N62	tsonic_node::process::ProcessEvents::emit	NODE-PROC-EVENTS-001	process event dispatch
+NODE-PROCESS-EVENTS-OFF	process	ProcessEvents.off	implemented	N82	tsonic_node::process::ProcessEvents::off_by_id	NODE-PROC-EVENTS-001	process off/remove by listener id
+NODE-PROCESS-EVENTS-REMOVE-LISTENER	process	ProcessEvents.removeListener	implemented	N82	tsonic_node::process::ProcessEvents::remove_listener_by_id	NODE-PROC-EVENTS-001	process removeListener by listener id
+NODE-PROCESS-EVENTS-REMOVE-ALL	process	ProcessEvents.removeAllListeners	implemented	N82	tsonic_node::process::ProcessEvents::remove_all_listeners	NODE-PROC-EVENTS-001	process removeAllListeners
+NODE-PROCESS-EVENTS-LISTENERS	process	ProcessEvents.listeners	implemented	N82	tsonic_node::process::ProcessEvents::listeners	NODE-PROC-EVENTS-001	process listeners id view
+NODE-PROCESS-EVENTS-RAW-LISTENERS	process	ProcessEvents.rawListeners	implemented	N82	tsonic_node::process::ProcessEvents::raw_listeners	NODE-PROC-EVENTS-001	process rawListeners id view
+NODE-PROCESS-EVENTS-EVENT-NAMES	process	ProcessEvents.eventNames	implemented	N82	tsonic_node::process::ProcessEvents::event_names	NODE-PROC-EVENTS-001	process event names view
 NODE-PROCESS-EVENTS-LISTENER-COUNT	process	ProcessEvents.listenerCount	implemented	N62	tsonic_node::process::ProcessEvents::listener_count	NODE-PROC-EVENTS-001	process event listener count
 NODE-OS-NETWORK	os	networkInterfaces	implemented	N10	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface query through approved dependency
 NODE-OS-PLATFORM-FN	os	platform	implemented	N67	tsonic_node::os::platform	NODE-OS-001	closed Node platform spelling helper

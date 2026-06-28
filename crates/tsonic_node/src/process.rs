@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
@@ -50,24 +50,49 @@ pub struct ResourceUsage {
 pub struct Release {
     pub name: String,
     pub source_url: String,
+    pub headers_url: Option<String>,
+    pub lib_url: Option<String>,
+    pub lts: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessFeatures {
+    pub debug: bool,
     pub inspector: bool,
     pub ipv6: bool,
     pub tls: bool,
     pub tls_alpn: bool,
+    pub tls_ocsp: bool,
     pub tls_sni: bool,
     pub uv: bool,
     pub cached_builtins: bool,
     pub require_module: bool,
+    pub typescript: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessConfig {
     pub target_defaults: Vec<(String, String)>,
     pub variables: Vec<(String, String)>,
+    pub cflags: Vec<String>,
+    pub defines: Vec<String>,
+    pub include_dirs: Vec<String>,
+    pub libraries: Vec<String>,
+    pub default_configuration: String,
+    pub host_arch: String,
+    pub target_arch: String,
+    pub node_install_npm: bool,
+    pub node_install_waf: bool,
+    pub node_prefix: String,
+    pub node_shared_openssl: bool,
+    pub node_shared_js_engine: bool,
+    pub node_shared_zlib: bool,
+    pub node_use_dtrace: bool,
+    pub node_use_etw: bool,
+    pub node_use_openssl: bool,
+    pub js_engine_no_strict_aliasing: i32,
+    pub js_engine_use_snapshot: bool,
+    pub visibility: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +101,39 @@ pub struct ProcessWarning {
     pub message: String,
     pub code: Option<String>,
     pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EmitWarningOptions {
+    pub r#type: Option<String>,
+    pub code: Option<String>,
+    pub detail: Option<String>,
+    pub ctor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessVersions {
+    pub node: String,
+    pub tsonic_rust: String,
+    pub ares: String,
+    pub http_parser: String,
+    pub modules: String,
+    pub openssl: String,
+    pub uv: String,
+    pub js_engine: String,
+    pub zlib: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProcessIpcState {
+    pub connected: bool,
+    pub channel: Option<String>,
+    pub main_module: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProcessFinalization {
+    pub registered_count: usize,
 }
 
 pub fn cwd() -> NodeResult<String> {
@@ -207,6 +265,9 @@ pub fn release() -> Release {
     Release {
         name: "tsonic-rust".to_string(),
         source_url: "https://github.com/tsoniclang/tsonic-rust".to_string(),
+        headers_url: None,
+        lib_url: None,
+        lts: None,
     }
 }
 
@@ -220,28 +281,52 @@ pub fn set_title(value: &str) {
 
 pub fn features() -> ProcessFeatures {
     ProcessFeatures {
+        debug: false,
         inspector: false,
         ipv6: true,
         tls: true,
         tls_alpn: true,
+        tls_ocsp: true,
         tls_sni: true,
         uv: false,
         cached_builtins: false,
         require_module: true,
+        typescript: Some("transform".to_string()),
     }
 }
 
 pub fn config() -> ProcessConfig {
+    let target_arch = arch();
+    let target_platform = platform();
     ProcessConfig {
         target_defaults: vec![
             ("default_configuration".to_string(), "Release".to_string()),
-            ("target_arch".to_string(), arch()),
-            ("target_platform".to_string(), platform()),
+            ("target_arch".to_string(), target_arch.clone()),
+            ("target_platform".to_string(), target_platform),
         ],
         variables: vec![
             ("host_arch".to_string(), std::env::consts::ARCH.to_string()),
             ("host_os".to_string(), std::env::consts::OS.to_string()),
         ],
+        cflags: Vec::new(),
+        defines: Vec::new(),
+        include_dirs: Vec::new(),
+        libraries: Vec::new(),
+        default_configuration: "Release".to_string(),
+        host_arch: std::env::consts::ARCH.to_string(),
+        target_arch,
+        node_install_npm: false,
+        node_install_waf: false,
+        node_prefix: String::new(),
+        node_shared_openssl: false,
+        node_shared_js_engine: false,
+        node_shared_zlib: false,
+        node_use_dtrace: false,
+        node_use_etw: false,
+        node_use_openssl: true,
+        js_engine_no_strict_aliasing: 0,
+        js_engine_use_snapshot: false,
+        visibility: "default".to_string(),
     }
 }
 
@@ -269,6 +354,15 @@ pub fn emit_warning(message: &str, name: Option<&str>, code: Option<&str>, detai
         code: code.map(str::to_string),
         detail: detail.map(str::to_string),
     });
+}
+
+pub fn emit_warning_with_options(message: &str, options: EmitWarningOptions) {
+    emit_warning(
+        message,
+        options.r#type.as_deref(),
+        options.code.as_deref(),
+        options.detail.as_deref(),
+    );
 }
 
 pub fn emitted_warnings() -> Vec<ProcessWarning> {
@@ -304,6 +398,20 @@ pub fn hrtime(previous: Option<(u64, u32)>) -> (u64, u32) {
 pub fn hrtime_bigint() -> u128 {
     let elapsed = START.get_or_init(Instant::now).elapsed();
     u128::from(elapsed.as_secs()) * 1_000_000_000 + u128::from(elapsed.subsec_nanos())
+}
+
+pub fn versions_struct() -> ProcessVersions {
+    ProcessVersions {
+        node: version(),
+        tsonic_rust: env!("CARGO_PKG_VERSION").to_string(),
+        ares: String::new(),
+        http_parser: String::new(),
+        modules: String::new(),
+        openssl: String::new(),
+        uv: String::new(),
+        js_engine: String::new(),
+        zlib: String::new(),
+    }
 }
 
 pub fn memory_usage() -> MemoryUsage {
@@ -414,6 +522,100 @@ pub fn next_tick(callback: impl FnOnce()) {
     callback();
 }
 
+pub fn connected() -> bool {
+    ipc_state().lock().unwrap().connected
+}
+
+pub fn channel() -> Option<String> {
+    ipc_state().lock().unwrap().channel.clone()
+}
+
+pub fn main_module() -> Option<String> {
+    ipc_state().lock().unwrap().main_module.clone()
+}
+
+pub fn disconnect() -> NodeResult<()> {
+    if !connected() {
+        return Err(NodeError::new(
+            "ERR_IPC_CHANNEL_CLOSED",
+            "process IPC channel is not connected",
+        ));
+    }
+    ipc_state().lock().unwrap().connected = false;
+    Ok(())
+}
+
+pub fn send(_message: &JsValue) -> NodeResult<bool> {
+    if connected() {
+        Ok(true)
+    } else {
+        Err(NodeError::new(
+            "ERR_IPC_CHANNEL_CLOSED",
+            "process IPC channel is not connected",
+        ))
+    }
+}
+
+pub fn no_deprecation() -> bool {
+    false
+}
+
+pub fn throw_deprecation() -> bool {
+    false
+}
+
+pub fn trace_deprecation() -> bool {
+    false
+}
+
+pub fn trace_process_warnings() -> bool {
+    false
+}
+
+pub fn has_uncaught_exception_capture_callback() -> bool {
+    UNCAUGHT_EXCEPTION_CAPTURE.load(Ordering::SeqCst)
+}
+
+pub fn set_uncaught_exception_capture_callback(enabled: bool) {
+    UNCAUGHT_EXCEPTION_CAPTURE.store(enabled, Ordering::SeqCst);
+}
+
+pub fn add_uncaught_exception_capture_callback() {
+    set_uncaught_exception_capture_callback(true);
+}
+
+pub fn abort() -> NodeResult<()> {
+    Err(NodeError::new(
+        "ERR_PROCESS_ABORT_UNSUPPORTED",
+        "process.abort is not exposed by the closed generated Rust runtime",
+    ))
+}
+
+pub fn execve(_file: &str, _args: &[&str], _env: &[(&str, &str)]) -> NodeResult<()> {
+    Err(NodeError::new(
+        "ERR_PROCESS_EXECVE_UNSUPPORTED",
+        "process.execve would replace the native process image and is not exposed",
+    ))
+}
+
+pub fn finalization() -> ProcessFinalization {
+    ProcessFinalization {
+        registered_count: FINALIZATION_COUNT.load(Ordering::SeqCst),
+    }
+}
+
+pub fn finalization_register() {
+    FINALIZATION_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+pub fn finalization_unregister() {
+    FINALIZATION_COUNT
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+            value.checked_sub(1)
+        })
+        .ok();
+}
+
 pub fn stdout() -> Writable {
     Writable::new()
 }
@@ -466,8 +668,73 @@ impl ProcessEvents {
         self
     }
 
+    pub fn add_listener<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.on(event, listener)
+    }
+
+    pub fn on_with_id<F>(&mut self, event: impl Into<String>, listener: F) -> usize
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.on_with_id(event, listener)
+    }
+
+    pub fn once<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.once(event, listener);
+        self
+    }
+
+    pub fn prepend_listener<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.prepend_listener(event, listener);
+        self
+    }
+
+    pub fn prepend_once_listener<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.prepend_once_listener(event, listener);
+        self
+    }
+
     pub fn emit(&mut self, event: &str, args: &[JsValue]) -> bool {
         self.emitter.emit(event, args)
+    }
+
+    pub fn off_by_id(&mut self, event: &str, listener_id: usize) -> &mut Self {
+        self.emitter.off_by_id(event, listener_id);
+        self
+    }
+
+    pub fn remove_listener_by_id(&mut self, event: &str, listener_id: usize) -> &mut Self {
+        self.emitter.remove_listener_by_id(event, listener_id);
+        self
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        self.emitter.remove_all_listeners(event);
+        self
+    }
+
+    pub fn listeners(&self, event: &str) -> Vec<usize> {
+        self.emitter.listeners(event)
+    }
+
+    pub fn raw_listeners(&self, event: &str) -> Vec<usize> {
+        self.emitter.raw_listeners(event)
+    }
+
+    pub fn event_names(&self) -> Vec<String> {
+        self.emitter.event_names()
     }
 
     pub fn listener_count(&self, event: &str) -> usize {
@@ -574,6 +841,9 @@ fn current_rss_bytes() -> Option<u64> {
 
 static PROCESS_TITLE: OnceLock<Mutex<String>> = OnceLock::new();
 static WARNINGS: OnceLock<Mutex<Vec<ProcessWarning>>> = OnceLock::new();
+static IPC_STATE: OnceLock<Mutex<ProcessIpcState>> = OnceLock::new();
+static UNCAUGHT_EXCEPTION_CAPTURE: AtomicBool = AtomicBool::new(false);
+static FINALIZATION_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 fn process_title() -> &'static Mutex<String> {
     PROCESS_TITLE.get_or_init(|| Mutex::new("tsonic-rust".to_string()))
@@ -581,4 +851,8 @@ fn process_title() -> &'static Mutex<String> {
 
 fn warnings() -> &'static Mutex<Vec<ProcessWarning>> {
     WARNINGS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn ipc_state() -> &'static Mutex<ProcessIpcState> {
+    IPC_STATE.get_or_init(|| Mutex::new(ProcessIpcState::default()))
 }

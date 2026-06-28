@@ -85,6 +85,9 @@ fn process_runtime_queries_have_stable_shapes() {
     assert!(process::versions()
         .iter()
         .any(|(name, _)| name == "tsonic_rust"));
+    let versions = process::versions_struct();
+    assert_eq!(versions.node, process::version());
+    assert!(!versions.tsonic_rust.is_empty());
     assert!(process::uptime() >= 0.0);
     let (seconds, nanos) = process::hrtime(None);
     assert!(nanos < 1_000_000_000);
@@ -111,7 +114,10 @@ fn process_metadata_warnings_and_feature_shapes_are_closed() {
     let features = process::features();
     assert!(features.ipv6);
     assert!(features.tls);
+    assert!(features.tls_ocsp);
     assert!(features.require_module);
+    assert_eq!(features.typescript.as_deref(), Some("transform"));
+    assert!(!features.debug);
     assert!(!features.inspector);
 
     let config = process::config();
@@ -120,6 +126,11 @@ fn process_metadata_warnings_and_feature_shapes_are_closed() {
         .iter()
         .any(|(name, _)| name == "target_platform"));
     assert!(config.variables.iter().any(|(name, _)| name == "host_arch"));
+    assert_eq!(config.default_configuration, "Release");
+    assert_eq!(config.target_arch, process::arch());
+    assert!(config.node_use_openssl);
+    assert!(!config.node_shared_js_engine);
+    assert_eq!(config.visibility, "default");
 
     assert!(process::allowed_node_environment_flags().contains(&"--trace-warnings"));
     assert!(process::available_memory() > 0);
@@ -128,6 +139,27 @@ fn process_metadata_warnings_and_feature_shapes_are_closed() {
     assert_eq!(process::debug_port(), 0);
     assert_eq!(process::get_builtin_module("node:fs"), Some("fs"));
     assert_eq!(process::get_builtin_module("missing"), None);
+    assert_eq!(process::main_module(), None);
+    assert_eq!(process::channel(), None);
+    assert!(!process::connected());
+    assert!(process::disconnect().is_err());
+    assert!(process::send(&tsonic_js::JsValue::String("hello".to_string())).is_err());
+    assert!(!process::no_deprecation());
+    assert!(!process::throw_deprecation());
+    assert!(!process::trace_deprecation());
+    assert!(!process::trace_process_warnings());
+    process::set_uncaught_exception_capture_callback(false);
+    assert!(!process::has_uncaught_exception_capture_callback());
+    process::add_uncaught_exception_capture_callback();
+    assert!(process::has_uncaught_exception_capture_callback());
+    process::set_uncaught_exception_capture_callback(false);
+    assert!(process::abort().is_err());
+    assert!(process::execve("/bin/echo", &[], &[]).is_err());
+    let before = process::finalization().registered_count;
+    process::finalization_register();
+    assert_eq!(process::finalization().registered_count, before + 1);
+    process::finalization_unregister();
+    assert_eq!(process::finalization().registered_count, before);
     process::ref_handle(&features);
     process::unref_handle(&features);
     let current_umask = process::umask(None);
@@ -147,13 +179,49 @@ fn process_metadata_warnings_and_feature_shapes_are_closed() {
     assert_eq!(warnings[0].message, "careful");
     assert_eq!(warnings[0].code.as_deref(), Some("TSONIC_WARN"));
     assert_eq!(warnings[0].detail.as_deref(), Some("detail"));
+    process::emit_warning_with_options(
+        "with options",
+        process::EmitWarningOptions {
+            r#type: Some("TypedWarning".to_string()),
+            code: Some("TSONIC_TYPED".to_string()),
+            detail: Some("typed detail".to_string()),
+            ctor: Some("Ctor".to_string()),
+        },
+    );
+    let warnings = process::emitted_warnings();
+    assert_eq!(warnings.len(), 2);
+    assert_eq!(warnings[1].name, "TypedWarning");
+    assert_eq!(warnings[1].code.as_deref(), Some("TSONIC_TYPED"));
 }
 
 #[test]
 fn process_events_use_closed_event_emitter_shape() {
     let mut events = process::ProcessEvents::new();
     events.on("beforeExit", |_| {});
-    assert_eq!(events.listener_count("beforeExit"), 1);
+    events.add_listener("beforeExit", |_| {});
+    let removable = events.on_with_id("beforeExit", |_| {});
+    events.once("exit", |_| {});
+    events.prepend_listener("warning", |_| {});
+    events.prepend_once_listener("warning", |_| {});
+    assert_eq!(events.listener_count("beforeExit"), 3);
+    assert!(events.listeners("beforeExit").contains(&removable));
+    assert_eq!(
+        events.raw_listeners("beforeExit"),
+        events.listeners("beforeExit")
+    );
+    assert!(events.event_names().contains(&"beforeExit".to_string()));
+    events.off_by_id("beforeExit", removable);
+    assert!(!events.listeners("beforeExit").contains(&removable));
+    let removable = events.on_with_id("beforeExit", |_| {});
+    events.remove_listener_by_id("beforeExit", removable);
+    assert!(!events.listeners("beforeExit").contains(&removable));
     assert!(events.emit("beforeExit", &[]));
+    assert!(events.emit("exit", &[]));
+    assert!(!events.emit("exit", &[]));
+    assert!(events.emit("warning", &[]));
+    events.remove_all_listeners(Some("warning"));
+    assert_eq!(events.listener_count("warning"), 0);
+    events.remove_all_listeners(None);
+    assert_eq!(events.event_names().len(), 0);
     assert!(!events.emit("uncaughtException", &[]));
 }
