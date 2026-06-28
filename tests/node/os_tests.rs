@@ -6,8 +6,10 @@ fn os_wrappers_have_stable_shapes() {
     assert!(!os::arch().is_empty());
     assert!(matches!(os::eol(), "\n" | "\r\n"));
     assert!(!os::tmpdir().unwrap().is_empty());
+    assert!(os::homedir().is_none_or(|value| !value.is_empty()));
     assert!(!os::hostname().is_empty());
     assert!(!os::r#type().is_empty());
+    assert!(!os::release().is_empty());
     let _version = os::version();
     let cpus = os::cpus();
     assert!(!cpus.is_empty());

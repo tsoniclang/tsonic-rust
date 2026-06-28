@@ -407,6 +407,31 @@ NODE-OS-HOST-RELEASE	os	hostname/type/release	implemented	J	tsonic_node::os::{ho
 NODE-OS-CPU	os	cpus/loadavg	implemented	J	tsonic_node::os::{cpus,loadavg}	NODE-OS-001	CPU/load helpers
 NODE-OS-NETWORK	os	networkInterfaces	implemented	N10	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface query through approved dependency
 NODE-OS-NETWORK-FIELDS	os	NetworkInterfaceInfo address/netmask/mac/internal/cidr/scopeid	implemented	N50	tsonic_node::os::{network_interfaces,NetworkInterfaceInfo}	NODE-OS-005	closed network interface field carrier with provider data where available and deterministic zero MAC/scope fallback
+NODE-OS-PLATFORM-FN	os	platform	implemented	N67	tsonic_node::os::platform	NODE-OS-001	closed Node platform spelling helper
+NODE-OS-ARCH-FN	os	arch	implemented	N67	tsonic_node::os::arch	NODE-OS-001	closed Node architecture spelling helper
+NODE-OS-EOL-FN	os	EOL	implemented	N67	tsonic_node::os::eol	NODE-OS-001	platform newline constant
+NODE-OS-TMPDIR-FN	os	tmpdir	implemented	N67	tsonic_node::os::tmpdir	NODE-OS-001	platform temporary directory helper
+NODE-OS-HOMEDIR-FN	os	homedir	implemented	N67	tsonic_node::os::homedir	NODE-OS-001	home directory helper with explicit absence
+NODE-OS-HOSTNAME-FN	os	hostname	implemented	N67	tsonic_node::os::hostname	NODE-OS-001	host name helper
+NODE-OS-TYPE-FN	os	type	implemented	N67	tsonic_node::os::type	NODE-OS-001	host OS type helper
+NODE-OS-RELEASE-FN	os	release	implemented	N67	tsonic_node::os::release	NODE-OS-001	host OS release helper
+NODE-OS-VERSION-FN	os	version	implemented	N67	tsonic_node::os::version	NODE-OS-001	host OS version helper
+NODE-OS-UPTIME-FN	os	uptime	implemented	N67	tsonic_node::os::uptime	NODE-OS-001	host uptime helper with finite seconds carrier
+NODE-OS-AVAILABLE-PARALLELISM-FN	os	availableParallelism	implemented	N67	tsonic_node::os::available_parallelism	NODE-OS-001	available parallelism helper with minimum one worker
+NODE-OS-MACHINE-FN	os	machine	implemented	N67	tsonic_node::os::machine	NODE-OS-001	machine architecture helper
+NODE-OS-ENDIANNESS-FN	os	endianness	implemented	N67	tsonic_node::os::endianness	NODE-OS-001	LE/BE endianness helper
+NODE-OS-DEVNULL-FN	os	devNull	implemented	N67	tsonic_node::os::dev_null	NODE-OS-001	platform null device path helper
+NODE-OS-USERINFO-FN	os	userInfo	implemented	N67	tsonic_node::os::user_info	NODE-OS-004	closed user info carrier
+NODE-OS-USERINFO-OPTIONS-FN	os	userInfo options	implemented	N67	tsonic_node::os::user_info_with_options	NODE-OS-004	user info options carrier with explicit encoding field
+NODE-OS-CPUS-FN	os	cpus	implemented	N67	tsonic_node::os::cpus	NODE-OS-001	CPU info carrier list with model, speed, and times
+NODE-OS-LOADAVG-FN	os	loadavg	implemented	N67	tsonic_node::os::loadavg	NODE-OS-001	load average triple helper
+NODE-OS-TOTALMEM-FN	os	totalmem	implemented	N67	tsonic_node::os::totalmem	NODE-OS-001	total memory helper
+NODE-OS-FREEMEM-FN	os	freemem	implemented	N67	tsonic_node::os::freemem	NODE-OS-001	free memory helper
+NODE-OS-NETWORK-INTERFACES-FN	os	networkInterfaces	implemented	N67	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface map helper
+NODE-OS-CONSTANTS-FN	os	constants	implemented	N67	tsonic_node::os::constants	NODE-OS-004	closed errno, signal, priority, dlopen, and uv constants
+NODE-OS-CPUINFO-CARRIER	os	CpuInfo/CpuTimes	implemented	N67	tsonic_node::os::{CpuInfo,CpuTimes}	NODE-OS-001	CPU info and CPU times carriers
+NODE-OS-USERINFO-CARRIER	os	UserInfo/UserInfoOptions	implemented	N67	tsonic_node::os::{UserInfo,UserInfoOptions}	NODE-OS-004	user info and options carriers
+NODE-OS-CONSTANTS-CARRIER	os	OsConstants/PriorityConstants	implemented	N67	tsonic_node::os::{OsConstants,PriorityConstants}	NODE-OS-004	OS constants carrier objects
 NODE-NET-SOCKET	net	Socket address/write/end/ref/timeout metadata	implemented	N17	tsonic_node::net::Socket	NODE-NET-002	TCP socket address, byte counter, timeout, encoding, ref/unref, and close helpers
 NODE-NET-SERVER	net	Server address/listen/ref metadata	implemented	N17	tsonic_node::net::Server	NODE-NET-002	TCP server address and ref/unref shape
 NODE-NET-OPTIONS	net	ConnectOptions/ListenOptions/SocketConstructorOpts	implemented	N37	tsonic_node::net::{ConnectOptions,ListenOptions,SocketConstructorOpts}	NODE-NET-003	closed connect/listen/socket constructor option carriers without fd takeover or dynamic lookup hooks

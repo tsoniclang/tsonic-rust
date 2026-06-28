@@ -294,6 +294,12 @@ NODE-NET-004	implemented	N64	tsonic_node::abi::{net_connect,net_connect_with_opt
 NODE-MOD-022	implemented	J	tsonic_node::abi::os_*	NODE-OS-001 through NODE-OS-003	platform/arch/eol/tmpdir/homedir only
 NODE-OS-004	implemented	N31	tsonic_node::abi::{os_constants,os_user_info_with_options,OsConstants,UserInfoOptions}	NODE-OS-004	errno, signal, priority, dlopen, uv constants and userInfo option shape
 NODE-OS-005	implemented	N50	tsonic_node::abi::{os_constants,os_network_interfaces,OsConstants,NetworkInterfaceInfo}	NODE-OS-005	expanded errno constants and full NetworkInterfaceInfo field carrier
+NODE-OS-006	implemented	N67	tsonic_node::abi::{os_platform,os_arch,os_eol,os_machine,os_endianness}	NODE-OS-001	OS identity and architecture helpers are individually inventoried
+NODE-OS-007	implemented	N67	tsonic_node::abi::{os_tmpdir,os_homedir,os_hostname,os_type,os_release,os_version,os_dev_null}	NODE-OS-001	OS path and host metadata helpers are individually inventoried
+NODE-OS-008	implemented	N67	tsonic_node::abi::{os_cpus,os_loadavg,os_totalmem,os_freemem,os_uptime,os_available_parallelism}	NODE-OS-001	OS CPU, memory, uptime, load, and parallelism helpers are individually inventoried
+NODE-OS-009	implemented	N67	tsonic_node::abi::{os_user_info,os_user_info_with_options,UserInfo,UserInfoOptions}	NODE-OS-004	OS user info helpers and option carriers are individually inventoried
+NODE-OS-010	implemented	N67	tsonic_node::abi::{os_network_interfaces,NetworkInterfaceInfo}	NODE-OS-NETWORK-001,NODE-OS-005	OS network interface helper and field carrier are individually inventoried
+NODE-OS-011	implemented	N67	tsonic_node::abi::{os_constants,OsConstants,PriorityConstants}	NODE-OS-004,NODE-OS-005	OS constants carriers are individually inventoried
 NODE-MOD-023	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-008	pure string path helpers
 NODE-MOD-024	implemented	M	tsonic_node::abi::performance_now	NODE-MISC-001	performance timer/observer policy not first wave (completed in full-completion branch)
 NODE-PERF-001	implemented	N11	tsonic_node::perf_hooks::{PerformanceEntry,PerformanceObserver,PerformanceObserverEntryList}	NODE-PERF-001	mark, measure, entry queries, observer snapshots, and supported entry types
