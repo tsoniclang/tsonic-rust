@@ -156,6 +156,14 @@ fn async_local_storage_tracks_nested_store_scope() {
         scope.dispose();
     }
     assert_eq!(storage.get_store().as_deref(), Some("default"));
+
+    storage.enter_with("entered".to_string());
+    assert_eq!(storage.get_store().as_deref(), Some("entered"));
+    let exited = storage.exit(|| storage.get_store());
+    assert_eq!(exited.as_deref(), Some("default"));
+    assert_eq!(storage.get_store().as_deref(), Some("entered"));
+    storage.disable();
+    assert_eq!(storage.get_store().as_deref(), Some("default"));
 }
 
 #[test]
@@ -231,6 +239,7 @@ fn diagnostics_channel_publishes_to_named_subscribers() {
     let seen = Rc::new(RefCell::new(Vec::new()));
     let target = Rc::clone(&seen);
     let channel = diagnostics_channel::channel(name);
+    assert_eq!(channel.name(), name);
     channel.subscribe(move |message| target.borrow_mut().push(message.to_string()));
 
     assert!(channel.has_subscribers());
@@ -238,4 +247,15 @@ fn diagnostics_channel_publishes_to_named_subscribers() {
     assert_eq!(seen.borrow().as_slice(), &["\"payload\"".to_string()]);
     assert!(diagnostics_channel::channel_names().contains(&name.to_string()));
     diagnostics_channel::unsubscribe_all(name);
+
+    let module_seen = Rc::new(RefCell::new(Vec::new()));
+    let module_target = Rc::clone(&module_seen);
+    diagnostics_channel::subscribe(name, move |message| {
+        module_target.borrow_mut().push(message.inspect())
+    });
+    assert!(diagnostics_channel::has_subscribers(name));
+    assert!(diagnostics_channel::publish(name, &JsValue::Number(7.0)));
+    assert_eq!(module_seen.borrow().as_slice(), &["7".to_string()]);
+    diagnostics_channel::unsubscribe_all(name);
+    assert!(!diagnostics_channel::has_subscribers(name));
 }

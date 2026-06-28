@@ -21,9 +21,38 @@ NODE-ASSERT-DOES-NOT-MATCH	assert	doesNotMatch	implemented	N68	tsonic_node::asse
 NODE-ASSERT-ERROR-OPTIONS	assert	AssertionErrorOptions	implemented	N68	tsonic_node::assert::AssertionErrorOptions	NODE-ASSERT-002	AssertionError options carrier with message, actual, expected, operator, stackStartFn, and diff fields
 NODE-ASSERT-DIFF	assert	AssertionDiff	implemented	N68	tsonic_node::assert::AssertionDiff	NODE-ASSERT-002	Assertion diff mode carrier
 NODE-MODULE-ASYNC-CONTEXT	async_context	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation is outside closed runtime externals
-NODE-MODULE-ASYNC-HOOKS	async_hooks	module	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
-NODE-ASYNC-HOOK	async_hooks	createHook/AsyncHook callbacks	implemented	N23	tsonic_node::async_hooks::{create_hook,AsyncHook,HookCallbacks}	NODE-ASYNC-002	explicit callback lifecycle carrier; no implicit runtime instrumentation
-NODE-ASYNC-RESOURCE	async_hooks	AsyncResource/async ids/providers	implemented	N23	tsonic_node::async_hooks::{AsyncResource,AsyncResourceOptions,async_wrap_providers}	NODE-ASYNC-002	closed async resource identity, bind, destroy, and provider constants
+NODE-MODULE-ASYNC-HOOKS	async_hooks	module	implemented	N3	tsonic_node::async_hooks	NODE-ASYNC-001	closed async_hooks module surface
+NODE-ASYNC-ALS-NEW	async_hooks	AsyncLocalStorage constructor	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::new	NODE-ASYNC-001	scoped store runtime with empty initial stack
+NODE-ASYNC-ALS-WITH-OPTIONS	async_hooks	AsyncLocalStorage options	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::with_options	NODE-ASYNC-001	name and defaultValue options carrier
+NODE-ASYNC-ALS-NAME	async_hooks	AsyncLocalStorage.name	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::name	NODE-ASYNC-001	name accessor
+NODE-ASYNC-ALS-RUN	async_hooks	AsyncLocalStorage.run	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::run	NODE-ASYNC-001	scoped callback store push/pop
+NODE-ASYNC-ALS-ENTER-WITH	async_hooks	AsyncLocalStorage.enterWith	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::enter_with	NODE-ASYNC-001	explicit store enter
+NODE-ASYNC-ALS-EXIT	async_hooks	AsyncLocalStorage.exit	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::exit	NODE-ASYNC-001	temporary scope exit and restore
+NODE-ASYNC-ALS-GET-STORE	async_hooks	AsyncLocalStorage.getStore	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::get_store	NODE-ASYNC-001	current/default store accessor
+NODE-ASYNC-ALS-DISABLE	async_hooks	AsyncLocalStorage.disable	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::disable	NODE-ASYNC-001	clears scoped store stack
+NODE-ASYNC-ALS-WITH-SCOPE	async_hooks	AsyncLocalStorage scoped guard	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage::with_scope	NODE-ASYNC-001	RAII scope guard for generated Rust
+NODE-ASYNC-CREATE-HOOK	async_hooks	createHook	implemented	N23	tsonic_node::async_hooks::create_hook	NODE-ASYNC-002	explicit callback lifecycle carrier
+NODE-ASYNC-HOOK-CALLBACKS	async_hooks	HookCallbacks	implemented	N23	tsonic_node::async_hooks::HookCallbacks	NODE-ASYNC-002	init/before/after/destroy/promiseResolve callback carrier
+NODE-ASYNC-HOOK-ENABLE	async_hooks	AsyncHook.enable	implemented	N23	tsonic_node::async_hooks::AsyncHook::enable	NODE-ASYNC-002	enables explicit hook callbacks
+NODE-ASYNC-HOOK-DISABLE	async_hooks	AsyncHook.disable	implemented	N23	tsonic_node::async_hooks::AsyncHook::disable	NODE-ASYNC-002	disables explicit hook callbacks
+NODE-ASYNC-HOOK-ENABLED	async_hooks	AsyncHook enabled state	implemented	N23	tsonic_node::async_hooks::AsyncHook::enabled	NODE-ASYNC-002	testable hook enabled state
+NODE-ASYNC-HOOK-EMIT-INIT	async_hooks	AsyncHook init callback	implemented	N23	tsonic_node::async_hooks::AsyncHook::emit_init	NODE-ASYNC-002	manual init callback dispatch
+NODE-ASYNC-HOOK-EMIT-BEFORE	async_hooks	AsyncHook before callback	implemented	N23	tsonic_node::async_hooks::AsyncHook::emit_before	NODE-ASYNC-002	manual before callback dispatch
+NODE-ASYNC-HOOK-EMIT-AFTER	async_hooks	AsyncHook after callback	implemented	N23	tsonic_node::async_hooks::AsyncHook::emit_after	NODE-ASYNC-002	manual after callback dispatch
+NODE-ASYNC-HOOK-EMIT-DESTROY	async_hooks	AsyncHook destroy callback	implemented	N23	tsonic_node::async_hooks::AsyncHook::emit_destroy	NODE-ASYNC-002	manual destroy callback dispatch
+NODE-ASYNC-HOOK-EMIT-PROMISE	async_hooks	AsyncHook promiseResolve callback	implemented	N23	tsonic_node::async_hooks::AsyncHook::emit_promise_resolve	NODE-ASYNC-002	manual promiseResolve callback dispatch
+NODE-ASYNC-RESOURCE-NEW	async_hooks	AsyncResource constructor	implemented	N23	tsonic_node::async_hooks::AsyncResource::new	NODE-ASYNC-002	closed async resource identity
+NODE-ASYNC-RESOURCE-ASYNC-ID	async_hooks	AsyncResource.asyncId	implemented	N23	tsonic_node::async_hooks::AsyncResource::async_id	NODE-ASYNC-002	async id accessor
+NODE-ASYNC-RESOURCE-TRIGGER-ID	async_hooks	AsyncResource.triggerAsyncId	implemented	N23	tsonic_node::async_hooks::AsyncResource::trigger_async_id	NODE-ASYNC-002	trigger id accessor
+NODE-ASYNC-RESOURCE-TYPE	async_hooks	AsyncResource resource type	implemented	N23	tsonic_node::async_hooks::AsyncResource::resource_type	NODE-ASYNC-002	resource type accessor
+NODE-ASYNC-RESOURCE-RUN-SCOPE	async_hooks	AsyncResource.runInAsyncScope	implemented	N23	tsonic_node::async_hooks::AsyncResource::run_in_async_scope	NODE-ASYNC-002	closed callback execution without implicit runtime instrumentation
+NODE-ASYNC-RESOURCE-BIND	async_hooks	AsyncResource.bind	implemented	N23	tsonic_node::async_hooks::AsyncResource::bind	NODE-ASYNC-002	bound function carrier records async id
+NODE-ASYNC-RESOURCE-EMIT-DESTROY	async_hooks	AsyncResource.emitDestroy	implemented	N23	tsonic_node::async_hooks::AsyncResource::emit_destroy	NODE-ASYNC-002	destroy lifecycle marker
+NODE-ASYNC-RESOURCE-DESTROYED	async_hooks	AsyncResource destroyed state	implemented	N23	tsonic_node::async_hooks::AsyncResource::destroyed	NODE-ASYNC-002	destroyed state accessor
+NODE-ASYNC-BOUND-FUNCTION	async_hooks	BoundAsyncFunction asyncId/call	implemented	N23	tsonic_node::async_hooks::BoundAsyncFunction	NODE-ASYNC-002	bound function exposes async id and explicit call
+NODE-ASYNC-EXECUTION-ID	async_hooks	executionAsyncId	implemented	N23	tsonic_node::async_hooks::execution_async_id	NODE-ASYNC-002	closed default execution async id
+NODE-ASYNC-TRIGGER-ID	async_hooks	triggerAsyncId	implemented	N23	tsonic_node::async_hooks::trigger_async_id	NODE-ASYNC-002	closed default trigger async id
+NODE-ASYNC-PROVIDERS	async_hooks	asyncWrapProviders	implemented	N23	tsonic_node::async_hooks::async_wrap_providers	NODE-ASYNC-002	closed async provider constants
 NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	closed Buffer carrier
 NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process	NODE-CHILD-001	capability-gated shell-free file process spawn and child process shape
 NODE-MODULE-CLUSTER	cluster	module	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary/worker process orchestration over approved file-spawn model
@@ -54,6 +83,16 @@ NODE-CONSOLE-PROFILE	console	Console.profile/profileEnd	implemented	N75	tsonic_j
 NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
 NODE-MODULE-DGRAM	dgram	module	implemented	N7	tsonic_node::dgram	NODE-DGRAM-001	UDP datagram socket over std net
 NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	implemented	N3	tsonic_node::diagnostics_channel	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
+NODE-DIAG-CHANNEL	diagnostics_channel	channel	implemented	N3	tsonic_node::diagnostics_channel::channel	NODE-DIAG-001	channel constructor by name
+NODE-DIAG-CHANNEL-NAME	diagnostics_channel	Channel.name	implemented	N3	tsonic_node::diagnostics_channel::Channel::name	NODE-DIAG-001	channel name accessor
+NODE-DIAG-CHANNEL-SUBSCRIBE	diagnostics_channel	Channel.subscribe	implemented	N3	tsonic_node::diagnostics_channel::Channel::subscribe	NODE-DIAG-001	channel instance subscriber registration
+NODE-DIAG-CHANNEL-HAS-SUBSCRIBERS	diagnostics_channel	Channel.hasSubscribers	implemented	N3	tsonic_node::diagnostics_channel::Channel::has_subscribers	NODE-DIAG-001	channel instance subscriber predicate
+NODE-DIAG-CHANNEL-PUBLISH	diagnostics_channel	Channel.publish	implemented	N3	tsonic_node::diagnostics_channel::Channel::publish	NODE-DIAG-001	channel instance publish dispatch
+NODE-DIAG-SUBSCRIBE	diagnostics_channel	subscribe	implemented	N3	tsonic_node::diagnostics_channel::subscribe	NODE-DIAG-001	module-level subscriber registration
+NODE-DIAG-HAS-SUBSCRIBERS	diagnostics_channel	hasSubscribers	implemented	N3	tsonic_node::diagnostics_channel::has_subscribers	NODE-DIAG-001	module-level subscriber predicate
+NODE-DIAG-PUBLISH	diagnostics_channel	publish	implemented	N3	tsonic_node::diagnostics_channel::publish	NODE-DIAG-001	module-level publish dispatch
+NODE-DIAG-UNSUBSCRIBE-ALL	diagnostics_channel	unsubscribeAll	implemented	N3	tsonic_node::diagnostics_channel::unsubscribe_all	NODE-DIAG-001	explicit test/runtime cleanup helper
+NODE-DIAG-CHANNEL-NAMES	diagnostics_channel	channelNames	implemented	N3	tsonic_node::diagnostics_channel::channel_names	NODE-DIAG-001	known channel name introspection
 NODE-MODULE-DNS	dns	module	implemented	N3	tsonic_node::dns	NODE-DNS-001	platform resolver lookup and address helpers
 NODE-DNS-RECORDS	dns	resolveAny/NS/PTR/CAA/NAPTR/SOA/TLSA	implemented	N26	tsonic_node::dns::{resolve_any,resolve_ns,resolve_ptr,resolve_caa,resolve_naptr,resolve_soa,resolve_tlsa}	NODE-DNS-002	closed DNS record API shapes; unsupported record resolver types fail explicitly with ENODATA
 NODE-DNS-RESOLVER	dns	Resolver complete common shape	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	Resolver setLocalAddress/cancel/reverse/record methods and server state
