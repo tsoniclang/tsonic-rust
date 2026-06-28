@@ -1,9 +1,20 @@
 use crate::error::{NodeError, NodeResult};
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CpuTimes {
+    pub user: u64,
+    pub nice: u64,
+    pub sys: u64,
+    pub idle: u64,
+    pub irq: u64,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CpuInfo {
     pub model: String,
     pub speed: u32,
+    pub times: CpuTimes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +29,32 @@ pub struct UserInfo {
     pub username: String,
     pub homedir: String,
     pub shell: Option<String>,
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserInfoOptions {
+    pub encoding: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PriorityConstants {
+    pub priority_low: i32,
+    pub priority_below_normal: i32,
+    pub priority_normal: i32,
+    pub priority_above_normal: i32,
+    pub priority_high: i32,
+    pub priority_highest: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OsConstants {
+    pub errno: BTreeMap<&'static str, i32>,
+    pub signals: BTreeMap<&'static str, i32>,
+    pub priority: PriorityConstants,
+    pub dlopen: BTreeMap<&'static str, i32>,
+    pub uv: BTreeMap<&'static str, i32>,
 }
 
 pub fn platform() -> String {
@@ -124,12 +161,18 @@ pub fn dev_null() -> &'static str {
 }
 
 pub fn user_info() -> UserInfo {
+    user_info_with_options(None)
+}
+
+pub fn user_info_with_options(_options: Option<UserInfoOptions>) -> UserInfo {
     UserInfo {
         username: std::env::var("USER")
             .or_else(|_| std::env::var("USERNAME"))
             .unwrap_or_default(),
         homedir: homedir().unwrap_or_default(),
         shell: std::env::var("SHELL").ok(),
+        uid: uid(),
+        gid: gid(),
     }
 }
 
@@ -140,6 +183,7 @@ pub fn cpus() -> Vec<CpuInfo> {
             .map(|_| CpuInfo {
                 model: std::env::consts::ARCH.to_string(),
                 speed: 0,
+                times: CpuTimes::default(),
             })
             .collect()
     })
@@ -194,8 +238,131 @@ pub fn network_interfaces(
     Ok(result)
 }
 
+pub fn constants() -> OsConstants {
+    OsConstants {
+        errno: errno_constants(),
+        signals: signal_constants(),
+        priority: PriorityConstants {
+            priority_low: 19,
+            priority_below_normal: 10,
+            priority_normal: 0,
+            priority_above_normal: -7,
+            priority_high: -14,
+            priority_highest: -20,
+        },
+        dlopen: dlopen_constants(),
+        uv: BTreeMap::from([("UV_UDP_REUSEADDR", 4)]),
+    }
+}
+
 pub fn unavailable(message: &str) -> NodeError {
     NodeError::new("ERR_UNSUPPORTED_OPERATION", message)
+}
+
+#[cfg(unix)]
+fn uid() -> Option<u32> {
+    Some(unsafe { libc::getuid() })
+}
+
+#[cfg(not(unix))]
+fn uid() -> Option<u32> {
+    None
+}
+
+#[cfg(unix)]
+fn gid() -> Option<u32> {
+    Some(unsafe { libc::getgid() })
+}
+
+#[cfg(not(unix))]
+fn gid() -> Option<u32> {
+    None
+}
+
+fn errno_constants() -> BTreeMap<&'static str, i32> {
+    BTreeMap::from([
+        ("E2BIG", libc::E2BIG),
+        ("EACCES", libc::EACCES),
+        ("EADDRINUSE", libc::EADDRINUSE),
+        ("EADDRNOTAVAIL", libc::EADDRNOTAVAIL),
+        ("EAFNOSUPPORT", libc::EAFNOSUPPORT),
+        ("EAGAIN", libc::EAGAIN),
+        ("EBADF", libc::EBADF),
+        ("EBUSY", libc::EBUSY),
+        ("ECONNABORTED", libc::ECONNABORTED),
+        ("ECONNREFUSED", libc::ECONNREFUSED),
+        ("ECONNRESET", libc::ECONNRESET),
+        ("EEXIST", libc::EEXIST),
+        ("EFAULT", libc::EFAULT),
+        ("EFBIG", libc::EFBIG),
+        ("EINTR", libc::EINTR),
+        ("EINVAL", libc::EINVAL),
+        ("EIO", libc::EIO),
+        ("EISDIR", libc::EISDIR),
+        ("EMFILE", libc::EMFILE),
+        ("EMLINK", libc::EMLINK),
+        ("ENAMETOOLONG", libc::ENAMETOOLONG),
+        ("ENFILE", libc::ENFILE),
+        ("ENOENT", libc::ENOENT),
+        ("ENOMEM", libc::ENOMEM),
+        ("ENOSPC", libc::ENOSPC),
+        ("ENOTDIR", libc::ENOTDIR),
+        ("ENOTEMPTY", libc::ENOTEMPTY),
+        ("ENOTSUP", libc::ENOTSUP),
+        ("EPERM", libc::EPERM),
+        ("EPIPE", libc::EPIPE),
+        ("EROFS", libc::EROFS),
+        ("ESRCH", libc::ESRCH),
+        ("ETIMEDOUT", libc::ETIMEDOUT),
+        ("EXDEV", libc::EXDEV),
+    ])
+}
+
+#[cfg(unix)]
+fn signal_constants() -> BTreeMap<&'static str, i32> {
+    BTreeMap::from([
+        ("SIGABRT", libc::SIGABRT),
+        ("SIGALRM", libc::SIGALRM),
+        ("SIGBUS", libc::SIGBUS),
+        ("SIGCHLD", libc::SIGCHLD),
+        ("SIGCONT", libc::SIGCONT),
+        ("SIGFPE", libc::SIGFPE),
+        ("SIGHUP", libc::SIGHUP),
+        ("SIGILL", libc::SIGILL),
+        ("SIGINT", libc::SIGINT),
+        ("SIGKILL", libc::SIGKILL),
+        ("SIGPIPE", libc::SIGPIPE),
+        ("SIGQUIT", libc::SIGQUIT),
+        ("SIGSEGV", libc::SIGSEGV),
+        ("SIGSTOP", libc::SIGSTOP),
+        ("SIGTERM", libc::SIGTERM),
+        ("SIGTRAP", libc::SIGTRAP),
+        ("SIGTSTP", libc::SIGTSTP),
+        ("SIGTTIN", libc::SIGTTIN),
+        ("SIGTTOU", libc::SIGTTOU),
+        ("SIGUSR1", libc::SIGUSR1),
+        ("SIGUSR2", libc::SIGUSR2),
+    ])
+}
+
+#[cfg(not(unix))]
+fn signal_constants() -> BTreeMap<&'static str, i32> {
+    BTreeMap::new()
+}
+
+#[cfg(unix)]
+fn dlopen_constants() -> BTreeMap<&'static str, i32> {
+    BTreeMap::from([
+        ("RTLD_LAZY", libc::RTLD_LAZY),
+        ("RTLD_NOW", libc::RTLD_NOW),
+        ("RTLD_GLOBAL", libc::RTLD_GLOBAL),
+        ("RTLD_LOCAL", libc::RTLD_LOCAL),
+    ])
+}
+
+#[cfg(not(unix))]
+fn dlopen_constants() -> BTreeMap<&'static str, i32> {
+    BTreeMap::new()
 }
 
 #[cfg(target_os = "linux")]
@@ -231,6 +398,7 @@ fn cpuinfo() -> Option<Vec<CpuInfo>> {
                         .take()
                         .unwrap_or_else(|| std::env::consts::ARCH.to_string()),
                     speed: speed.take().unwrap_or(0),
+                    times: CpuTimes::default(),
                 });
             }
             continue;

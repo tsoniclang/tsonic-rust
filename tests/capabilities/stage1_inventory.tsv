@@ -244,13 +244,16 @@ NODE-MODULE-002	implemented	N21	tsonic_node::abi::{SourceMap,SourceMapPayload,So
 NODE-MOD-021	implemented	N4	tsonic_node::abi::{net_connect,net_create_server}	NODE-NET-001	TCP socket/server substrate over std net
 NODE-NET-002	implemented	N17	tsonic_node::abi::{Socket,Server,NetAddressInfo}	NODE-NET-002	TCP socket/server address metadata, byte counters, timeout, ref/unref, and close helpers
 NODE-MOD-022	implemented	J	tsonic_node::abi::os_*	NODE-OS-001 through NODE-OS-003	platform/arch/eol/tmpdir/homedir only
+NODE-OS-004	implemented	N31	tsonic_node::abi::{os_constants,os_user_info_with_options,OsConstants,UserInfoOptions}	NODE-OS-004	errno, signal, priority, dlopen, uv constants and userInfo option shape
 NODE-MOD-023	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-008	pure string path helpers
 NODE-MOD-024	implemented	M	tsonic_node::abi::performance_now	NODE-MISC-001	performance timer/observer policy not first wave (completed in full-completion branch)
 NODE-PERF-001	implemented	N11	tsonic_node::perf_hooks::{PerformanceEntry,PerformanceObserver,PerformanceObserverEntryList}	NODE-PERF-001	mark, measure, entry queries, observer snapshots, and supported entry types
 NODE-PERF-002	implemented	N20	tsonic_node::abi::{PerformanceHistogram,RecordableHistogram,IntervalHistogram,performance_event_loop_utilization,performance_set_resource_timing_buffer_size}	NODE-PERF-002	histogram/event-loop utilization/resource timing controls
+NODE-PERF-003	implemented	N31	tsonic_node::abi::{PerformanceResourceTiming,performance_node_timing,performance_timerify,PERFORMANCE_CONSTANTS}	NODE-PERF-003	resource timing entries, node timing shape, GC constants, and function timing
 NODE-MOD-025	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001 through NODE-PROC-006	cwd/env/argv/platform/exitCode; no event/stdio runtime
 NODE-MOD-026	implemented	N8	tsonic_node::abi::{punycode_to_ascii,punycode_to_unicode}	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MOD-027	implemented	M	tsonic_node::abi::{querystring_parse,querystring_stringify}	NODE-MISC-002	legacy URL query helper; URLSearchParams implemented first (completed in full-completion branch)
+NODE-QUERYSTRING-001	implemented	N31	tsonic_node::abi::{ParseOptions,StringifyOptions,querystring_parse_with_options,querystring_stringify_records_with_options}	NODE-QUERYSTRING-001	custom separators, maxKeys, and codec callback options
 NODE-MOD-028	implemented	N5	tsonic_node::abi::readline_create_interface	NODE-READLINE-001	closed buffered readline interface
 NODE-READLINE-002	implemented	N19	tsonic_node::abi::{ReadlineInterface,ReadlineKey,ReadlineCursorPos,ReadlinePromisesController,readline_promises}	NODE-READLINE-002	Interface prompt/cursor/key/terminal and promises controller commit/rollback APIs
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1

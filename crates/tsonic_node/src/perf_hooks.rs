@@ -5,6 +5,7 @@ use std::time::Instant;
 static START: OnceLock<Instant> = OnceLock::new();
 static MARKS: OnceLock<Mutex<Vec<PerformanceMark>>> = OnceLock::new();
 static MEASURES: OnceLock<Mutex<Vec<PerformanceMeasure>>> = OnceLock::new();
+static RESOURCES: OnceLock<Mutex<Vec<PerformanceResourceTiming>>> = OnceLock::new();
 static RESOURCE_TIMING_BUFFER_SIZE: OnceLock<Mutex<usize>> = OnceLock::new();
 
 pub fn performance_now() -> f64 {
@@ -14,6 +15,35 @@ pub fn performance_now() -> f64 {
 pub fn time_origin() -> f64 {
     0.0
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PerformanceConstants {
+    pub node_performance_gc_major: u32,
+    pub node_performance_gc_minor: u32,
+    pub node_performance_gc_incremental: u32,
+    pub node_performance_gc_weakcb: u32,
+    pub node_performance_gc_flags_no: u32,
+    pub node_performance_gc_flags_construct_retained: u32,
+    pub node_performance_gc_flags_forced: u32,
+    pub node_performance_gc_flags_synchronous_phantom_processing: u32,
+    pub node_performance_gc_flags_all_available_garbage: u32,
+    pub node_performance_gc_flags_all_external_memory: u32,
+    pub node_performance_gc_flags_schedule_idle: u32,
+}
+
+pub const CONSTANTS: PerformanceConstants = PerformanceConstants {
+    node_performance_gc_major: 4,
+    node_performance_gc_minor: 1,
+    node_performance_gc_incremental: 8,
+    node_performance_gc_weakcb: 16,
+    node_performance_gc_flags_no: 0,
+    node_performance_gc_flags_construct_retained: 2,
+    node_performance_gc_flags_forced: 4,
+    node_performance_gc_flags_synchronous_phantom_processing: 8,
+    node_performance_gc_flags_all_available_garbage: 16,
+    node_performance_gc_flags_all_external_memory: 32,
+    node_performance_gc_flags_schedule_idle: 64,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EventLoopUtilization {
@@ -75,6 +105,117 @@ impl PerformanceEntry {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformanceResourceTiming {
+    pub name: String,
+    pub initiator_type: String,
+    pub start_time: f64,
+    pub duration: f64,
+    pub redirect_start: f64,
+    pub redirect_end: f64,
+    pub fetch_start: f64,
+    pub domain_lookup_start: f64,
+    pub domain_lookup_end: f64,
+    pub connect_start: f64,
+    pub connect_end: f64,
+    pub secure_connection_start: f64,
+    pub request_start: f64,
+    pub response_start: f64,
+    pub response_end: f64,
+    pub transfer_size: u64,
+    pub encoded_body_size: u64,
+    pub decoded_body_size: u64,
+    pub response_status: u16,
+    pub next_hop_protocol: String,
+}
+
+impl PerformanceResourceTiming {
+    pub fn new(name: &str, initiator_type: &str, start_time: f64, duration: f64) -> Self {
+        Self {
+            name: name.to_string(),
+            initiator_type: initiator_type.to_string(),
+            start_time,
+            duration,
+            redirect_start: 0.0,
+            redirect_end: 0.0,
+            fetch_start: start_time,
+            domain_lookup_start: 0.0,
+            domain_lookup_end: 0.0,
+            connect_start: 0.0,
+            connect_end: 0.0,
+            secure_connection_start: 0.0,
+            request_start: 0.0,
+            response_start: 0.0,
+            response_end: start_time + duration,
+            transfer_size: 0,
+            encoded_body_size: 0,
+            decoded_body_size: 0,
+            response_status: 0,
+            next_hop_protocol: String::new(),
+        }
+    }
+
+    pub fn to_entry(&self) -> PerformanceEntry {
+        PerformanceEntry {
+            name: self.name.clone(),
+            entry_type: "resource".to_string(),
+            start_time: self.start_time,
+            duration: self.duration,
+        }
+    }
+
+    pub fn to_json(&self) -> Vec<(String, String)> {
+        vec![
+            ("name".to_string(), self.name.clone()),
+            ("entryType".to_string(), "resource".to_string()),
+            ("initiatorType".to_string(), self.initiator_type.clone()),
+            ("startTime".to_string(), self.start_time.to_string()),
+            ("duration".to_string(), self.duration.to_string()),
+            (
+                "responseStatus".to_string(),
+                self.response_status.to_string(),
+            ),
+        ]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UVMetrics {
+    pub loop_count: u64,
+    pub events: u64,
+    pub events_waiting: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PerformanceNodeTiming {
+    pub node_start: f64,
+    pub engine_start: f64,
+    pub environment: f64,
+    pub loop_start: f64,
+    pub loop_exit: f64,
+    pub bootstrap_complete: f64,
+    pub idle_time: f64,
+    pub uv_metrics_info: UVMetrics,
+}
+
+pub fn node_timing() -> PerformanceNodeTiming {
+    let now = performance_now();
+    PerformanceNodeTiming {
+        node_start: 0.0,
+        engine_start: 0.0,
+        environment: 0.0,
+        loop_start: 0.0,
+        loop_exit: now,
+        bootstrap_complete: 0.0,
+        idle_time: 0.0,
+        uv_metrics_info: UVMetrics {
+            loop_count: 0,
+            events: 0,
+            events_waiting: 0,
+        },
+    }
+}
+
 pub fn mark(name: &str) -> PerformanceMark {
     mark_with_detail(name, None)
 }
@@ -127,6 +268,9 @@ pub fn get_entries() -> Vec<PerformanceEntry> {
         start_time: measure.start_time,
         duration: measure.duration,
     }));
+    drop(measures);
+    let resources = resources().lock().unwrap();
+    entries.extend(resources.iter().map(PerformanceResourceTiming::to_entry));
     entries.sort_by(|left, right| {
         left.start_time
             .partial_cmp(&right.start_time)
@@ -185,7 +329,23 @@ pub fn clear_measures(name: Option<&str>) {
     }
 }
 
-pub fn clear_resource_timings(_name: Option<&str>) {}
+pub fn clear_resource_timings(name: Option<&str>) {
+    let mut resources = resources().lock().unwrap();
+    if let Some(name) = name {
+        resources.retain(|resource| resource.name != name);
+    } else {
+        resources.clear();
+    }
+}
+
+pub fn add_resource_timing(resource: PerformanceResourceTiming) -> PerformanceResourceTiming {
+    let max_size = *resource_timing_buffer_size().lock().unwrap();
+    let mut resources = resources().lock().unwrap();
+    if resources.len() < max_size {
+        resources.push(resource.clone());
+    }
+    resource
+}
 
 pub fn set_resource_timing_buffer_size(size: usize) {
     *resource_timing_buffer_size().lock().unwrap() = size;
@@ -298,6 +458,19 @@ pub fn create_histogram() -> Histogram {
     Histogram::new()
 }
 
+pub fn timerify<R>(name: &str, callback: impl FnOnce() -> R) -> (R, PerformanceEntry) {
+    let start_time = performance_now();
+    let result = callback();
+    let duration = (performance_now() - start_time).max(0.0);
+    let entry = PerformanceEntry {
+        name: name.to_string(),
+        entry_type: "function".to_string(),
+        start_time,
+        duration,
+    };
+    (result, entry)
+}
+
 pub type RecordableHistogram = Histogram;
 pub type IntervalHistogram = Histogram;
 
@@ -317,6 +490,10 @@ fn marks() -> &'static Mutex<Vec<PerformanceMark>> {
 
 fn measures() -> &'static Mutex<Vec<PerformanceMeasure>> {
     MEASURES.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn resources() -> &'static Mutex<Vec<PerformanceResourceTiming>> {
+    RESOURCES.get_or_init(|| Mutex::new(Vec::new()))
 }
 
 #[derive(Debug, Clone, PartialEq)]

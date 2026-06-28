@@ -32,11 +32,14 @@ NODE-MODULE-SOURCEMAP	module	SourceMap/source map support	implemented	N21	tsonic
 NODE-MODULE-STRIP-TS	module	stripTypeScriptTypes	implemented	N21	tsonic_node::module::strip_type_script_types	NODE-MODULE-002	safe TypeScript type stripping helper; no evaluation or loader hook execution
 NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
 NODE-MODULE-OS	os	module	implemented	J	tsonic_node::os	NODE-OS-001	closed OS query helpers
+NODE-OS-CONSTANTS	os	constants/userInfo options	implemented	N31	tsonic_node::os::{constants,user_info_with_options,OsConstants,UserInfoOptions}	NODE-OS-004	errno, signal, priority, dlopen, uv constants and userInfo option shape
 NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers
 NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	NODE-MISC-001	performance.now subset
+NODE-PERF-RESOURCE-TIMING	perf_hooks	PerformanceResourceTiming/nodeTiming/timerify/constants	implemented	N31	tsonic_node::perf_hooks::{PerformanceResourceTiming,node_timing,timerify,CONSTANTS}	NODE-PERF-003	resource timing entries, node timing shape, GC constants, and function timing
 NODE-MODULE-PROCESS	process	module	implemented	J	tsonic_node::process	NODE-PROC-001	closed process/env helpers
 NODE-MODULE-PUNYCODE	punycode	module	implemented	N8	tsonic_node::punycode	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
+NODE-QUERYSTRING-OPTIONS	querystring	parse/stringify options	implemented	N31	tsonic_node::querystring::{ParseOptions,StringifyOptions,parse_with_options,stringify_records_with_options}	NODE-QUERYSTRING-001	custom separators, maxKeys, and codec callback options
 NODE-MODULE-READLINE	readline	module	implemented	N5	tsonic_node::readline	NODE-READLINE-001	closed buffered readline interface
 NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
 NODE-MODULE-SQLITE	sqlite	module	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency

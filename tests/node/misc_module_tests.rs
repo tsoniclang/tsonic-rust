@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use tsonic_js::JsValue;
 use tsonic_node::{assert, module, perf_hooks, querystring, string_decoder, tty};
 
@@ -92,6 +93,24 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     assert!(entries[0].to_json().iter().any(|(name, _)| name == "name"));
     perf_hooks::set_resource_timing_buffer_size(128);
     perf_hooks::clear_resource_timings(None);
+    let resource = perf_hooks::PerformanceResourceTiming::new(
+        "https://example.test/app.js",
+        "fetch",
+        1.0,
+        3.0,
+    );
+    let resource = perf_hooks::add_resource_timing(resource);
+    assert_eq!(resource.to_entry().entry_type, "resource");
+    assert!(resource
+        .to_json()
+        .iter()
+        .any(|(name, _)| name == "initiatorType"));
+    assert_eq!(
+        perf_hooks::get_entries_by_type("resource")[0].name,
+        "https://example.test/app.js"
+    );
+    perf_hooks::clear_resource_timings(Some("https://example.test/app.js"));
+    assert!(perf_hooks::get_entries_by_type("resource").is_empty());
     let utilization = perf_hooks::event_loop_utilization(None);
     assert!(utilization.utilization >= 0.0);
     let delta = perf_hooks::event_loop_utilization(Some(utilization));
@@ -117,6 +136,13 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     assert!(!histogram.enable());
     histogram.reset();
     assert_eq!(histogram.count(), 0);
+    let gc_major = perf_hooks::CONSTANTS.node_performance_gc_major;
+    assert!(gc_major > 0);
+    let timing = perf_hooks::node_timing();
+    assert!(timing.loop_exit >= timing.node_start);
+    let (value, entry) = perf_hooks::timerify("work", || 42);
+    assert_eq!(value, 42);
+    assert_eq!(entry.entry_type, "function");
 }
 
 #[test]
@@ -124,6 +150,32 @@ fn querystring_and_string_decoder_use_existing_closed_parsers() {
     let params = querystring::parse("a=1&a=2");
     assert_eq!(params.get_all("a"), vec!["1".to_string(), "2".to_string()]);
     assert_eq!(querystring::stringify(&params), "a=1&a=2");
+    let parsed = querystring::parse_with_options(
+        "a:1;b:2;c:3",
+        ";",
+        ":",
+        querystring::ParseOptions {
+            decode_uri_component: querystring::unescape,
+            max_keys: 2,
+        },
+    );
+    assert_eq!(parsed.get("a"), Some("1".to_string()));
+    assert_eq!(parsed.get("b"), Some("2".to_string()));
+    assert_eq!(parsed.get("c"), None);
+    let mut records = BTreeMap::new();
+    records.insert("hello world".to_string(), "x/y".to_string());
+    records.insert("z".to_string(), "last".to_string());
+    assert_eq!(
+        querystring::stringify_records_with_options(
+            &records,
+            ";",
+            ":",
+            querystring::StringifyOptions {
+                encode_uri_component: querystring::escape,
+            },
+        ),
+        "hello+world:x%2Fy;z:last"
+    );
     assert_eq!(querystring::escape("hello world/%"), "hello+world%2F%25");
     assert_eq!(querystring::unescape("hello+world%2F%25"), "hello world/%");
     assert_eq!(

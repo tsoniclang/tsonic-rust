@@ -160,12 +160,14 @@ pub use crate::net::{
     AddressInfo as NetAddressInfo, Server, Socket,
 };
 pub use crate::os::{
-    arch as os_arch, available_parallelism as os_available_parallelism, cpus as os_cpus,
-    dev_null as os_dev_null, endianness as os_endianness, eol as os_eol, freemem as os_freemem,
-    homedir as os_homedir, hostname as os_hostname, loadavg as os_loadavg, machine as os_machine,
-    network_interfaces as os_network_interfaces, platform as os_platform, r#type as os_type,
-    release as os_release, tmpdir as os_tmpdir, totalmem as os_totalmem, uptime as os_uptime,
-    user_info as os_user_info, version as os_version,
+    arch as os_arch, available_parallelism as os_available_parallelism, constants as os_constants,
+    cpus as os_cpus, dev_null as os_dev_null, endianness as os_endianness, eol as os_eol,
+    freemem as os_freemem, homedir as os_homedir, hostname as os_hostname, loadavg as os_loadavg,
+    machine as os_machine, network_interfaces as os_network_interfaces, platform as os_platform,
+    r#type as os_type, release as os_release, tmpdir as os_tmpdir, totalmem as os_totalmem,
+    uptime as os_uptime, user_info as os_user_info,
+    user_info_with_options as os_user_info_with_options, version as os_version, CpuTimes,
+    OsConstants, PriorityConstants, UserInfoOptions,
 };
 pub use crate::path::{
     basename as path_basename, delimiter as path_delimiter, dirname as path_dirname,
@@ -175,7 +177,8 @@ pub use crate::path::{
     to_namespaced_path as path_to_namespaced_path, ParsedPath,
 };
 pub use crate::perf_hooks::{
-    clear_marks as performance_clear_marks, clear_measures as performance_clear_measures,
+    add_resource_timing as performance_add_resource_timing, clear_marks as performance_clear_marks,
+    clear_measures as performance_clear_measures,
     clear_resource_timings as performance_clear_resource_timings,
     create_histogram as performance_create_histogram,
     event_loop_utilization as performance_event_loop_utilization,
@@ -183,11 +186,13 @@ pub use crate::perf_hooks::{
     get_entries_by_name_entries as performance_get_entries_by_name_entries,
     get_entries_by_type as performance_get_entries_by_type, mark as performance_mark,
     mark_with_detail as performance_mark_with_detail, measure as performance_measure,
-    performance_now,
+    node_timing as performance_node_timing, performance_now,
     set_resource_timing_buffer_size as performance_set_resource_timing_buffer_size,
-    time_origin as performance_time_origin, EventLoopUtilization,
-    Histogram as PerformanceHistogram, IntervalHistogram, PerformanceEntry, PerformanceMark,
-    PerformanceMeasure, PerformanceObserver, PerformanceObserverEntryList, RecordableHistogram,
+    time_origin as performance_time_origin, timerify as performance_timerify, EventLoopUtilization,
+    Histogram as PerformanceHistogram, IntervalHistogram, PerformanceConstants, PerformanceEntry,
+    PerformanceMark, PerformanceMeasure, PerformanceNodeTiming, PerformanceObserver,
+    PerformanceObserverEntryList, PerformanceResourceTiming, RecordableHistogram, UVMetrics,
+    CONSTANTS as PERFORMANCE_CONSTANTS,
 };
 pub use crate::process::{
     allowed_node_environment_flags as process_allowed_node_environment_flags, arch as process_arch,
@@ -212,8 +217,13 @@ pub use crate::process::{
 };
 pub use crate::punycode::{to_ascii as punycode_to_ascii, to_unicode as punycode_to_unicode};
 pub use crate::querystring::{
-    escape as querystring_escape, parse as querystring_parse, stringify as querystring_stringify,
-    unescape as querystring_unescape, unescape_buffer as querystring_unescape_buffer,
+    escape as querystring_escape, parse as querystring_parse,
+    parse_with_options as querystring_parse_with_options,
+    parse_with_separators as querystring_parse_with_separators, stringify as querystring_stringify,
+    stringify_records as querystring_stringify_records,
+    stringify_records_with_options as querystring_stringify_records_with_options,
+    unescape as querystring_unescape, unescape_buffer as querystring_unescape_buffer, ParseOptions,
+    StringifyOptions,
 };
 pub use crate::readline::{
     create_interface as readline_create_interface, promises as readline_promises,
