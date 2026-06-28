@@ -2014,6 +2014,77 @@ NODE-FSP-DIR-ENTRIES	fs/promises	Dir entries	implemented	N65	tsonic_node::fs_pro
 NODE-FSP-DIR-CLOSE	fs/promises	Dir.close	implemented	N65	tsonic_node::fs_promises::Dir::close	NODE-FSP-002	Dir close marks handle closed
 NODE-FSP-DIR-CLOSED	fs/promises	Dir.closed	implemented	N65	tsonic_node::fs_promises::Dir::closed	NODE-FSP-002	Dir closed reports closed-state carrier
 NODE-FSP-OPENDIR-HANDLE	fs/promises	opendir handle	implemented	N65	tsonic_node::fs_promises::opendir_handle	NODE-FSP-002	opendir handle returns closed Dir lifecycle carrier
+NODE-FSP-OBJECT-ENCODING-OPTIONS	fs/promises	ObjectEncodingOptions	implemented	N88	tsonic_node::fs_promises::ObjectEncodingOptions	NODE-FSP-003	promise-shaped object encoding options carrier
+NODE-FSP-BIGINT-STATS-CARRIER	fs/promises	BigIntStats	implemented	N88	tsonic_node::fs_promises::BigIntStats	NODE-FSP-003	promise-shaped bigint stats alias over closed Stats carrier
+NODE-FSP-BIGINT-STATSFS-CARRIER	fs/promises	BigIntStatsFs	implemented	N88	tsonic_node::fs_promises::BigIntStatsFs	NODE-FSP-003	promise-shaped bigint statfs alias over closed StatFs carrier
+NODE-FSP-STAT-OPTIONS-CARRIER	fs/promises	StatOptions	implemented	N88	tsonic_node::fs_promises::StatOptions	NODE-FSP-003	promise-shaped stat options carrier
+NODE-FSP-STATFS-OPTIONS-CARRIER	fs/promises	StatFsOptions	implemented	N88	tsonic_node::fs_promises::StatFsOptions	NODE-FSP-003	promise-shaped statfs options carrier
+NODE-FSP-MKDIR-OPTIONS-CARRIER	fs/promises	MakeDirectoryOptions	implemented	N88	tsonic_node::fs_promises::MakeDirectoryOptions	NODE-FSP-003	promise-shaped mkdir options carrier
+NODE-FSP-RM-OPTIONS-CARRIER	fs/promises	RmOptions	implemented	N88	tsonic_node::fs_promises::RmOptions	NODE-FSP-003	promise-shaped rm options carrier
+NODE-FSP-COPY-FILTER-CARRIER	fs/promises	CopyFilter	implemented	N88	tsonic_node::fs_promises::CopyFilter	NODE-FSP-003	promise-shaped copy filter carrier
+NODE-FSP-COPY-OPTIONS-BASE-CARRIER	fs/promises	CopyOptionsBase	implemented	N88	tsonic_node::fs_promises::CopyOptionsBase	NODE-FSP-003	promise-shaped copy options base carrier
+NODE-FSP-COPY-OPTIONS-CARRIER	fs/promises	CopyOptions	implemented	N88	tsonic_node::fs_promises::CopyOptions	NODE-FSP-003	promise-shaped copy options carrier
+NODE-FSP-COPY-SYNC-OPTIONS-CARRIER	fs/promises	CopySyncOptions	implemented	N88	tsonic_node::fs_promises::CopySyncOptions	NODE-FSP-003	promise-shaped cp options carrier
+NODE-FSP-OPENDIR-OPTIONS-CARRIER	fs/promises	OpenDirOptions	implemented	N88	tsonic_node::fs_promises::OpenDirOptions	NODE-FSP-003	promise-shaped opendir options carrier
+NODE-FSP-FLAG-AND-OPEN-MODE-CARRIER	fs/promises	FlagAndOpenMode	implemented	N88	tsonic_node::fs_promises::FlagAndOpenMode	NODE-FSP-003	promise-shaped open flag and mode carrier
+NODE-FSP-READ-OPTIONS-CARRIER	fs/promises	ReadOptions	implemented	N88	tsonic_node::fs_promises::ReadOptions	NODE-FSP-003	promise-shaped read options carrier
+NODE-FSP-FILE-READ-OPTIONS-CARRIER	fs/promises	FileReadOptions	implemented	N88	tsonic_node::fs_promises::FileReadOptions	NODE-FSP-003	promise-shaped FileReadOptions alias over read options
+NODE-FSP-READ-RESULT-CARRIER	fs/promises	ReadResult	implemented	N88	tsonic_node::fs_promises::ReadResult	NODE-FSP-003	promise-shaped read result carrier
+NODE-FSP-FILE-READ-RESULT-CARRIER	fs/promises	FileReadResult	implemented	N88	tsonic_node::fs_promises::FileReadResult	NODE-FSP-003	promise-shaped FileReadResult alias over read result
+NODE-FSP-READV-RESULT-CARRIER	fs/promises	ReadVResult	implemented	N88	tsonic_node::fs_promises::ReadVResult	NODE-FSP-003	promise-shaped readv result carrier
+NODE-FSP-WRITE-OPTIONS-CARRIER	fs/promises	WriteOptions	implemented	N88	tsonic_node::fs_promises::WriteOptions	NODE-FSP-003	promise-shaped write options carrier
+NODE-FSP-WRITE-RESULT-CARRIER	fs/promises	WriteResult	implemented	N88	tsonic_node::fs_promises::WriteResult	NODE-FSP-003	promise-shaped write result carrier
+NODE-FSP-WRITEV-RESULT-CARRIER	fs/promises	WriteVResult	implemented	N88	tsonic_node::fs_promises::WriteVResult	NODE-FSP-003	promise-shaped writev result carrier
+NODE-FSP-FS-STREAM-OPTIONS-CARRIER	fs/promises	FsStreamOptions	implemented	N88	tsonic_node::fs_promises::FsStreamOptions	NODE-FSP-003	promise-shaped stream option base carrier
+NODE-FSP-READ-STREAM-OPTIONS-CARRIER	fs/promises	ReadStreamOptions	implemented	N88	tsonic_node::fs_promises::ReadStreamOptions	NODE-FSP-003	promise-shaped read stream options carrier
+NODE-FSP-WRITE-STREAM-OPTIONS-CARRIER	fs/promises	WriteStreamOptions	implemented	N88	tsonic_node::fs_promises::WriteStreamOptions	NODE-FSP-003	promise-shaped write stream options carrier
+NODE-FSP-READABLE-WEB-STREAM-OPTIONS-CARRIER	fs/promises	ReadableWebStreamOptions	implemented	N88	tsonic_node::fs_promises::ReadableWebStreamOptions	NODE-FSP-003	promise-shaped readable web stream options carrier
+NODE-FSP-WRITER-OPTIONS-CARRIER	fs/promises	WriterOptions	implemented	N88	tsonic_node::fs_promises::WriterOptions	NODE-FSP-003	promise-shaped writer options carrier
+NODE-FSP-PULL-OPTIONS-CARRIER	fs/promises	PullOptions	implemented	N88	tsonic_node::fs_promises::PullOptions	NODE-FSP-003	promise-shaped pull options carrier
+NODE-FSP-WATCH-OPTIONS-CARRIER	fs/promises	WatchOptions	implemented	N88	tsonic_node::fs_promises::WatchOptions	NODE-FSP-003	promise-shaped watch options carrier
+NODE-FSP-WATCHFILE-OPTIONS-CARRIER	fs/promises	WatchFileOptions	implemented	N88	tsonic_node::fs_promises::WatchFileOptions	NODE-FSP-003	promise-shaped watchFile options carrier
+NODE-FSP-FILE-CHANGE-INFO-CARRIER	fs/promises	FileChangeInfo	implemented	N88	tsonic_node::fs_promises::FileChangeInfo	NODE-FSP-003	promise-shaped watch change info carrier
+NODE-FSP-FS-WATCH-EVENT-CARRIER	fs/promises	FsWatchEvent	implemented	N88	tsonic_node::fs_promises::FsWatchEvent	NODE-FSP-003	promise-shaped watcher event carrier
+NODE-FSP-FS-WATCHER-CARRIER	fs/promises	FsWatcher	implemented	N88	tsonic_node::fs_promises::FsWatcher	NODE-FSP-003	promise-shaped watcher carrier
+NODE-FSP-STAT-WATCHER-CARRIER	fs/promises	StatWatcher	implemented	N88	tsonic_node::fs_promises::StatWatcher	NODE-FSP-003	promise-shaped stat watcher alias
+NODE-FSP-DISPOSABLE-TEMP-DIR-CARRIER	fs/promises	DisposableTempDir	implemented	N88	tsonic_node::fs_promises::DisposableTempDir	NODE-FSP-003	promise-shaped disposable temporary directory carrier
+NODE-FSP-DISPOSABLE-TEMP-DIR-REMOVE	fs/promises	DisposableTempDir.remove	implemented	N88	tsonic_node::fs_promises::DisposableTempDir::remove	NODE-FSP-003	removes disposable temporary directory exactly once
+NODE-FSP-DISPOSABLE-TEMP-DIR-REMOVED	fs/promises	DisposableTempDir.removed	implemented	N88	tsonic_node::fs_promises::DisposableTempDir::removed	NODE-FSP-003	reads disposable temporary directory removed state
+NODE-FSP-READFILE-OPTIONS	fs/promises	readFile options	implemented	N88	tsonic_node::fs_promises::read_file_with_options	NODE-FSP-003	promise-shaped readFile helper with object encoding options
+NODE-FSP-WRITEFILE-STRING-OPTIONS	fs/promises	writeFile string options	implemented	N88	tsonic_node::fs_promises::write_file_string_with_options	NODE-FSP-003	promise-shaped writeFile string helper with object encoding options
+NODE-FSP-WRITEFILE-BUFFER-OPTIONS	fs/promises	writeFile Buffer options	implemented	N88	tsonic_node::fs_promises::write_file_buffer_with_options	NODE-FSP-003	promise-shaped writeFile Buffer helper with explicit options carrier
+NODE-FSP-APPENDFILE-STRING-OPTIONS	fs/promises	appendFile string options	implemented	N88	tsonic_node::fs_promises::append_file_string_with_options	NODE-FSP-003	promise-shaped appendFile string helper with object encoding options
+NODE-FSP-APPENDFILE-BUFFER-OPTIONS	fs/promises	appendFile Buffer options	implemented	N88	tsonic_node::fs_promises::append_file_buffer_with_options	NODE-FSP-003	promise-shaped appendFile Buffer helper with explicit options carrier
+NODE-FSP-COPYFILE-MODE	fs/promises	copyFile mode	implemented	N88	tsonic_node::fs_promises::copy_file_with_mode	NODE-FSP-003	promise-shaped copyFile helper with explicit copy mode
+NODE-FSP-CP-OPTIONS	fs/promises	cp options	implemented	N88	tsonic_node::fs_promises::cp_with_options	NODE-FSP-003	promise-shaped cp helper with explicit options carrier
+NODE-FSP-COPY-OPTIONS	fs/promises	copy options	implemented	N88	tsonic_node::fs_promises::copy_with_options	NODE-FSP-003	promise-shaped copy helper with explicit options carrier
+NODE-FSP-STAT-OPTIONS	fs/promises	stat options	implemented	N88	tsonic_node::fs_promises::stat_with_options	NODE-FSP-003	promise-shaped stat helper with throwIfNoEntry options
+NODE-FSP-STATFS-OPTIONS	fs/promises	statfs options	implemented	N88	tsonic_node::fs_promises::statfs_with_options	NODE-FSP-003	promise-shaped statfs helper with explicit options carrier
+NODE-FSP-LSTAT-OPTIONS	fs/promises	lstat options	implemented	N88	tsonic_node::fs_promises::lstat_with_options	NODE-FSP-003	promise-shaped lstat helper with throwIfNoEntry options
+NODE-FSP-MKDIR-OPTIONS	fs/promises	mkdir options	implemented	N88	tsonic_node::fs_promises::mkdir_with_options	NODE-FSP-003	promise-shaped mkdir helper with explicit options carrier
+NODE-FSP-MKDTEMP-DISPOSABLE	fs/promises	mkdtempDisposable	implemented	N88	tsonic_node::fs_promises::mkdtemp_disposable	NODE-FSP-003	promise-shaped mkdtemp disposable helper
+NODE-FSP-RM-OPTIONS	fs/promises	rm options	implemented	N88	tsonic_node::fs_promises::rm_with_options	NODE-FSP-003	promise-shaped rm helper with retry/force/recursive options
+NODE-FSP-OPENDIR-OPTIONS	fs/promises	opendir options	implemented	N88	tsonic_node::fs_promises::opendir_with_options	NODE-FSP-003	promise-shaped opendir helper with explicit options carrier
+NODE-FSP-OPENDIR-HANDLE-OPTIONS	fs/promises	opendir handle options	implemented	N88	tsonic_node::fs_promises::opendir_handle_with_options	NODE-FSP-003	promise-shaped opendir handle helper with explicit options carrier
+NODE-FSP-OPEN-OPTIONS	fs/promises	open options	implemented	N88	tsonic_node::fs_promises::open_with_options	NODE-FSP-003	promise-shaped open helper with flag and mode carrier
+NODE-FSP-GLOB	fs/promises	glob	implemented	N88	tsonic_node::fs_promises::glob	NODE-FSP-003	promise-shaped glob helper over approved glob dependency
+NODE-FSP-WATCH	fs/promises	watch	implemented	N88	tsonic_node::fs_promises::watch	NODE-FSP-003	promise-shaped watch helper over closed polling watcher
+NODE-FSP-WATCH-OPTIONS	fs/promises	watch options	implemented	N88	tsonic_node::fs_promises::watch_with_options	NODE-FSP-003	promise-shaped watch helper with explicit options carrier
+NODE-FSP-WATCHFILE	fs/promises	watchFile	implemented	N88	tsonic_node::fs_promises::watch_file	NODE-FSP-003	promise-shaped watchFile helper over closed polling watcher
+NODE-FSP-WATCHFILE-OPTIONS	fs/promises	watchFile options	implemented	N88	tsonic_node::fs_promises::watch_file_with_options	NODE-FSP-003	promise-shaped watchFile helper with explicit options carrier
+NODE-FSP-FILEHANDLE-STAT-OPTIONS	fs/promises	FileHandle.stat options	implemented	N88	tsonic_node::fs_promises::FileHandle::stat_with_options	NODE-FSP-003	FileHandle stat helper accepts explicit StatOptions carrier
+NODE-FSP-FILEHANDLE-TRUNCATE-DEFAULT	fs/promises	FileHandle.truncate default	implemented	N88	tsonic_node::fs_promises::FileHandle::truncate_default	NODE-FSP-003	FileHandle truncate default maps omitted length to zero
+NODE-FSP-FILEHANDLE-READ-OPTIONS	fs/promises	FileHandle.read options	implemented	N88	tsonic_node::fs_promises::FileHandle::read_with_options	NODE-FSP-003	FileHandle read helper returns closed ReadResult carrier
+NODE-FSP-FILEHANDLE-WRITE-BUFFER-OPTIONS	fs/promises	FileHandle.write Buffer options	implemented	N88	tsonic_node::fs_promises::FileHandle::write_buffer_with_options	NODE-FSP-003	FileHandle Buffer write helper returns closed WriteResult carrier
+NODE-FSP-FILEHANDLE-WRITE-STRING-OPTIONS	fs/promises	FileHandle.write string options	implemented	N88	tsonic_node::fs_promises::FileHandle::write_string_with_options	NODE-FSP-003	FileHandle string write helper returns closed WriteResult carrier
+NODE-FSP-FILEHANDLE-READV-RESULT	fs/promises	FileHandle.readv result	implemented	N88	tsonic_node::fs_promises::FileHandle::readv_result	NODE-FSP-003	FileHandle readv helper returns closed ReadVResult carrier
+NODE-FSP-FILEHANDLE-WRITEV-RESULT	fs/promises	FileHandle.writev result	implemented	N88	tsonic_node::fs_promises::FileHandle::writev_result	NODE-FSP-003	FileHandle writev helper returns closed WriteVResult carrier
+NODE-FSP-FILEHANDLE-READABLE-WEB-OPTIONS	fs/promises	FileHandle.readableWebStream options	implemented	N88	tsonic_node::fs_promises::FileHandle::readable_web_stream_with_options	NODE-FSP-003	FileHandle readable web stream accepts explicit options carrier
+NODE-FSP-FILEHANDLE-CREATE-READ-STREAM-OPTIONS	fs/promises	FileHandle.createReadStream options	implemented	N88	tsonic_node::fs_promises::FileHandle::create_read_stream_with_options	NODE-FSP-003	FileHandle createReadStream helper applies explicit range options
+NODE-FSP-FILEHANDLE-CREATE-WRITE-STREAM-OPTIONS	fs/promises	FileHandle.createWriteStream options	implemented	N88	tsonic_node::fs_promises::FileHandle::create_write_stream_with_options	NODE-FSP-003	FileHandle createWriteStream helper accepts explicit options carrier
+NODE-FSP-FILEHANDLE-READ-LINES-OPTIONS	fs/promises	FileHandle.readLines options	implemented	N88	tsonic_node::fs_promises::FileHandle::read_lines_with_options	NODE-FSP-003	FileHandle readLines helper accepts explicit stream options carrier
+NODE-FSP-FILEHANDLE-PULL-OPTIONS	fs/promises	FileHandle.pull options	implemented	N88	tsonic_node::fs_promises::FileHandle::pull_with_options	NODE-FSP-003	FileHandle pull helper applies explicit start/chunk/limit options
+NODE-FSP-FILEHANDLE-WRITER-OPTIONS	fs/promises	FileHandle.writer options	implemented	N88	tsonic_node::fs_promises::FileHandle::writer_with_options	NODE-FSP-003	FileHandle writer helper applies explicit start option
 NODE-PATH-BASENAME	path	basename	implemented	J	tsonic_node::path::basename	NODE-PATH-001	path helper
 NODE-PATH-DIRNAME	path	dirname	implemented	J	tsonic_node::path::dirname	NODE-PATH-001	path helper
 NODE-PATH-EXTNAME	path	extname	implemented	J	tsonic_node::path::extname	NODE-PATH-001	path helper
