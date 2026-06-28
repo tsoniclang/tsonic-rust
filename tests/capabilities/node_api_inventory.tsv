@@ -181,6 +181,10 @@ NODE-PATH-RESOLVE	path	resolve	implemented	J	tsonic_node::path::resolve	NODE-PAT
 NODE-PATH-TO-NAMESPACED	path	toNamespacedPath	implemented	J	tsonic_node::path::to_namespaced_path	NODE-PATH-001	path helper
 NODE-PATH-SEP-DELIMITER	path	sep/delimiter	implemented	J	tsonic_node::path::{sep,delimiter}	NODE-PATH-001	platform separators
 NODE-PATH-MATCH-GLOB	path	matchesGlob	implemented	N8	tsonic_node::path::matches_glob	NODE-PATH-GLOB-001	common star/question glob matcher
+NODE-PATH-POSIX	path	posix basename/dirname/extname/format/isAbsolute/join/normalize/parse/relative/sep/delimiter	implemented	N61	tsonic_node::path::posix	NODE-PATH-001	explicit POSIX path helper namespace over pure string semantics
+NODE-PATH-WIN32	path	win32 basename/dirname/extname/format/isAbsolute/join/normalize/parse/relative/sep/delimiter	implemented	N61	tsonic_node::path::win32	NODE-PATH-001	explicit Win32 path helper namespace over pure string semantics
+NODE-PATH-PARSED-PATH	path	ParsedPath root/dir/base/ext/name	implemented	N61	tsonic_node::path::ParsedPath	NODE-PATH-001	closed ParsedPath carrier for parse/format
+NODE-PATH-PLATFORM	path	platform basename/dirname/extname/format/isAbsolute/join/normalize/parse/relative/resolve/sep/delimiter	implemented	N61	tsonic_node::path	NODE-PATH-001	host platform path helper namespace using std path separator policy
 NODE-BUFFER-ALLOC	buffer	alloc/from	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-001	closed byte carrier
 NODE-BUFFER-ENCODING	buffer	encodings	implemented	K	tsonic_node::buffer::{encode_string,decode_bytes}	NODE-BUF-001	utf8/latin1/utf16le/hex/base64/base64url
 NODE-BUFFER-SLICE	buffer	slice/subarray	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-002	shared views

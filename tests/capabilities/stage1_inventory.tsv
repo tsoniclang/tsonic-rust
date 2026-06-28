@@ -162,6 +162,8 @@ NODE-PATH-002	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-
 NODE-PATH-003	implemented	J	tsonic_node::abi::path_*	NODE-PATH-004 through NODE-PATH-006	string semantics
 NODE-PATH-004	implemented	J	tsonic_node::abi::path_*	NODE-PATH-007, NODE-PATH-008	`ParsedPath`
 NODE-PATH-005	implemented	M	tsonic_node::abi::path_to_namespaced_path	NODE-PATH-009	Windows-specific (completed in full-completion branch)
+NODE-PATH-006	implemented	N61	tsonic_node::abi::{path_posix,path_win32,ParsedPath}	NODE-PATH-001	explicit POSIX/Win32 namespace helpers and ParsedPath carrier
+NODE-PATH-007	implemented	N61	tsonic_node::abi::{path_sep,path_delimiter,path_resolve,path_matches_glob}	NODE-PATH-001,NODE-PATH-GLOB-001	platform sep/delimiter/resolve plus approved glob matcher
 NODE-PROCESS-001	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001, NODE-PROC-002	process-global
 NODE-PROCESS-002	implemented	J	tsonic_node::abi::process_*	NODE-PROC-005	test injection required
 NODE-PROCESS-003	implemented	J	tsonic_node::abi::process_*	process/os tests	Node spelling

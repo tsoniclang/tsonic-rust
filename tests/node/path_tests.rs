@@ -27,4 +27,9 @@ fn parse_and_format_roundtrip_basic_path() {
     assert_eq!(parsed.name, "file");
     assert_eq!(path::posix::format(&parsed), "/tmp/file.txt");
     assert_eq!(path::to_namespaced_path("/tmp/file.txt"), "/tmp/file.txt");
+    assert_eq!(path::sep(), std::path::MAIN_SEPARATOR.to_string());
+    assert!(!path::delimiter().is_empty());
+    assert!(path::resolve(&[".", "src"]).unwrap().ends_with("src"));
+    assert!(path::matches_glob("src/index.ts", "src/*.ts"));
+    assert_eq!(path::format(&path::parse("/tmp/file.txt")), "/tmp/file.txt");
 }
