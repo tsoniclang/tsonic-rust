@@ -5,6 +5,182 @@ use tsonic_js::typed_array::TypedArrayLen;
 use tsonic_js::value::JsValue;
 use tsonic_js::{ArrayBuffer, Uint8Array};
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MIMEParams {
+    pairs: Vec<(String, String)>,
+}
+
+impl MIMEParams {
+    pub fn new() -> Self {
+        Self { pairs: Vec::new() }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.pairs
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
+    }
+
+    pub fn has(&self, name: &str) -> bool {
+        self.get(name).is_some()
+    }
+
+    pub fn set(&mut self, name: &str, value: &str) {
+        if let Some((_, existing)) = self
+            .pairs
+            .iter_mut()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+        {
+            *existing = value.to_string();
+        } else {
+            self.pairs
+                .push((name.to_ascii_lowercase(), value.to_string()));
+        }
+    }
+
+    pub fn delete(&mut self, name: &str) {
+        self.pairs
+            .retain(|(key, _)| !key.eq_ignore_ascii_case(name));
+    }
+
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.pairs
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
+        self.pairs.iter().map(|(key, _)| key.as_str())
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &str> {
+        self.pairs.iter().map(|(_, value)| value.as_str())
+    }
+}
+
+impl std::fmt::Display for MIMEParams {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = self
+            .pairs
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join(";");
+        write!(formatter, "{text}")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MIMEType {
+    r#type: String,
+    subtype: String,
+    params: MIMEParams,
+}
+
+impl MIMEType {
+    pub fn new(input: &str) -> Result<Self, String> {
+        let mut pieces = input.split(';');
+        let essence = pieces
+            .next()
+            .ok_or_else(|| "missing MIME essence".to_string())?
+            .trim();
+        let (r#type, subtype) = essence
+            .split_once('/')
+            .ok_or_else(|| "missing MIME subtype".to_string())?;
+        if r#type.trim().is_empty() || subtype.trim().is_empty() {
+            return Err("invalid MIME essence".to_string());
+        }
+        let mut params = MIMEParams::new();
+        for piece in pieces {
+            if let Some((name, value)) = piece.trim().split_once('=') {
+                params.set(name.trim(), value.trim().trim_matches('"'));
+            }
+        }
+        Ok(Self {
+            r#type: r#type.trim().to_ascii_lowercase(),
+            subtype: subtype.trim().to_ascii_lowercase(),
+            params,
+        })
+    }
+
+    pub fn essence(&self) -> String {
+        format!("{}/{}", self.r#type, self.subtype)
+    }
+
+    pub fn r#type(&self) -> &str {
+        &self.r#type
+    }
+
+    pub fn subtype(&self) -> &str {
+        &self.subtype
+    }
+
+    pub fn params(&self) -> &MIMEParams {
+        &self.params
+    }
+
+    pub fn params_mut(&mut self) -> &mut MIMEParams {
+        &mut self.params
+    }
+}
+
+impl std::fmt::Display for MIMEType {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params = self.params.to_string();
+        if params.is_empty() {
+            write!(formatter, "{}", self.essence())
+        } else {
+            write!(formatter, "{};{}", self.essence(), params)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseArgsOptionType {
+    Boolean,
+    String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseArgsOptionDescriptor {
+    pub option_type: ParseArgsOptionType,
+    pub short: Option<char>,
+    pub multiple: bool,
+    pub default: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ParseArgsConfig {
+    pub args: Vec<String>,
+    pub options: Vec<(String, ParseArgsOptionDescriptor)>,
+    pub allow_positionals: bool,
+    pub allow_negative: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ParseArgsResult {
+    pub values: Vec<(String, Vec<String>)>,
+    pub positionals: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DebugLogger {
+    section: String,
+    enabled: bool,
+}
+
+impl DebugLogger {
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn log(&self, message: &str) -> Option<String> {
+        self.enabled
+            .then(|| format!("{} {message}", self.section.to_ascii_uppercase()))
+    }
+}
+
 pub fn format(format: &str, args: &[JsValue]) -> String {
     let mut out = String::new();
     let mut chars = format.chars().peekable();
@@ -96,6 +272,114 @@ pub fn promisify<T>(function: T) -> T {
 
 pub fn callbackify<T>(function: T) -> T {
     function
+}
+
+pub fn debuglog(section: &str, enabled_sections: &[&str]) -> DebugLogger {
+    DebugLogger {
+        section: section.to_string(),
+        enabled: enabled_sections
+            .iter()
+            .any(|enabled| enabled.eq_ignore_ascii_case(section)),
+    }
+}
+
+pub fn style_text(style: &str, text: &str) -> String {
+    let code = match style {
+        "red" => Some(31),
+        "green" => Some(32),
+        "yellow" => Some(33),
+        "blue" => Some(34),
+        "magenta" => Some(35),
+        "cyan" => Some(36),
+        "gray" | "grey" => Some(90),
+        "bold" => Some(1),
+        "underline" => Some(4),
+        _ => None,
+    };
+    if let Some(code) = code {
+        format!("\u{1b}[{code}m{text}\u{1b}[0m")
+    } else {
+        text.to_string()
+    }
+}
+
+pub fn get_system_error_name(code: i32) -> &'static str {
+    match code {
+        1 => "EPERM",
+        2 => "ENOENT",
+        13 => "EACCES",
+        17 => "EEXIST",
+        22 => "EINVAL",
+        _ => "ERR_SYSTEM_ERROR",
+    }
+}
+
+pub fn get_system_error_message(code: i32) -> &'static str {
+    match code {
+        1 => "operation not permitted",
+        2 => "no such file or directory",
+        13 => "permission denied",
+        17 => "file already exists",
+        22 => "invalid argument",
+        _ => "system error",
+    }
+}
+
+pub fn parse_args(config: ParseArgsConfig) -> ParseArgsResult {
+    let mut result = ParseArgsResult::default();
+    for (name, descriptor) in &config.options {
+        if let Some(default) = &descriptor.default {
+            result.values.push((name.clone(), vec![default.clone()]));
+        }
+    }
+    let mut index = 0;
+    while index < config.args.len() {
+        let arg = &config.args[index];
+        if arg == "--" {
+            result
+                .positionals
+                .extend(config.args[index + 1..].iter().cloned());
+            break;
+        }
+        if let Some(rest) = arg.strip_prefix("--") {
+            let (name, inline_value) = rest
+                .split_once('=')
+                .map(|(name, value)| (name, Some(value.to_string())))
+                .unwrap_or((rest, None));
+            if let Some((_, descriptor)) = config.options.iter().find(|(key, _)| key == name) {
+                let value = match descriptor.option_type {
+                    ParseArgsOptionType::Boolean => "true".to_string(),
+                    ParseArgsOptionType::String => inline_value.unwrap_or_else(|| {
+                        index += 1;
+                        config.args.get(index).cloned().unwrap_or_default()
+                    }),
+                };
+                set_parsed_arg(&mut result, name, value, descriptor.multiple);
+            } else if config.allow_positionals {
+                result.positionals.push(arg.clone());
+            }
+        } else if let Some(shorts) = arg.strip_prefix('-') {
+            if !shorts.is_empty()
+                && (config.allow_negative || !shorts.chars().all(|ch| ch.is_ascii_digit()))
+            {
+                for short in shorts.chars() {
+                    if let Some((name, descriptor)) = config
+                        .options
+                        .iter()
+                        .find(|(_, descriptor)| descriptor.short == Some(short))
+                    {
+                        set_parsed_arg(&mut result, name, "true".to_string(), descriptor.multiple);
+                    }
+                }
+            } else if config.allow_positionals {
+                result.positionals.push(arg.clone());
+            }
+        } else if config.allow_positionals {
+            result.positionals.push(arg.clone());
+        }
+        index += 1;
+    }
+    result
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -237,6 +521,20 @@ fn next_arg<'a>(args: &'a [JsValue], index: &mut usize) -> &'a JsValue {
     let value = args.get(*index).unwrap_or(&JsValue::Undefined);
     *index += 1;
     value
+}
+
+fn set_parsed_arg(result: &mut ParseArgsResult, name: &str, value: String, multiple: bool) {
+    if multiple {
+        if let Some((_, values)) = result.values.iter_mut().find(|(key, _)| key == name) {
+            values.push(value);
+        } else {
+            result.values.push((name.to_string(), vec![value]));
+        }
+    } else if let Some((_, values)) = result.values.iter_mut().find(|(key, _)| key == name) {
+        *values = vec![value];
+    } else {
+        result.values.push((name.to_string(), vec![value]));
+    }
 }
 
 fn format_number(value: &JsValue) -> String {

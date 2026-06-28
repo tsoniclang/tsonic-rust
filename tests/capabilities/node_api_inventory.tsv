@@ -130,9 +130,12 @@ NODE-URL-FILE	url	fileURLToPath/pathToFileURL	implemented	L	tsonic_node::url::{f
 NODE-UTIL-FORMAT	util	format	implemented	L	tsonic_node::util::format	NODE-UTIL-001	format subset
 NODE-UTIL-INSPECT	util	inspect	implemented	L	tsonic_node::util::inspect	NODE-UTIL-001	closed value inspection
 NODE-UTIL-TYPES	util	types	implemented	L	tsonic_node::util::types	NODE-UTIL-002	type predicates
+NODE-UTIL-MIME	util	MIMEType/MIMEParams	implemented	N22	tsonic_node::util::{MIMEType,MIMEParams}	NODE-UTIL-006	closed MIME parser and mutable parameter carrier
+NODE-UTIL-PARSE-ARGS	util	parseArgs	implemented	N22	tsonic_node::util::parse_args	NODE-UTIL-006	closed CLI option parser over explicit config; no shell/runtime introspection
+NODE-UTIL-DEBUG-STYLE	util	debuglog/styleText/system errors	implemented	N22	tsonic_node::util::{debuglog,style_text,get_system_error_name,get_system_error_message}	NODE-UTIL-006	debug logger, ANSI styling, and known system error string helpers
 NODE-ASSERT-DEEP	assert	deepStrictEqual/notDeepStrictEqual	implemented	N2	tsonic_node::assert::{deep_strict_equal,not_deep_strict_equal}	NODE-ASSERT-001	closed JsValue deep strict assertions
 NODE-ASSERT-NOT	assert	notStrictEqual	implemented	N2	tsonic_node::assert::not_strict_equal	NODE-ASSERT-001	strict inequality assertion
-NODE-UTIL-PROMISIFY	util	promisify/callbackify	hard-reject	N0	n/a	REJECT-NODE-UTIL-ASYNC	callback/Promise adaptation excluded
+NODE-UTIL-PROMISIFY	util	promisify/callbackify	implemented	N22	tsonic_node::util::{promisify,callbackify}	NODE-UTIL-006	closed identity adapters for generated Rust function carriers; no dynamic Promise runtime
 NODE-PROCESS-ENV	process	env	implemented	J	tsonic_node::process::{env_get,env_set,env_delete}	NODE-PROC-001	env helpers
 NODE-PROCESS-CWD	process	cwd/chdir	implemented	J	tsonic_node::process::{cwd,chdir}	NODE-PROC-001	cwd helpers
 NODE-PROCESS-ARGS	process	argv/execPath	implemented	J	tsonic_node::process::{argv,exec_path}	NODE-PROC-001	process args

@@ -58,6 +58,14 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     assert_eq!(util::deprecate(1, "deprecated"), 1);
     assert_eq!(util::promisify(2), 2);
     assert_eq!(util::callbackify(3), 3);
+    assert_eq!(util::style_text("red", "x"), "\u{1b}[31mx\u{1b}[0m");
+    assert_eq!(util::style_text("unknown", "x"), "x");
+    assert_eq!(util::get_system_error_name(2), "ENOENT");
+    assert_eq!(util::get_system_error_message(13), "permission denied");
+
+    let logger = util::debuglog("http", &["HTTP"]);
+    assert!(logger.enabled());
+    assert_eq!(logger.log("listening"), Some("HTTP listening".to_string()));
 
     let buffer = ArrayBuffer::new(4);
     let typed = Uint8Array::from_vec(vec![1, 2, 3]);
@@ -72,4 +80,71 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     assert!(!util::types::is_promise(&JsValue::Null));
     assert!(!util::types::is_native_error(&JsValue::Null));
     assert!(!util::types::is_proxy(&JsValue::Null));
+}
+
+#[test]
+fn util_mime_and_parse_args_cover_common_tooling_shapes() {
+    let mut mime = util::MIMEType::new("Text/HTML; Charset=utf-8").unwrap();
+    assert_eq!(mime.essence(), "text/html");
+    assert_eq!(mime.r#type(), "text");
+    assert_eq!(mime.subtype(), "html");
+    assert_eq!(mime.params().get("charset"), Some("utf-8"));
+    mime.params_mut().set("boundary", "abc");
+    assert!(mime.to_string().contains("boundary=abc"));
+    mime.params_mut().delete("charset");
+    assert!(!mime.params().has("charset"));
+
+    let parsed = util::parse_args(util::ParseArgsConfig {
+        args: vec![
+            "--name".to_string(),
+            "app".to_string(),
+            "-v".to_string(),
+            "src/index.ts".to_string(),
+            "--tag=one".to_string(),
+            "--tag=two".to_string(),
+        ],
+        options: vec![
+            (
+                "name".to_string(),
+                util::ParseArgsOptionDescriptor {
+                    option_type: util::ParseArgsOptionType::String,
+                    short: None,
+                    multiple: false,
+                    default: None,
+                },
+            ),
+            (
+                "verbose".to_string(),
+                util::ParseArgsOptionDescriptor {
+                    option_type: util::ParseArgsOptionType::Boolean,
+                    short: Some('v'),
+                    multiple: false,
+                    default: None,
+                },
+            ),
+            (
+                "tag".to_string(),
+                util::ParseArgsOptionDescriptor {
+                    option_type: util::ParseArgsOptionType::String,
+                    short: None,
+                    multiple: true,
+                    default: None,
+                },
+            ),
+        ],
+        allow_positionals: true,
+        allow_negative: false,
+    });
+    assert_eq!(
+        parsed.values,
+        vec![
+            ("name".to_string(), vec!["app".to_string()]),
+            ("verbose".to_string(), vec!["true".to_string()]),
+            (
+                "tag".to_string(),
+                vec!["one".to_string(), "two".to_string()]
+            ),
+        ]
+    );
+    assert_eq!(parsed.positionals, vec!["src/index.ts".to_string()]);
 }

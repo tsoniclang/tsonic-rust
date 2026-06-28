@@ -237,12 +237,16 @@ pub use crate::url::{
 };
 pub use crate::util::types as util_types;
 pub use crate::util::{
-    callbackify as util_callbackify, deprecate as util_deprecate, format as util_format,
-    format_with_options as util_format_with_options, inherits as util_inherits,
+    callbackify as util_callbackify, debuglog as util_debuglog, deprecate as util_deprecate,
+    format as util_format, format_with_options as util_format_with_options,
+    get_system_error_message as util_get_system_error_message,
+    get_system_error_name as util_get_system_error_name, inherits as util_inherits,
     inspect as util_inspect, inspect_with_options as util_inspect_with_options,
-    is_deep_strict_equal as util_is_deep_strict_equal, promisify as util_promisify,
-    strip_vt_control_characters as util_strip_vt_control_characters,
-    to_usv_string as util_to_usv_string, TextDecoder, TextEncoder,
+    is_deep_strict_equal as util_is_deep_strict_equal, parse_args as util_parse_args,
+    promisify as util_promisify, strip_vt_control_characters as util_strip_vt_control_characters,
+    style_text as util_style_text, to_usv_string as util_to_usv_string, DebugLogger, MIMEParams,
+    MIMEType, ParseArgsConfig, ParseArgsOptionDescriptor, ParseArgsOptionType, ParseArgsResult,
+    TextDecoder, TextEncoder,
 };
 pub use crate::worker_threads::{
     is_main_thread as worker_is_main_thread, parent_port as worker_parent_port,
