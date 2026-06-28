@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 const INVENTORY: &str = include_str!("capabilities/stage1_inventory.tsv");
 const DEPENDENCY_ALLOWLIST: &str = include_str!("capabilities/dependency_allowlist.tsv");
-const EXPECTED_ROW_COUNT: usize = 305;
-const EXPECTED_IMPLEMENTED_COUNT: usize = 248;
+const EXPECTED_ROW_COUNT: usize = 306;
+const EXPECTED_IMPLEMENTED_COUNT: usize = 249;
 const EXPECTED_DEFERRED_COUNT: usize = 0;
 const EXPECTED_HARD_REJECT_COUNT: usize = 57;
 

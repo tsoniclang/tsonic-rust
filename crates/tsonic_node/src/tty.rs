@@ -1,16 +1,23 @@
+use crate::events::EventEmitter;
+use tsonic_js::JsValue;
+
 pub fn isatty(_fd: i32) -> bool {
     false
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadStream {
     fd: i32,
     is_raw: bool,
+    emitter: EventEmitter,
 }
 
 impl ReadStream {
     pub fn new(fd: i32) -> Self {
-        Self { fd, is_raw: false }
+        Self {
+            fd,
+            is_raw: false,
+            emitter: EventEmitter::new(),
+        }
     }
 
     pub fn fd(&self) -> i32 {
@@ -29,9 +36,37 @@ impl ReadStream {
         self.is_raw = mode;
         self
     }
+
+    pub fn on<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.on(event, listener);
+        self
+    }
+
+    pub fn once<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.once(event, listener);
+        self
+    }
+
+    pub fn emit(&mut self, event: &str, args: &[JsValue]) -> bool {
+        self.emitter.emit(event, args)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.emitter.listener_count(event)
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        self.emitter.remove_all_listeners(event);
+        self
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WriteStream {
     fd: i32,
     columns: u16,
@@ -39,6 +74,7 @@ pub struct WriteStream {
     cursor_x: u16,
     cursor_y: u16,
     color_depth: u8,
+    emitter: EventEmitter,
 }
 
 impl WriteStream {
@@ -50,6 +86,7 @@ impl WriteStream {
             cursor_x: 0,
             cursor_y: 0,
             color_depth: 1,
+            emitter: EventEmitter::new(),
         }
     }
 
@@ -61,6 +98,7 @@ impl WriteStream {
             cursor_x: 0,
             cursor_y: 0,
             color_depth: 1,
+            emitter: EventEmitter::new(),
         }
     }
 
@@ -152,5 +190,71 @@ impl WriteStream {
         let moved = self.move_cursor(dx, dy);
         callback();
         moved
+    }
+
+    pub fn on<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.on(event, listener);
+        self
+    }
+
+    pub fn once<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.once(event, listener);
+        self
+    }
+
+    pub fn add_listener<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.add_listener(event, listener);
+        self
+    }
+
+    pub fn prepend_listener<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.prepend_listener(event, listener);
+        self
+    }
+
+    pub fn prepend_once_listener<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.prepend_once_listener(event, listener);
+        self
+    }
+
+    pub fn off_by_id(&mut self, event: &str, listener_id: usize) -> &mut Self {
+        self.emitter.off_by_id(event, listener_id);
+        self
+    }
+
+    pub fn emit(&mut self, event: &str, args: &[JsValue]) -> bool {
+        self.emitter.emit(event, args)
+    }
+
+    pub fn listeners(&self, event: &str) -> Vec<usize> {
+        self.emitter.listeners(event)
+    }
+
+    pub fn raw_listeners(&self, event: &str) -> Vec<usize> {
+        self.emitter.raw_listeners(event)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.emitter.listener_count(event)
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        self.emitter.remove_all_listeners(event);
+        self
     }
 }

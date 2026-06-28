@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 use tsonic_js::JsValue;
 use tsonic_node::{assert, module, perf_hooks, querystring, string_decoder, tty};
 
@@ -281,6 +282,12 @@ fn tty_is_explicitly_non_interactive_by_default() {
     assert!(!input.is_raw());
     input.set_raw_mode(true);
     assert!(input.is_raw());
+    let input_hits = Arc::new(Mutex::new(0_usize));
+    let input_hits_ref = Arc::clone(&input_hits);
+    input.once("data", move |_| *input_hits_ref.lock().unwrap() += 1);
+    assert!(input.emit("data", &[JsValue::String("x".to_string())]));
+    assert!(!input.emit("data", &[]));
+    assert_eq!(*input_hits.lock().unwrap(), 1);
 
     let mut output = tty::WriteStream::with_size(1, 120, 40);
     assert_eq!(output.fd(), 1);
@@ -294,6 +301,25 @@ fn tty_is_explicitly_non_interactive_by_default() {
     output.set_color_depth(8);
     assert_eq!(output.get_color_depth(), 8);
     assert!(output.has_colors());
+    let output_hits = Arc::new(Mutex::new(Vec::<String>::new()));
+    let output_hits_ref = Arc::clone(&output_hits);
+    output.on("resize", move |_| {
+        output_hits_ref.lock().unwrap().push("on".to_string());
+    });
+    let output_hits_ref = Arc::clone(&output_hits);
+    output.prepend_once_listener("resize", move |_| {
+        output_hits_ref.lock().unwrap().push("once".to_string());
+    });
+    assert_eq!(output.listener_count("resize"), 2);
+    assert!(output.emit("resize", &[]));
+    assert!(output.emit("resize", &[]));
+    assert_eq!(
+        *output_hits.lock().unwrap(),
+        vec!["once".to_string(), "on".to_string(), "on".to_string()]
+    );
+    assert_eq!(output.listeners("resize").len(), 1);
+    output.remove_all_listeners(Some("resize"));
+    assert_eq!(output.listener_count("resize"), 0);
     let callback_called = std::cell::Cell::new(false);
     assert!(output.clear_line_with_callback(|| callback_called.set(true)));
     assert!(callback_called.get());

@@ -177,6 +177,9 @@ impl EventEmitter {
         let Some(listeners) = self.listeners.get_mut(event) else {
             return false;
         };
+        if listeners.is_empty() {
+            return false;
+        }
         for listener in listeners.iter_mut() {
             (listener.callback)(args);
         }

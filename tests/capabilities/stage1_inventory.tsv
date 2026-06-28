@@ -291,6 +291,7 @@ NODE-TLS-002	implemented	N40	tsonic_node::abi::{TlsSocket,TlsCertificate,TlsCiph
 NODE-MOD-036	hard-reject	M	n/a	REJECT-NODE-TRACE-EVENTS	tracing integration out of Stage 1
 NODE-MOD-037	implemented	M	tsonic_node::abi::tty_isatty	NODE-MISC-003	terminal capability/runtime policy not first wave (completed in full-completion branch)
 NODE-TTY-001	implemented	N27	tsonic_node::abi::{TtyReadStream,TtyWriteStream}	NODE-TTY-001	ReadStream raw mode and WriteStream size/color/cursor/clear callback helpers
+NODE-TTY-002	implemented	N52	tsonic_node::abi::{TtyReadStream,TtyWriteStream}	NODE-TTY-002	ReadStream and WriteStream EventEmitter listener/emit helpers
 NODE-MOD-038	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-001 through NODE-URL-008	URL and URLSearchParams subset
 NODE-MOD-039	implemented	L/M	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-001 through NODE-UTIL-005	format/inspect/deepStrictEqual over closed values; selected type predicates implemented
 NODE-MOD-040	hard-reject	M	n/a	REJECT-NODE-V8	engine-specific introspection violates closed runtime design

@@ -70,6 +70,7 @@ NODE-TLS-CONTEXT-OPTIONS	tls	SecureContextOptions extended key/cert/options	impl
 NODE-MODULE-TRACE-EVENTS	trace_events	module	hard-reject	N0	n/a	REJECT-NODE-TRACE-EVENTS	instrumentation excluded
 NODE-MODULE-TTY	tty	module	implemented	N1	tsonic_node::tty	NODE-MISC-004	isatty helper
 NODE-TTY-STREAMS	tty	ReadStream/WriteStream terminal helpers	implemented	N27	tsonic_node::tty::{ReadStream,WriteStream}	NODE-TTY-001	raw mode, window size, color depth, cursor movement, and clear callbacks
+NODE-TTY-EVENTS	tty	ReadStream/WriteStream EventEmitter methods	implemented	N52	tsonic_node::tty::{ReadStream,WriteStream}	NODE-TTY-002	closed stream event listener and emit helpers backed by runtime EventEmitter carrier
 NODE-MODULE-URL	url	module	implemented	L	tsonic_node::url	NODE-URL-001	URL and URLSearchParams helpers
 NODE-MODULE-UTIL	util	module	implemented	L	tsonic_node::util	NODE-UTIL-001	format/inspect/types subset
 NODE-MODULE-V8	v8	module	hard-reject	N0	n/a	REJECT-NODE-V8	V8-specific APIs irrelevant to Rust runtime
