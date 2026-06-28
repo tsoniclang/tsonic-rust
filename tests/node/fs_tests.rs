@@ -106,9 +106,28 @@ fn fs_extended_sync_file_lifecycle() {
     let mut buffer = tsonic_node::buffer::Buffer::alloc(5);
     assert_eq!(fs::read_sync(fd, &mut buffer, 0, 5, Some(6)).unwrap(), 5);
     assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
+    let mut vector_buffers = [
+        tsonic_node::buffer::Buffer::alloc(5),
+        tsonic_node::buffer::Buffer::alloc(1),
+    ];
+    assert_eq!(fs::readv_sync(fd, &mut vector_buffers, Some(0)).unwrap(), 6);
+    assert_eq!(vector_buffers[0].to_string(Some("utf8")).unwrap(), "hello");
+    assert_eq!(vector_buffers[1].to_string(Some("utf8")).unwrap(), " ");
     assert_eq!(
         fs::write_sync_string(fd, "rust", Some(6), "utf8").unwrap(),
         4
+    );
+    assert_eq!(
+        fs::writev_sync(
+            fd,
+            &[
+                tsonic_node::buffer::Buffer::from_string("R", Some("utf8")).unwrap(),
+                tsonic_node::buffer::Buffer::from_string("S", Some("utf8")).unwrap(),
+            ],
+            Some(10),
+        )
+        .unwrap(),
+        2
     );
     fs::fsync_sync(fd).unwrap();
     fs::fdatasync_sync(fd).unwrap();
@@ -213,6 +232,31 @@ fn fs_extended_callback_matrix_uses_real_file_io() {
         write_fd_result = Some(result);
     });
     assert_eq!(write_fd_result.unwrap().unwrap(), 4);
+
+    let mut readv_buffers = [
+        tsonic_node::buffer::Buffer::alloc(5),
+        tsonic_node::buffer::Buffer::alloc(1),
+    ];
+    let mut readv_result = None;
+    fs::readv_callback(fd, &mut readv_buffers, Some(0), |result| {
+        readv_result = Some(result);
+    });
+    assert_eq!(readv_result.unwrap().unwrap(), 6);
+    assert_eq!(readv_buffers[0].to_string(Some("utf8")).unwrap(), "hello");
+
+    let mut writev_result = None;
+    fs::writev_callback(
+        fd,
+        &[
+            tsonic_node::buffer::Buffer::from_string("R", Some("utf8")).unwrap(),
+            tsonic_node::buffer::Buffer::from_string("S", Some("utf8")).unwrap(),
+        ],
+        Some(10),
+        |result| {
+            writev_result = Some(result);
+        },
+    );
+    assert_eq!(writev_result.unwrap().unwrap(), 2);
 
     let mut fsync_result = None;
     fs::fsync_callback(fd, |result| {

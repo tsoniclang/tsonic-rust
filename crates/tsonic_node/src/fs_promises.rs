@@ -9,12 +9,17 @@ pub struct FileHandle {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dir {
+    path: String,
     entries: Vec<Dirent>,
     index: usize,
     closed: bool,
 }
 
 impl Dir {
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
     pub fn read(&mut self) -> NodeResult<Option<Dirent>> {
         if self.closed {
             return Err(crate::error::NodeError::new(
@@ -95,6 +100,14 @@ impl FileHandle {
         fs::write_sync_buffer(self.fd, buffer, offset, length, position)
     }
 
+    pub fn readv(&self, buffers: &mut [Buffer], position: Option<u64>) -> NodeResult<usize> {
+        fs::readv_sync(self.fd, buffers, position)
+    }
+
+    pub fn writev(&self, buffers: &[Buffer], position: Option<u64>) -> NodeResult<usize> {
+        fs::writev_sync(self.fd, buffers, position)
+    }
+
     pub fn write_string(
         &self,
         value: &str,
@@ -135,8 +148,82 @@ impl FileHandle {
         crate::stream::web::WritableStream::new()
     }
 
+    pub fn create_read_stream(&self) -> NodeResult<crate::stream::Readable> {
+        Ok(crate::stream::Readable::from_chunks(vec![
+            self.read_file_buffer()?
+        ]))
+    }
+
+    pub fn create_write_stream(&self) -> crate::stream::Writable {
+        crate::stream::Writable::new()
+    }
+
+    pub fn read_lines(&self, encoding: &str) -> NodeResult<Vec<String>> {
+        Ok(self
+            .read_file_string(encoding)?
+            .lines()
+            .map(str::to_string)
+            .collect())
+    }
+
+    pub fn pull(&self, chunk_size: usize) -> NodeResult<crate::stream::Readable> {
+        let buffer = self.read_file_buffer()?;
+        if chunk_size == 0 || buffer.len() <= chunk_size {
+            return Ok(crate::stream::Readable::from_chunks(vec![buffer]));
+        }
+        let chunks = buffer
+            .as_bytes()
+            .chunks(chunk_size)
+            .map(|chunk| Buffer::from_bytes(chunk.to_vec()))
+            .collect();
+        Ok(crate::stream::Readable::from_chunks(chunks))
+    }
+
+    pub fn writer(&self) -> FileHandleWriter {
+        FileHandleWriter {
+            fd: self.fd,
+            position: None,
+        }
+    }
+
     pub fn close(self) -> NodeResult<()> {
         fs::close_sync(self.fd)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileHandleWriter {
+    fd: i32,
+    position: Option<u64>,
+}
+
+impl FileHandleWriter {
+    pub fn fd(&self) -> i32 {
+        self.fd
+    }
+
+    pub fn position(&self) -> Option<u64> {
+        self.position
+    }
+
+    pub fn seek(&mut self, position: u64) {
+        self.position = Some(position);
+    }
+
+    pub fn write_buffer(&mut self, buffer: &Buffer) -> NodeResult<usize> {
+        let written = fs::write_sync_buffer(self.fd, buffer, 0, buffer.len(), self.position)?;
+        if let Some(position) = self.position {
+            self.position = Some(position + written as u64);
+        }
+        Ok(written)
+    }
+
+    pub fn write_string(&mut self, value: &str, encoding: &str) -> NodeResult<usize> {
+        let written = fs::write_sync_string(self.fd, value, self.position, encoding)?;
+        if let Some(position) = self.position {
+            self.position = Some(position + written as u64);
+        }
+        Ok(written)
     }
 }
 
@@ -258,6 +345,7 @@ pub fn opendir(path: &str) -> NodeResult<Vec<Dirent>> {
 
 pub fn opendir_handle(path: &str) -> NodeResult<Dir> {
     Ok(Dir {
+        path: path.to_string(),
         entries: opendir(path)?,
         index: 0,
         closed: false,

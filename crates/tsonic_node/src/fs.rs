@@ -709,6 +709,22 @@ pub fn read_sync(
     Ok(read)
 }
 
+pub fn readv_sync(fd: i32, buffers: &mut [Buffer], position: Option<u64>) -> NodeResult<usize> {
+    let mut total = 0;
+    let mut next_position = position;
+    for buffer in buffers {
+        let read = read_sync(fd, buffer, 0, buffer.len(), next_position)?;
+        total += read;
+        if let Some(position) = next_position {
+            next_position = Some(position + read as u64);
+        }
+        if read < buffer.len() {
+            break;
+        }
+    }
+    Ok(total)
+}
+
 pub fn write_sync_buffer(
     fd: i32,
     buffer: &Buffer,
@@ -743,6 +759,22 @@ pub fn write_sync_string(
     let bytes = crate::buffer::encode_string(value, Some(encoding))?;
     let buffer = Buffer::from_bytes(bytes);
     write_sync_buffer(fd, &buffer, 0, buffer.len(), position)
+}
+
+pub fn writev_sync(fd: i32, buffers: &[Buffer], position: Option<u64>) -> NodeResult<usize> {
+    let mut total = 0;
+    let mut next_position = position;
+    for buffer in buffers {
+        let written = write_sync_buffer(fd, buffer, 0, buffer.len(), next_position)?;
+        total += written;
+        if let Some(position) = next_position {
+            next_position = Some(position + written as u64);
+        }
+        if written < buffer.len() {
+            break;
+        }
+    }
+    Ok(total)
 }
 
 pub fn fstat_sync(fd: i32) -> NodeResult<Stats> {
@@ -954,6 +986,15 @@ pub fn read_callback(
     callback(read_sync(fd, buffer, offset, length, position));
 }
 
+pub fn readv_callback(
+    fd: i32,
+    buffers: &mut [Buffer],
+    position: Option<u64>,
+    callback: impl FnOnce(NodeResult<usize>),
+) {
+    callback(readv_sync(fd, buffers, position));
+}
+
 pub fn write_callback_buffer(
     fd: i32,
     buffer: &Buffer,
@@ -973,6 +1014,15 @@ pub fn write_callback_string(
     callback: impl FnOnce(NodeResult<usize>),
 ) {
     callback(write_sync_string(fd, value, position, encoding));
+}
+
+pub fn writev_callback(
+    fd: i32,
+    buffers: &[Buffer],
+    position: Option<u64>,
+    callback: impl FnOnce(NodeResult<usize>),
+) {
+    callback(writev_sync(fd, buffers, position));
 }
 
 pub fn fstat_callback(fd: i32, callback: impl FnOnce(NodeResult<Stats>)) {

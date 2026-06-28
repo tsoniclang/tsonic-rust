@@ -930,8 +930,10 @@ NODE-FS-CALLBACK-TRUNCATE	fs	truncate callback	implemented	N44	tsonic_node::fs::
 NODE-FS-FD-CALLBACK-OPEN	fs	open callback	implemented	N44	tsonic_node::fs::open_callback	NODE-FS-CALLBACK-002	callback-shaped fd open uses closed fd table and real file IO
 NODE-FS-FD-CALLBACK-CLOSE	fs	close callback	implemented	N44	tsonic_node::fs::close_callback	NODE-FS-CALLBACK-002	callback-shaped fd close uses closed fd table and real file IO
 NODE-FS-FD-CALLBACK-READ	fs	read callback	implemented	N44	tsonic_node::fs::read_callback	NODE-FS-CALLBACK-002	callback-shaped fd read uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-READV	fs	readv callback	implemented	N77	tsonic_node::fs::readv_callback	NODE-FS-VECTOR-001	callback-shaped fd readv fills Buffer vector through closed fd table
 NODE-FS-FD-CALLBACK-WRITE-BUFFER	fs	write Buffer callback	implemented	N44	tsonic_node::fs::write_callback_buffer	NODE-FS-CALLBACK-002	callback-shaped fd write Buffer uses closed fd table and real file IO
 NODE-FS-FD-CALLBACK-WRITE-STRING	fs	write string callback	implemented	N44	tsonic_node::fs::write_callback_string	NODE-FS-CALLBACK-002	callback-shaped fd write string uses closed fd table and real file IO
+NODE-FS-FD-CALLBACK-WRITEV	fs	writev callback	implemented	N77	tsonic_node::fs::writev_callback	NODE-FS-VECTOR-001	callback-shaped fd writev writes Buffer vector through closed fd table
 NODE-FS-FD-CALLBACK-FSTAT	fs	fstat callback	implemented	N44	tsonic_node::fs::fstat_callback	NODE-FS-CALLBACK-002	callback-shaped fd fstat uses closed fd table and real file IO
 NODE-FS-FD-CALLBACK-FCHMOD	fs	fchmod callback	implemented	N44	tsonic_node::fs::fchmod_callback	NODE-FS-CALLBACK-002	callback-shaped fd fchmod uses closed fd table and real file IO
 NODE-FS-FD-CALLBACK-FCHOWN	fs	fchown callback	implemented	N44	tsonic_node::fs::fchown_callback	NODE-FS-CALLBACK-002	callback-shaped fd fchown uses closed fd table and real file IO
@@ -1491,6 +1493,7 @@ NODE-FS-MKDTEMP	fs	mkdtempSync	implemented	K	tsonic_node::fs::mkdtemp_sync	NODE-
 NODE-FS-OPEN	fs	openSync	implemented	K	tsonic_node::fs::open_sync	NODE-FS-EXT-001	closed fd table flags r/r+/w/w+/a/a+
 NODE-FS-OPENDIR	fs	opendirSync	implemented	K	tsonic_node::fs::opendir_sync	NODE-FS-EXT-002	Dirent vector
 NODE-FS-READ	fs	readSync	implemented	K	tsonic_node::fs::read_sync	NODE-FS-EXT-001	buffer read from fd
+NODE-FS-READV	fs	readvSync	implemented	N77	tsonic_node::fs::readv_sync	NODE-FS-VECTOR-001	reads into ordered Buffer vector from closed fd table
 NODE-FS-READDIR	fs	readdirSync	implemented	K	tsonic_node::fs::readdir_sync	NODE-FS-001	sorted names
 NODE-FS-READFILE-GENERIC	fs	readFileSync	implemented	N66	tsonic_node::fs::read_file_sync	NODE-FS-001	reads file as selected string or buffer result
 NODE-FS-READFILE-STRING	fs	readFileSync string	implemented	N66	tsonic_node::fs::read_file_sync_string	NODE-FS-001	reads file as encoded string
@@ -1513,6 +1516,7 @@ NODE-FS-WATCH-EVENT-CARRIER	fs	FsWatchEvent	implemented	N66	tsonic_node::fs::FsW
 NODE-FS-WATCH-FILE-FN	fs	watchFile	implemented	N66	tsonic_node::fs::watch_file	NODE-FS-004	creates closed polling file watcher
 NODE-FS-WRITE-STRING	fs	writeSync string	implemented	N66	tsonic_node::fs::write_sync_string	NODE-FS-001	writes string data to file descriptor
 NODE-FS-WRITE-BUFFER	fs	writeSync buffer	implemented	N66	tsonic_node::fs::write_sync_buffer	NODE-FS-001	writes Buffer bytes to file descriptor
+NODE-FS-WRITEV	fs	writevSync	implemented	N77	tsonic_node::fs::writev_sync	NODE-FS-VECTOR-001	writes ordered Buffer vector through closed fd table
 NODE-FS-WRITEFILE-GENERIC	fs	writeFileSync	implemented	N66	tsonic_node::fs::write_file_sync	NODE-FS-001	writes selected string or buffer file data
 NODE-FS-WRITEFILE-STRING	fs	writeFileSync string	implemented	N66	tsonic_node::fs::write_file_sync_string	NODE-FS-001	writes encoded string file data
 NODE-FS-WRITEFILE-BUFFER	fs	writeFileSync buffer	implemented	N66	tsonic_node::fs::write_file_sync_buffer	NODE-FS-001	writes Buffer file data
@@ -1560,16 +1564,28 @@ NODE-FSP-FILEHANDLE-CHMOD	fs/promises	FileHandle.chmod	implemented	N65	tsonic_no
 NODE-FSP-FILEHANDLE-CHOWN	fs/promises	FileHandle.chown	implemented	N65	tsonic_node::fs_promises::FileHandle::chown	NODE-FSP-002	FileHandle chown mutates backing fd ownership where platform-supported
 NODE-FSP-FILEHANDLE-UTIMES	fs/promises	FileHandle.utimes	implemented	N65	tsonic_node::fs_promises::FileHandle::utimes	NODE-FSP-002	FileHandle utimes mutates backing fd timestamps
 NODE-FSP-FILEHANDLE-READ	fs/promises	FileHandle.read	implemented	N65	tsonic_node::fs_promises::FileHandle::read	NODE-FSP-002	FileHandle read fills closed Buffer carrier at explicit position
+NODE-FSP-FILEHANDLE-READV	fs/promises	FileHandle.readv	implemented	N77	tsonic_node::fs_promises::FileHandle::readv	NODE-FS-VECTOR-001	FileHandle readv fills ordered Buffer vector at explicit position
 NODE-FSP-FILEHANDLE-WRITE-BUFFER	fs/promises	FileHandle.write Buffer	implemented	N65	tsonic_node::fs_promises::FileHandle::write_buffer	NODE-FSP-002	FileHandle write Buffer writes closed Buffer bytes at explicit position
 NODE-FSP-FILEHANDLE-WRITE-STRING	fs/promises	FileHandle.write string	implemented	N65	tsonic_node::fs_promises::FileHandle::write_string	NODE-FSP-002	FileHandle write string writes encoded text at explicit position
+NODE-FSP-FILEHANDLE-WRITEV	fs/promises	FileHandle.writev	implemented	N77	tsonic_node::fs_promises::FileHandle::writev	NODE-FS-VECTOR-001	FileHandle writev writes ordered Buffer vector at explicit position
 NODE-FSP-FILEHANDLE-APPEND-STRING	fs/promises	FileHandle.appendFile string	implemented	N65	tsonic_node::fs_promises::FileHandle::append_file_string	NODE-FSP-002	FileHandle appendFile string writes at current file end
 NODE-FSP-FILEHANDLE-APPEND-BUFFER	fs/promises	FileHandle.appendFile Buffer	implemented	N65	tsonic_node::fs_promises::FileHandle::append_file_buffer	NODE-FSP-002	FileHandle appendFile Buffer writes at current file end
 NODE-FSP-FILEHANDLE-READFILE-BUFFER	fs/promises	FileHandle.readFile Buffer	implemented	N65	tsonic_node::fs_promises::FileHandle::read_file_buffer	NODE-FSP-002	FileHandle readFile Buffer reads whole fd from start
 NODE-FSP-FILEHANDLE-READFILE-STRING	fs/promises	FileHandle.readFile string	implemented	N65	tsonic_node::fs_promises::FileHandle::read_file_string	NODE-FSP-002	FileHandle readFile string decodes whole fd from start
 NODE-FSP-FILEHANDLE-READABLE-WEB	fs/promises	FileHandle.readableWebStream	implemented	N65	tsonic_node::fs_promises::FileHandle::readable_web_stream	NODE-FSP-002	FileHandle readable web stream exposes closed chunk carrier
 NODE-FSP-FILEHANDLE-WRITABLE-WEB	fs/promises	FileHandle.writableWebStream	implemented	N65	tsonic_node::fs_promises::FileHandle::writable_web_stream	NODE-FSP-002	FileHandle writable web stream exposes closed stream carrier
+NODE-FSP-FILEHANDLE-CREATE-READ-STREAM	fs/promises	FileHandle.createReadStream	implemented	N77	tsonic_node::fs_promises::FileHandle::create_read_stream	NODE-FSP-STREAM-001	FileHandle createReadStream exposes closed Readable chunks over real file IO
+NODE-FSP-FILEHANDLE-CREATE-WRITE-STREAM	fs/promises	FileHandle.createWriteStream	implemented	N77	tsonic_node::fs_promises::FileHandle::create_write_stream	NODE-FSP-STREAM-001	FileHandle createWriteStream exposes closed Writable carrier
+NODE-FSP-FILEHANDLE-READ-LINES	fs/promises	FileHandle.readLines	implemented	N77	tsonic_node::fs_promises::FileHandle::read_lines	NODE-FSP-STREAM-001	FileHandle readLines returns deterministic decoded line vector
+NODE-FSP-FILEHANDLE-PULL	fs/promises	FileHandle.pull	implemented	N77	tsonic_node::fs_promises::FileHandle::pull	NODE-FSP-STREAM-001	FileHandle pull exposes chunked closed Readable carrier
+NODE-FSP-FILEHANDLE-WRITER	fs/promises	FileHandle.writer	implemented	N77	tsonic_node::fs_promises::FileHandle::writer	NODE-FSP-WRITER-001	FileHandle writer creates explicit closed writer carrier
+NODE-FSP-FILEHANDLE-WRITER-CARRIER	fs/promises	FileHandleWriter	implemented	N77	tsonic_node::fs_promises::FileHandleWriter	NODE-FSP-WRITER-001	closed file handle writer carrier
+NODE-FSP-FILEHANDLE-WRITER-SEEK	fs/promises	FileHandleWriter.seek	implemented	N77	tsonic_node::fs_promises::FileHandleWriter::seek	NODE-FSP-WRITER-001	writer explicit position mutation
+NODE-FSP-FILEHANDLE-WRITER-WRITE-STRING	fs/promises	FileHandleWriter.write string	implemented	N77	tsonic_node::fs_promises::FileHandleWriter::write_string	NODE-FSP-WRITER-001	writer writes encoded string through backing fd
+NODE-FSP-FILEHANDLE-WRITER-WRITE-BUFFER	fs/promises	FileHandleWriter.write Buffer	implemented	N77	tsonic_node::fs_promises::FileHandleWriter::write_buffer	NODE-FSP-WRITER-001	writer writes Buffer bytes through backing fd
 NODE-FSP-FILEHANDLE-CLOSE	fs/promises	FileHandle.close	implemented	N65	tsonic_node::fs_promises::FileHandle::close	NODE-FSP-002	FileHandle close closes backing fd
 NODE-FSP-DIR-READ	fs/promises	Dir.read	implemented	N65	tsonic_node::fs_promises::Dir::read	NODE-FSP-002	Dir read returns sequential Dirent values and closed-state errors
+NODE-FSP-DIR-PATH	fs/promises	Dir.path	implemented	N77	tsonic_node::fs_promises::Dir::path	NODE-FSP-002	Dir exposes opened directory path
 NODE-FSP-DIR-ENTRIES	fs/promises	Dir entries	implemented	N65	tsonic_node::fs_promises::Dir::entries	NODE-FSP-002	Dir exposes deterministic entry snapshot
 NODE-FSP-DIR-CLOSE	fs/promises	Dir.close	implemented	N65	tsonic_node::fs_promises::Dir::close	NODE-FSP-002	Dir close marks handle closed
 NODE-FSP-DIR-CLOSED	fs/promises	Dir.closed	implemented	N65	tsonic_node::fs_promises::Dir::closed	NODE-FSP-002	Dir closed reports closed-state carrier

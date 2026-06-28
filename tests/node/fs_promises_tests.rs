@@ -96,6 +96,22 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
     handle.write_string("rust", Some(6), "utf8").unwrap();
     assert_eq!(handle.read_file_string("utf8").unwrap(), "hello rustd!");
+    let mut vector_buffers = [Buffer::alloc(5), Buffer::alloc(1)];
+    assert_eq!(handle.readv(&mut vector_buffers, Some(0)).unwrap(), 6);
+    assert_eq!(vector_buffers[0].to_string(Some("utf8")).unwrap(), "hello");
+    assert_eq!(vector_buffers[1].to_string(Some("utf8")).unwrap(), " ");
+    assert_eq!(
+        handle
+            .writev(
+                &[
+                    Buffer::from_string("r", Some("utf8")).unwrap(),
+                    Buffer::from_string("u", Some("utf8")).unwrap(),
+                ],
+                Some(6),
+            )
+            .unwrap(),
+        2
+    );
     let written = handle
         .write_buffer(
             &Buffer::from_string("!!", Some("utf8")).unwrap(),
@@ -114,6 +130,21 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     let readable_web = handle.readable_web_stream().unwrap();
     assert_eq!(readable_web.chunks().len(), 1);
     assert!(!handle.writable_web_stream().closed());
+    let mut read_stream = handle.create_read_stream().unwrap();
+    assert!(!read_stream.read().unwrap().is_empty());
+    let mut write_stream = handle.create_write_stream();
+    assert!(write_stream.write(Buffer::from_string("stream", Some("utf8")).unwrap()));
+    assert_eq!(write_stream.chunks().len(), 1);
+    assert_eq!(
+        handle.read_lines("utf8").unwrap(),
+        vec!["hello rust!!?#".to_string()]
+    );
+    let pulled = handle.pull(4).unwrap().to_vec();
+    assert!(pulled.len() >= 3);
+    let mut writer = handle.writer();
+    writer.seek(10);
+    assert_eq!(writer.write_string("?#", "utf8").unwrap(), 2);
+    assert_eq!(writer.position(), Some(12));
     handle.sync().unwrap();
     handle.datasync().unwrap();
     handle.truncate(10).unwrap();
@@ -134,6 +165,7 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     let nested_file = nested.join("n.txt");
     fs_promises::write_file_string(&nested_file.to_string_lossy(), "n", "utf8").unwrap();
     let mut dir = fs_promises::opendir_handle(&nested_text).unwrap();
+    assert_eq!(dir.path(), nested_text);
     let first = dir.read().unwrap().unwrap();
     assert_eq!(first.name, "n.txt");
     assert!(dir.read().unwrap().is_none());
