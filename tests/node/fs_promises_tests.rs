@@ -78,6 +78,7 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     assert!(statfs.bsize > 0);
 
     let handle = fs_promises::open(&file_text, "r+").unwrap();
+    assert!(handle.fd() >= 0);
     assert_eq!(handle.stat().unwrap().size, 12);
     handle.chmod(0o600).unwrap();
     #[cfg(unix)]
@@ -95,6 +96,16 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
     handle.write_string("rust", Some(6), "utf8").unwrap();
     assert_eq!(handle.read_file_string("utf8").unwrap(), "hello rustd!");
+    let written = handle
+        .write_buffer(
+            &Buffer::from_string("!!", Some("utf8")).unwrap(),
+            0,
+            2,
+            Some(10),
+        )
+        .unwrap();
+    assert_eq!(written, 2);
+    assert_eq!(handle.read_file_string("utf8").unwrap(), "hello rust!!");
     handle.append_file_string("?", "utf8").unwrap();
     handle
         .append_file_buffer(&Buffer::from_string("#", Some("utf8")).unwrap())

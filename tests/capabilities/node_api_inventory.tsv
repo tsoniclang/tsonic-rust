@@ -183,6 +183,59 @@ NODE-FS-DIRENT-TYPE-METHODS	fs	Dirent parentPath and type predicates	implemented
 NODE-FS-PROMISES	fs	promises APIs	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-FSP-FILEHANDLE	fs/promises	FileHandle readFile/write/appendFile/web streams	implemented	N42	tsonic_node::fs_promises::FileHandle	NODE-FSP-002	FileHandle stat/sync/datasync/truncate/chmod/chown/utimes/read/write/readFile/appendFile and web stream carriers
 NODE-FSP-DIR	fs/promises	Dir read/close async iterator shape	implemented	N42	tsonic_node::fs_promises::{Dir,opendir_handle}	NODE-FSP-002	closed fs/promises Dir handle with read, entries, close, and closed-state errors
+NODE-FSP-ACCESS	fs/promises	access	implemented	N65	tsonic_node::fs_promises::access	NODE-FSP-001	promise-shaped access helper over real filesystem checks
+NODE-FSP-READFILE-STRING	fs/promises	readFile string	implemented	N65	tsonic_node::fs_promises::read_file_string	NODE-FSP-001	promise-shaped readFile string helper with explicit encoding
+NODE-FSP-READFILE-BUFFER	fs/promises	readFile Buffer	implemented	N65	tsonic_node::fs_promises::read_file_buffer	NODE-FSP-001	promise-shaped readFile buffer helper over closed Buffer carrier
+NODE-FSP-WRITEFILE-STRING	fs/promises	writeFile string	implemented	N65	tsonic_node::fs_promises::write_file_string	NODE-FSP-001	promise-shaped writeFile string helper with explicit encoding
+NODE-FSP-WRITEFILE-BUFFER	fs/promises	writeFile Buffer	implemented	N65	tsonic_node::fs_promises::write_file_buffer	NODE-FSP-001	promise-shaped writeFile buffer helper over closed Buffer carrier
+NODE-FSP-APPENDFILE-STRING	fs/promises	appendFile string	implemented	N65	tsonic_node::fs_promises::append_file_string	NODE-FSP-001	promise-shaped appendFile string helper with explicit encoding
+NODE-FSP-APPENDFILE-BUFFER	fs/promises	appendFile Buffer	implemented	N65	tsonic_node::fs_promises::append_file_buffer	NODE-FSP-001	promise-shaped appendFile buffer helper over closed Buffer carrier
+NODE-FSP-CHMOD	fs/promises	chmod	implemented	N65	tsonic_node::fs_promises::chmod	NODE-FSP-001	promise-shaped chmod helper backed by platform file mode mutation
+NODE-FSP-CHOWN	fs/promises	chown	implemented	N65	tsonic_node::fs_promises::chown	NODE-FSP-001	promise-shaped chown helper backed where platform ownership mutation is available
+NODE-FSP-LCHOWN	fs/promises	lchown	implemented	N65	tsonic_node::fs_promises::lchown	NODE-FSP-001	promise-shaped lchown helper backed where symlink ownership mutation is available
+NODE-FSP-UTIMES	fs/promises	utimes	implemented	N65	tsonic_node::fs_promises::utimes	NODE-FSP-001	promise-shaped timestamp mutation helper
+NODE-FSP-COPYFILE	fs/promises	copyFile	implemented	N65	tsonic_node::fs_promises::copy_file	NODE-FSP-001	promise-shaped copyFile helper over real filesystem copy
+NODE-FSP-CP	fs/promises	cp	implemented	N65	tsonic_node::fs_promises::cp	NODE-FSP-001	promise-shaped cp helper with explicit recursive control
+NODE-FSP-LINK	fs/promises	link	implemented	N65	tsonic_node::fs_promises::link	NODE-FSP-001	promise-shaped hard-link helper
+NODE-FSP-STAT	fs/promises	stat	implemented	N65	tsonic_node::fs_promises::stat	NODE-FSP-001	promise-shaped stat helper returning closed Stats carrier
+NODE-FSP-STATFS	fs/promises	statfs	implemented	N65	tsonic_node::fs_promises::statfs	NODE-FSP-001	promise-shaped statfs helper returning closed StatFs carrier
+NODE-FSP-LSTAT	fs/promises	lstat	implemented	N65	tsonic_node::fs_promises::lstat	NODE-FSP-001	promise-shaped lstat helper returning closed Stats carrier
+NODE-FSP-MKDIR	fs/promises	mkdir	implemented	N65	tsonic_node::fs_promises::mkdir	NODE-FSP-001	promise-shaped mkdir helper with explicit recursive control
+NODE-FSP-MKDTEMP	fs/promises	mkdtemp	implemented	N65	tsonic_node::fs_promises::mkdtemp	NODE-FSP-001	promise-shaped temporary directory helper
+NODE-FSP-RM	fs/promises	rm	implemented	N65	tsonic_node::fs_promises::rm	NODE-FSP-001	promise-shaped rm helper with recursive and force controls
+NODE-FSP-RMDIR	fs/promises	rmdir	implemented	N65	tsonic_node::fs_promises::rmdir	NODE-FSP-001	promise-shaped empty directory removal helper
+NODE-FSP-RENAME	fs/promises	rename	implemented	N65	tsonic_node::fs_promises::rename	NODE-FSP-001	promise-shaped rename helper
+NODE-FSP-UNLINK	fs/promises	unlink	implemented	N65	tsonic_node::fs_promises::unlink	NODE-FSP-001	promise-shaped unlink helper
+NODE-FSP-TRUNCATE	fs/promises	truncate	implemented	N65	tsonic_node::fs_promises::truncate	NODE-FSP-001	promise-shaped path truncate helper
+NODE-FSP-SYMLINK	fs/promises	symlink	implemented	N65	tsonic_node::fs_promises::symlink	NODE-FSP-001	promise-shaped symlink helper
+NODE-FSP-READLINK	fs/promises	readlink	implemented	N65	tsonic_node::fs_promises::readlink	NODE-FSP-001	promise-shaped readlink helper
+NODE-FSP-REALPATH	fs/promises	realpath	implemented	N65	tsonic_node::fs_promises::realpath	NODE-FSP-001	promise-shaped canonical path helper
+NODE-FSP-READDIR	fs/promises	readdir	implemented	N65	tsonic_node::fs_promises::readdir	NODE-FSP-001	promise-shaped directory listing helper
+NODE-FSP-OPENDIR-LIST	fs/promises	opendir list	implemented	N65	tsonic_node::fs_promises::opendir	NODE-FSP-001	promise-shaped directory entry listing helper
+NODE-FSP-OPEN	fs/promises	open	implemented	N65	tsonic_node::fs_promises::open	NODE-FSP-002	promise-shaped open helper returning closed FileHandle carrier
+NODE-FSP-FILEHANDLE-FD	fs/promises	FileHandle.fd	implemented	N65	tsonic_node::fs_promises::FileHandle::fd	NODE-FSP-002	FileHandle exposes stable fd identity
+NODE-FSP-FILEHANDLE-STAT	fs/promises	FileHandle.stat	implemented	N65	tsonic_node::fs_promises::FileHandle::stat	NODE-FSP-002	FileHandle stat returns closed Stats carrier
+NODE-FSP-FILEHANDLE-SYNC	fs/promises	FileHandle.sync	implemented	N65	tsonic_node::fs_promises::FileHandle::sync	NODE-FSP-002	FileHandle sync flushes the backing fd
+NODE-FSP-FILEHANDLE-DATASYNC	fs/promises	FileHandle.datasync	implemented	N65	tsonic_node::fs_promises::FileHandle::datasync	NODE-FSP-002	FileHandle datasync flushes backing fd data
+NODE-FSP-FILEHANDLE-TRUNCATE	fs/promises	FileHandle.truncate	implemented	N65	tsonic_node::fs_promises::FileHandle::truncate	NODE-FSP-002	FileHandle truncate mutates backing fd length
+NODE-FSP-FILEHANDLE-CHMOD	fs/promises	FileHandle.chmod	implemented	N65	tsonic_node::fs_promises::FileHandle::chmod	NODE-FSP-002	FileHandle chmod mutates backing fd mode
+NODE-FSP-FILEHANDLE-CHOWN	fs/promises	FileHandle.chown	implemented	N65	tsonic_node::fs_promises::FileHandle::chown	NODE-FSP-002	FileHandle chown mutates backing fd ownership where platform-supported
+NODE-FSP-FILEHANDLE-UTIMES	fs/promises	FileHandle.utimes	implemented	N65	tsonic_node::fs_promises::FileHandle::utimes	NODE-FSP-002	FileHandle utimes mutates backing fd timestamps
+NODE-FSP-FILEHANDLE-READ	fs/promises	FileHandle.read	implemented	N65	tsonic_node::fs_promises::FileHandle::read	NODE-FSP-002	FileHandle read fills closed Buffer carrier at explicit position
+NODE-FSP-FILEHANDLE-WRITE-BUFFER	fs/promises	FileHandle.write Buffer	implemented	N65	tsonic_node::fs_promises::FileHandle::write_buffer	NODE-FSP-002	FileHandle write Buffer writes closed Buffer bytes at explicit position
+NODE-FSP-FILEHANDLE-WRITE-STRING	fs/promises	FileHandle.write string	implemented	N65	tsonic_node::fs_promises::FileHandle::write_string	NODE-FSP-002	FileHandle write string writes encoded text at explicit position
+NODE-FSP-FILEHANDLE-APPEND-STRING	fs/promises	FileHandle.appendFile string	implemented	N65	tsonic_node::fs_promises::FileHandle::append_file_string	NODE-FSP-002	FileHandle appendFile string writes at current file end
+NODE-FSP-FILEHANDLE-APPEND-BUFFER	fs/promises	FileHandle.appendFile Buffer	implemented	N65	tsonic_node::fs_promises::FileHandle::append_file_buffer	NODE-FSP-002	FileHandle appendFile Buffer writes at current file end
+NODE-FSP-FILEHANDLE-READFILE-BUFFER	fs/promises	FileHandle.readFile Buffer	implemented	N65	tsonic_node::fs_promises::FileHandle::read_file_buffer	NODE-FSP-002	FileHandle readFile Buffer reads whole fd from start
+NODE-FSP-FILEHANDLE-READFILE-STRING	fs/promises	FileHandle.readFile string	implemented	N65	tsonic_node::fs_promises::FileHandle::read_file_string	NODE-FSP-002	FileHandle readFile string decodes whole fd from start
+NODE-FSP-FILEHANDLE-READABLE-WEB	fs/promises	FileHandle.readableWebStream	implemented	N65	tsonic_node::fs_promises::FileHandle::readable_web_stream	NODE-FSP-002	FileHandle readable web stream exposes closed chunk carrier
+NODE-FSP-FILEHANDLE-WRITABLE-WEB	fs/promises	FileHandle.writableWebStream	implemented	N65	tsonic_node::fs_promises::FileHandle::writable_web_stream	NODE-FSP-002	FileHandle writable web stream exposes closed stream carrier
+NODE-FSP-FILEHANDLE-CLOSE	fs/promises	FileHandle.close	implemented	N65	tsonic_node::fs_promises::FileHandle::close	NODE-FSP-002	FileHandle close closes backing fd
+NODE-FSP-DIR-READ	fs/promises	Dir.read	implemented	N65	tsonic_node::fs_promises::Dir::read	NODE-FSP-002	Dir read returns sequential Dirent values and closed-state errors
+NODE-FSP-DIR-ENTRIES	fs/promises	Dir entries	implemented	N65	tsonic_node::fs_promises::Dir::entries	NODE-FSP-002	Dir exposes deterministic entry snapshot
+NODE-FSP-DIR-CLOSE	fs/promises	Dir.close	implemented	N65	tsonic_node::fs_promises::Dir::close	NODE-FSP-002	Dir close marks handle closed
+NODE-FSP-DIR-CLOSED	fs/promises	Dir.closed	implemented	N65	tsonic_node::fs_promises::Dir::closed	NODE-FSP-002	Dir closed reports closed-state carrier
+NODE-FSP-OPENDIR-HANDLE	fs/promises	opendir handle	implemented	N65	tsonic_node::fs_promises::opendir_handle	NODE-FSP-002	opendir handle returns closed Dir lifecycle carrier
 NODE-PATH-BASENAME	path	basename	implemented	J	tsonic_node::path::basename	NODE-PATH-001	path helper
 NODE-PATH-DIRNAME	path	dirname	implemented	J	tsonic_node::path::dirname	NODE-PATH-001	path helper
 NODE-PATH-EXTNAME	path	extname	implemented	J	tsonic_node::path::extname	NODE-PATH-001	path helper
