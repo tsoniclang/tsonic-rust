@@ -116,8 +116,138 @@ pub fn secure_heap_used() -> SecureHeapUsage {
     SecureHeapUsage::default()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CryptoConstants {
+    pub dh_check_p_not_safe_prime: i32,
+    pub dh_check_p_not_prime: i32,
+    pub dh_unable_to_check_generator: i32,
+    pub dh_not_suitable_generator: i32,
+    pub engine_method_none: i32,
+    pub engine_method_rsa: i32,
+    pub engine_method_dsa: i32,
+    pub engine_method_dh: i32,
+    pub engine_method_rand: i32,
+    pub engine_method_ec: i32,
+    pub engine_method_ciphers: i32,
+    pub engine_method_digests: i32,
+    pub engine_method_pkey_meths: i32,
+    pub engine_method_pkey_asn1_meths: i32,
+    pub engine_method_all: i32,
+    pub rsa_pkcs1_padding: i32,
+    pub rsa_ssl_v23_padding: i32,
+    pub rsa_no_padding: i32,
+    pub rsa_pkcs1_oaep_padding: i32,
+    pub rsa_x931_padding: i32,
+    pub rsa_pkcs1_pss_padding: i32,
+    pub rsa_pss_saltlen_digest: i32,
+    pub rsa_pss_saltlen_max_sign: i32,
+    pub rsa_pss_saltlen_auto: i32,
+    pub point_conversion_compressed: i32,
+    pub point_conversion_uncompressed: i32,
+    pub point_conversion_hybrid: i32,
+    pub default_core_cipher_list: String,
+    pub default_cipher_list: String,
+    pub openssl_version_number: u64,
+}
+
+pub fn constants() -> CryptoConstants {
+    CryptoConstants {
+        dh_check_p_not_safe_prime: 2,
+        dh_check_p_not_prime: 1,
+        dh_unable_to_check_generator: 4,
+        dh_not_suitable_generator: 8,
+        engine_method_none: 0,
+        engine_method_rsa: 1,
+        engine_method_dsa: 2,
+        engine_method_dh: 4,
+        engine_method_rand: 8,
+        engine_method_ec: 2048,
+        engine_method_ciphers: 64,
+        engine_method_digests: 128,
+        engine_method_pkey_meths: 512,
+        engine_method_pkey_asn1_meths: 1024,
+        engine_method_all: 0xffff,
+        rsa_pkcs1_padding: 1,
+        rsa_ssl_v23_padding: 2,
+        rsa_no_padding: 3,
+        rsa_pkcs1_oaep_padding: 4,
+        rsa_x931_padding: 5,
+        rsa_pkcs1_pss_padding: 6,
+        rsa_pss_saltlen_digest: -1,
+        rsa_pss_saltlen_max_sign: -2,
+        rsa_pss_saltlen_auto: -2,
+        point_conversion_compressed: 2,
+        point_conversion_uncompressed: 4,
+        point_conversion_hybrid: 6,
+        default_core_cipher_list: "TLS_AES_256_GCM_SHA384".to_string(),
+        default_cipher_list: "TLS_AES_256_GCM_SHA384".to_string(),
+        openssl_version_number: 0,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RandomUUIDOptions {
+    pub disable_entropy_cache: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct HashOptions {
+    pub output_length: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct OneShotDigestOptions {
+    pub output_length: Option<usize>,
+    pub encoding: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CipherInfoOptions {
+    pub key_length: Option<usize>,
+    pub iv_length: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CipherInfo {
+    pub name: String,
+    pub nid: i32,
+    pub block_size: usize,
+    pub iv_length: usize,
+    pub key_length: usize,
+    pub mode: String,
+}
+
+pub fn get_cipher_info(name: &str, options: Option<CipherInfoOptions>) -> Option<CipherInfo> {
+    if name.eq_ignore_ascii_case("aes-256-gcm") {
+        let options = options.unwrap_or(CipherInfoOptions {
+            key_length: Some(32),
+            iv_length: Some(12),
+        });
+        Some(CipherInfo {
+            name: "aes-256-gcm".to_string(),
+            nid: 0,
+            block_size: 1,
+            iv_length: options.iv_length.unwrap_or(12),
+            key_length: options.key_length.unwrap_or(32),
+            mode: "gcm".to_string(),
+        })
+    } else {
+        None
+    }
+}
+
 pub fn create_hash(algorithm: &str) -> NodeResult<Hash> {
     Hash::create(algorithm)
+}
+
+pub fn create_hash_with_options(algorithm: &str, options: HashOptions) -> NodeResult<Hash> {
+    if options.output_length.is_some() {
+        return Err(NodeError::new(
+            "ERR_CRYPTO_UNSUPPORTED_OPTION",
+            "hash outputLength is only valid for unsupported XOF algorithms",
+        ));
+    }
+    create_hash(algorithm)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,6 +326,20 @@ pub fn hash(algorithm: &str, data: &[u8], encoding: Option<&str>) -> NodeResult<
     let mut hash = create_hash(algorithm)?;
     hash.update_bytes(data);
     hash.digest(encoding)
+}
+
+pub fn hash_with_options(
+    algorithm: &str,
+    data: &[u8],
+    options: OneShotDigestOptions,
+) -> NodeResult<DigestResult> {
+    if options.output_length.is_some() {
+        return Err(NodeError::new(
+            "ERR_CRYPTO_UNSUPPORTED_OPTION",
+            "one-shot digest outputLength is only valid for unsupported XOF algorithms",
+        ));
+    }
+    hash(algorithm, data, options.encoding.as_deref())
 }
 
 #[derive(Debug, Clone)]
@@ -333,6 +477,29 @@ pub fn pbkdf2_sync(
     Ok(Buffer::from_bytes(output))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pbkdf2Params {
+    pub password: Buffer,
+    pub salt: Buffer,
+    pub iterations: u32,
+    pub key_len: usize,
+    pub digest: String,
+}
+
+pub fn pbkdf2_sync_params(params: &Pbkdf2Params) -> NodeResult<Buffer> {
+    pbkdf2_sync(
+        &params.password.as_bytes(),
+        &params.salt.as_bytes(),
+        params.iterations,
+        params.key_len,
+        &params.digest,
+    )
+}
+
+pub fn pbkdf2_callback(params: &Pbkdf2Params, callback: impl FnOnce(NodeResult<Buffer>)) {
+    callback(pbkdf2_sync_params(params));
+}
+
 pub fn hkdf_sync(
     digest: &str,
     input_keying_material: &[u8],
@@ -373,9 +540,65 @@ pub fn hkdf_sync(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HkdfParams {
+    pub digest: String,
+    pub input_keying_material: Buffer,
+    pub salt: Buffer,
+    pub info: Buffer,
+    pub key_len: usize,
+}
+
+pub fn hkdf_sync_params(params: &HkdfParams) -> NodeResult<Buffer> {
+    hkdf_sync(
+        &params.digest,
+        &params.input_keying_material.as_bytes(),
+        &params.salt.as_bytes(),
+        &params.info.as_bytes(),
+        params.key_len,
+    )
+}
+
+pub fn hkdf_callback(params: &HkdfParams, callback: impl FnOnce(NodeResult<Buffer>)) {
+    callback(hkdf_sync_params(params));
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScryptOptions {
+    pub cost: u32,
+    pub block_size: u32,
+    pub parallelization: u32,
+    pub maxmem: usize,
+}
+
+impl Default for ScryptOptions {
+    fn default() -> Self {
+        Self {
+            cost: 16_384,
+            block_size: 8,
+            parallelization: 1,
+            maxmem: 32 * 1024 * 1024,
+        }
+    }
+}
+
+pub fn scrypt_sync(
+    _password: &[u8],
+    _salt: &[u8],
+    _key_len: usize,
+    _options: ScryptOptions,
+) -> NodeResult<Buffer> {
+    Err(NodeError::new(
+        "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
+        "scrypt requires an approved scrypt implementation dependency",
+    ))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyObject {
     key_type: String,
     bytes: Buffer,
+    asymmetric_key_type: Option<String>,
+    asymmetric_key_details: Option<AsymmetricKeyDetails>,
 }
 
 impl KeyObject {
@@ -392,11 +615,22 @@ impl KeyObject {
     }
 
     pub fn asymmetric_key_type(&self) -> Option<&str> {
-        None
+        self.asymmetric_key_type.as_deref()
+    }
+
+    pub fn asymmetric_key_details(&self) -> Option<&AsymmetricKeyDetails> {
+        self.asymmetric_key_details.as_ref()
     }
 
     pub fn export(&self) -> Buffer {
         self.bytes.clone()
+    }
+
+    pub fn export_with_options(&self, options: KeyExportOptions) -> NodeResult<KeyExportResult> {
+        match options.encoding.as_deref() {
+            None => Ok(KeyExportResult::Buffer(self.export())),
+            Some(encoding) => Ok(KeyExportResult::String(self.export_string(encoding)?)),
+        }
     }
 
     pub fn export_string(&self, encoding: &str) -> NodeResult<String> {
@@ -412,6 +646,8 @@ pub fn create_secret_key(key: &Buffer) -> KeyObject {
     KeyObject {
         key_type: "secret".to_string(),
         bytes: key.clone(),
+        asymmetric_key_type: None,
+        asymmetric_key_details: None,
     }
 }
 
@@ -419,7 +655,76 @@ pub fn create_secret_key_bytes(key: &[u8]) -> KeyObject {
     KeyObject {
         key_type: "secret".to_string(),
         bytes: Buffer::from_bytes(key.to_vec()),
+        asymmetric_key_type: None,
+        asymmetric_key_details: None,
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsymmetricKeyDetails {
+    pub modulus_length: Option<usize>,
+    pub public_exponent: Option<u64>,
+    pub hash_algorithm: Option<String>,
+    pub mgf1_hash_algorithm: Option<String>,
+    pub salt_length: Option<usize>,
+    pub named_curve: Option<String>,
+    pub divisor_length: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyExportOptions {
+    pub format: String,
+    pub key_type: Option<String>,
+    pub cipher: Option<String>,
+    pub passphrase: Option<String>,
+    pub encoding: Option<String>,
+}
+
+impl Default for KeyExportOptions {
+    fn default() -> Self {
+        Self {
+            format: "buffer".to_string(),
+            key_type: None,
+            cipher: None,
+            passphrase: None,
+            encoding: None,
+        }
+    }
+}
+
+pub type PrivateKeyExportOptions = KeyExportOptions;
+pub type PublicKeyExportOptions = KeyExportOptions;
+pub type SymmetricKeyExportOptions = KeyExportOptions;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyExportResult {
+    Buffer(Buffer),
+    String(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JsonWebKey {
+    pub kty: String,
+    pub crv: Option<String>,
+    pub x: Option<String>,
+    pub y: Option<String>,
+    pub d: Option<String>,
+    pub n: Option<String>,
+    pub e: Option<String>,
+    pub k: Option<String>,
+    pub alg: Option<String>,
+    pub key_ops: Vec<String>,
+    pub ext: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JsonWebKeyInput {
+    pub jwk: JsonWebKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JwkKeyExportOptions {
+    pub format: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -505,6 +810,10 @@ pub fn random_uuid() -> NodeResult<String> {
         bytes[8], bytes[9],
         bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
     ))
+}
+
+pub fn random_uuid_with_options(_options: RandomUUIDOptions) -> NodeResult<String> {
+    random_uuid()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -616,6 +925,55 @@ pub fn sign(algorithm: &str, key_pair: &RsaKeyPair, data: &[u8]) -> NodeResult<B
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SigningOptions {
+    pub padding: Option<i32>,
+    pub salt_length: Option<i32>,
+    pub dsa_encoding: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Sign {
+    algorithm: String,
+    bytes: Vec<u8>,
+}
+
+impl Sign {
+    pub fn create(algorithm: &str) -> Self {
+        Self {
+            algorithm: algorithm.to_string(),
+            bytes: Vec::new(),
+        }
+    }
+
+    pub fn update_bytes(&mut self, bytes: &[u8]) -> &mut Self {
+        self.bytes.extend_from_slice(bytes);
+        self
+    }
+
+    pub fn update_string(&mut self, value: &str, encoding: Option<&str>) -> NodeResult<&mut Self> {
+        self.bytes
+            .extend_from_slice(&crate::buffer::encode_string(value, encoding)?);
+        Ok(self)
+    }
+
+    pub fn sign(&self, key_pair: &RsaKeyPair) -> NodeResult<Buffer> {
+        sign(&self.algorithm, key_pair, &self.bytes)
+    }
+
+    pub fn sign_with_options(
+        &self,
+        key_pair: &RsaKeyPair,
+        _options: SigningOptions,
+    ) -> NodeResult<Buffer> {
+        self.sign(key_pair)
+    }
+}
+
+pub fn create_sign(algorithm: &str) -> Sign {
+    Sign::create(algorithm)
+}
+
 pub fn verify_sha256(
     public_key: &RsaPublicKey,
     data: &[u8],
@@ -642,8 +1000,156 @@ pub fn verify(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyKeyObjectInput {
+    pub padding: Option<i32>,
+    pub salt_length: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Verify {
+    algorithm: String,
+    bytes: Vec<u8>,
+}
+
+impl Verify {
+    pub fn create(algorithm: &str) -> Self {
+        Self {
+            algorithm: algorithm.to_string(),
+            bytes: Vec::new(),
+        }
+    }
+
+    pub fn update_bytes(&mut self, bytes: &[u8]) -> &mut Self {
+        self.bytes.extend_from_slice(bytes);
+        self
+    }
+
+    pub fn update_string(&mut self, value: &str, encoding: Option<&str>) -> NodeResult<&mut Self> {
+        self.bytes
+            .extend_from_slice(&crate::buffer::encode_string(value, encoding)?);
+        Ok(self)
+    }
+
+    pub fn verify(&self, public_key: &RsaPublicKey, signature: &Buffer) -> NodeResult<bool> {
+        verify(&self.algorithm, public_key, &self.bytes, signature)
+    }
+
+    pub fn verify_with_options(
+        &self,
+        public_key: &RsaPublicKey,
+        signature: &Buffer,
+        _options: VerifyKeyObjectInput,
+    ) -> NodeResult<bool> {
+        self.verify(public_key, signature)
+    }
+}
+
+pub fn create_verify(algorithm: &str) -> Verify {
+    Verify::create(algorithm)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyAlgorithm {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaKeyAlgorithm {
+    pub name: String,
+    pub modulus_length: usize,
+    pub public_exponent: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaHashedKeyAlgorithm {
+    pub rsa: RsaKeyAlgorithm,
+    pub hash: KeyAlgorithm,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HmacKeyAlgorithm {
+    pub name: String,
+    pub hash: KeyAlgorithm,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CryptoKey {
+    pub key_type: String,
+    pub extractable: bool,
+    pub algorithm: KeyAlgorithm,
+    pub usages: Vec<String>,
+    data: Buffer,
+}
+
+impl CryptoKey {
+    pub fn secret(name: &str, data: Buffer, usages: &[&str]) -> Self {
+        Self {
+            key_type: "secret".to_string(),
+            extractable: true,
+            algorithm: KeyAlgorithm {
+                name: name.to_string(),
+            },
+            usages: usages.iter().map(|value| value.to_string()).collect(),
+            data,
+        }
+    }
+
+    pub fn data(&self) -> Buffer {
+        self.data.clone()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CryptoKeyPair {
+    pub public_key: CryptoKey,
+    pub private_key: CryptoKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AeadParams {
+    pub name: String,
+    pub iv: Buffer,
+    pub additional_data: Option<Buffer>,
+    pub tag_length: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AesCtrParams {
+    pub name: String,
+    pub counter: Buffer,
+    pub length: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaPssParams {
+    pub name: String,
+    pub salt_length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaOaepParams {
+    pub name: String,
+    pub label: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EcdsaParams {
+    pub name: String,
+    pub hash: KeyAlgorithm,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EcdhKeyDeriveParams {
+    pub name: String,
+    pub public: CryptoKey,
+}
+
 pub mod webcrypto {
-    use super::{digest_bytes, parse_algorithm, random_bytes};
+    use super::{
+        digest_bytes, parse_algorithm, random_bytes, CryptoKey, JsonWebKey, KeyExportResult,
+    };
     use crate::buffer::Buffer;
     use crate::error::NodeResult;
 
@@ -679,6 +1185,45 @@ pub mod webcrypto {
         pub fn digest(&self, algorithm: &str, data: &[u8]) -> NodeResult<Buffer> {
             let algorithm = parse_algorithm(algorithm)?;
             Ok(Buffer::from_bytes(digest_bytes(algorithm, data)))
+        }
+
+        pub fn import_secret_key(
+            &self,
+            algorithm: &str,
+            data: &Buffer,
+            usages: &[&str],
+        ) -> CryptoKey {
+            CryptoKey::secret(algorithm, data.clone(), usages)
+        }
+
+        pub fn export_key(&self, format: &str, key: &CryptoKey) -> NodeResult<KeyExportResult> {
+            match format {
+                "raw" => Ok(KeyExportResult::Buffer(key.data())),
+                "jwk" => {
+                    let jwk = JsonWebKey {
+                        kty: "oct".to_string(),
+                        crv: None,
+                        x: None,
+                        y: None,
+                        d: None,
+                        n: None,
+                        e: None,
+                        k: Some(key.data().to_string(Some("base64url"))?),
+                        alg: Some(key.algorithm.name.clone()),
+                        key_ops: key.usages.clone(),
+                        ext: key.extractable,
+                    };
+                    Ok(KeyExportResult::String(format!(
+                        "{{\"kty\":\"{}\",\"k\":\"{}\"}}",
+                        jwk.kty,
+                        jwk.k.unwrap_or_default()
+                    )))
+                }
+                _ => Err(crate::error::NodeError::new(
+                    "ERR_CRYPTO_UNSUPPORTED_KEY_FORMAT",
+                    "unsupported WebCrypto exportKey format",
+                )),
+            }
         }
     }
 }

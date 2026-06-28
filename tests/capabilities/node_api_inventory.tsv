@@ -2096,6 +2096,64 @@ NODE-CRYPTO-RANDOM-UUID	crypto	randomUUID	implemented	L	tsonic_node::crypto::ran
 NODE-CRYPTO-TIMING-SAFE-EQUAL	crypto	timingSafeEqual	implemented	L	tsonic_node::crypto::timing_safe_equal	NODE-CRYPTO-002	constant-time same-length byte comparison
 NODE-CRYPTO-GET-HASHES	crypto	getHashes	implemented	L	tsonic_node::crypto::get_hashes	NODE-CRYPTO-002	declared supported hash algorithms
 NODE-CRYPTO-HASH-ONESHOT	crypto	hash	implemented	N45	tsonic_node::crypto::hash	NODE-CRYPTO-006	one-shot digest helper over same closed hash algorithms and encoding result carrier
+NODE-CRYPTO-CONSTANTS-FN	crypto	constants	implemented	N85	tsonic_node::crypto::constants	NODE-CRYPTO-007	closed crypto constants carrier
+NODE-CRYPTO-CONSTANTS-CARRIER	crypto	CryptoConstants	implemented	N85	tsonic_node::crypto::CryptoConstants	NODE-CRYPTO-007	closed OpenSSL-compatible constants subset
+NODE-CRYPTO-RANDOM-UUID-OPTIONS	crypto	RandomUUIDOptions	implemented	N85	tsonic_node::crypto::RandomUUIDOptions	NODE-CRYPTO-007	closed randomUUID options carrier
+NODE-CRYPTO-RANDOM-UUID-WITH-OPTIONS	crypto	randomUUID options	implemented	N85	tsonic_node::crypto::random_uuid_with_options	NODE-CRYPTO-007	randomUUID with disableEntropyCache option carrier
+NODE-CRYPTO-HASH-OPTIONS	crypto	HashOptions	implemented	N85	tsonic_node::crypto::HashOptions	NODE-CRYPTO-007	closed createHash options carrier
+NODE-CRYPTO-CREATE-HASH-WITH-OPTIONS	crypto	createHash options	implemented	N85	tsonic_node::crypto::create_hash_with_options	NODE-CRYPTO-007	createHash validates unsupported XOF outputLength explicitly
+NODE-CRYPTO-ONESHOT-DIGEST-OPTIONS	crypto	OneShotDigestOptions	implemented	N85	tsonic_node::crypto::OneShotDigestOptions	NODE-CRYPTO-007	closed one-shot digest options carrier
+NODE-CRYPTO-HASH-WITH-OPTIONS	crypto	hash options	implemented	N85	tsonic_node::crypto::hash_with_options	NODE-CRYPTO-007	one-shot hash with explicit options carrier
+NODE-CRYPTO-CIPHER-INFO-OPTIONS	crypto	CipherInfoOptions	implemented	N85	tsonic_node::crypto::CipherInfoOptions	NODE-CRYPTO-007	closed cipher info options carrier
+NODE-CRYPTO-CIPHER-INFO-CARRIER	crypto	CipherInfo	implemented	N85	tsonic_node::crypto::CipherInfo	NODE-CRYPTO-007	closed cipher info result carrier
+NODE-CRYPTO-GET-CIPHER-INFO	crypto	getCipherInfo	implemented	N85	tsonic_node::crypto::get_cipher_info	NODE-CRYPTO-007	reports supported AES-GCM cipher metadata
+NODE-CRYPTO-KEYOBJECT-ASYMMETRIC-DETAILS	crypto	KeyObject.asymmetricKeyDetails	implemented	N85	tsonic_node::crypto::KeyObject::asymmetric_key_details	NODE-CRYPTO-008	closed asymmetric detail accessor
+NODE-CRYPTO-KEYOBJECT-EXPORT-OPTIONS	crypto	KeyObject.export options	implemented	N85	tsonic_node::crypto::KeyObject::export_with_options	NODE-CRYPTO-008	exports key with explicit encoding options
+NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-CARRIER	crypto	AsymmetricKeyDetails	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails	NODE-CRYPTO-008	closed asymmetric key metadata carrier
+NODE-CRYPTO-KEY-EXPORT-OPTIONS	crypto	KeyExportOptions	implemented	N85	tsonic_node::crypto::KeyExportOptions	NODE-CRYPTO-008	closed key export options carrier
+NODE-CRYPTO-PRIVATE-KEY-EXPORT-OPTIONS	crypto	PrivateKeyExportOptions	implemented	N85	tsonic_node::crypto::PrivateKeyExportOptions	NODE-CRYPTO-008	private key export alias over closed options carrier
+NODE-CRYPTO-PUBLIC-KEY-EXPORT-OPTIONS	crypto	PublicKeyExportOptions	implemented	N85	tsonic_node::crypto::PublicKeyExportOptions	NODE-CRYPTO-008	public key export alias over closed options carrier
+NODE-CRYPTO-SYMMETRIC-KEY-EXPORT-OPTIONS	crypto	SymmetricKeyExportOptions	implemented	N85	tsonic_node::crypto::SymmetricKeyExportOptions	NODE-CRYPTO-008	symmetric key export alias over closed options carrier
+NODE-CRYPTO-KEY-EXPORT-RESULT	crypto	KeyExportResult	implemented	N85	tsonic_node::crypto::KeyExportResult	NODE-CRYPTO-008	closed key export Buffer/string result carrier
+NODE-CRYPTO-JSONWEBKEY-CARRIER	crypto	JsonWebKey	implemented	N85	tsonic_node::crypto::JsonWebKey	NODE-CRYPTO-008	closed JWK metadata carrier
+NODE-CRYPTO-JSONWEBKEY-INPUT	crypto	JsonWebKeyInput	implemented	N85	tsonic_node::crypto::JsonWebKeyInput	NODE-CRYPTO-008	closed JWK input carrier
+NODE-CRYPTO-JWK-EXPORT-OPTIONS	crypto	JwkKeyExportOptions	implemented	N85	tsonic_node::crypto::JwkKeyExportOptions	NODE-CRYPTO-008	closed JWK export options carrier
+NODE-CRYPTO-SIGNING-OPTIONS	crypto	SigningOptions	implemented	N85	tsonic_node::crypto::SigningOptions	NODE-CRYPTO-009	closed signing options carrier
+NODE-CRYPTO-SIGN-CARRIER	crypto	Sign	implemented	N85	tsonic_node::crypto::Sign	NODE-CRYPTO-009	closed streaming Sign carrier
+NODE-CRYPTO-CREATE-SIGN	crypto	createSign	implemented	N85	tsonic_node::crypto::create_sign	NODE-CRYPTO-009	creates streaming Sign carrier
+NODE-CRYPTO-SIGN-UPDATE-BYTES	crypto	Sign.update bytes	implemented	N85	tsonic_node::crypto::Sign::update_bytes	NODE-CRYPTO-009	streaming Sign bytes update
+NODE-CRYPTO-SIGN-UPDATE-STRING	crypto	Sign.update string	implemented	N85	tsonic_node::crypto::Sign::update_string	NODE-CRYPTO-009	streaming Sign string update
+NODE-CRYPTO-SIGN-SIGN	crypto	Sign.sign	implemented	N85	tsonic_node::crypto::Sign::sign	NODE-CRYPTO-009	streaming Sign signature helper
+NODE-CRYPTO-SIGN-SIGN-OPTIONS	crypto	Sign.sign options	implemented	N85	tsonic_node::crypto::Sign::sign_with_options	NODE-CRYPTO-009	streaming Sign signature helper with options carrier
+NODE-CRYPTO-VERIFY-KEYOBJECT-INPUT	crypto	VerifyKeyObjectInput	implemented	N85	tsonic_node::crypto::VerifyKeyObjectInput	NODE-CRYPTO-009	closed verify key options carrier
+NODE-CRYPTO-VERIFY-CARRIER	crypto	Verify	implemented	N85	tsonic_node::crypto::Verify	NODE-CRYPTO-009	closed streaming Verify carrier
+NODE-CRYPTO-CREATE-VERIFY	crypto	createVerify	implemented	N85	tsonic_node::crypto::create_verify	NODE-CRYPTO-009	creates streaming Verify carrier
+NODE-CRYPTO-VERIFY-UPDATE-BYTES	crypto	Verify.update bytes	implemented	N85	tsonic_node::crypto::Verify::update_bytes	NODE-CRYPTO-009	streaming Verify bytes update
+NODE-CRYPTO-VERIFY-UPDATE-STRING	crypto	Verify.update string	implemented	N85	tsonic_node::crypto::Verify::update_string	NODE-CRYPTO-009	streaming Verify string update
+NODE-CRYPTO-VERIFY-VERIFY	crypto	Verify.verify	implemented	N85	tsonic_node::crypto::Verify::verify	NODE-CRYPTO-009	streaming Verify signature checker
+NODE-CRYPTO-VERIFY-VERIFY-OPTIONS	crypto	Verify.verify options	implemented	N85	tsonic_node::crypto::Verify::verify_with_options	NODE-CRYPTO-009	streaming Verify signature checker with options carrier
+NODE-CRYPTO-PBKDF2-PARAMS	crypto	Pbkdf2Params	implemented	N85	tsonic_node::crypto::Pbkdf2Params	NODE-CRYPTO-KDF-002	closed PBKDF2 parameter carrier
+NODE-CRYPTO-PBKDF2-PARAMS-SYNC	crypto	pbkdf2Sync params	implemented	N85	tsonic_node::crypto::pbkdf2_sync_params	NODE-CRYPTO-KDF-002	PBKDF2 from explicit parameter carrier
+NODE-CRYPTO-PBKDF2-CALLBACK	crypto	pbkdf2 callback	implemented	N85	tsonic_node::crypto::pbkdf2_callback	NODE-CRYPTO-KDF-002	PBKDF2 callback shape over sync implementation
+NODE-CRYPTO-HKDF-PARAMS	crypto	HkdfParams	implemented	N85	tsonic_node::crypto::HkdfParams	NODE-CRYPTO-KDF-002	closed HKDF parameter carrier
+NODE-CRYPTO-HKDF-PARAMS-SYNC	crypto	hkdfSync params	implemented	N85	tsonic_node::crypto::hkdf_sync_params	NODE-CRYPTO-KDF-002	HKDF from explicit parameter carrier
+NODE-CRYPTO-HKDF-CALLBACK	crypto	hkdf callback	implemented	N85	tsonic_node::crypto::hkdf_callback	NODE-CRYPTO-KDF-002	HKDF callback shape over sync implementation
+NODE-CRYPTO-SCRYPT-OPTIONS	crypto	ScryptOptions	implemented	N85	tsonic_node::crypto::ScryptOptions	NODE-CRYPTO-KDF-002	closed scrypt options carrier
+NODE-CRYPTO-SCRYPT-EXPLICIT-REJECT	crypto	scrypt	implemented	N85	tsonic_node::crypto::scrypt_sync	NODE-CRYPTO-KDF-002	explicit unsupported dependency boundary for scrypt until approved implementation lands
+NODE-CRYPTO-KEY-ALGORITHM	crypto	KeyAlgorithm	implemented	N85	tsonic_node::crypto::KeyAlgorithm	NODE-CRYPTO-WEB-002	closed WebCrypto key algorithm carrier
+NODE-CRYPTO-RSA-KEY-ALGORITHM	crypto	RsaKeyAlgorithm	implemented	N85	tsonic_node::crypto::RsaKeyAlgorithm	NODE-CRYPTO-WEB-002	closed WebCrypto RSA key algorithm carrier
+NODE-CRYPTO-RSA-HASHED-KEY-ALGORITHM	crypto	RsaHashedKeyAlgorithm	implemented	N85	tsonic_node::crypto::RsaHashedKeyAlgorithm	NODE-CRYPTO-WEB-002	closed WebCrypto RSA hashed algorithm carrier
+NODE-CRYPTO-HMAC-KEY-ALGORITHM	crypto	HmacKeyAlgorithm	implemented	N85	tsonic_node::crypto::HmacKeyAlgorithm	NODE-CRYPTO-WEB-002	closed WebCrypto HMAC key algorithm carrier
+NODE-CRYPTO-CRYPTOKEY-CARRIER	crypto	CryptoKey	implemented	N85	tsonic_node::crypto::CryptoKey	NODE-CRYPTO-WEB-002	closed WebCrypto CryptoKey carrier
+NODE-CRYPTO-CRYPTOKEYPAIR-CARRIER	crypto	CryptoKeyPair	implemented	N85	tsonic_node::crypto::CryptoKeyPair	NODE-CRYPTO-WEB-002	closed WebCrypto CryptoKeyPair carrier
+NODE-CRYPTO-AEAD-PARAMS	crypto	AeadParams	implemented	N85	tsonic_node::crypto::AeadParams	NODE-CRYPTO-WEB-002	closed AEAD params carrier
+NODE-CRYPTO-AES-CTR-PARAMS	crypto	AesCtrParams	implemented	N85	tsonic_node::crypto::AesCtrParams	NODE-CRYPTO-WEB-002	closed AES-CTR params carrier
+NODE-CRYPTO-RSA-PSS-PARAMS	crypto	RsaPssParams	implemented	N85	tsonic_node::crypto::RsaPssParams	NODE-CRYPTO-WEB-002	closed RSA-PSS params carrier
+NODE-CRYPTO-RSA-OAEP-PARAMS	crypto	RsaOaepParams	implemented	N85	tsonic_node::crypto::RsaOaepParams	NODE-CRYPTO-WEB-002	closed RSA-OAEP params carrier
+NODE-CRYPTO-ECDSA-PARAMS	crypto	EcdsaParams	implemented	N85	tsonic_node::crypto::EcdsaParams	NODE-CRYPTO-WEB-002	closed ECDSA params carrier
+NODE-CRYPTO-ECDH-DERIVE-PARAMS	crypto	EcdhKeyDeriveParams	implemented	N85	tsonic_node::crypto::EcdhKeyDeriveParams	NODE-CRYPTO-WEB-002	closed ECDH derive params carrier
+NODE-CRYPTO-WEBCRYPTO-IMPORT-SECRET	crypto	SubtleCrypto.importKey secret	implemented	N85	tsonic_node::crypto::webcrypto::SubtleCrypto::import_secret_key	NODE-CRYPTO-WEB-002	imports closed secret CryptoKey
+NODE-CRYPTO-WEBCRYPTO-EXPORT-KEY	crypto	SubtleCrypto.exportKey	implemented	N85	tsonic_node::crypto::webcrypto::SubtleCrypto::export_key	NODE-CRYPTO-WEB-002	exports closed CryptoKey as raw or JWK string
 NODE-URL-CARRIER	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL carrier
 NODE-URL-PARSE	url	URL constructor	implemented	L	tsonic_node::url::Url::parse	NODE-URL-001	absolute and base-relative URL parse
 NODE-URL-HREF	url	URL.href	implemented	N59	tsonic_node::url::Url::href	NODE-URL-001,NODE-URL-009	href accessor and reserialization
