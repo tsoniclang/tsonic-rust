@@ -25,7 +25,7 @@ fn node_api_inventory_is_complete_classified_and_owned() {
     for row in &rows {
         assert!(ids.insert(row.id), "duplicate node inventory id {}", row.id);
         assert!(
-            matches!(row.status, "implemented" | "hard-reject"),
+            matches!(row.status, "implemented" | "later" | "hard-reject"),
             "{} has invalid status {}",
             row.id,
             row.status
@@ -38,7 +38,8 @@ fn node_api_inventory_is_complete_classified_and_owned() {
     }
 
     assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 106);
-    assert_eq!(by_status.get("hard-reject").copied().unwrap_or(0), 40);
+    assert_eq!(by_status.get("later").copied().unwrap_or(0), 9);
+    assert_eq!(by_status.get("hard-reject").copied().unwrap_or(0), 31);
 }
 
 #[test]
@@ -61,6 +62,18 @@ fn hard_rejected_node_api_rows_have_explicit_reject_reason() {
         assert!(
             row.evidence.starts_with("REJECT-NODE-"),
             "{} must use REJECT-NODE evidence",
+            row.id
+        );
+    }
+}
+
+#[test]
+fn later_node_api_rows_have_explicit_future_scope() {
+    for row in rows().into_iter().filter(|row| row.status == "later") {
+        assert_eq!(row.rust_api, "n/a", "{} must not expose API yet", row.id);
+        assert!(
+            row.evidence.starts_with("LATER-NODE-"),
+            "{} must use LATER-NODE evidence",
             row.id
         );
     }

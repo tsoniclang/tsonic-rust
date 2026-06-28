@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 const INVENTORY: &str = include_str!("capabilities/stage1_inventory.tsv");
 const EXPECTED_ROW_COUNT: usize = 239;
 const EXPECTED_IMPLEMENTED_COUNT: usize = 170;
-const EXPECTED_DEFERRED_COUNT: usize = 0;
-const EXPECTED_HARD_REJECT_COUNT: usize = 69;
+const EXPECTED_DEFERRED_COUNT: usize = 8;
+const EXPECTED_HARD_REJECT_COUNT: usize = 61;
 
 #[derive(Clone, Debug)]
 struct CapabilityRow {
@@ -32,7 +32,7 @@ fn stage1_inventory_has_complete_classification() {
             row.id
         );
         assert!(
-            matches!(row.status.as_str(), "implemented" | "hard-reject"),
+            matches!(row.status.as_str(), "implemented" | "later" | "hard-reject"),
             "unexpected status {} for {}",
             row.status,
             row.id
@@ -50,7 +50,7 @@ fn stage1_inventory_has_complete_classification() {
         EXPECTED_IMPLEMENTED_COUNT
     );
     assert_eq!(
-        counts.get("deferred").copied().unwrap_or(0),
+        counts.get("later").copied().unwrap_or(0),
         EXPECTED_DEFERRED_COUNT
     );
     assert_eq!(
@@ -91,6 +91,23 @@ fn implemented_rows_have_api_and_test_evidence() {
 
 #[test]
 fn deferred_and_hard_reject_rows_are_explicit() {
+    for row in inventory_rows()
+        .into_iter()
+        .filter(|row| row.status == "later")
+    {
+        assert_eq!(
+            row.rust_api, "n/a",
+            "{} should not expose a Rust API yet",
+            row.id
+        );
+        assert!(
+            row.evidence.starts_with("LATER-NODE-"),
+            "later row {} must use LATER-NODE evidence, got {}",
+            row.id,
+            row.evidence
+        );
+        assert!(!row.notes.is_empty(), "{} needs a reason", row.id);
+    }
     for row in inventory_rows()
         .into_iter()
         .filter(|row| row.status == "hard-reject")
