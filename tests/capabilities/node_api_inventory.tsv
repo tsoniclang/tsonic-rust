@@ -74,6 +74,14 @@ NODE-WORKER-OPTIONS	worker_threads	WorkerOptions/resourceLimits/environmentData/
 NODE-MODULE-ZLIB	zlib	module	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
 NODE-ZLIB-CLASSES	zlib	Zlib classes/options/constants/raw/unzip	implemented	N35	tsonic_node::zlib::{ZlibOptions,BrotliOptions,ZstdOptions,Zlib,create_gzip,create_gunzip,deflate_raw_sync,inflate_raw_sync,unzip_sync,constants}	NODE-ZLIB-002	stream-class carrier shape, bytesWritten, reset/flush/params/close, raw/unzip aliases, and constants
 NODE-ZLIB-ZSTD-GATE	zlib	ZstdCompress/ZstdDecompress	implemented	N35	tsonic_node::zlib::{create_zstd_compress,create_zstd_decompress,zstd_compress_sync,zstd_decompress_sync}	NODE-ZLIB-002	explicit dependency-gated Zstd unsupported error until approved zstd implementation lands
+WEB-ABORT	web-globals/abortcontroller	AbortController/AbortSignal	implemented	W1	tsonic_js::web::{AbortController,AbortSignal}	JS-WEB-001	closed abort signal/controller carrier with reason, timeout, any, and throwIfAborted
+WEB-DOM-EXCEPTION	web-globals/domexception	DOMException	implemented	W1	tsonic_js::web::DomException	JS-WEB-002	DOMException name/message and legacy code constants
+WEB-EVENTS	web-globals/events	Event/CustomEvent/EventTarget	implemented	W1	tsonic_js::web::{Event,CustomEvent,EventTarget}	JS-WEB-003	closed EventTarget listener carrier, cancellation, once, custom detail, and dispatch result
+WEB-BODY	web-globals/fetch	Blob/File/Body	implemented	W1	tsonic_js::web::{Blob,File,Body}	JS-WEB-004	closed byte/text/blob/file body carriers with text and ArrayBuffer views
+WEB-FETCH-CARRIERS	web-globals/fetch	Headers/FormData/Request/Response	implemented	W1	tsonic_js::web::{Headers,FormData,Request,Response}	JS-WEB-005-007	case-insensitive headers, ordered form data, request/response body readers, json, redirect, and clone carriers
+WEB-STORAGE-NAV	web-globals/storage	Storage/Navigator	implemented	W1	tsonic_js::web::{Storage,Navigator}	JS-WEB-008	closed Storage and Navigator global shapes
+WEB-IMPORTMETA	web-globals/importmeta	ImportMeta	implemented	W1	tsonic_js::web::ImportMeta	JS-WEB-010	non-evaluating import.meta identity and safe resolver
+WEB-FETCH	web-globals/fetch	fetch	implemented	W1	tsonic_node::fetch	JS-WEB-009	Node-backed fetch over reqwest into closed Web Request/Response carriers
 NODE-FS-ACCESS	fs	accessSync	implemented	K	tsonic_node::fs::access_sync	NODE-FS-EXT-001	existence/access validation
 NODE-FS-APPEND-FILE	fs	appendFileSync	implemented	K	tsonic_node::fs::{append_file_sync_string,append_file_sync_buffer}	NODE-FS-EXT-001	string and buffer overloads
 NODE-FS-CHMOD	fs	chmodSync	implemented	K	tsonic_node::fs::chmod_sync	NODE-FS-EXT-001	numeric mode accepted; Windows maps writable bit

@@ -156,6 +156,7 @@ JS-WEB-007	implemented	N11	tsonic_js::abi::{Request,Response}	JS-WEB-007	Fetch r
 JS-WEB-008	implemented	N11	tsonic_js::abi::{Storage,Navigator}	JS-WEB-008	common Web global storage and navigator shape
 JS-WEB-009	implemented	N11	tsonic_node::abi::{fetch,fetch_request,FetchInit}	JS-WEB-009	Node-backed fetch over reqwest into closed Web Request/Response carriers
 JS-WEB-010	implemented	N11	tsonic_js::abi::ImportMeta	JS-WEB-010	closed import.meta identity and non-evaluating specifier resolve shape
+JS-WEB-011	implemented	W1	tsonic_js::abi::{File,Headers,FormData,Request,Response}	JS-WEB-011	File text/arrayBuffer, Headers/FormData forEach/keys/values, and Request/Response clone/body readers
 NODE-PATH-001	implemented	J	tsonic_node::abi::path_*	path tests	host/default plus posix/win32
 NODE-PATH-002	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-003	string semantics
 NODE-PATH-003	implemented	J	tsonic_node::abi::path_*	NODE-PATH-004 through NODE-PATH-006	string semantics

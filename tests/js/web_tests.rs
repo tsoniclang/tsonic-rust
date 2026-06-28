@@ -133,6 +133,10 @@ fn blob_file_and_body_cover_text_and_bytes() {
     assert_eq!(file.name(), "greeting.txt");
     assert_eq!(file.last_modified(), 123);
     assert_eq!(file.blob().text().unwrap(), "hello world");
+    assert_eq!(file.size(), 11);
+    assert_eq!(file.content_type(), "text/plain");
+    assert_eq!(file.text().unwrap(), "hello world");
+    assert_eq!(file.array_buffer().as_bytes(), b"hello world");
 
     assert_eq!(Body::Blob(blob).text().unwrap(), "hello world");
 }
@@ -160,6 +164,15 @@ fn headers_are_case_insensitive_and_ordered() {
             ("x-test".to_string(), "1".to_string())
         ]
     );
+    let mut visited = Vec::new();
+    headers.for_each(|value, key| visited.push(format!("{key}={value}")));
+    assert_eq!(
+        visited,
+        vec![
+            "content-type=text/plain, charset=utf-8".to_string(),
+            "x-test=1".to_string()
+        ]
+    );
     headers.delete("x-test");
     assert!(!headers.has("x-test"));
 }
@@ -173,6 +186,26 @@ fn form_data_preserves_multiple_values() {
 
     assert!(form.has("tag"));
     assert_eq!(form.get_all("tag").len(), 2);
+    assert_eq!(
+        form.keys(),
+        vec!["tag".to_string(), "tag".to_string(), "name".to_string()]
+    );
+    assert_eq!(form.values().len(), 3);
+    let mut visited = Vec::new();
+    form.for_each(|value, key| {
+        visited.push(match value {
+            FormDataValue::String(value) => format!("{key}={value}"),
+            FormDataValue::File(file) => format!("{key}={}", file.name()),
+        });
+    });
+    assert_eq!(
+        visited,
+        vec![
+            "tag=a".to_string(),
+            "tag=b".to_string(),
+            "name=Ada".to_string()
+        ]
+    );
     assert_eq!(
         Body::FormData(form).text().unwrap(),
         "tag=a&tag=b&name=Ada".to_string()
@@ -197,6 +230,10 @@ fn request_and_response_cover_fetch_carriers() {
         Some("application/json".to_string())
     );
     assert_eq!(request.body().text().unwrap(), "{\"ok\":true}");
+    assert_eq!(request.text().unwrap(), "{\"ok\":true}");
+    assert_eq!(request.json().unwrap().inspect(), "{ok: true}");
+    assert_eq!(request.array_buffer().as_bytes(), b"{\"ok\":true}");
+    assert_eq!(request.clone_request().method(), "POST");
 
     let response = Response::json(&JsValue::Object(JsObject::from_pairs([(
         "ok",
@@ -209,6 +246,8 @@ fn request_and_response_cover_fetch_carriers() {
         response.headers().get("content-type"),
         Some("application/json".to_string())
     );
+    assert_eq!(response.body().text().unwrap(), "{\"ok\":true}");
+    assert_eq!(response.clone_response().status(), 200);
     assert_eq!(response.json_body().unwrap().inspect(), "{ok: true}");
 
     let redirect = Response::redirect("https://example.test/next", 302);

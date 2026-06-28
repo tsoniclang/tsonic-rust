@@ -461,6 +461,22 @@ impl File {
     pub fn blob(&self) -> &Blob {
         &self.blob
     }
+
+    pub fn size(&self) -> usize {
+        self.blob.size()
+    }
+
+    pub fn content_type(&self) -> &str {
+        self.blob.content_type()
+    }
+
+    pub fn text(&self) -> JsResult<String> {
+        self.blob.text()
+    }
+
+    pub fn array_buffer(&self) -> ArrayBuffer {
+        self.blob.array_buffer()
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -536,6 +552,12 @@ impl Headers {
             .map(|(key, values)| (key.clone(), values.join(", ")))
             .collect()
     }
+
+    pub fn for_each(&self, mut callback: impl FnMut(&str, &str)) {
+        for (key, value) in self.entries() {
+            callback(&value, &key);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -583,6 +605,23 @@ impl FormData {
 
     pub fn entries(&self) -> Vec<(String, FormDataValue)> {
         self.entries.clone()
+    }
+
+    pub fn keys(&self) -> Vec<String> {
+        self.entries.iter().map(|(key, _)| key.clone()).collect()
+    }
+
+    pub fn values(&self) -> Vec<FormDataValue> {
+        self.entries
+            .iter()
+            .map(|(_, value)| value.clone())
+            .collect()
+    }
+
+    pub fn for_each(&self, mut callback: impl FnMut(&FormDataValue, &str)) {
+        for (key, value) in &self.entries {
+            callback(value, key);
+        }
     }
 }
 
@@ -685,6 +724,22 @@ impl Request {
     pub fn signal(&self) -> Option<AbortSignal> {
         self.signal.clone()
     }
+
+    pub fn text(&self) -> JsResult<String> {
+        self.body.text()
+    }
+
+    pub fn array_buffer(&self) -> ArrayBuffer {
+        ArrayBuffer::from_bytes(self.body.bytes())
+    }
+
+    pub fn json(&self) -> JsResult<JsValue> {
+        self.body.json()
+    }
+
+    pub fn clone_request(&self) -> Self {
+        self.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -766,6 +821,14 @@ impl Response {
 
     pub fn json_body(&self) -> JsResult<JsValue> {
         self.body.json()
+    }
+
+    pub fn body(&self) -> &Body {
+        &self.body
+    }
+
+    pub fn clone_response(&self) -> Self {
+        self.clone()
     }
 }
 
