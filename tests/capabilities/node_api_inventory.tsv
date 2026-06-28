@@ -94,14 +94,48 @@ NODE-DIAG-PUBLISH	diagnostics_channel	publish	implemented	N3	tsonic_node::diagno
 NODE-DIAG-UNSUBSCRIBE-ALL	diagnostics_channel	unsubscribeAll	implemented	N3	tsonic_node::diagnostics_channel::unsubscribe_all	NODE-DIAG-001	explicit test/runtime cleanup helper
 NODE-DIAG-CHANNEL-NAMES	diagnostics_channel	channelNames	implemented	N3	tsonic_node::diagnostics_channel::channel_names	NODE-DIAG-001	known channel name introspection
 NODE-MODULE-DNS	dns	module	implemented	N3	tsonic_node::dns	NODE-DNS-001	platform resolver lookup and address helpers
-NODE-DNS-RECORDS	dns	resolveAny/NS/PTR/CAA/NAPTR/SOA/TLSA	implemented	N26	tsonic_node::dns::{resolve_any,resolve_ns,resolve_ptr,resolve_caa,resolve_naptr,resolve_soa,resolve_tlsa}	NODE-DNS-002	closed DNS record API shapes; unsupported record resolver types fail explicitly with ENODATA
-NODE-DNS-RESOLVER	dns	Resolver complete common shape	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	Resolver setLocalAddress/cancel/reverse/record methods and server state
-NODE-DNS-PROMISES	dns/promises	promise record helpers	implemented	N26	tsonic_node::dns::promises	NODE-DNS-002	blocking-now promise-shaped DNS record helpers over same closed resolver APIs
+NODE-DNS-LOOKUP	dns	lookup	implemented	N3	tsonic_node::dns::lookup	NODE-DNS-001	platform-backed lookup without shelling out
+NODE-DNS-LOOKUP-ADDRESS	dns	LookupAddress	implemented	N56	tsonic_node::dns::LookupAddress	NODE-DNS-001	lookup address/family carrier
+NODE-DNS-RESOLVE4	dns	resolve4	implemented	N56	tsonic_node::dns::resolve4	NODE-DNS-001	platform-backed IPv4 resolution
+NODE-DNS-RESOLVE6	dns	resolve6	implemented	N56	tsonic_node::dns::resolve6	NODE-DNS-001	platform-backed IPv6 resolution
+NODE-DNS-RESOLVE	dns	resolve	implemented	N56	tsonic_node::dns::resolve	NODE-DNS-001,NODE-DNS-002	record type dispatch with explicit unsupported errors
+NODE-DNS-REVERSE	dns	reverse	implemented	N56	tsonic_node::dns::reverse	NODE-DNS-001	reverse shape validates IP address and returns closed string list
 NODE-DNS-LOOKUP-SERVICE	dns	lookupService	implemented	N56	tsonic_node::dns::lookup_service	NODE-DNS-001	closed lookupService carrier returning host/service pair without shelling out
-NODE-DNS-DEFAULT-ORDER	dns	setDefaultResultOrder/getDefaultResultOrder	implemented	N56	tsonic_node::dns::{set_default_result_order,get_default_result_order,DefaultResultOrder}	NODE-DNS-001	default result order state with Node spellings ipv4first/ipv6first/verbatim
-NODE-DNS-COMMON-RESOLVE	dns	resolve/resolve4/resolve6/reverse	implemented	N56	tsonic_node::dns::{resolve,resolve4,resolve6,reverse}	NODE-DNS-001	common platform-backed address resolution and reverse shape
-NODE-DNS-RECORD-CARRIERS	dns	MxRecord/SrvRecord/CaaRecord/NaptrRecord/SoaRecord/TlsaRecord/AnyRecord	implemented	N56	tsonic_node::dns::{MxRecord,SrvRecord,CaaRecord,NaptrRecord,SoaRecord,TlsaRecord,AnyRecord}	NODE-DNS-002	closed typed DNS record carriers for all exposed record APIs
-NODE-DNS-PROMISES-COMMON	dns/promises	lookup/lookupService/resolve/reverse promise common helpers	implemented	N56	tsonic_node::dns::promises::{lookup_now,lookup_service_now,resolve_now,reverse_now}	NODE-DNS-002	blocking-now promise helpers reuse deterministic DNS function implementations
+NODE-DNS-DEFAULT-ORDER-CARRIER	dns	DefaultResultOrder	implemented	N56	tsonic_node::dns::DefaultResultOrder	NODE-DNS-001	default result order enum with Node spellings
+NODE-DNS-DEFAULT-ORDER-SET	dns	setDefaultResultOrder	implemented	N56	tsonic_node::dns::set_default_result_order	NODE-DNS-001	default result order setter
+NODE-DNS-DEFAULT-ORDER-GET	dns	getDefaultResultOrder	implemented	N56	tsonic_node::dns::get_default_result_order	NODE-DNS-001	default result order getter
+NODE-DNS-RESOLVE-CNAME	dns	resolveCname	implemented	N26	tsonic_node::dns::resolve_cname	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-MX	dns	resolveMx	implemented	N26	tsonic_node::dns::resolve_mx	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-TXT	dns	resolveTxt	implemented	N26	tsonic_node::dns::resolve_txt	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-SRV	dns	resolveSrv	implemented	N26	tsonic_node::dns::resolve_srv	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-NS	dns	resolveNs	implemented	N26	tsonic_node::dns::resolve_ns	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-PTR	dns	resolvePtr	implemented	N26	tsonic_node::dns::resolve_ptr	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-CAA	dns	resolveCaa	implemented	N26	tsonic_node::dns::resolve_caa	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-NAPTR	dns	resolveNaptr	implemented	N26	tsonic_node::dns::resolve_naptr	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-SOA	dns	resolveSoa	implemented	N26	tsonic_node::dns::resolve_soa	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-TLSA	dns	resolveTlsa	implemented	N26	tsonic_node::dns::resolve_tlsa	NODE-DNS-002	explicit ENODATA until DNS record dependency is approved
+NODE-DNS-RESOLVE-ANY	dns	resolveAny	implemented	N26	tsonic_node::dns::resolve_any	NODE-DNS-002	closed any-record aggregation from supported address records
+NODE-DNS-MX-RECORD	dns	MxRecord	implemented	N56	tsonic_node::dns::MxRecord	NODE-DNS-002	typed MX record carrier
+NODE-DNS-SRV-RECORD	dns	SrvRecord	implemented	N56	tsonic_node::dns::SrvRecord	NODE-DNS-002	typed SRV record carrier
+NODE-DNS-CAA-RECORD	dns	CaaRecord	implemented	N56	tsonic_node::dns::CaaRecord	NODE-DNS-002	typed CAA record carrier
+NODE-DNS-NAPTR-RECORD	dns	NaptrRecord	implemented	N56	tsonic_node::dns::NaptrRecord	NODE-DNS-002	typed NAPTR record carrier
+NODE-DNS-SOA-RECORD	dns	SoaRecord	implemented	N56	tsonic_node::dns::SoaRecord	NODE-DNS-002	typed SOA record carrier
+NODE-DNS-TLSA-RECORD	dns	TlsaRecord	implemented	N56	tsonic_node::dns::TlsaRecord	NODE-DNS-002	typed TLSA record carrier
+NODE-DNS-ANY-RECORD	dns	AnyRecord	implemented	N56	tsonic_node::dns::AnyRecord	NODE-DNS-002	closed any-record enum carrier
+NODE-DNS-RESOLVER-CARRIER	dns	Resolver	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	resolver carrier with explicit server/local/cancel state
+NODE-DNS-RESOLVER-SERVERS	dns	Resolver setServers/getServers	implemented	N26	tsonic_node::dns::Resolver::{set_servers,get_servers}	NODE-DNS-002	resolver server state
+NODE-DNS-RESOLVER-LOCAL	dns	Resolver setLocalAddress/localAddresses	implemented	N26	tsonic_node::dns::Resolver::{set_local_address,local_addresses}	NODE-DNS-002	resolver local address state
+NODE-DNS-RESOLVER-CANCEL	dns	Resolver cancel/cancelled	implemented	N26	tsonic_node::dns::Resolver::{cancel,cancelled}	NODE-DNS-002	resolver cancellation state
+NODE-DNS-RESOLVER-COMMON	dns	Resolver lookup/resolve/reverse	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	resolver common methods delegate to deterministic implementations
+NODE-DNS-RESOLVER-RECORDS	dns	Resolver record methods	implemented	N26	tsonic_node::dns::Resolver	NODE-DNS-002	resolver record methods preserve explicit unsupported-record failures
+NODE-DNS-PROMISES-MODULE	dns/promises	module	implemented	N26	tsonic_node::dns::promises	NODE-DNS-002	blocking-now promise-shaped DNS module
+NODE-DNS-PROMISES-LOOKUP	dns/promises	lookup	implemented	N56	tsonic_node::dns::promises::lookup_now	NODE-DNS-002	promise-shaped lookup helper
+NODE-DNS-PROMISES-LOOKUP-SERVICE	dns/promises	lookupService	implemented	N56	tsonic_node::dns::promises::lookup_service_now	NODE-DNS-002	promise-shaped lookupService helper
+NODE-DNS-PROMISES-RESOLVE	dns/promises	resolve	implemented	N56	tsonic_node::dns::promises::resolve_now	NODE-DNS-002	promise-shaped resolve helper
+NODE-DNS-PROMISES-RESOLVE4	dns/promises	resolve4	implemented	N56	tsonic_node::dns::promises::resolve4_now	NODE-DNS-002	promise-shaped resolve4 helper
+NODE-DNS-PROMISES-RESOLVE6	dns/promises	resolve6	implemented	N56	tsonic_node::dns::promises::resolve6_now	NODE-DNS-002	promise-shaped resolve6 helper
+NODE-DNS-PROMISES-REVERSE	dns/promises	reverse	implemented	N56	tsonic_node::dns::promises::reverse_now	NODE-DNS-002	promise-shaped reverse helper
+NODE-DNS-PROMISES-RECORDS	dns/promises	record helpers	implemented	N26	tsonic_node::dns::promises	NODE-DNS-002	promise-shaped record helpers preserve explicit unsupported-record failures
 NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded
 NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events	NODE-EVENTS-001	closed events module surface
 NODE-EVENTS-EMITTER-NEW	events	EventEmitter constructor	implemented	N3	tsonic_node::events::EventEmitter::new	NODE-EVENTS-001	closed EventEmitter listener carrier
