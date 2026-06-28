@@ -48,6 +48,9 @@ NODE-OS-CONSTANTS-EXT	os	errno Windows aliases and extended POSIX names	implemen
 NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers
 NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	NODE-MISC-001	performance.now subset
 NODE-PERF-RESOURCE-TIMING	perf_hooks	PerformanceResourceTiming/nodeTiming/timerify/constants	implemented	N31	tsonic_node::perf_hooks::{PerformanceResourceTiming,node_timing,timerify,CONSTANTS}	NODE-PERF-003	resource timing entries, node timing shape, GC constants, and function timing
+NODE-PERF-PERFORMANCE-FACADE	perf_hooks	Performance now/mark/measure/getEntries/clear/toJSON	implemented	N54	tsonic_node::perf_hooks::Performance	NODE-PERF-004	closed Performance object facade over existing timing stores without host runtime introspection
+NODE-PERF-MARK-MEASURE-OPTIONS	perf_hooks	PerformanceMarkOptions/PerformanceMeasureOptions/detail/start/duration	implemented	N54	tsonic_node::perf_hooks::{PerformanceMarkOptions,PerformanceMeasureOptions,mark_with_options,measure_with_options}	NODE-PERF-004	mark and measure option carriers including explicit start time, duration, and detail
+NODE-PERF-HISTOGRAM-EXT	perf_hooks	Histogram bigint/percentiles/exceeds fields	implemented	N54	tsonic_node::perf_hooks::Histogram	NODE-PERF-004	expanded histogram bigint and percentile map helpers with closed zero-exceeds carrier
 NODE-MODULE-PROCESS	process	module	implemented	J	tsonic_node::process	NODE-PROC-001	closed process/env helpers
 NODE-MODULE-PUNYCODE	punycode	module	implemented	N8	tsonic_node::punycode	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers

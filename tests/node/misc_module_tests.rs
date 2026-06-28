@@ -48,19 +48,51 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     );
     assert!(perf_hooks::performance_now() >= 0.0);
     assert_eq!(perf_hooks::time_origin(), 0.0);
+    let performance = perf_hooks::performance();
+    assert!(performance.now() >= 0.0);
+    assert!(performance
+        .to_json()
+        .iter()
+        .any(|(name, _)| name == "timeOrigin"));
     perf_hooks::clear_marks(None);
     perf_hooks::clear_measures(None);
     perf_hooks::mark("start");
     perf_hooks::mark("end");
     let detailed = perf_hooks::mark_with_detail("detail", Some("payload".to_string()));
     assert_eq!(detailed.detail, Some("payload".to_string()));
+    let explicit = performance.mark(
+        "explicit",
+        Some(perf_hooks::PerformanceMarkOptions {
+            detail: Some("d".to_string()),
+            start_time: Some(12.0),
+        }),
+    );
+    assert_eq!(explicit.entry_type, "mark");
+    assert_eq!(explicit.start_time, 12.0);
     let measure = perf_hooks::measure("duration", Some("start"), Some("end"));
     assert_eq!(measure.name, "duration");
     assert!(measure.duration >= 0.0);
     assert_eq!(measure.detail, None);
+    let measured = performance.measure(
+        "explicit-duration",
+        Some(perf_hooks::PerformanceMeasureOptions {
+            start: Some(5.0),
+            end: Some(15.0),
+            duration: None,
+            detail: Some("detail".to_string()),
+        }),
+        None,
+    );
+    assert_eq!(measured.entry_type, "measure");
+    assert_eq!(measured.duration, 10.0);
+    assert_eq!(measured.detail.as_deref(), Some("detail"));
     assert_eq!(
         perf_hooks::get_entries_by_name("duration"),
         vec!["duration".to_string()]
+    );
+    assert_eq!(
+        performance.get_entries_by_name("explicit-duration", Some("measure"))[0].duration,
+        10.0
     );
     assert_eq!(
         perf_hooks::get_entries_by_type("mark")
@@ -100,6 +132,8 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
         1.0,
         3.0,
     );
+    assert_eq!(resource.worker_start, 0.0);
+    assert_eq!(resource.delivery_type, None);
     let resource = perf_hooks::add_resource_timing(resource);
     assert_eq!(resource.to_entry().entry_type, "resource");
     assert!(resource
@@ -121,11 +155,19 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     histogram.record(10);
     histogram.record(30);
     assert_eq!(histogram.count(), 2);
+    assert_eq!(histogram.count_bigint(), 2);
     assert_eq!(histogram.min(), 10);
+    assert_eq!(histogram.min_bigint(), 10);
     assert!(histogram.max() >= 30);
+    assert!(histogram.max_bigint() >= 30);
     assert!(histogram.mean() >= 10.0);
     assert!(histogram.stddev() >= 0.0);
     assert!(histogram.percentile(50.0) >= 10);
+    assert!(histogram.percentile_bigint(50.0) >= 10);
+    assert!(histogram.percentiles().contains_key(&50));
+    assert!(histogram.percentiles_bigint().contains_key(&50));
+    assert_eq!(histogram.exceeds(), 0);
+    assert_eq!(histogram.exceeds_bigint(), 0);
     histogram.record_delta();
     assert_eq!(histogram.count(), 3);
     let mut other = perf_hooks::Histogram::new();
@@ -141,6 +183,7 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     assert!(gc_major > 0);
     let timing = perf_hooks::node_timing();
     assert!(timing.loop_exit >= timing.node_start);
+    assert!(performance.node_timing().loop_exit >= timing.node_start);
     let (value, entry) = perf_hooks::timerify("work", || 42);
     assert_eq!(value, 42);
     assert_eq!(entry.entry_type, "function");

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -14,6 +15,100 @@ pub fn performance_now() -> f64 {
 
 pub fn time_origin() -> f64 {
     0.0
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Performance {
+    pub time_origin: f64,
+}
+
+impl Default for Performance {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Performance {
+    pub fn new() -> Self {
+        Self {
+            time_origin: time_origin(),
+        }
+    }
+
+    pub fn now(&self) -> f64 {
+        performance_now()
+    }
+
+    pub fn mark(&self, name: &str, options: Option<PerformanceMarkOptions>) -> PerformanceMark {
+        mark_with_options(name, options)
+    }
+
+    pub fn measure(
+        &self,
+        name: &str,
+        options: Option<PerformanceMeasureOptions>,
+        end_mark: Option<&str>,
+    ) -> PerformanceMeasure {
+        if let Some(options) = options {
+            measure_with_options(name, options)
+        } else {
+            measure(name, None, end_mark)
+        }
+    }
+
+    pub fn get_entries(&self) -> Vec<PerformanceEntry> {
+        get_entries()
+    }
+
+    pub fn get_entries_by_name(
+        &self,
+        name: &str,
+        entry_type: Option<&str>,
+    ) -> Vec<PerformanceEntry> {
+        get_entries_by_name_entries(name, entry_type)
+    }
+
+    pub fn get_entries_by_type(&self, entry_type: &str) -> Vec<PerformanceEntry> {
+        get_entries_by_type(entry_type)
+    }
+
+    pub fn clear_marks(&self, name: Option<&str>) {
+        clear_marks(name);
+    }
+
+    pub fn clear_measures(&self, name: Option<&str>) {
+        clear_measures(name);
+    }
+
+    pub fn clear_resource_timings(&self, name: Option<&str>) {
+        clear_resource_timings(name);
+    }
+
+    pub fn set_resource_timing_buffer_size(&self, size: usize) {
+        set_resource_timing_buffer_size(size);
+    }
+
+    pub fn node_timing(&self) -> PerformanceNodeTiming {
+        node_timing()
+    }
+
+    pub fn event_loop_utilization(
+        &self,
+        previous: Option<EventLoopUtilization>,
+    ) -> EventLoopUtilization {
+        event_loop_utilization(previous)
+    }
+
+    pub fn to_json(&self) -> Vec<(String, String)> {
+        vec![
+            ("timeOrigin".to_string(), self.time_origin.to_string()),
+            ("nodeTiming".to_string(), "available".to_string()),
+        ]
+    }
+}
+
+pub fn performance() -> Performance {
+    Performance::new()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +169,7 @@ pub fn event_loop_utilization(previous: Option<EventLoopUtilization>) -> EventLo
 #[derive(Debug, Clone, PartialEq)]
 pub struct PerformanceMark {
     pub name: String,
+    pub entry_type: &'static str,
     pub start_time: f64,
     pub detail: Option<String>,
 }
@@ -81,8 +177,23 @@ pub struct PerformanceMark {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PerformanceMeasure {
     pub name: String,
+    pub entry_type: &'static str,
     pub start_time: f64,
     pub duration: f64,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformanceMarkOptions {
+    pub detail: Option<String>,
+    pub start_time: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerformanceMeasureOptions {
+    pub start: Option<f64>,
+    pub end: Option<f64>,
+    pub duration: Option<f64>,
     pub detail: Option<String>,
 }
 
@@ -127,6 +238,8 @@ pub struct PerformanceResourceTiming {
     pub decoded_body_size: u64,
     pub response_status: u16,
     pub next_hop_protocol: String,
+    pub worker_start: f64,
+    pub delivery_type: Option<String>,
 }
 
 impl PerformanceResourceTiming {
@@ -152,6 +265,8 @@ impl PerformanceResourceTiming {
             decoded_body_size: 0,
             response_status: 0,
             next_hop_protocol: String::new(),
+            worker_start: 0.0,
+            delivery_type: None,
         }
     }
 
@@ -174,6 +289,10 @@ impl PerformanceResourceTiming {
             (
                 "responseStatus".to_string(),
                 self.response_status.to_string(),
+            ),
+            (
+                "nextHopProtocol".to_string(),
+                self.next_hop_protocol.clone(),
             ),
         ]
     }
@@ -221,10 +340,25 @@ pub fn mark(name: &str) -> PerformanceMark {
 }
 
 pub fn mark_with_detail(name: &str, detail: Option<String>) -> PerformanceMark {
+    mark_with_options(
+        name,
+        Some(PerformanceMarkOptions {
+            detail,
+            start_time: None,
+        }),
+    )
+}
+
+pub fn mark_with_options(name: &str, options: Option<PerformanceMarkOptions>) -> PerformanceMark {
+    let options = options.unwrap_or(PerformanceMarkOptions {
+        detail: None,
+        start_time: None,
+    });
     let mark = PerformanceMark {
         name: name.to_string(),
-        start_time: performance_now(),
-        detail,
+        entry_type: "mark",
+        start_time: options.start_time.unwrap_or_else(performance_now),
+        detail: options.detail,
     };
     marks().lock().unwrap().push(mark.clone());
     mark
@@ -241,9 +375,27 @@ pub fn measure(name: &str, start_mark: Option<&str>, end_mark: Option<&str>) -> 
         .unwrap_or_else(performance_now);
     let measure = PerformanceMeasure {
         name: name.to_string(),
+        entry_type: "measure",
         start_time,
         duration: (end_time - start_time).max(0.0),
         detail: None,
+    };
+    measures().lock().unwrap().push(measure.clone());
+    measure
+}
+
+pub fn measure_with_options(name: &str, options: PerformanceMeasureOptions) -> PerformanceMeasure {
+    let start_time = options.start.unwrap_or(0.0);
+    let duration = options
+        .duration
+        .or_else(|| options.end.map(|end| (end - start_time).max(0.0)))
+        .unwrap_or_else(|| (performance_now() - start_time).max(0.0));
+    let measure = PerformanceMeasure {
+        name: name.to_string(),
+        entry_type: "measure",
+        start_time,
+        duration,
+        detail: options.detail,
     };
     measures().lock().unwrap().push(measure.clone());
     measure
@@ -264,7 +416,7 @@ pub fn get_entries() -> Vec<PerformanceEntry> {
     let measures = measures().lock().unwrap();
     entries.extend(measures.iter().map(|measure| PerformanceEntry {
         name: measure.name.clone(),
-        entry_type: "measure".to_string(),
+        entry_type: measure.entry_type.to_string(),
         start_time: measure.start_time,
         duration: measure.duration,
     }));
@@ -403,12 +555,32 @@ impl Histogram {
         self.values.len()
     }
 
+    pub fn count_bigint(&self) -> u128 {
+        self.count() as u128
+    }
+
     pub fn min(&self) -> u64 {
         self.values.iter().copied().min().unwrap_or(0)
     }
 
+    pub fn min_bigint(&self) -> u128 {
+        self.min() as u128
+    }
+
     pub fn max(&self) -> u64 {
         self.values.iter().copied().max().unwrap_or(0)
+    }
+
+    pub fn max_bigint(&self) -> u128 {
+        self.max() as u128
+    }
+
+    pub fn exceeds(&self) -> u64 {
+        0
+    }
+
+    pub fn exceeds_bigint(&self) -> u128 {
+        0
     }
 
     pub fn mean(&self) -> f64 {
@@ -445,6 +617,24 @@ impl Histogram {
         let percentile = percentile.clamp(0.0, 100.0);
         let index = ((percentile / 100.0) * (values.len().saturating_sub(1) as f64)).round();
         values[index as usize]
+    }
+
+    pub fn percentile_bigint(&self, percentile: f64) -> u128 {
+        self.percentile(percentile) as u128
+    }
+
+    pub fn percentiles(&self) -> BTreeMap<u64, u64> {
+        [0_u64, 50, 75, 90, 99, 100]
+            .into_iter()
+            .map(|percentile| (percentile, self.percentile(percentile as f64)))
+            .collect()
+    }
+
+    pub fn percentiles_bigint(&self) -> BTreeMap<u128, u128> {
+        self.percentiles()
+            .into_iter()
+            .map(|(percentile, value)| (percentile as u128, value as u128))
+            .collect()
     }
 }
 
