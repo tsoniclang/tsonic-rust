@@ -473,6 +473,14 @@ fn fs_extended_sync_directory_lifecycle() {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].name, "nested.txt");
     assert!(entries[0].is_file());
+    let mut dir = fs::opendir_handle_sync(&copied_text).unwrap();
+    assert_eq!(dir.path, copied_text);
+    assert_eq!(dir.read_sync().unwrap().name, "nested.txt");
+    let mut async_dir_read = None;
+    dir.read_callback(|result| async_dir_read = Some(result));
+    assert_eq!(async_dir_read.unwrap().unwrap(), None);
+    dir.close_callback(|result| result.unwrap());
+    assert!(dir.closed());
     let open_dir_options = fs::OpenDirOptions {
         encoding: Some("utf8".to_string()),
         buffer_size: 8,
@@ -575,6 +583,7 @@ fn fs_glob_and_watchers_are_closed_polling_apis() {
             persistent: false,
             recursive: false,
             encoding: Some("utf8".to_string()),
+            ignore: Vec::new(),
             signal_aborted: false,
             max_queue: 16,
             overflow: "ignore".to_string(),
@@ -892,6 +901,7 @@ fn fs_option_result_and_stream_carriers_expose_backend_legal_fields() {
         persistent: false,
         recursive: true,
         encoding: Some("utf8".to_string()),
+        ignore: vec!["*.tmp".to_string()],
         signal_aborted: true,
         max_queue: 10,
         overflow: "throw".to_string(),
@@ -899,6 +909,7 @@ fn fs_option_result_and_stream_carriers_expose_backend_legal_fields() {
     assert!(!watch.persistent);
     assert!(watch.recursive);
     assert_eq!(watch.encoding.as_deref(), Some("utf8"));
+    assert_eq!(watch.ignore, vec!["*.tmp"]);
     assert!(watch.signal_aborted);
     assert_eq!(watch.max_queue, 10);
     assert_eq!(watch.overflow, "throw");
@@ -937,6 +948,91 @@ fn fs_option_result_and_stream_carriers_expose_backend_legal_fields() {
     assert!(utf8_options.mkdir);
     assert_eq!(utf8_options.mode, 0o600);
     assert_eq!(utf8_options.periodic_flush_ms, Some(50));
+
+    let glob = fs::GlobOptions {
+        cwd: Some("/tmp".to_string()),
+        with_file_types: Some(false),
+        exclude: vec!["*.bak".to_string()],
+    };
+    assert_eq!(glob.cwd.as_deref(), Some("/tmp"));
+    assert_eq!(glob.with_file_types, Some(false));
+    assert_eq!(glob.exclude, vec!["*.bak"]);
+    let glob_without = fs::GlobOptionsWithoutFileTypes {
+        cwd: Some("/tmp".to_string()),
+        with_file_types: false,
+        exclude: vec!["*.tmp".to_string()],
+    };
+    assert!(!glob_without.with_file_types);
+    let glob_with = fs::GlobOptionsWithFileTypes {
+        cwd: Some("/tmp".to_string()),
+        with_file_types: true,
+        exclude: Vec::new(),
+    };
+    assert!(glob_with.with_file_types);
+
+    let blob = fs::OpenAsBlobOptions {
+        type_: Some("text/plain".to_string()),
+    };
+    assert_eq!(blob.type_.as_deref(), Some("text/plain"));
+    let read_with_buffer = fs::ReadOptionsWithBuffer {
+        buffer: Some(tsonic_node::buffer::Buffer::alloc(4)),
+    };
+    assert_eq!(read_with_buffer.buffer.as_ref().unwrap().len(), 4);
+    let fs_impl = fs::FsImplementation {
+        open: true,
+        close: true,
+    };
+    assert!(fs_impl.open && fs_impl.close);
+    let read_impl = fs::CreateReadStreamFsImplementation { read: true };
+    assert!(read_impl.read);
+    let write_impl = fs::CreateWriteStreamFsImplementation {
+        write: true,
+        writev: true,
+    };
+    assert!(write_impl.write && write_impl.writev);
+
+    let stats_alias: fs::StatsBase = fs::Stats {
+        size: 1,
+        dev: 2,
+        ino: 3,
+        mode: 4,
+        nlink: 5,
+        uid: 6,
+        gid: 7,
+        rdev: 8,
+        blksize: 9,
+        blocks: 10,
+        atime_ms: 11.0,
+        mtime_ms: 12.0,
+        ctime_ms: 13.0,
+        birthtime_ms: 14.0,
+        is_file: true,
+        is_directory: false,
+        is_symbolic_link: false,
+        is_block_device: false,
+        is_character_device: false,
+        is_fifo: false,
+        is_socket: false,
+    };
+    assert_eq!(stats_alias.size, 1);
+    assert!(stats_alias.is_file());
+    let big_stats_alias: fs::BigIntStats = stats_alias.clone();
+    assert_eq!(big_stats_alias.atime_ns(), 11_000_000);
+    let statfs_alias: fs::StatsFsBase = fs::StatFs {
+        r#type: 1,
+        bsize: 2,
+        blocks: 3,
+        bfree: 4,
+        bavail: 5,
+        files: 6,
+        ffree: 7,
+    };
+    assert_eq!(statfs_alias.bsize, 2);
+
+    let temp_dir = fs::mkdtemp_disposable_sync("target/tsonic-rust-disposable-").unwrap();
+    assert!(std::path::Path::new(&temp_dir.path).exists());
+    temp_dir.remove().unwrap();
+    assert!(!std::path::Path::new(&temp_dir.path).exists());
 }
 
 fn temp_root(label: &str) -> std::path::PathBuf {

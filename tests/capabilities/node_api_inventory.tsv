@@ -1647,6 +1647,69 @@ NODE-FS-MEMBER-READ-STREAM-OPTIONS-STREAM	fs	ReadStreamOptions.stream	implemente
 NODE-FS-MEMBER-WRITE-STREAM-OPTIONS-STREAM	fs	WriteStreamOptions.stream	implemented	N89	tsonic_node::fs::WriteStreamOptions::stream	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
 NODE-FS-MEMBER-FS-WATCH-EVENT-EVENT-TYPE	fs	FsWatchEvent.eventType	implemented	N89	tsonic_node::fs::FsWatchEvent::event_type	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
 NODE-FS-MEMBER-FS-WATCH-EVENT-FILENAME	fs	FsWatchEvent.filename	implemented	N89	tsonic_node::fs::FsWatchEvent::filename	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-STATSBASE-SIZE	fs	StatsBase.size	implemented	N90	tsonic_node::fs::StatsBase::size	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats size field
+NODE-FS-STATSBASE-DEV	fs	StatsBase.dev	implemented	N90	tsonic_node::fs::StatsBase::dev	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats dev field
+NODE-FS-STATSBASE-INO	fs	StatsBase.ino	implemented	N90	tsonic_node::fs::StatsBase::ino	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats ino field
+NODE-FS-STATSBASE-MODE	fs	StatsBase.mode	implemented	N90	tsonic_node::fs::StatsBase::mode	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats mode field
+NODE-FS-STATSBASE-NLINK	fs	StatsBase.nlink	implemented	N90	tsonic_node::fs::StatsBase::nlink	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats nlink field
+NODE-FS-STATSBASE-UID	fs	StatsBase.uid	implemented	N90	tsonic_node::fs::StatsBase::uid	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats uid field
+NODE-FS-STATSBASE-GID	fs	StatsBase.gid	implemented	N90	tsonic_node::fs::StatsBase::gid	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats gid field
+NODE-FS-STATSBASE-RDEV	fs	StatsBase.rdev	implemented	N90	tsonic_node::fs::StatsBase::rdev	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats rdev field
+NODE-FS-STATSBASE-BLKSIZE	fs	StatsBase.blksize	implemented	N90	tsonic_node::fs::StatsBase::blksize	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats blksize field
+NODE-FS-STATSBASE-BLOCKS	fs	StatsBase.blocks	implemented	N90	tsonic_node::fs::StatsBase::blocks	NODE-FS-CARRIER-002	StatsBase alias exposes platform Stats blocks field
+NODE-FS-STATSBASE-ATIME-MS	fs	StatsBase.atimeMs	implemented	N90	tsonic_node::fs::StatsBase::atime_ms	NODE-FS-CARRIER-002	StatsBase alias exposes atimeMs accessor
+NODE-FS-STATSBASE-MTIME-MS	fs	StatsBase.mtimeMs	implemented	N90	tsonic_node::fs::StatsBase::mtime_ms	NODE-FS-CARRIER-002	StatsBase alias exposes mtimeMs accessor
+NODE-FS-STATSBASE-CTIME-MS	fs	StatsBase.ctimeMs	implemented	N90	tsonic_node::fs::StatsBase::ctime_ms	NODE-FS-CARRIER-002	StatsBase alias exposes ctimeMs accessor
+NODE-FS-STATSBASE-BIRTHTIME-MS	fs	StatsBase.birthtimeMs	implemented	N90	tsonic_node::fs::StatsBase::birthtime_ms	NODE-FS-CARRIER-002	StatsBase alias exposes birthtimeMs accessor
+NODE-FS-STATSBASE-ATIME	fs	StatsBase.atime	implemented	N90	tsonic_node::fs::StatsBase::atime	NODE-FS-CARRIER-002	StatsBase alias exposes Date atime accessor
+NODE-FS-STATSBASE-MTIME	fs	StatsBase.mtime	implemented	N90	tsonic_node::fs::StatsBase::mtime	NODE-FS-CARRIER-002	StatsBase alias exposes Date mtime accessor
+NODE-FS-STATSBASE-CTIME	fs	StatsBase.ctime	implemented	N90	tsonic_node::fs::StatsBase::ctime	NODE-FS-CARRIER-002	StatsBase alias exposes Date ctime accessor
+NODE-FS-STATSBASE-BIRTHTIME	fs	StatsBase.birthtime	implemented	N90	tsonic_node::fs::StatsBase::birthtime	NODE-FS-CARRIER-002	StatsBase alias exposes Date birthtime accessor
+NODE-FS-STATSBASE-IS-FILE	fs	StatsBase.isFile	implemented	N90	tsonic_node::fs::StatsBase::is_file	NODE-FS-CARRIER-002	StatsBase alias exposes isFile method
+NODE-FS-STATSBASE-IS-DIRECTORY	fs	StatsBase.isDirectory	implemented	N90	tsonic_node::fs::StatsBase::is_directory	NODE-FS-CARRIER-002	StatsBase alias exposes isDirectory method
+NODE-FS-STATSBASE-IS-SYMBOLIC-LINK	fs	StatsBase.isSymbolicLink	implemented	N90	tsonic_node::fs::StatsBase::is_symbolic_link	NODE-FS-CARRIER-002	StatsBase alias exposes isSymbolicLink method
+NODE-FS-STATSBASE-IS-BLOCK-DEVICE	fs	StatsBase.isBlockDevice	implemented	N90	tsonic_node::fs::StatsBase::is_block_device	NODE-FS-CARRIER-002	StatsBase alias exposes isBlockDevice method
+NODE-FS-STATSBASE-IS-CHARACTER-DEVICE	fs	StatsBase.isCharacterDevice	implemented	N90	tsonic_node::fs::StatsBase::is_character_device	NODE-FS-CARRIER-002	StatsBase alias exposes isCharacterDevice method
+NODE-FS-STATSBASE-IS-FIFO	fs	StatsBase.isFIFO	implemented	N90	tsonic_node::fs::StatsBase::is_fifo	NODE-FS-CARRIER-002	StatsBase alias exposes isFIFO method
+NODE-FS-STATSBASE-IS-SOCKET	fs	StatsBase.isSocket	implemented	N90	tsonic_node::fs::StatsBase::is_socket	NODE-FS-CARRIER-002	StatsBase alias exposes isSocket method
+NODE-FS-DIR-CARRIER	fs	Dir	implemented	N90	tsonic_node::fs::Dir	NODE-FS-CARRIER-002	closed fs Dir handle carrier
+NODE-FS-DIR-PATH	fs	Dir.path	implemented	N90	tsonic_node::fs::Dir::path	NODE-FS-CARRIER-002	Dir path field
+NODE-FS-DIR-READ-SYNC	fs	Dir.readSync	implemented	N90	tsonic_node::fs::Dir::read_sync	NODE-FS-CARRIER-002	Dir synchronous read operation
+NODE-FS-DIR-READ	fs	Dir.read	implemented	N90	tsonic_node::fs::Dir::read	NODE-FS-CARRIER-002	Dir result-shaped read operation
+NODE-FS-DIR-READ-CALLBACK	fs	Dir.read callback	implemented	N90	tsonic_node::fs::Dir::read_callback	NODE-FS-CARRIER-002	Dir callback-shaped read operation
+NODE-FS-DIR-CLOSE-SYNC	fs	Dir.closeSync	implemented	N90	tsonic_node::fs::Dir::close_sync	NODE-FS-CARRIER-002	Dir synchronous close operation
+NODE-FS-DIR-CLOSE	fs	Dir.close	implemented	N90	tsonic_node::fs::Dir::close	NODE-FS-CARRIER-002	Dir result-shaped close operation
+NODE-FS-DIR-CLOSE-CALLBACK	fs	Dir.close callback	implemented	N90	tsonic_node::fs::Dir::close_callback	NODE-FS-CARRIER-002	Dir callback-shaped close operation
+NODE-FS-OPENDIR-HANDLE-SYNC	fs	opendirSync handle	implemented	N90	tsonic_node::fs::opendir_handle_sync	NODE-FS-CARRIER-002	opendir handle helper for generated Rust Dir paths
+NODE-FS-DISPOSABLE-TEMP-DIR-CARRIER	fs	DisposableTempDir	implemented	N90	tsonic_node::fs::DisposableTempDir	NODE-FS-CARRIER-002	closed disposable temp dir carrier
+NODE-FS-DISPOSABLE-TEMP-DIR-PATH	fs	DisposableTempDir.path	implemented	N90	tsonic_node::fs::DisposableTempDir::path	NODE-FS-CARRIER-002	disposable temp dir path field
+NODE-FS-DISPOSABLE-TEMP-DIR-REMOVE	fs	DisposableTempDir.remove	implemented	N90	tsonic_node::fs::DisposableTempDir::remove	NODE-FS-CARRIER-002	disposable temp dir remove operation
+NODE-FS-MKDTEMP-DISPOSABLE	fs	mkdtempDisposableSync	implemented	N90	tsonic_node::fs::mkdtemp_disposable_sync	NODE-FS-CARRIER-002	creates disposable temp dir through mkdtempSync
+NODE-FS-GLOB-OPTIONS-CARRIER	fs	GlobOptions	implemented	N90	tsonic_node::fs::GlobOptions	NODE-FS-CARRIER-002	closed glob options carrier
+NODE-FS-GLOB-OPTIONS-CWD	fs	GlobOptions.cwd	implemented	N90	tsonic_node::fs::GlobOptions::cwd	NODE-FS-CARRIER-002	glob cwd option field
+NODE-FS-GLOB-OPTIONS-WITH-FILE-TYPES	fs	GlobOptions.withFileTypes	implemented	N90	tsonic_node::fs::GlobOptions::with_file_types	NODE-FS-CARRIER-002	glob withFileTypes option field
+NODE-FS-GLOB-OPTIONS-EXCLUDE	fs	GlobOptions.exclude	implemented	N90	tsonic_node::fs::GlobOptions::exclude	NODE-FS-CARRIER-002	glob exclude option field
+NODE-FS-GLOB-OPTIONS-WITHOUT-FILE-TYPES-CARRIER	fs	GlobOptionsWithoutFileTypes	implemented	N90	tsonic_node::fs::GlobOptionsWithoutFileTypes	NODE-FS-CARRIER-002	closed glob no-dirent option carrier
+NODE-FS-GLOB-OPTIONS-WITHOUT-FILE-TYPES-FIELD	fs	GlobOptionsWithoutFileTypes.withFileTypes	implemented	N90	tsonic_node::fs::GlobOptionsWithoutFileTypes::with_file_types	NODE-FS-CARRIER-002	glob no-dirent withFileTypes field
+NODE-FS-GLOB-OPTIONS-WITH-FILE-TYPES-CARRIER	fs	GlobOptionsWithFileTypes	implemented	N90	tsonic_node::fs::GlobOptionsWithFileTypes	NODE-FS-CARRIER-002	closed glob dirent option carrier
+NODE-FS-GLOB-OPTIONS-WITH-FILE-TYPES-FIELD	fs	GlobOptionsWithFileTypes.withFileTypes	implemented	N90	tsonic_node::fs::GlobOptionsWithFileTypes::with_file_types	NODE-FS-CARRIER-002	glob dirent withFileTypes field
+NODE-FS-OPEN-AS-BLOB-OPTIONS-CARRIER	fs	OpenAsBlobOptions	implemented	N90	tsonic_node::fs::OpenAsBlobOptions	NODE-FS-CARRIER-002	closed openAsBlob options carrier
+NODE-FS-OPEN-AS-BLOB-OPTIONS-TYPE	fs	OpenAsBlobOptions.type	implemented	N90	tsonic_node::fs::OpenAsBlobOptions::type_	NODE-FS-CARRIER-002	openAsBlob MIME type option field
+NODE-FS-READ-OPTIONS-WITH-BUFFER-CARRIER	fs	ReadOptionsWithBuffer	implemented	N90	tsonic_node::fs::ReadOptionsWithBuffer	NODE-FS-CARRIER-002	closed read options with Buffer carrier
+NODE-FS-READ-OPTIONS-WITH-BUFFER-BUFFER	fs	ReadOptionsWithBuffer.buffer	implemented	N90	tsonic_node::fs::ReadOptionsWithBuffer::buffer	NODE-FS-CARRIER-002	read options buffer field
+NODE-FS-FS-IMPLEMENTATION-CARRIER	fs	FSImplementation	implemented	N90	tsonic_node::fs::FsImplementation	NODE-FS-CARRIER-002	closed fs implementation capability carrier
+NODE-FS-FS-IMPLEMENTATION-OPEN	fs	FSImplementation.open	implemented	N90	tsonic_node::fs::FsImplementation::open	NODE-FS-CARRIER-002	fs implementation open capability field
+NODE-FS-FS-IMPLEMENTATION-CLOSE	fs	FSImplementation.close	implemented	N90	tsonic_node::fs::FsImplementation::close	NODE-FS-CARRIER-002	fs implementation close capability field
+NODE-FS-CREATE-READ-STREAM-FS-IMPLEMENTATION-CARRIER	fs	CreateReadStreamFSImplementation	implemented	N90	tsonic_node::fs::CreateReadStreamFsImplementation	NODE-FS-CARRIER-002	closed createReadStream fs implementation carrier
+NODE-FS-CREATE-READ-STREAM-FS-IMPLEMENTATION-READ	fs	CreateReadStreamFSImplementation.read	implemented	N90	tsonic_node::fs::CreateReadStreamFsImplementation::read	NODE-FS-CARRIER-002	createReadStream read implementation field
+NODE-FS-CREATE-WRITE-STREAM-FS-IMPLEMENTATION-CARRIER	fs	CreateWriteStreamFSImplementation	implemented	N90	tsonic_node::fs::CreateWriteStreamFsImplementation	NODE-FS-CARRIER-002	closed createWriteStream fs implementation carrier
+NODE-FS-CREATE-WRITE-STREAM-FS-IMPLEMENTATION-WRITE	fs	CreateWriteStreamFSImplementation.write	implemented	N90	tsonic_node::fs::CreateWriteStreamFsImplementation::write	NODE-FS-CARRIER-002	createWriteStream write implementation field
+NODE-FS-CREATE-WRITE-STREAM-FS-IMPLEMENTATION-WRITEV	fs	CreateWriteStreamFSImplementation.writev	implemented	N90	tsonic_node::fs::CreateWriteStreamFsImplementation::writev	NODE-FS-CARRIER-002	createWriteStream writev implementation field
+NODE-FS-WATCH-OPTIONS-IGNORE	fs	WatchOptions.ignore	implemented	N90	tsonic_node::fs::WatchOptions::ignore	NODE-FS-CARRIER-002	watch ignore option field
+NODE-FS-WATCH-OPTIONS-STRING-ENCODING	fs	WatchOptionsWithStringEncoding.encoding	implemented	N90	tsonic_node::fs::WatchOptions::encoding	NODE-FS-CARRIER-002	watch string encoding option field
+NODE-FS-WATCH-OPTIONS-BUFFER-ENCODING	fs	WatchOptionsWithBufferEncoding.encoding	implemented	N90	tsonic_node::fs::WatchOptions::encoding	NODE-FS-CARRIER-002	watch buffer encoding option field
+NODE-FS-STAT-WATCHER-REF	fs	StatWatcher.ref	implemented	N90	tsonic_node::fs::StatWatcher::ref_	NODE-FS-CARRIER-002	StatWatcher alias ref operation
+NODE-FS-STAT-WATCHER-UNREF	fs	StatWatcher.unref	implemented	N90	tsonic_node::fs::StatWatcher::unref	NODE-FS-CARRIER-002	StatWatcher alias unref operation
 NODE-FSP-FILEHANDLE-CARRIER	fs/promises	FileHandle	implemented	N42	tsonic_node::fs_promises::FileHandle	NODE-FSP-002	closed FileHandle carrier
 NODE-FSP-DIR-CARRIER	fs/promises	Dir	implemented	N42	tsonic_node::fs_promises::Dir	NODE-FSP-002	closed Dir handle carrier
 NODE-STREAM-READABLE-IS-ENDED	stream	Readable.isEnded	implemented	N38	tsonic_node::stream::Readable::is_ended	NODE-STREAM-004	readable end-state query

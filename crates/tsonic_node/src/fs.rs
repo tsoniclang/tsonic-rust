@@ -559,6 +559,7 @@ pub struct WatchOptions {
     pub persistent: bool,
     pub recursive: bool,
     pub encoding: Option<String>,
+    pub ignore: Vec<String>,
     pub signal_aborted: bool,
     pub max_queue: usize,
     pub overflow: String,
@@ -570,6 +571,7 @@ impl Default for WatchOptions {
             persistent: true,
             recursive: false,
             encoding: Some("utf8".to_string()),
+            ignore: Vec::new(),
             signal_aborted: false,
             max_queue: usize::MAX,
             overflow: "ignore".to_string(),
@@ -627,6 +629,54 @@ impl Default for Utf8StreamOptions {
             periodic_flush_ms: None,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct GlobOptions {
+    pub cwd: Option<String>,
+    pub with_file_types: Option<bool>,
+    pub exclude: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct GlobOptionsWithoutFileTypes {
+    pub cwd: Option<String>,
+    pub with_file_types: bool,
+    pub exclude: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct GlobOptionsWithFileTypes {
+    pub cwd: Option<String>,
+    pub with_file_types: bool,
+    pub exclude: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct OpenAsBlobOptions {
+    pub type_: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ReadOptionsWithBuffer {
+    pub buffer: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FsImplementation {
+    pub open: bool,
+    pub close: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CreateReadStreamFsImplementation {
+    pub read: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CreateWriteStreamFsImplementation {
+    pub write: bool,
+    pub writev: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -952,6 +1002,76 @@ impl WriteStream {
 pub type StatsBase = Stats;
 pub type BigIntStats = Stats;
 pub type StatsFsBase = StatFs;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dir {
+    pub path: String,
+    entries: Vec<Dirent>,
+    index: usize,
+    closed: bool,
+}
+
+impl Dir {
+    pub fn open(path: &str) -> NodeResult<Self> {
+        Ok(Self {
+            path: path.to_string(),
+            entries: opendir_sync(path)?,
+            index: 0,
+            closed: false,
+        })
+    }
+
+    pub fn read_sync(&mut self) -> Option<Dirent> {
+        if self.closed {
+            return None;
+        }
+        let entry = self.entries.get(self.index).cloned();
+        if entry.is_some() {
+            self.index += 1;
+        }
+        entry
+    }
+
+    pub fn read(&mut self) -> NodeResult<Option<Dirent>> {
+        Ok(self.read_sync())
+    }
+
+    pub fn read_callback(&mut self, callback: impl FnOnce(NodeResult<Option<Dirent>>)) {
+        callback(self.read());
+    }
+
+    pub fn close_sync(&mut self) {
+        self.closed = true;
+    }
+
+    pub fn close(&mut self) -> NodeResult<()> {
+        self.close_sync();
+        Ok(())
+    }
+
+    pub fn close_callback(&mut self, callback: impl FnOnce(NodeResult<()>)) {
+        callback(self.close());
+    }
+
+    pub fn closed(&self) -> bool {
+        self.closed
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DisposableTempDir {
+    pub path: String,
+}
+
+impl DisposableTempDir {
+    pub fn new(path: String) -> Self {
+        Self { path }
+    }
+
+    pub fn remove(&self) -> NodeResult<()> {
+        rm_sync(&self.path, true, true)
+    }
+}
 
 pub fn exists_sync(path: &str) -> bool {
     std::path::Path::new(path).exists()
@@ -1458,6 +1578,10 @@ pub fn mkdtemp_sync(prefix: &str) -> NodeResult<String> {
     ))
 }
 
+pub fn mkdtemp_disposable_sync(prefix: &str) -> NodeResult<DisposableTempDir> {
+    mkdtemp_sync(prefix).map(DisposableTempDir::new)
+}
+
 pub fn opendir_sync(path: &str) -> NodeResult<Vec<Dirent>> {
     let mut entries = Vec::new();
     for entry in fs::read_dir(path).map_err(map_io_error)? {
@@ -1477,6 +1601,10 @@ pub fn opendir_sync(path: &str) -> NodeResult<Vec<Dirent>> {
     }
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(entries)
+}
+
+pub fn opendir_handle_sync(path: &str) -> NodeResult<Dir> {
+    Dir::open(path)
 }
 
 pub fn open_sync(path: &str, flags: &str) -> NodeResult<i32> {
