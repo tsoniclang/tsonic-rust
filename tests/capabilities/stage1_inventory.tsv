@@ -156,7 +156,7 @@ NODE-PROCESS-003	implemented	J	tsonic_node::abi::process_*	process/os tests	Node
 NODE-PROCESS-004	implemented	J	tsonic_node::abi::process_*	NODE-PROC-003, NODE-PROC-004	process-global
 NODE-PROCESS-005	implemented	J	tsonic_node::abi::process_*	NODE-PROC-006	testable state
 NODE-PROCESS-006	implemented	M	tsonic_node::abi::process_exit	completion tests	test-wrapper only until explicit process termination policy exists (completed in full-completion branch)
-NODE-PROCESS-007	hard-reject	M	n/a	REJECT-NODE-PROCESS-EVENTS	stream/event loop out
+NODE-PROCESS-007	implemented	N10	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	closed process event emitter shape for generated runtimes
 NODE-OS-001	implemented	J	tsonic_node::abi::os_*	NODE-OS-001, NODE-OS-003	host shape tests
 NODE-OS-002	implemented	J	tsonic_node::abi::os_*	NODE-OS-002	no shared mutation assumptions
 NODE-OS-003	implemented	M	tsonic_node::abi::{os_cpus,os_loadavg,os_totalmem,os_freemem}	NODE-OS-004	platform inventory (completed in full-completion branch)

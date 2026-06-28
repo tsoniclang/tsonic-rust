@@ -36,3 +36,12 @@ fn process_runtime_queries_have_stable_shapes() {
     let memory = process::memory_usage();
     assert!(memory.rss <= memory.rss + memory.heap_total);
 }
+
+#[test]
+fn process_events_use_closed_event_emitter_shape() {
+    let mut events = process::ProcessEvents::new();
+    events.on("beforeExit", |_| {});
+    assert_eq!(events.listener_count("beforeExit"), 1);
+    assert!(events.emit("beforeExit", &[]));
+    assert!(!events.emit("uncaughtException", &[]));
+}

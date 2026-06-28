@@ -6,6 +6,13 @@ pub struct CpuInfo {
     pub speed: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetworkInterfaceInfo {
+    pub address: String,
+    pub family: String,
+    pub internal: bool,
+}
+
 pub fn platform() -> String {
     crate::process::platform()
 }
@@ -90,6 +97,26 @@ pub fn freemem() -> u64 {
         .or_else(|| meminfo_kb("MemFree"))
         .map(|kb| kb * 1024)
         .unwrap_or(0)
+}
+
+pub fn network_interfaces(
+) -> NodeResult<std::collections::BTreeMap<String, Vec<NetworkInterfaceInfo>>> {
+    let mut result = std::collections::BTreeMap::<String, Vec<NetworkInterfaceInfo>>::new();
+    for interface in get_if_addrs::get_if_addrs()
+        .map_err(|error| NodeError::new("ERR_OS_NETWORK_INTERFACES", error.to_string()))?
+    {
+        let address = interface.ip();
+        let internal = interface.is_loopback();
+        result
+            .entry(interface.name)
+            .or_default()
+            .push(NetworkInterfaceInfo {
+                address: address.to_string(),
+                family: if address.is_ipv4() { "IPv4" } else { "IPv6" }.to_string(),
+                internal,
+            });
+    }
+    Ok(result)
 }
 
 pub fn unavailable(message: &str) -> NodeError {

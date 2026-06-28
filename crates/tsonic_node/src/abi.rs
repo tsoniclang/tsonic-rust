@@ -47,17 +47,17 @@ pub use crate::fs::{
     create_read_stream as fs_create_read_stream, create_write_stream as fs_create_write_stream,
     exists_sync as fs_exists_sync, fdatasync_sync as fs_fdatasync_sync,
     fstat_sync as fs_fstat_sync, fsync_sync as fs_fsync_sync, ftruncate_sync as fs_ftruncate_sync,
-    link_sync as fs_link_sync, lstat_sync as fs_lstat_sync, mkdir_sync as fs_mkdir_sync,
-    mkdtemp_sync as fs_mkdtemp_sync, open_sync as fs_open_sync, opendir_sync as fs_opendir_sync,
-    read_file_sync_buffer as fs_read_file_sync_buffer,
+    glob_sync as fs_glob_sync, link_sync as fs_link_sync, lstat_sync as fs_lstat_sync,
+    mkdir_sync as fs_mkdir_sync, mkdtemp_sync as fs_mkdtemp_sync, open_sync as fs_open_sync,
+    opendir_sync as fs_opendir_sync, read_file_sync_buffer as fs_read_file_sync_buffer,
     read_file_sync_string as fs_read_file_sync_string, read_sync as fs_read_sync,
     readdir_sync as fs_readdir_sync, readlink_sync as fs_readlink_sync,
     realpath_sync as fs_realpath_sync, rename_sync as fs_rename_sync, rm_sync as fs_rm_sync,
     rmdir_sync as fs_rmdir_sync, stat_sync as fs_stat_sync, symlink_sync as fs_symlink_sync,
-    truncate_sync as fs_truncate_sync, unlink_sync as fs_unlink_sync,
-    write_file_sync_buffer as fs_write_file_sync_buffer,
+    truncate_sync as fs_truncate_sync, unlink_sync as fs_unlink_sync, watch as fs_watch,
+    watch_file as fs_watch_file, write_file_sync_buffer as fs_write_file_sync_buffer,
     write_file_sync_string as fs_write_file_sync_string, write_sync_buffer as fs_write_sync_buffer,
-    write_sync_string as fs_write_sync_string, Dirent, Stats,
+    write_sync_string as fs_write_sync_string, Dirent, FsWatchEvent, FsWatcher, Stats,
 };
 pub use crate::fs_promises::{
     append_file_string as fs_promises_append_file_string, mkdir as fs_promises_mkdir,
@@ -88,8 +88,9 @@ pub use crate::net::{
 };
 pub use crate::os::{
     arch as os_arch, cpus as os_cpus, eol as os_eol, freemem as os_freemem, homedir as os_homedir,
-    hostname as os_hostname, loadavg as os_loadavg, platform as os_platform, r#type as os_type,
-    release as os_release, tmpdir as os_tmpdir, totalmem as os_totalmem,
+    hostname as os_hostname, loadavg as os_loadavg, network_interfaces as os_network_interfaces,
+    platform as os_platform, r#type as os_type, release as os_release, tmpdir as os_tmpdir,
+    totalmem as os_totalmem,
 };
 pub use crate::path::{
     basename as path_basename, delimiter as path_delimiter, dirname as path_dirname,
@@ -108,6 +109,7 @@ pub use crate::process::{
     platform as process_platform, set_exit_code as process_set_exit_code, stderr as process_stderr,
     stdin_is_tty as process_stdin_is_tty, stdout as process_stdout, uptime as process_uptime,
     version as process_version, versions as process_versions, MemoryUsage as ProcessMemoryUsage,
+    ProcessEvents,
 };
 pub use crate::punycode::{to_ascii as punycode_to_ascii, to_unicode as punycode_to_unicode};
 pub use crate::querystring::{parse as querystring_parse, stringify as querystring_stringify};

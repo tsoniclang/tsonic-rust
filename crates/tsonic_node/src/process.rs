@@ -3,7 +3,9 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use crate::error::{NodeError, NodeResult};
+use crate::events::EventEmitter;
 use crate::stream::Writable;
+use tsonic_js::JsValue;
 
 static EXIT_CODE: AtomicI32 = AtomicI32::new(i32::MIN);
 static START: OnceLock<Instant> = OnceLock::new();
@@ -155,6 +157,33 @@ pub fn stderr() -> Writable {
 
 pub fn stdin_is_tty() -> bool {
     false
+}
+
+#[derive(Default)]
+pub struct ProcessEvents {
+    emitter: EventEmitter,
+}
+
+impl ProcessEvents {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn on<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.on(event, listener);
+        self
+    }
+
+    pub fn emit(&mut self, event: &str, args: &[JsValue]) -> bool {
+        self.emitter.emit(event, args)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.emitter.listener_count(event)
+    }
 }
 
 pub fn exit(code: Option<i32>) -> ! {

@@ -11,4 +11,9 @@ fn os_wrappers_have_stable_shapes() {
     assert!(!os::cpus().is_empty());
     assert_eq!(os::loadavg().len(), 3);
     assert!(os::totalmem() >= os::freemem());
+    let interfaces = os::network_interfaces().unwrap();
+    assert!(interfaces
+        .values()
+        .flatten()
+        .all(|interface| matches!(interface.family.as_str(), "IPv4" | "IPv6")));
 }

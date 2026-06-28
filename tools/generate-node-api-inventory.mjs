@@ -260,7 +260,7 @@ function classifyPhase(moduleName, kind, name, memberOf, signature) {
       return { phase: "hard-reject", reason: "process host introspection or dynamic native loading surface" };
     }
     if (module === "fs" && /glob/i.test(lowerSearchText)) {
-      return { phase: "hard-reject", reason: "filesystem glob engine excluded from runtime externals" };
+      return { phase: "phase1", reason: "approved deterministic filesystem glob operation group" };
     }
     if (module === "fs" && /cp\(|cpsync/i.test(lowerSearchText)) {
       return { phase: "phase1", reason: "framework-ready filesystem recursive copy API" };

@@ -154,6 +154,35 @@ fn fs_extended_sync_directory_lifecycle() {
     fs::rm_sync(&root_text, true, false).unwrap();
 }
 
+#[test]
+fn fs_glob_and_watchers_are_closed_polling_apis() {
+    let root = temp_root("glob-watch");
+    let root_text = root.to_string_lossy().to_string();
+    fs::mkdir_sync(&root_text, true).unwrap();
+    let alpha = root.join("alpha.txt");
+    let beta = root.join("beta.log");
+    fs::write_file_sync_string(&alpha.to_string_lossy(), "a", "utf8").unwrap();
+    fs::write_file_sync_string(&beta.to_string_lossy(), "b", "utf8").unwrap();
+
+    let matches = fs::glob_sync(&root.join("*.txt").to_string_lossy()).unwrap();
+    assert_eq!(matches.len(), 1);
+    assert!(matches[0].ends_with("alpha.txt"));
+
+    let mut watcher = fs::watch(&alpha.to_string_lossy()).unwrap();
+    assert_eq!(watcher.poll().unwrap(), None);
+    fs::write_file_sync_string(&alpha.to_string_lossy(), "changed", "utf8").unwrap();
+    let event = watcher.poll().unwrap().unwrap();
+    assert_eq!(event.event_type, "change");
+    assert_eq!(event.filename, "alpha.txt");
+
+    let mut file_watcher = fs::watch_file(&root.join("new.txt").to_string_lossy()).unwrap();
+    assert_eq!(file_watcher.poll().unwrap(), None);
+    fs::write_file_sync_string(&root.join("new.txt").to_string_lossy(), "new", "utf8").unwrap();
+    assert_eq!(file_watcher.poll().unwrap().unwrap().event_type, "rename");
+
+    fs::rm_sync(&root_text, true, false).unwrap();
+}
+
 fn temp_root(label: &str) -> std::path::PathBuf {
     std::env::current_dir().unwrap().join(".temp").join(format!(
         "tsonic-rust-fs-{label}-{}",
