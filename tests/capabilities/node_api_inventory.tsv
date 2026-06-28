@@ -715,6 +715,23 @@ NODE-HTTP-CREATE-SERVER	http	createServer	implemented	N64	tsonic_node::http::cre
 NODE-HTTP-REQUEST	http	request	implemented	N64	tsonic_node::http::request	NODE-HTTP-001	HTTP/1 client helper over real TCP
 NODE-HTTP-GET	http	get	implemented	N64	tsonic_node::http::get	NODE-HTTP-001	GET convenience helper over request options
 NODE-HTTP-PARSE-RESPONSE	http	parseResponse	implemented	N64	tsonic_node::http::parse_response	NODE-HTTP-001	parses raw HTTP response bytes into closed Response carrier
+NODE-HTTP-INCOMING-HEADERS-CARRIER	http	IncomingHttpHeaders	implemented	N87	tsonic_node::http::IncomingHttpHeaders	NODE-HTTP-004	closed incoming header map alias
+NODE-HTTP-OUTGOING-HEADERS-CARRIER	http	OutgoingHttpHeaders	implemented	N87	tsonic_node::http::OutgoingHttpHeaders	NODE-HTTP-004	closed outgoing header map alias
+NODE-HTTP-INFORMATION-EVENT-CARRIER	http	InformationEvent	implemented	N87	tsonic_node::http::InformationEvent	NODE-HTTP-004	closed informational response event carrier
+NODE-HTTP-PROXY-ENV-CARRIER	http	ProxyEnv	implemented	N87	tsonic_node::http::ProxyEnv	NODE-HTTP-004	closed proxy environment carrier
+NODE-HTTP-CLIENT-REQUEST-ARGS-CARRIER	http	ClientRequestArgs	implemented	N87	tsonic_node::http::ClientRequestArgs	NODE-HTTP-004	closed client request args carrier
+NODE-HTTP-CLIENT-REQUEST-ARGS-TO-OPTIONS	http	ClientRequestArgs.toRequestOptions	implemented	N87	tsonic_node::http::ClientRequestArgs::to_request_options	NODE-HTTP-004	converts explicit request args to request options
+NODE-HTTP-INCOMING-READ	http	IncomingMessage.read	implemented	N87	tsonic_node::http::IncomingMessage::read	NODE-HTTP-004	reads closed incoming message body chunks
+NODE-HTTP-SERVER-RESPONSE-SET-STATUS-CODE	http	ServerResponse.setStatusCode	implemented	N87	tsonic_node::http::ServerResponse::set_status_code	NODE-HTTP-004	sets status code and canonical message
+NODE-HTTP-SERVER-RESPONSE-SET-STATUS-MESSAGE	http	ServerResponse.setStatusMessage	implemented	N87	tsonic_node::http::ServerResponse::set_status_message	NODE-HTTP-004	sets status message explicitly
+NODE-HTTP-SERVER-RESPONSE-WRITABLE-ENDED	http	ServerResponse.writableEnded	implemented	N87	tsonic_node::http::ServerResponse::writable_ended	NODE-HTTP-004	reads response writable ended state
+NODE-HTTP-OUTGOING-MESSAGE-CARRIER	http	OutgoingMessage	implemented	N87	tsonic_node::http::OutgoingMessage	NODE-HTTP-004	closed outgoing message alias over server response
+NODE-HTTP-CLIENT-REQUEST-WRITE	http	ClientRequest.write	implemented	N87	tsonic_node::http::ClientRequest::write	NODE-HTTP-004	writes Buffer into closed request body
+NODE-HTTP-CLIENT-REQUEST-END	http	ClientRequest.end	implemented	N87	tsonic_node::http::ClientRequest::end	NODE-HTTP-004	ends request with optional body chunk
+NODE-HTTP-CLIENT-REQUEST-FINISHED	http	ClientRequest.finished	implemented	N87	tsonic_node::http::ClientRequest::finished	NODE-HTTP-004	reads request finished state
+NODE-HTTP-CLIENT-REQUEST-BODY	http	ClientRequest.body	implemented	N87	tsonic_node::http::ClientRequest::body	NODE-HTTP-004	reads closed request body chunks
+NODE-HTTP-CLIENT-REQUEST-DESTROY	http	ClientRequest.destroy	implemented	N87	tsonic_node::http::ClientRequest::destroy	NODE-HTTP-004	destroys client request and marks it aborted
+NODE-HTTP-CLIENT-REQUEST-DESTROYED	http	ClientRequest.destroyed	implemented	N87	tsonic_node::http::ClientRequest::destroyed	NODE-HTTP-004	reads request destroyed state
 NODE-MODULE-HTTP2	http2	module	implemented	N9	tsonic_node::http2	NODE-HTTP2-001	HTTP/2 client request/session shape over approved reqwest rustls/http2 dependency
 NODE-HTTP2-HEADER-METHOD	http2	HTTP2_HEADER_METHOD	implemented	N39	tsonic_node::http2::HTTP2_HEADER_METHOD	NODE-HTTP2-002	closed HTTP2 pseudo-header constant
 NODE-HTTP2-HEADER-PATH	http2	HTTP2_HEADER_PATH	implemented	N39	tsonic_node::http2::HTTP2_HEADER_PATH	NODE-HTTP2-002	closed HTTP2 pseudo-header constant

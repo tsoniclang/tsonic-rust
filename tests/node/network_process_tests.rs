@@ -174,6 +174,11 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
         assert_eq!(request.url, "/submit");
         assert_eq!(request.http_version, "1.1");
         assert!(request.complete);
+        let mut request = request;
+        assert_eq!(
+            request.read().unwrap().to_string(Some("utf8")).unwrap(),
+            "payload"
+        );
         assert_eq!(
             request.get_header("content-type"),
             Some("text/plain".to_string())
@@ -183,6 +188,10 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
             &vec!["text/plain".to_string()]
         );
         response.set_header("content-type", "text/plain");
+        response.set_status_code(202);
+        assert_eq!(response.status_code, 202);
+        response.set_status_message("Created");
+        assert_eq!(response.status_message, "Created");
         response.append_header("vary", "accept");
         response.append_header("vary", "encoding");
         assert_eq!(response.get_header("vary").unwrap(), "accept, encoding");
@@ -212,6 +221,7 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
             tsonic_node::buffer::Buffer::from_string("created", Some("utf8")).unwrap(),
         ));
         assert!(response.finished());
+        assert!(response.writable_ended());
     });
 
     let mut request = http::IncomingMessage::new("POST", "/submit", b"payload".to_vec());
@@ -262,6 +272,22 @@ fn http_agent_and_client_request_expose_common_state() {
     assert!(agent_to_destroy.destroyed());
     assert!(!agent_to_destroy.reuse_socket());
 
+    let args = http::ClientRequestArgs {
+        host: Some("example.test".to_string()),
+        port: Some(80),
+        path: Some("/from-args".to_string()),
+        method: Some("POST".to_string()),
+        headers: BTreeMap::from([("x-arg".to_string(), "1".to_string())]),
+        agent: Some(agent.clone()),
+        timeout: Some(500),
+        set_host: true,
+        ..http::ClientRequestArgs::default()
+    };
+    let from_args = args.to_request_options();
+    assert_eq!(from_args.method, "POST");
+    assert_eq!(from_args.path, "/from-args");
+    assert_eq!(from_args.headers.get("x-arg").unwrap(), "1");
+
     let mut request = http::ClientRequest::new(options);
     assert_eq!(request.method, "GET");
     assert_eq!(request.host, "example.test");
@@ -280,6 +306,31 @@ fn http_agent_and_client_request_expose_common_state() {
     request.remove_header("x-client");
     assert_eq!(request.get_header("x-client"), None);
     assert!(request.get_headers().is_empty());
+    assert!(request.write(tsonic_node::buffer::Buffer::from_string("body", Some("utf8")).unwrap()));
+    request.end(Some(
+        tsonic_node::buffer::Buffer::from_string("!", Some("utf8")).unwrap(),
+    ));
+    assert!(request.finished());
+    assert_eq!(request.body().len(), 2);
+    request.destroy();
+    assert!(request.destroyed());
+
+    let info = http::InformationEvent {
+        status_code: 103,
+        status_message: "Early Hints".to_string(),
+        http_version: "1.1".to_string(),
+        http_version_major: 1,
+        http_version_minor: 1,
+        headers: BTreeMap::from([("link".to_string(), "</style.css>".to_string())]),
+        raw_headers: vec!["link".to_string(), "</style.css>".to_string()],
+    };
+    assert_eq!(info.status_code, 103);
+    let proxy = http::ProxyEnv {
+        http_proxy: Some("http://proxy".to_string()),
+        https_proxy: None,
+        no_proxy: Some("localhost".to_string()),
+    };
+    assert_eq!(proxy.no_proxy.as_deref(), Some("localhost"));
 }
 
 #[test]

@@ -89,6 +89,67 @@ pub fn validate_header_value(name: &str, value: &str) -> NodeResult<()> {
     Ok(())
 }
 
+pub type IncomingHttpHeaders = BTreeMap<String, String>;
+pub type OutgoingHttpHeaders = BTreeMap<String, String>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct InformationEvent {
+    pub status_code: u16,
+    pub status_message: String,
+    pub http_version: String,
+    pub http_version_major: u8,
+    pub http_version_minor: u8,
+    pub headers: IncomingHttpHeaders,
+    pub raw_headers: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ProxyEnv {
+    pub http_proxy: Option<String>,
+    pub https_proxy: Option<String>,
+    pub no_proxy: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ClientRequestArgs {
+    pub protocol: Option<String>,
+    pub host: Option<String>,
+    pub hostname: Option<String>,
+    pub family: Option<u8>,
+    pub port: Option<u16>,
+    pub local_address: Option<String>,
+    pub socket_path: Option<String>,
+    pub method: Option<String>,
+    pub path: Option<String>,
+    pub headers: OutgoingHttpHeaders,
+    pub auth: Option<String>,
+    pub agent: Option<Agent>,
+    pub create_connection: bool,
+    pub timeout: Option<u64>,
+    pub set_host: bool,
+}
+
+impl ClientRequestArgs {
+    pub fn to_request_options(&self) -> RequestOptions {
+        RequestOptions {
+            host: self
+                .hostname
+                .clone()
+                .or_else(|| self.host.clone())
+                .unwrap_or_else(|| "localhost".to_string()),
+            port: self.port.unwrap_or(80),
+            path: self.path.clone().unwrap_or_else(|| "/".to_string()),
+            method: self.method.clone().unwrap_or_else(|| "GET".to_string()),
+            headers: self.headers.clone(),
+            protocol: self.protocol.clone().unwrap_or_else(|| "http:".to_string()),
+            timeout: self.timeout,
+            agent: self.agent.clone(),
+            auth: self.auth.clone(),
+            set_host: self.set_host,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentOptions {
     pub keep_alive: bool,
@@ -251,6 +312,10 @@ impl IncomingMessage {
 
     pub fn get_header(&self, name: &str) -> Option<String> {
         self.headers.get(&name.to_ascii_lowercase()).cloned()
+    }
+
+    pub fn read(&mut self) -> Option<Buffer> {
+        self.body.read()
     }
 
     pub fn headers_distinct(&self) -> BTreeMap<String, Vec<String>> {
@@ -458,7 +523,22 @@ impl ServerResponse {
     pub fn finished(&self) -> bool {
         self.finished
     }
+
+    pub fn set_status_code(&mut self, status_code: u16) {
+        self.status_code = status_code;
+        self.status_message = canonical_status_message(status_code).to_string();
+    }
+
+    pub fn set_status_message(&mut self, status_message: &str) {
+        self.status_message = status_message.to_string();
+    }
+
+    pub fn writable_ended(&self) -> bool {
+        self.finished
+    }
 }
+
+pub type OutgoingMessage = ServerResponse;
 
 #[derive(Debug)]
 pub struct ClientRequest {
@@ -473,6 +553,9 @@ pub struct ClientRequest {
     timeout: Option<u64>,
     no_delay: bool,
     keep_alive: Option<u64>,
+    body: Writable,
+    finished: bool,
+    destroyed: bool,
 }
 
 impl ClientRequest {
@@ -489,6 +572,9 @@ impl ClientRequest {
             timeout: None,
             no_delay: false,
             keep_alive: None,
+            body: Writable::new(),
+            finished: false,
+            destroyed: false,
         }
     }
 
@@ -549,6 +635,35 @@ impl ClientRequest {
 
     pub fn on_socket(&mut self) {
         self.reused_socket = true;
+    }
+
+    pub fn write(&mut self, chunk: Buffer) -> bool {
+        self.body.write(chunk)
+    }
+
+    pub fn end(&mut self, chunk: Option<Buffer>) {
+        if let Some(chunk) = chunk {
+            self.write(chunk);
+        }
+        self.body.end();
+        self.finished = true;
+    }
+
+    pub fn finished(&self) -> bool {
+        self.finished
+    }
+
+    pub fn body(&self) -> &[Buffer] {
+        self.body.chunks()
+    }
+
+    pub fn destroy(&mut self) {
+        self.destroyed = true;
+        self.abort();
+    }
+
+    pub fn destroyed(&self) -> bool {
+        self.destroyed
     }
 }
 
