@@ -12,6 +12,7 @@ pub mod diagnostics_channel;
 pub mod dns;
 pub mod error;
 pub mod events;
+pub mod fetch;
 pub mod fs;
 pub mod fs_promises;
 pub mod http;

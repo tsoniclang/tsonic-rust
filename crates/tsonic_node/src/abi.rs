@@ -57,6 +57,7 @@ pub use crate::events::{
     get_event_listeners as events_get_event_listeners, listener_count as events_listener_count,
     once as events_once, set_max_listeners as events_set_max_listeners, EventEmitter,
 };
+pub use crate::fetch::{fetch, fetch_request, FetchInit};
 pub use crate::fs::{
     access_sync as fs_access_sync, append_file_sync_buffer as fs_append_file_sync_buffer,
     append_file_sync_string as fs_append_file_sync_string, chmod_sync as fs_chmod_sync,

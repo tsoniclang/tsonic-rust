@@ -152,6 +152,7 @@ JS-WEB-004	implemented	N11	tsonic_js::abi::Headers	JS-WEB-004	case-insensitive F
 JS-WEB-005	implemented	N11	tsonic_js::abi::{FormData,FormDataValue}	JS-WEB-005	ordered form-data carrier
 JS-WEB-006	implemented	N11	tsonic_js::abi::{Request,Response}	JS-WEB-006	Fetch request and response shape without network execution
 JS-WEB-007	implemented	N11	tsonic_js::abi::{Storage,Navigator}	JS-WEB-007	common Web global storage and navigator shape
+JS-WEB-008	implemented	N11	tsonic_node::abi::{fetch,fetch_request,FetchInit}	JS-WEB-008	Node-backed fetch over reqwest into closed Web Request/Response carriers
 NODE-PATH-001	implemented	J	tsonic_node::abi::path_*	path tests	host/default plus posix/win32
 NODE-PATH-002	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-003	string semantics
 NODE-PATH-003	implemented	J	tsonic_node::abi::path_*	NODE-PATH-004 through NODE-PATH-006	string semantics

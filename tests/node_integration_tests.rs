@@ -10,6 +10,8 @@ mod dependency_backed_runtime_tests;
 mod dgram_tests;
 #[path = "node/events_async_tests.rs"]
 mod events_async_tests;
+#[path = "node/fetch_tests.rs"]
+mod fetch_tests;
 #[path = "node/fs_promises_tests.rs"]
 mod fs_promises_tests;
 #[path = "node/fs_tests.rs"]
