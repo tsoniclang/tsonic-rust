@@ -86,11 +86,14 @@ pub use crate::process::{
     env_delete as process_env_delete, env_get as process_env_get, env_set as process_env_set,
     exec_path as process_exec_path, exit as process_exit, exit_code as process_exit_code,
     hrtime as process_hrtime, hrtime_bigint as process_hrtime_bigint,
-    memory_usage as process_memory_usage, pid as process_pid, platform as process_platform,
-    set_exit_code as process_set_exit_code, uptime as process_uptime, version as process_version,
-    versions as process_versions, MemoryUsage as ProcessMemoryUsage,
+    memory_usage as process_memory_usage, next_tick as process_next_tick, pid as process_pid,
+    platform as process_platform, set_exit_code as process_set_exit_code, uptime as process_uptime,
+    version as process_version, versions as process_versions, MemoryUsage as ProcessMemoryUsage,
 };
 pub use crate::querystring::{parse as querystring_parse, stringify as querystring_stringify};
+pub use crate::readline::{
+    create_interface as readline_create_interface, Interface as ReadlineInterface,
+};
 pub use crate::stream::{
     consumers as stream_consumers, pipeline as stream_pipeline, Readable, Writable,
 };
@@ -104,4 +107,7 @@ pub use crate::util::types as util_types;
 pub use crate::util::{
     format as util_format, inspect as util_inspect,
     is_deep_strict_equal as util_is_deep_strict_equal,
+};
+pub use crate::worker_threads::{
+    receive_message_on_port as worker_receive_message_on_port, MessageChannel, MessagePort, Worker,
 };

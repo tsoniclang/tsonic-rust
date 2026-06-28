@@ -218,7 +218,7 @@ NODE-MOD-024	implemented	M	tsonic_node::abi::performance_now	NODE-MISC-001	perfo
 NODE-MOD-025	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001 through NODE-PROC-006	cwd/env/argv/platform/exitCode; no event/stdio runtime
 NODE-MOD-026	hard-reject	M	n/a	REJECT-NODE-PUNYCODE	legacy encoding module; dependency/policy not first wave (closed as principled non-runtime surface)
 NODE-MOD-027	implemented	M	tsonic_node::abi::{querystring_parse,querystring_stringify}	NODE-MISC-002	legacy URL query helper; URLSearchParams implemented first (completed in full-completion branch)
-NODE-MOD-028	hard-reject	M	n/a	REJECT-NODE-READLINE	interactive streams/async runtime out of Stage 1
+NODE-MOD-028	implemented	N5	tsonic_node::abi::readline_create_interface	NODE-READLINE-001	closed buffered readline interface
 NODE-MOD-029	hard-reject	M	n/a	REJECT-NODE-REPL	dynamic evaluation/runtime shell out of Stage 1
 NODE-MOD-030	hard-reject	M	n/a	REJECT-NODE-SQLITE	database runtime/dependency requires separate product decision (closed as principled non-runtime surface)
 NODE-MOD-031	implemented	N3	tsonic_node::abi::{Readable,Writable,stream_pipeline}	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
@@ -233,7 +233,8 @@ NODE-MOD-039	implemented	L/M	tsonic_node::abi::{util_format,util_inspect,util_is
 NODE-MOD-040	hard-reject	M	n/a	REJECT-NODE-V8	engine-specific introspection violates closed runtime design
 NODE-MOD-041	hard-reject	M	n/a	REJECT-NODE-VM	dynamic JS execution forbidden
 NODE-MOD-042	hard-reject	M	n/a	REJECT-NODE-WASI	WASI runtime integration out of Stage 1
-NODE-MOD-043	hard-reject	M	n/a	REJECT-NODE-WORKER-THREADS	threading/event runtime out of Stage 1
+NODE-MOD-043	implemented	N5	tsonic_node::abi::{MessageChannel,Worker}	NODE-WORKER-001	message channel and Rust closure worker substrate
 NODE-MOD-044	hard-reject	M	n/a	REJECT-NODE-ZLIB	compression dependency/policy not first wave (closed as principled non-runtime surface)
 NODE-MOD-045	hard-reject	M	n/a	REJECT-NODE-NAPI	native addon ABI not runtime surface
 NODE-MOD-046	hard-reject	M	n/a	REJECT-NODE-LOADER	module resolution belongs to compiler/provider, not runtime crate
+NODE-PROCESS-008	implemented	N5	tsonic_node::abi::process_next_tick	NODE-PROC-007	deterministic nextTick callback hook

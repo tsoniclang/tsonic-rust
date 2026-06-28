@@ -26,7 +26,7 @@ NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	
 NODE-MODULE-PROCESS	process	module	implemented	J	tsonic_node::process	NODE-PROC-001	closed process/env helpers
 NODE-MODULE-PUNYCODE	punycode	module	hard-reject	N0	n/a	REJECT-NODE-PUNYCODE	deprecated compatibility module excluded
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
-NODE-MODULE-READLINE	readline	module	hard-reject	N0	n/a	REJECT-NODE-READLINE	interactive terminal/event runtime excluded
+NODE-MODULE-READLINE	readline	module	implemented	N5	tsonic_node::readline	NODE-READLINE-001	closed buffered readline interface
 NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
 NODE-MODULE-SQLITE	sqlite	module	hard-reject	N0	n/a	REJECT-NODE-SQLITE	database binding excluded from runtime externals
 NODE-MODULE-STREAM	stream	module	implemented	N3	tsonic_node::stream	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
@@ -41,7 +41,7 @@ NODE-MODULE-UTIL	util	module	implemented	L	tsonic_node::util	NODE-UTIL-001	forma
 NODE-MODULE-V8	v8	module	hard-reject	N0	n/a	REJECT-NODE-V8	V8-specific APIs irrelevant to Rust runtime
 NODE-MODULE-VM	vm	module	hard-reject	N0	n/a	REJECT-NODE-VM	dynamic code execution excluded
 NODE-MODULE-WASI	wasi	module	hard-reject	N0	n/a	REJECT-NODE-WASI	WASI runtime embedding excluded
-NODE-MODULE-WORKER-THREADS	worker_threads	module	hard-reject	N0	n/a	REJECT-NODE-WORKERS	thread/event worker runtime excluded
+NODE-MODULE-WORKER-THREADS	worker_threads	module	implemented	N5	tsonic_node::worker_threads	NODE-WORKER-001	message channel and Rust closure worker substrate
 NODE-MODULE-ZLIB	zlib	module	hard-reject	N0	n/a	REJECT-NODE-ZLIB	compression dependency not approved
 NODE-FS-ACCESS	fs	accessSync	implemented	K	tsonic_node::fs::access_sync	NODE-FS-EXT-001	existence/access validation
 NODE-FS-APPEND-FILE	fs	appendFileSync	implemented	K	tsonic_node::fs::{append_file_sync_string,append_file_sync_buffer}	NODE-FS-EXT-001	string and buffer overloads
@@ -144,3 +144,4 @@ NODE-OS-HOME-TMP	os	homedir/tmpdir	implemented	J	tsonic_node::os::{homedir,tmpdi
 NODE-OS-HOST-RELEASE	os	hostname/type/release	implemented	J	tsonic_node::os::{hostname,type,release}	NODE-OS-001	host identity helpers
 NODE-OS-CPU	os	cpus/loadavg	implemented	J	tsonic_node::os::{cpus,loadavg}	NODE-OS-001	CPU/load helpers
 NODE-OS-NETWORK	os	networkInterfaces	hard-reject	N0	n/a	REJECT-NODE-OS-NETWORK	network introspection excluded
+NODE-PROCESS-NEXTTICK	process	nextTick	implemented	N5	tsonic_node::process::next_tick	NODE-PROC-007	deterministic nextTick callback hook

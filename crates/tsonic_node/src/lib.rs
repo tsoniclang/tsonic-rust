@@ -22,11 +22,13 @@ pub mod path_win32;
 pub mod perf_hooks;
 pub mod process;
 pub mod querystring;
+pub mod readline;
 pub mod stream;
 pub mod string_decoder;
 pub mod timers;
 pub mod tty;
 pub mod url;
 pub mod util;
+pub mod worker_threads;
 
 pub use error::{NodeError, NodeResult};

@@ -3,10 +3,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const INVENTORY: &str = include_str!("capabilities/stage1_inventory.tsv");
-const EXPECTED_ROW_COUNT: usize = 238;
-const EXPECTED_IMPLEMENTED_COUNT: usize = 167;
+const EXPECTED_ROW_COUNT: usize = 239;
+const EXPECTED_IMPLEMENTED_COUNT: usize = 170;
 const EXPECTED_DEFERRED_COUNT: usize = 0;
-const EXPECTED_HARD_REJECT_COUNT: usize = 71;
+const EXPECTED_HARD_REJECT_COUNT: usize = 69;
 
 #[derive(Clone, Debug)]
 struct CapabilityRow {

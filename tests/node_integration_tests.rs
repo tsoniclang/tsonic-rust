@@ -18,6 +18,8 @@ mod os_tests;
 mod path_tests;
 #[path = "node/process_tests.rs"]
 mod process_tests;
+#[path = "node/readline_worker_tests.rs"]
+mod readline_worker_tests;
 #[path = "node/timers_stream_dns_tests.rs"]
 mod timers_stream_dns_tests;
 #[path = "node/url_tests.rs"]
