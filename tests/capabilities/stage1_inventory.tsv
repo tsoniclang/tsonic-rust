@@ -240,6 +240,7 @@ NODE-MOD-022	implemented	J	tsonic_node::abi::os_*	NODE-OS-001 through NODE-OS-00
 NODE-MOD-023	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-008	pure string path helpers
 NODE-MOD-024	implemented	M	tsonic_node::abi::performance_now	NODE-MISC-001	performance timer/observer policy not first wave (completed in full-completion branch)
 NODE-PERF-001	implemented	N11	tsonic_node::perf_hooks::{PerformanceEntry,PerformanceObserver,PerformanceObserverEntryList}	NODE-PERF-001	mark, measure, entry queries, observer snapshots, and supported entry types
+NODE-PERF-002	implemented	N20	tsonic_node::abi::{PerformanceHistogram,RecordableHistogram,IntervalHistogram,performance_event_loop_utilization,performance_set_resource_timing_buffer_size}	NODE-PERF-002	histogram/event-loop utilization/resource timing controls
 NODE-MOD-025	implemented	J	tsonic_node::abi::process_*	NODE-PROC-001 through NODE-PROC-006	cwd/env/argv/platform/exitCode; no event/stdio runtime
 NODE-MOD-026	implemented	N8	tsonic_node::abi::{punycode_to_ascii,punycode_to_unicode}	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MOD-027	implemented	M	tsonic_node::abi::{querystring_parse,querystring_stringify}	NODE-MISC-002	legacy URL query helper; URLSearchParams implemented first (completed in full-completion branch)

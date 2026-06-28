@@ -158,12 +158,18 @@ pub use crate::path::{
 };
 pub use crate::perf_hooks::{
     clear_marks as performance_clear_marks, clear_measures as performance_clear_measures,
+    clear_resource_timings as performance_clear_resource_timings,
+    create_histogram as performance_create_histogram,
+    event_loop_utilization as performance_event_loop_utilization,
     get_entries as performance_get_entries, get_entries_by_name as performance_get_entries_by_name,
     get_entries_by_name_entries as performance_get_entries_by_name_entries,
     get_entries_by_type as performance_get_entries_by_type, mark as performance_mark,
     mark_with_detail as performance_mark_with_detail, measure as performance_measure,
-    performance_now, time_origin as performance_time_origin, PerformanceEntry, PerformanceMark,
-    PerformanceMeasure, PerformanceObserver, PerformanceObserverEntryList,
+    performance_now,
+    set_resource_timing_buffer_size as performance_set_resource_timing_buffer_size,
+    time_origin as performance_time_origin, EventLoopUtilization,
+    Histogram as PerformanceHistogram, IntervalHistogram, PerformanceEntry, PerformanceMark,
+    PerformanceMeasure, PerformanceObserver, PerformanceObserverEntryList, RecordableHistogram,
 };
 pub use crate::process::{
     allowed_node_environment_flags as process_allowed_node_environment_flags, arch as process_arch,

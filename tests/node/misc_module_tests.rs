@@ -72,6 +72,36 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     assert!(!observer.connected());
     perf_hooks::clear_marks(Some("start"));
     assert!(perf_hooks::get_entries_by_name("start").is_empty());
+    let entries = perf_hooks::get_entries();
+    assert!(!entries.is_empty());
+    assert!(entries[0].to_json().iter().any(|(name, _)| name == "name"));
+    perf_hooks::set_resource_timing_buffer_size(128);
+    perf_hooks::clear_resource_timings(None);
+    let utilization = perf_hooks::event_loop_utilization(None);
+    assert!(utilization.utilization >= 0.0);
+    let delta = perf_hooks::event_loop_utilization(Some(utilization));
+    assert!(delta.active >= 0.0);
+
+    let mut histogram = perf_hooks::create_histogram();
+    histogram.record(10);
+    histogram.record(30);
+    assert_eq!(histogram.count(), 2);
+    assert_eq!(histogram.min(), 10);
+    assert!(histogram.max() >= 30);
+    assert!(histogram.mean() >= 10.0);
+    assert!(histogram.stddev() >= 0.0);
+    assert!(histogram.percentile(50.0) >= 10);
+    histogram.record_delta();
+    assert_eq!(histogram.count(), 3);
+    let mut other = perf_hooks::Histogram::new();
+    other.record(100);
+    histogram.add(&other);
+    assert!(histogram.max() >= 100);
+    assert!(histogram.disable());
+    histogram.record(200);
+    assert!(!histogram.enable());
+    histogram.reset();
+    assert_eq!(histogram.count(), 0);
 }
 
 #[test]
