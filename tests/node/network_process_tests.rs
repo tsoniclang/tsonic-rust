@@ -5,12 +5,15 @@ use tsonic_node::{child_process, http, module, net};
 #[test]
 fn net_socket_and_http_client_use_real_local_tcp() {
     let server = net::create_server("127.0.0.1", 0).unwrap();
+    assert!(server.address().unwrap().port > 0);
     let port = server.local_port().unwrap();
     let handle = thread::spawn(move || {
         let mut socket = server.accept().unwrap();
+        assert_eq!(socket.remote_family().unwrap(), "IPv4");
         socket
             .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
             .unwrap();
+        assert!(socket.bytes_written() > 0);
         socket.shutdown().unwrap();
     });
 
@@ -22,6 +25,34 @@ fn net_socket_and_http_client_use_real_local_tcp() {
     assert_eq!(net::is_ip("127.0.0.1"), 4);
     assert!(net::is_ipv4("127.0.0.1"));
     assert!(net::is_ipv6("::1"));
+
+    let server = net::create_server("127.0.0.1", 0).unwrap();
+    let port = server.local_port().unwrap();
+    let handle = thread::spawn(move || {
+        let mut socket = server.accept().unwrap();
+        let data = socket.read_to_end().unwrap();
+        assert_eq!(data, b"ping");
+        assert_eq!(socket.bytes_read(), 4);
+    });
+    let mut socket = net::connect("127.0.0.1", port).unwrap();
+    assert_eq!(socket.remote_family().unwrap(), "IPv4");
+    assert_eq!(socket.remote_port().unwrap(), port);
+    assert!(socket.local_port().unwrap() > 0);
+    assert_eq!(socket.address().unwrap().family, "IPv4");
+    socket.set_no_delay(true).unwrap();
+    socket.set_timeout(1_000).unwrap();
+    assert_eq!(socket.timeout(), Some(1_000));
+    socket.set_encoding("utf8");
+    assert_eq!(socket.encoding(), Some("utf8"));
+    assert!(socket.write(b"ping").unwrap());
+    assert_eq!(socket.bytes_written(), 4);
+    assert!(socket.has_ref());
+    socket.unref();
+    assert!(!socket.has_ref());
+    socket.r#ref();
+    assert!(socket.has_ref());
+    socket.end(None).unwrap();
+    handle.join().unwrap();
 }
 
 #[test]

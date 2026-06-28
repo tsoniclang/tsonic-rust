@@ -153,4 +153,6 @@ NODE-OS-HOME-TMP	os	homedir/tmpdir	implemented	J	tsonic_node::os::{homedir,tmpdi
 NODE-OS-HOST-RELEASE	os	hostname/type/release	implemented	J	tsonic_node::os::{hostname,type,release}	NODE-OS-001	host identity helpers
 NODE-OS-CPU	os	cpus/loadavg	implemented	J	tsonic_node::os::{cpus,loadavg}	NODE-OS-001	CPU/load helpers
 NODE-OS-NETWORK	os	networkInterfaces	implemented	N10	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface query through approved dependency
+NODE-NET-SOCKET	net	Socket address/write/end/ref/timeout metadata	implemented	N17	tsonic_node::net::Socket	NODE-NET-002	TCP socket address, byte counter, timeout, encoding, ref/unref, and close helpers
+NODE-NET-SERVER	net	Server address/listen/ref metadata	implemented	N17	tsonic_node::net::Server	NODE-NET-002	TCP server address and ref/unref shape
 NODE-PROCESS-NEXTTICK	process	nextTick	implemented	N5	tsonic_node::process::next_tick	NODE-PROC-007	deterministic nextTick callback hook

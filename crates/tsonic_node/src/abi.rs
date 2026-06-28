@@ -136,8 +136,8 @@ pub use crate::module::{
 };
 pub use crate::net::{
     connect as net_connect, create_server as net_create_server, is_ip as net_is_ip,
-    is_ipv4 as net_is_ipv4, is_ipv6 as net_is_ipv6, lookup_endpoint as net_lookup_endpoint, Server,
-    Socket,
+    is_ipv4 as net_is_ipv4, is_ipv6 as net_is_ipv6, lookup_endpoint as net_lookup_endpoint,
+    AddressInfo as NetAddressInfo, Server, Socket,
 };
 pub use crate::os::{
     arch as os_arch, available_parallelism as os_available_parallelism, cpus as os_cpus,
