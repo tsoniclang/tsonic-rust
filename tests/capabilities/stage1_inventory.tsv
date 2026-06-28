@@ -212,6 +212,9 @@ NODE-MOD-002	hard-reject	M	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagati
 NODE-MOD-003	implemented	N3	tsonic_node::abi::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
 NODE-MOD-004	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-001 through NODE-BUF-009	closed `Buffer` subset in Stage 1
 NODE-MOD-005	implemented	N4	tsonic_node::abi::child_process_spawn_file_sync	NODE-CHILD-001	capability-gated shell-free file process spawn
+NODE-CHILD-001	implemented	N14	tsonic_node::abi::{child_process_spawn_sync,child_process_spawn_file_sync,child_process_spawn_file_sync_with_options}	NODE-CHILD-001	shell-free sync process execution with stdout/stderr/status
+NODE-CHILD-002	implemented	N14	tsonic_node::abi::{child_process_spawn,child_process_spawn_file,ChildProcess}	NODE-CHILD-002	running child process shape with pid/spawnargs/ref/unref/disconnect/wait
+NODE-CHILD-003	implemented	N14	tsonic_node::abi::{child_process_exec_file,child_process_exec_file_sync,child_process_exec_sync}	NODE-CHILD-001,NODE-CHILD-002	file execution aliases without shell evaluation
 NODE-MOD-006	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary/worker process orchestration over approved file-spawn model
 NODE-MOD-007	implemented	F/M	tsonic_js::abi::console_*_to	JS-CON-001, JS-CON-002	injectable writer runtime API through JS console support
 NODE-MOD-008	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001 through NODE-CRYPTO-003	randomBytes/hash subset implemented; broader crypto has explicit hard-reject rows

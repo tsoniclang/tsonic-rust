@@ -16,10 +16,14 @@ pub use crate::buffer::{
     is_buffer as buffer_is_buffer, is_encoding as buffer_is_encoding, transcode as buffer_transcode,
 };
 pub use crate::child_process::{
-    exec_file_sync as child_process_exec_file_sync,
+    exec_file as child_process_exec_file, exec_file_sync as child_process_exec_file_sync,
     exec_file_sync_string as child_process_exec_file_sync_string,
-    exec_sync as child_process_exec_sync, spawn_file_sync as child_process_spawn_file_sync,
-    spawn_sync as child_process_spawn_sync, SpawnOutput as ChildProcessOutput,
+    exec_sync as child_process_exec_sync, spawn as child_process_spawn,
+    spawn_file as child_process_spawn_file, spawn_file_sync as child_process_spawn_file_sync,
+    spawn_file_sync_with_options as child_process_spawn_file_sync_with_options,
+    spawn_file_with_options as child_process_spawn_file_with_options,
+    spawn_sync as child_process_spawn_sync, ChildProcess, SpawnOptions,
+    SpawnOutput as ChildProcessOutput,
 };
 pub use crate::cluster::{
     fork as cluster_fork, is_primary as cluster_is_primary, is_worker as cluster_is_worker,

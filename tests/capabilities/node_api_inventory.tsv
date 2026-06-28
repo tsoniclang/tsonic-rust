@@ -3,7 +3,7 @@ NODE-MODULE-ASSERT	assert	module	implemented	N2	tsonic_node::assert	NODE-ASSERT-
 NODE-MODULE-ASYNC-CONTEXT	async_context	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation is outside closed runtime externals
 NODE-MODULE-ASYNC-HOOKS	async_hooks	module	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
 NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	closed Buffer carrier
-NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process::spawn_file_sync	NODE-CHILD-001	capability-gated shell-free file process spawn
+NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process	NODE-CHILD-001	capability-gated shell-free file process spawn and child process shape
 NODE-MODULE-CLUSTER	cluster	module	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary/worker process orchestration over approved file-spawn model
 NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
 NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
@@ -108,6 +108,10 @@ NODE-BUFFER-SLICE	buffer	slice/subarray	implemented	K	tsonic_node::buffer::Buffe
 NODE-BUFFER-COMPARE	buffer	equals/compare/concat	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-003	byte comparisons
 NODE-BUFFER-INTEGERS	buffer	read/write integers	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-004	fixed-width and variable-width endian integer helpers
 NODE-BUFFER-TRANSCODE	buffer	transcode	implemented	N8	tsonic_node::buffer::transcode	NODE-BUF-TRANSCODE-001	transcode across supported encodings
+NODE-CHILD-SPAWN-SYNC	child_process	spawnSync/spawnFileSync	implemented	N14	tsonic_node::child_process::{spawn_sync,spawn_file_sync,spawn_file_sync_with_options}	NODE-CHILD-001	shell-free sync file process execution with stdout/stderr/status shape
+NODE-CHILD-SPAWN	child_process	spawn/spawnFile	implemented	N14	tsonic_node::child_process::{spawn,spawn_file,spawn_file_with_options,ChildProcess}	NODE-CHILD-002	shell-free running child process shape with pid/stdio/wait/ref/unref/disconnect
+NODE-CHILD-EXEC-FILE	child_process	execFile/execFileSync	implemented	N14	tsonic_node::child_process::{exec_file,exec_file_sync,exec_file_sync_string}	NODE-CHILD-002	file execution helpers without shell evaluation
+NODE-CHILD-EXEC-SYNC	child_process	execSync	implemented	N14	tsonic_node::child_process::exec_sync	NODE-CHILD-001	closed shell-free exec alias for generated Rust ABI
 NODE-CRYPTO-RANDOM-BYTES	crypto	randomBytes	implemented	L	tsonic_node::crypto::random_bytes	NODE-CRYPTO-001	OS randomness
 NODE-CRYPTO-RANDOM-FILL	crypto	randomFill/randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	buffer random fill
 NODE-CRYPTO-RANDOM-INT	crypto	randomInt	implemented	L	tsonic_node::crypto::{random_int,random_int_range}	NODE-CRYPTO-001	range-limited random integer

@@ -80,4 +80,34 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
             .unwrap()
             .contains("network_process_tests")
     );
+
+    let mut child = child_process::spawn_file(&current, &["--list"]).unwrap();
+    assert!(child.pid.unwrap() > 0);
+    assert_eq!(child.spawnfile, current);
+    assert_eq!(child.spawnargs, vec!["--list"]);
+    assert!(child.stdin);
+    assert!(child.connected);
+    assert!(child.has_ref());
+    child.unref_process();
+    assert!(!child.has_ref());
+    child.ref_process();
+    assert!(child.has_ref());
+    assert!(child.send("ready").unwrap());
+    child.disconnect();
+    assert!(child.send("ready").is_err());
+
+    let output = child.wait().unwrap();
+    assert!(output.success());
+    assert_eq!(child.exit_code, Some(0));
+    assert!(child
+        .stdout
+        .as_ref()
+        .unwrap()
+        .windows("network_process_tests".len())
+        .any(|window| window == b"network_process_tests"));
+    assert!(child_process::exec_file(&current, &["--list"])
+        .unwrap()
+        .stdout_string()
+        .unwrap()
+        .contains("network_process_tests"));
 }
