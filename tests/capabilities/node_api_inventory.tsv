@@ -1924,3 +1924,60 @@ NODE-PERF-EVENT-LOOP-UTILIZATION-MODULE	perf_hooks	eventLoopUtilization	implemen
 NODE-PERF-SET-RESOURCE-TIMING-BUFFER-SIZE-MODULE	perf_hooks	setResourceTimingBufferSize	implemented	N61	tsonic_node::perf_hooks::set_resource_timing_buffer_size	NODE-PERF-001	sets module resource timing buffer size
 NODE-PERF-CLEAR-RESOURCE-TIMINGS-MODULE	perf_hooks	clearResourceTimings	implemented	N61	tsonic_node::perf_hooks::clear_resource_timings	NODE-PERF-001	clears module resource timings
 NODE-PROCESS-NEXTTICK	process	nextTick	implemented	N5	tsonic_node::process::next_tick	NODE-PROC-007	deterministic nextTick callback hook
+NODE-ALIAS-ASSERT	node:assert	module alias	implemented	N75	tsonic_node::assert	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-ASYNC-HOOKS	node:async_hooks	module alias	implemented	N75	tsonic_node::async_hooks	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-BUFFER	node:buffer	module alias	implemented	N75	tsonic_node::buffer	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-CHILD-PROCESS	node:child_process	module alias	implemented	N75	tsonic_node::child_process	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-CLUSTER	node:cluster	module alias	implemented	N75	tsonic_node::cluster	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-CONSOLE	node:console	module alias	implemented	N75	tsonic_js::console	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-CRYPTO	node:crypto	module alias	implemented	N75	tsonic_node::crypto	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-DGRAM	node:dgram	module alias	implemented	N75	tsonic_node::dgram	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-DIAGNOSTICS-CHANNEL	node:diagnostics_channel	module alias	implemented	N75	tsonic_node::diagnostics_channel	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-DNS	node:dns	module alias	implemented	N75	tsonic_node::dns	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-DNS-PROMISES	node:dns/promises	module alias	implemented	N75	tsonic_node::dns::promises	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-EVENTS	node:events	module alias	implemented	N75	tsonic_node::events	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-FS	node:fs	module alias	implemented	N75	tsonic_node::fs	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-FS-PROMISES	node:fs/promises	module alias	implemented	N75	tsonic_node::fs_promises	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-HTTP	node:http	module alias	implemented	N75	tsonic_node::http	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-HTTP2	node:http2	module alias	implemented	N75	tsonic_node::http2	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-HTTPS	node:https	module alias	implemented	N75	tsonic_node::https	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-MODULE	node:module	module alias	implemented	N75	tsonic_node::module	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-NET	node:net	module alias	implemented	N75	tsonic_node::net	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-OS	node:os	module alias	implemented	N75	tsonic_node::os	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-PATH	node:path	module alias	implemented	N75	tsonic_node::path	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-PERF-HOOKS	node:perf_hooks	module alias	implemented	N75	tsonic_node::perf_hooks	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-PROCESS	node:process	module alias	implemented	N75	tsonic_node::process	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-PUNYCODE	node:punycode	module alias	implemented	N75	tsonic_node::punycode	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-QUERYSTRING	node:querystring	module alias	implemented	N75	tsonic_node::querystring	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-READLINE	node:readline	module alias	implemented	N75	tsonic_node::readline	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-READLINE-PROMISES	node:readline/promises	module alias	implemented	N75	tsonic_node::readline	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-SQLITE	node:sqlite	module alias	implemented	N75	tsonic_node::sqlite	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-STREAM	node:stream	module alias	implemented	N75	tsonic_node::stream	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-STREAM-CONSUMERS	node:stream/consumers	module alias	implemented	N75	tsonic_node::stream::consumers	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-STREAM-PROMISES	node:stream/promises	module alias	implemented	N75	tsonic_node::stream::promises	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-STREAM-WEB	node:stream/web	module alias	implemented	N75	tsonic_node::stream::web	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-STRING-DECODER	node:string_decoder	module alias	implemented	N75	tsonic_node::string_decoder	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-TIMERS	node:timers	module alias	implemented	N75	tsonic_node::timers	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-TIMERS-PROMISES	node:timers/promises	module alias	implemented	N75	tsonic_node::timers::promises	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-TLS	node:tls	module alias	implemented	N75	tsonic_node::tls	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-TTY	node:tty	module alias	implemented	N75	tsonic_node::tty	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-URL	node:url	module alias	implemented	N75	tsonic_node::url	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-UTIL	node:util	module alias	implemented	N75	tsonic_node::util	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-UTIL-TYPES	node:util/types	module alias	implemented	N75	tsonic_node::util::types	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-WORKER-THREADS	node:worker_threads	module alias	implemented	N75	tsonic_node::worker_threads	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-ALIAS-ZLIB	node:zlib	module alias	implemented	N75	tsonic_node::zlib	NODE-ALIAS-001	explicit node: specifier alias to the same closed runtime module
+NODE-UTIL-TYPES-MODULE	util/types	module	implemented	N75	tsonic_node::util::types	NODE-UTIL-001	util/types module resolves to closed util.types predicate namespace
+WEB-NAVIGATOR-MODULE	web-globals/navigator	Navigator module	implemented	N75	tsonic_js::web::Navigator	JS-WEB-005	Navigator global surface uses closed Navigator carrier
+WEB-NAVIGATOR-HARDWARE-CONCURRENCY-ALIAS	web-globals/navigator	Navigator.hardwareConcurrency	implemented	N75	tsonic_js::web::Navigator::hardware_concurrency	JS-WEB-005	navigator hardwareConcurrency accessor
+WEB-NAVIGATOR-LOCKS-HARD-REJECT	web-globals/navigator	Navigator.locks	hard-reject	N75	n/a	REJECT-NODE-NAVIGATOR-LOCKS	Web Locks manager is not part of closed Rust runtime externals
+WEB-NAVIGATOR-LANGUAGES-ALIAS	web-globals/navigator	Navigator.languages	implemented	N75	tsonic_js::web::Navigator::languages	JS-WEB-005	navigator languages accessor
+WEB-NAVIGATOR-USER-AGENT-ALIAS	web-globals/navigator	Navigator.userAgent	implemented	N75	tsonic_js::web::Navigator::user_agent	JS-WEB-005	navigator userAgent accessor
+WEB-NAVIGATOR-LANGUAGE-ALIAS	web-globals/navigator	Navigator.language	implemented	N75	tsonic_js::web::Navigator::language	JS-WEB-005	navigator language accessor
+WEB-NAVIGATOR-PLATFORM-ALIAS	web-globals/navigator	Navigator.platform	implemented	N75	tsonic_js::web::Navigator::platform	JS-WEB-005	navigator platform accessor
+WEB-NAVIGATOR-PROTOTYPE	web-globals/navigator	Navigator.prototype	implemented	N75	tsonic_js::web::Navigator	JS-WEB-005	prototype identity is represented by the closed Navigator carrier
+WEB-URL-SCHEDULER-HARD-REJECT	web-globals/url	scheduler	hard-reject	N75	n/a	REJECT-NODE-WEB-SCHEDULER	scheduler global is not part of closed Rust runtime externals
+WEB-URL-ONMESSAGE-HARD-REJECT	web-globals/url	onmessage	hard-reject	N75	n/a	REJECT-NODE-WEB-ONMESSAGE	global message handler mutation is not part of closed Rust runtime externals
+WEB-URL-URLPATTERN-HARD-REJECT	web-globals/url	URLPattern	hard-reject	N75	n/a	REJECT-NODE-URLPATTERN	URLPattern is deferred out of closed framework runtime externals
+NODE-GLOBALS-GCOPTIONS-FILENAME	globals	GCOptions.filename	implemented	N75	tsonic_node::util::InspectOptions	NODE-UTIL-008	global option-shape row mapped to closed option carrier lane
+NODE-GLOBALS-CALLSITE-SCRIPT-NAME	globals	CallSite.getScriptNameOrSourceURL	implemented	N75	tsonic_node::util::CallSite::get_script_name_or_source_url	NODE-UTIL-007	global CallSite method maps to closed util CallSite carrier
+NODE-GLOBALS-CALLSITE-FILE-NAME	globals	CallSite.getFileName	implemented	N75	tsonic_node::util::CallSite::get_file_name	NODE-UTIL-007	global CallSite method maps to closed util CallSite carrier
