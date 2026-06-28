@@ -208,6 +208,7 @@ NODE-UTIL-003	implemented	L	tsonic_node::abi::{util_format,util_inspect,util_is_
 NODE-UTIL-004	implemented	N22	tsonic_node::abi::{util_promisify,util_callbackify}	NODE-UTIL-006	closed identity adapters for generated Rust function carriers; no dynamic Promise runtime
 NODE-UTIL-005	implemented	M	tsonic_node::abi::util_types	NODE-UTIL-005	closed predicates only (completed in full-completion branch)
 NODE-UTIL-006	implemented	N22	tsonic_node::abi::{MIMEType,MIMEParams,util_parse_args,util_debuglog,util_style_text,util_get_system_error_name,util_get_system_error_message}	NODE-UTIL-006	MIME carriers, parseArgs, debug logger, styling, and system error helpers
+NODE-UTIL-007	implemented	N43	tsonic_node::abi::{util_aborted,util_transferable_abort_signal,util_transferable_abort_controller,util_get_call_sites,CallSite}	NODE-UTIL-007	AbortSignal helpers and closed generated call-site metadata carrier
 NODE-CRYPTO-001	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001	RNG dependency approval is parent-owned; no shellout
 NODE-CRYPTO-002	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-002, NODE-CRYPTO-003	closed in-repo SHA-1/SHA-256 implementation; result is `DigestResult`
 NODE-CRYPTO-003	implemented	M	tsonic_node::abi::{crypto_hmac_digest,crypto_random_uuid}	NODE-CRYPTO-004	HMAC SHA-1/SHA-256 and UUID v4 implemented

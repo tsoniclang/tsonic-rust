@@ -1,5 +1,6 @@
 use tsonic_js::date::JsDate;
 use tsonic_js::regexp::JsRegExp;
+use tsonic_js::web::{AbortController, AbortSignal};
 use tsonic_js::JsValue;
 use tsonic_js::{ArrayBuffer, Uint8Array};
 use tsonic_node::util;
@@ -58,6 +59,18 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     assert_eq!(util::deprecate(1, "deprecated"), 1);
     assert_eq!(util::promisify(2), 2);
     assert_eq!(util::callbackify(3), 3);
+    let controller = AbortController::new();
+    assert!(!util::aborted(&controller.signal()));
+    controller.abort(JsValue::String("stop".to_string()));
+    assert!(util::aborted(&controller.signal()));
+    assert!(util::transferable_abort_signal(&controller.signal()).aborted());
+    assert!(!util::transferable_abort_controller().signal().aborted());
+    assert!(util::aborted(&AbortSignal::abort(JsValue::Bool(true))));
+    let sites = util::get_call_sites();
+    assert_eq!(sites[0].get_function_name(), Some("getCallSites"));
+    assert_eq!(sites[0].get_line_number(), Some(1));
+    assert!(!sites[0].is_eval());
+    assert!(!sites[0].is_native());
     assert_eq!(util::style_text("red", "x"), "\u{1b}[31mx\u{1b}[0m");
     assert_eq!(util::style_text("unknown", "x"), "x");
     assert_eq!(util::get_system_error_name(2), "ENOENT");

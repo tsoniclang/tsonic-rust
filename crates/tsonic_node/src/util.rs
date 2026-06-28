@@ -3,6 +3,7 @@ use tsonic_js::json;
 use tsonic_js::regexp::JsRegExp;
 use tsonic_js::typed_array::TypedArrayLen;
 use tsonic_js::value::JsValue;
+use tsonic_js::web::{AbortController, AbortSignal};
 use tsonic_js::{ArrayBuffer, Uint8Array};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -170,6 +171,75 @@ pub struct DebugLogger {
     enabled: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallSite {
+    function_name: Option<String>,
+    script_name: Option<String>,
+    line_number: Option<u32>,
+    column_number: Option<u32>,
+    eval: bool,
+    native: bool,
+    constructor: bool,
+    async_call: bool,
+}
+
+impl CallSite {
+    pub fn new(function_name: Option<String>, script_name: Option<String>) -> Self {
+        Self {
+            function_name,
+            script_name,
+            line_number: None,
+            column_number: None,
+            eval: false,
+            native: false,
+            constructor: false,
+            async_call: false,
+        }
+    }
+
+    pub fn with_position(mut self, line_number: u32, column_number: u32) -> Self {
+        self.line_number = Some(line_number);
+        self.column_number = Some(column_number);
+        self
+    }
+
+    pub fn get_function_name(&self) -> Option<&str> {
+        self.function_name.as_deref()
+    }
+
+    pub fn get_file_name(&self) -> Option<&str> {
+        self.script_name.as_deref()
+    }
+
+    pub fn get_script_name_or_source_url(&self) -> Option<&str> {
+        self.script_name.as_deref()
+    }
+
+    pub fn get_line_number(&self) -> Option<u32> {
+        self.line_number
+    }
+
+    pub fn get_column_number(&self) -> Option<u32> {
+        self.column_number
+    }
+
+    pub fn is_eval(&self) -> bool {
+        self.eval
+    }
+
+    pub fn is_native(&self) -> bool {
+        self.native
+    }
+
+    pub fn is_constructor(&self) -> bool {
+        self.constructor
+    }
+
+    pub fn is_async(&self) -> bool {
+        self.async_call
+    }
+}
+
 impl DebugLogger {
     pub fn enabled(&self) -> bool {
         self.enabled
@@ -272,6 +342,26 @@ pub fn promisify<T>(function: T) -> T {
 
 pub fn callbackify<T>(function: T) -> T {
     function
+}
+
+pub fn aborted(signal: &AbortSignal) -> bool {
+    signal.aborted()
+}
+
+pub fn transferable_abort_signal(signal: &AbortSignal) -> AbortSignal {
+    signal.clone()
+}
+
+pub fn transferable_abort_controller() -> AbortController {
+    AbortController::new()
+}
+
+pub fn get_call_sites() -> Vec<CallSite> {
+    vec![CallSite::new(
+        Some("getCallSites".to_string()),
+        Some("tsonic:generated".to_string()),
+    )
+    .with_position(1, 1)]
 }
 
 pub fn debuglog(section: &str, enabled_sections: &[&str]) -> DebugLogger {
