@@ -52,11 +52,18 @@ for (const file of files) {
 
     if (isPublicMemberLine(line)) {
       const memberOf = container?.name ?? "inline-type-literal";
+      const namespaceFunction = line.match(/^function\s+([A-Za-z_$][\w$]*)\s*\(/);
+      const namespaceValue = line.match(/^(const|let|var)\s+([A-Za-z_$][\w$]*)\s*[:=]/);
       const method = line.match(/^(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*\([^;{}]*\)\s*[:;]/);
       const property = line.match(/^(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*:/);
       const indexer = line.match(/^\[([^\]]+)\]\s*:/);
       const constructor = line.match(/^constructor\s*\(/);
-      if (method) {
+      if (container && namespaceFunction) {
+        rows.push(row({ moduleName, kind: "namespace-function", name: namespaceFunction[1], memberOf, sourceFile, lineNumber, signature: compact(line) }));
+      } else if (container && namespaceValue) {
+        const valueKind = namespaceValue[1] === "let" || namespaceValue[1] === "var" ? "namespace-const" : "namespace-const";
+        rows.push(row({ moduleName, kind: valueKind, name: namespaceValue[2], memberOf, sourceFile, lineNumber, signature: compact(line) }));
+      } else if (method) {
         rows.push(row({ moduleName, kind: container ? "method" : "inline-method", name: method[1], memberOf, sourceFile, lineNumber, signature: compact(line) }));
       } else if (property) {
         rows.push(row({ moduleName, kind: container ? "property" : "inline-property", name: property[1], memberOf, sourceFile, lineNumber, signature: compact(line) }));
@@ -97,6 +104,8 @@ function collectFiles(root) {
 }
 
 function moduleNameFromFile(file) {
+  const normalized = file.replace(/\.d\.ts$/, "");
+  if (normalized.includes("/")) return normalized.replace(/\/index$/, "");
   const name = basename(file, ".d.ts");
   if (name === "index") return "node";
   if (name === "globals" || name === "globals.typedarray") return "globals";
@@ -151,44 +160,118 @@ function classifyPhase(moduleName, kind, name, memberOf, signature) {
   const module = moduleName.replace(/^node:/, "");
   const lowerSig = signature.toLowerCase();
   const fullName = memberOf ? `${memberOf}.${name}` : name;
+  const searchText = `${module} ${fullName} ${signature}`;
+  const lowerSearchText = searchText.toLowerCase();
 
-  const hardRejectModules = new Set(["vm", "inspector", "inspector.generated", "test", "repl", "wasi", "v8", "trace_events", "module", "sea", "quic"]);
-  if (hardRejectModules.has(module)) return { phase: "hard-reject", reason: "runtime loader, VM, inspector, test runner, or host-specific machinery" };
-  if (["child_process", "cluster", "worker_threads"].includes(module)) return { phase: "hard-reject", reason: "process/thread spawning is outside closed generated runtime" };
+  const hardRejectModules = new Set(["vm", "inspector", "inspector.generated", "test", "repl", "wasi", "v8", "trace_events", "sea"]);
+  if (hardRejectModules.has(module)) return { phase: "hard-reject", reason: "dynamic evaluator, inspector, test runner, V8 internals, or host introspection surface" };
+  if (module === "quic") return { phase: "hard-reject", reason: "experimental specialized transport outside approved framework-ready Phase 1" };
 
-  const laterModules = new Set(["http", "http2", "https", "net", "tls", "dgram", "dns", "stream", "events", "readline", "sqlite", "zlib", "async_hooks", "async_context", "diagnostics_channel", "domain", "timers"]);
-  if (laterModules.has(module)) return { phase: "later", reason: "important Node subsystem requiring event loop, networking, async runtime, or approved dependency design" };
+  if (module === "module") {
+    if (/createrequire|builtinmodules|findpackagejson|registerhooks|striptypescript|sourcemap|module\.syncbuiltin|module\.findpackage|module\.registerhooks/i.test(searchText)) {
+      return { phase: "phase1", reason: "safe package/tooling helper without dynamic JS evaluation" };
+    }
+    return { phase: "hard-reject", reason: "dynamic module loader or evaluation hook outside closed runtime architecture" };
+  }
+
+  if (module === "cluster") return { phase: "later", reason: "process orchestration needs separate lifecycle and supervisor contract" };
+  if (module === "dgram") return { phase: "later", reason: "UDP socket surface is useful but below framework-ready HTTP/TCP priority" };
+  if (module === "sqlite") return { phase: "later", reason: "storage API requires approved dependency and persistence compatibility contract" };
+  if (module === "domain") return { phase: "later", reason: "legacy async error context surface; AsyncLocalStorage is the Phase 1 substrate" };
+  if (module === "async_context") return { phase: "later", reason: "emerging async context surface beyond AsyncLocalStorage Phase 1 contract" };
+
+  if (module === "child_process") {
+    if (/spawn|execfile|exec|fork|childprocess|subprocess|stdio|send|kill|disconnect|pid|exitcode|signalcode/i.test(searchText)) {
+      return { phase: "phase1", reason: "capability-gated process contract required by common CLI and build tooling" };
+    }
+    return { phase: "later", reason: "less common child_process declaration outside Phase 1 operation groups" };
+  }
+
+  if (module === "worker_threads") {
+    if (/worker|messagechannel|messageport|broadcastchannel|parentport|workerdata|threadid|markasuntransferable|istransferable|receiveMessageOnPort/i.test(searchText)) {
+      return { phase: "phase1", reason: "capability-gated worker/message channel substrate required by common tooling" };
+    }
+    return { phase: "later", reason: "advanced worker_threads declaration outside Phase 1 subset" };
+  }
+
+  const frameworkReadyModules = new Set([
+    "assert",
+    "async_hooks",
+    "buffer",
+    "console",
+    "crypto",
+    "diagnostics_channel",
+    "dns",
+    "dns/promises",
+    "events",
+    "fs",
+    "fs/promises",
+    "http",
+    "http2",
+    "https",
+    "net",
+    "os",
+    "path",
+    "perf_hooks",
+    "process",
+    "punycode",
+    "querystring",
+    "readline",
+    "readline/promises",
+    "stream",
+    "stream/consumers",
+    "stream/promises",
+    "stream/web",
+    "string_decoder",
+    "timers",
+    "timers/promises",
+    "tls",
+    "tty",
+    "url",
+    "util",
+    "util/types",
+    "zlib",
+  ]);
 
   if (module === "fs" || module === "fs/promises") {
-    if (module === "fs/promises" || lowerSig.includes("promise") || lowerSig.includes("callback") || name.endsWith("Stream") || name === "watch" || name === "watchFile" || name === "unwatchFile") {
-      return { phase: "later", reason: "async, promise, stream, or watcher fs API" };
+    if (/watch|watchfile|unwatchfile|fswatcher|statfs|opendir|dirent|filehandle|readstream|writestream|createReadStream|createWriteStream/i.test(searchText)) {
+      return { phase: "phase1", reason: "common filesystem object, watcher, directory, stream, or file-handle surface" };
     }
-    if (name.endsWith("Sync") || ["Stats", "Dirent", "ReadStream", "WriteStream", "PathLike", "NoParamCallback"].includes(name)) {
-      return { phase: "phase1", reason: "high-use synchronous filesystem API or supporting shape" };
-    }
-    return { phase: "later", reason: "non-sync fs API" };
+    return { phase: "phase1", reason: "framework-ready filesystem sync, callback, or promise API" };
   }
 
   if (module === "crypto") {
-    if (/cipher|decipher|key|certificate|x509|sign|verify|diffie|ecdh|secure|webcrypto|subtle|hkdf|pbkdf|scrypt|rsa|dsa|ed25519/i.test(fullName + " " + signature)) {
-      return { phase: "later", reason: "broad crypto/key/cipher API needs dependency and security design" };
+    if (/x509|certificate|diffie|ecdh|cipher|decipher|hkdf|pbkdf|scrypt|rsa|dsa|ed25519|ed448|x25519|x448|subtle|cryptokey|jwk|keypair|secureheap/i.test(searchText)) {
+      return { phase: "later", reason: "security-sensitive full crypto/key/cipher matrix requires separate dependency and algorithm contract" };
     }
-    return { phase: "phase1", reason: "common hash, hmac, random, uuid, or digest API" };
+    return { phase: "phase1", reason: "common hash, HMAC, random, UUID, timing-safe, sign/verify, or practical WebCrypto surface" };
   }
 
-  const phase1Modules = new Set(["assert", "buffer", "console", "os", "path", "perf_hooks", "process", "punycode", "querystring", "string_decoder", "tty", "url", "util"]);
-  if (phase1Modules.has(module)) {
-    if (module === "process" && /stdin|stdout|stderr|on\(|emit\(|nexttick|channel|permission/i.test(fullName + " " + signature)) {
-      return { phase: "later", reason: "process stream, event, or permission API" };
+  if (module === "globals") {
+    if (/fetch|request|response|headers|formdata|blob|file|abortcontroller|abortsignal|textencoder|textdecoder|readablestream|writablestream|transformstream|url|urlsearchparams|domexception/i.test(searchText)) {
+      return { phase: "phase1", reason: "Web runtime global required by modern Node frameworks and SDKs" };
     }
-    if (module === "util" && /promisify|callbackify|debuglog|parseargs|mime|transferable|aborted/i.test(fullName + " " + signature)) {
-      return { phase: "later", reason: "utility API requiring callback, debug, MIME, abort, or transfer design" };
-    }
-    return { phase: "phase1", reason: "common closed Node runtime API" };
+    return { phase: "later", reason: "ambient global declaration outside selected Web/Node runtime substrate" };
   }
 
-  if (module === "globals") return { phase: "later", reason: "ambient global declaration, not direct node module runtime API" };
-  if (module === "node") return { phase: "later", reason: "package-level typing helper" };
+  if (module === "node") return { phase: "later", reason: "package-level typing helper, not a user-facing runtime operation group" };
+  if (frameworkReadyModules.has(module)) {
+    if (module === "process" && /permission|report|binding|_debug|dlopen|setSourceMapsEnabled/i.test(searchText)) {
+      return { phase: "hard-reject", reason: "process host introspection or dynamic native loading surface" };
+    }
+    if (module === "fs" && /glob|cp\(|cpsync/i.test(lowerSearchText)) {
+      return { phase: "later", reason: "newer filesystem convenience API needs exact compatibility and platform tests" };
+    }
+    if (module === "zlib" && /brotli/i.test(searchText)) {
+      return { phase: "later", reason: "Brotli support requires explicit compression dependency approval" };
+    }
+    return { phase: "phase1", reason: "framework-ready documented Node runtime operation group" };
+  }
+
+  if (/^web-globals|^web$|abort|domexception|fetch|undici/i.test(module)) {
+    return { phase: "phase1", reason: "modern Web global substrate used by Node frameworks and SDKs" };
+  }
+
   return { phase: "later", reason: "not selected for Phase 1 until usage-driven implementation" };
 }
 

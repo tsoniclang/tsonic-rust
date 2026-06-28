@@ -8,7 +8,7 @@ Update this ledger whenever the runtime surface changes.
 
 `node_api_full_inventory.csv` is the broad Node API inventory generated from local `@types/node` declarations. It is intentionally much larger than the implemented runtime ledger: it makes the full documented/typed Node surface visible and classifies each row as `phase1`, `later`, or `hard-reject`.
 
-Phase 1 means high-use APIs that fit the closed Rust runtime ABI without event loop, network stack, VM/loader, process-spawning, or broad dependency design. `later` means important but explicitly postponed. `hard-reject` means the API is outside the architecture for generated Rust runtime externals.
+Phase 1 means framework-ready Node compatibility for common documented operation groups used by server frameworks, SDKs, SSR stacks, CLIs, streams, async runtime, networking, filesystem promises, timers, TLS, DNS, compression, and capability-gated process or worker APIs. `later` means important but explicitly postponed pending a larger dependency, security, platform, or exact-compatibility design. `hard-reject` means the API is outside the architecture for generated Rust runtime externals.
 
 Regenerate with:
 
