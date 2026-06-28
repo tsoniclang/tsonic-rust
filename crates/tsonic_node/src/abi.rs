@@ -231,7 +231,8 @@ pub use crate::stream::{
 pub use crate::string_decoder::StringDecoder;
 pub use crate::timers::{
     clear_immediate, clear_interval, clear_timeout, promises as timers_promises, set_immediate,
-    set_interval, set_timeout, Immediate, Timeout, Timer,
+    set_immediate_with_options, set_interval, set_interval_with_options, set_timeout,
+    set_timeout_with_options, Immediate, Timeout, Timer, TimerOptions,
 };
 pub use crate::tls::{
     check_server_identity as tls_check_server_identity, connect as tls_connect,

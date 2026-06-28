@@ -8,15 +8,29 @@ fn timers_run_callbacks_and_expose_handle_state() {
     let mut timeout = timers::set_timeout(|| called.set(true), 0);
     assert!(called.get());
     assert!(timeout.id() > 0);
+    assert_eq!(timeout.delay_ms(), 0);
     assert!(timeout.has_ref());
     timeout.unref();
     assert!(!timeout.has_ref());
     timeout.r#ref();
     timers::clear_timeout(&mut timeout);
     assert!(!timeout.has_ref());
+    timeout.on_timeout(|| called.set(false));
+    assert!(!called.get());
 
     let (_, value) = timers::promises::set_timeout_value(0, "done");
     assert_eq!(value, "done");
+    let aborted_called = Cell::new(false);
+    let aborted = timers::set_timeout_with_options(
+        || aborted_called.set(true),
+        0,
+        timers::TimerOptions {
+            r#ref: true,
+            signal_aborted: true,
+        },
+    );
+    assert!(!aborted_called.get());
+    assert!(!aborted.has_ref());
 }
 
 #[test]
@@ -30,6 +44,8 @@ fn timers_cover_interval_immediate_and_scheduler_shapes() {
 
     let mut immediate = timers::set_immediate(|| count.set(count.get() + 1));
     assert_eq!(count.get(), 2);
+    immediate.on_immediate(|| count.set(count.get() + 1));
+    assert_eq!(count.get(), 3);
     timers::clear_immediate(&mut immediate);
     assert!(!immediate.has_ref());
 
@@ -41,6 +57,16 @@ fn timers_cover_interval_immediate_and_scheduler_shapes() {
     assert_eq!(values, vec!["tick", "tick", "tick"]);
     let (_, value) = timers::promises::set_immediate_value("immediate");
     assert_eq!(value, "immediate");
+    let (unrefed, value) = timers::promises::set_timeout_value_with_options(
+        0,
+        "quiet",
+        timers::TimerOptions {
+            r#ref: false,
+            signal_aborted: false,
+        },
+    );
+    assert_eq!(value, "quiet");
+    assert!(!unrefed.has_ref());
     timers::promises::scheduler::wait(0);
     timers::promises::scheduler::yield_now();
 }
