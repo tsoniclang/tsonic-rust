@@ -8,8 +8,8 @@ pub use crate::assert::{
     match_string as assert_match_string, not_deep_equal as assert_not_deep_equal,
     not_deep_strict_equal as assert_not_deep_strict_equal, not_equal as assert_not_equal,
     not_strict_equal as assert_not_strict_equal, ok as assert_ok, rejects as assert_rejects,
-    strict_equal as assert_strict_equal, throws as assert_throws, AssertionDiff, AssertionError,
-    AssertionErrorOptions,
+    strict_equal as assert_strict_equal, throws as assert_throws, throws_with_predicate,
+    AssertOptions, AssertPredicate, AssertionDiff, AssertionError, AssertionErrorOptions,
 };
 pub use crate::async_hooks::{
     async_wrap_providers, create_hook as async_hooks_create_hook,
@@ -73,7 +73,8 @@ pub use crate::dgram::{
 pub use crate::diagnostics_channel::{
     channel as diagnostics_channel, has_subscribers as diagnostics_has_subscribers,
     publish as diagnostics_publish, subscribe as diagnostics_subscribe,
-    Channel as DiagnosticsChannel,
+    Channel as DiagnosticsChannel, TraceCall, TracingChannel as DiagnosticsTracingChannel,
+    TracingChannelCollection, TracingChannelSubscribers, TracingSubscription,
 };
 pub use crate::dns::{
     get_default_result_order as dns_get_default_result_order, lookup as dns_lookup,

@@ -22,6 +22,23 @@ pub struct Channel {
     name: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraceCall {
+    pub context: JsValue,
+    pub this_arg: Option<JsValue>,
+    pub position: Option<usize>,
+}
+
+impl TraceCall {
+    pub fn new(context: JsValue) -> Self {
+        Self {
+            context,
+            this_arg: None,
+            position: None,
+        }
+    }
+}
+
 impl Channel {
     pub fn name(&self) -> &str {
         &self.name
@@ -56,6 +73,11 @@ impl Channel {
 
     pub fn bound_store_count(&self) -> usize {
         bound_store_count(&self.name)
+    }
+
+    pub fn trace<Result>(&self, call: &TraceCall, function: impl FnOnce() -> Result) -> Result {
+        self.publish(&call.context);
+        function()
     }
 }
 
@@ -217,6 +239,8 @@ pub struct TracingChannel {
     error: Channel,
 }
 
+pub type TracingChannelCollection = TracingChannel;
+
 impl TracingChannel {
     pub fn name(&self) -> &str {
         &self.name
@@ -291,6 +315,36 @@ impl TracingChannel {
         if let Some(id) = subscription.error {
             self.error.unsubscribe(id);
         }
+    }
+
+    pub fn trace_sync<Result>(
+        &self,
+        call: &TraceCall,
+        function: impl FnOnce() -> Result,
+    ) -> Result {
+        self.start.publish(&call.context);
+        let result = function();
+        self.end.publish(&call.context);
+        result
+    }
+
+    pub fn trace_async<Result>(
+        &self,
+        call: &TraceCall,
+        function: impl FnOnce() -> Result,
+    ) -> Result {
+        self.async_start.publish(&call.context);
+        let result = function();
+        self.async_end.publish(&call.context);
+        result
+    }
+
+    pub fn trace_callback<Result>(
+        &self,
+        call: &TraceCall,
+        function: impl FnOnce() -> Result,
+    ) -> Result {
+        self.trace_sync(call, function)
     }
 }
 

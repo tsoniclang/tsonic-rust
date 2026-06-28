@@ -149,14 +149,32 @@ pub fn create_interface(lines: impl IntoIterator<Item = String>) -> Interface {
 pub struct Readline {
     stream: Vec<String>,
     auto_commit: bool,
+    options: ReadlineOptions,
     pending: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReadlineOptions {
+    pub input: Option<String>,
+    pub output: Option<String>,
+    pub terminal: bool,
+    pub completer: Option<String>,
+    pub auto_commit: bool,
 }
 
 impl Readline {
     pub fn new(auto_commit: bool) -> Self {
+        Self::with_options(ReadlineOptions {
+            auto_commit,
+            ..Default::default()
+        })
+    }
+
+    pub fn with_options(options: ReadlineOptions) -> Self {
         Self {
             stream: Vec::new(),
-            auto_commit,
+            auto_commit: options.auto_commit,
+            options,
             pending: Vec::new(),
         }
     }
@@ -196,6 +214,14 @@ impl Readline {
 
     pub fn pending(&self) -> &[String] {
         &self.pending
+    }
+
+    pub fn auto_commit(&self) -> bool {
+        self.auto_commit
+    }
+
+    pub fn options(&self) -> &ReadlineOptions {
+        &self.options
     }
 
     fn enqueue(&mut self, value: String) {

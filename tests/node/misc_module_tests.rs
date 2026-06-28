@@ -37,6 +37,7 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
         actual: Some(JsValue::Number(1.0)),
         expected: Some(JsValue::Number(2.0)),
         operator: Some("strictEqual".to_string()),
+        stack_start_fn: Some("test_assert_and_perf_hooks_are_closed_runtime_helpers".to_string()),
         diff: Some(assert::AssertionDiff::Simple),
     });
     assert_eq!(assertion_error.code, "ERR_ASSERTION");
@@ -47,6 +48,31 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
         assertion_error.clone().into_node_error().code(),
         "ERR_ASSERTION"
     );
+    let assert_options = assert::AssertOptions {
+        strict: true,
+        skip_prototype: true,
+        diff: Some(assert::AssertionDiff::Full),
+    };
+    assert!(assert_options.strict);
+    assert!(assert_options.skip_prototype);
+    assert_eq!(assert_options.diff, Some(assert::AssertionDiff::Full));
+    assert::throws_with_predicate(
+        || Err(tsonic_node::error::NodeError::new("ERR_EXPECTED", "boom")),
+        assert::AssertPredicate::Code("ERR_EXPECTED".to_string()),
+        None,
+    )
+    .unwrap();
+    assert::rejects_with_predicate(
+        || {
+            Err(tsonic_node::error::NodeError::new(
+                "ERR_ASYNC",
+                "async boom",
+            ))
+        },
+        assert::AssertPredicate::MessageContains("boom".to_string()),
+        None,
+    )
+    .unwrap();
     assert!(perf_hooks::performance_now() >= 0.0);
     assert_eq!(perf_hooks::time_origin(), 0.0);
     let performance = perf_hooks::performance();

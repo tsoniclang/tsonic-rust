@@ -304,9 +304,29 @@ fn diagnostics_channel_publishes_to_named_subscribers() {
     assert!(tracing
         .error()
         .publish(&JsValue::String("boom".to_string())));
+    let call = diagnostics_channel::TraceCall {
+        context: JsValue::String("ctx".to_string()),
+        this_arg: Some(JsValue::String("receiver".to_string())),
+        position: Some(1),
+    };
+    assert_eq!(call.position, Some(1));
+    assert_eq!(
+        call.this_arg.as_ref(),
+        Some(&JsValue::String("receiver".to_string()))
+    );
+    assert_eq!(tracing.trace_sync(&call, || 7), 7);
+    assert_eq!(tracing.trace_async(&call, || 8), 8);
+    assert_eq!(tracing.trace_callback(&call, || 9), 9);
+    assert_eq!(tracing.start().trace(&call, || "done"), "done");
     assert_eq!(
         trace_seen.borrow().as_slice(),
-        &["start:\"work\"".to_string(), "error:\"boom\"".to_string()]
+        &[
+            "start:\"work\"".to_string(),
+            "error:\"boom\"".to_string(),
+            "start:\"ctx\"".to_string(),
+            "start:\"ctx\"".to_string(),
+            "start:\"ctx\"".to_string()
+        ]
     );
     tracing.unsubscribe(&subscription);
     assert!(!tracing.has_subscribers());

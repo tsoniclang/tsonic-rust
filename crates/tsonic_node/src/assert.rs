@@ -7,13 +7,28 @@ pub enum AssertionDiff {
     Full,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct AssertionErrorOptions {
     pub message: Option<String>,
     pub actual: Option<JsValue>,
     pub expected: Option<JsValue>,
     pub operator: Option<String>,
+    pub stack_start_fn: Option<String>,
     pub diff: Option<AssertionDiff>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AssertOptions {
+    pub strict: bool,
+    pub skip_prototype: bool,
+    pub diff: Option<AssertionDiff>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssertPredicate {
+    Any,
+    Code(String),
+    MessageContains(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -164,11 +179,24 @@ pub fn if_error(value: Option<&NodeError>) -> NodeResult<()> {
 }
 
 pub fn throws(callback: impl FnOnce() -> NodeResult<()>, message: Option<&str>) -> NodeResult<()> {
+    throws_with_predicate(callback, AssertPredicate::Any, message)
+}
+
+pub fn throws_with_predicate(
+    callback: impl FnOnce() -> NodeResult<()>,
+    predicate: AssertPredicate,
+    message: Option<&str>,
+) -> NodeResult<()> {
     match callback() {
         Ok(()) => Err(assertion_error(
             message.unwrap_or("Missing expected exception"),
         )),
-        Err(_) => Ok(()),
+        Err(error) if matches_assert_predicate(&error, &predicate) => Ok(()),
+        Err(error) => Err(assertion_error(
+            message
+                .map(ToString::to_string)
+                .unwrap_or_else(|| format!("Got unwanted exception: {error}")),
+        )),
     }
 }
 
@@ -188,6 +216,14 @@ pub fn does_not_throw(
 
 pub fn rejects(callback: impl FnOnce() -> NodeResult<()>, message: Option<&str>) -> NodeResult<()> {
     throws(callback, message)
+}
+
+pub fn rejects_with_predicate(
+    callback: impl FnOnce() -> NodeResult<()>,
+    predicate: AssertPredicate,
+    message: Option<&str>,
+) -> NodeResult<()> {
+    throws_with_predicate(callback, predicate, message)
 }
 
 pub fn does_not_reject(
@@ -227,9 +263,18 @@ fn assertion_error(message: impl Into<String>) -> NodeError {
         actual: None,
         expected: None,
         operator: Some("fail".to_string()),
+        stack_start_fn: None,
         diff: None,
     })
     .into_node_error()
+}
+
+fn matches_assert_predicate(error: &NodeError, predicate: &AssertPredicate) -> bool {
+    match predicate {
+        AssertPredicate::Any => true,
+        AssertPredicate::Code(code) => error.code() == code,
+        AssertPredicate::MessageContains(text) => error.message().contains(text),
+    }
 }
 
 fn default_assertion_message(

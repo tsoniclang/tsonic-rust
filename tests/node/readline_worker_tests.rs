@@ -58,8 +58,24 @@ fn readline_interface_uses_explicit_input_and_output_buffers() {
     assert_eq!(terminal.stream(), &["clearScreenDown".to_string()]);
 
     let mut auto = readline::Readline::new(true);
+    assert!(auto.auto_commit());
     auto.cursor_to(1, None);
     assert_eq!(auto.stream(), &["cursorTo:1:0".to_string()]);
+
+    let configured = readline::Readline::with_options(readline::ReadlineOptions {
+        input: Some("stdin".to_string()),
+        output: Some("stdout".to_string()),
+        terminal: true,
+        completer: Some("word-completer".to_string()),
+        auto_commit: true,
+    });
+    assert_eq!(configured.options().input.as_deref(), Some("stdin"));
+    assert_eq!(configured.options().output.as_deref(), Some("stdout"));
+    assert!(configured.options().terminal);
+    assert_eq!(
+        configured.options().completer.as_deref(),
+        Some("word-completer")
+    );
 }
 
 #[test]
