@@ -629,6 +629,20 @@ fn fs_stream_option_carriers_are_closed_shapes() {
         },
     )
     .unwrap();
+    assert_eq!(readable.path, file_text);
+    assert!(!readable.pending);
+    let mut listener_readable = readable.clone();
+    listener_readable
+        .on("open")
+        .once("data")
+        .prepend_listener("close");
+    assert_eq!(listener_readable.listener_count("open"), 1);
+    assert!(listener_readable.emit("data"));
+    assert_eq!(listener_readable.listeners("close"), vec!["close"]);
+    listener_readable.remove_listener("open");
+    assert_eq!(listener_readable.raw_listeners("open").len(), 0);
+    listener_readable.close();
+    assert!(!listener_readable.pending);
     assert_eq!(readable.to_vec()[0].to_string(Some("utf8")).unwrap(), "bcd");
 
     let write_options = fs::WriteStreamOptions {
@@ -638,9 +652,21 @@ fn fs_stream_option_carriers_are_closed_shapes() {
             ..fs::FsStreamOptions::default()
         },
     };
-    let mut writable = fs::create_write_stream_with_options(write_options).unwrap();
+    let mut writable = fs::create_write_stream_with_options(&file_text, write_options).unwrap();
+    assert_eq!(writable.path, file_text);
+    assert!(!writable.pending);
+    writable
+        .add_listener("drain")
+        .prepend_once_listener("close");
+    assert_eq!(writable.listener_count("drain"), 1);
+    assert!(writable.emit("close"));
+    writable.off("drain");
+    assert!(writable.listeners("drain").is_empty());
     assert!(writable.write(tsonic_node::buffer::Buffer::from_string("x", Some("utf8")).unwrap()));
+    assert_eq!(writable.bytes_written, 1);
     assert_eq!(writable.chunks().len(), 1);
+    writable.close();
+    assert!(!writable.pending);
 
     assert!(fs::create_read_stream_with_options(
         &file_text,
@@ -652,6 +678,55 @@ fn fs_stream_option_carriers_are_closed_shapes() {
         },
     )
     .is_err());
+
+    fs::rm_sync(&root_text, true, false).unwrap();
+}
+
+#[test]
+fn fs_utf8_stream_is_a_closed_file_writer_shape() {
+    let root = temp_root("utf8-stream");
+    let root_text = root.to_string_lossy().to_string();
+    fs::mkdir_sync(&root_text, true).unwrap();
+    let file = root.join("logs").join("out.txt");
+    let file_text = file.to_string_lossy().to_string();
+
+    let mut stream = fs::Utf8Stream::new(fs::Utf8StreamOptions {
+        dest: Some(file_text.clone()),
+        min_length: 1,
+        max_length: 64,
+        content_mode: "utf8".to_string(),
+        mkdir: true,
+        sync: true,
+        ..fs::Utf8StreamOptions::default()
+    })
+    .unwrap();
+    assert_eq!(stream.file, file_text);
+    assert_eq!(stream.fd, -1);
+    assert_eq!(stream.content_mode, "utf8");
+    assert!(stream.mkdir);
+    assert!(stream.sync);
+    assert!(stream.write(FsWriteData::String("hello")));
+    assert_eq!(
+        fs::read_file_sync_string(&file_text, "utf8").unwrap(),
+        "hello"
+    );
+
+    let reopened = root.join("logs").join("next.txt");
+    let reopened_text = reopened.to_string_lossy().to_string();
+    stream.reopen(&reopened_text).unwrap();
+    assert!(stream.write(FsWriteData::Buffer(
+        &tsonic_node::buffer::Buffer::from_string("next", Some("utf8")).unwrap()
+    )));
+    let mut flush_result = None;
+    stream.flush(|result| flush_result = Some(result));
+    flush_result.unwrap().unwrap();
+    assert_eq!(
+        fs::read_file_sync_string(&reopened_text, "utf8").unwrap(),
+        "next"
+    );
+    stream.end().unwrap();
+    assert!(!stream.write(FsWriteData::Bytes(b"ignored")));
+    stream.destroy();
 
     fs::rm_sync(&root_text, true, false).unwrap();
 }

@@ -306,16 +306,17 @@ impl FileHandle {
         crate::stream::web::WritableStream::new()
     }
 
-    pub fn create_read_stream(&self) -> NodeResult<crate::stream::Readable> {
-        Ok(crate::stream::Readable::from_chunks(vec![
-            self.read_file_buffer()?
-        ]))
+    pub fn create_read_stream(&self) -> NodeResult<fs::ReadStream> {
+        Ok(fs::ReadStream::new(
+            format!("fd:{}", self.fd),
+            crate::stream::Readable::from_chunks(vec![self.read_file_buffer()?]),
+        ))
     }
 
     pub fn create_read_stream_with_options(
         &self,
         options: ReadStreamOptions,
-    ) -> NodeResult<crate::stream::Readable> {
+    ) -> NodeResult<fs::ReadStream> {
         if options.stream.signal_aborted {
             return Err(crate::error::NodeError::new(
                 "ABORT_ERR",
@@ -337,18 +338,21 @@ impl FileHandle {
                 Buffer::from_bytes(buffer.as_bytes()[start..end].to_vec())
             };
         }
-        Ok(crate::stream::Readable::from_chunks(vec![buffer]))
+        Ok(fs::ReadStream::new(
+            format!("fd:{}", self.fd),
+            crate::stream::Readable::from_chunks(vec![buffer]),
+        ))
     }
 
-    pub fn create_write_stream(&self) -> crate::stream::Writable {
-        crate::stream::Writable::new()
+    pub fn create_write_stream(&self) -> fs::WriteStream {
+        fs::create_write_stream(&format!("fd:{}", self.fd))
     }
 
     pub fn create_write_stream_with_options(
         &self,
         options: WriteStreamOptions,
-    ) -> NodeResult<crate::stream::Writable> {
-        fs::create_write_stream_with_options(options)
+    ) -> NodeResult<fs::WriteStream> {
+        fs::create_write_stream_with_options(&format!("fd:{}", self.fd), options)
     }
 
     pub fn read_lines(&self, encoding: &str) -> NodeResult<Vec<String>> {

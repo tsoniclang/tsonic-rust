@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tsonic_node::{buffer, fs, path, process, punycode, stream};
+use tsonic_node::{buffer, fs, path, process, punycode};
 
 #[test]
 fn buffer_transcode_converts_between_supported_encodings() {
@@ -79,11 +79,8 @@ fn fs_stream_and_callback_shapes_are_backed_by_real_file_io() {
     unlink_result.unwrap().unwrap();
 
     let mut readable = fs::create_read_stream(&file_text).unwrap();
-    assert_eq!(
-        stream::consumers::text(&mut readable, Some("utf8")).unwrap(),
-        "hello"
-    );
-    let mut writable = fs::create_write_stream();
+    assert_eq!(readable.text(Some("utf8")).unwrap(), "hello");
+    let mut writable = fs::create_write_stream(&file_text);
     assert!(writable.write(buffer::Buffer::from_string("x", Some("utf8")).unwrap()));
     assert_eq!(writable.chunks().len(), 1);
 

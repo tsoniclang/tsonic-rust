@@ -154,7 +154,8 @@ pub use crate::fs::{
     write_file_sync_buffer as fs_write_file_sync_buffer,
     write_file_sync_string as fs_write_file_sync_string, write_sync_buffer as fs_write_sync_buffer,
     write_sync_string as fs_write_sync_string, Dirent, FsConstants, FsWatchEvent, FsWatcher,
-    StatFs, Stats,
+    ReadStream as FsReadStream, StatFs, Stats, Utf8Stream as FsUtf8Stream,
+    Utf8StreamOptions as FsUtf8StreamOptions, WriteStream as FsWriteStream,
 };
 pub use crate::fs_promises::{
     access as fs_promises_access, append_file_buffer as fs_promises_append_file_buffer,

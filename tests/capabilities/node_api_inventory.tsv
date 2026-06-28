@@ -2192,6 +2192,75 @@ NODE-FS-WRITEFILE-STRING	fs	writeFileSync string	implemented	N66	tsonic_node::fs
 NODE-FS-WRITEFILE-BUFFER	fs	writeFileSync buffer	implemented	N66	tsonic_node::fs::write_file_sync_buffer	NODE-FS-001	writes Buffer file data
 NODE-FS-CREATE-READ-STREAM	fs	createReadStream	implemented	N8	tsonic_node::fs::create_read_stream	NODE-FS-STREAM-001	file read stream backed by real file IO and closed Readable
 NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	implemented	N8	tsonic_node::fs::create_write_stream	NODE-FS-STREAM-001	closed Writable stream shape for generated output
+NODE-FS-READSTREAM-CARRIER	fs	ReadStream	implemented	N84	tsonic_node::fs::ReadStream	NODE-FS-STREAM-002	closed fs ReadStream carrier
+NODE-FS-READSTREAM-PATH	fs	ReadStream.path	implemented	N84	tsonic_node::fs::ReadStream::path	NODE-FS-STREAM-002	ReadStream path field
+NODE-FS-READSTREAM-PENDING	fs	ReadStream.pending	implemented	N84	tsonic_node::fs::ReadStream::pending	NODE-FS-STREAM-002	ReadStream pending field
+NODE-FS-READSTREAM-BYTES-READ	fs	ReadStream.bytesRead	implemented	N84	tsonic_node::fs::ReadStream::bytes_read	NODE-FS-STREAM-002	ReadStream byte counter
+NODE-FS-READSTREAM-READ	fs	ReadStream.read	implemented	N84	tsonic_node::fs::ReadStream::read	NODE-FS-STREAM-002	ReadStream closed read operation
+NODE-FS-READSTREAM-CLOSE	fs	ReadStream.close	implemented	N84	tsonic_node::fs::ReadStream::close	NODE-FS-STREAM-002	ReadStream close operation
+NODE-FS-READSTREAM-ADD-LISTENER	fs	ReadStream.addListener	implemented	N84	tsonic_node::fs::ReadStream::add_listener	NODE-FS-STREAM-002	ReadStream EventEmitter addListener operation
+NODE-FS-READSTREAM-ON	fs	ReadStream.on	implemented	N84	tsonic_node::fs::ReadStream::on	NODE-FS-STREAM-002	ReadStream EventEmitter on operation
+NODE-FS-READSTREAM-ONCE	fs	ReadStream.once	implemented	N84	tsonic_node::fs::ReadStream::once	NODE-FS-STREAM-002	ReadStream EventEmitter once operation
+NODE-FS-READSTREAM-PREPEND-LISTENER	fs	ReadStream.prependListener	implemented	N84	tsonic_node::fs::ReadStream::prepend_listener	NODE-FS-STREAM-002	ReadStream EventEmitter prependListener operation
+NODE-FS-READSTREAM-PREPEND-ONCE-LISTENER	fs	ReadStream.prependOnceListener	implemented	N84	tsonic_node::fs::ReadStream::prepend_once_listener	NODE-FS-STREAM-002	ReadStream EventEmitter prependOnceListener operation
+NODE-FS-READSTREAM-REMOVE-LISTENER	fs	ReadStream.removeListener	implemented	N84	tsonic_node::fs::ReadStream::remove_listener	NODE-FS-STREAM-002	ReadStream EventEmitter removeListener operation
+NODE-FS-READSTREAM-OFF	fs	ReadStream.off	implemented	N84	tsonic_node::fs::ReadStream::off	NODE-FS-STREAM-002	ReadStream EventEmitter off operation
+NODE-FS-READSTREAM-REMOVE-ALL-LISTENERS	fs	ReadStream.removeAllListeners	implemented	N84	tsonic_node::fs::ReadStream::remove_all_listeners	NODE-FS-STREAM-002	ReadStream EventEmitter removeAllListeners operation
+NODE-FS-READSTREAM-LISTENERS	fs	ReadStream.listeners	implemented	N84	tsonic_node::fs::ReadStream::listeners	NODE-FS-STREAM-002	ReadStream EventEmitter listeners operation
+NODE-FS-READSTREAM-RAW-LISTENERS	fs	ReadStream.rawListeners	implemented	N84	tsonic_node::fs::ReadStream::raw_listeners	NODE-FS-STREAM-002	ReadStream EventEmitter rawListeners operation
+NODE-FS-READSTREAM-LISTENER-COUNT	fs	ReadStream.listenerCount	implemented	N84	tsonic_node::fs::ReadStream::listener_count	NODE-FS-STREAM-002	ReadStream EventEmitter listenerCount operation
+NODE-FS-READSTREAM-EMIT	fs	ReadStream.emit	implemented	N84	tsonic_node::fs::ReadStream::emit	NODE-FS-STREAM-002	ReadStream EventEmitter emit operation
+NODE-FS-WRITESTREAM-CARRIER	fs	WriteStream	implemented	N84	tsonic_node::fs::WriteStream	NODE-FS-STREAM-002	closed fs WriteStream carrier
+NODE-FS-WRITESTREAM-PATH	fs	WriteStream.path	implemented	N84	tsonic_node::fs::WriteStream::path	NODE-FS-STREAM-002	WriteStream path field
+NODE-FS-WRITESTREAM-PENDING	fs	WriteStream.pending	implemented	N84	tsonic_node::fs::WriteStream::pending	NODE-FS-STREAM-002	WriteStream pending field
+NODE-FS-WRITESTREAM-BYTES-WRITTEN	fs	WriteStream.bytesWritten	implemented	N84	tsonic_node::fs::WriteStream::bytes_written	NODE-FS-STREAM-002	WriteStream byte counter
+NODE-FS-WRITESTREAM-WRITE	fs	WriteStream.write	implemented	N84	tsonic_node::fs::WriteStream::write	NODE-FS-STREAM-002	WriteStream closed write operation
+NODE-FS-WRITESTREAM-CLOSE	fs	WriteStream.close	implemented	N84	tsonic_node::fs::WriteStream::close	NODE-FS-STREAM-002	WriteStream close operation
+NODE-FS-WRITESTREAM-ADD-LISTENER	fs	WriteStream.addListener	implemented	N84	tsonic_node::fs::WriteStream::add_listener	NODE-FS-STREAM-002	WriteStream EventEmitter addListener operation
+NODE-FS-WRITESTREAM-ON	fs	WriteStream.on	implemented	N84	tsonic_node::fs::WriteStream::on	NODE-FS-STREAM-002	WriteStream EventEmitter on operation
+NODE-FS-WRITESTREAM-ONCE	fs	WriteStream.once	implemented	N84	tsonic_node::fs::WriteStream::once	NODE-FS-STREAM-002	WriteStream EventEmitter once operation
+NODE-FS-WRITESTREAM-PREPEND-LISTENER	fs	WriteStream.prependListener	implemented	N84	tsonic_node::fs::WriteStream::prepend_listener	NODE-FS-STREAM-002	WriteStream EventEmitter prependListener operation
+NODE-FS-WRITESTREAM-PREPEND-ONCE-LISTENER	fs	WriteStream.prependOnceListener	implemented	N84	tsonic_node::fs::WriteStream::prepend_once_listener	NODE-FS-STREAM-002	WriteStream EventEmitter prependOnceListener operation
+NODE-FS-WRITESTREAM-REMOVE-LISTENER	fs	WriteStream.removeListener	implemented	N84	tsonic_node::fs::WriteStream::remove_listener	NODE-FS-STREAM-002	WriteStream EventEmitter removeListener operation
+NODE-FS-WRITESTREAM-OFF	fs	WriteStream.off	implemented	N84	tsonic_node::fs::WriteStream::off	NODE-FS-STREAM-002	WriteStream EventEmitter off operation
+NODE-FS-WRITESTREAM-REMOVE-ALL-LISTENERS	fs	WriteStream.removeAllListeners	implemented	N84	tsonic_node::fs::WriteStream::remove_all_listeners	NODE-FS-STREAM-002	WriteStream EventEmitter removeAllListeners operation
+NODE-FS-WRITESTREAM-LISTENERS	fs	WriteStream.listeners	implemented	N84	tsonic_node::fs::WriteStream::listeners	NODE-FS-STREAM-002	WriteStream EventEmitter listeners operation
+NODE-FS-WRITESTREAM-RAW-LISTENERS	fs	WriteStream.rawListeners	implemented	N84	tsonic_node::fs::WriteStream::raw_listeners	NODE-FS-STREAM-002	WriteStream EventEmitter rawListeners operation
+NODE-FS-WRITESTREAM-LISTENER-COUNT	fs	WriteStream.listenerCount	implemented	N84	tsonic_node::fs::WriteStream::listener_count	NODE-FS-STREAM-002	WriteStream EventEmitter listenerCount operation
+NODE-FS-WRITESTREAM-EMIT	fs	WriteStream.emit	implemented	N84	tsonic_node::fs::WriteStream::emit	NODE-FS-STREAM-002	WriteStream EventEmitter emit operation
+NODE-FS-UTF8STREAM-CARRIER	fs	Utf8Stream	implemented	N84	tsonic_node::fs::Utf8Stream	NODE-FS-UTF8-001	closed Utf8Stream carrier
+NODE-FS-UTF8STREAM-OPTIONS-CARRIER	fs	Utf8StreamOptions	implemented	N84	tsonic_node::fs::Utf8StreamOptions	NODE-FS-UTF8-001	closed Utf8Stream options carrier
+NODE-FS-UTF8STREAM-NEW	fs	Utf8Stream.constructor	implemented	N84	tsonic_node::fs::Utf8Stream::new	NODE-FS-UTF8-001	constructs closed Utf8Stream carrier
+NODE-FS-UTF8STREAM-REOPEN	fs	Utf8Stream.reopen	implemented	N84	tsonic_node::fs::Utf8Stream::reopen	NODE-FS-UTF8-001	reopens closed Utf8Stream destination
+NODE-FS-UTF8STREAM-WRITE	fs	Utf8Stream.write	implemented	N84	tsonic_node::fs::Utf8Stream::write	NODE-FS-UTF8-001	writes string or Buffer bytes
+NODE-FS-UTF8STREAM-FLUSH	fs	Utf8Stream.flush	implemented	N84	tsonic_node::fs::Utf8Stream::flush	NODE-FS-UTF8-001	callback-style Utf8Stream flush
+NODE-FS-UTF8STREAM-FLUSH-SYNC	fs	Utf8Stream.flushSync	implemented	N84	tsonic_node::fs::Utf8Stream::flush_sync	NODE-FS-UTF8-001	synchronous Utf8Stream flush
+NODE-FS-UTF8STREAM-END	fs	Utf8Stream.end	implemented	N84	tsonic_node::fs::Utf8Stream::end	NODE-FS-UTF8-001	flushes and closes Utf8Stream
+NODE-FS-UTF8STREAM-DESTROY	fs	Utf8Stream.destroy	implemented	N84	tsonic_node::fs::Utf8Stream::destroy	NODE-FS-UTF8-001	destroys buffered Utf8Stream
+NODE-FS-UTF8STREAM-FILE	fs	Utf8Stream.file	implemented	N84	tsonic_node::fs::Utf8Stream::file	NODE-FS-UTF8-001	Utf8Stream file field
+NODE-FS-UTF8STREAM-FD	fs	Utf8Stream.fd	implemented	N84	tsonic_node::fs::Utf8Stream::fd	NODE-FS-UTF8-001	Utf8Stream fd field
+NODE-FS-UTF8STREAM-MIN-LENGTH	fs	Utf8Stream.minLength	implemented	N84	tsonic_node::fs::Utf8Stream::min_length	NODE-FS-UTF8-001	Utf8Stream minLength field
+NODE-FS-UTF8STREAM-MAX-LENGTH	fs	Utf8Stream.maxLength	implemented	N84	tsonic_node::fs::Utf8Stream::max_length	NODE-FS-UTF8-001	Utf8Stream maxLength field
+NODE-FS-UTF8STREAM-CONTENT-MODE	fs	Utf8Stream.contentMode	implemented	N84	tsonic_node::fs::Utf8Stream::content_mode	NODE-FS-UTF8-001	Utf8Stream contentMode field
+NODE-FS-UTF8STREAM-WRITING	fs	Utf8Stream.writing	implemented	N84	tsonic_node::fs::Utf8Stream::writing	NODE-FS-UTF8-001	Utf8Stream writing field
+NODE-FS-UTF8STREAM-APPEND	fs	Utf8Stream.append	implemented	N84	tsonic_node::fs::Utf8Stream::append	NODE-FS-UTF8-001	Utf8Stream append field
+NODE-FS-UTF8STREAM-SYNC	fs	Utf8Stream.sync	implemented	N84	tsonic_node::fs::Utf8Stream::sync	NODE-FS-UTF8-001	Utf8Stream sync field
+NODE-FS-UTF8STREAM-PERIODIC-FLUSH	fs	Utf8Stream.periodicFlush	implemented	N84	tsonic_node::fs::Utf8Stream::periodic_flush	NODE-FS-UTF8-001	Utf8Stream periodicFlush field
+NODE-FS-UTF8STREAM-FSYNC	fs	Utf8Stream.fsync	implemented	N84	tsonic_node::fs::Utf8Stream::fsync	NODE-FS-UTF8-001	Utf8Stream fsync field
+NODE-FS-UTF8STREAM-MKDIR	fs	Utf8Stream.mkdir	implemented	N84	tsonic_node::fs::Utf8Stream::mkdir	NODE-FS-UTF8-001	Utf8Stream mkdir field
+NODE-FS-UTF8STREAM-MODE	fs	Utf8Stream.mode	implemented	N84	tsonic_node::fs::Utf8Stream::mode	NODE-FS-UTF8-001	Utf8Stream mode field
+NODE-FS-UTF8STREAM-OPTIONS-DEST	fs	Utf8StreamOptions.dest	implemented	N84	tsonic_node::fs::Utf8StreamOptions::dest	NODE-FS-UTF8-001	Utf8Stream dest option
+NODE-FS-UTF8STREAM-OPTIONS-FD	fs	Utf8StreamOptions.fd	implemented	N84	tsonic_node::fs::Utf8StreamOptions::fd	NODE-FS-UTF8-001	Utf8Stream fd option
+NODE-FS-UTF8STREAM-OPTIONS-MIN-LENGTH	fs	Utf8StreamOptions.minLength	implemented	N84	tsonic_node::fs::Utf8StreamOptions::min_length	NODE-FS-UTF8-001	Utf8Stream minLength option
+NODE-FS-UTF8STREAM-OPTIONS-MAX-LENGTH	fs	Utf8StreamOptions.maxLength	implemented	N84	tsonic_node::fs::Utf8StreamOptions::max_length	NODE-FS-UTF8-001	Utf8Stream maxLength option
+NODE-FS-UTF8STREAM-OPTIONS-MAX-WRITE	fs	Utf8StreamOptions.maxWrite	implemented	N84	tsonic_node::fs::Utf8StreamOptions::max_write	NODE-FS-UTF8-001	Utf8Stream maxWrite option
+NODE-FS-UTF8STREAM-OPTIONS-CONTENT-MODE	fs	Utf8StreamOptions.contentMode	implemented	N84	tsonic_node::fs::Utf8StreamOptions::content_mode	NODE-FS-UTF8-001	Utf8Stream contentMode option
+NODE-FS-UTF8STREAM-OPTIONS-APPEND	fs	Utf8StreamOptions.append	implemented	N84	tsonic_node::fs::Utf8StreamOptions::append	NODE-FS-UTF8-001	Utf8Stream append option
+NODE-FS-UTF8STREAM-OPTIONS-SYNC	fs	Utf8StreamOptions.sync	implemented	N84	tsonic_node::fs::Utf8StreamOptions::sync	NODE-FS-UTF8-001	Utf8Stream sync option
+NODE-FS-UTF8STREAM-OPTIONS-FSYNC	fs	Utf8StreamOptions.fsync	implemented	N84	tsonic_node::fs::Utf8StreamOptions::fsync	NODE-FS-UTF8-001	Utf8Stream fsync option
+NODE-FS-UTF8STREAM-OPTIONS-MKDIR	fs	Utf8StreamOptions.mkdir	implemented	N84	tsonic_node::fs::Utf8StreamOptions::mkdir	NODE-FS-UTF8-001	Utf8Stream mkdir option
+NODE-FS-UTF8STREAM-OPTIONS-MODE	fs	Utf8StreamOptions.mode	implemented	N84	tsonic_node::fs::Utf8StreamOptions::mode	NODE-FS-UTF8-001	Utf8Stream mode option
+NODE-FS-UTF8STREAM-OPTIONS-PERIODIC-FLUSH	fs	Utf8StreamOptions.periodicFlush	implemented	N84	tsonic_node::fs::Utf8StreamOptions::periodic_flush_ms	NODE-FS-UTF8-001	Utf8Stream periodicFlush option
 NODE-FS-CONSTANTS-FN	fs	constants	implemented	N66	tsonic_node::fs::constants	NODE-FS-001	returns closed fs constants carrier
 NODE-FS-CONSTANTS-CARRIER	fs	FsConstants	implemented	N66	tsonic_node::fs::FsConstants	NODE-FS-001	closed fs constants carrier
 NODE-FS-CONSTANT-F-OK	fs	constants.F_OK	implemented	N83	tsonic_node::fs::FsConstants::f_ok	NODE-FS-001	fs access F_OK constant
@@ -2263,6 +2332,73 @@ NODE-FS-WATCH-FILE-OPTIONS	fs	WatchFileOptions	implemented	N84	tsonic_node::fs::
 NODE-FS-STATS-BASE	fs	StatsBase	implemented	N84	tsonic_node::fs::StatsBase	NODE-FS-OPTIONS-001	Stats alias for documented base stat shape
 NODE-FS-BIGINT-STATS	fs	BigIntStats	implemented	N84	tsonic_node::fs::BigIntStats	NODE-FS-OPTIONS-001	Stats alias exposing nanosecond accessors
 NODE-FS-STATSFS-BASE	fs	StatsFsBase	implemented	N84	tsonic_node::fs::StatsFsBase	NODE-FS-OPTIONS-001	StatFs alias for documented filesystem stat shape
+NODE-FS-STATFS-FIELD-TYPE	fs	StatFs.type	implemented	N84	tsonic_node::fs::StatFs::type	NODE-FS-STATFS-001	StatFs type field
+NODE-FS-STATFS-FIELD-BSIZE	fs	StatFs.bsize	implemented	N84	tsonic_node::fs::StatFs::bsize	NODE-FS-STATFS-001	StatFs block size field
+NODE-FS-STATFS-FIELD-BLOCKS	fs	StatFs.blocks	implemented	N84	tsonic_node::fs::StatFs::blocks	NODE-FS-STATFS-001	StatFs blocks field
+NODE-FS-STATFS-FIELD-BFREE	fs	StatFs.bfree	implemented	N84	tsonic_node::fs::StatFs::bfree	NODE-FS-STATFS-001	StatFs free blocks field
+NODE-FS-STATFS-FIELD-BAVAIL	fs	StatFs.bavail	implemented	N84	tsonic_node::fs::StatFs::bavail	NODE-FS-STATFS-001	StatFs available blocks field
+NODE-FS-STATFS-FIELD-FILES	fs	StatFs.files	implemented	N84	tsonic_node::fs::StatFs::files	NODE-FS-STATFS-001	StatFs files field
+NODE-FS-STATFS-FIELD-FFREE	fs	StatFs.ffree	implemented	N84	tsonic_node::fs::StatFs::ffree	NODE-FS-STATFS-001	StatFs free files field
+NODE-FS-OBJECT-ENCODING-OPTIONS-ENCODING	fs	ObjectEncodingOptions.encoding	implemented	N84	tsonic_node::fs::ObjectEncodingOptions::encoding	NODE-FS-OPTIONS-001	ObjectEncodingOptions encoding field
+NODE-FS-BIGINT-OPTIONS-BIGINT	fs	BigIntOptions.bigint	implemented	N84	tsonic_node::fs::BigIntOptions::bigint	NODE-FS-OPTIONS-001	BigIntOptions bigint field
+NODE-FS-STAT-OPTIONS-BIGINT	fs	StatOptions.bigint	implemented	N84	tsonic_node::fs::StatOptions::bigint	NODE-FS-OPTIONS-001	StatOptions bigint field
+NODE-FS-STAT-OPTIONS-THROW-IF-NO-ENTRY	fs	StatOptions.throwIfNoEntry	implemented	N84	tsonic_node::fs::StatOptions::throw_if_no_entry	NODE-FS-OPTIONS-001	StatOptions throwIfNoEntry field
+NODE-FS-STATFS-OPTIONS-BIGINT	fs	StatFsOptions.bigint	implemented	N84	tsonic_node::fs::StatFsOptions::bigint	NODE-FS-OPTIONS-001	StatFsOptions bigint field
+NODE-FS-MAKE-DIRECTORY-OPTIONS-RECURSIVE	fs	MakeDirectoryOptions.recursive	implemented	N84	tsonic_node::fs::MakeDirectoryOptions::recursive	NODE-FS-OPTIONS-002	MakeDirectoryOptions recursive field
+NODE-FS-MAKE-DIRECTORY-OPTIONS-MODE	fs	MakeDirectoryOptions.mode	implemented	N84	tsonic_node::fs::MakeDirectoryOptions::mode	NODE-FS-OPTIONS-002	MakeDirectoryOptions mode field
+NODE-FS-RM-OPTIONS-RECURSIVE	fs	RmOptions.recursive	implemented	N84	tsonic_node::fs::RmOptions::recursive	NODE-FS-OPTIONS-002	RmOptions recursive field
+NODE-FS-RM-OPTIONS-FORCE	fs	RmOptions.force	implemented	N84	tsonic_node::fs::RmOptions::force	NODE-FS-OPTIONS-002	RmOptions force field
+NODE-FS-RM-OPTIONS-MAX-RETRIES	fs	RmOptions.maxRetries	implemented	N84	tsonic_node::fs::RmOptions::max_retries	NODE-FS-OPTIONS-002	RmOptions maxRetries field
+NODE-FS-RM-OPTIONS-RETRY-DELAY	fs	RmOptions.retryDelay	implemented	N84	tsonic_node::fs::RmOptions::retry_delay_ms	NODE-FS-OPTIONS-002	RmOptions retryDelay field
+NODE-FS-COPY-OPTIONS-BASE-DEREFERENCE	fs	CopyOptionsBase.dereference	implemented	N84	tsonic_node::fs::CopyOptionsBase::dereference	NODE-FS-OPTIONS-002	CopyOptionsBase dereference field
+NODE-FS-COPY-OPTIONS-BASE-ERROR-ON-EXIST	fs	CopyOptionsBase.errorOnExist	implemented	N84	tsonic_node::fs::CopyOptionsBase::error_on_exist	NODE-FS-OPTIONS-002	CopyOptionsBase errorOnExist field
+NODE-FS-COPY-OPTIONS-BASE-FORCE	fs	CopyOptionsBase.force	implemented	N84	tsonic_node::fs::CopyOptionsBase::force	NODE-FS-OPTIONS-002	CopyOptionsBase force field
+NODE-FS-COPY-OPTIONS-BASE-MODE	fs	CopyOptionsBase.mode	implemented	N84	tsonic_node::fs::CopyOptionsBase::mode	NODE-FS-OPTIONS-002	CopyOptionsBase mode field
+NODE-FS-COPY-OPTIONS-BASE-PRESERVE-TIMESTAMPS	fs	CopyOptionsBase.preserveTimestamps	implemented	N84	tsonic_node::fs::CopyOptionsBase::preserve_timestamps	NODE-FS-OPTIONS-002	CopyOptionsBase preserveTimestamps field
+NODE-FS-COPY-OPTIONS-BASE-RECURSIVE	fs	CopyOptionsBase.recursive	implemented	N84	tsonic_node::fs::CopyOptionsBase::recursive	NODE-FS-OPTIONS-002	CopyOptionsBase recursive field
+NODE-FS-COPY-OPTIONS-BASE-VERBATIM-SYMLINKS	fs	CopyOptionsBase.verbatimSymlinks	implemented	N84	tsonic_node::fs::CopyOptionsBase::verbatim_symlinks	NODE-FS-OPTIONS-002	CopyOptionsBase verbatimSymlinks field
+NODE-FS-COPY-OPTIONS-BASE-FIELD	fs	CopyOptions.base	implemented	N84	tsonic_node::fs::CopyOptions::base	NODE-FS-OPTIONS-002	CopyOptions base field
+NODE-FS-COPY-OPTIONS-FILTER-FIELD	fs	CopyOptions.filter	implemented	N84	tsonic_node::fs::CopyOptions::filter	NODE-FS-OPTIONS-002	CopyOptions filter field
+NODE-FS-COPY-SYNC-OPTIONS-BASE-FIELD	fs	CopySyncOptions.base	implemented	N84	tsonic_node::fs::CopySyncOptions::base	NODE-FS-OPTIONS-002	CopySyncOptions base field
+NODE-FS-COPY-SYNC-OPTIONS-FILTER-FIELD	fs	CopySyncOptions.filter	implemented	N84	tsonic_node::fs::CopySyncOptions::filter	NODE-FS-OPTIONS-002	CopySyncOptions filter field
+NODE-FS-OPEN-DIR-OPTIONS-ENCODING	fs	OpenDirOptions.encoding	implemented	N84	tsonic_node::fs::OpenDirOptions::encoding	NODE-FS-OPTIONS-002	OpenDirOptions encoding field
+NODE-FS-OPEN-DIR-OPTIONS-BUFFER-SIZE	fs	OpenDirOptions.bufferSize	implemented	N84	tsonic_node::fs::OpenDirOptions::buffer_size	NODE-FS-OPTIONS-002	OpenDirOptions bufferSize field
+NODE-FS-OPEN-DIR-OPTIONS-RECURSIVE	fs	OpenDirOptions.recursive	implemented	N84	tsonic_node::fs::OpenDirOptions::recursive	NODE-FS-OPTIONS-002	OpenDirOptions recursive field
+NODE-FS-READ-OPTIONS-OFFSET	fs	ReadOptions.offset	implemented	N84	tsonic_node::fs::ReadOptions::offset	NODE-FS-OPTIONS-001	ReadOptions offset field
+NODE-FS-READ-OPTIONS-LENGTH	fs	ReadOptions.length	implemented	N84	tsonic_node::fs::ReadOptions::length	NODE-FS-OPTIONS-001	ReadOptions length field
+NODE-FS-READ-OPTIONS-POSITION	fs	ReadOptions.position	implemented	N84	tsonic_node::fs::ReadOptions::position	NODE-FS-OPTIONS-001	ReadOptions position field
+NODE-FS-READ-RESULT-BYTES-READ	fs	ReadResult.bytesRead	implemented	N84	tsonic_node::fs::ReadResult::bytes_read	NODE-FS-OPTIONS-001	ReadResult bytesRead field
+NODE-FS-READ-RESULT-BUFFER	fs	ReadResult.buffer	implemented	N84	tsonic_node::fs::ReadResult::buffer	NODE-FS-OPTIONS-001	ReadResult buffer field
+NODE-FS-READV-RESULT-BYTES-READ	fs	ReadVResult.bytesRead	implemented	N84	tsonic_node::fs::ReadVResult::bytes_read	NODE-FS-OPTIONS-001	ReadVResult bytesRead field
+NODE-FS-READV-RESULT-BUFFERS	fs	ReadVResult.buffers	implemented	N84	tsonic_node::fs::ReadVResult::buffers	NODE-FS-OPTIONS-001	ReadVResult buffers field
+NODE-FS-WRITE-OPTIONS-OFFSET	fs	WriteOptions.offset	implemented	N84	tsonic_node::fs::WriteOptions::offset	NODE-FS-OPTIONS-001	WriteOptions offset field
+NODE-FS-WRITE-OPTIONS-LENGTH	fs	WriteOptions.length	implemented	N84	tsonic_node::fs::WriteOptions::length	NODE-FS-OPTIONS-001	WriteOptions length field
+NODE-FS-WRITE-OPTIONS-POSITION	fs	WriteOptions.position	implemented	N84	tsonic_node::fs::WriteOptions::position	NODE-FS-OPTIONS-001	WriteOptions position field
+NODE-FS-WRITE-OPTIONS-ENCODING	fs	WriteOptions.encoding	implemented	N84	tsonic_node::fs::WriteOptions::encoding	NODE-FS-OPTIONS-001	WriteOptions encoding field
+NODE-FS-WRITE-RESULT-BYTES-WRITTEN	fs	WriteResult.bytesWritten	implemented	N84	tsonic_node::fs::WriteResult::bytes_written	NODE-FS-OPTIONS-001	WriteResult bytesWritten field
+NODE-FS-WRITE-RESULT-BUFFER	fs	WriteResult.buffer	implemented	N84	tsonic_node::fs::WriteResult::buffer	NODE-FS-OPTIONS-001	WriteResult buffer field
+NODE-FS-WRITEV-RESULT-BYTES-WRITTEN	fs	WriteVResult.bytesWritten	implemented	N84	tsonic_node::fs::WriteVResult::bytes_written	NODE-FS-OPTIONS-001	WriteVResult bytesWritten field
+NODE-FS-WRITEV-RESULT-BUFFERS	fs	WriteVResult.buffers	implemented	N84	tsonic_node::fs::WriteVResult::buffers	NODE-FS-OPTIONS-001	WriteVResult buffers field
+NODE-FS-STREAM-OPTIONS-FLAGS	fs	StreamOptions.flags	implemented	N84	tsonic_node::fs::FsStreamOptions::flags	NODE-FS-STREAM-002	FsStreamOptions flags field
+NODE-FS-STREAM-OPTIONS-ENCODING	fs	StreamOptions.encoding	implemented	N84	tsonic_node::fs::FsStreamOptions::encoding	NODE-FS-STREAM-002	FsStreamOptions encoding field
+NODE-FS-STREAM-OPTIONS-FD	fs	StreamOptions.fd	implemented	N84	tsonic_node::fs::FsStreamOptions::fd	NODE-FS-STREAM-002	FsStreamOptions fd field
+NODE-FS-STREAM-OPTIONS-MODE	fs	StreamOptions.mode	implemented	N84	tsonic_node::fs::FsStreamOptions::mode	NODE-FS-STREAM-002	FsStreamOptions mode field
+NODE-FS-STREAM-OPTIONS-AUTO-CLOSE	fs	StreamOptions.autoClose	implemented	N84	tsonic_node::fs::FsStreamOptions::auto_close	NODE-FS-STREAM-002	FsStreamOptions autoClose field
+NODE-FS-STREAM-OPTIONS-EMIT-CLOSE	fs	StreamOptions.emitClose	implemented	N84	tsonic_node::fs::FsStreamOptions::emit_close	NODE-FS-STREAM-002	FsStreamOptions emitClose field
+NODE-FS-STREAM-OPTIONS-START	fs	StreamOptions.start	implemented	N84	tsonic_node::fs::FsStreamOptions::start	NODE-FS-STREAM-002	FsStreamOptions start field
+NODE-FS-STREAM-OPTIONS-END	fs	StreamOptions.end	implemented	N84	tsonic_node::fs::FsStreamOptions::end	NODE-FS-STREAM-002	FsStreamOptions end field
+NODE-FS-STREAM-OPTIONS-HIGH-WATER-MARK	fs	StreamOptions.highWaterMark	implemented	N84	tsonic_node::fs::FsStreamOptions::high_water_mark	NODE-FS-STREAM-002	FsStreamOptions highWaterMark field
+NODE-FS-STREAM-OPTIONS-FLUSH	fs	StreamOptions.flush	implemented	N84	tsonic_node::fs::FsStreamOptions::flush	NODE-FS-STREAM-002	FsStreamOptions flush field
+NODE-FS-STREAM-OPTIONS-SIGNAL	fs	StreamOptions.signal	implemented	N84	tsonic_node::fs::FsStreamOptions::signal_aborted	NODE-FS-STREAM-002	FsStreamOptions signal field modeled as closed abort state
+NODE-FS-WATCH-OPTIONS-PERSISTENT	fs	WatchOptions.persistent	implemented	N84	tsonic_node::fs::WatchOptions::persistent	NODE-FS-OPTIONS-003	WatchOptions persistent field
+NODE-FS-WATCH-OPTIONS-RECURSIVE	fs	WatchOptions.recursive	implemented	N84	tsonic_node::fs::WatchOptions::recursive	NODE-FS-OPTIONS-003	WatchOptions recursive field
+NODE-FS-WATCH-OPTIONS-ENCODING	fs	WatchOptions.encoding	implemented	N84	tsonic_node::fs::WatchOptions::encoding	NODE-FS-OPTIONS-003	WatchOptions encoding field
+NODE-FS-WATCH-OPTIONS-SIGNAL	fs	WatchOptions.signal	implemented	N84	tsonic_node::fs::WatchOptions::signal_aborted	NODE-FS-OPTIONS-003	WatchOptions signal field modeled as closed abort state
+NODE-FS-WATCH-OPTIONS-MAX-QUEUE	fs	WatchOptions.maxQueue	implemented	N84	tsonic_node::fs::WatchOptions::max_queue	NODE-FS-OPTIONS-003	WatchOptions maxQueue field
+NODE-FS-WATCH-OPTIONS-OVERFLOW	fs	WatchOptions.overflow	implemented	N84	tsonic_node::fs::WatchOptions::overflow	NODE-FS-OPTIONS-003	WatchOptions overflow field
+NODE-FS-WATCHFILE-OPTIONS-BIGINT	fs	WatchFileOptions.bigint	implemented	N84	tsonic_node::fs::WatchFileOptions::bigint	NODE-FS-OPTIONS-003	WatchFileOptions bigint field
+NODE-FS-WATCHFILE-OPTIONS-PERSISTENT	fs	WatchFileOptions.persistent	implemented	N84	tsonic_node::fs::WatchFileOptions::persistent	NODE-FS-OPTIONS-003	WatchFileOptions persistent field
+NODE-FS-WATCHFILE-OPTIONS-INTERVAL	fs	WatchFileOptions.interval	implemented	N84	tsonic_node::fs::WatchFileOptions::interval_ms	NODE-FS-OPTIONS-003	WatchFileOptions interval field
 NODE-FS-STAT-WITH-OPTIONS	fs	statSync options	implemented	N84	tsonic_node::fs::stat_sync_with_options	NODE-FS-OPTIONS-001	stat with throwIfNoEntry carrier behavior
 NODE-FS-LSTAT-WITH-OPTIONS	fs	lstatSync options	implemented	N84	tsonic_node::fs::lstat_sync_with_options	NODE-FS-OPTIONS-001	lstat with throwIfNoEntry carrier behavior
 NODE-FS-FSTAT-WITH-OPTIONS	fs	fstatSync options	implemented	N84	tsonic_node::fs::fstat_sync_with_options	NODE-FS-OPTIONS-001	fstat with explicit options carrier
