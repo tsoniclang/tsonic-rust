@@ -273,9 +273,13 @@ pub use crate::util::{
     TextDecoder, TextEncoder,
 };
 pub use crate::worker_threads::{
-    is_main_thread as worker_is_main_thread, parent_port as worker_parent_port,
-    receive_message_on_port as worker_receive_message_on_port, worker_data, BroadcastChannel,
-    MessageChannel, MessagePort, Worker,
+    get_environment_data as worker_get_environment_data, is_main_thread as worker_is_main_thread,
+    is_marked_as_untransferable_token as worker_is_marked_as_untransferable_token,
+    mark_as_untransferable_token as worker_mark_as_untransferable_token,
+    move_message_port_to_context as worker_move_message_port_to_context,
+    parent_port as worker_parent_port, receive_message_on_port as worker_receive_message_on_port,
+    set_environment_data as worker_set_environment_data, worker_data, BroadcastChannel,
+    MessageChannel, MessagePort, ResourceLimits as WorkerResourceLimits, Worker, WorkerOptions,
 };
 pub use crate::zlib::{
     brotli_compress_sync as zlib_brotli_compress_sync,

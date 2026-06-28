@@ -276,6 +276,7 @@ NODE-MOD-040	hard-reject	M	n/a	REJECT-NODE-V8	engine-specific introspection viol
 NODE-MOD-041	hard-reject	M	n/a	REJECT-NODE-VM	dynamic JS execution forbidden
 NODE-MOD-042	hard-reject	M	n/a	REJECT-NODE-WASI	WASI runtime integration out of Stage 1
 NODE-MOD-043	implemented	N5	tsonic_node::abi::{MessageChannel,Worker}	NODE-WORKER-001	message channel and Rust closure worker substrate
+NODE-WORKER-002	implemented	N32	tsonic_node::abi::{WorkerOptions,WorkerResourceLimits,worker_set_environment_data,worker_mark_as_untransferable_token}	NODE-WORKER-002	closed worker options, resource-limit metadata, environment data, transfer markers, and port context move identity
 NODE-MOD-044	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
 NODE-MOD-045	hard-reject	M	n/a	REJECT-NODE-NAPI	native addon ABI not runtime surface
 NODE-MOD-046	hard-reject	M	n/a	REJECT-NODE-LOADER	module resolution belongs to compiler/provider, not runtime crate

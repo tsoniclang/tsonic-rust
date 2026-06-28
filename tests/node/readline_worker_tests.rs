@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::collections::BTreeMap;
 
 use tsonic_js::JsValue;
 use tsonic_node::{process, readline, worker_threads};
@@ -72,8 +73,11 @@ fn process_next_tick_executes_without_event_loop_guessing() {
 fn worker_message_channel_moves_closed_js_values() {
     let channel = worker_threads::MessageChannel::new();
     channel.port1.start();
+    assert!(channel.port1.has_ref());
     channel.port1.unref();
+    assert!(!channel.port1.has_ref());
     channel.port1.r#ref();
+    assert!(channel.port1.has_ref());
     channel
         .port1
         .post_message(JsValue::String("hello".to_string()))
@@ -105,4 +109,52 @@ fn worker_broadcast_channel_is_closed_in_process_state() {
 fn worker_runs_rust_closure_and_reports_join_result() {
     let worker = worker_threads::Worker::spawn(|| 21 * 2);
     assert_eq!(worker.join().unwrap(), 42);
+}
+
+#[test]
+fn worker_options_environment_and_transfer_markers_are_closed_state() {
+    let mut env = BTreeMap::new();
+    env.insert("MODE".to_string(), "test".to_string());
+    let mut worker = worker_threads::Worker::spawn_with_options(
+        || "done".to_string(),
+        worker_threads::WorkerOptions {
+            name: Some("compiler-worker".to_string()),
+            argv: vec!["--job".to_string()],
+            env,
+            worker_data: JsValue::String("payload".to_string()),
+            resource_limits: worker_threads::ResourceLimits {
+                max_old_generation_size_mb: Some(256),
+                max_young_generation_size_mb: Some(64),
+                code_range_size_mb: Some(32),
+                stack_size_mb: Some(8),
+            },
+        },
+    );
+    assert!(worker.thread_id() > 0);
+    assert_eq!(worker.name(), Some("compiler-worker"));
+    assert_eq!(
+        worker.resource_limits().max_old_generation_size_mb,
+        Some(256)
+    );
+    assert!(worker.has_ref());
+    worker.unref();
+    assert!(!worker.has_ref());
+    worker.r#ref();
+    assert!(worker.has_ref());
+    assert_eq!(worker.join().unwrap(), "done");
+
+    worker_threads::set_environment_data("runtime", JsValue::String("rust".to_string()));
+    assert_eq!(
+        worker_threads::get_environment_data("runtime"),
+        Some(JsValue::String("rust".to_string()))
+    );
+    worker_threads::mark_as_untransferable_token("buffer-1");
+    assert!(worker_threads::is_marked_as_untransferable_token(
+        "buffer-1"
+    ));
+
+    let channel = worker_threads::MessageChannel::new();
+    let moved = worker_threads::move_message_port_to_context(channel.port1);
+    moved.post_message(JsValue::Number(1.0)).unwrap();
+    assert_eq!(channel.port2.receive_message(), Some(JsValue::Number(1.0)));
 }

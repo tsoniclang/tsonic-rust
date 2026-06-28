@@ -59,6 +59,7 @@ NODE-MODULE-V8	v8	module	hard-reject	N0	n/a	REJECT-NODE-V8	V8-specific APIs irre
 NODE-MODULE-VM	vm	module	hard-reject	N0	n/a	REJECT-NODE-VM	dynamic code execution excluded
 NODE-MODULE-WASI	wasi	module	hard-reject	N0	n/a	REJECT-NODE-WASI	WASI runtime embedding excluded
 NODE-MODULE-WORKER-THREADS	worker_threads	module	implemented	N5	tsonic_node::worker_threads	NODE-WORKER-001	message channel and Rust closure worker substrate
+NODE-WORKER-OPTIONS	worker_threads	WorkerOptions/resourceLimits/environmentData/transfer markers	implemented	N32	tsonic_node::worker_threads::{WorkerOptions,ResourceLimits,set_environment_data,get_environment_data,mark_as_untransferable_token}	NODE-WORKER-002	closed worker options, resource-limit metadata, environment data, and transfer marker state
 NODE-MODULE-ZLIB	zlib	module	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
 NODE-FS-ACCESS	fs	accessSync	implemented	K	tsonic_node::fs::access_sync	NODE-FS-EXT-001	existence/access validation
 NODE-FS-APPEND-FILE	fs	appendFileSync	implemented	K	tsonic_node::fs::{append_file_sync_string,append_file_sync_buffer}	NODE-FS-EXT-001	string and buffer overloads
