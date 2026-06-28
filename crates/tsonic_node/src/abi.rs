@@ -45,8 +45,13 @@ pub use crate::diagnostics_channel::{
     Channel as DiagnosticsChannel,
 };
 pub use crate::dns::{
-    lookup as dns_lookup, resolve4 as dns_resolve4, resolve6 as dns_resolve6,
-    LookupAddress as DnsLookupAddress,
+    get_default_result_order as dns_get_default_result_order, lookup as dns_lookup,
+    promises as dns_promises, resolve as dns_resolve, resolve4 as dns_resolve4,
+    resolve6 as dns_resolve6, resolve_cname as dns_resolve_cname, resolve_mx as dns_resolve_mx,
+    resolve_srv as dns_resolve_srv, resolve_txt as dns_resolve_txt, reverse as dns_reverse,
+    set_default_result_order as dns_set_default_result_order,
+    DefaultResultOrder as DnsDefaultResultOrder, LookupAddress as DnsLookupAddress,
+    MxRecord as DnsMxRecord, Resolver as DnsResolver, SrvRecord as DnsSrvRecord,
 };
 pub use crate::events::{
     get_event_listeners as events_get_event_listeners, listener_count as events_listener_count,

@@ -111,4 +111,32 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
     assert!(lookup.family == 4 || lookup.family == 6);
     assert!(!lookup.address.is_empty());
     assert!(dns::resolve4("localhost").is_ok() || dns::resolve6("localhost").is_ok());
+    assert!(
+        dns::resolve("localhost", Some("A")).is_ok()
+            || dns::resolve("localhost", Some("AAAA")).is_ok()
+    );
+    assert!(dns::reverse("127.0.0.1")
+        .unwrap()
+        .contains(&"127.0.0.1".to_string()));
+
+    dns::set_default_result_order(dns::DefaultResultOrder::Ipv4First);
+    assert_eq!(dns::get_default_result_order().as_str(), "ipv4first");
+    dns::set_default_result_order(dns::DefaultResultOrder::Verbatim);
+
+    let mut resolver = dns::Resolver::new();
+    resolver.set_servers(&["1.1.1.1", "8.8.8.8"]);
+    assert_eq!(resolver.get_servers(), vec!["1.1.1.1", "8.8.8.8"]);
+    assert!(resolver.lookup("localhost").is_ok());
+    assert!(resolver.resolve4("localhost").is_ok() || resolver.resolve6("localhost").is_ok());
+
+    assert!(dns::resolve_cname("localhost").is_err());
+    assert!(dns::resolve_mx("localhost").is_err());
+    assert!(dns::resolve_txt("localhost").is_err());
+    assert!(dns::resolve_srv("localhost").is_err());
+    assert!(dns::promises::lookup_now("localhost").is_ok());
+    assert!(
+        dns::promises::resolve_now("localhost", Some("A")).is_ok()
+            || dns::promises::resolve_now("localhost", Some("AAAA")).is_ok()
+    );
+    assert!(dns::promises::reverse_now("127.0.0.1").is_ok());
 }
