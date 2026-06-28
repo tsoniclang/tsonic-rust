@@ -243,6 +243,16 @@ NODE-UTIL-INSPECT-OPTIONS	util	InspectOptions/defaultOptions	implemented	N48	tso
 NODE-UTIL-TEXT-ENCODER-INTO	util	TextEncoder.encodeInto/TextEncoderEncodeIntoResult	implemented	N48	tsonic_node::util::{TextEncoder,TextEncoderEncodeIntoResult}	NODE-UTIL-008	closed UTF-8 encodeInto result carrier with read/written counts
 NODE-UTIL-TEXT-DECODER-OPTIONS	util	TextDecoder fatal/ignoreBOM options	implemented	N48	tsonic_node::util::TextDecoder	NODE-UTIL-008	closed TextDecoder option carrier for fatal and ignoreBOM flags
 NODE-UTIL-SIGNALS	util	convertProcessSignalToExitCode/setTraceSigInt	implemented	N48	tsonic_node::util::{convert_process_signal_to_exit_code,set_trace_sigint}	NODE-UTIL-008	closed signal-to-exit-code mapping and no-op trace SIGINT toggle
+NODE-UTIL-FORMAT-OPTIONS	util	formatWithOptions	implemented	N60	tsonic_node::util::format_with_options	NODE-UTIL-001	formatWithOptions delegates to closed format semantics without object reflection
+NODE-UTIL-INSPECT-STRUCT	util	inspectWithOptions/defaultOptions/InspectOptions	implemented	N60	tsonic_node::util::{inspect_with_options,inspect_with_struct_options,default_inspect_options,InspectOptions}	NODE-UTIL-001,NODE-UTIL-008	closed inspect option carrier for string truncation and color controls
+NODE-UTIL-DEEP-EQUALITY	util	isDeepStrictEqual	implemented	N60	tsonic_node::util::is_deep_strict_equal	NODE-UTIL-001	closed JsValue deep strict equality
+NODE-UTIL-CONTROL-STRINGS	util	stripVTControlCharacters/toUSVString/styleText	implemented	N60	tsonic_node::util::{strip_vt_control_characters,to_usv_string,style_text}	NODE-UTIL-007,NODE-UTIL-008	ANSI control stripping, USV normalization, and explicit ANSI styling
+NODE-UTIL-INHERITS-DEPRECATE	util	inherits/deprecate	implemented	N60	tsonic_node::util::{inherits,deprecate}	NODE-UTIL-007	closed generated-code helpers without prototype mutation or runtime warnings
+NODE-UTIL-TEXT-ENCODER	util	TextEncoder.encode/encoding	implemented	N60	tsonic_node::util::TextEncoder	NODE-UTIL-007,NODE-UTIL-008	UTF-8 TextEncoder carrier and encode helper
+NODE-UTIL-TEXT-DECODER	util	TextDecoder.decode/encoding/fatal/ignoreBOM	implemented	N60	tsonic_node::util::TextDecoder	NODE-UTIL-007,NODE-UTIL-008	UTF-8 TextDecoder carrier with explicit option state
+NODE-UTIL-PARSE-ARGS-SHAPES	util	ParseArgsConfig/ParseArgsOptionDescriptor/ParseArgsResult	implemented	N60	tsonic_node::util::{ParseArgsConfig,ParseArgsOptionDescriptor,ParseArgsResult,ParseArgsOptionType}	NODE-UTIL-006	closed parseArgs configuration/result carrier shapes
+NODE-UTIL-MIME-PARAMS	util	MIMEParams get/set/delete/has	implemented	N60	tsonic_node::util::MIMEParams	NODE-UTIL-006	ordered MIME parameter mutation and lookup carrier
+NODE-UTIL-RUNTIME-PREDICATES	util	util.types common predicates	implemented	N60	tsonic_node::util::types	NODE-UTIL-001,NODE-UTIL-007	closed runtime predicate helpers for JsValue, ArrayBuffer, typed array, date, regexp, promise/error/proxy negatives
 NODE-PROCESS-ENV	process	env	implemented	J	tsonic_node::process::{env_get,env_set,env_delete}	NODE-PROC-001	env helpers
 NODE-PROCESS-CWD	process	cwd/chdir	implemented	J	tsonic_node::process::{cwd,chdir}	NODE-PROC-001	cwd helpers
 NODE-PROCESS-ARGS	process	argv/execPath	implemented	J	tsonic_node::process::{argv,exec_path}	NODE-PROC-001	process args
