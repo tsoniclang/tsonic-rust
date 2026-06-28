@@ -200,6 +200,9 @@ NODE-BUFFER-004	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-004	closed value
 NODE-BUFFER-005	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-008, NODE-BUF-009	concat independent buffer
 NODE-BUFFER-006	implemented	M	tsonic_node::abi::Buffer read/write integer methods	NODE-BUF-010	fixed-width and variable-width endian/bounds matrix
 NODE-BUFFER-007	implemented	M	tsonic_node::abi::Buffer extended encodings	NODE-BUF-010	deterministic unsupported errors (completed in full-completion branch)
+NODE-BUFFER-008	implemented	N58	tsonic_node::abi::{Buffer,buffer_is_buffer,buffer_is_encoding,buffer_transcode}	NODE-BUF-001,NODE-BUF-003,NODE-BUF-TRANSCODE-001,NODE-BUF-010	Buffer statics, predicates, transcoding, supported encoding aliases, shared views, and JSON shape
+NODE-BUFFER-009	implemented	N58	tsonic_node::abi::Buffer	NODE-BUF-010	Buffer mutation/search helpers fill/copy/includes/indexOf/lastIndexOf and checked byte access
+NODE-BUFFER-010	implemented	N58	tsonic_node::abi::Buffer	NODE-BUF-010	unsigned, signed, float, and double endian read/write matrix with bounds/range validation
 NODE-URL-001	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-001, NODE-URL-002	parser dependency parent-owned
 NODE-URL-002	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-001 through NODE-URL-004	explicit accessors
 NODE-URL-003	implemented	M	tsonic_node::abi::Url setters	NODE-URL-009	mutation/reserialization (completed in full-completion branch)

@@ -187,6 +187,15 @@ NODE-BUFFER-SLICE	buffer	slice/subarray	implemented	K	tsonic_node::buffer::Buffe
 NODE-BUFFER-COMPARE	buffer	equals/compare/concat	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-003	byte comparisons
 NODE-BUFFER-INTEGERS	buffer	read/write integers	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-004	fixed-width and variable-width endian integer helpers
 NODE-BUFFER-TRANSCODE	buffer	transcode	implemented	N8	tsonic_node::buffer::transcode	NODE-BUF-TRANSCODE-001	transcode across supported encodings
+NODE-BUFFER-STATICS	buffer	Buffer.alloc/allocUnsafe/from/byteLength/concat/isBuffer/isEncoding	implemented	N58	tsonic_node::buffer::{Buffer,is_buffer,is_encoding}	NODE-BUF-001,NODE-BUF-003,NODE-BUF-010	closed Buffer static constructors, length, concat, and predicates
+NODE-BUFFER-VIEWS	buffer	length/indexing/get/set/slice/subarray	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-002,NODE-BUF-005,NODE-BUF-007	shared view semantics with checked byte access
+NODE-BUFFER-ENCODING-MATRIX	buffer	utf8/hex/base64/base64url/latin1/ascii/utf16le/ucs2	implemented	N58	tsonic_node::buffer::{encode_string,decode_bytes}	NODE-BUF-001,NODE-BUF-010	supported Node Buffer encoding spellings with deterministic unsupported encoding errors
+NODE-BUFFER-MUTATION	buffer	fill/copy/writeUInt8/writeInt8	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	buffer mutation helpers with bounds validation
+NODE-BUFFER-SEARCH	buffer	includes/indexOf/lastIndexOf	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	byte search helpers with offset normalization
+NODE-BUFFER-JSON	buffer	toJSON	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-004	closed Buffer JSON shape with type Buffer and data byte array
+NODE-BUFFER-UINTS	buffer	readUIntLE/readUIntBE/writeUIntLE/writeUIntBE/readUInt8/readUInt16LE/BE/readUInt32LE/BE/writeUInt8/writeUInt16LE/BE/writeUInt32LE/BE	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	unsigned fixed-width and variable-width endian matrix
+NODE-BUFFER-INTS	buffer	readIntLE/readIntBE/writeIntLE/writeIntBE/readInt8/readInt16LE/BE/readInt32LE/BE/writeInt8/writeInt16LE/BE/writeInt32LE/BE	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	signed fixed-width and variable-width endian matrix
+NODE-BUFFER-FLOATS	buffer	readFloatLE/BE readDoubleLE/BE writeFloatLE/BE writeDoubleLE/BE	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	IEEE float and double endian read/write matrix
 NODE-CHILD-SPAWN-SYNC	child_process	spawnSync/spawnFileSync	implemented	N14	tsonic_node::child_process::{spawn_sync,spawn_file_sync,spawn_file_sync_with_options}	NODE-CHILD-001	shell-free sync file process execution with stdout/stderr/status shape
 NODE-CHILD-SPAWN	child_process	spawn/spawnFile	implemented	N14	tsonic_node::child_process::{spawn,spawn_file,spawn_file_with_options,ChildProcess}	NODE-CHILD-002	shell-free running child process shape with pid/stdio/wait/ref/unref/disconnect
 NODE-CHILD-EXEC-FILE	child_process	execFile/execFileSync	implemented	N14	tsonic_node::child_process::{exec_file,exec_file_sync,exec_file_sync_string}	NODE-CHILD-002	file execution helpers without shell evaluation
