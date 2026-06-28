@@ -94,6 +94,35 @@ NODE-PERF-RESOURCE-TIMING	perf_hooks	PerformanceResourceTiming/nodeTiming/timeri
 NODE-PERF-PERFORMANCE-FACADE	perf_hooks	Performance now/mark/measure/getEntries/clear/toJSON	implemented	N54	tsonic_node::perf_hooks::Performance	NODE-PERF-004	closed Performance object facade over existing timing stores without host runtime introspection
 NODE-PERF-MARK-MEASURE-OPTIONS	perf_hooks	PerformanceMarkOptions/PerformanceMeasureOptions/detail/start/duration	implemented	N54	tsonic_node::perf_hooks::{PerformanceMarkOptions,PerformanceMeasureOptions,mark_with_options,measure_with_options}	NODE-PERF-004	mark and measure option carriers including explicit start time, duration, and detail
 NODE-PERF-HISTOGRAM-EXT	perf_hooks	Histogram bigint/percentiles/exceeds fields	implemented	N54	tsonic_node::perf_hooks::Histogram	NODE-PERF-004	expanded histogram bigint and percentile map helpers with closed zero-exceeds carrier
+NODE-PERF-NOW	perf_hooks	performance.now	implemented	N70	tsonic_node::perf_hooks::performance_now	NODE-PERF-004	closed monotonic performance.now helper
+NODE-PERF-TIME-ORIGIN	perf_hooks	performance.timeOrigin	implemented	N70	tsonic_node::perf_hooks::time_origin	NODE-PERF-004	closed timeOrigin helper
+NODE-PERF-PERFORMANCE-OBJECT	perf_hooks	performance object	implemented	N70	tsonic_node::perf_hooks::performance	NODE-PERF-004	closed Performance object factory
+NODE-PERF-CONSTANTS	perf_hooks	constants	implemented	N70	tsonic_node::perf_hooks::CONSTANTS	NODE-PERF-003	closed performance GC constants carrier
+NODE-PERF-EVENT-LOOP-UTILIZATION-FN	perf_hooks	eventLoopUtilization	implemented	N70	tsonic_node::perf_hooks::event_loop_utilization	NODE-PERF-002	closed event loop utilization snapshot/delta helper
+NODE-PERF-MARK-FN	perf_hooks	mark	implemented	N70	tsonic_node::perf_hooks::mark	NODE-PERF-001	closed performance mark helper
+NODE-PERF-MARK-DETAIL-FN	perf_hooks	mark detail	implemented	N70	tsonic_node::perf_hooks::mark_with_detail	NODE-PERF-004	closed performance mark helper with detail
+NODE-PERF-MARK-OPTIONS-FN	perf_hooks	mark options	implemented	N70	tsonic_node::perf_hooks::mark_with_options	NODE-PERF-004	closed performance mark helper with options carrier
+NODE-PERF-MEASURE-FN	perf_hooks	measure	implemented	N70	tsonic_node::perf_hooks::measure	NODE-PERF-001	closed performance measure helper
+NODE-PERF-MEASURE-OPTIONS-FN	perf_hooks	measure options	implemented	N70	tsonic_node::perf_hooks::measure_with_options	NODE-PERF-004	closed performance measure helper with options carrier
+NODE-PERF-GET-ENTRIES	perf_hooks	getEntries	implemented	N70	tsonic_node::perf_hooks::get_entries	NODE-PERF-001	closed performance entry snapshot helper
+NODE-PERF-GET-ENTRIES-BY-NAME	perf_hooks	getEntriesByName	implemented	N70	tsonic_node::perf_hooks::get_entries_by_name	NODE-PERF-001	closed entry name query helper
+NODE-PERF-GET-ENTRIES-BY-NAME-ENTRIES	perf_hooks	getEntriesByName entries	implemented	N70	tsonic_node::perf_hooks::get_entries_by_name_entries	NODE-PERF-001	closed typed entry name query helper
+NODE-PERF-GET-ENTRIES-BY-TYPE	perf_hooks	getEntriesByType	implemented	N70	tsonic_node::perf_hooks::get_entries_by_type	NODE-PERF-001	closed entry type query helper
+NODE-PERF-CLEAR-MARKS	perf_hooks	clearMarks	implemented	N70	tsonic_node::perf_hooks::clear_marks	NODE-PERF-001	closed mark clear helper
+NODE-PERF-CLEAR-MEASURES	perf_hooks	clearMeasures	implemented	N70	tsonic_node::perf_hooks::clear_measures	NODE-PERF-001	closed measure clear helper
+NODE-PERF-CLEAR-RESOURCE-TIMINGS	perf_hooks	clearResourceTimings	implemented	N70	tsonic_node::perf_hooks::clear_resource_timings	NODE-PERF-002	closed resource timing clear helper
+NODE-PERF-ADD-RESOURCE-TIMING	perf_hooks	addResourceTiming	implemented	N70	tsonic_node::perf_hooks::add_resource_timing	NODE-PERF-003	closed resource timing insertion helper
+NODE-PERF-SET-RESOURCE-TIMING-BUFFER-SIZE	perf_hooks	setResourceTimingBufferSize	implemented	N70	tsonic_node::perf_hooks::set_resource_timing_buffer_size	NODE-PERF-002	closed resource timing buffer size setter
+NODE-PERF-NODE-TIMING	perf_hooks	nodeTiming	implemented	N70	tsonic_node::perf_hooks::node_timing	NODE-PERF-003	closed node timing carrier helper
+NODE-PERF-CREATE-HISTOGRAM	perf_hooks	createHistogram	implemented	N70	tsonic_node::perf_hooks::create_histogram	NODE-PERF-002	closed histogram factory
+NODE-PERF-TIMERIFY	perf_hooks	timerify	implemented	N70	tsonic_node::perf_hooks::timerify	NODE-PERF-003	closed function timing helper
+NODE-PERF-ENTRY-CARRIER	perf_hooks	PerformanceEntry	implemented	N70	tsonic_node::perf_hooks::PerformanceEntry	NODE-PERF-001	closed performance entry carrier
+NODE-PERF-MARK-CARRIER	perf_hooks	PerformanceMark	implemented	N70	tsonic_node::perf_hooks::PerformanceMark	NODE-PERF-001	closed performance mark carrier
+NODE-PERF-MEASURE-CARRIER	perf_hooks	PerformanceMeasure	implemented	N70	tsonic_node::perf_hooks::PerformanceMeasure	NODE-PERF-001	closed performance measure carrier
+NODE-PERF-RESOURCE-TIMING-CARRIER	perf_hooks	PerformanceResourceTiming	implemented	N70	tsonic_node::perf_hooks::PerformanceResourceTiming	NODE-PERF-003	closed performance resource timing carrier
+NODE-PERF-NODE-TIMING-CARRIER	perf_hooks	PerformanceNodeTiming	implemented	N70	tsonic_node::perf_hooks::PerformanceNodeTiming	NODE-PERF-003	closed performance node timing carrier
+NODE-PERF-OBSERVER-CARRIER	perf_hooks	PerformanceObserver	implemented	N70	tsonic_node::perf_hooks::PerformanceObserver	NODE-PERF-001	closed performance observer callback carrier
+NODE-PERF-OBSERVER-LIST-CARRIER	perf_hooks	PerformanceObserverEntryList	implemented	N70	tsonic_node::perf_hooks::PerformanceObserverEntryList	NODE-PERF-001	closed performance observer entry list carrier
 NODE-MODULE-PROCESS	process	module	implemented	J	tsonic_node::process	NODE-PROC-001	closed process/env helpers
 NODE-MODULE-PUNYCODE	punycode	module	implemented	N8	tsonic_node::punycode	NODE-PUNYCODE-001	RFC-style punycode toASCII/toUnicode helpers
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
