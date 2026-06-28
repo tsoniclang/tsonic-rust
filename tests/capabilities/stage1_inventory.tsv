@@ -195,7 +195,7 @@ NODE-MOD-001	implemented	M	tsonic_node::abi::{assert_ok,assert_strict_equal}	NOD
 NODE-MOD-002	hard-reject	M	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation runtime out of Stage 1
 NODE-MOD-003	implemented	N3	tsonic_node::abi::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
 NODE-MOD-004	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-001 through NODE-BUF-009	closed `Buffer` subset in Stage 1
-NODE-MOD-005	hard-reject	M	n/a	REJECT-NODE-CHILD-PROCESS	process spawning/shellouts violate runtime contract
+NODE-MOD-005	implemented	N4	tsonic_node::abi::child_process_spawn_file_sync	NODE-CHILD-001	capability-gated shell-free file process spawn
 NODE-MOD-006	hard-reject	M	n/a	REJECT-NODE-CLUSTER	multi-process orchestration out of Stage 1
 NODE-MOD-007	implemented	F/M	tsonic_js::abi::console_*_to	JS-CON-001, JS-CON-002	injectable writer runtime API through JS console support
 NODE-MOD-008	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001 through NODE-CRYPTO-003	randomBytes/hash subset implemented; broader crypto has explicit hard-reject rows
@@ -206,12 +206,12 @@ NODE-MOD-012	hard-reject	M	n/a	REJECT-NODE-DOMAIN	legacy async error domain runt
 NODE-MOD-013	implemented	N3	tsonic_node::abi::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-MOD-014	implemented	K	tsonic_node::abi::fs_*	NODE-FS-001 through NODE-FS-010	selected synchronous file APIs only
 NODE-MOD-015	implemented	N3	tsonic_node::abi::fs_promises_*	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
-NODE-MOD-016	hard-reject	M	n/a	REJECT-NODE-HTTP	networking/server runtime out of Stage 1
+NODE-MOD-016	implemented	N4	tsonic_node::abi::{http_get,http_request}	NODE-HTTP-001	HTTP/1 client request/response over real TCP
 NODE-MOD-017	hard-reject	M	n/a	REJECT-NODE-HTTP2	networking/server runtime out of Stage 1
 NODE-MOD-018	hard-reject	M	n/a	REJECT-NODE-HTTPS	networking/TLS runtime out of Stage 1
 NODE-MOD-019	hard-reject	M	n/a	REJECT-NODE-INSPECTOR	debugger/inspector protocol out of Stage 1
-NODE-MOD-020	hard-reject	M	n/a	REJECT-NODE-MODULE	dynamic module loader/introspection out of runtime contracts
-NODE-MOD-021	hard-reject	M	n/a	REJECT-NODE-NET	TCP networking runtime out of Stage 1
+NODE-MOD-020	implemented	N4	tsonic_node::abi::{module_builtin_modules,module_create_require}	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution
+NODE-MOD-021	implemented	N4	tsonic_node::abi::{net_connect,net_create_server}	NODE-NET-001	TCP socket/server substrate over std net
 NODE-MOD-022	implemented	J	tsonic_node::abi::os_*	NODE-OS-001 through NODE-OS-003	platform/arch/eol/tmpdir/homedir only
 NODE-MOD-023	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-008	pure string path helpers
 NODE-MOD-024	implemented	M	tsonic_node::abi::performance_now	NODE-MISC-001	performance timer/observer policy not first wave (completed in full-completion branch)

@@ -8,6 +8,9 @@ pub use crate::assert::{
 };
 pub use crate::async_hooks::AsyncLocalStorage;
 pub use crate::buffer::Buffer;
+pub use crate::child_process::{
+    spawn_file_sync as child_process_spawn_file_sync, SpawnOutput as ChildProcessOutput,
+};
 pub use crate::crypto::{
     get_hashes as crypto_get_hashes, hmac_digest as crypto_hmac_digest,
     random_bytes as crypto_random_bytes, random_fill as crypto_random_fill,
@@ -52,6 +55,18 @@ pub use crate::fs_promises::{
     rm as fs_promises_rm, stat as fs_promises_stat,
     write_file_buffer as fs_promises_write_file_buffer,
     write_file_string as fs_promises_write_file_string,
+};
+pub use crate::http::{
+    get as http_get, parse_response as http_parse_response, request as http_request,
+    RequestOptions as HttpRequestOptions, Response as HttpResponse,
+};
+pub use crate::module::{
+    builtin_modules as module_builtin_modules, create_require as module_create_require, Require,
+};
+pub use crate::net::{
+    connect as net_connect, create_server as net_create_server, is_ip as net_is_ip,
+    is_ipv4 as net_is_ipv4, is_ipv6 as net_is_ipv6, lookup_endpoint as net_lookup_endpoint, Server,
+    Socket,
 };
 pub use crate::os::{
     arch as os_arch, cpus as os_cpus, eol as os_eol, freemem as os_freemem, homedir as os_homedir,

@@ -3,7 +3,7 @@ NODE-MODULE-ASSERT	assert	module	implemented	N2	tsonic_node::assert	NODE-ASSERT-
 NODE-MODULE-ASYNC-CONTEXT	async_context	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation is outside closed runtime externals
 NODE-MODULE-ASYNC-HOOKS	async_hooks	module	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
 NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	closed Buffer carrier
-NODE-MODULE-CHILD-PROCESS	child_process	module	hard-reject	N0	n/a	REJECT-NODE-CHILD-PROCESS	process spawning is explicitly excluded
+NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process::spawn_file_sync	NODE-CHILD-001	capability-gated shell-free file process spawn
 NODE-MODULE-CLUSTER	cluster	module	hard-reject	N0	n/a	REJECT-NODE-CLUSTER	multi-process orchestration is outside runtime helpers
 NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
 NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
@@ -14,12 +14,12 @@ NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecate
 NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
 NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
-NODE-MODULE-HTTP	http	module	hard-reject	N0	n/a	REJECT-NODE-HTTP	network server/client stack excluded
+NODE-MODULE-HTTP	http	module	implemented	N4	tsonic_node::http	NODE-HTTP-001	HTTP/1 client request/response over real TCP
 NODE-MODULE-HTTP2	http2	module	hard-reject	N0	n/a	REJECT-NODE-HTTP2	network server/client stack excluded
 NODE-MODULE-HTTPS	https	module	hard-reject	N0	n/a	REJECT-NODE-HTTPS	network server/client stack excluded
 NODE-MODULE-INSPECTOR	inspector	module	hard-reject	N0	n/a	REJECT-NODE-INSPECTOR	debugger protocol excluded
-NODE-MODULE-MODULE	module	module	hard-reject	N0	n/a	REJECT-NODE-MODULE	Node loader/module mutation excluded
-NODE-MODULE-NET	net	module	hard-reject	N0	n/a	REJECT-NODE-NET	network sockets excluded
+NODE-MODULE-MODULE	module	module	implemented	N4	tsonic_node::module	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution
+NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
 NODE-MODULE-OS	os	module	implemented	J	tsonic_node::os	NODE-OS-001	closed OS query helpers
 NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers
 NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	NODE-MISC-001	performance.now subset

@@ -10,6 +10,8 @@ mod fs_promises_tests;
 mod fs_tests;
 #[path = "node/misc_module_tests.rs"]
 mod misc_module_tests;
+#[path = "node/network_process_tests.rs"]
+mod network_process_tests;
 #[path = "node/os_tests.rs"]
 mod os_tests;
 #[path = "node/path_tests.rs"]
