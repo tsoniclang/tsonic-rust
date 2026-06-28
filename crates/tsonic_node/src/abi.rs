@@ -16,7 +16,10 @@ pub use crate::buffer::{
     is_buffer as buffer_is_buffer, is_encoding as buffer_is_encoding, transcode as buffer_transcode,
 };
 pub use crate::child_process::{
-    spawn_file_sync as child_process_spawn_file_sync, SpawnOutput as ChildProcessOutput,
+    exec_file_sync as child_process_exec_file_sync,
+    exec_file_sync_string as child_process_exec_file_sync_string,
+    exec_sync as child_process_exec_sync, spawn_file_sync as child_process_spawn_file_sync,
+    spawn_sync as child_process_spawn_sync, SpawnOutput as ChildProcessOutput,
 };
 pub use crate::cluster::{
     fork as cluster_fork, is_primary as cluster_is_primary, is_worker as cluster_is_worker,
@@ -179,7 +182,9 @@ pub use crate::util::{
     to_usv_string as util_to_usv_string, TextDecoder, TextEncoder,
 };
 pub use crate::worker_threads::{
-    receive_message_on_port as worker_receive_message_on_port, MessageChannel, MessagePort, Worker,
+    is_main_thread as worker_is_main_thread, parent_port as worker_parent_port,
+    receive_message_on_port as worker_receive_message_on_port, worker_data, BroadcastChannel,
+    MessageChannel, MessagePort, Worker,
 };
 pub use crate::zlib::{
     brotli_compress_sync as zlib_brotli_compress_sync,

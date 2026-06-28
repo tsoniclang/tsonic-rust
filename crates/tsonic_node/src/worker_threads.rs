@@ -1,4 +1,5 @@
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 
 use tsonic_js::JsValue;
@@ -31,6 +32,12 @@ impl MessagePort {
     pub fn close(&mut self) {
         self.closed = true;
     }
+
+    pub fn start(&self) {}
+
+    pub fn unref(&self) {}
+
+    pub fn r#ref(&self) {}
 }
 
 pub struct MessageChannel {
@@ -87,4 +94,60 @@ impl<T: Send + 'static> Worker<T> {
 
 pub fn receive_message_on_port(port: &MessagePort) -> Option<JsValue> {
     port.receive_message()
+}
+
+pub fn is_main_thread() -> bool {
+    true
+}
+
+pub fn parent_port() -> Option<MessagePort> {
+    None
+}
+
+pub fn worker_data() -> JsValue {
+    JsValue::Undefined
+}
+
+#[derive(Debug, Clone)]
+pub struct BroadcastChannel {
+    name: String,
+}
+
+impl BroadcastChannel {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn post_message(&self, value: JsValue) {
+        broadcast_table()
+            .lock()
+            .unwrap()
+            .entry(self.name.clone())
+            .or_default()
+            .push(value);
+    }
+
+    pub fn receive_message(&self) -> Option<JsValue> {
+        let mut table = broadcast_table().lock().unwrap();
+        table.get_mut(&self.name).and_then(|values| {
+            if values.is_empty() {
+                None
+            } else {
+                Some(values.remove(0))
+            }
+        })
+    }
+
+    pub fn close(&self) {}
+}
+
+static BROADCAST_TABLE: OnceLock<Mutex<std::collections::BTreeMap<String, Vec<JsValue>>>> =
+    OnceLock::new();
+
+fn broadcast_table() -> &'static Mutex<std::collections::BTreeMap<String, Vec<JsValue>>> {
+    BROADCAST_TABLE.get_or_init(|| Mutex::new(std::collections::BTreeMap::new()))
 }

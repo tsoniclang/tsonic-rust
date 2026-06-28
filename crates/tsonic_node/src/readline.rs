@@ -5,6 +5,7 @@ pub struct Interface {
     input: VecDeque<String>,
     output: Vec<String>,
     closed: bool,
+    paused: bool,
 }
 
 impl Interface {
@@ -13,11 +14,12 @@ impl Interface {
             input: lines.into_iter().collect(),
             output: Vec::new(),
             closed: false,
+            paused: false,
         }
     }
 
     pub fn question(&mut self, query: &str) -> Option<String> {
-        if self.closed {
+        if self.closed || self.paused {
             return None;
         }
         self.output.push(query.to_string());
@@ -25,9 +27,21 @@ impl Interface {
     }
 
     pub fn write(&mut self, text: &str) {
-        if !self.closed {
+        if !self.closed && !self.paused {
             self.output.push(text.to_string());
         }
+    }
+
+    pub fn pause(&mut self) {
+        self.paused = true;
+    }
+
+    pub fn resume(&mut self) {
+        self.paused = false;
+    }
+
+    pub fn paused(&self) -> bool {
+        self.paused
     }
 
     pub fn close(&mut self) {
@@ -40,6 +54,18 @@ impl Interface {
 
     pub fn output(&self) -> &[String] {
         &self.output
+    }
+
+    pub fn next_line(&mut self) -> Option<String> {
+        if self.closed || self.paused {
+            None
+        } else {
+            self.input.pop_front()
+        }
+    }
+
+    pub fn remaining_lines(&self) -> Vec<String> {
+        self.input.iter().cloned().collect()
     }
 }
 

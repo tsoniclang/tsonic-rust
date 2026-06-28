@@ -63,9 +63,21 @@ fn child_process_file_spawn_is_explicit_and_shell_free() {
     let current = std::env::current_exe().unwrap();
     let current = current.to_string_lossy().to_string();
     let output = child_process::spawn_file_sync(&current, &["--list"]).unwrap();
+    assert!(output.success());
     assert_eq!(output.status, 0);
+    assert_eq!(output.stderr_string().unwrap(), "");
     assert!(output
         .stdout_string()
         .unwrap()
         .contains("network_process_tests"));
+    let output = child_process::spawn_sync(&current, &["--list"]).unwrap();
+    assert!(output.success());
+    assert!(child_process::exec_file_sync_string(&current, &["--list"])
+        .unwrap()
+        .contains("network_process_tests"));
+    assert!(
+        String::from_utf8(child_process::exec_sync(&current, &["--list"]).unwrap())
+            .unwrap()
+            .contains("network_process_tests")
+    );
 }
