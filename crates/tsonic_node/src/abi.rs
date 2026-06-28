@@ -161,9 +161,15 @@ pub use crate::module::{
     StripTypeScriptMode, StripTypeScriptTypesOptions,
 };
 pub use crate::net::{
-    connect as net_connect, create_server as net_create_server, is_ip as net_is_ip,
+    connect as net_connect, connect_with_options as net_connect_with_options,
+    create_connection as net_create_connection,
+    create_connection_with_options as net_create_connection_with_options,
+    create_server as net_create_server,
+    create_server_with_options as net_create_server_with_options, is_ip as net_is_ip,
     is_ipv4 as net_is_ipv4, is_ipv6 as net_is_ipv6, lookup_endpoint as net_lookup_endpoint,
-    AddressInfo as NetAddressInfo, Server, Socket,
+    AddressInfo as NetAddressInfo, BlockList as NetBlockList, ConnectOptions as NetConnectOptions,
+    ListenOptions as NetListenOptions, Server, Socket, SocketAddress as NetSocketAddress,
+    SocketConstructorOpts as NetSocketConstructorOpts,
 };
 pub use crate::os::{
     arch as os_arch, available_parallelism as os_available_parallelism, constants as os_constants,

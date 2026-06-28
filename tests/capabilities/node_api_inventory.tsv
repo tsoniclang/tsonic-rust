@@ -181,6 +181,9 @@ NODE-OS-CPU	os	cpus/loadavg	implemented	J	tsonic_node::os::{cpus,loadavg}	NODE-O
 NODE-OS-NETWORK	os	networkInterfaces	implemented	N10	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface query through approved dependency
 NODE-NET-SOCKET	net	Socket address/write/end/ref/timeout metadata	implemented	N17	tsonic_node::net::Socket	NODE-NET-002	TCP socket address, byte counter, timeout, encoding, ref/unref, and close helpers
 NODE-NET-SERVER	net	Server address/listen/ref metadata	implemented	N17	tsonic_node::net::Server	NODE-NET-002	TCP server address and ref/unref shape
+NODE-NET-OPTIONS	net	ConnectOptions/ListenOptions/SocketConstructorOpts	implemented	N37	tsonic_node::net::{ConnectOptions,ListenOptions,SocketConstructorOpts}	NODE-NET-003	closed connect/listen/socket constructor option carriers without fd takeover or dynamic lookup hooks
+NODE-NET-BLOCKLIST	net	BlockList	implemented	N37	tsonic_node::net::BlockList	NODE-NET-003	address/range/subnet block list checks and rules serialization
+NODE-NET-SOCKET-ADDRESS	net	SocketAddress	implemented	N37	tsonic_node::net::SocketAddress	NODE-NET-003	host/port/family socket address carrier and parser
 NODE-DGRAM-SOCKET	dgram	Socket address/connect/send/close/ref/ttl/buffer metadata	implemented	N18	tsonic_node::dgram::Socket	NODE-DGRAM-002	UDP socket address, connected send, ref/unref, close, queue, buffer, TTL, and broadcast helpers
 NODE-READLINE-INTERFACE	readline	Interface prompt/cursor/key/terminal methods	implemented	N19	tsonic_node::readline::Interface	NODE-READLINE-002	buffered Interface prompt, cursor, key-write, terminal, pause/resume, and close behavior
 NODE-READLINE-PROMISES	readline/promises	Readline commit/rollback/cursor methods	implemented	N19	tsonic_node::readline::promises	NODE-READLINE-002	promises Readline controller command queue with commit/rollback semantics

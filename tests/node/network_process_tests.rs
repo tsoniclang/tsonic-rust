@@ -10,6 +10,7 @@ fn net_socket_and_http_client_use_real_local_tcp() {
     assert!(server.address().unwrap().port > 0);
     let port = server.local_port().unwrap();
     let handle = thread::spawn(move || {
+        let mut server = server;
         let mut socket = server.accept().unwrap();
         assert_eq!(socket.remote_family().unwrap(), "IPv4");
         socket
@@ -31,6 +32,7 @@ fn net_socket_and_http_client_use_real_local_tcp() {
     let server = net::create_server("127.0.0.1", 0).unwrap();
     let port = server.local_port().unwrap();
     let handle = thread::spawn(move || {
+        let mut server = server;
         let mut socket = server.accept().unwrap();
         let data = socket.read_to_end().unwrap();
         assert_eq!(data, b"ping");
@@ -55,6 +57,106 @@ fn net_socket_and_http_client_use_real_local_tcp() {
     assert!(socket.has_ref());
     socket.end(None).unwrap();
     handle.join().unwrap();
+}
+
+#[test]
+fn net_option_and_policy_shapes_are_closed_and_fact_backed() {
+    let mut block_list = net::BlockList::new();
+    block_list.add_address("192.0.2.10").unwrap();
+    block_list.add_range("192.0.2.20", "192.0.2.30").unwrap();
+    block_list.add_subnet("2001:db8::", 32).unwrap();
+    assert!(block_list.check("192.0.2.10").unwrap());
+    assert!(block_list.check("192.0.2.25").unwrap());
+    assert!(block_list.check("2001:db8::1").unwrap());
+    assert!(!block_list.check("198.51.100.1").unwrap());
+    let restored = net::BlockList::from_json(&block_list.rules()).unwrap();
+    assert_eq!(restored.rules(), block_list.rules());
+
+    let socket_address = net::SocketAddress::parse("127.0.0.1:80").unwrap();
+    assert_eq!(socket_address.address, "127.0.0.1");
+    assert_eq!(socket_address.family, "IPv4");
+    assert_eq!(socket_address.port, 80);
+    assert_eq!(net::SocketAddress::new("::1", 443).unwrap().family, "IPv6");
+
+    let mut server = net::create_server_with_options(&net::ListenOptions {
+        host: "127.0.0.1".to_string(),
+        port: 0,
+        backlog: Some(8),
+        ipv6_only: false,
+        exclusive: true,
+        readable_all: false,
+        writable_all: false,
+    })
+    .unwrap();
+    assert!(server.listening());
+    assert_eq!(server.connections(), 0);
+    server.set_max_connections(Some(16));
+    assert_eq!(server.max_connections(), Some(16));
+    let port = server.local_port().unwrap();
+    let handle = thread::spawn(move || {
+        let mut socket = server.accept().unwrap();
+        assert_eq!(server.get_connections(), 1);
+        socket.write(b"ok").unwrap();
+        socket.end(None).unwrap();
+    });
+
+    let mut block_list = net::BlockList::new();
+    block_list.add_address("203.0.113.1").unwrap();
+    let mut socket = net::connect_with_options(&net::ConnectOptions {
+        host: "127.0.0.1".to_string(),
+        port,
+        local_address: None,
+        local_port: None,
+        family: Some(4),
+        no_delay: true,
+        keep_alive: true,
+        keep_alive_initial_delay: Some(250),
+        timeout: Some(1_000),
+        block_list: Some(block_list),
+    })
+    .unwrap();
+    assert!(socket.keep_alive());
+    assert_eq!(socket.keep_alive_initial_delay(), Some(250));
+    socket.set_type_of_service(16).unwrap();
+    assert_eq!(socket.type_of_service(), Some(16));
+    assert_eq!(socket.ready_state(), "open");
+    socket.pause();
+    assert!(socket.is_paused());
+    assert_eq!(socket.ready_state(), "readOnly");
+    socket.resume();
+    assert!(!socket.is_paused());
+    let data = socket.read_to_end().unwrap();
+    assert_eq!(data, b"ok");
+    socket.reset_and_destroy().unwrap();
+    assert!(socket.destroyed());
+    assert_eq!(socket.ready_state(), "closed");
+    handle.join().unwrap();
+
+    let blocked = net::connect_with_options(&net::ConnectOptions {
+        host: "192.0.2.10".to_string(),
+        port: 1,
+        local_address: None,
+        local_port: None,
+        family: Some(4),
+        no_delay: false,
+        keep_alive: false,
+        keep_alive_initial_delay: None,
+        timeout: None,
+        block_list: Some(restored),
+    });
+    assert!(blocked.is_err());
+
+    let socket = net::Socket::new_with_options(net::SocketConstructorOpts {
+        allow_half_open: true,
+        ..net::SocketConstructorOpts::default()
+    })
+    .unwrap();
+    assert!(socket.allow_half_open());
+    assert!(net::Socket::new_with_options(net::SocketConstructorOpts {
+        fd: Some(1),
+        ..net::SocketConstructorOpts::default()
+    })
+    .is_err());
 }
 
 #[test]
