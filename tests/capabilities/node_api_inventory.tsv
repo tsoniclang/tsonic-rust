@@ -1079,6 +1079,38 @@ NODE-STREAM-WEB-READABLE-TO-WEB	stream/web	Readable.toWeb	implemented	N56	tsonic
 NODE-STREAM-WEB-READABLE-FROM-WEB	stream/web	Readable.fromWeb	implemented	N56	tsonic_node::stream::web::readable_from_web	NODE-STREAM-003	converts closed Web ReadableStream to closed Node Readable
 NODE-STREAM-WEB-WRITABLE-TO-WEB	stream/web	Writable.toWeb	implemented	N56	tsonic_node::stream::web::writable_to_web	NODE-STREAM-003	converts closed Node Writable to closed Web WritableStream
 NODE-STREAM-WEB-WRITABLE-FROM-WEB	stream/web	Writable.fromWeb	implemented	N56	tsonic_node::stream::web::writable_from_web	NODE-STREAM-003	converts closed Web WritableStream to closed Node Writable
+NODE-STREAM-WEB-READABLE-CARRIER	stream/web	ReadableStream	implemented	N69	tsonic_node::stream::web::ReadableStream	NODE-STREAM-004	closed readable web stream carrier exported from stream/web
+NODE-STREAM-WEB-READABLE-FROM-CHUNKS	stream/web	ReadableStream.fromChunks	implemented	N69	tsonic_node::stream::web::ReadableStream::from_chunks	NODE-STREAM-004	constructs readable web stream from explicit chunks
+NODE-STREAM-WEB-READABLE-CHUNKS	stream/web	ReadableStream.chunks	implemented	N69	tsonic_node::stream::web::ReadableStream::chunks	NODE-STREAM-004	reads web stream backing chunks
+NODE-STREAM-WEB-READABLE-LOCKED	stream/web	ReadableStream.locked	implemented	N69	tsonic_node::stream::web::ReadableStream::locked	NODE-STREAM-004	reads readable stream lock state
+NODE-STREAM-WEB-READABLE-CANCELED	stream/web	ReadableStream.canceled	implemented	N69	tsonic_node::stream::web::ReadableStream::canceled	NODE-STREAM-004	reads readable stream canceled state
+NODE-STREAM-WEB-READABLE-GET-READER	stream/web	ReadableStream.getReader	implemented	N69	tsonic_node::stream::web::ReadableStream::get_reader	NODE-STREAM-004	acquires closed reader lock
+NODE-STREAM-WEB-READABLE-CANCEL	stream/web	ReadableStream.cancel	implemented	N69	tsonic_node::stream::web::ReadableStream::cancel	NODE-STREAM-004	cancels readable web stream
+NODE-STREAM-WEB-READABLE-VALUES	stream/web	ReadableStream.values	implemented	N69	tsonic_node::stream::web::ReadableStream::values	NODE-STREAM-004	drains web stream values
+NODE-STREAM-WEB-READABLE-PIPE-TO	stream/web	ReadableStream.pipeTo	implemented	N69	tsonic_node::stream::web::ReadableStream::pipe_to	NODE-STREAM-004	pipes chunks to writable web stream
+NODE-STREAM-WEB-READABLE-READER-CARRIER	stream/web	ReadableStreamDefaultReader	implemented	N69	tsonic_node::stream::web::ReadableStreamDefaultReader	NODE-STREAM-004	closed readable stream reader carrier exported from stream/web
+NODE-STREAM-WEB-READABLE-READER-READ	stream/web	ReadableStreamDefaultReader.read	implemented	N69	tsonic_node::stream::web::ReadableStreamDefaultReader::read	NODE-STREAM-004	reads next chunk from locked stream
+NODE-STREAM-WEB-READABLE-READER-RELEASE-LOCK	stream/web	ReadableStreamDefaultReader.releaseLock	implemented	N69	tsonic_node::stream::web::ReadableStreamDefaultReader::release_lock	NODE-STREAM-004	releases readable stream lock
+NODE-STREAM-WEB-WRITABLE-CARRIER	stream/web	WritableStream	implemented	N69	tsonic_node::stream::web::WritableStream	NODE-STREAM-004	closed writable web stream carrier exported from stream/web
+NODE-STREAM-WEB-WRITABLE-NEW	stream/web	WritableStream.new	implemented	N69	tsonic_node::stream::web::WritableStream::new	NODE-STREAM-004	constructs writable web stream
+NODE-STREAM-WEB-WRITABLE-CHUNKS	stream/web	WritableStream.chunks	implemented	N69	tsonic_node::stream::web::WritableStream::chunks	NODE-STREAM-004	reads written chunks
+NODE-STREAM-WEB-WRITABLE-LOCKED	stream/web	WritableStream.locked	implemented	N69	tsonic_node::stream::web::WritableStream::locked	NODE-STREAM-004	reads writable stream lock state
+NODE-STREAM-WEB-WRITABLE-CLOSED	stream/web	WritableStream.closed	implemented	N69	tsonic_node::stream::web::WritableStream::closed	NODE-STREAM-004	reads writable closed state
+NODE-STREAM-WEB-WRITABLE-ABORTED	stream/web	WritableStream.aborted	implemented	N69	tsonic_node::stream::web::WritableStream::aborted	NODE-STREAM-004	reads writable aborted state
+NODE-STREAM-WEB-WRITABLE-WRITE	stream/web	WritableStream.write	implemented	N69	tsonic_node::stream::web::WritableStream::write	NODE-STREAM-004	writes explicit Buffer chunk
+NODE-STREAM-WEB-WRITABLE-CLOSE	stream/web	WritableStream.close	implemented	N69	tsonic_node::stream::web::WritableStream::close	NODE-STREAM-004	closes writable web stream
+NODE-STREAM-WEB-WRITABLE-ABORT	stream/web	WritableStream.abort	implemented	N69	tsonic_node::stream::web::WritableStream::abort	NODE-STREAM-004	aborts writable web stream
+NODE-STREAM-WEB-WRITABLE-GET-WRITER	stream/web	WritableStream.getWriter	implemented	N69	tsonic_node::stream::web::WritableStream::get_writer	NODE-STREAM-004	acquires closed writer lock
+NODE-STREAM-WEB-WRITABLE-WRITER-CARRIER	stream/web	WritableStreamDefaultWriter	implemented	N69	tsonic_node::stream::web::WritableStreamDefaultWriter	NODE-STREAM-004	closed writable stream writer carrier exported from stream/web
+NODE-STREAM-WEB-WRITABLE-WRITER-WRITE	stream/web	WritableStreamDefaultWriter.write	implemented	N69	tsonic_node::stream::web::WritableStreamDefaultWriter::write	NODE-STREAM-004	writes through locked writer
+NODE-STREAM-WEB-WRITABLE-WRITER-CLOSE	stream/web	WritableStreamDefaultWriter.close	implemented	N69	tsonic_node::stream::web::WritableStreamDefaultWriter::close	NODE-STREAM-004	closes through locked writer
+NODE-STREAM-WEB-WRITABLE-WRITER-ABORT	stream/web	WritableStreamDefaultWriter.abort	implemented	N69	tsonic_node::stream::web::WritableStreamDefaultWriter::abort	NODE-STREAM-004	aborts through locked writer
+NODE-STREAM-WEB-WRITABLE-WRITER-RELEASE-LOCK	stream/web	WritableStreamDefaultWriter.releaseLock	implemented	N69	tsonic_node::stream::web::WritableStreamDefaultWriter::release_lock	NODE-STREAM-004	releases writable stream lock
+NODE-STREAM-WEB-TRANSFORM-CARRIER	stream/web	TransformStream	implemented	N69	tsonic_node::stream::web::TransformStream	NODE-STREAM-004	closed transform web stream carrier exported from stream/web
+NODE-STREAM-WEB-TRANSFORM-NEW	stream/web	TransformStream.new	implemented	N69	tsonic_node::stream::web::TransformStream::new	NODE-STREAM-004	constructs transform stream
+NODE-STREAM-WEB-TRANSFORM-READABLE	stream/web	TransformStream.readable	implemented	N69	tsonic_node::stream::web::TransformStream::readable	NODE-STREAM-004	reads transform readable side
+NODE-STREAM-WEB-TRANSFORM-WRITABLE	stream/web	TransformStream.writable	implemented	N69	tsonic_node::stream::web::TransformStream::writable	NODE-STREAM-004	reads transform writable side
+NODE-STREAM-WEB-TRANSFORM-WRITE-PASSTHROUGH	stream/web	TransformStream.writePassthrough	implemented	N69	tsonic_node::stream::web::TransformStream::write_passthrough	NODE-STREAM-004	passes chunk from writable to readable side
 WEB-STREAM-READABLE-CARRIER	web-globals/streams	ReadableStream	implemented	N69	tsonic_node::stream::web::ReadableStream	NODE-STREAM-004	closed readable web stream carrier
 WEB-STREAM-READABLE-FROM-CHUNKS	web-globals/streams	ReadableStream.fromChunks	implemented	N69	tsonic_node::stream::web::ReadableStream::from_chunks	NODE-STREAM-004	constructs readable web stream from explicit chunks
 WEB-STREAM-READABLE-CHUNKS	web-globals/streams	ReadableStream.chunks	implemented	N69	tsonic_node::stream::web::ReadableStream::chunks	NODE-STREAM-004	reads web stream backing chunks
