@@ -617,8 +617,15 @@ NODE-HTTPS-REQUEST	https	request	implemented	N64	tsonic_node::https::request	NOD
 NODE-HTTPS-CREATE-SERVER	https	createServer	implemented	N64	tsonic_node::https::create_server	NODE-HTTPS-002	creates HTTPS server carrier from explicit options and handler
 NODE-MODULE-INSPECTOR	inspector	module	hard-reject	N0	n/a	REJECT-NODE-INSPECTOR	debugger protocol excluded
 NODE-MODULE-MODULE	module	module	implemented	N4	tsonic_node::module	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution
-NODE-MODULE-SOURCEMAP	module	SourceMap/source map support	implemented	N21	tsonic_node::module::{SourceMap,SourceMapPayload,SourceMapping,SourceMapsSupport}	NODE-MODULE-002	closed source map carrier and global source map support toggles without loader execution
-NODE-MODULE-SOURCEMAP-EXT	module	SourceMapPayload.file/SourceMapsSupport.enabled/setSourceMapsSupport options	implemented	N51	tsonic_node::module::{SourceMapPayload,SourceMapsSupport,SetSourceMapsSupportOptions,set_source_maps_support_with_options}	NODE-MODULE-003	expanded source map carrier fields and option-based support updates without loader execution
+NODE-MODULE-SOURCEMAPS-SUPPORT-STATE	module	SourceMapsSupport	implemented	N62	tsonic_node::module::SourceMapsSupport	NODE-MODULE-001	closed source maps support state
+NODE-MODULE-SOURCEMAP-SOURCE-MAPPING-CARRIER	module	SourceMapping	implemented	N62	tsonic_node::module::SourceMapping	NODE-MODULE-001	closed decoded source mapping row
+NODE-MODULE-SOURCEMAP-SOURCE-ORIGIN-CARRIER	module	SourceOrigin	implemented	N62	tsonic_node::module::SourceOrigin	NODE-MODULE-001	closed source origin row
+NODE-MODULE-SOURCEMAP-PAYLOAD-FILE	module	SourceMapPayload.file	implemented	N62	tsonic_node::module::SourceMapPayload::file	NODE-MODULE-001	source map payload file field
+NODE-MODULE-SOURCEMAP-PAYLOAD-SOURCE-ROOT	module	SourceMapPayload.sourceRoot	implemented	N62	tsonic_node::module::SourceMapPayload::source_root	NODE-MODULE-001	source map payload sourceRoot field
+NODE-MODULE-SOURCEMAP-PAYLOAD-SOURCES-CONTENT	module	SourceMapPayload.sourcesContent	implemented	N62	tsonic_node::module::SourceMapPayload::sources_content	NODE-MODULE-001	source map payload sourcesContent field
+NODE-MODULE-SOURCEMAPS-SUPPORT-ENABLED-FIELD	module	SourceMapsSupport.enabled	implemented	N62	tsonic_node::module::SourceMapsSupport::enabled	NODE-MODULE-001	source maps enabled state
+NODE-MODULE-SOURCEMAPS-SUPPORT-NODE-MODULES	module	SourceMapsSupport.nodeModules	implemented	N62	tsonic_node::module::SourceMapsSupport::node_modules	NODE-MODULE-001	source maps node_modules option state
+NODE-MODULE-SOURCEMAPS-SUPPORT-GENERATED-CODE	module	SourceMapsSupport.generatedCode	implemented	N62	tsonic_node::module::SourceMapsSupport::generated_code	NODE-MODULE-001	source maps generatedCode option state
 NODE-MODULE-STRIP-TS	module	stripTypeScriptTypes	implemented	N21	tsonic_node::module::strip_type_script_types	NODE-MODULE-002	safe TypeScript type stripping helper; no evaluation or loader hook execution
 NODE-MODULE-BUILTIN-MODULES	module	builtinModules	implemented	N74	tsonic_node::module::builtin_modules	NODE-MODULE-001	closed builtin module list for supported runtime modules
 NODE-MODULE-CREATE-REQUIRE	module	createRequire	implemented	N74	tsonic_node::module::create_require	NODE-MODULE-001	createRequire returns safe Require carrier without executing loaders
@@ -634,13 +641,19 @@ NODE-MODULE-SOURCEMAP-OPTIONS	module	SourceMapConstructorOptions	implemented	N74
 NODE-MODULE-SOURCEMAP-MAPPING	module	SourceMapping	implemented	N74	tsonic_node::module::SourceMapping	NODE-MODULE-002	closed decoded source mapping carrier
 NODE-MODULE-SOURCEMAP-ORIGIN	module	SourceOrigin	implemented	N74	tsonic_node::module::SourceOrigin	NODE-MODULE-002	closed source origin lookup carrier
 NODE-MODULE-SOURCEMAP-CARRIER	module	SourceMap	implemented	N74	tsonic_node::module::SourceMap	NODE-MODULE-002	closed source map carrier
-NODE-MODULE-SOURCEMAP-NEW	module	SourceMap.new/withDecodedMappings	implemented	N74	tsonic_node::module::SourceMap::{new,with_decoded_mappings}	NODE-MODULE-002	SourceMap constructors keep payload/options/mappings closed
-NODE-MODULE-SOURCEMAP-QUERIES	module	SourceMap payload/lineLengths/findEntry/findOrigin	implemented	N74	tsonic_node::module::SourceMap::{payload,line_lengths,find_entry,find_origin}	NODE-MODULE-002	SourceMap lookup helpers are deterministic over decoded mappings
+NODE-MODULE-SOURCEMAP-CONSTRUCTOR	module	SourceMap.new	implemented	N62	tsonic_node::module::SourceMap::new	NODE-MODULE-001	constructs source map from payload
+NODE-MODULE-SOURCEMAP-WITH-DECODED-MAPPINGS	module	SourceMap.withDecodedMappings	implemented	N62	tsonic_node::module::SourceMap::with_decoded_mappings	NODE-MODULE-001	constructs source map with decoded mappings
+NODE-MODULE-SOURCEMAP-PAYLOAD-ACCESSOR	module	SourceMap.payload	implemented	N62	tsonic_node::module::SourceMap::payload	NODE-MODULE-001	returns source map payload
+NODE-MODULE-SOURCEMAP-LINE-LENGTHS	module	SourceMap.lineLengths	implemented	N62	tsonic_node::module::SourceMap::line_lengths	NODE-MODULE-001	returns optional source line lengths
+NODE-MODULE-SOURCEMAP-FIND-ENTRY	module	SourceMap.findEntry	implemented	N62	tsonic_node::module::SourceMap::find_entry	NODE-MODULE-001	finds decoded mapping entry
+NODE-MODULE-SOURCEMAP-FIND-ORIGIN	module	SourceMap.findOrigin	implemented	N62	tsonic_node::module::SourceMap::find_origin	NODE-MODULE-001	finds decoded origin tuple
 NODE-MODULE-SOURCEMAP-SUPPORT-CARRIER	module	SourceMapsSupport	implemented	N74	tsonic_node::module::SourceMapsSupport	NODE-MODULE-002	closed source map support state carrier
 NODE-MODULE-SOURCEMAP-SUPPORT-GET	module	getSourceMapsSupport	implemented	N74	tsonic_node::module::get_source_maps_support	NODE-MODULE-002	source map support getter reads explicit runtime state
 NODE-MODULE-SOURCEMAP-SUPPORT-SET	module	setSourceMapsSupport	implemented	N74	tsonic_node::module::set_source_maps_support	NODE-MODULE-002	source map support setter writes explicit runtime state
 NODE-MODULE-SOURCEMAP-SUPPORT-OPTIONS	module	SetSourceMapsSupportOptions	implemented	N74	tsonic_node::module::SetSourceMapsSupportOptions	NODE-MODULE-003	closed source map support options carrier
-NODE-MODULE-SOURCEMAP-SUPPORT-SET-OPTIONS	module	setSourceMapsSupport options	implemented	N74	tsonic_node::module::set_source_maps_support_with_options	NODE-MODULE-003	option-based source map support setter writes explicit runtime state
+NODE-MODULE-SOURCEMAP-SUPPORT-OPTIONS-NODE-MODULES	module	SetSourceMapsSupportOptions.nodeModules	implemented	N62	tsonic_node::module::SetSourceMapsSupportOptions::node_modules	NODE-MODULE-001	source map support nodeModules option
+NODE-MODULE-SOURCEMAP-SUPPORT-OPTIONS-GENERATED-CODE	module	SetSourceMapsSupportOptions.generatedCode	implemented	N62	tsonic_node::module::SetSourceMapsSupportOptions::generated_code	NODE-MODULE-001	source map support generatedCode option
+NODE-MODULE-SOURCEMAP-SUPPORT-SET-WITH-OPTIONS	module	setSourceMapsSupport options	implemented	N62	tsonic_node::module::set_source_maps_support_with_options	NODE-MODULE-001	sets source maps support with explicit options
 NODE-MODULE-STRIP-TS-MODE	module	StripTypeScriptMode	implemented	N74	tsonic_node::module::StripTypeScriptMode	NODE-MODULE-002	closed strip/transform mode carrier
 NODE-MODULE-STRIP-TS-OPTIONS	module	StripTypeScriptTypesOptions	implemented	N74	tsonic_node::module::StripTypeScriptTypesOptions	NODE-MODULE-002	closed strip TypeScript options carrier
 NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
@@ -1253,12 +1266,108 @@ NODE-ZLIB-BROTLI-COMPRESS-SYNC	zlib	brotliCompressSync	implemented	N66	tsonic_no
 NODE-ZLIB-BROTLI-DECOMPRESS-SYNC	zlib	brotliDecompressSync	implemented	N66	tsonic_node::zlib::brotli_decompress_sync	NODE-ZLIB-002	brotliDecompressSync decompresses Brotli Buffer input
 NODE-ZLIB-ZSTD-COMPRESS-SYNC	zlib	zstdCompressSync	implemented	N66	tsonic_node::zlib::zstd_compress_sync	NODE-ZLIB-002	dependency-gated zstdCompressSync returns explicit unsupported error until approved implementation lands
 NODE-ZLIB-ZSTD-DECOMPRESS-SYNC	zlib	zstdDecompressSync	implemented	N66	tsonic_node::zlib::zstd_decompress_sync	NODE-ZLIB-002	dependency-gated zstdDecompressSync returns explicit unsupported error until approved implementation lands
-WEB-ABORT	web-globals/abortcontroller	AbortController/AbortSignal	implemented	W1	tsonic_js::web::{AbortController,AbortSignal}	JS-WEB-001	closed abort signal/controller carrier with reason, timeout, any, and throwIfAborted
+WEB-ABORT-CONTROLLER-CARRIER	web-globals/abortcontroller	AbortController	implemented	N65	tsonic_js::web::AbortController	JS-WEB-001	closed abort controller carrier
+WEB-ABORT-CONTROLLER-NEW	web-globals/abortcontroller	AbortController.new	implemented	N65	tsonic_js::web::AbortController::new	JS-WEB-001	constructs abort controller
+WEB-ABORT-CONTROLLER-SIGNAL	web-globals/abortcontroller	AbortController.signal	implemented	N65	tsonic_js::web::AbortController::signal	JS-WEB-001	returns linked abort signal
+WEB-ABORT-CONTROLLER-ABORT	web-globals/abortcontroller	AbortController.abort	implemented	N65	tsonic_js::web::AbortController::abort	JS-WEB-001	aborts with closed reason value
+WEB-ABORT-SIGNAL-CARRIER	web-globals/abortcontroller	AbortSignal	implemented	N65	tsonic_js::web::AbortSignal	JS-WEB-001	closed abort signal carrier
+WEB-ABORT-SIGNAL-NEW	web-globals/abortcontroller	AbortSignal.new	implemented	N65	tsonic_js::web::AbortSignal::new	JS-WEB-001	constructs non-aborted signal
+WEB-ABORT-SIGNAL-ABORTED	web-globals/abortcontroller	AbortSignal.aborted	implemented	N65	tsonic_js::web::AbortSignal::aborted	JS-WEB-001	reads aborted state
+WEB-ABORT-SIGNAL-REASON	web-globals/abortcontroller	AbortSignal.reason	implemented	N65	tsonic_js::web::AbortSignal::reason	JS-WEB-001	reads closed abort reason
+WEB-ABORT-SIGNAL-THROW-IF-ABORTED	web-globals/abortcontroller	AbortSignal.throwIfAborted	implemented	N65	tsonic_js::web::AbortSignal::throw_if_aborted	JS-WEB-001	returns error when signal is aborted
+WEB-ABORT-SIGNAL-ABORT	web-globals/abortcontroller	AbortSignal.abort	implemented	N65	tsonic_js::web::AbortSignal::abort	JS-WEB-001	constructs already aborted signal
+WEB-ABORT-SIGNAL-TIMEOUT	web-globals/abortcontroller	AbortSignal.timeout	implemented	N65	tsonic_js::web::AbortSignal::timeout	JS-WEB-001	closed timeout signal constructor
+WEB-ABORT-SIGNAL-ANY	web-globals/abortcontroller	AbortSignal.any	implemented	N65	tsonic_js::web::AbortSignal::any	JS-WEB-001	combines explicit signal set
 WEB-DOM-EXCEPTION	web-globals/domexception	DOMException	implemented	W1	tsonic_js::web::DomException	JS-WEB-002	DOMException name/message and legacy code constants
-WEB-EVENTS	web-globals/events	Event/CustomEvent/EventTarget	implemented	W1	tsonic_js::web::{Event,CustomEvent,EventTarget}	JS-WEB-003	closed EventTarget listener carrier, cancellation, once, custom detail, and dispatch result
-WEB-BODY	web-globals/fetch	Blob/File/Body	implemented	W1	tsonic_js::web::{Blob,File,Body}	JS-WEB-004	closed byte/text/blob/file body carriers with text and ArrayBuffer views
-WEB-FETCH-CARRIERS	web-globals/fetch	Headers/FormData/Request/Response	implemented	W1	tsonic_js::web::{Headers,FormData,Request,Response}	JS-WEB-005-007	case-insensitive headers, ordered form data, request/response body readers, json, redirect, and clone carriers
-WEB-STORAGE-NAV	web-globals/storage	Storage/Navigator	implemented	W1	tsonic_js::web::{Storage,Navigator}	JS-WEB-008	closed Storage and Navigator global shapes
+WEB-EVENT-CARRIER	web-globals/events	Event	implemented	N65	tsonic_js::web::Event	JS-WEB-002	closed Event carrier
+WEB-EVENT-NEW	web-globals/events	Event.new	implemented	N65	tsonic_js::web::Event::new	JS-WEB-002	constructs Event with explicit init
+WEB-EVENT-TYPE	web-globals/events	Event.type	implemented	N65	tsonic_js::web::Event::event_type	JS-WEB-002	event type accessor
+WEB-EVENT-PREVENT-DEFAULT	web-globals/events	Event.preventDefault	implemented	N65	tsonic_js::web::Event::prevent_default	JS-WEB-002	prevents default on cancelable events
+WEB-EVENT-STOP-PROPAGATION	web-globals/events	Event.stopPropagation	implemented	N65	tsonic_js::web::Event::stop_propagation	JS-WEB-002	stops propagation flag
+WEB-EVENT-STOP-IMMEDIATE-PROPAGATION	web-globals/events	Event.stopImmediatePropagation	implemented	N65	tsonic_js::web::Event::stop_immediate_propagation	JS-WEB-002	stops immediate propagation flag
+WEB-EVENT-INIT-EVENT	web-globals/events	Event.initEvent	implemented	N65	tsonic_js::web::Event::init_event	JS-WEB-002	reinitializes event fields
+WEB-CUSTOM-EVENT-CARRIER	web-globals/events	CustomEvent	implemented	N65	tsonic_js::web::CustomEvent	JS-WEB-002	closed CustomEvent carrier
+WEB-CUSTOM-EVENT-NEW	web-globals/events	CustomEvent.new	implemented	N65	tsonic_js::web::CustomEvent::new	JS-WEB-002	constructs CustomEvent with detail
+WEB-CUSTOM-EVENT-DETAIL	web-globals/events	CustomEvent.detail	implemented	N65	tsonic_js::web::CustomEvent::detail	JS-WEB-002	custom event detail accessor
+WEB-EVENTTARGET-CARRIER	web-globals/events	EventTarget	implemented	N65	tsonic_js::web::EventTarget	JS-WEB-002	closed EventTarget carrier
+WEB-EVENTTARGET-NEW	web-globals/events	EventTarget.new	implemented	N65	tsonic_js::web::EventTarget::new	JS-WEB-002	constructs event target
+WEB-EVENTTARGET-ADD-LISTENER	web-globals/events	EventTarget.addEventListener	implemented	N65	tsonic_js::web::EventTarget::add_event_listener	JS-WEB-002	adds explicit callback listener
+WEB-EVENTTARGET-REMOVE-LISTENER	web-globals/events	EventTarget.removeEventListener	implemented	N65	tsonic_js::web::EventTarget::remove_event_listener	JS-WEB-002	removes listener by id
+WEB-EVENTTARGET-DISPATCH	web-globals/events	EventTarget.dispatchEvent	implemented	N65	tsonic_js::web::EventTarget::dispatch_event	JS-WEB-002	dispatches event to closed listener list
+WEB-BLOB-CARRIER	web-globals/fetch	Blob	implemented	N65	tsonic_js::web::Blob	JS-WEB-003	closed Blob carrier
+WEB-BLOB-NEW	web-globals/fetch	Blob.new	implemented	N65	tsonic_js::web::Blob::new	JS-WEB-003	constructs blob from explicit parts
+WEB-BLOB-FROM-TEXT	web-globals/fetch	Blob.fromText	implemented	N65	tsonic_js::web::Blob::from_text	JS-WEB-003	constructs text blob
+WEB-BLOB-SIZE	web-globals/fetch	Blob.size	implemented	N65	tsonic_js::web::Blob::size	JS-WEB-003	blob size accessor
+WEB-BLOB-TYPE	web-globals/fetch	Blob.type	implemented	N65	tsonic_js::web::Blob::content_type	JS-WEB-003	blob content type accessor
+WEB-BLOB-TEXT	web-globals/fetch	Blob.text	implemented	N65	tsonic_js::web::Blob::text	JS-WEB-003	decodes blob as UTF-8 text
+WEB-BLOB-ARRAY-BUFFER	web-globals/fetch	Blob.arrayBuffer	implemented	N65	tsonic_js::web::Blob::array_buffer	JS-WEB-003	copies blob bytes into ArrayBuffer
+WEB-BLOB-BYTES	web-globals/fetch	Blob.bytes	implemented	N65	tsonic_js::web::Blob::bytes	JS-WEB-003	returns blob byte slice
+WEB-BLOB-SLICE	web-globals/fetch	Blob.slice	implemented	N65	tsonic_js::web::Blob::slice	JS-WEB-003	copies blob slice with explicit type
+WEB-FILE-CARRIER	web-globals/fetch	File	implemented	N65	tsonic_js::web::File	JS-WEB-003	closed File carrier
+WEB-FILE-NEW	web-globals/fetch	File.new	implemented	N65	tsonic_js::web::File::new	JS-WEB-003	constructs file from blob parts
+WEB-FILE-NAME	web-globals/fetch	File.name	implemented	N65	tsonic_js::web::File::name	JS-WEB-003	file name accessor
+WEB-FILE-LAST-MODIFIED	web-globals/fetch	File.lastModified	implemented	N65	tsonic_js::web::File::last_modified	JS-WEB-003	file lastModified accessor
+WEB-BODY-CARRIER	web-globals/fetch	Body	implemented	N65	tsonic_js::web::Body	JS-WEB-003	closed Body enum carrier
+WEB-BODY-BYTES	web-globals/fetch	Body.bytes	implemented	N65	tsonic_js::web::Body::bytes	JS-WEB-003	returns body bytes
+WEB-BODY-TEXT	web-globals/fetch	Body.text	implemented	N65	tsonic_js::web::Body::text	JS-WEB-003	returns body text
+WEB-BODY-JSON	web-globals/fetch	Body.json	implemented	N65	tsonic_js::web::Body::json	JS-WEB-003	parses body JSON into closed JsValue
+WEB-HEADERS-CARRIER	web-globals/fetch	Headers	implemented	N65	tsonic_js::web::Headers	JS-WEB-004	closed Headers carrier
+WEB-HEADERS-NEW	web-globals/fetch	Headers.new	implemented	N65	tsonic_js::web::Headers::new	JS-WEB-004	constructs empty headers
+WEB-HEADERS-FROM-PAIRS	web-globals/fetch	Headers.fromPairs	implemented	N65	tsonic_js::web::Headers::from_pairs	JS-WEB-004	constructs headers from explicit pairs
+WEB-HEADERS-APPEND	web-globals/fetch	Headers.append	implemented	N65	tsonic_js::web::Headers::append	JS-WEB-004	appends header value
+WEB-HEADERS-SET	web-globals/fetch	Headers.set	implemented	N65	tsonic_js::web::Headers::set	JS-WEB-004	sets header value
+WEB-HEADERS-GET	web-globals/fetch	Headers.get	implemented	N65	tsonic_js::web::Headers::get	JS-WEB-004	gets combined header value
+WEB-HEADERS-GET-ALL	web-globals/fetch	Headers.getAll	implemented	N65	tsonic_js::web::Headers::get_all	JS-WEB-004	gets all header values
+WEB-HEADERS-HAS	web-globals/fetch	Headers.has	implemented	N65	tsonic_js::web::Headers::has	JS-WEB-004	checks header presence
+WEB-HEADERS-DELETE	web-globals/fetch	Headers.delete	implemented	N65	tsonic_js::web::Headers::delete	JS-WEB-004	deletes header values
+WEB-HEADERS-KEYS	web-globals/fetch	Headers.keys	implemented	N65	tsonic_js::web::Headers::keys	JS-WEB-004	returns ordered header keys
+WEB-HEADERS-VALUES	web-globals/fetch	Headers.values	implemented	N65	tsonic_js::web::Headers::values	JS-WEB-004	returns ordered header values
+WEB-HEADERS-ENTRIES	web-globals/fetch	Headers.entries	implemented	N65	tsonic_js::web::Headers::entries	JS-WEB-004	returns ordered header entries
+WEB-HEADERS-FOREACH	web-globals/fetch	Headers.forEach	implemented	N65	tsonic_js::web::Headers::for_each	JS-WEB-004	iterates header entries with explicit callback
+WEB-FORMDATA-CARRIER	web-globals/fetch	FormData	implemented	N65	tsonic_js::web::FormData	JS-WEB-004	closed FormData carrier
+WEB-FORMDATA-NEW	web-globals/fetch	FormData.new	implemented	N65	tsonic_js::web::FormData::new	JS-WEB-004	constructs empty form data
+WEB-FORMDATA-APPEND	web-globals/fetch	FormData.append	implemented	N65	tsonic_js::web::FormData::append	JS-WEB-004	appends form value
+WEB-FORMDATA-SET	web-globals/fetch	FormData.set	implemented	N65	tsonic_js::web::FormData::set	JS-WEB-004	sets form value
+WEB-FORMDATA-GET	web-globals/fetch	FormData.get	implemented	N65	tsonic_js::web::FormData::get	JS-WEB-004	gets first form value
+WEB-FORMDATA-GET-ALL	web-globals/fetch	FormData.getAll	implemented	N65	tsonic_js::web::FormData::get_all	JS-WEB-004	gets all form values
+WEB-FORMDATA-HAS	web-globals/fetch	FormData.has	implemented	N65	tsonic_js::web::FormData::has	JS-WEB-004	checks form key
+WEB-FORMDATA-DELETE	web-globals/fetch	FormData.delete	implemented	N65	tsonic_js::web::FormData::delete	JS-WEB-004	deletes form key
+WEB-FORMDATA-ENTRIES	web-globals/fetch	FormData.entries	implemented	N65	tsonic_js::web::FormData::entries	JS-WEB-004	returns ordered form entries
+WEB-FORMDATA-KEYS	web-globals/fetch	FormData.keys	implemented	N65	tsonic_js::web::FormData::keys	JS-WEB-004	returns ordered form keys
+WEB-FORMDATA-VALUES	web-globals/fetch	FormData.values	implemented	N65	tsonic_js::web::FormData::values	JS-WEB-004	returns ordered form values
+WEB-FORMDATA-FOREACH	web-globals/fetch	FormData.forEach	implemented	N65	tsonic_js::web::FormData::for_each	JS-WEB-004	iterates form entries with explicit callback
+WEB-REQUEST-CARRIER	web-globals/fetch	Request	implemented	N65	tsonic_js::web::Request	JS-WEB-004	closed Request carrier
+WEB-REQUEST-NEW	web-globals/fetch	Request.new	implemented	N65	tsonic_js::web::Request::new	JS-WEB-004	constructs GET request
+WEB-REQUEST-WITH-INIT	web-globals/fetch	Request.withInit	implemented	N65	tsonic_js::web::Request::with_init	JS-WEB-004	constructs request with explicit init
+WEB-REQUEST-TEXT	web-globals/fetch	Request.text	implemented	N65	tsonic_js::web::Request::text	JS-WEB-004	reads request body as text
+WEB-REQUEST-ARRAY-BUFFER	web-globals/fetch	Request.arrayBuffer	implemented	N65	tsonic_js::web::Request::array_buffer	JS-WEB-004	reads request body as ArrayBuffer
+WEB-REQUEST-JSON	web-globals/fetch	Request.json	implemented	N65	tsonic_js::web::Request::json	JS-WEB-004	reads request body as JSON
+WEB-REQUEST-CLONE	web-globals/fetch	Request.clone	implemented	N65	tsonic_js::web::Request::clone_request	JS-WEB-004	clones request carrier
+WEB-RESPONSE-CARRIER	web-globals/fetch	Response	implemented	N65	tsonic_js::web::Response	JS-WEB-004	closed Response carrier
+WEB-RESPONSE-NEW	web-globals/fetch	Response.new	implemented	N65	tsonic_js::web::Response::new	JS-WEB-004	constructs response
+WEB-RESPONSE-WITH-INIT	web-globals/fetch	Response.withInit	implemented	N65	tsonic_js::web::Response::with_init	JS-WEB-004	constructs response with explicit init
+WEB-RESPONSE-JSON	web-globals/fetch	Response.json	implemented	N65	tsonic_js::web::Response::json	JS-WEB-004	constructs JSON response
+WEB-RESPONSE-REDIRECT	web-globals/fetch	Response.redirect	implemented	N65	tsonic_js::web::Response::redirect	JS-WEB-004	constructs redirect response
+WEB-RESPONSE-ERROR	web-globals/fetch	Response.error	implemented	N65	tsonic_js::web::Response::error	JS-WEB-004	constructs error response
+WEB-RESPONSE-TEXT	web-globals/fetch	Response.text	implemented	N65	tsonic_js::web::Response::text	JS-WEB-004	reads response body as text
+WEB-RESPONSE-ARRAY-BUFFER	web-globals/fetch	Response.arrayBuffer	implemented	N65	tsonic_js::web::Response::array_buffer	JS-WEB-004	reads response body as ArrayBuffer
+WEB-RESPONSE-JSON-BODY	web-globals/fetch	Response.jsonBody	implemented	N65	tsonic_js::web::Response::json_body	JS-WEB-004	reads response body as JSON
+WEB-RESPONSE-CLONE	web-globals/fetch	Response.clone	implemented	N65	tsonic_js::web::Response::clone_response	JS-WEB-004	clones response carrier
+WEB-STORAGE-CARRIER	web-globals/storage	Storage	implemented	N65	tsonic_js::web::Storage	JS-WEB-005	closed Storage carrier
+WEB-STORAGE-NEW	web-globals/storage	Storage.new	implemented	N65	tsonic_js::web::Storage::new	JS-WEB-005	constructs storage
+WEB-STORAGE-LENGTH	web-globals/storage	Storage.length	implemented	N65	tsonic_js::web::Storage::length	JS-WEB-005	storage length accessor
+WEB-STORAGE-KEY	web-globals/storage	Storage.key	implemented	N65	tsonic_js::web::Storage::key	JS-WEB-005	gets key by index
+WEB-STORAGE-GET-ITEM	web-globals/storage	Storage.getItem	implemented	N65	tsonic_js::web::Storage::get_item	JS-WEB-005	gets item by key
+WEB-STORAGE-SET-ITEM	web-globals/storage	Storage.setItem	implemented	N65	tsonic_js::web::Storage::set_item	JS-WEB-005	sets item by key
+WEB-STORAGE-REMOVE-ITEM	web-globals/storage	Storage.removeItem	implemented	N65	tsonic_js::web::Storage::remove_item	JS-WEB-005	removes item by key
+WEB-STORAGE-CLEAR	web-globals/storage	Storage.clear	implemented	N65	tsonic_js::web::Storage::clear	JS-WEB-005	clears storage
+WEB-NAVIGATOR-CARRIER	web-globals/storage	Navigator	implemented	N65	tsonic_js::web::Navigator	JS-WEB-005	closed Navigator carrier
+WEB-NAVIGATOR-NEW	web-globals/storage	Navigator.new	implemented	N65	tsonic_js::web::Navigator::new	JS-WEB-005	constructs default navigator
+WEB-NAVIGATOR-USER-AGENT	web-globals/storage	Navigator.userAgent	implemented	N65	tsonic_js::web::Navigator::user_agent	JS-WEB-005	navigator userAgent accessor
+WEB-NAVIGATOR-PLATFORM	web-globals/storage	Navigator.platform	implemented	N65	tsonic_js::web::Navigator::platform	JS-WEB-005	navigator platform accessor
+WEB-NAVIGATOR-LANGUAGE	web-globals/storage	Navigator.language	implemented	N65	tsonic_js::web::Navigator::language	JS-WEB-005	navigator language accessor
+WEB-NAVIGATOR-LANGUAGES	web-globals/storage	Navigator.languages	implemented	N65	tsonic_js::web::Navigator::languages	JS-WEB-005	navigator languages accessor
+WEB-NAVIGATOR-HARDWARE-CONCURRENCY	web-globals/storage	Navigator.hardwareConcurrency	implemented	N65	tsonic_js::web::Navigator::hardware_concurrency	JS-WEB-005	navigator hardware concurrency accessor
 WEB-IMPORTMETA	web-globals/importmeta	ImportMeta	implemented	W1	tsonic_js::web::ImportMeta	JS-WEB-010	non-evaluating import.meta identity and safe resolver
 WEB-FETCH	web-globals/fetch	fetch	implemented	W1	tsonic_node::fetch	JS-WEB-009	Node-backed fetch over reqwest into closed Web Request/Response carriers
 NODE-FS-ACCESS	fs	accessSync	implemented	K	tsonic_node::fs::access_sync	NODE-FS-EXT-001	existence/access validation
