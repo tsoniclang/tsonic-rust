@@ -1140,8 +1140,8 @@ NODE-TTY-ISATTY	tty	isatty	implemented	N73	tsonic_node::tty::isatty	NODE-TTY-001
 NODE-TTY-READSTREAM-CARRIER	tty	ReadStream	implemented	N73	tsonic_node::tty::ReadStream	NODE-TTY-001	closed ReadStream carrier with fd, isTTY, raw mode, and event helpers
 NODE-TTY-READSTREAM-FD	tty	ReadStream.fd	implemented	N73	tsonic_node::tty::ReadStream::fd	NODE-TTY-001	ReadStream exposes fd carrier
 NODE-TTY-READSTREAM-ISTTY	tty	ReadStream.isTTY	implemented	N73	tsonic_node::tty::ReadStream::is_tty	NODE-TTY-001	ReadStream isTTY uses explicit TTY probe
-NODE-TTY-READSTREAM-RAW	tty	ReadStream raw mode	implemented	N73	tsonic_node::tty::ReadStream::{is_raw,set_raw_mode}	NODE-TTY-001	ReadStream raw mode is explicit state
-NODE-TTY-READSTREAM-EVENTS	tty	ReadStream events	implemented	N73	tsonic_node::tty::ReadStream::{on,once,emit,listener_count,remove_all_listeners}	NODE-TTY-002	ReadStream event helpers use closed EventEmitter carrier
+NODE-TTY-READSTREAM-IS-RAW	tty	ReadStream.isRaw	implemented	N63	tsonic_node::tty::ReadStream::is_raw	NODE-TTY-001	reads read stream raw mode state
+NODE-TTY-READSTREAM-SET-RAW-MODE	tty	ReadStream.setRawMode	implemented	N63	tsonic_node::tty::ReadStream::set_raw_mode	NODE-TTY-001	sets read stream raw mode state
 NODE-TTY-WRITESTREAM-CARRIER	tty	WriteStream	implemented	N73	tsonic_node::tty::WriteStream	NODE-TTY-001	closed WriteStream carrier with fd, size, color, cursor, clear, and event helpers
 NODE-TTY-WRITESTREAM-FD	tty	WriteStream.fd	implemented	N73	tsonic_node::tty::WriteStream::fd	NODE-TTY-001	WriteStream exposes fd carrier
 NODE-TTY-WRITESTREAM-ISTTY	tty	WriteStream.isTTY	implemented	N73	tsonic_node::tty::WriteStream::is_tty	NODE-TTY-001	WriteStream isTTY uses explicit TTY probe
