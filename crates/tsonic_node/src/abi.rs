@@ -133,8 +133,13 @@ pub use crate::https::{
 };
 pub use crate::module::{
     builtin_modules as module_builtin_modules, create_require as module_create_require,
-    find_package_json as module_find_package_json, is_builtin as module_is_builtin,
-    sync_builtin_esm_exports as module_sync_builtin_esm_exports, Require,
+    find_package_json as module_find_package_json,
+    get_source_maps_support as module_get_source_maps_support, is_builtin as module_is_builtin,
+    set_source_maps_support as module_set_source_maps_support,
+    strip_type_script_types as module_strip_type_script_types,
+    sync_builtin_esm_exports as module_sync_builtin_esm_exports, Require, SourceMap,
+    SourceMapConstructorOptions, SourceMapPayload, SourceMapping, SourceMapsSupport, SourceOrigin,
+    StripTypeScriptMode, StripTypeScriptTypesOptions,
 };
 pub use crate::net::{
     connect as net_connect, create_server as net_create_server, is_ip as net_is_ip,

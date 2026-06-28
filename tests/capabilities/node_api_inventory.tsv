@@ -19,6 +19,8 @@ NODE-MODULE-HTTP2	http2	module	implemented	N9	tsonic_node::http2	NODE-HTTP2-001	
 NODE-MODULE-HTTPS	https	module	implemented	N9	tsonic_node::https	NODE-HTTPS-001	HTTPS client request shape over approved reqwest rustls dependency
 NODE-MODULE-INSPECTOR	inspector	module	hard-reject	N0	n/a	REJECT-NODE-INSPECTOR	debugger protocol excluded
 NODE-MODULE-MODULE	module	module	implemented	N4	tsonic_node::module	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution
+NODE-MODULE-SOURCEMAP	module	SourceMap/source map support	implemented	N21	tsonic_node::module::{SourceMap,SourceMapPayload,SourceMapping,SourceMapsSupport}	NODE-MODULE-002	closed source map carrier and global source map support toggles without loader execution
+NODE-MODULE-STRIP-TS	module	stripTypeScriptTypes	implemented	N21	tsonic_node::module::strip_type_script_types	NODE-MODULE-002	safe TypeScript type stripping helper; no evaluation or loader hook execution
 NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
 NODE-MODULE-OS	os	module	implemented	J	tsonic_node::os	NODE-OS-001	closed OS query helpers
 NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers

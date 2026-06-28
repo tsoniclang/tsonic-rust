@@ -131,6 +131,55 @@ fn module_helpers_cover_safe_common_node_shapes() {
     let require = module::create_require("/repo/app");
     assert_eq!(require.resolve("./mod.js"), "/repo/app/./mod.js");
     assert_eq!(require.resolve("node:fs"), "node:fs");
+
+    let payload = module::SourceMapPayload::new(
+        3,
+        vec!["src/main.ts".to_string()],
+        vec!["main".to_string()],
+        "",
+    );
+    let source_map = module::SourceMap::with_decoded_mappings(
+        payload.clone(),
+        Some(module::SourceMapConstructorOptions::new(Some(vec![12, 20]))),
+        vec![module::SourceMapping {
+            generated_line: 2,
+            generated_column: 4,
+            original_source: "src/main.ts".to_string(),
+            original_line: 1,
+            original_column: 3,
+            name: Some("main".to_string()),
+        }],
+    );
+    assert_eq!(source_map.payload(), &payload);
+    assert_eq!(source_map.line_lengths(), Some(&[12, 20][..]));
+    assert_eq!(
+        source_map.find_origin(2, 4),
+        Some(module::SourceOrigin {
+            file_name: "src/main.ts".to_string(),
+            line_number: 1,
+            column_number: 3,
+        })
+    );
+    assert_eq!(
+        module::set_source_maps_support(true, true),
+        module::SourceMapsSupport {
+            node_modules: true,
+            generated_code: true,
+        }
+    );
+    assert!(module::get_source_maps_support().generated_code);
+    let stripped = module::strip_type_script_types(
+        "type T = number;\nconst x: number = 1;\nfunction f(y: string) { return y as const; }",
+        Some(module::StripTypeScriptTypesOptions {
+            mode: module::StripTypeScriptMode::Transform,
+            source_map: true,
+            source_url: Some("input.ts".to_string()),
+        }),
+    );
+    assert!(!stripped.contains("type T"));
+    assert!(stripped.contains("const x= 1;"));
+    assert!(stripped.contains("function f(y)"));
+    assert!(stripped.contains("sourceURL=input.ts"));
 }
 
 #[test]
