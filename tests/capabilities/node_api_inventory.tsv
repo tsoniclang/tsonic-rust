@@ -1,6 +1,25 @@
 id	module	api	status	packet	rust_api	evidence	reason
 NODE-MODULE-ASSERT	assert	module	implemented	N2	tsonic_node::assert	NODE-ASSERT-001	closed assertion helpers
 NODE-ASSERT-ERROR	assert	AssertionError	implemented	N25	tsonic_node::assert::{AssertionError,AssertionErrorOptions,AssertionDiff}	NODE-ASSERT-002	closed ERR_ASSERTION carrier with actual/expected/operator/generatedMessage/diff fields
+NODE-ASSERT-FAIL	assert	fail	implemented	N68	tsonic_node::assert::fail	NODE-ASSERT-001	fail always returns ERR_ASSERTION carrier
+NODE-ASSERT-OK	assert	ok	implemented	N68	tsonic_node::assert::ok	NODE-ASSERT-001	ok validates boolean truthiness lane used by generated Rust
+NODE-ASSERT-EQUAL	assert	equal	implemented	N68	tsonic_node::assert::equal	NODE-ASSERT-001	loose equality helper over comparable generated Rust values
+NODE-ASSERT-NOT-EQUAL	assert	notEqual	implemented	N68	tsonic_node::assert::not_equal	NODE-ASSERT-001	loose inequality helper over comparable generated Rust values
+NODE-ASSERT-STRICT-EQUAL	assert	strictEqual	implemented	N68	tsonic_node::assert::strict_equal	NODE-ASSERT-001	strict equality helper over comparable generated Rust values
+NODE-ASSERT-NOT-STRICT-EQUAL	assert	notStrictEqual	implemented	N68	tsonic_node::assert::not_strict_equal	NODE-ASSERT-001	strict inequality helper over comparable generated Rust values
+NODE-ASSERT-DEEP-EQUAL	assert	deepEqual	implemented	N68	tsonic_node::assert::deep_equal	NODE-ASSERT-001	closed JsValue deep equality helper
+NODE-ASSERT-NOT-DEEP-EQUAL	assert	notDeepEqual	implemented	N68	tsonic_node::assert::not_deep_equal	NODE-ASSERT-001	closed JsValue deep inequality helper
+NODE-ASSERT-DEEP-STRICT-EQUAL	assert	deepStrictEqual	implemented	N68	tsonic_node::assert::deep_strict_equal	NODE-ASSERT-001	closed JsValue deep strict equality helper
+NODE-ASSERT-NOT-DEEP-STRICT-EQUAL	assert	notDeepStrictEqual	implemented	N68	tsonic_node::assert::not_deep_strict_equal	NODE-ASSERT-001	closed JsValue deep strict inequality helper
+NODE-ASSERT-IF-ERROR	assert	ifError	implemented	N68	tsonic_node::assert::if_error	NODE-ASSERT-001	ifError rejects explicit NodeError values
+NODE-ASSERT-THROWS	assert	throws	implemented	N68	tsonic_node::assert::throws	NODE-ASSERT-001	throws validates callback error result without dynamic exception machinery
+NODE-ASSERT-DOES-NOT-THROW	assert	doesNotThrow	implemented	N68	tsonic_node::assert::does_not_throw	NODE-ASSERT-001	doesNotThrow validates callback success result
+NODE-ASSERT-REJECTS	assert	rejects	implemented	N68	tsonic_node::assert::rejects	NODE-ASSERT-001	rejects validates generated async-shaped callback error result
+NODE-ASSERT-DOES-NOT-REJECT	assert	doesNotReject	implemented	N68	tsonic_node::assert::does_not_reject	NODE-ASSERT-001	doesNotReject validates generated async-shaped callback success result
+NODE-ASSERT-MATCH	assert	match	implemented	N68	tsonic_node::assert::match_string	NODE-ASSERT-001	string pattern match helper
+NODE-ASSERT-DOES-NOT-MATCH	assert	doesNotMatch	implemented	N68	tsonic_node::assert::does_not_match_string	NODE-ASSERT-001	string negative pattern match helper
+NODE-ASSERT-ERROR-OPTIONS	assert	AssertionErrorOptions	implemented	N68	tsonic_node::assert::AssertionErrorOptions	NODE-ASSERT-002	AssertionError options carrier with message, actual, expected, operator, stackStartFn, and diff fields
+NODE-ASSERT-DIFF	assert	AssertionDiff	implemented	N68	tsonic_node::assert::AssertionDiff	NODE-ASSERT-002	Assertion diff mode carrier
 NODE-MODULE-ASYNC-CONTEXT	async_context	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation is outside closed runtime externals
 NODE-MODULE-ASYNC-HOOKS	async_hooks	module	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
 NODE-ASYNC-HOOK	async_hooks	createHook/AsyncHook callbacks	implemented	N23	tsonic_node::async_hooks::{create_hook,AsyncHook,HookCallbacks}	NODE-ASYNC-002	explicit callback lifecycle carrier; no implicit runtime instrumentation
