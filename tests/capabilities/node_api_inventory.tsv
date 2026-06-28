@@ -88,7 +88,7 @@ NODE-FS-WRITEFILE	fs	writeFileSync	implemented	K	tsonic_node::fs::{write_file_sy
 NODE-FS-CREATE-READ-STREAM	fs	createReadStream	hard-reject	N0	n/a	REJECT-NODE-FS-STREAMS	stream runtime excluded
 NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	hard-reject	N0	n/a	REJECT-NODE-FS-STREAMS	stream runtime excluded
 NODE-FS-ASYNC-CALLBACKS	fs	callback APIs	hard-reject	N0	n/a	REJECT-NODE-FS-ASYNC	callback async runtime excluded
-NODE-FS-PROMISES	fs	promises APIs	hard-reject	N0	n/a	REJECT-NODE-FS-PROMISES	Promise async runtime excluded
+NODE-FS-PROMISES	fs	promises APIs	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-PATH-BASENAME	path	basename	implemented	J	tsonic_node::path::basename	NODE-PATH-001	path helper
 NODE-PATH-DIRNAME	path	dirname	implemented	J	tsonic_node::path::dirname	NODE-PATH-001	path helper
 NODE-PATH-EXTNAME	path	extname	implemented	J	tsonic_node::path::extname	NODE-PATH-001	path helper
@@ -137,7 +137,7 @@ NODE-PROCESS-VERSION	process	version/versions	implemented	J	tsonic_node::process
 NODE-PROCESS-TIME	process	uptime/hrtime/hrtime.bigint	implemented	J	tsonic_node::process::{uptime,hrtime,hrtime_bigint}	NODE-PROC-002	monotonic process timers
 NODE-PROCESS-MEMORY	process	memoryUsage	implemented	J	tsonic_node::process::memory_usage	NODE-PROC-002	RSS plus closed heap fields
 NODE-PROCESS-IO	process	stdin/stdout/stderr	hard-reject	N0	n/a	REJECT-NODE-PROCESS-STREAMS	stream handles excluded
-NODE-PROCESS-EVENTS	process	on/emit/nextTick	hard-reject	N0	n/a	REJECT-NODE-PROCESS-EVENTS	event loop excluded
+NODE-PROCESS-EVENTS	process	on/emit	hard-reject	N0	n/a	REJECT-NODE-PROCESS-EVENTS	process event emitter integration excluded; nextTick has NODE-PROCESS-NEXTTICK
 NODE-OS-PLATFORM	os	platform/arch	implemented	J	tsonic_node::os::{platform,arch}	NODE-OS-001	platform helpers
 NODE-OS-MEM	os	freemem/totalmem	implemented	J	tsonic_node::os::{freemem,totalmem}	NODE-OS-001	memory helpers
 NODE-OS-HOME-TMP	os	homedir/tmpdir	implemented	J	tsonic_node::os::{homedir,tmpdir}	NODE-OS-001	directory helpers
