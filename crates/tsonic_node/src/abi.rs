@@ -25,13 +25,15 @@ pub use crate::cluster::{
 };
 pub use crate::crypto::{
     aes_256_gcm_decrypt as crypto_aes_256_gcm_decrypt,
-    aes_256_gcm_encrypt as crypto_aes_256_gcm_encrypt, generate_rsa_key_pair,
-    get_hashes as crypto_get_hashes, hmac_digest as crypto_hmac_digest,
+    aes_256_gcm_encrypt as crypto_aes_256_gcm_encrypt, create_hash as crypto_create_hash,
+    create_hmac as crypto_create_hmac, create_secret_key as crypto_create_secret_key,
+    generate_rsa_key_pair, get_hashes as crypto_get_hashes, hmac_digest as crypto_hmac_digest,
     random_bytes as crypto_random_bytes, random_fill as crypto_random_fill,
     random_int as crypto_random_int, random_int_range as crypto_random_int_range,
     random_uuid as crypto_random_uuid, sign_sha256 as crypto_sign_sha256,
     timing_safe_equal as crypto_timing_safe_equal, verify_sha256 as crypto_verify_sha256,
-    AesGcmCiphertext, DigestResult, Hash, RsaKeyPair,
+    webcrypto as crypto_webcrypto, AesGcmCiphertext, DigestResult, Hash, Hmac, KeyObject,
+    RsaKeyPair,
 };
 pub use crate::dgram::{create_socket as dgram_create_socket, Socket as DgramSocket};
 pub use crate::diagnostics_channel::{

@@ -81,6 +81,10 @@ pub fn get_hashes() -> Vec<&'static str> {
     vec!["sha1", "sha256"]
 }
 
+pub fn create_hash(algorithm: &str) -> NodeResult<Hash> {
+    Hash::create(algorithm)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DigestResult {
     Buffer(Buffer),
@@ -110,6 +114,10 @@ impl Hash {
 
     pub fn update_bytes(&mut self, bytes: &[u8]) {
         self.bytes.extend_from_slice(bytes);
+    }
+
+    pub fn copy(&self) -> Self {
+        self.clone()
     }
 
     pub fn update_string(&mut self, value: &str, encoding: Option<&str>) -> NodeResult<()> {
@@ -147,6 +155,61 @@ impl Hash {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Hmac {
+    algorithm: Algorithm,
+    key: Vec<u8>,
+    bytes: Vec<u8>,
+}
+
+impl Hmac {
+    pub fn create(algorithm: &str, key: &[u8]) -> NodeResult<Self> {
+        Ok(Self {
+            algorithm: parse_algorithm(algorithm)?,
+            key: key.to_vec(),
+            bytes: Vec::new(),
+        })
+    }
+
+    pub fn update_bytes(&mut self, bytes: &[u8]) {
+        self.bytes.extend_from_slice(bytes);
+    }
+
+    pub fn update_string(&mut self, value: &str, encoding: Option<&str>) -> NodeResult<()> {
+        self.bytes
+            .extend_from_slice(&crate::buffer::encode_string(value, encoding)?);
+        Ok(())
+    }
+
+    pub fn digest(self, encoding: Option<&str>) -> NodeResult<DigestResult> {
+        hmac_digest_algorithm(self.algorithm, &self.key, &self.bytes, encoding)
+    }
+
+    pub fn digest_string(self, encoding: &str) -> NodeResult<String> {
+        match self.digest(Some(encoding))? {
+            DigestResult::String(value) => Ok(value),
+            DigestResult::Buffer(_) => Err(NodeError::new(
+                "ERR_INVALID_RETURN_VALUE",
+                "hmac string digest returned a buffer",
+            )),
+        }
+    }
+
+    pub fn digest_buffer(self) -> NodeResult<Buffer> {
+        match self.digest(None)? {
+            DigestResult::Buffer(value) => Ok(value),
+            DigestResult::String(_) => Err(NodeError::new(
+                "ERR_INVALID_RETURN_VALUE",
+                "hmac buffer digest returned a string",
+            )),
+        }
+    }
+}
+
+pub fn create_hmac(algorithm: &str, key: &[u8]) -> NodeResult<Hmac> {
+    Hmac::create(algorithm, key)
+}
+
 pub fn hmac_digest(
     algorithm: &str,
     key: &[u8],
@@ -154,6 +217,15 @@ pub fn hmac_digest(
     encoding: Option<&str>,
 ) -> NodeResult<DigestResult> {
     let algorithm = parse_algorithm(algorithm)?;
+    hmac_digest_algorithm(algorithm, key, data, encoding)
+}
+
+fn hmac_digest_algorithm(
+    algorithm: Algorithm,
+    key: &[u8],
+    data: &[u8],
+    encoding: Option<&str>,
+) -> NodeResult<DigestResult> {
     let mut key_block = [0_u8; 64];
     let normalized_key = if key.len() > 64 {
         digest_bytes(algorithm, key)
@@ -176,6 +248,29 @@ pub fn hmac_digest(
     match encoding {
         None => Ok(DigestResult::Buffer(Buffer::from_bytes(bytes))),
         Some(encoding) => Ok(DigestResult::String(decode_bytes(&bytes, Some(encoding))?)),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyObject {
+    key_type: String,
+    bytes: Buffer,
+}
+
+impl KeyObject {
+    pub fn key_type(&self) -> &str {
+        &self.key_type
+    }
+
+    pub fn export(&self) -> Buffer {
+        self.bytes.clone()
+    }
+}
+
+pub fn create_secret_key(key: &Buffer) -> KeyObject {
+    KeyObject {
+        key_type: "secret".to_string(),
+        bytes: key.clone(),
     }
 }
 
@@ -302,6 +397,47 @@ pub fn verify_sha256(
     let signature = RsaSignature::try_from(signature.as_bytes().as_slice())
         .map_err(|error| NodeError::new("ERR_CRYPTO_INVALID_SIGNATURE", error.to_string()))?;
     Ok(verifying_key.verify(data, &signature).is_ok())
+}
+
+pub mod webcrypto {
+    use super::{digest_bytes, parse_algorithm, random_bytes};
+    use crate::buffer::Buffer;
+    use crate::error::NodeResult;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct Crypto;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct SubtleCrypto;
+
+    pub fn crypto() -> Crypto {
+        Crypto
+    }
+
+    impl Crypto {
+        pub fn subtle(&self) -> SubtleCrypto {
+            SubtleCrypto
+        }
+
+        pub fn get_random_values(&self, buffer: &mut Buffer) -> NodeResult<()> {
+            let bytes = random_bytes(buffer.len())?;
+            for (index, byte) in bytes.as_bytes().into_iter().enumerate() {
+                buffer.set(index, byte)?;
+            }
+            Ok(())
+        }
+
+        pub fn random_uuid(&self) -> NodeResult<String> {
+            super::random_uuid()
+        }
+    }
+
+    impl SubtleCrypto {
+        pub fn digest(&self, algorithm: &str, data: &[u8]) -> NodeResult<Buffer> {
+            let algorithm = parse_algorithm(algorithm)?;
+            Ok(Buffer::from_bytes(digest_bytes(algorithm, data)))
+        }
+    }
 }
 
 fn parse_algorithm(algorithm: &str) -> NodeResult<Algorithm> {
