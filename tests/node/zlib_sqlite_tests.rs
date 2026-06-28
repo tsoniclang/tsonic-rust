@@ -1,6 +1,9 @@
 use tsonic_js::value::JsValue;
 use tsonic_node::buffer::Buffer;
-use tsonic_node::sqlite::{DatabaseSync, SqlValue};
+use tsonic_node::sqlite::{
+    constants as sqlite_constants, ApplyChangesetOptions, CreateSessionOptions, DatabaseLimits,
+    DatabaseSync, DatabaseSyncOptions, PrepareOptions, SqlValue,
+};
 
 #[test]
 fn zlib_gzip_and_deflate_round_trip_buffers() {
@@ -204,4 +207,124 @@ fn sqlite_database_sync_exec_run_get_and_all() {
 
     let rows = database.all("select name from users", &[]).unwrap();
     assert_eq!(rows.len(), 1);
+}
+
+#[test]
+fn sqlite_statement_sessions_tag_store_and_constants_are_closed_shapes() {
+    let database = DatabaseSync::open_with_options(
+        ":memory:",
+        DatabaseSyncOptions {
+            open: true,
+            read_bigints: true,
+            return_arrays: true,
+            allow_bare_named_parameters: true,
+            allow_unknown_named_parameters: true,
+            defensive: true,
+            limits: Some(DatabaseLimits {
+                variable_number: 999,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(database.is_open());
+    assert!(!database.is_transaction());
+    assert_eq!(database.location(Some("main")).as_deref(), Some(":memory:"));
+    assert_eq!(database.limits().variable_number, 999);
+
+    database
+        .exec("create table kv (id integer primary key, name text)")
+        .unwrap();
+    let statement = database.prepare(
+        "insert into kv (name) values (?1)",
+        Some(PrepareOptions {
+            read_bigints: true,
+            return_arrays: true,
+            allow_bare_named_parameters: true,
+            allow_unknown_named_parameters: true,
+        }),
+    );
+    assert_eq!(statement.source_sql(), "insert into kv (name) values (?1)");
+    assert_eq!(
+        statement.expanded_sql(),
+        "insert into kv (name) values (?1)"
+    );
+    statement.set_read_bigints(false);
+    statement.set_return_arrays(false);
+    statement.set_allow_bare_named_parameters(false);
+    statement.set_allow_unknown_named_parameters(false);
+    let inserted = statement
+        .run(&[SqlValue::Text("alpha".to_string())])
+        .unwrap();
+    assert_eq!(inserted.changes, 1);
+    assert_eq!(inserted.last_insert_rowid, 1);
+
+    let select = database.prepare("select id, name from kv", None);
+    let columns = select.columns().unwrap();
+    assert_eq!(columns[0].name, "id");
+    assert_eq!(select.iterate(&[]).unwrap().len(), 1);
+    assert_eq!(
+        select.get(&[]).unwrap().unwrap().get("name"),
+        Some(&JsValue::String("alpha".to_string()))
+    );
+
+    let tag_store = database.create_tag_store(Some(2));
+    assert_eq!(tag_store.capacity(), 2);
+    tag_store
+        .run(
+            "insert into kv (name) values (?1)",
+            &[SqlValue::Text("beta".to_string())],
+        )
+        .unwrap();
+    assert_eq!(tag_store.size(), 1);
+    assert_eq!(tag_store.all("select name from kv", &[]).unwrap().len(), 2);
+    assert!(tag_store
+        .get("select name from kv where name = 'beta'", &[])
+        .unwrap()
+        .is_some());
+    tag_store.clear();
+    assert_eq!(tag_store.size(), 0);
+
+    let session = database.create_session(Some(CreateSessionOptions {
+        db: Some("main".to_string()),
+        table: Some("kv".to_string()),
+    }));
+    assert_eq!(session.db(), "main");
+    assert_eq!(session.table(), Some("kv"));
+    assert!(session.changeset().is_empty());
+    assert!(session.patchset().is_empty());
+    session.close();
+    assert!(session.closed());
+
+    assert!(database.apply_changeset(
+        &[],
+        Some(ApplyChangesetOptions {
+            filter: Some(|table| table == "main"),
+            on_conflict: Some(|code| code),
+        }),
+    ));
+    database.enable_defensive(false);
+    database.enable_load_extension(true);
+    assert!(database.load_extension("x").is_err());
+    database.function("identity", |args| {
+        args.first().cloned().unwrap_or(SqlValue::Null)
+    });
+    database.aggregate(
+        "sum_like",
+        tsonic_node::sqlite::AggregateOptions {
+            start: Some(SqlValue::Integer(0)),
+            step: |acc, _args| acc,
+            inverse: None,
+            result: None,
+        },
+    );
+
+    assert_eq!(sqlite_constants::SQLITE_OK, 0);
+    assert_eq!(sqlite_constants::SQLITE_CREATE_TABLE, 2);
+    assert_eq!(sqlite_constants::SQLITE_CHANGESET_ABORT, 2);
+    database.close();
+    assert!(!database.is_open());
+    database.open_connection();
+    assert!(database.is_open());
 }

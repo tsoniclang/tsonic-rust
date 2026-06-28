@@ -833,7 +833,65 @@ NODE-QUERYSTRING-PARSE-OPTIONS-CARRIER	querystring	ParseOptions	implemented	N69	
 NODE-QUERYSTRING-STRINGIFY-OPTIONS-CARRIER	querystring	StringifyOptions	implemented	N69	tsonic_node::querystring::StringifyOptions	NODE-QUERYSTRING-001	closed StringifyOptions carrier with encodeUriComponent
 NODE-MODULE-READLINE	readline	module	implemented	N5	tsonic_node::readline	NODE-READLINE-001	closed buffered readline interface
 NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
-NODE-MODULE-SQLITE	sqlite	module	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency
+NODE-MODULE-SQLITE	sqlite	module	implemented	N76	tsonic_node::sqlite	NODE-SQLITE-001	closed node:sqlite runtime module over bundled SQLite dependency
+NODE-SQLITE-DATABASE-CARRIER	sqlite	DatabaseSync	implemented	N76	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed synchronous database carrier
+NODE-SQLITE-DATABASE-OPEN	sqlite	DatabaseSync.open	implemented	N76	tsonic_node::sqlite::DatabaseSync::open	NODE-SQLITE-001	opens memory or file database
+NODE-SQLITE-DATABASE-OPEN-WITH-OPTIONS	sqlite	DatabaseSync.openWithOptions	implemented	N76	tsonic_node::sqlite::DatabaseSync::open_with_options	NODE-SQLITE-001	opens database with closed options carrier
+NODE-SQLITE-DATABASE-IS-OPEN	sqlite	DatabaseSync.isOpen	implemented	N76	tsonic_node::sqlite::DatabaseSync::is_open	NODE-SQLITE-001	reads database open state
+NODE-SQLITE-DATABASE-IS-TRANSACTION	sqlite	DatabaseSync.isTransaction	implemented	N76	tsonic_node::sqlite::DatabaseSync::is_transaction	NODE-SQLITE-001	reads transaction/autocommit state
+NODE-SQLITE-DATABASE-LIMITS	sqlite	DatabaseSync.limits	implemented	N76	tsonic_node::sqlite::DatabaseSync::limits	NODE-SQLITE-001	reads closed database limits carrier
+NODE-SQLITE-DATABASE-CLOSE	sqlite	DatabaseSync.close	implemented	N76	tsonic_node::sqlite::DatabaseSync::close	NODE-SQLITE-001	closes database carrier state
+NODE-SQLITE-DATABASE-OPEN-CONNECTION	sqlite	DatabaseSync.open	implemented	N76	tsonic_node::sqlite::DatabaseSync::open_connection	NODE-SQLITE-001	reopens database carrier state for generated Rust shape
+NODE-SQLITE-DATABASE-LOCATION	sqlite	DatabaseSync.location	implemented	N76	tsonic_node::sqlite::DatabaseSync::location	NODE-SQLITE-001	returns known database path for main database
+NODE-SQLITE-DATABASE-EXEC	sqlite	DatabaseSync.exec	implemented	N76	tsonic_node::sqlite::DatabaseSync::exec	NODE-SQLITE-001	executes SQL batch
+NODE-SQLITE-DATABASE-PREPARE	sqlite	DatabaseSync.prepare	implemented	N76	tsonic_node::sqlite::DatabaseSync::prepare	NODE-SQLITE-001	creates closed prepared statement carrier
+NODE-SQLITE-DATABASE-RUN	sqlite	DatabaseSync.run	implemented	N76	tsonic_node::sqlite::DatabaseSync::run	NODE-SQLITE-001	runs parameterized SQL statement
+NODE-SQLITE-DATABASE-ALL	sqlite	DatabaseSync.all	implemented	N76	tsonic_node::sqlite::DatabaseSync::all	NODE-SQLITE-001	returns all rows as closed JsValue records
+NODE-SQLITE-DATABASE-GET	sqlite	DatabaseSync.get	implemented	N76	tsonic_node::sqlite::DatabaseSync::get	NODE-SQLITE-001	returns first row as closed JsValue record
+NODE-SQLITE-DATABASE-CREATE-TAG-STORE	sqlite	DatabaseSync.createTagStore	implemented	N76	tsonic_node::sqlite::DatabaseSync::create_tag_store	NODE-SQLITE-001	creates closed SQLTagStore carrier
+NODE-SQLITE-DATABASE-CREATE-SESSION	sqlite	DatabaseSync.createSession	implemented	N76	tsonic_node::sqlite::DatabaseSync::create_session	NODE-SQLITE-001	creates closed Session carrier
+NODE-SQLITE-DATABASE-APPLY-CHANGESET	sqlite	DatabaseSync.applyChangeset	implemented	N76	tsonic_node::sqlite::DatabaseSync::apply_changeset	NODE-SQLITE-001	applies explicit changeset predicate without dynamic callbacks
+NODE-SQLITE-DATABASE-ENABLE-LOAD-EXTENSION	sqlite	DatabaseSync.enableLoadExtension	implemented	N76	tsonic_node::sqlite::DatabaseSync::enable_load_extension	NODE-SQLITE-001	records extension policy flag
+NODE-SQLITE-DATABASE-LOAD-EXTENSION	sqlite	DatabaseSync.loadExtension	implemented	N76	tsonic_node::sqlite::DatabaseSync::load_extension	NODE-SQLITE-001	explicit hard error for native extension loading
+NODE-SQLITE-DATABASE-ENABLE-DEFENSIVE	sqlite	DatabaseSync.enableDefensive	implemented	N76	tsonic_node::sqlite::DatabaseSync::enable_defensive	NODE-SQLITE-001	sets defensive mode state
+NODE-SQLITE-DATABASE-FUNCTION	sqlite	DatabaseSync.function	implemented	N76	tsonic_node::sqlite::DatabaseSync::function	NODE-SQLITE-001	registers closed generated Rust scalar callback marker
+NODE-SQLITE-DATABASE-AGGREGATE	sqlite	DatabaseSync.aggregate	implemented	N76	tsonic_node::sqlite::DatabaseSync::aggregate	NODE-SQLITE-001	registers closed generated Rust aggregate callback marker
+NODE-SQLITE-DATABASE-OPTIONS-CARRIER	sqlite	DatabaseSyncOptions	implemented	N76	tsonic_node::sqlite::DatabaseSyncOptions	NODE-SQLITE-001	closed database options carrier
+NODE-SQLITE-DATABASE-LIMITS-CARRIER	sqlite	DatabaseLimits	implemented	N76	tsonic_node::sqlite::DatabaseLimits	NODE-SQLITE-001	closed database limits carrier
+NODE-SQLITE-PREPARE-OPTIONS-CARRIER	sqlite	PrepareOptions	implemented	N76	tsonic_node::sqlite::PrepareOptions	NODE-SQLITE-001	closed prepare options carrier
+NODE-SQLITE-STATEMENT-CARRIER	sqlite	StatementSync	implemented	N76	tsonic_node::sqlite::StatementSync	NODE-SQLITE-001	closed prepared statement carrier
+NODE-SQLITE-STATEMENT-SOURCE-SQL	sqlite	StatementSync.sourceSQL	implemented	N76	tsonic_node::sqlite::StatementSync::source_sql	NODE-SQLITE-001	source SQL accessor
+NODE-SQLITE-STATEMENT-EXPANDED-SQL	sqlite	StatementSync.expandedSQL	implemented	N76	tsonic_node::sqlite::StatementSync::expanded_sql	NODE-SQLITE-001	expanded SQL accessor
+NODE-SQLITE-STATEMENT-SET-READ-BIGINTS	sqlite	StatementSync.setReadBigInts	implemented	N76	tsonic_node::sqlite::StatementSync::set_read_bigints	NODE-SQLITE-001	sets readBigInts flag
+NODE-SQLITE-STATEMENT-SET-RETURN-ARRAYS	sqlite	StatementSync.setReturnArrays	implemented	N76	tsonic_node::sqlite::StatementSync::set_return_arrays	NODE-SQLITE-001	sets returnArrays flag
+NODE-SQLITE-STATEMENT-SET-ALLOW-BARE-NAMED	sqlite	StatementSync.setAllowBareNamedParameters	implemented	N76	tsonic_node::sqlite::StatementSync::set_allow_bare_named_parameters	NODE-SQLITE-001	sets bare named parameter flag
+NODE-SQLITE-STATEMENT-SET-ALLOW-UNKNOWN-NAMED	sqlite	StatementSync.setAllowUnknownNamedParameters	implemented	N76	tsonic_node::sqlite::StatementSync::set_allow_unknown_named_parameters	NODE-SQLITE-001	sets unknown named parameter flag
+NODE-SQLITE-STATEMENT-COLUMNS	sqlite	StatementSync.columns	implemented	N76	tsonic_node::sqlite::StatementSync::columns	NODE-SQLITE-001	returns closed column metadata
+NODE-SQLITE-STATEMENT-RUN	sqlite	StatementSync.run	implemented	N76	tsonic_node::sqlite::StatementSync::run	NODE-SQLITE-001	runs prepared statement
+NODE-SQLITE-STATEMENT-ALL	sqlite	StatementSync.all	implemented	N76	tsonic_node::sqlite::StatementSync::all	NODE-SQLITE-001	returns all rows from prepared statement
+NODE-SQLITE-STATEMENT-GET	sqlite	StatementSync.get	implemented	N76	tsonic_node::sqlite::StatementSync::get	NODE-SQLITE-001	returns first row from prepared statement
+NODE-SQLITE-STATEMENT-ITERATE	sqlite	StatementSync.iterate	implemented	N76	tsonic_node::sqlite::StatementSync::iterate	NODE-SQLITE-001	returns eager closed iterator rows
+NODE-SQLITE-COLUMN-METADATA-CARRIER	sqlite	StatementColumnMetadata	implemented	N76	tsonic_node::sqlite::StatementColumnMetadata	NODE-SQLITE-001	closed statement column metadata carrier
+NODE-SQLITE-SQLVALUE-CARRIER	sqlite	SQLInputValue/SQLOutputValue	implemented	N76	tsonic_node::sqlite::SqlValue	NODE-SQLITE-001	closed SQL value carrier
+NODE-SQLITE-RUN-RESULT-CARRIER	sqlite	StatementResultingChanges	implemented	N76	tsonic_node::sqlite::RunResult	NODE-SQLITE-001	closed run result carrier
+NODE-SQLITE-BACKUP-PROGRESS-CARRIER	sqlite	BackupProgressInfo	implemented	N76	tsonic_node::sqlite::BackupProgressInfo	NODE-SQLITE-001	closed backup progress carrier
+NODE-SQLITE-BACKUP-OPTIONS-CARRIER	sqlite	BackupOptions	implemented	N76	tsonic_node::sqlite::BackupOptions	NODE-SQLITE-001	closed backup options carrier
+NODE-SQLITE-CHANGESET-OPTIONS-CARRIER	sqlite	ApplyChangesetOptions	implemented	N76	tsonic_node::sqlite::ApplyChangesetOptions	NODE-SQLITE-001	closed changeset options carrier
+NODE-SQLITE-SESSION-OPTIONS-CARRIER	sqlite	CreateSessionOptions	implemented	N76	tsonic_node::sqlite::CreateSessionOptions	NODE-SQLITE-001	closed session options carrier
+NODE-SQLITE-SESSION-CARRIER	sqlite	Session	implemented	N76	tsonic_node::sqlite::Session	NODE-SQLITE-001	closed session carrier
+NODE-SQLITE-SESSION-CHANGESET	sqlite	Session.changeset	implemented	N76	tsonic_node::sqlite::Session::changeset	NODE-SQLITE-001	returns closed changeset bytes
+NODE-SQLITE-SESSION-PATCHSET	sqlite	Session.patchset	implemented	N76	tsonic_node::sqlite::Session::patchset	NODE-SQLITE-001	returns closed patchset bytes
+NODE-SQLITE-SESSION-CLOSE	sqlite	Session.close	implemented	N76	tsonic_node::sqlite::Session::close	NODE-SQLITE-001	closes session carrier
+NODE-SQLITE-SQLTAGSTORE-CARRIER	sqlite	SQLTagStore	implemented	N76	tsonic_node::sqlite::SQLTagStore	NODE-SQLITE-001	closed SQL tag store carrier
+NODE-SQLITE-SQLTAGSTORE-CAPACITY	sqlite	SQLTagStore.capacity	implemented	N76	tsonic_node::sqlite::SQLTagStore::capacity	NODE-SQLITE-001	reads tag store capacity
+NODE-SQLITE-SQLTAGSTORE-SIZE	sqlite	SQLTagStore.size	implemented	N76	tsonic_node::sqlite::SQLTagStore::size	NODE-SQLITE-001	reads tag store size
+NODE-SQLITE-SQLTAGSTORE-CLEAR	sqlite	SQLTagStore.clear	implemented	N76	tsonic_node::sqlite::SQLTagStore::clear	NODE-SQLITE-001	clears tag store size
+NODE-SQLITE-SQLTAGSTORE-RUN	sqlite	SQLTagStore.run	implemented	N76	tsonic_node::sqlite::SQLTagStore::run	NODE-SQLITE-001	runs tagged statement
+NODE-SQLITE-SQLTAGSTORE-ALL	sqlite	SQLTagStore.all	implemented	N76	tsonic_node::sqlite::SQLTagStore::all	NODE-SQLITE-001	returns all rows for tagged statement
+NODE-SQLITE-SQLTAGSTORE-GET	sqlite	SQLTagStore.get	implemented	N76	tsonic_node::sqlite::SQLTagStore::get	NODE-SQLITE-001	returns first row for tagged statement
+NODE-SQLITE-FUNCTION-OPTIONS-CARRIER	sqlite	FunctionOptions	implemented	N76	tsonic_node::sqlite::FunctionOptions	NODE-SQLITE-001	closed scalar function options carrier
+NODE-SQLITE-AGGREGATE-OPTIONS-CARRIER	sqlite	AggregateOptions	implemented	N76	tsonic_node::sqlite::AggregateOptions	NODE-SQLITE-001	closed aggregate function options carrier
+NODE-SQLITE-CONSTANTS	sqlite	constants	implemented	N76	tsonic_node::sqlite::constants	NODE-SQLITE-001	NODE-const SQLITE_* constants exposed as closed numeric constants
 NODE-MODULE-STREAM	stream	module	implemented	N3	tsonic_node::stream	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
 NODE-STREAM-OPTIONS	stream	StreamOptions	implemented	N38	tsonic_node::stream::StreamOptions	NODE-STREAM-004	closed stream option carrier with highWaterMark/objectMode/emitClose/autoDestroy/allowHalfOpen/defaultEncoding
 NODE-STREAM-READABLE-CARRIER	stream	Readable	implemented	N38	tsonic_node::stream::Readable	NODE-STREAM-004	closed readable carrier over Buffer chunks
