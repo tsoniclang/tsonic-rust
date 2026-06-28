@@ -263,6 +263,7 @@ NODE-MOD-034	implemented	N3	tsonic_node::abi::{set_timeout,set_immediate,Timeout
 NODE-MOD-035	implemented	N9	tsonic_node::tls	NODE-TLS-001	TLS identity/options and HTTPS connect helper over approved rustls transport
 NODE-MOD-036	hard-reject	M	n/a	REJECT-NODE-TRACE-EVENTS	tracing integration out of Stage 1
 NODE-MOD-037	implemented	M	tsonic_node::abi::tty_isatty	NODE-MISC-003	terminal capability/runtime policy not first wave (completed in full-completion branch)
+NODE-TTY-001	implemented	N27	tsonic_node::abi::{TtyReadStream,TtyWriteStream}	NODE-TTY-001	ReadStream raw mode and WriteStream size/color/cursor/clear callback helpers
 NODE-MOD-038	implemented	L	tsonic_node::abi::{Url,UrlSearchParams}	NODE-URL-001 through NODE-URL-008	URL and URLSearchParams subset
 NODE-MOD-039	implemented	L/M	tsonic_node::abi::{util_format,util_inspect,util_is_deep_strict_equal}	NODE-UTIL-001 through NODE-UTIL-005	format/inspect/deepStrictEqual over closed values; selected type predicates implemented
 NODE-MOD-040	hard-reject	M	n/a	REJECT-NODE-V8	engine-specific introspection violates closed runtime design

@@ -45,6 +45,7 @@ NODE-MODULE-TIMERS	timers	module	implemented	N3	tsonic_node::timers	NODE-TIMERS-
 NODE-MODULE-TLS	tls	module	implemented	N9	tsonic_node::tls	NODE-TLS-001	TLS identity/options and HTTPS connect helper over approved rustls transport
 NODE-MODULE-TRACE-EVENTS	trace_events	module	hard-reject	N0	n/a	REJECT-NODE-TRACE-EVENTS	instrumentation excluded
 NODE-MODULE-TTY	tty	module	implemented	N1	tsonic_node::tty	NODE-MISC-004	isatty helper
+NODE-TTY-STREAMS	tty	ReadStream/WriteStream terminal helpers	implemented	N27	tsonic_node::tty::{ReadStream,WriteStream}	NODE-TTY-001	raw mode, window size, color depth, cursor movement, and clear callbacks
 NODE-MODULE-URL	url	module	implemented	L	tsonic_node::url	NODE-URL-001	URL and URLSearchParams helpers
 NODE-MODULE-UTIL	util	module	implemented	L	tsonic_node::util	NODE-UTIL-001	format/inspect/types subset
 NODE-MODULE-V8	v8	module	hard-reject	N0	n/a	REJECT-NODE-V8	V8-specific APIs irrelevant to Rust runtime

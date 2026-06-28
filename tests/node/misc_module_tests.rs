@@ -207,15 +207,24 @@ fn tty_is_explicitly_non_interactive_by_default() {
     input.set_raw_mode(true);
     assert!(input.is_raw());
 
-    let output = tty::WriteStream::new(1);
+    let mut output = tty::WriteStream::with_size(1, 120, 40);
     assert_eq!(output.fd(), 1);
     assert!(!output.is_tty());
-    assert_eq!(output.columns(), 80);
-    assert_eq!(output.rows(), 24);
+    assert_eq!(output.columns(), 120);
+    assert_eq!(output.rows(), 40);
+    output.set_window_size(100, 30);
+    assert_eq!(output.get_window_size(), (100, 30));
     assert_eq!(output.get_color_depth(), 1);
     assert!(!output.has_colors());
-    assert!(!output.clear_line());
-    assert!(!output.clear_screen_down());
-    assert!(!output.cursor_to(0, None));
-    assert!(!output.move_cursor(1, 1));
+    output.set_color_depth(8);
+    assert_eq!(output.get_color_depth(), 8);
+    assert!(output.has_colors());
+    let callback_called = std::cell::Cell::new(false);
+    assert!(output.clear_line_with_callback(|| callback_called.set(true)));
+    assert!(callback_called.get());
+    assert!(output.clear_screen_down());
+    assert!(output.cursor_to(5, Some(6)));
+    assert_eq!(output.cursor(), (5, 6));
+    assert!(output.move_cursor(1, -2));
+    assert_eq!(output.cursor(), (6, 4));
 }
