@@ -51,7 +51,9 @@ NODE-ASYNC-RESOURCE-RUN-SCOPE	async_hooks	AsyncResource.runInAsyncScope	implemen
 NODE-ASYNC-RESOURCE-BIND	async_hooks	AsyncResource.bind	implemented	N23	tsonic_node::async_hooks::AsyncResource::bind	NODE-ASYNC-002	bound function carrier records async id
 NODE-ASYNC-RESOURCE-EMIT-DESTROY	async_hooks	AsyncResource.emitDestroy	implemented	N23	tsonic_node::async_hooks::AsyncResource::emit_destroy	NODE-ASYNC-002	destroy lifecycle marker
 NODE-ASYNC-RESOURCE-DESTROYED	async_hooks	AsyncResource destroyed state	implemented	N23	tsonic_node::async_hooks::AsyncResource::destroyed	NODE-ASYNC-002	destroyed state accessor
-NODE-ASYNC-BOUND-FUNCTION	async_hooks	BoundAsyncFunction asyncId/call	implemented	N23	tsonic_node::async_hooks::BoundAsyncFunction	NODE-ASYNC-002	bound function exposes async id and explicit call
+NODE-ASYNC-BOUND-FUNCTION-CARRIER	async_hooks	BoundAsyncFunction	implemented	N74	tsonic_node::async_hooks::BoundAsyncFunction	NODE-ASYNC-001	closed bound async function carrier
+NODE-ASYNC-BOUND-FUNCTION-ASYNC-ID	async_hooks	BoundAsyncFunction.asyncId	implemented	N74	tsonic_node::async_hooks::BoundAsyncFunction::async_id	NODE-ASYNC-001	reads captured async id
+NODE-ASYNC-BOUND-FUNCTION-CALL	async_hooks	BoundAsyncFunction.call	implemented	N74	tsonic_node::async_hooks::BoundAsyncFunction::call	NODE-ASYNC-001	calls bound generated Rust callback
 NODE-ASYNC-EXECUTION-ID	async_hooks	executionAsyncId	implemented	N23	tsonic_node::async_hooks::execution_async_id	NODE-ASYNC-002	closed default execution async id
 NODE-ASYNC-TRIGGER-ID	async_hooks	triggerAsyncId	implemented	N23	tsonic_node::async_hooks::trigger_async_id	NODE-ASYNC-002	closed default trigger async id
 NODE-ASYNC-PROVIDERS	async_hooks	asyncWrapProviders	implemented	N23	tsonic_node::async_hooks::async_wrap_providers	NODE-ASYNC-002	closed async provider constants
