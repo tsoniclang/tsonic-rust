@@ -12,12 +12,20 @@ pub use crate::buffer::Buffer;
 pub use crate::child_process::{
     spawn_file_sync as child_process_spawn_file_sync, SpawnOutput as ChildProcessOutput,
 };
+pub use crate::cluster::{
+    fork as cluster_fork, is_primary as cluster_is_primary, is_worker as cluster_is_worker,
+    setup_primary as cluster_setup_primary, worker_id as cluster_worker_id, ClusterSettings,
+    Worker as ClusterWorker,
+};
 pub use crate::crypto::{
+    aes_256_gcm_decrypt as crypto_aes_256_gcm_decrypt,
+    aes_256_gcm_encrypt as crypto_aes_256_gcm_encrypt, generate_rsa_key_pair,
     get_hashes as crypto_get_hashes, hmac_digest as crypto_hmac_digest,
     random_bytes as crypto_random_bytes, random_fill as crypto_random_fill,
     random_int as crypto_random_int, random_int_range as crypto_random_int_range,
-    random_uuid as crypto_random_uuid, timing_safe_equal as crypto_timing_safe_equal, DigestResult,
-    Hash,
+    random_uuid as crypto_random_uuid, sign_sha256 as crypto_sign_sha256,
+    timing_safe_equal as crypto_timing_safe_equal, verify_sha256 as crypto_verify_sha256,
+    AesGcmCiphertext, DigestResult, Hash, RsaKeyPair,
 };
 pub use crate::dgram::{create_socket as dgram_create_socket, Socket as DgramSocket};
 pub use crate::diagnostics_channel::{
@@ -63,6 +71,13 @@ pub use crate::http::{
     get as http_get, parse_response as http_parse_response, request as http_request,
     RequestOptions as HttpRequestOptions, Response as HttpResponse,
 };
+pub use crate::http2::{
+    connect as http2_connect, request as http2_request,
+    ClientSessionOptions as Http2ClientSessionOptions,
+};
+pub use crate::https::{
+    get as https_get, request as https_request, RequestOptions as HttpsRequestOptions,
+};
 pub use crate::module::{
     builtin_modules as module_builtin_modules, create_require as module_create_require, Require,
 };
@@ -99,12 +114,19 @@ pub use crate::querystring::{parse as querystring_parse, stringify as querystrin
 pub use crate::readline::{
     create_interface as readline_create_interface, Interface as ReadlineInterface,
 };
+pub use crate::sqlite::{
+    DatabaseSync as SqliteDatabaseSync, RunResult as SqliteRunResult, SqlValue,
+};
 pub use crate::stream::{
     consumers as stream_consumers, pipeline as stream_pipeline, Readable, Writable,
 };
 pub use crate::string_decoder::StringDecoder;
 pub use crate::timers::{
     clear_timeout, promises as timers_promises, set_immediate, set_timeout, Timeout,
+};
+pub use crate::tls::{
+    check_server_identity as tls_check_server_identity, connect_get as tls_connect_get,
+    default_port as tls_default_port, ConnectOptions as TlsConnectOptions,
 };
 pub use crate::tty::isatty as tty_isatty;
 pub use crate::url::{file_url_to_path, path_to_file_url, Url, UrlSearchParams};
@@ -115,4 +137,9 @@ pub use crate::util::{
 };
 pub use crate::worker_threads::{
     receive_message_on_port as worker_receive_message_on_port, MessageChannel, MessagePort, Worker,
+};
+pub use crate::zlib::{
+    deflate_sync as zlib_deflate_sync, gunzip_string_sync as zlib_gunzip_string_sync,
+    gunzip_sync as zlib_gunzip_sync, gzip_string_sync as zlib_gzip_string_sync,
+    gzip_sync as zlib_gzip_sync, inflate_sync as zlib_inflate_sync,
 };

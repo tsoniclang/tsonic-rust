@@ -4,7 +4,7 @@ NODE-MODULE-ASYNC-CONTEXT	async_context	module	hard-reject	N0	n/a	REJECT-NODE-AS
 NODE-MODULE-ASYNC-HOOKS	async_hooks	module	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
 NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	closed Buffer carrier
 NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process::spawn_file_sync	NODE-CHILD-001	capability-gated shell-free file process spawn
-NODE-MODULE-CLUSTER	cluster	module	later	N6	n/a	LATER-NODE-CLUSTER	process orchestration requires lifecycle/supervisor contract
+NODE-MODULE-CLUSTER	cluster	module	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary/worker process orchestration over approved file-spawn model
 NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
 NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
 NODE-MODULE-DGRAM	dgram	module	implemented	N7	tsonic_node::dgram	NODE-DGRAM-001	UDP datagram socket over std net
@@ -15,8 +15,8 @@ NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events::EventEmitte
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
 NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-MODULE-HTTP	http	module	implemented	N4	tsonic_node::http	NODE-HTTP-001	HTTP/1 client request/response over real TCP
-NODE-MODULE-HTTP2	http2	module	later	N6	n/a	LATER-NODE-HTTP2	HTTP/2 requires protocol implementation/dependency approval
-NODE-MODULE-HTTPS	https	module	later	N6	n/a	LATER-NODE-HTTPS	HTTPS requires TLS dependency/runtime approval
+NODE-MODULE-HTTP2	http2	module	implemented	N9	tsonic_node::http2	NODE-HTTP2-001	HTTP/2 client request/session shape over approved reqwest rustls/http2 dependency
+NODE-MODULE-HTTPS	https	module	implemented	N9	tsonic_node::https	NODE-HTTPS-001	HTTPS client request shape over approved reqwest rustls dependency
 NODE-MODULE-INSPECTOR	inspector	module	hard-reject	N0	n/a	REJECT-NODE-INSPECTOR	debugger protocol excluded
 NODE-MODULE-MODULE	module	module	implemented	N4	tsonic_node::module	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution
 NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
@@ -28,12 +28,12 @@ NODE-MODULE-PUNYCODE	punycode	module	implemented	N8	tsonic_node::punycode	NODE-P
 NODE-MODULE-QUERYSTRING	querystring	module	implemented	N1	tsonic_node::querystring	NODE-MISC-002	legacy querystring helpers
 NODE-MODULE-READLINE	readline	module	implemented	N5	tsonic_node::readline	NODE-READLINE-001	closed buffered readline interface
 NODE-MODULE-REPL	repl	module	hard-reject	N0	n/a	REJECT-NODE-REPL	dynamic evaluator excluded
-NODE-MODULE-SQLITE	sqlite	module	later	N6	n/a	LATER-NODE-SQLITE	database runtime requires storage dependency decision
+NODE-MODULE-SQLITE	sqlite	module	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	closed node:sqlite DatabaseSync subset over approved bundled SQLite dependency
 NODE-MODULE-STREAM	stream	module	implemented	N3	tsonic_node::stream	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
 NODE-MODULE-STRING-DECODER	string_decoder	module	implemented	N1	tsonic_node::string_decoder	NODE-MISC-003	UTF-8 string decoder subset
 NODE-MODULE-TEST	test	module	hard-reject	N0	n/a	REJECT-NODE-TEST	test runner module excluded from generated runtime ABI
 NODE-MODULE-TIMERS	timers	module	implemented	N3	tsonic_node::timers	NODE-TIMERS-001	deterministic timer handles and callback execution
-NODE-MODULE-TLS	tls	module	later	N6	n/a	LATER-NODE-TLS	TLS requires dependency/security contract
+NODE-MODULE-TLS	tls	module	implemented	N9	tsonic_node::tls	NODE-TLS-001	TLS identity/options and HTTPS connect helper over approved rustls transport
 NODE-MODULE-TRACE-EVENTS	trace_events	module	hard-reject	N0	n/a	REJECT-NODE-TRACE-EVENTS	instrumentation excluded
 NODE-MODULE-TTY	tty	module	implemented	N1	tsonic_node::tty	NODE-MISC-004	isatty helper
 NODE-MODULE-URL	url	module	implemented	L	tsonic_node::url	NODE-URL-001	URL and URLSearchParams helpers
@@ -42,7 +42,7 @@ NODE-MODULE-V8	v8	module	hard-reject	N0	n/a	REJECT-NODE-V8	V8-specific APIs irre
 NODE-MODULE-VM	vm	module	hard-reject	N0	n/a	REJECT-NODE-VM	dynamic code execution excluded
 NODE-MODULE-WASI	wasi	module	hard-reject	N0	n/a	REJECT-NODE-WASI	WASI runtime embedding excluded
 NODE-MODULE-WORKER-THREADS	worker_threads	module	implemented	N5	tsonic_node::worker_threads	NODE-WORKER-001	message channel and Rust closure worker substrate
-NODE-MODULE-ZLIB	zlib	module	later	N6	n/a	LATER-NODE-ZLIB	compression requires approved implementation/dependency
+NODE-MODULE-ZLIB	zlib	module	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
 NODE-FS-ACCESS	fs	accessSync	implemented	K	tsonic_node::fs::access_sync	NODE-FS-EXT-001	existence/access validation
 NODE-FS-APPEND-FILE	fs	appendFileSync	implemented	K	tsonic_node::fs::{append_file_sync_string,append_file_sync_buffer}	NODE-FS-EXT-001	string and buffer overloads
 NODE-FS-CHMOD	fs	chmodSync	implemented	K	tsonic_node::fs::chmod_sync	NODE-FS-EXT-001	numeric mode accepted; Windows maps writable bit
@@ -116,8 +116,8 @@ NODE-CRYPTO-HMAC	crypto	createHmac	implemented	L	tsonic_node::crypto::hmac_diges
 NODE-CRYPTO-RANDOM-UUID	crypto	randomUUID	implemented	L	tsonic_node::crypto::random_uuid	NODE-CRYPTO-002	UUID v4 shape
 NODE-CRYPTO-TIMING-SAFE-EQUAL	crypto	timingSafeEqual	implemented	L	tsonic_node::crypto::timing_safe_equal	NODE-CRYPTO-002	constant-time same-length byte comparison
 NODE-CRYPTO-GET-HASHES	crypto	getHashes	implemented	L	tsonic_node::crypto::get_hashes	NODE-CRYPTO-002	declared supported hash algorithms
-NODE-CRYPTO-CIPHER	crypto	cipher/decipher	later	N6	n/a	LATER-NODE-CRYPTO-CIPHER	full cipher suite requires approved crypto dependency/security policy
-NODE-CRYPTO-KEYS	crypto	keys/certs/sign/verify	later	N6	n/a	LATER-NODE-CRYPTO-PKI	PKI/key object model requires approved crypto dependency/security policy
+NODE-CRYPTO-CIPHER	crypto	cipher/decipher	implemented	N9	tsonic_node::crypto::{aes_256_gcm_encrypt,aes_256_gcm_decrypt}	NODE-CRYPTO-CIPHER-001	closed AES-256-GCM cipher/decipher over approved audited dependency
+NODE-CRYPTO-KEYS	crypto	keys/certs/sign/verify	implemented	N9	tsonic_node::crypto::{generate_rsa_key_pair,sign_sha256,verify_sha256}	NODE-CRYPTO-PKI-001	closed RSA-SHA256 sign/verify over approved audited dependency
 NODE-URL-URL	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL parser/mutators
 NODE-URL-SEARCH-PARAMS	url	URLSearchParams	implemented	L	tsonic_node::url::UrlSearchParams	NODE-URL-002	query parameter carrier
 NODE-URL-FILE	url	fileURLToPath/pathToFileURL	implemented	L	tsonic_node::url::{file_url_to_path,path_to_file_url}	NODE-URL-003	file URL helpers

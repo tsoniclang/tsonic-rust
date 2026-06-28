@@ -4,6 +4,8 @@ mod buffer_tests;
 mod compat_gap_tests;
 #[path = "node/crypto_tests.rs"]
 mod crypto_tests;
+#[path = "node/dependency_backed_runtime_tests.rs"]
+mod dependency_backed_runtime_tests;
 #[path = "node/dgram_tests.rs"]
 mod dgram_tests;
 #[path = "node/events_async_tests.rs"]
@@ -30,3 +32,5 @@ mod timers_stream_dns_tests;
 mod url_tests;
 #[path = "node/util_tests.rs"]
 mod util_tests;
+#[path = "node/zlib_sqlite_tests.rs"]
+mod zlib_sqlite_tests;

@@ -1,5 +1,12 @@
 use crate::buffer::{decode_bytes, Buffer};
 use crate::error::{NodeError, NodeResult};
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Nonce};
+use rand::rngs::OsRng;
+use rsa::pkcs1v15::{Signature as RsaSignature, SigningKey, VerifyingKey};
+use rsa::signature::{SignatureEncoding, Signer, Verifier};
+use rsa::{RsaPrivateKey, RsaPublicKey};
+use sha2::Sha256;
 
 pub fn random_bytes(size: usize) -> NodeResult<Buffer> {
     let mut bytes = vec![0_u8; size];
@@ -185,6 +192,116 @@ pub fn random_uuid() -> NodeResult<String> {
         bytes[8], bytes[9],
         bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
     ))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AesGcmCiphertext {
+    pub ciphertext: Buffer,
+    pub auth_tag: Buffer,
+}
+
+pub fn aes_256_gcm_encrypt(
+    key: &Buffer,
+    iv: &Buffer,
+    plaintext: &Buffer,
+) -> NodeResult<AesGcmCiphertext> {
+    if key.len() != 32 {
+        return Err(NodeError::new(
+            "ERR_CRYPTO_INVALID_KEYLEN",
+            "AES-256-GCM key must be 32 bytes",
+        ));
+    }
+    if iv.len() != 12 {
+        return Err(NodeError::new(
+            "ERR_CRYPTO_INVALID_IV",
+            "AES-256-GCM iv must be 12 bytes",
+        ));
+    }
+    let cipher = Aes256Gcm::new_from_slice(&key.as_bytes())
+        .map_err(|error| NodeError::new("ERR_CRYPTO_INVALID_KEY", error.to_string()))?;
+    let mut output = cipher
+        .encrypt(
+            Nonce::from_slice(&iv.as_bytes()),
+            plaintext.as_bytes().as_ref(),
+        )
+        .map_err(|error| NodeError::new("ERR_CRYPTO_CIPHER_FAILED", error.to_string()))?;
+    let tag = output.split_off(output.len().saturating_sub(16));
+    Ok(AesGcmCiphertext {
+        ciphertext: Buffer::from_bytes(output),
+        auth_tag: Buffer::from_bytes(tag),
+    })
+}
+
+pub fn aes_256_gcm_decrypt(
+    key: &Buffer,
+    iv: &Buffer,
+    ciphertext: &Buffer,
+    auth_tag: &Buffer,
+) -> NodeResult<Buffer> {
+    if key.len() != 32 {
+        return Err(NodeError::new(
+            "ERR_CRYPTO_INVALID_KEYLEN",
+            "AES-256-GCM key must be 32 bytes",
+        ));
+    }
+    if iv.len() != 12 {
+        return Err(NodeError::new(
+            "ERR_CRYPTO_INVALID_IV",
+            "AES-256-GCM iv must be 12 bytes",
+        ));
+    }
+    if auth_tag.len() != 16 {
+        return Err(NodeError::new(
+            "ERR_CRYPTO_INVALID_AUTH_TAG",
+            "AES-256-GCM auth tag must be 16 bytes",
+        ));
+    }
+    let cipher = Aes256Gcm::new_from_slice(&key.as_bytes())
+        .map_err(|error| NodeError::new("ERR_CRYPTO_INVALID_KEY", error.to_string()))?;
+    let mut sealed = ciphertext.as_bytes();
+    sealed.extend_from_slice(&auth_tag.as_bytes());
+    let plaintext = cipher
+        .decrypt(Nonce::from_slice(&iv.as_bytes()), sealed.as_ref())
+        .map_err(|error| NodeError::new("ERR_CRYPTO_AUTH_FAILED", error.to_string()))?;
+    Ok(Buffer::from_bytes(plaintext))
+}
+
+#[derive(Debug, Clone)]
+pub struct RsaKeyPair {
+    private_key: RsaPrivateKey,
+    public_key: RsaPublicKey,
+}
+
+impl RsaKeyPair {
+    pub fn public_key(&self) -> RsaPublicKey {
+        self.public_key.clone()
+    }
+}
+
+pub fn generate_rsa_key_pair(bits: usize) -> NodeResult<RsaKeyPair> {
+    let private_key = RsaPrivateKey::new(&mut OsRng, bits)
+        .map_err(|error| NodeError::new("ERR_CRYPTO_KEYGEN_FAILED", error.to_string()))?;
+    let public_key = RsaPublicKey::from(&private_key);
+    Ok(RsaKeyPair {
+        private_key,
+        public_key,
+    })
+}
+
+pub fn sign_sha256(key_pair: &RsaKeyPair, data: &[u8]) -> Buffer {
+    let signing_key = SigningKey::<Sha256>::new(key_pair.private_key.clone());
+    Buffer::from_bytes(signing_key.sign(data).to_vec())
+}
+
+pub fn verify_sha256(
+    public_key: &RsaPublicKey,
+    data: &[u8],
+    signature: &Buffer,
+) -> NodeResult<bool> {
+    let verifying_key = VerifyingKey::<Sha256>::new(public_key.clone());
+    let signature = RsaSignature::try_from(signature.as_bytes().as_slice())
+        .map_err(|error| NodeError::new("ERR_CRYPTO_INVALID_SIGNATURE", error.to_string()))?;
+    Ok(verifying_key.verify(data, &signature).is_ok())
 }
 
 fn parse_algorithm(algorithm: &str) -> NodeResult<Algorithm> {

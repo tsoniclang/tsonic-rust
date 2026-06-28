@@ -1,0 +1,8 @@
+crate	package	reason
+tsonic_node	flate2	approved zlib/gzip/deflate runtime implementation; no shellout or embedded JS engine
+tsonic_node	reqwest	approved HTTPS/HTTP2 client transport implementation over rustls; no shellout or embedded JS engine
+tsonic_node	rusqlite	approved Node sqlite runtime implementation with bundled SQLite; no runtime reflection or process shellout
+tsonic_node	aes-gcm	approved crypto cipher runtime implementation; audited crate rather than handwritten cipher
+tsonic_node	rsa	approved crypto key/sign/verify runtime implementation; audited crate rather than handwritten PKI
+tsonic_node	rand	approved crypto key generation support dependency for rsa/aes-gcm tests and APIs
+tsonic_node	sha2	approved crypto sign/verify digest dependency matching existing hash semantics
