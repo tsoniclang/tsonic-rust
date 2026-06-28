@@ -16,6 +16,16 @@ fn console_formats_to_injectable_writer() {
     let mut trace = Vec::new();
     console::trace_to(&mut trace, &[JsValue::String("here".to_string())]).unwrap();
     assert_eq!(String::from_utf8(trace).unwrap(), "Trace: \"here\"\n");
+
+    let mut table = Vec::new();
+    console::table_to(&mut table, &[JsValue::Number(1.0), JsValue::Bool(true)]).unwrap();
+    let table = String::from_utf8(table).unwrap();
+    assert!(table.contains("(index) Values"));
+    assert!(table.contains("0: 1"));
+
+    let mut dirxml = Vec::new();
+    console::dirxml_to(&mut dirxml, &[JsValue::String("node".to_string())]).unwrap();
+    assert_eq!(String::from_utf8(dirxml).unwrap(), "\"node\"\n");
 }
 
 #[test]
@@ -59,4 +69,45 @@ fn console_instance_tracks_counts_timers_and_groups() {
     let timing = String::from_utf8(timing).unwrap();
     assert!(timing.contains("load: "));
     assert!(timing.contains("phase"));
+}
+
+#[test]
+fn console_options_profiles_timestamps_and_dirxml_are_closed() {
+    let mut console = console::Console::with_options(console::ConsoleOptions {
+        ignore_errors: false,
+        color_mode: console::ConsoleColorMode::Never,
+        group_indentation: 4,
+    });
+    assert!(!console.ignore_errors());
+    assert_eq!(console.color_mode(), console::ConsoleColorMode::Never);
+    assert_eq!(console.group_indentation(), 4);
+
+    let mut grouped = Vec::new();
+    console
+        .group_collapsed_to(&mut grouped, &[JsValue::String("root".to_string())])
+        .unwrap();
+    console
+        .dirxml_to(&mut grouped, &[JsValue::String("child".to_string())])
+        .unwrap();
+    console.group_end();
+    assert_eq!(
+        String::from_utf8(grouped).unwrap(),
+        "\"root\"\n    \"child\"\n"
+    );
+
+    let mut timestamp = Vec::new();
+    console
+        .time_stamp_to(&mut timestamp, Some("render"))
+        .unwrap();
+    assert_eq!(String::from_utf8(timestamp).unwrap(), "Timestamp: render\n");
+
+    console.profile(Some("render"));
+    let mut profile = Vec::new();
+    assert!(console
+        .profile_end_to(&mut profile, Some("render"))
+        .unwrap()
+        .is_some());
+    assert!(String::from_utf8(profile)
+        .unwrap()
+        .contains("Profile 'render':"));
 }

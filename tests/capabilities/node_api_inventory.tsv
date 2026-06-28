@@ -8,6 +8,7 @@ NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	
 NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process	NODE-CHILD-001	capability-gated shell-free file process spawn and child process shape
 NODE-MODULE-CLUSTER	cluster	module	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary/worker process orchestration over approved file-spawn model
 NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
+NODE-CONSOLE-CLASS	console	Console options/profile/dirxml/timestamp	implemented	N24	tsonic_js::console::{Console,ConsoleOptions,ConsoleColorMode}	JS-CON-003	Console class options, profiling, timestamp, dirxml, and groupCollapsed shape
 NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
 NODE-MODULE-DGRAM	dgram	module	implemented	N7	tsonic_node::dgram	NODE-DGRAM-001	UDP datagram socket over std net
 NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	implemented	N3	tsonic_node::diagnostics_channel	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime

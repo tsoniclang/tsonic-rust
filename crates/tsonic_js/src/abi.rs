@@ -17,10 +17,10 @@ pub use crate::array::dense::{
 pub use crate::array::{JsArray, JsSlot};
 pub use crate::array_buffer::ArrayBuffer;
 pub use crate::console::{
-    debug_to as console_debug_to, dir_to as console_dir_to, error_to as console_error_to,
-    format_args as console_format_args, info_to as console_info_to, log_to as console_log_to,
-    table_to as console_table_to, trace_to as console_trace_to, warn_to as console_warn_to,
-    Console,
+    debug_to as console_debug_to, dir_to as console_dir_to, dirxml_to as console_dirxml_to,
+    error_to as console_error_to, format_args as console_format_args, info_to as console_info_to,
+    log_to as console_log_to, table_to as console_table_to, trace_to as console_trace_to,
+    warn_to as console_warn_to, Console, ConsoleColorMode, ConsoleOptions,
 };
 pub use crate::data_view::DataView;
 pub use crate::date::JsDate;

@@ -145,6 +145,7 @@ JS-BINARY-006	implemented	M	tsonic_js::typed_array::TypedArray::map	JS-TA-007	ca
 JS-BINARY-007	implemented	M	tsonic_js::abi::DataView	JS-DATAVIEW-001	endian-aware API (completed in full-completion branch)
 JS-BINARY-008	hard-reject	M	n/a	REJECT-JS-SHARED-ATOMICS	concurrency semantics
 JS-CONSOLE-001	implemented	F/M	tsonic_js::abi::{Console,console_log_to,console_error_to,console_warn_to,console_info_to,console_debug_to,console_dir_to,console_table_to,console_trace_to}	JS-CON-001, JS-CON-002	injectable writers, counters, timers, groups, trace, table, dir
+JS-CONSOLE-002	implemented	N24	tsonic_js::abi::{ConsoleOptions,ConsoleColorMode,console_dirxml_to}	JS-CON-003	Console options, dirxml, profile/profileEnd, timeStamp, groupCollapsed, and configurable indentation
 JS-WEB-001	implemented	N11	tsonic_js::abi::{AbortController,AbortSignal}	JS-WEB-001	closed abort signal and controller carrier
 JS-WEB-002	implemented	N11	tsonic_js::abi::DomException	JS-WEB-002	DOMException name, message, and legacy code constants
 JS-WEB-003	implemented	N11	tsonic_js::abi::{Event,EventInit,CustomEvent,EventTarget,AddEventListenerOptions,EventListenerOptions}	JS-WEB-003	closed Event and EventTarget callback carrier
