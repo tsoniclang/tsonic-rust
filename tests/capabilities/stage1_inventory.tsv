@@ -245,6 +245,8 @@ NODE-MOD-012	hard-reject	M	n/a	REJECT-NODE-DOMAIN	legacy async error domain runt
 NODE-MOD-013	implemented	N3	tsonic_node::abi::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-EVENTS-002	implemented	N28	tsonic_node::abi::{NodeEventTarget,EventEmitterAsyncResource,EventEmitterOptions,events_on}	NODE-EVENTS-002	NodeEventTarget, captureRejections option, static on helper, and EventEmitterAsyncResource
 NODE-EVENTS-003	implemented	N34	tsonic_node::abi::{events_default_max_listeners,events_set_default_max_listeners,events_error_monitor,events_capture_rejection_symbol}	NODE-EVENTS-003	global max-listener policy and EventEmitter symbol name constants
+NODE-EVENTS-004	implemented	N57	tsonic_node::abi::{EventEmitter,events_once,events_on,events_get_event_listeners,events_listener_count,events_set_max_listeners}	NODE-EVENTS-001,NODE-EVENTS-002,NODE-EVENTS-003	EventEmitter registration, removal, introspection, max-listener policy, and static helpers
+NODE-EVENTS-005	implemented	N57	tsonic_node::abi::{NodeEventTarget,EventEmitterAsyncResource}	NODE-EVENTS-002	NodeEventTarget method surface and EventEmitterAsyncResource metadata/lifecycle
 NODE-MOD-014	implemented	K	tsonic_node::abi::fs_*	NODE-FS-001 through NODE-FS-010	selected synchronous file APIs only
 NODE-MOD-015	implemented	N3	tsonic_node::abi::fs_promises_*	NODE-FSP-001	blocking-now fs/promises shape over broad filesystem helpers
 NODE-FSP-002	implemented	N42	tsonic_node::abi::{FsPromisesFileHandle,FsPromisesDir,fs_promises_opendir_handle}	NODE-FSP-002	FileHandle readFile/appendFile/web stream carriers and Dir read/close handle shape
