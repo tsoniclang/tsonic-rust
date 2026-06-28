@@ -57,7 +57,11 @@ NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	
 NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process	NODE-CHILD-001	capability-gated shell-free file process spawn and child process shape
 NODE-MODULE-CLUSTER	cluster	module	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary/worker process orchestration over approved file-spawn model
 NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
-NODE-CONSOLE-CLASS	console	Console options/profile/dirxml/timestamp	implemented	N24	tsonic_js::console::{Console,ConsoleOptions,ConsoleColorMode}	JS-CON-003	Console class options, profiling, timestamp, dirxml, and groupCollapsed shape
+NODE-CONSOLE-NEW	console	Console.new	implemented	N75	tsonic_js::console::Console::new	JS-CON-002	constructs console carrier with default options
+NODE-CONSOLE-WITH-OPTIONS	console	Console.withOptions	implemented	N75	tsonic_js::console::Console::with_options	JS-CON-003	constructs console carrier with explicit options
+NODE-CONSOLE-IGNORE-ERRORS	console	Console.ignoreErrors	implemented	N75	tsonic_js::console::Console::ignore_errors	JS-CON-003	ignoreErrors option accessor
+NODE-CONSOLE-COLOR-MODE-ACCESSOR	console	Console.colorMode	implemented	N75	tsonic_js::console::Console::color_mode	JS-CON-003	colorMode option accessor
+NODE-CONSOLE-GROUP-INDENTATION	console	Console.groupIndentation	implemented	N75	tsonic_js::console::Console::group_indentation	JS-CON-003	group indentation option accessor
 NODE-CONSOLE-FORMAT	console	format args	implemented	N75	tsonic_js::console::format_args	JS-CON-001	closed console argument formatting over JsValue inspect
 NODE-CONSOLE-LOG-TO	console	log	implemented	N75	tsonic_js::console::log_to	JS-CON-001	console log writer helper
 NODE-CONSOLE-ERROR-TO	console	error	implemented	N75	tsonic_js::console::error_to	JS-CON-001	console error writer helper
@@ -72,14 +76,28 @@ NODE-CONSOLE-CARRIER	console	Console	implemented	N75	tsonic_js::console::Console
 NODE-CONSOLE-OPTIONS	console	ConsoleOptions	implemented	N75	tsonic_js::console::ConsoleOptions	JS-CON-003	ConsoleOptions carrier controls ignoreErrors, colorMode, and groupIndentation
 NODE-CONSOLE-COLOR-MODE	console	ConsoleColorMode	implemented	N75	tsonic_js::console::ConsoleColorMode	JS-CON-003	ConsoleColorMode carrier exposes auto/always/never policy
 NODE-CONSOLE-INSTANCE-FORMAT	console	Console.format	implemented	N75	tsonic_js::console::Console::format	JS-CON-001	Console.format applies indentation and JsValue formatting
-NODE-CONSOLE-INSTANCE-WRITERS	console	Console log/info/debug/warn/error/dir/table/dirxml/trace	implemented	N75	tsonic_js::console::Console::{log_to,info_to,debug_to,warn_to,error_to,dir_to,table_to,dirxml_to,trace_to}	JS-CON-001, JS-CON-002, JS-CON-003	Console writer methods are individually backed by injectable writer policy
+NODE-CONSOLE-INSTANCE-LOG	console	Console.log	implemented	N75	tsonic_js::console::Console::log_to	JS-CON-001	Console log writer method uses injectable writer policy
+NODE-CONSOLE-INSTANCE-INFO	console	Console.info	implemented	N75	tsonic_js::console::Console::info_to	JS-CON-001	Console info writer method delegates to log writer policy
+NODE-CONSOLE-INSTANCE-DEBUG	console	Console.debug	implemented	N75	tsonic_js::console::Console::debug_to	JS-CON-001	Console debug writer method delegates to log writer policy
+NODE-CONSOLE-INSTANCE-WARN	console	Console.warn	implemented	N75	tsonic_js::console::Console::warn_to	JS-CON-001	Console warn writer method uses injectable writer policy
+NODE-CONSOLE-INSTANCE-ERROR	console	Console.error	implemented	N75	tsonic_js::console::Console::error_to	JS-CON-001	Console error writer method uses injectable writer policy
+NODE-CONSOLE-INSTANCE-DIR	console	Console.dir	implemented	N75	tsonic_js::console::Console::dir_to	JS-CON-001	Console dir writer method uses JsValue inspect
+NODE-CONSOLE-INSTANCE-TABLE	console	Console.table	implemented	N75	tsonic_js::console::Console::table_to	JS-CON-002	Console table writer method emits closed row values
+NODE-CONSOLE-INSTANCE-DIRXML	console	Console.dirxml	implemented	N75	tsonic_js::console::Console::dirxml_to	JS-CON-003	Console dirxml writer method delegates to log writer policy
+NODE-CONSOLE-INSTANCE-TRACE	console	Console.trace	implemented	N75	tsonic_js::console::Console::trace_to	JS-CON-002	Console trace writer method emits deterministic trace prefix
 NODE-CONSOLE-ASSERT	console	Console.assert	implemented	N75	tsonic_js::console::Console::assert_to	JS-CON-003	Console assert writer emits only failed assertions
-NODE-CONSOLE-COUNT	console	Console.count/countReset	implemented	N75	tsonic_js::console::Console::{count_to,count_reset}	JS-CON-002	Console count state is explicit per label
-NODE-CONSOLE-TIME	console	Console.time/timeLog/timeEnd	implemented	N75	tsonic_js::console::Console::{time,time_log_to,time_end_to}	JS-CON-002	Console timer state is explicit per label
-NODE-CONSOLE-GROUP	console	Console.group/groupCollapsed/groupEnd	implemented	N75	tsonic_js::console::Console::{group_to,group_collapsed_to,group_end}	JS-CON-002, JS-CON-003	Console group indentation state is explicit
+NODE-CONSOLE-COUNT	console	Console.count	implemented	N75	tsonic_js::console::Console::count_to	JS-CON-002	Console count state increments per explicit label
+NODE-CONSOLE-COUNT-RESET	console	Console.countReset	implemented	N75	tsonic_js::console::Console::count_reset	JS-CON-002	Console countReset clears explicit label state
+NODE-CONSOLE-TIME	console	Console.time	implemented	N75	tsonic_js::console::Console::time	JS-CON-002	Console timer state starts per explicit label
+NODE-CONSOLE-TIME-LOG	console	Console.timeLog	implemented	N75	tsonic_js::console::Console::time_log_to	JS-CON-002	Console timeLog reports elapsed time for explicit label
+NODE-CONSOLE-TIME-END	console	Console.timeEnd	implemented	N75	tsonic_js::console::Console::time_end_to	JS-CON-002	Console timeEnd reports elapsed time and clears explicit label
+NODE-CONSOLE-GROUP	console	Console.group	implemented	N75	tsonic_js::console::Console::group_to	JS-CON-002	Console group emits optional label and increments indentation depth
+NODE-CONSOLE-GROUP-COLLAPSED	console	Console.groupCollapsed	implemented	N75	tsonic_js::console::Console::group_collapsed_to	JS-CON-003	Console groupCollapsed follows group behavior in closed console carrier
+NODE-CONSOLE-GROUP-END	console	Console.groupEnd	implemented	N75	tsonic_js::console::Console::group_end	JS-CON-002	Console groupEnd decrements indentation depth
 NODE-CONSOLE-CLEAR	console	Console.clear	implemented	N75	tsonic_js::console::Console::clear_to	JS-CON-003	Console clear emits deterministic ANSI clear sequence
 NODE-CONSOLE-TIMESTAMP	console	Console.timeStamp	implemented	N75	tsonic_js::console::Console::time_stamp_to	JS-CON-003	Console timeStamp emits deterministic label line
-NODE-CONSOLE-PROFILE	console	Console.profile/profileEnd	implemented	N75	tsonic_js::console::Console::{profile,profile_end_to}	JS-CON-003	Console profile state is explicit per label
+NODE-CONSOLE-PROFILE	console	Console.profile	implemented	N75	tsonic_js::console::Console::profile	JS-CON-003	Console profile starts explicit label timer
+NODE-CONSOLE-PROFILE-END	console	Console.profileEnd	implemented	N75	tsonic_js::console::Console::profile_end_to	JS-CON-003	Console profileEnd reports elapsed time and clears explicit label
 NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
 NODE-MODULE-DGRAM	dgram	module	implemented	N7	tsonic_node::dgram	NODE-DGRAM-001	UDP datagram socket over std net
 NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	implemented	N3	tsonic_node::diagnostics_channel	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
