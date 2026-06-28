@@ -16,6 +16,8 @@ mod fetch_tests;
 mod fs_promises_tests;
 #[path = "node/fs_tests.rs"]
 mod fs_tests;
+#[path = "node/http2_tests.rs"]
+mod http2_tests;
 #[path = "node/misc_module_tests.rs"]
 mod misc_module_tests;
 #[path = "node/network_process_tests.rs"]

@@ -193,7 +193,47 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
 
     let http2 = tsonic_node::http2::connect("https://example.com").unwrap();
     assert_eq!(http2.authority, "https://example.com");
+    assert!(http2.headers.is_empty());
+    assert!(!http2.prior_knowledge);
+    assert_eq!(http2.protocol, None);
+    assert_eq!(http2.max_reserved_remote_streams, None);
+    assert!(!http2.session.strict_field_whitespace_validation);
     assert!(tsonic_node::http2::connect("example.com").is_err());
+    let session_options = tsonic_node::http2::SessionOptions {
+        max_deflate_dynamic_table_size: Some(4096),
+        max_header_list_pairs: Some(128),
+        max_outstanding_pings: Some(4),
+        max_send_header_block_length: Some(16_384),
+        max_session_memory: Some(1 << 20),
+        max_settings: Some(32),
+        padding_strategy: Some(1),
+        peer_max_concurrent_streams: Some(100),
+        remote_custom_settings: vec![1, 2],
+        settings: Some(tsonic_node::http2::Http2Settings::default()),
+        strict_field_whitespace_validation: true,
+        unknown_protocol_timeout: Some(10_000),
+    };
+    assert_eq!(session_options.max_header_list_pairs, Some(128));
+    assert_eq!(session_options.remote_custom_settings, vec![1, 2]);
+    assert!(session_options.strict_field_whitespace_validation);
+    let request_options = tsonic_node::http2::ClientSessionRequestOptions {
+        end_stream: true,
+        exclusive: true,
+        parent: Some(1),
+        signal_aborted: false,
+        wait_for_trailers: true,
+    };
+    assert!(request_options.end_stream);
+    assert_eq!(request_options.parent, Some(1));
+    let alternative = tsonic_node::http2::AlternativeServiceOptions {
+        origin: "https://alt.example.com".to_string(),
+    };
+    assert_eq!(alternative.origin, "https://alt.example.com");
+    let stat_options = tsonic_node::http2::StatOptions {
+        offset: 1,
+        length: 2,
+    };
+    assert_eq!(stat_options.length, 2);
     let mut session = tsonic_node::http2::connect_session("https://example.com").unwrap();
     assert_eq!(session.authority(), "https://example.com");
     assert!(!session.closed());
@@ -229,7 +269,15 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     assert_eq!(session.timeout(), Some(50));
     assert!(timed.get());
     let state = session.state();
+    assert_eq!(state.effective_local_window_size, 100_000);
+    assert_eq!(state.effective_recv_data_length, 0);
+    assert_eq!(state.next_stream_id, 1);
     assert_eq!(state.local_window_size, 100_000);
+    assert_eq!(state.last_proc_stream_id, 0);
+    assert_eq!(state.remote_window_size, 65_535);
+    assert_eq!(state.outbound_queue_size, 0);
+    assert_eq!(state.deflate_dynamic_table_size, 4096);
+    assert_eq!(state.inflate_dynamic_table_size, 4096);
     session.goaway(tsonic_node::http2::NGHTTP2_CANCEL);
     assert_eq!(
         session.goaway_code(),
@@ -275,7 +323,15 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
         silent: false,
     });
     assert_eq!(stream.priority_options().unwrap().weight, 32);
-    assert_eq!(stream.state().weight, Some(32));
+    let stream_state = stream.state();
+    assert_eq!(stream_state.weight, Some(32));
+    assert_eq!(
+        stream_state.state,
+        Some(tsonic_node::http2::NGHTTP2_STREAM_STATE_OPEN)
+    );
+    assert_eq!(stream_state.local_close, Some(0));
+    assert_eq!(stream_state.remote_close, Some(0));
+    assert_eq!(stream_state.local_window_size, Some(0));
     let headers = BTreeMap::from([(
         tsonic_node::http2::HTTP2_HEADER_STATUS.to_string(),
         tsonic_node::http2::HTTP_STATUS_OK.to_string(),
@@ -346,7 +402,16 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     let mut request = tsonic_node::http2::Http2ServerRequest::new(request_stream.clone());
     assert_eq!(request.method, "POST");
     assert_eq!(request.url, "/submit");
+    assert_eq!(request.authority, "example.com");
+    assert_eq!(request.scheme, "https");
     assert_eq!(request.http_version, "2.0");
+    assert_eq!(request.http_version_major, 2);
+    assert_eq!(request.http_version_minor, 0);
+    assert!(request.complete);
+    assert!(!request.aborted);
+    assert!(request.raw_headers.is_empty());
+    assert!(request.trailers.is_empty());
+    assert!(request.raw_trailers.is_empty());
     request.push_body(Buffer::from_string("body", Some("utf8")).unwrap());
     assert_eq!(
         request.read(None).unwrap().to_string(Some("utf8")).unwrap(),
@@ -356,9 +421,16 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     assert_eq!(request.timeout(), Some(10));
 
     let mut response = tsonic_node::http2::Http2ServerResponse::new(request_stream);
+    assert_eq!(response.status_code(), tsonic_node::http2::HTTP_STATUS_OK);
+    assert!(response.send_date());
+    assert!(!response.finished());
+    assert!(!response.headers_sent());
     response.set_status_code(201);
     response.set_status_message("Created");
     response.set_send_date(false);
+    assert_eq!(response.status_code(), 201);
+    assert_eq!(response.status_message(), "Created");
+    assert!(!response.send_date());
     response.set_header("Content-Type", "text/plain");
     response.append_header("Content-Type", "charset=utf8");
     assert!(response.has_header("content-type"));
@@ -366,6 +438,19 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
         response.get_header("CONTENT-TYPE"),
         Some("text/plain, charset=utf8")
     );
+    assert!(response
+        .get_header_names()
+        .contains(&"content-type".to_string()));
+    assert_eq!(
+        response
+            .get_headers()
+            .get("content-type")
+            .map(String::as_str),
+        Some("text/plain, charset=utf8")
+    );
+    response.remove_header("content-type");
+    assert!(!response.has_header("content-type"));
+    response.set_header("Content-Type", "text/plain");
     response.write_head(
         201,
         &BTreeMap::from([("x-id".to_string(), "1".to_string())]),
