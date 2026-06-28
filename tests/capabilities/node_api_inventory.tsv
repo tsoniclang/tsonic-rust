@@ -1719,6 +1719,75 @@ NODE-TLS-CONNECT-GET	tls	connectGet	implemented	N64	tsonic_node::tls::connect_ge
 NODE-TLS-DEFAULT-PORT	tls	defaultPort	implemented	N64	tsonic_node::tls::default_port	NODE-TLS-002	closed TLS default port constant helper
 NODE-TLS-CHECK-SERVER-IDENTITY	tls	checkServerIdentity	implemented	N64	tsonic_node::tls::check_server_identity	NODE-TLS-002	validates closed TLS server-name shape
 NODE-TLS-CREATE-SECURE-CONTEXT	tls	createSecureContext	implemented	N64	tsonic_node::tls::create_secure_context	NODE-TLS-002	creates closed secure context carrier from explicit options
+NODE-TLS-CONNECT-OPTIONS-HOST	tls	ConnectionOptions.host	implemented	N88	tsonic_node::tls::ConnectOptions::host	NODE-TLS-002	TLS connection host field
+NODE-TLS-CONNECT-OPTIONS-SERVERNAME	tls	ConnectionOptions.servername	implemented	N88	tsonic_node::tls::ConnectOptions::servername	NODE-TLS-002	TLS SNI servername field
+NODE-TLS-CONNECT-OPTIONS-PORT	tls	ConnectionOptions.port	implemented	N88	tsonic_node::tls::ConnectOptions::port	NODE-TLS-002	TLS port field
+NODE-TLS-CONNECT-OPTIONS-PATH	tls	ConnectionOptions.path	implemented	N88	tsonic_node::tls::ConnectOptions::path	NODE-TLS-002	TLS unix path field
+NODE-TLS-CONNECT-OPTIONS-ALPN	tls	CommonConnectionOptions.ALPNProtocols	implemented	N88	tsonic_node::tls::ConnectOptions::alpn_protocols	NODE-TLS-002	TLS ALPN protocol field
+NODE-TLS-CONNECT-OPTIONS-REJECT-UNAUTHORIZED	tls	CommonConnectionOptions.rejectUnauthorized	implemented	N88	tsonic_node::tls::ConnectOptions::reject_unauthorized	NODE-TLS-002	TLS rejectUnauthorized field
+NODE-TLS-CONNECT-OPTIONS-REQUEST-OCSP	tls	CommonConnectionOptions.requestOCSP	implemented	N88	tsonic_node::tls::ConnectOptions::request_ocsp	NODE-TLS-002	TLS requestOCSP field
+NODE-TLS-CONNECT-OPTIONS-SESSION	tls	ConnectionOptions.session	implemented	N88	tsonic_node::tls::ConnectOptions::session	NODE-TLS-002	TLS session bytes field
+NODE-TLS-CONNECT-OPTIONS-MIN-VERSION	tls	SecureContextOptions.minVersion	implemented	N88	tsonic_node::tls::ConnectOptions::min_version	NODE-TLS-002	TLS minVersion field
+NODE-TLS-CONNECT-OPTIONS-MAX-VERSION	tls	SecureContextOptions.maxVersion	implemented	N88	tsonic_node::tls::ConnectOptions::max_version	NODE-TLS-002	TLS maxVersion field
+NODE-TLS-CONNECT-OPTIONS-TIMEOUT	tls	ConnectionOptions.timeout	implemented	N88	tsonic_node::tls::ConnectOptions::timeout	NODE-TLS-002	TLS connection timeout field
+NODE-TLS-CONNECT-OPTIONS-MIN-DH-SIZE	tls	ConnectionOptions.minDHSize	implemented	N88	tsonic_node::tls::ConnectOptions::min_dh_size	NODE-TLS-002	TLS minDHSize field
+NODE-TLS-CONNECT-OPTIONS-CHECK-SERVER-IDENTITY	tls	ConnectionOptions.checkServerIdentity	implemented	N88	tsonic_node::tls::ConnectOptions::check_server_identity	NODE-TLS-002	TLS server identity check toggle field
+NODE-TLS-SECURE-CONTEXT-KEY	tls	SecureContextOptions.key	implemented	N88	tsonic_node::tls::SecureContextOptions::key	NODE-TLS-002	secure context key field
+NODE-TLS-SECURE-CONTEXT-CERT	tls	SecureContextOptions.cert	implemented	N88	tsonic_node::tls::SecureContextOptions::cert	NODE-TLS-002	secure context cert field
+NODE-TLS-SECURE-CONTEXT-PFX	tls	SecureContextOptions.pfx	implemented	N88	tsonic_node::tls::SecureContextOptions::pfx	NODE-TLS-002	secure context pfx field
+NODE-TLS-SECURE-CONTEXT-PASSPHRASE	tls	SecureContextOptions.passphrase	implemented	N88	tsonic_node::tls::SecureContextOptions::passphrase	NODE-TLS-002	secure context passphrase field
+NODE-TLS-SECURE-CONTEXT-CA	tls	SecureContextOptions.ca	implemented	N88	tsonic_node::tls::SecureContextOptions::ca	NODE-TLS-002	secure context ca field
+NODE-TLS-SECURE-CONTEXT-ALPN	tls	SecureContextOptions.ALPNProtocols	implemented	N88	tsonic_node::tls::SecureContextOptions::alpn_protocols	NODE-TLS-002	secure context ALPN field
+NODE-TLS-SECURE-CONTEXT-CIPHERS	tls	SecureContextOptions.ciphers	implemented	N88	tsonic_node::tls::SecureContextOptions::ciphers	NODE-TLS-002	secure context ciphers field
+NODE-TLS-SECURE-CONTEXT-SIGALGS	tls	SecureContextOptions.sigalgs	implemented	N88	tsonic_node::tls::SecureContextOptions::sigalgs	NODE-TLS-002	secure context sigalgs field
+NODE-TLS-SECURE-CONTEXT-HONOR-CIPHER-ORDER	tls	SecureContextOptions.honorCipherOrder	implemented	N88	tsonic_node::tls::SecureContextOptions::honor_cipher_order	NODE-TLS-002	secure context honorCipherOrder field
+NODE-TLS-SECURE-CONTEXT-DHPARAM	tls	SecureContextOptions.dhparam	implemented	N88	tsonic_node::tls::SecureContextOptions::dhparam	NODE-TLS-002	secure context dhparam field
+NODE-TLS-SECURE-CONTEXT-CRL	tls	SecureContextOptions.crl	implemented	N88	tsonic_node::tls::SecureContextOptions::crl	NODE-TLS-002	secure context crl field
+NODE-TLS-SECURE-CONTEXT-ECDH-CURVE	tls	SecureContextOptions.ecdhCurve	implemented	N88	tsonic_node::tls::SecureContextOptions::ecdh_curve	NODE-TLS-002	secure context ecdhCurve field
+NODE-TLS-SECURE-CONTEXT-CLIENT-CERT-ENGINE	tls	SecureContextOptions.clientCertEngine	implemented	N88	tsonic_node::tls::SecureContextOptions::client_cert_engine	NODE-TLS-002	secure context clientCertEngine field
+NODE-TLS-SECURE-CONTEXT-PRIVATE-KEY-ENGINE	tls	SecureContextOptions.privateKeyEngine	implemented	N88	tsonic_node::tls::SecureContextOptions::private_key_engine	NODE-TLS-002	secure context privateKeyEngine field
+NODE-TLS-SECURE-CONTEXT-PRIVATE-KEY-IDENTIFIER	tls	SecureContextOptions.privateKeyIdentifier	implemented	N88	tsonic_node::tls::SecureContextOptions::private_key_identifier	NODE-TLS-002	secure context privateKeyIdentifier field
+NODE-TLS-SECURE-CONTEXT-SESSION-ID-CONTEXT	tls	SecureContextOptions.sessionIdContext	implemented	N88	tsonic_node::tls::SecureContextOptions::session_id_context	NODE-TLS-002	secure context sessionIdContext field
+NODE-TLS-SECURE-CONTEXT-SESSION-TIMEOUT	tls	SecureContextOptions.sessionTimeout	implemented	N88	tsonic_node::tls::SecureContextOptions::session_timeout	NODE-TLS-002	secure context sessionTimeout field
+NODE-TLS-SECURE-CONTEXT-TICKET-KEYS	tls	SecureContextOptions.ticketKeys	implemented	N88	tsonic_node::tls::SecureContextOptions::ticket_keys	NODE-TLS-002	secure context ticketKeys field
+NODE-TLS-SECURE-CONTEXT-SECURE-OPTIONS	tls	SecureContextOptions.secureOptions	implemented	N88	tsonic_node::tls::SecureContextOptions::secure_options	NODE-TLS-002	secure context secureOptions field
+NODE-TLS-SECURE-CONTEXT-SECURE-PROTOCOL	tls	SecureContextOptions.secureProtocol	implemented	N88	tsonic_node::tls::SecureContextOptions::secure_protocol	NODE-TLS-002	secure context secureProtocol field
+NODE-TLS-SECURE-CONTEXT-ALLOW-PARTIAL-TRUST-CHAIN	tls	SecureContextOptions.allowPartialTrustChain	implemented	N88	tsonic_node::tls::SecureContextOptions::allow_partial_trust_chain	NODE-TLS-002	secure context allowPartialTrustChain field
+NODE-TLS-CIPHER-NAME	tls	CipherNameAndProtocol.name	implemented	N88	tsonic_node::tls::CipherInfo::name	NODE-TLS-002	TLS cipher name field
+NODE-TLS-CIPHER-STANDARD-NAME	tls	CipherNameAndProtocol.standardName	implemented	N88	tsonic_node::tls::CipherInfo::standard_name	NODE-TLS-002	TLS cipher standardName field
+NODE-TLS-CIPHER-VERSION	tls	CipherNameAndProtocol.version	implemented	N88	tsonic_node::tls::CipherInfo::version	NODE-TLS-002	TLS cipher version field
+NODE-TLS-CERTIFICATE-CA	tls	PeerCertificate.ca	implemented	N88	tsonic_node::tls::Certificate::ca	NODE-TLS-002	TLS certificate ca field
+NODE-TLS-CERTIFICATE-SUBJECT	tls	PeerCertificate.subject	implemented	N88	tsonic_node::tls::Certificate::subject	NODE-TLS-002	TLS certificate subject field
+NODE-TLS-CERTIFICATE-ISSUER	tls	PeerCertificate.issuer	implemented	N88	tsonic_node::tls::Certificate::issuer	NODE-TLS-002	TLS certificate issuer field
+NODE-TLS-CERTIFICATE-SUBJECTALTNAME	tls	PeerCertificate.subjectaltname	implemented	N88	tsonic_node::tls::Certificate::subjectaltname	NODE-TLS-002	TLS certificate subjectaltname field
+NODE-TLS-CERTIFICATE-INFO-ACCESS	tls	PeerCertificate.infoAccess	implemented	N88	tsonic_node::tls::Certificate::info_access	NODE-TLS-002	TLS certificate infoAccess field
+NODE-TLS-CERTIFICATE-VALID-FROM	tls	PeerCertificate.valid_from	implemented	N88	tsonic_node::tls::Certificate::valid_from	NODE-TLS-002	TLS certificate valid_from field
+NODE-TLS-CERTIFICATE-VALID-TO	tls	PeerCertificate.valid_to	implemented	N88	tsonic_node::tls::Certificate::valid_to	NODE-TLS-002	TLS certificate valid_to field
+NODE-TLS-CERTIFICATE-FINGERPRINT	tls	PeerCertificate.fingerprint	implemented	N88	tsonic_node::tls::Certificate::fingerprint	NODE-TLS-002	TLS certificate fingerprint field
+NODE-TLS-CERTIFICATE-FINGERPRINT256	tls	PeerCertificate.fingerprint256	implemented	N88	tsonic_node::tls::Certificate::fingerprint256	NODE-TLS-002	TLS certificate fingerprint256 field
+NODE-TLS-CERTIFICATE-FINGERPRINT512	tls	PeerCertificate.fingerprint512	implemented	N88	tsonic_node::tls::Certificate::fingerprint512	NODE-TLS-002	TLS certificate fingerprint512 field
+NODE-TLS-CERTIFICATE-SERIAL-NUMBER	tls	PeerCertificate.serialNumber	implemented	N88	tsonic_node::tls::Certificate::serial_number	NODE-TLS-002	TLS certificate serialNumber field
+NODE-TLS-CERTIFICATE-RAW	tls	PeerCertificate.raw	implemented	N88	tsonic_node::tls::Certificate::raw	NODE-TLS-002	TLS certificate raw field
+NODE-TLS-CERTIFICATE-BITS	tls	PeerCertificate.bits	implemented	N88	tsonic_node::tls::Certificate::bits	NODE-TLS-002	TLS certificate bits field
+NODE-TLS-CERTIFICATE-EXPONENT	tls	PeerCertificate.exponent	implemented	N88	tsonic_node::tls::Certificate::exponent	NODE-TLS-002	TLS certificate exponent field
+NODE-TLS-CERTIFICATE-MODULUS	tls	PeerCertificate.modulus	implemented	N88	tsonic_node::tls::Certificate::modulus	NODE-TLS-002	TLS certificate modulus field
+NODE-TLS-CERTIFICATE-PUBKEY	tls	PeerCertificate.pubkey	implemented	N88	tsonic_node::tls::Certificate::pubkey	NODE-TLS-002	TLS certificate pubkey field
+NODE-TLS-CERTIFICATE-ASN1-CURVE	tls	PeerCertificate.asn1Curve	implemented	N88	tsonic_node::tls::Certificate::asn1_curve	NODE-TLS-002	TLS certificate asn1Curve field
+NODE-TLS-CERTIFICATE-NIST-CURVE	tls	PeerCertificate.nistCurve	implemented	N88	tsonic_node::tls::Certificate::nist_curve	NODE-TLS-002	TLS certificate nistCurve field
+NODE-TLS-CERTIFICATE-EXT-KEY-USAGE	tls	PeerCertificate.ext_key_usage	implemented	N88	tsonic_node::tls::Certificate::ext_key_usage	NODE-TLS-002	TLS certificate ext_key_usage field
+NODE-TLS-EPHEMERAL-KEY-TYPE	tls	EphemeralKeyInfo.type	implemented	N88	tsonic_node::tls::EphemeralKeyInfo::type	NODE-TLS-002	TLS ephemeral key type field
+NODE-TLS-EPHEMERAL-KEY-NAME	tls	EphemeralKeyInfo.name	implemented	N88	tsonic_node::tls::EphemeralKeyInfo::name	NODE-TLS-002	TLS ephemeral key name field
+NODE-TLS-EPHEMERAL-KEY-SIZE	tls	EphemeralKeyInfo.size	implemented	N88	tsonic_node::tls::EphemeralKeyInfo::size	NODE-TLS-002	TLS ephemeral key size field
+NODE-TLS-SOCKET-GET-PROTOCOL	tls	TLSSocket.getProtocol	implemented	N88	tsonic_node::tls::TlsSocket::get_protocol	NODE-TLS-002	TLS protocol accessor
+NODE-TLS-SOCKET-ENCRYPTED	tls	TLSSocket.encrypted	implemented	N88	tsonic_node::tls::TlsSocket::encrypted	NODE-TLS-002	TLS encrypted accessor
+NODE-TLS-SOCKET-EXPORT-KEYING-MATERIAL	tls	TLSSocket.exportKeyingMaterial	implemented	N88	tsonic_node::tls::TlsSocket::export_keying_material	NODE-TLS-002	TLS deterministic keying material helper
+NODE-TLS-SOCKET-GET-TLS-TICKET	tls	TLSSocket.getTLSTicket	implemented	N88	tsonic_node::tls::TlsSocket::get_tls_ticket	NODE-TLS-002	TLS ticket bytes accessor
+NODE-TLS-SOCKET-DISABLE-RENEGOTIATION	tls	TLSSocket.disableRenegotiation	implemented	N88	tsonic_node::tls::TlsSocket::disable_renegotiation	NODE-TLS-002	TLS renegotiation disable marker
+NODE-TLS-SOCKET-RENEGOTIATION-DISABLED	tls	TLSSocket.renegotiationDisabled	implemented	N88	tsonic_node::tls::TlsSocket::renegotiation_disabled	NODE-TLS-002	TLS renegotiation disabled accessor
+NODE-TLS-SOCKET-SET-MAX-SEND-FRAGMENT	tls	TLSSocket.setMaxSendFragment	implemented	N88	tsonic_node::tls::TlsSocket::set_max_send_fragment	NODE-TLS-002	TLS max send fragment validator
+NODE-TLS-SOCKET-MAX-SEND-FRAGMENT	tls	TLSSocket.maxSendFragment	implemented	N88	tsonic_node::tls::TlsSocket::max_send_fragment	NODE-TLS-002	TLS max send fragment accessor
+NODE-TLS-SOCKET-SET-KEY-CERT	tls	TLSSocket.setKeyCert	implemented	N88	tsonic_node::tls::TlsSocket::set_key_cert	NODE-TLS-002	TLS key/cert context setter
+NODE-TLS-SOCKET-KEY-CERT-CONTEXT	tls	TLSSocket.keyCertContext	implemented	N88	tsonic_node::tls::TlsSocket::key_cert_context	NODE-TLS-002	TLS key/cert context accessor
 NODE-MODULE-TRACE-EVENTS	trace_events	module	hard-reject	N0	n/a	REJECT-NODE-TRACE-EVENTS	instrumentation excluded
 NODE-MODULE-TTY	tty	module	implemented	N1	tsonic_node::tty	NODE-MISC-004	isatty helper
 NODE-TTY-READSTREAM-NEW	tty	ReadStream.new	implemented	N63	tsonic_node::tty::ReadStream::new	NODE-TTY-001	constructs read stream for explicit fd
