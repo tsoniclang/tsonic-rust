@@ -191,6 +191,11 @@ NODE-ASSERT-NOT	assert	notStrictEqual	implemented	N2	tsonic_node::assert::not_st
 NODE-UTIL-PROMISIFY	util	promisify/callbackify	implemented	N22	tsonic_node::util::{promisify,callbackify}	NODE-UTIL-006	closed identity adapters for generated Rust function carriers; no dynamic Promise runtime
 NODE-UTIL-ABORT	util	aborted/transferableAbortSignal/transferableAbortController	implemented	N43	tsonic_node::util::{aborted,transferable_abort_signal,transferable_abort_controller}	NODE-UTIL-007	closed AbortSignal helpers over Web abort carriers without cross-thread object mutation
 NODE-UTIL-CALLSITES	util	getCallSites/CallSite	implemented	N43	tsonic_node::util::{get_call_sites,CallSite}	NODE-UTIL-007	closed generated call-site metadata carrier; no host stack introspection
+NODE-UTIL-DIFF	util	diff	implemented	N48	tsonic_node::util::{diff,DiffEntry}	NODE-UTIL-008	closed line/string diff carrier with operation/value rows
+NODE-UTIL-INSPECT-OPTIONS	util	InspectOptions/defaultOptions	implemented	N48	tsonic_node::util::{InspectOptions,default_inspect_options,inspect_with_struct_options}	NODE-UTIL-008	closed inspect option carrier controlling truncation/color without object reflection
+NODE-UTIL-TEXT-ENCODER-INTO	util	TextEncoder.encodeInto/TextEncoderEncodeIntoResult	implemented	N48	tsonic_node::util::{TextEncoder,TextEncoderEncodeIntoResult}	NODE-UTIL-008	closed UTF-8 encodeInto result carrier with read/written counts
+NODE-UTIL-TEXT-DECODER-OPTIONS	util	TextDecoder fatal/ignoreBOM options	implemented	N48	tsonic_node::util::TextDecoder	NODE-UTIL-008	closed TextDecoder option carrier for fatal and ignoreBOM flags
+NODE-UTIL-SIGNALS	util	convertProcessSignalToExitCode/setTraceSigInt	implemented	N48	tsonic_node::util::{convert_process_signal_to_exit_code,set_trace_sigint}	NODE-UTIL-008	closed signal-to-exit-code mapping and no-op trace SIGINT toggle
 NODE-PROCESS-ENV	process	env	implemented	J	tsonic_node::process::{env_get,env_set,env_delete}	NODE-PROC-001	env helpers
 NODE-PROCESS-CWD	process	cwd/chdir	implemented	J	tsonic_node::process::{cwd,chdir}	NODE-PROC-001	cwd helpers
 NODE-PROCESS-ARGS	process	argv/execPath	implemented	J	tsonic_node::process::{argv,exec_path}	NODE-PROC-001	process args

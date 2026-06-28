@@ -172,6 +172,43 @@ pub struct DebugLogger {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InspectOptions {
+    pub show_hidden: bool,
+    pub depth: Option<usize>,
+    pub colors: bool,
+    pub compact: bool,
+    pub sorted: bool,
+    pub break_length: usize,
+    pub max_string_length: Option<usize>,
+}
+
+impl Default for InspectOptions {
+    fn default() -> Self {
+        Self {
+            show_hidden: false,
+            depth: Some(2),
+            colors: false,
+            compact: true,
+            sorted: false,
+            break_length: 80,
+            max_string_length: Some(10_000),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextEncoderEncodeIntoResult {
+    pub read: usize,
+    pub written: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffEntry {
+    pub operation: i8,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallSite {
     function_name: Option<String>,
     script_name: Option<String>,
@@ -296,8 +333,68 @@ pub fn inspect_with_options(value: &JsValue, _options: &JsValue) -> String {
     inspect(value)
 }
 
+pub fn default_inspect_options() -> InspectOptions {
+    InspectOptions::default()
+}
+
+pub fn inspect_with_struct_options(value: &JsValue, options: &InspectOptions) -> String {
+    let mut text = inspect(value);
+    if let Some(max) = options.max_string_length {
+        if text.chars().count() > max {
+            text = text.chars().take(max).collect::<String>();
+            text.push_str("...");
+        }
+    }
+    if options.colors {
+        style_text("cyan", &text)
+    } else {
+        text
+    }
+}
+
 pub fn is_deep_strict_equal(left: &JsValue, right: &JsValue) -> bool {
     left == right
+}
+
+pub fn diff(actual: &str, expected: &str) -> Vec<DiffEntry> {
+    if actual == expected {
+        return vec![DiffEntry {
+            operation: 0,
+            value: actual.to_string(),
+        }];
+    }
+    let actual_units = split_diff_units(actual);
+    let expected_units = split_diff_units(expected);
+    let mut entries = Vec::new();
+    let max = actual_units.len().max(expected_units.len());
+    for index in 0..max {
+        match (actual_units.get(index), expected_units.get(index)) {
+            (Some(left), Some(right)) if left == right => entries.push(DiffEntry {
+                operation: 0,
+                value: (*left).to_string(),
+            }),
+            (Some(left), Some(right)) => {
+                entries.push(DiffEntry {
+                    operation: -1,
+                    value: (*left).to_string(),
+                });
+                entries.push(DiffEntry {
+                    operation: 1,
+                    value: (*right).to_string(),
+                });
+            }
+            (Some(left), None) => entries.push(DiffEntry {
+                operation: -1,
+                value: (*left).to_string(),
+            }),
+            (None, Some(right)) => entries.push(DiffEntry {
+                operation: 1,
+                value: (*right).to_string(),
+            }),
+            (None, None) => {}
+        }
+    }
+    entries
 }
 
 pub fn strip_vt_control_characters(value: &str) -> String {
@@ -415,6 +512,21 @@ pub fn get_system_error_message(code: i32) -> &'static str {
     }
 }
 
+pub fn convert_process_signal_to_exit_code(signal: &str) -> Option<i32> {
+    match signal {
+        "SIGHUP" => Some(129),
+        "SIGINT" => Some(130),
+        "SIGQUIT" => Some(131),
+        "SIGILL" => Some(132),
+        "SIGABRT" => Some(134),
+        "SIGKILL" => Some(137),
+        "SIGTERM" => Some(143),
+        _ => None,
+    }
+}
+
+pub fn set_trace_sigint(_enable: bool) {}
+
 pub fn parse_args(config: ParseArgsConfig) -> ParseArgsResult {
     let mut result = ParseArgsResult::default();
     for (name, descriptor) in &config.options {
@@ -487,6 +599,16 @@ impl TextEncoder {
     pub fn encode(&self, input: &str) -> Vec<u8> {
         input.as_bytes().to_vec()
     }
+
+    pub fn encode_into(&self, input: &str, destination: &mut [u8]) -> TextEncoderEncodeIntoResult {
+        let bytes = input.as_bytes();
+        let written = bytes.len().min(destination.len());
+        destination[..written].copy_from_slice(&bytes[..written]);
+        TextEncoderEncodeIntoResult {
+            read: input[..written].chars().count(),
+            written,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -502,6 +624,14 @@ impl TextDecoder {
             encoding: encoding.unwrap_or("utf-8").to_ascii_lowercase(),
             fatal: false,
             ignore_bom: false,
+        }
+    }
+
+    pub fn new_with_options(encoding: Option<&str>, fatal: bool, ignore_bom: bool) -> Self {
+        Self {
+            encoding: encoding.unwrap_or("utf-8").to_ascii_lowercase(),
+            fatal,
+            ignore_bom,
         }
     }
 
@@ -604,6 +734,16 @@ pub mod types {
 
     pub fn is_proxy(_value: &JsValue) -> bool {
         false
+    }
+}
+
+fn split_diff_units(value: &str) -> Vec<&str> {
+    if value.contains('\n') {
+        value.lines().collect()
+    } else if value.is_empty() {
+        Vec::new()
+    } else {
+        vec![value]
     }
 }
 

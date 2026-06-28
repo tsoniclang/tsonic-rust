@@ -25,6 +25,16 @@ fn util_format_and_inspect_closed_values() {
         util::inspect_with_options(&JsValue::Null, &JsValue::Null),
         "null"
     );
+    let mut options = util::default_inspect_options();
+    options.max_string_length = Some(3);
+    assert_eq!(
+        util::inspect_with_struct_options(&JsValue::String("abcdef".to_string()), &options),
+        "\"ab..."
+    );
+    let diff = util::diff("a\nb", "a\nc");
+    assert_eq!(diff[0].operation, 0);
+    assert_eq!(diff[1].operation, -1);
+    assert_eq!(diff[2].operation, 1);
     assert!(util::is_deep_strict_equal(&JsValue::Null, &JsValue::Null));
     assert!(util::types::is_string(&JsValue::String("x".to_string())));
     assert!(util::types::is_number(&JsValue::Number(1.0)));
@@ -40,12 +50,20 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     let encoder = util::TextEncoder::new();
     assert_eq!(encoder.encoding(), "utf-8");
     assert_eq!(encoder.encode("hé"), "hé".as_bytes());
+    let mut encoded = [0_u8; 4];
+    let encode_result = encoder.encode_into("rust", &mut encoded);
+    assert_eq!(encode_result.read, 4);
+    assert_eq!(encode_result.written, 4);
+    assert_eq!(&encoded, b"rust");
 
     let decoder = util::TextDecoder::new(Some("utf-8"));
     assert_eq!(decoder.encoding(), "utf-8");
     assert!(!decoder.fatal());
     assert!(!decoder.ignore_bom());
     assert_eq!(decoder.decode("hé".as_bytes()), "hé");
+    let decoder = util::TextDecoder::new_with_options(Some("utf-8"), true, true);
+    assert!(decoder.fatal());
+    assert!(decoder.ignore_bom());
 
     assert_eq!(
         util::strip_vt_control_characters("\u{1b}[31mred\u{1b}[0m"),
@@ -75,6 +93,12 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     assert_eq!(util::style_text("unknown", "x"), "x");
     assert_eq!(util::get_system_error_name(2), "ENOENT");
     assert_eq!(util::get_system_error_message(13), "permission denied");
+    assert_eq!(
+        util::convert_process_signal_to_exit_code("SIGTERM"),
+        Some(143)
+    );
+    assert_eq!(util::convert_process_signal_to_exit_code("NOPE"), None);
+    util::set_trace_sigint(true);
 
     let logger = util::debuglog("http", &["HTTP"]);
     assert!(logger.enabled());

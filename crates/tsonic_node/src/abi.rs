@@ -302,19 +302,23 @@ pub use crate::url::{
 };
 pub use crate::util::types as util_types;
 pub use crate::util::{
-    aborted as util_aborted, callbackify as util_callbackify, debuglog as util_debuglog,
-    deprecate as util_deprecate, format as util_format,
+    aborted as util_aborted, callbackify as util_callbackify,
+    convert_process_signal_to_exit_code as util_convert_process_signal_to_exit_code,
+    debuglog as util_debuglog, default_inspect_options as util_default_inspect_options,
+    deprecate as util_deprecate, diff as util_diff, format as util_format,
     format_with_options as util_format_with_options, get_call_sites as util_get_call_sites,
     get_system_error_message as util_get_system_error_message,
     get_system_error_name as util_get_system_error_name, inherits as util_inherits,
     inspect as util_inspect, inspect_with_options as util_inspect_with_options,
+    inspect_with_struct_options as util_inspect_with_struct_options,
     is_deep_strict_equal as util_is_deep_strict_equal, parse_args as util_parse_args,
-    promisify as util_promisify, strip_vt_control_characters as util_strip_vt_control_characters,
-    style_text as util_style_text, to_usv_string as util_to_usv_string,
+    promisify as util_promisify, set_trace_sigint as util_set_trace_sigint,
+    strip_vt_control_characters as util_strip_vt_control_characters, style_text as util_style_text,
+    to_usv_string as util_to_usv_string,
     transferable_abort_controller as util_transferable_abort_controller,
-    transferable_abort_signal as util_transferable_abort_signal, CallSite, DebugLogger, MIMEParams,
-    MIMEType, ParseArgsConfig, ParseArgsOptionDescriptor, ParseArgsOptionType, ParseArgsResult,
-    TextDecoder, TextEncoder,
+    transferable_abort_signal as util_transferable_abort_signal, CallSite, DebugLogger, DiffEntry,
+    InspectOptions, MIMEParams, MIMEType, ParseArgsConfig, ParseArgsOptionDescriptor,
+    ParseArgsOptionType, ParseArgsResult, TextDecoder, TextEncoder, TextEncoderEncodeIntoResult,
 };
 pub use crate::worker_threads::{
     get_environment_data as worker_get_environment_data, is_main_thread as worker_is_main_thread,
