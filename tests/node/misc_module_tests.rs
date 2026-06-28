@@ -1,5 +1,5 @@
 use tsonic_js::JsValue;
-use tsonic_node::{assert, perf_hooks, querystring, string_decoder, tty};
+use tsonic_node::{assert, module, perf_hooks, querystring, string_decoder, tty};
 
 #[test]
 fn assert_and_perf_hooks_are_closed_runtime_helpers() {
@@ -31,10 +31,28 @@ fn querystring_and_string_decoder_use_existing_closed_parsers() {
     let params = querystring::parse("a=1&a=2");
     assert_eq!(params.get_all("a"), vec!["1".to_string(), "2".to_string()]);
     assert_eq!(querystring::stringify(&params), "a=1&a=2");
+    assert_eq!(querystring::escape("hello world/%"), "hello+world%2F%25");
+    assert_eq!(querystring::unescape("hello+world%2F%25"), "hello world/%");
+    assert_eq!(
+        querystring::unescape_buffer("hello%20world"),
+        b"hello world".to_vec()
+    );
 
     let decoder = string_decoder::StringDecoder::new(Some("utf8"));
     assert_eq!(decoder.write(b"hi").unwrap(), "hi");
     assert_eq!(decoder.end(None).unwrap(), "");
+}
+
+#[test]
+fn module_helpers_cover_safe_common_node_shapes() {
+    assert!(module::is_builtin("fs"));
+    assert!(module::is_builtin("node:fs/promises"));
+    assert!(module::builtin_modules().contains(&"http2"));
+    module::sync_builtin_esm_exports();
+
+    let require = module::create_require("/repo/app");
+    assert_eq!(require.resolve("./mod.js"), "/repo/app/./mod.js");
+    assert_eq!(require.resolve("node:fs"), "node:fs");
 }
 
 #[test]

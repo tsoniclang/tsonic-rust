@@ -1,4 +1,6 @@
 use crate::error::{NodeError, NodeResult};
+use crate::punycode;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Url {
@@ -110,6 +112,121 @@ impl std::fmt::Display for Url {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyUrlObject {
+    pub href: String,
+    pub protocol: String,
+    pub slashes: bool,
+    pub auth: String,
+    pub host: String,
+    pub port: String,
+    pub hostname: String,
+    pub hash: String,
+    pub search: String,
+    pub query: String,
+    pub pathname: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpOptions {
+    pub protocol: String,
+    pub hostname: String,
+    pub port: Option<u16>,
+    pub path: String,
+    pub auth: String,
+}
+
+pub fn can_parse(input: &str, base: Option<&str>) -> bool {
+    Url::parse(input, base).is_ok()
+}
+
+pub fn parse(
+    input: &str,
+    parse_query_string: bool,
+    slashes_denote_host: bool,
+) -> NodeResult<LegacyUrlObject> {
+    let url = if input.contains("://") {
+        Url::parse(input, None)?
+    } else if slashes_denote_host && input.starts_with("//") {
+        Url::parse(&format!("http:{input}"), None)?
+    } else {
+        Url::parse(input, Some("http://localhost"))?
+    };
+    let query = url
+        .search
+        .strip_prefix('?')
+        .unwrap_or(&url.search)
+        .to_string();
+    let auth = match (url.username.is_empty(), url.password.is_empty()) {
+        (true, _) => String::new(),
+        (false, true) => url.username.clone(),
+        (false, false) => format!("{}:{}", url.username, url.password),
+    };
+    let query_value = if parse_query_string {
+        UrlSearchParams::new(Some(&query))?.to_string()
+    } else {
+        query
+    };
+    Ok(LegacyUrlObject {
+        href: url.href.clone(),
+        protocol: url.protocol.clone(),
+        slashes: true,
+        auth,
+        host: url.host.clone(),
+        port: url.port.clone(),
+        hostname: url.hostname.clone(),
+        hash: url.hash.clone(),
+        search: url.search.clone(),
+        query: query_value,
+        pathname: url.pathname.clone(),
+        path: format!("{}{}", url.pathname, url.search),
+    })
+}
+
+pub fn format(value: &LegacyUrlObject) -> String {
+    let mut result = String::new();
+    result.push_str(&value.protocol);
+    if value.slashes {
+        result.push_str("//");
+    }
+    if !value.auth.is_empty() {
+        result.push_str(&value.auth);
+        result.push('@');
+    }
+    result.push_str(&value.host);
+    result.push_str(&value.pathname);
+    result.push_str(&value.search);
+    result.push_str(&value.hash);
+    result
+}
+
+pub fn resolve(from: &str, to: &str) -> NodeResult<String> {
+    Ok(Url::parse(to, Some(from))?.href())
+}
+
+pub fn domain_to_ascii(domain: &str) -> String {
+    punycode::to_ascii(domain)
+}
+
+pub fn domain_to_unicode(domain: &str) -> String {
+    punycode::to_unicode(domain)
+}
+
+pub fn url_to_http_options(url: &Url) -> HttpOptions {
+    HttpOptions {
+        protocol: url.protocol(),
+        hostname: url.hostname(),
+        port: url.port().parse::<u16>().ok(),
+        path: format!("{}{}", url.pathname(), url.search()),
+        auth: match (url.username.is_empty(), url.password.is_empty()) {
+            (true, _) => String::new(),
+            (false, true) => url.username.clone(),
+            (false, false) => format!("{}:{}", url.username, url.password),
+        },
+    }
+}
+
 pub fn path_to_file_url(path: &str) -> Url {
     let mut pathname = path.replace('\\', "/");
     if !pathname.starts_with('/') {
@@ -165,6 +282,44 @@ impl UrlSearchParams {
 
     pub fn has(&self, name: &str) -> bool {
         self.entries.iter().any(|(key, _)| key == name)
+    }
+
+    pub fn size(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn keys(&self) -> Vec<String> {
+        self.entries.iter().map(|(key, _)| key.clone()).collect()
+    }
+
+    pub fn values(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .map(|(_, value)| value.clone())
+            .collect()
+    }
+
+    pub fn entries(&self) -> Vec<(String, String)> {
+        self.entries.clone()
+    }
+
+    pub fn sort(&mut self) {
+        self.entries.sort_by(|left, right| left.0.cmp(&right.0));
+    }
+
+    pub fn for_each(&self, mut callback: impl FnMut(&str, &str)) {
+        for (key, value) in &self.entries {
+            callback(value, key);
+        }
+    }
+
+    pub fn from_records(records: &BTreeMap<String, String>) -> Self {
+        Self {
+            entries: records
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        }
     }
 
     pub fn append(&mut self, name: &str, value: &str) {
@@ -262,10 +417,55 @@ fn join_base(base: &str, input: &str) -> String {
     format!("{prefix}/{input}")
 }
 
-fn percent_decode(value: &str) -> String {
-    value.replace('+', " ")
+pub(crate) fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => {
+                output.push(b' ');
+                index += 1;
+            }
+            b'%' if index + 2 < bytes.len() => {
+                if let (Some(high), Some(low)) =
+                    (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
+                {
+                    output.push((high << 4) | low);
+                    index += 3;
+                } else {
+                    output.push(bytes[index]);
+                    index += 1;
+                }
+            }
+            byte => {
+                output.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&output).into_owned()
 }
 
-fn percent_encode(value: &str) -> String {
-    value.replace(' ', "+")
+pub(crate) fn percent_encode(value: &str) -> String {
+    let mut output = String::new();
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                output.push(byte as char)
+            }
+            b' ' => output.push('+'),
+            _ => output.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    output
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }

@@ -82,7 +82,9 @@ pub use crate::https::{
     get as https_get, request as https_request, RequestOptions as HttpsRequestOptions,
 };
 pub use crate::module::{
-    builtin_modules as module_builtin_modules, create_require as module_create_require, Require,
+    builtin_modules as module_builtin_modules, create_require as module_create_require,
+    find_package_json as module_find_package_json, is_builtin as module_is_builtin,
+    sync_builtin_esm_exports as module_sync_builtin_esm_exports, Require,
 };
 pub use crate::net::{
     connect as net_connect, create_server as net_create_server, is_ip as net_is_ip,
@@ -124,7 +126,10 @@ pub use crate::process::{
     Release as ProcessRelease, ResourceUsage as ProcessResourceUsage,
 };
 pub use crate::punycode::{to_ascii as punycode_to_ascii, to_unicode as punycode_to_unicode};
-pub use crate::querystring::{parse as querystring_parse, stringify as querystring_stringify};
+pub use crate::querystring::{
+    escape as querystring_escape, parse as querystring_parse, stringify as querystring_stringify,
+    unescape as querystring_unescape, unescape_buffer as querystring_unescape_buffer,
+};
 pub use crate::readline::{
     create_interface as readline_create_interface, Interface as ReadlineInterface,
 };
@@ -144,7 +149,12 @@ pub use crate::tls::{
     default_port as tls_default_port, ConnectOptions as TlsConnectOptions,
 };
 pub use crate::tty::isatty as tty_isatty;
-pub use crate::url::{file_url_to_path, path_to_file_url, Url, UrlSearchParams};
+pub use crate::url::{
+    can_parse as url_can_parse, domain_to_ascii as url_domain_to_ascii,
+    domain_to_unicode as url_domain_to_unicode, file_url_to_path, format as url_format,
+    parse as url_parse, path_to_file_url, resolve as url_resolve, url_to_http_options, HttpOptions,
+    LegacyUrlObject, Url, UrlSearchParams,
+};
 pub use crate::util::types as util_types;
 pub use crate::util::{
     format as util_format, inspect as util_inspect,
