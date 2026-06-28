@@ -44,6 +44,41 @@ pub struct Buffer {
     len: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BufferValue {
+    Byte(u8),
+    Bytes(Vec<u8>),
+    Text {
+        value: String,
+        encoding: Option<String>,
+    },
+}
+
+impl BufferValue {
+    pub fn byte(value: u8) -> Self {
+        Self::Byte(value)
+    }
+
+    pub fn bytes(value: impl Into<Vec<u8>>) -> Self {
+        Self::Bytes(value.into())
+    }
+
+    pub fn text(value: impl Into<String>, encoding: Option<&str>) -> Self {
+        Self::Text {
+            value: value.into(),
+            encoding: encoding.map(str::to_string),
+        }
+    }
+
+    fn into_bytes(self) -> NodeResult<Vec<u8>> {
+        match self {
+            Self::Byte(value) => Ok(vec![value]),
+            Self::Bytes(value) => Ok(value),
+            Self::Text { value, encoding } => encode_string(&value, encoding.as_deref()),
+        }
+    }
+}
+
 impl PartialEq for Buffer {
     fn eq(&self, other: &Self) -> bool {
         self.to_vec() == other.to_vec()
@@ -55,6 +90,12 @@ impl Eq for Buffer {}
 impl Buffer {
     pub fn alloc(size: usize) -> Self {
         Self::from_bytes(vec![0; size])
+    }
+
+    pub fn alloc_with_fill(size: usize, fill: BufferValue) -> NodeResult<Self> {
+        let mut buffer = Self::alloc(size);
+        buffer.fill_value(fill, 0, None)?;
+        Ok(buffer)
     }
 
     pub fn alloc_unsafe(size: usize) -> Self {
@@ -138,6 +179,35 @@ impl Buffer {
     }
 
     pub fn fill(&mut self, value: u8, start: usize, end: Option<usize>) -> NodeResult<&mut Self> {
+        self.fill_bytes(&[value], start, end)
+    }
+
+    pub fn fill_value(
+        &mut self,
+        value: BufferValue,
+        start: usize,
+        end: Option<usize>,
+    ) -> NodeResult<&mut Self> {
+        let bytes = value.into_bytes()?;
+        self.fill_bytes(&bytes, start, end)
+    }
+
+    pub fn fill_string(
+        &mut self,
+        value: &str,
+        start: usize,
+        end: Option<usize>,
+        encoding: Option<&str>,
+    ) -> NodeResult<&mut Self> {
+        self.fill_value(BufferValue::text(value, encoding), start, end)
+    }
+
+    pub fn fill_bytes(
+        &mut self,
+        value: &[u8],
+        start: usize,
+        end: Option<usize>,
+    ) -> NodeResult<&mut Self> {
         let end = end.unwrap_or(self.len).min(self.len);
         if start > end {
             return Err(NodeError::new(
@@ -145,8 +215,11 @@ impl Buffer {
                 "buffer fill start is after end",
             ));
         }
-        for index in start..end {
-            self.set(index, value)?;
+        if value.is_empty() {
+            return Ok(self);
+        }
+        for (write_index, index) in (start..end).enumerate() {
+            self.set(index, value[write_index % value.len()])?;
         }
         Ok(self)
     }
@@ -174,6 +247,32 @@ impl Buffer {
         let count = (source_end - source_start).min(target.len - target_start);
         let bytes = self.read_exact(source_start, count)?;
         target.write_exact(target_start, &bytes)?;
+        Ok(count)
+    }
+
+    pub fn copy_to_slice(
+        &self,
+        target: &mut [u8],
+        target_start: usize,
+        source_start: usize,
+        source_end: Option<usize>,
+    ) -> NodeResult<usize> {
+        if target_start > target.len() || source_start > self.len {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "buffer copy range is outside buffer",
+            ));
+        }
+        let source_end = source_end.unwrap_or(self.len).min(self.len);
+        if source_start > source_end {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "buffer copy source start is after source end",
+            ));
+        }
+        let count = (source_end - source_start).min(target.len() - target_start);
+        let bytes = self.read_exact(source_start, count)?;
+        target[target_start..target_start + count].copy_from_slice(&bytes);
         Ok(count)
     }
 
@@ -217,6 +316,19 @@ impl Buffer {
         self.index_of(needle, byte_offset).is_some()
     }
 
+    pub fn includes_value(&self, needle: BufferValue, byte_offset: isize) -> NodeResult<bool> {
+        Ok(self.index_of_value(needle, byte_offset)?.is_some())
+    }
+
+    pub fn includes_string(
+        &self,
+        needle: &str,
+        byte_offset: isize,
+        encoding: Option<&str>,
+    ) -> NodeResult<bool> {
+        self.includes_value(BufferValue::text(needle, encoding), byte_offset)
+    }
+
     pub fn index_of(&self, needle: &[u8], byte_offset: isize) -> Option<usize> {
         if needle.is_empty() {
             return Some(normalize_search_start(self.len, byte_offset));
@@ -226,6 +338,23 @@ impl Buffer {
             .windows(needle.len())
             .position(|window| window == needle)
             .map(|index| index + start)
+    }
+
+    pub fn index_of_value(
+        &self,
+        needle: BufferValue,
+        byte_offset: isize,
+    ) -> NodeResult<Option<usize>> {
+        Ok(self.index_of(&needle.into_bytes()?, byte_offset))
+    }
+
+    pub fn index_of_string(
+        &self,
+        needle: &str,
+        byte_offset: isize,
+        encoding: Option<&str>,
+    ) -> NodeResult<Option<usize>> {
+        self.index_of_value(BufferValue::text(needle, encoding), byte_offset)
     }
 
     pub fn last_index_of(&self, needle: &[u8], byte_offset: Option<isize>) -> Option<usize> {
@@ -245,6 +374,23 @@ impl Buffer {
         (0..=start)
             .rev()
             .find(|index| &bytes[*index..*index + needle.len()] == needle)
+    }
+
+    pub fn last_index_of_value(
+        &self,
+        needle: BufferValue,
+        byte_offset: Option<isize>,
+    ) -> NodeResult<Option<usize>> {
+        Ok(self.last_index_of(&needle.into_bytes()?, byte_offset))
+    }
+
+    pub fn last_index_of_string(
+        &self,
+        needle: &str,
+        byte_offset: Option<isize>,
+        encoding: Option<&str>,
+    ) -> NodeResult<Option<usize>> {
+        self.last_index_of_value(BufferValue::text(needle, encoding), byte_offset)
     }
 
     pub fn concat(buffers: &[Buffer]) -> Buffer {

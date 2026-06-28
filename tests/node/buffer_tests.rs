@@ -1,4 +1,5 @@
 use tsonic_node::buffer::Buffer;
+use tsonic_node::buffer::BufferValue;
 
 #[test]
 fn buffer_encodings_and_views() {
@@ -109,6 +110,51 @@ fn buffer_common_mutation_search_and_predicates() {
     assert_eq!(swap.as_bytes(), vec![3, 4, 1, 2, 7, 8, 5, 6]);
     swap.swap64().unwrap();
     assert_eq!(swap.as_bytes(), vec![6, 5, 8, 7, 2, 1, 4, 3]);
+}
+
+#[test]
+fn buffer_overload_values_cover_string_number_and_byte_views() {
+    let from_fill = Buffer::alloc_with_fill(5, BufferValue::text("ab", Some("utf8"))).unwrap();
+    assert_eq!(from_fill.as_bytes(), b"ababa");
+
+    let mut buffer = Buffer::from_bytes(vec![0, 0, 0, 0, 0, 0]);
+    buffer
+        .fill_value(BufferValue::text("ff", Some("hex")), 1, Some(5))
+        .unwrap();
+    assert_eq!(buffer.as_bytes(), vec![0, 255, 255, 255, 255, 0]);
+    buffer
+        .fill_value(BufferValue::bytes(vec![1, 2]), 2, None)
+        .unwrap();
+    assert_eq!(buffer.as_bytes(), vec![0, 255, 1, 2, 1, 2]);
+    buffer.fill_value(BufferValue::byte(9), 0, Some(2)).unwrap();
+    assert_eq!(buffer.as_bytes(), vec![9, 9, 1, 2, 1, 2]);
+    buffer.fill_string("hi", 2, Some(6), Some("utf8")).unwrap();
+    assert_eq!(buffer.as_bytes(), vec![9, 9, b'h', b'i', b'h', b'i']);
+
+    assert!(buffer.includes_value(BufferValue::byte(b'h'), 0).unwrap());
+    assert!(buffer.includes_string("ih", 0, Some("utf8")).unwrap());
+    assert_eq!(
+        buffer
+            .index_of_value(BufferValue::bytes(b"hi".to_vec()), 0)
+            .unwrap(),
+        Some(2)
+    );
+    assert_eq!(
+        buffer
+            .last_index_of_string("hi", None, Some("utf8"))
+            .unwrap(),
+        Some(4)
+    );
+    assert_eq!(
+        buffer
+            .last_index_of_value(BufferValue::byte(9), None)
+            .unwrap(),
+        Some(1)
+    );
+
+    let mut target = [0_u8; 8];
+    assert_eq!(buffer.copy_to_slice(&mut target, 2, 2, Some(6)).unwrap(), 4);
+    assert_eq!(target, [0, 0, b'h', b'i', b'h', b'i', 0, 0]);
 }
 
 #[test]

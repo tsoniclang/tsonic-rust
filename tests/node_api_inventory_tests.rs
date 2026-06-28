@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 const INVENTORY: &str = include_str!("capabilities/node_api_inventory.tsv");
-const EXPECTED_ROW_COUNT: usize = 4619;
+const FULL_INVENTORY: &str = include_str!("capabilities/node_api_full_inventory.csv");
+const EXPECTED_ROW_COUNT: usize = 4743;
 
 #[derive(Debug)]
 struct NodeApiRow<'a> {
@@ -37,9 +38,14 @@ fn node_api_inventory_is_complete_classified_and_owned() {
         *by_status.entry(row.status).or_default() += 1;
     }
 
-    assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 4606);
+    assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 4730);
     assert_eq!(by_status.get("later").copied().unwrap_or(0), 0);
     assert_eq!(by_status.get("hard-reject").copied().unwrap_or(0), 13);
+}
+
+#[test]
+fn closed_modules_have_exact_phase_one_declaration_rows() {
+    assert_phase_one_declarations_are_mapped("buffer");
 }
 
 #[test]
@@ -147,4 +153,104 @@ fn rows() -> Vec<NodeApiRow<'static>> {
             }
         })
         .collect()
+}
+
+fn assert_phase_one_declarations_are_mapped(module: &str) {
+    let implemented_apis = rows()
+        .into_iter()
+        .filter(|row| row.module == module && row.status == "implemented")
+        .map(|row| row.api.to_string())
+        .collect::<BTreeSet<_>>();
+
+    let missing = full_rows()
+        .into_iter()
+        .filter(|row| row.module == module && row.phase == "phase1")
+        .filter_map(|row| {
+            let api = full_inventory_api(&row);
+            if implemented_apis.contains(&api) {
+                None
+            } else {
+                Some(format!("{} {}", row.id, api))
+            }
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        missing.is_empty(),
+        "{module} has unmapped phase-one declarations: {missing:?}"
+    );
+}
+
+#[derive(Debug)]
+struct FullInventoryRow {
+    id: String,
+    module: String,
+    kind: String,
+    member_of: String,
+    name: String,
+    phase: String,
+}
+
+fn full_rows() -> Vec<FullInventoryRow> {
+    parse_csv(FULL_INVENTORY)
+        .into_iter()
+        .skip(1)
+        .filter(|row| !row.iter().all(|value| value.is_empty()))
+        .map(|columns| {
+            assert_eq!(columns.len(), 10, "bad full inventory row: {columns:?}");
+            FullInventoryRow {
+                id: columns[0].clone(),
+                module: columns[1].clone(),
+                kind: columns[2].clone(),
+                member_of: columns[3].clone(),
+                name: columns[4].clone(),
+                phase: columns[5].clone(),
+            }
+        })
+        .collect()
+}
+
+fn full_inventory_api(row: &FullInventoryRow) -> String {
+    match row.kind.as_str() {
+        "module" => "module".to_string(),
+        "export-function" | "namespace-function" | "export-const" | "namespace-const" => {
+            row.name.clone()
+        }
+        _ if !row.member_of.is_empty() => format!("{}.{}", row.member_of, row.name),
+        _ => row.name.clone(),
+    }
+}
+
+fn parse_csv(text: &str) -> Vec<Vec<String>> {
+    let mut rows = Vec::new();
+    let mut row = Vec::new();
+    let mut field = String::new();
+    let mut chars = text.chars().peekable();
+    let mut in_quotes = false;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' if in_quotes && chars.peek() == Some(&'"') => {
+                field.push('"');
+                chars.next();
+            }
+            '"' => in_quotes = !in_quotes,
+            ',' if !in_quotes => {
+                row.push(std::mem::take(&mut field));
+            }
+            '\n' if !in_quotes => {
+                row.push(std::mem::take(&mut field));
+                rows.push(std::mem::take(&mut row));
+            }
+            '\r' if !in_quotes => {}
+            _ => field.push(ch),
+        }
+    }
+
+    if in_quotes || !field.is_empty() || !row.is_empty() {
+        row.push(field);
+        rows.push(row);
+    }
+
+    rows
 }
