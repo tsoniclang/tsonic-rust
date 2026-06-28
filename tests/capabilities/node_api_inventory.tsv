@@ -87,7 +87,7 @@ NODE-FS-WRITE	fs	writeSync	implemented	K	tsonic_node::fs::{write_sync_string,wri
 NODE-FS-WRITEFILE	fs	writeFileSync	implemented	K	tsonic_node::fs::{write_file_sync_string,write_file_sync_buffer}	NODE-FS-001	string/buffer overloads
 NODE-FS-CREATE-READ-STREAM	fs	createReadStream	implemented	N8	tsonic_node::fs::create_read_stream	NODE-FS-STREAM-001	file read stream backed by real file IO and closed Readable
 NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	implemented	N8	tsonic_node::fs::create_write_stream	NODE-FS-STREAM-001	closed Writable stream shape for generated output
-NODE-FS-ASYNC-CALLBACKS	fs	callback APIs	implemented	N8	tsonic_node::fs::{read_file_callback_string,write_file_callback_string}	NODE-FS-CALLBACK-001	callback-shaped fs APIs execute real sync IO deterministically
+NODE-FS-ASYNC-CALLBACKS	fs	callback APIs	implemented	N16	tsonic_node::fs::{access_callback,exists_callback,read_file_callback_string,write_file_callback_string,append_file_callback_string,stat_callback,lstat_callback,readdir_callback,mkdir_callback,copy_file_callback,rename_callback,unlink_callback,rm_callback}	NODE-FS-CALLBACK-001	callback-shaped fs APIs execute real sync IO deterministically
 NODE-FS-PROMISES	fs	promises APIs	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-PATH-BASENAME	path	basename	implemented	J	tsonic_node::path::basename	NODE-PATH-001	path helper
 NODE-PATH-DIRNAME	path	dirname	implemented	J	tsonic_node::path::dirname	NODE-PATH-001	path helper

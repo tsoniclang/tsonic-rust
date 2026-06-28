@@ -682,6 +682,10 @@ pub fn read_file_callback_string(
     callback(read_file_sync_string(path, encoding));
 }
 
+pub fn read_file_callback_buffer(path: &str, callback: impl FnOnce(NodeResult<Buffer>)) {
+    callback(read_file_sync_buffer(path));
+}
+
 pub fn write_file_callback_string(
     path: &str,
     value: &str,
@@ -689,6 +693,68 @@ pub fn write_file_callback_string(
     callback: impl FnOnce(NodeResult<()>),
 ) {
     callback(write_file_sync_string(path, value, encoding));
+}
+
+pub fn write_file_callback_buffer(
+    path: &str,
+    value: &Buffer,
+    callback: impl FnOnce(NodeResult<()>),
+) {
+    callback(write_file_sync_buffer(path, value));
+}
+
+pub fn exists_callback(path: &str, callback: impl FnOnce(bool)) {
+    callback(exists_sync(path));
+}
+
+pub fn access_callback(path: &str, callback: impl FnOnce(NodeResult<()>)) {
+    callback(access_sync(path));
+}
+
+pub fn append_file_callback_string(
+    path: &str,
+    value: &str,
+    encoding: &str,
+    callback: impl FnOnce(NodeResult<()>),
+) {
+    callback(append_file_sync_string(path, value, encoding));
+}
+
+pub fn stat_callback(path: &str, callback: impl FnOnce(NodeResult<Stats>)) {
+    callback(stat_sync(path));
+}
+
+pub fn lstat_callback(path: &str, callback: impl FnOnce(NodeResult<Stats>)) {
+    callback(lstat_sync(path));
+}
+
+pub fn readdir_callback(path: &str, callback: impl FnOnce(NodeResult<Vec<String>>)) {
+    callback(readdir_sync(path));
+}
+
+pub fn mkdir_callback(path: &str, recursive: bool, callback: impl FnOnce(NodeResult<()>)) {
+    callback(mkdir_sync(path, recursive));
+}
+
+pub fn copy_file_callback(from: &str, to: &str, callback: impl FnOnce(NodeResult<()>)) {
+    callback(copy_file_sync(from, to));
+}
+
+pub fn rename_callback(from: &str, to: &str, callback: impl FnOnce(NodeResult<()>)) {
+    callback(rename_sync(from, to));
+}
+
+pub fn unlink_callback(path: &str, callback: impl FnOnce(NodeResult<()>)) {
+    callback(unlink_sync(path));
+}
+
+pub fn rm_callback(
+    path: &str,
+    recursive: bool,
+    force: bool,
+    callback: impl FnOnce(NodeResult<()>),
+) {
+    callback(rm_sync(path, recursive, force));
 }
 
 pub fn glob_sync(pattern: &str) -> NodeResult<Vec<String>> {

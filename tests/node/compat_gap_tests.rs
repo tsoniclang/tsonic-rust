@@ -43,6 +43,41 @@ fn fs_stream_and_callback_shapes_are_backed_by_real_file_io() {
     fs::read_file_callback_string(&file_text, "utf8", |result| read_result = Some(result));
     assert_eq!(read_result.unwrap().unwrap(), "hello");
 
+    let mut exists = None;
+    fs::exists_callback(&file_text, |result| exists = Some(result));
+    assert_eq!(exists, Some(true));
+    let mut access = None;
+    fs::access_callback(&file_text, |result| access = Some(result));
+    access.unwrap().unwrap();
+    let mut stat = None;
+    fs::stat_callback(&file_text, |result| stat = Some(result));
+    assert_eq!(stat.unwrap().unwrap().size, 5);
+
+    let copy = root.join("copy.txt");
+    let copy_text = copy.to_string_lossy().to_string();
+    let mut copy_result = None;
+    fs::copy_file_callback(&file_text, &copy_text, |result| copy_result = Some(result));
+    copy_result.unwrap().unwrap();
+    let mut append_result = None;
+    fs::append_file_callback_string(&copy_text, "!", "utf8", |result| {
+        append_result = Some(result)
+    });
+    append_result.unwrap().unwrap();
+    let mut names = None;
+    fs::readdir_callback(&root_text, |result| names = Some(result));
+    assert_eq!(names.unwrap().unwrap(), vec!["copy.txt", "stream.txt"]);
+
+    let renamed = root.join("renamed.txt");
+    let renamed_text = renamed.to_string_lossy().to_string();
+    let mut rename_result = None;
+    fs::rename_callback(&copy_text, &renamed_text, |result| {
+        rename_result = Some(result)
+    });
+    rename_result.unwrap().unwrap();
+    let mut unlink_result = None;
+    fs::unlink_callback(&renamed_text, |result| unlink_result = Some(result));
+    unlink_result.unwrap().unwrap();
+
     let mut readable = fs::create_read_stream(&file_text).unwrap();
     assert_eq!(
         stream::consumers::text(&mut readable, Some("utf8")).unwrap(),

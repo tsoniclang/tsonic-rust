@@ -186,6 +186,7 @@ NODE-FS-009	implemented	N8	tsonic_node::abi::{fs_create_read_stream,fs_create_wr
 NODE-FS-010	implemented	N13	tsonic_node::abi::{fs_utimes_sync,fs_futimes_sync,fs_lutimes_sync,fs_promises_utimes}	NODE-FS-TIME-001	approved filetime-backed path/fd/link timestamp mutation
 NODE-FS-011	implemented	N13	tsonic_node::abi::{fs_statfs_sync,StatFs}	NODE-FS-STATFS-001	exact Linux statfs platform binding; unsupported platforms fail explicitly
 NODE-FS-012	implemented	N13	tsonic_node::abi::{fs_chown_sync,fs_fchown_sync,fs_lchown_sync,fs_promises_chown,fs_promises_lchown}	NODE-FS-OWNER-001	Unix owner/group mutation through explicit platform binding; unsupported platforms fail explicitly
+NODE-FS-013	implemented	N16	tsonic_node::abi::{fs_access_callback,fs_exists_callback,fs_stat_callback,fs_readdir_callback,fs_copy_file_callback,fs_rename_callback,fs_unlink_callback}	NODE-FS-CALLBACK-001	callback-shaped fs APIs over deterministic filesystem helpers
 NODE-BUFFER-001	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-001 through NODE-BUF-003, NODE-BUF-006	utf8/hex/base64 first
 NODE-BUFFER-002	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-005	checked byte access
 NODE-BUFFER-003	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-007	shared views
