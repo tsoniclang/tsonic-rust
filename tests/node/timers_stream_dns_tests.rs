@@ -626,7 +626,42 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
     let lookup = dns::lookup("localhost").unwrap();
     assert!(lookup.family == 4 || lookup.family == 6);
     assert!(!lookup.address.is_empty());
+    let lookup_options = dns::LookupOptions {
+        family: Some(lookup.family),
+        hints: Some(0),
+        all: false,
+        verbatim: Some(true),
+        order: Some(dns::DefaultResultOrder::Verbatim),
+    };
+    let one = dns::lookup_one("localhost", lookup_options).unwrap();
+    assert_eq!(one.family, lookup.family);
+    let all = dns::lookup_all(
+        "localhost",
+        dns::LookupOptions {
+            all: true,
+            ..lookup_options
+        },
+    )
+    .unwrap();
+    assert!(!all.is_empty());
+    assert!(matches!(
+        dns::lookup_with_options("localhost", lookup_options).unwrap(),
+        dns::LookupResult::One(_)
+    ));
     assert!(dns::resolve4("localhost").is_ok() || dns::resolve6("localhost").is_ok());
+    assert!(
+        dns::resolve4_with_ttl("localhost").is_ok() || dns::resolve6_with_ttl("localhost").is_ok()
+    );
+    assert!(matches!(
+        dns::resolve4_with_options("localhost", dns::ResolveOptions { ttl: false })
+            .or_else(|_| dns::resolve6_with_options(
+                "localhost",
+                dns::ResolveOptions { ttl: false }
+            ))
+            .unwrap(),
+        dns::ResolveAddressResult::Addresses(_)
+    ));
+    assert!(dns::ResolveWithTtlOptions::default().ttl);
     assert!(
         dns::resolve("localhost", Some("A")).is_ok()
             || dns::resolve("localhost", Some("AAAA")).is_ok()
@@ -637,6 +672,8 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
 
     dns::set_default_result_order(dns::DefaultResultOrder::Ipv4First);
     assert_eq!(dns::get_default_result_order().as_str(), "ipv4first");
+    dns::set_default_result_order(dns::DefaultResultOrder::Ipv6First);
+    assert_eq!(dns::get_default_result_order().as_str(), "ipv6first");
     dns::set_default_result_order(dns::DefaultResultOrder::Verbatim);
 
     let mut resolver = dns::Resolver::new();
@@ -648,6 +685,23 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
     assert_eq!(resolver_with_options.options().timeout, Some(250));
     assert_eq!(resolver_with_options.options().tries, Some(2));
     assert_eq!(resolver_with_options.options().max_timeout, Some(1_000));
+    assert_eq!(
+        resolver
+            .lookup_one("localhost", lookup_options)
+            .unwrap()
+            .family,
+        lookup.family
+    );
+    assert!(!resolver
+        .lookup_all(
+            "localhost",
+            dns::LookupOptions {
+                all: true,
+                ..lookup_options
+            },
+        )
+        .unwrap()
+        .is_empty());
     resolver.set_servers(&["1.1.1.1", "8.8.8.8"]);
     assert_eq!(resolver.get_servers(), vec!["1.1.1.1", "8.8.8.8"]);
     resolver.set_local_address(Some("127.0.0.1"), Some("::1"));
@@ -658,9 +712,180 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
         resolver.resolve("localhost", Some("A")).is_ok()
             || resolver.resolve("localhost", Some("AAAA")).is_ok()
     );
+    assert!(
+        resolver.resolve4_with_ttl("localhost").is_ok()
+            || resolver.resolve6_with_ttl("localhost").is_ok()
+    );
+    assert!(matches!(
+        resolver
+            .resolve4_with_options("localhost", dns::ResolveOptions { ttl: false })
+            .or_else(
+                |_| resolver.resolve6_with_options("localhost", dns::ResolveOptions { ttl: false })
+            )
+            .unwrap(),
+        dns::ResolveAddressResult::Addresses(_)
+    ));
     assert!(resolver.reverse("127.0.0.1").is_ok());
     resolver.cancel();
     assert!(resolver.cancelled());
+
+    let mx = dns::MxRecord {
+        priority: 10,
+        exchange: "mail.example".to_string(),
+    };
+    assert_eq!(mx.exchange, "mail.example");
+    let srv = dns::SrvRecord {
+        priority: 1,
+        weight: 2,
+        port: 443,
+        name: "svc.example".to_string(),
+    };
+    assert_eq!((srv.priority, srv.weight, srv.port), (1, 2, 443));
+    let caa = dns::CaaRecord {
+        critical: 0,
+        issue: Some("letsencrypt.org".to_string()),
+        issue_wild: None,
+        contact_email: Some("ops@example".to_string()),
+        contact_phone: None,
+    };
+    assert_eq!(caa.issue.as_deref(), Some("letsencrypt.org"));
+    let naptr = dns::NaptrRecord {
+        flags: "s".to_string(),
+        service: "SIP+D2U".to_string(),
+        regexp: String::new(),
+        replacement: "_sip._udp.example".to_string(),
+        order: 100,
+        preference: 50,
+    };
+    assert_eq!((naptr.order, naptr.preference), (100, 50));
+    let soa = dns::SoaRecord {
+        nsname: "ns.example".to_string(),
+        hostmaster: "hostmaster.example".to_string(),
+        serial: 1,
+        refresh: 2,
+        retry: 3,
+        expire: 4,
+        minttl: 5,
+    };
+    assert_eq!(soa.minttl, 5);
+    let tlsa = dns::TlsaRecord {
+        cert_usage: 3,
+        selector: 1,
+        match_type: 1,
+        data: vec![1, 2],
+    };
+    assert_eq!(tlsa.match_type, 1);
+    let ttl = dns::RecordWithTtl {
+        address: "127.0.0.1".to_string(),
+        ttl: 60,
+    };
+    assert_eq!(ttl.ttl, 60);
+    assert_eq!(
+        dns::AnyARecord {
+            address: "127.0.0.1".to_string()
+        }
+        .record_type(),
+        "A"
+    );
+    assert_eq!(
+        dns::AnyAaaaRecord {
+            address: "::1".to_string()
+        }
+        .record_type(),
+        "AAAA"
+    );
+    assert_eq!(
+        dns::AnyCnameRecord {
+            value: "alias".to_string()
+        }
+        .record_type(),
+        "CNAME"
+    );
+    assert_eq!(
+        dns::AnyNsRecord {
+            value: "ns".to_string()
+        }
+        .record_type(),
+        "NS"
+    );
+    assert_eq!(
+        dns::AnyPtrRecord {
+            value: "ptr".to_string()
+        }
+        .record_type(),
+        "PTR"
+    );
+    assert_eq!(
+        dns::AnyMxRecord {
+            priority: 10,
+            exchange: "mail".to_string()
+        }
+        .record_type(),
+        "MX"
+    );
+    assert_eq!(
+        dns::AnySrvRecord {
+            priority: 1,
+            weight: 2,
+            port: 443,
+            name: "svc".to_string()
+        }
+        .record_type(),
+        "SRV"
+    );
+    assert_eq!(
+        dns::AnyTxtRecord {
+            entries: vec!["txt".to_string()]
+        }
+        .record_type(),
+        "TXT"
+    );
+    assert_eq!(
+        dns::AnySoaRecord {
+            nsname: "ns".to_string(),
+            hostmaster: "hostmaster".to_string(),
+            serial: 1,
+            refresh: 2,
+            retry: 3,
+            expire: 4,
+            minttl: 5,
+        }
+        .record_type(),
+        "SOA"
+    );
+    assert_eq!(
+        dns::AnyCaaRecord {
+            critical: 0,
+            issue: None,
+            issue_wild: None,
+            contact_email: None,
+            contact_phone: None,
+        }
+        .record_type(),
+        "CAA"
+    );
+    assert_eq!(
+        dns::AnyNaptrRecord {
+            flags: "s".to_string(),
+            service: "svc".to_string(),
+            regexp: String::new(),
+            replacement: "r".to_string(),
+            order: 1,
+            preference: 2,
+        }
+        .record_type(),
+        "NAPTR"
+    );
+    assert_eq!(
+        dns::AnyTlsaRecord {
+            cert_usage: 3,
+            selector: 1,
+            match_type: 1,
+            data: vec![1],
+        }
+        .record_type(),
+        "TLSA"
+    );
 
     assert!(dns::resolve_cname("localhost").is_err());
     assert!(dns::resolve_mx("localhost").is_err());
@@ -678,10 +903,32 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
         ("127.0.0.1".to_string(), "80".to_string())
     );
     assert!(dns::promises::lookup_now("localhost").is_ok());
+    assert!(dns::promises::lookup_one_now("localhost", lookup_options).is_ok());
+    assert!(dns::promises::lookup_all_now(
+        "localhost",
+        dns::LookupOptions {
+            all: true,
+            ..lookup_options
+        }
+    )
+    .is_ok());
     assert!(
         dns::promises::resolve_now("localhost", Some("A")).is_ok()
             || dns::promises::resolve_now("localhost", Some("AAAA")).is_ok()
     );
+    assert!(
+        dns::promises::resolve4_with_ttl_now("localhost").is_ok()
+            || dns::promises::resolve6_with_ttl_now("localhost").is_ok()
+    );
+    assert!(matches!(
+        dns::promises::resolve4_with_options_now("localhost", dns::ResolveOptions { ttl: false },)
+            .or_else(|_| dns::promises::resolve6_with_options_now(
+                "localhost",
+                dns::ResolveOptions { ttl: false },
+            ))
+            .unwrap(),
+        dns::ResolveAddressResult::Addresses(_)
+    ));
     assert!(dns::promises::resolve_ns_now("localhost").is_err());
     assert!(dns::promises::resolve_ptr_now("localhost").is_err());
     assert!(dns::promises::resolve_caa_now("localhost").is_err());
@@ -698,6 +945,18 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
         max_timeout: Some(2_000),
     });
     assert_eq!(promise_resolver.options().tries, Some(3));
+    assert!(promise_resolver
+        .lookup_one("localhost", lookup_options)
+        .is_ok());
+    assert!(promise_resolver
+        .lookup_all(
+            "localhost",
+            dns::LookupOptions {
+                all: true,
+                ..lookup_options
+            },
+        )
+        .is_ok());
     promise_resolver.set_servers(&["9.9.9.9"]);
     assert_eq!(promise_resolver.get_servers(), vec!["9.9.9.9"]);
     promise_resolver.set_local_address(Some("127.0.0.1"), None);
@@ -710,6 +969,20 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
         promise_resolver.resolve4("localhost").is_ok()
             || promise_resolver.resolve6("localhost").is_ok()
     );
+    assert!(
+        promise_resolver.resolve4_with_ttl("localhost").is_ok()
+            || promise_resolver.resolve6_with_ttl("localhost").is_ok()
+    );
+    assert!(matches!(
+        promise_resolver
+            .resolve4_with_options("localhost", dns::ResolveOptions { ttl: false })
+            .or_else(|_| {
+                promise_resolver
+                    .resolve6_with_options("localhost", dns::ResolveOptions { ttl: false })
+            })
+            .unwrap(),
+        dns::ResolveAddressResult::Addresses(_)
+    ));
     assert!(promise_resolver.resolve_cname("localhost").is_err());
     assert!(promise_resolver.resolve_mx("localhost").is_err());
     assert!(promise_resolver.resolve_txt("localhost").is_err());

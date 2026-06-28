@@ -561,6 +561,90 @@ NODE-DNS-PROMISES-RESOLVE-NAPTR	dns/promises	resolveNaptr	implemented	N33	tsonic
 NODE-DNS-PROMISES-RESOLVE-SOA	dns/promises	resolveSoa	implemented	N33	tsonic_node::dns::promises::resolve_soa_now	NODE-DNS-002	promise-shaped SOA lookup preserves explicit unsupported-record failure
 NODE-DNS-PROMISES-RESOLVE-TLSA	dns/promises	resolveTlsa	implemented	N33	tsonic_node::dns::promises::resolve_tlsa_now	NODE-DNS-002	promise-shaped TLSA lookup preserves explicit unsupported-record failure
 NODE-DNS-PROMISES-RESOLVE-ANY	dns/promises	resolveAny	implemented	N33	tsonic_node::dns::promises::resolve_any_now	NODE-DNS-002	promise-shaped ANY lookup delegates to explicit AnyRecord helper
+NODE-DNS-LOOKUP-OPTIONS-CARRIER	dns	LookupOptions	implemented	N79	tsonic_node::dns::LookupOptions	NODE-DNS-001	closed lookup option carrier
+NODE-DNS-LOOKUP-ONE-OPTIONS-CARRIER	dns	LookupOneOptions	implemented	N79	tsonic_node::dns::LookupOneOptions	NODE-DNS-001	closed lookup one option carrier alias
+NODE-DNS-LOOKUP-ALL-OPTIONS-CARRIER	dns	LookupAllOptions	implemented	N79	tsonic_node::dns::LookupAllOptions	NODE-DNS-001	closed lookup all option carrier alias
+NODE-DNS-LOOKUP-RESULT-CARRIER	dns	LookupResult	implemented	N79	tsonic_node::dns::LookupResult	NODE-DNS-001	closed lookup result enum
+NODE-DNS-RECORD-WITH-TTL-CARRIER	dns	RecordWithTtl	implemented	N79	tsonic_node::dns::RecordWithTtl	NODE-DNS-002	closed DNS address record with TTL carrier
+NODE-DNS-RESOLVE-OPTIONS-CARRIER	dns	ResolveOptions	implemented	N79	tsonic_node::dns::ResolveOptions	NODE-DNS-002	closed resolve options carrier
+NODE-DNS-RESOLVE-WITH-TTL-OPTIONS-CARRIER	dns	ResolveWithTtlOptions	implemented	N79	tsonic_node::dns::ResolveWithTtlOptions	NODE-DNS-002	closed resolve with TTL options carrier
+NODE-DNS-RESOLVE-ADDRESS-RESULT-CARRIER	dns	ResolveAddressResult	implemented	N79	tsonic_node::dns::ResolveAddressResult	NODE-DNS-002	closed resolve address result enum
+NODE-DNS-ANY-A-RECORD-CARRIER	dns	AnyARecord	implemented	N79	tsonic_node::dns::AnyARecord	NODE-DNS-002	closed ANY A record carrier
+NODE-DNS-ANY-AAAA-RECORD-CARRIER	dns	AnyAaaaRecord	implemented	N79	tsonic_node::dns::AnyAaaaRecord	NODE-DNS-002	closed ANY AAAA record carrier
+NODE-DNS-ANY-CNAME-RECORD-CARRIER	dns	AnyCnameRecord	implemented	N79	tsonic_node::dns::AnyCnameRecord	NODE-DNS-002	closed ANY CNAME record carrier
+NODE-DNS-ANY-NS-RECORD-CARRIER	dns	AnyNsRecord	implemented	N79	tsonic_node::dns::AnyNsRecord	NODE-DNS-002	closed ANY NS record carrier
+NODE-DNS-ANY-PTR-RECORD-CARRIER	dns	AnyPtrRecord	implemented	N79	tsonic_node::dns::AnyPtrRecord	NODE-DNS-002	closed ANY PTR record carrier
+NODE-DNS-ANY-MX-RECORD-CARRIER	dns	AnyMxRecord	implemented	N79	tsonic_node::dns::AnyMxRecord	NODE-DNS-002	closed ANY MX record carrier
+NODE-DNS-ANY-SRV-RECORD-CARRIER	dns	AnySrvRecord	implemented	N79	tsonic_node::dns::AnySrvRecord	NODE-DNS-002	closed ANY SRV record carrier
+NODE-DNS-ANY-TXT-RECORD-CARRIER	dns	AnyTxtRecord	implemented	N79	tsonic_node::dns::AnyTxtRecord	NODE-DNS-002	closed ANY TXT record carrier
+NODE-DNS-ANY-SOA-RECORD-CARRIER	dns	AnySoaRecord	implemented	N79	tsonic_node::dns::AnySoaRecord	NODE-DNS-002	closed ANY SOA record carrier
+NODE-DNS-ANY-CAA-RECORD-CARRIER	dns	AnyCaaRecord	implemented	N79	tsonic_node::dns::AnyCaaRecord	NODE-DNS-002	closed ANY CAA record carrier
+NODE-DNS-ANY-NAPTR-RECORD-CARRIER	dns	AnyNaptrRecord	implemented	N79	tsonic_node::dns::AnyNaptrRecord	NODE-DNS-002	closed ANY NAPTR record carrier
+NODE-DNS-ANY-TLSA-RECORD-CARRIER	dns	AnyTlsaRecord	implemented	N79	tsonic_node::dns::AnyTlsaRecord	NODE-DNS-002	closed ANY TLSA record carrier
+NODE-DNS-LOOKUP-ADDRESS-ADDRESS	dns	LookupAddress.address	implemented	N79	tsonic_node::dns::LookupAddress::address	NODE-DNS-001	lookup address string field
+NODE-DNS-LOOKUP-ADDRESS-FAMILY	dns	LookupAddress.family	implemented	N79	tsonic_node::dns::LookupAddress::family	NODE-DNS-001	lookup address family field
+NODE-DNS-LOOKUP-OPTIONS-FAMILY	dns	LookupOptions.family	implemented	N79	tsonic_node::dns::LookupOptions::family	NODE-DNS-001	lookup family option
+NODE-DNS-LOOKUP-OPTIONS-HINTS	dns	LookupOptions.hints	implemented	N79	tsonic_node::dns::LookupOptions::hints	NODE-DNS-001	lookup hints option
+NODE-DNS-LOOKUP-OPTIONS-ALL	dns	LookupOptions.all	implemented	N79	tsonic_node::dns::LookupOptions::all	NODE-DNS-001	lookup all option
+NODE-DNS-LOOKUP-OPTIONS-VERBATIM	dns	LookupOptions.verbatim	implemented	N79	tsonic_node::dns::LookupOptions::verbatim	NODE-DNS-001	lookup verbatim option
+NODE-DNS-LOOKUP-OPTIONS-ORDER	dns	LookupOptions.order	implemented	N79	tsonic_node::dns::LookupOptions::order	NODE-DNS-001	lookup result order option
+NODE-DNS-RECORD-WITH-TTL-ADDRESS	dns	RecordWithTtl.address	implemented	N79	tsonic_node::dns::RecordWithTtl::address	NODE-DNS-002	record-with-TTL address field
+NODE-DNS-RECORD-WITH-TTL-TTL	dns	RecordWithTtl.ttl	implemented	N79	tsonic_node::dns::RecordWithTtl::ttl	NODE-DNS-002	record-with-TTL ttl field
+NODE-DNS-RESOLVE-OPTIONS-TTL	dns	ResolveOptions.ttl	implemented	N79	tsonic_node::dns::ResolveOptions::ttl	NODE-DNS-002	resolve ttl option
+NODE-DNS-RESOLVE-WITH-TTL-OPTIONS-TTL	dns	ResolveWithTtlOptions.ttl	implemented	N79	tsonic_node::dns::ResolveWithTtlOptions::ttl	NODE-DNS-002	resolve-with-TTL ttl option
+NODE-DNS-MX-RECORD-PRIORITY	dns	MxRecord.priority	implemented	N79	tsonic_node::dns::MxRecord::priority	NODE-DNS-002	MX priority field
+NODE-DNS-MX-RECORD-EXCHANGE	dns	MxRecord.exchange	implemented	N79	tsonic_node::dns::MxRecord::exchange	NODE-DNS-002	MX exchange field
+NODE-DNS-SRV-RECORD-PRIORITY	dns	SrvRecord.priority	implemented	N79	tsonic_node::dns::SrvRecord::priority	NODE-DNS-002	SRV priority field
+NODE-DNS-SRV-RECORD-WEIGHT	dns	SrvRecord.weight	implemented	N79	tsonic_node::dns::SrvRecord::weight	NODE-DNS-002	SRV weight field
+NODE-DNS-SRV-RECORD-PORT	dns	SrvRecord.port	implemented	N79	tsonic_node::dns::SrvRecord::port	NODE-DNS-002	SRV port field
+NODE-DNS-SRV-RECORD-NAME	dns	SrvRecord.name	implemented	N79	tsonic_node::dns::SrvRecord::name	NODE-DNS-002	SRV name field
+NODE-DNS-CAA-RECORD-CRITICAL	dns	CaaRecord.critical	implemented	N79	tsonic_node::dns::CaaRecord::critical	NODE-DNS-002	CAA critical field
+NODE-DNS-CAA-RECORD-ISSUE	dns	CaaRecord.issue	implemented	N79	tsonic_node::dns::CaaRecord::issue	NODE-DNS-002	CAA issue field
+NODE-DNS-CAA-RECORD-ISSUE-WILD	dns	CaaRecord.issuewild	implemented	N79	tsonic_node::dns::CaaRecord::issue_wild	NODE-DNS-002	CAA issuewild field
+NODE-DNS-CAA-RECORD-CONTACT-EMAIL	dns	CaaRecord.contactemail	implemented	N79	tsonic_node::dns::CaaRecord::contact_email	NODE-DNS-002	CAA contactemail field
+NODE-DNS-CAA-RECORD-CONTACT-PHONE	dns	CaaRecord.contactphone	implemented	N79	tsonic_node::dns::CaaRecord::contact_phone	NODE-DNS-002	CAA contactphone field
+NODE-DNS-NAPTR-RECORD-FLAGS	dns	NaptrRecord.flags	implemented	N79	tsonic_node::dns::NaptrRecord::flags	NODE-DNS-002	NAPTR flags field
+NODE-DNS-NAPTR-RECORD-SERVICE	dns	NaptrRecord.service	implemented	N79	tsonic_node::dns::NaptrRecord::service	NODE-DNS-002	NAPTR service field
+NODE-DNS-NAPTR-RECORD-REGEXP	dns	NaptrRecord.regexp	implemented	N79	tsonic_node::dns::NaptrRecord::regexp	NODE-DNS-002	NAPTR regexp field
+NODE-DNS-NAPTR-RECORD-REPLACEMENT	dns	NaptrRecord.replacement	implemented	N79	tsonic_node::dns::NaptrRecord::replacement	NODE-DNS-002	NAPTR replacement field
+NODE-DNS-NAPTR-RECORD-ORDER	dns	NaptrRecord.order	implemented	N79	tsonic_node::dns::NaptrRecord::order	NODE-DNS-002	NAPTR order field
+NODE-DNS-NAPTR-RECORD-PREFERENCE	dns	NaptrRecord.preference	implemented	N79	tsonic_node::dns::NaptrRecord::preference	NODE-DNS-002	NAPTR preference field
+NODE-DNS-SOA-RECORD-NSNAME	dns	SoaRecord.nsname	implemented	N79	tsonic_node::dns::SoaRecord::nsname	NODE-DNS-002	SOA nsname field
+NODE-DNS-SOA-RECORD-HOSTMASTER	dns	SoaRecord.hostmaster	implemented	N79	tsonic_node::dns::SoaRecord::hostmaster	NODE-DNS-002	SOA hostmaster field
+NODE-DNS-SOA-RECORD-SERIAL	dns	SoaRecord.serial	implemented	N79	tsonic_node::dns::SoaRecord::serial	NODE-DNS-002	SOA serial field
+NODE-DNS-SOA-RECORD-REFRESH	dns	SoaRecord.refresh	implemented	N79	tsonic_node::dns::SoaRecord::refresh	NODE-DNS-002	SOA refresh field
+NODE-DNS-SOA-RECORD-RETRY	dns	SoaRecord.retry	implemented	N79	tsonic_node::dns::SoaRecord::retry	NODE-DNS-002	SOA retry field
+NODE-DNS-SOA-RECORD-EXPIRE	dns	SoaRecord.expire	implemented	N79	tsonic_node::dns::SoaRecord::expire	NODE-DNS-002	SOA expire field
+NODE-DNS-SOA-RECORD-MINTTL	dns	SoaRecord.minttl	implemented	N79	tsonic_node::dns::SoaRecord::minttl	NODE-DNS-002	SOA minttl field
+NODE-DNS-TLSA-RECORD-CERT-USAGE	dns	TlsaRecord.certUsage	implemented	N79	tsonic_node::dns::TlsaRecord::cert_usage	NODE-DNS-002	TLSA certUsage field
+NODE-DNS-TLSA-RECORD-SELECTOR	dns	TlsaRecord.selector	implemented	N79	tsonic_node::dns::TlsaRecord::selector	NODE-DNS-002	TLSA selector field
+NODE-DNS-TLSA-RECORD-MATCH	dns	TlsaRecord.match	implemented	N79	tsonic_node::dns::TlsaRecord::match_type	NODE-DNS-002	TLSA match field
+NODE-DNS-TLSA-RECORD-DATA	dns	TlsaRecord.data	implemented	N79	tsonic_node::dns::TlsaRecord::data	NODE-DNS-002	TLSA data field
+NODE-DNS-LOOKUP-ONE	dns	lookupOne	implemented	N79	tsonic_node::dns::lookup_one	NODE-DNS-001	lookup helper with explicit one-result options
+NODE-DNS-LOOKUP-ALL	dns	lookupAll	implemented	N79	tsonic_node::dns::lookup_all	NODE-DNS-001	lookup helper with explicit all-results options
+NODE-DNS-LOOKUP-WITH-OPTIONS	dns	lookupWithOptions	implemented	N79	tsonic_node::dns::lookup_with_options	NODE-DNS-001	lookup helper with explicit options carrier
+NODE-DNS-RESOLVE4-WITH-TTL	dns	resolve4WithTtl	implemented	N79	tsonic_node::dns::resolve4_with_ttl	NODE-DNS-002	resolve4 with closed TTL record carrier
+NODE-DNS-RESOLVE6-WITH-TTL	dns	resolve6WithTtl	implemented	N79	tsonic_node::dns::resolve6_with_ttl	NODE-DNS-002	resolve6 with closed TTL record carrier
+NODE-DNS-RESOLVE4-WITH-OPTIONS	dns	resolve4WithOptions	implemented	N79	tsonic_node::dns::resolve4_with_options	NODE-DNS-002	resolve4 with explicit TTL options carrier
+NODE-DNS-RESOLVE6-WITH-OPTIONS	dns	resolve6WithOptions	implemented	N79	tsonic_node::dns::resolve6_with_options	NODE-DNS-002	resolve6 with explicit TTL options carrier
+NODE-DNS-RESOLVER-LOOKUP-ONE	dns	Resolver.lookupOne	implemented	N79	tsonic_node::dns::Resolver::lookup_one	NODE-DNS-001	resolver lookupOne helper
+NODE-DNS-RESOLVER-LOOKUP-ALL	dns	Resolver.lookupAll	implemented	N79	tsonic_node::dns::Resolver::lookup_all	NODE-DNS-001	resolver lookupAll helper
+NODE-DNS-RESOLVER-RESOLVE4-WITH-TTL	dns	Resolver.resolve4WithTtl	implemented	N79	tsonic_node::dns::Resolver::resolve4_with_ttl	NODE-DNS-002	resolver resolve4 with TTL helper
+NODE-DNS-RESOLVER-RESOLVE6-WITH-TTL	dns	Resolver.resolve6WithTtl	implemented	N79	tsonic_node::dns::Resolver::resolve6_with_ttl	NODE-DNS-002	resolver resolve6 with TTL helper
+NODE-DNS-RESOLVER-RESOLVE4-WITH-OPTIONS	dns	Resolver.resolve4WithOptions	implemented	N79	tsonic_node::dns::Resolver::resolve4_with_options	NODE-DNS-002	resolver resolve4 with options helper
+NODE-DNS-RESOLVER-RESOLVE6-WITH-OPTIONS	dns	Resolver.resolve6WithOptions	implemented	N79	tsonic_node::dns::Resolver::resolve6_with_options	NODE-DNS-002	resolver resolve6 with options helper
+NODE-DNS-PROMISES-LOOKUP-ONE	dns/promises	lookupOne	implemented	N79	tsonic_node::dns::promises::lookup_one_now	NODE-DNS-001	promise-shaped lookupOne helper
+NODE-DNS-PROMISES-LOOKUP-ALL	dns/promises	lookupAll	implemented	N79	tsonic_node::dns::promises::lookup_all_now	NODE-DNS-001	promise-shaped lookupAll helper
+NODE-DNS-PROMISES-RESOLVE4-WITH-TTL	dns/promises	resolve4WithTtl	implemented	N79	tsonic_node::dns::promises::resolve4_with_ttl_now	NODE-DNS-002	promise-shaped resolve4 with TTL helper
+NODE-DNS-PROMISES-RESOLVE6-WITH-TTL	dns/promises	resolve6WithTtl	implemented	N79	tsonic_node::dns::promises::resolve6_with_ttl_now	NODE-DNS-002	promise-shaped resolve6 with TTL helper
+NODE-DNS-PROMISES-RESOLVE4-WITH-OPTIONS	dns/promises	resolve4WithOptions	implemented	N79	tsonic_node::dns::promises::resolve4_with_options_now	NODE-DNS-002	promise-shaped resolve4 with options helper
+NODE-DNS-PROMISES-RESOLVE6-WITH-OPTIONS	dns/promises	resolve6WithOptions	implemented	N79	tsonic_node::dns::promises::resolve6_with_options_now	NODE-DNS-002	promise-shaped resolve6 with options helper
+NODE-DNS-PROMISES-RESOLVER-LOOKUP-ONE	dns/promises	Resolver.lookupOne	implemented	N79	tsonic_node::dns::promises::Resolver::lookup_one	NODE-DNS-001	promise Resolver lookupOne helper
+NODE-DNS-PROMISES-RESOLVER-LOOKUP-ALL	dns/promises	Resolver.lookupAll	implemented	N79	tsonic_node::dns::promises::Resolver::lookup_all	NODE-DNS-001	promise Resolver lookupAll helper
+NODE-DNS-PROMISES-RESOLVER-RESOLVE4-WITH-TTL	dns/promises	Resolver.resolve4WithTtl	implemented	N79	tsonic_node::dns::promises::Resolver::resolve4_with_ttl	NODE-DNS-002	promise Resolver resolve4 with TTL helper
+NODE-DNS-PROMISES-RESOLVER-RESOLVE6-WITH-TTL	dns/promises	Resolver.resolve6WithTtl	implemented	N79	tsonic_node::dns::promises::Resolver::resolve6_with_ttl	NODE-DNS-002	promise Resolver resolve6 with TTL helper
+NODE-DNS-PROMISES-RESOLVER-RESOLVE4-WITH-OPTIONS	dns/promises	Resolver.resolve4WithOptions	implemented	N79	tsonic_node::dns::promises::Resolver::resolve4_with_options	NODE-DNS-002	promise Resolver resolve4 with options helper
+NODE-DNS-PROMISES-RESOLVER-RESOLVE6-WITH-OPTIONS	dns/promises	Resolver.resolve6WithOptions	implemented	N79	tsonic_node::dns::promises::Resolver::resolve6_with_options	NODE-DNS-002	promise Resolver resolve6 with options helper
 NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded
 NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events	NODE-EVENTS-001	closed events module surface
 NODE-EVENTS-EMITTER-NEW	events	EventEmitter constructor	implemented	N3	tsonic_node::events::EventEmitter::new	NODE-EVENTS-001	closed EventEmitter listener carrier

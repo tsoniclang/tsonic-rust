@@ -9,19 +9,71 @@ pub struct LookupAddress {
     pub family: u8,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LookupOptions {
+    pub family: Option<u8>,
+    pub hints: Option<u32>,
+    pub all: bool,
+    pub verbatim: Option<bool>,
+    pub order: Option<DefaultResultOrder>,
+}
+
+pub type LookupOneOptions = LookupOptions;
+pub type LookupAllOptions = LookupOptions;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LookupResult {
+    One(LookupAddress),
+    All(Vec<LookupAddress>),
+}
+
 pub fn lookup(hostname: &str) -> NodeResult<LookupAddress> {
-    let mut addresses = (hostname, 0).to_socket_addrs().map_err(map_dns_error)?;
-    let Some(address) = addresses.next() else {
+    lookup_with_options(hostname, LookupOptions::default()).and_then(|result| match result {
+        LookupResult::One(address) => Ok(address),
+        LookupResult::All(mut addresses) => addresses
+            .drain(..)
+            .next()
+            .ok_or_else(|| NodeError::new("ENOTFOUND", "DNS lookup returned no addresses")),
+    })
+}
+
+pub fn lookup_one(hostname: &str, options: LookupOneOptions) -> NodeResult<LookupAddress> {
+    let mut options = options;
+    options.all = false;
+    lookup_with_options(hostname, options).and_then(|result| match result {
+        LookupResult::One(address) => Ok(address),
+        LookupResult::All(_) => Err(NodeError::new(
+            "EINVAL",
+            "lookupOne expected a single address result",
+        )),
+    })
+}
+
+pub fn lookup_all(hostname: &str, mut options: LookupAllOptions) -> NodeResult<Vec<LookupAddress>> {
+    options.all = true;
+    lookup_with_options(hostname, options).map(|result| match result {
+        LookupResult::All(addresses) => addresses,
+        LookupResult::One(address) => vec![address],
+    })
+}
+
+pub fn lookup_with_options(hostname: &str, options: LookupOptions) -> NodeResult<LookupResult> {
+    let mut addresses = lookup_addresses(hostname)?;
+    if let Some(family) = options.family {
+        addresses.retain(|address| address.family == family);
+    }
+    apply_result_order(&mut addresses, options.order);
+    if addresses.is_empty() {
         return Err(NodeError::new(
             "ENOTFOUND",
-            "DNS lookup returned no addresses",
+            "DNS lookup returned no matching addresses",
         ));
-    };
-    let ip = address.ip();
-    Ok(LookupAddress {
-        address: ip.to_string(),
-        family: if ip.is_ipv4() { 4 } else { 6 },
-    })
+    }
+    if options.all {
+        Ok(LookupResult::All(addresses))
+    } else {
+        Ok(LookupResult::One(addresses.remove(0)))
+    }
 }
 
 pub fn resolve4(hostname: &str) -> NodeResult<Vec<String>> {
@@ -81,6 +133,64 @@ pub fn resolve(hostname: &str, rrtype: Option<&str>) -> NodeResult<Vec<String>> 
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordWithTtl {
+    pub address: String,
+    pub ttl: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ResolveOptions {
+    pub ttl: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResolveWithTtlOptions {
+    pub ttl: bool,
+}
+
+impl Default for ResolveWithTtlOptions {
+    fn default() -> Self {
+        Self { ttl: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolveAddressResult {
+    Addresses(Vec<String>),
+    Records(Vec<RecordWithTtl>),
+}
+
+pub fn resolve4_with_ttl(hostname: &str) -> NodeResult<Vec<RecordWithTtl>> {
+    resolve4(hostname).map(addresses_to_records_with_ttl)
+}
+
+pub fn resolve6_with_ttl(hostname: &str) -> NodeResult<Vec<RecordWithTtl>> {
+    resolve6(hostname).map(addresses_to_records_with_ttl)
+}
+
+pub fn resolve4_with_options(
+    hostname: &str,
+    options: ResolveOptions,
+) -> NodeResult<ResolveAddressResult> {
+    if options.ttl {
+        resolve4_with_ttl(hostname).map(ResolveAddressResult::Records)
+    } else {
+        resolve4(hostname).map(ResolveAddressResult::Addresses)
+    }
+}
+
+pub fn resolve6_with_options(
+    hostname: &str,
+    options: ResolveOptions,
+) -> NodeResult<ResolveAddressResult> {
+    if options.ttl {
+        resolve6_with_ttl(hostname).map(ResolveAddressResult::Records)
+    } else {
+        resolve6(hostname).map(ResolveAddressResult::Addresses)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MxRecord {
     pub priority: u16,
     pub exchange: String,
@@ -130,6 +240,160 @@ pub struct TlsaRecord {
     pub selector: u8,
     pub match_type: u8,
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyARecord {
+    pub address: String,
+}
+
+impl AnyARecord {
+    pub fn record_type(&self) -> &'static str {
+        "A"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyAaaaRecord {
+    pub address: String,
+}
+
+impl AnyAaaaRecord {
+    pub fn record_type(&self) -> &'static str {
+        "AAAA"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyCnameRecord {
+    pub value: String,
+}
+
+impl AnyCnameRecord {
+    pub fn record_type(&self) -> &'static str {
+        "CNAME"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyNsRecord {
+    pub value: String,
+}
+
+impl AnyNsRecord {
+    pub fn record_type(&self) -> &'static str {
+        "NS"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyPtrRecord {
+    pub value: String,
+}
+
+impl AnyPtrRecord {
+    pub fn record_type(&self) -> &'static str {
+        "PTR"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyMxRecord {
+    pub priority: u16,
+    pub exchange: String,
+}
+
+impl AnyMxRecord {
+    pub fn record_type(&self) -> &'static str {
+        "MX"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnySrvRecord {
+    pub priority: u16,
+    pub weight: u16,
+    pub port: u16,
+    pub name: String,
+}
+
+impl AnySrvRecord {
+    pub fn record_type(&self) -> &'static str {
+        "SRV"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyTxtRecord {
+    pub entries: Vec<String>,
+}
+
+impl AnyTxtRecord {
+    pub fn record_type(&self) -> &'static str {
+        "TXT"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnySoaRecord {
+    pub nsname: String,
+    pub hostmaster: String,
+    pub serial: u32,
+    pub refresh: u32,
+    pub retry: u32,
+    pub expire: u32,
+    pub minttl: u32,
+}
+
+impl AnySoaRecord {
+    pub fn record_type(&self) -> &'static str {
+        "SOA"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyCaaRecord {
+    pub critical: u8,
+    pub issue: Option<String>,
+    pub issue_wild: Option<String>,
+    pub contact_email: Option<String>,
+    pub contact_phone: Option<String>,
+}
+
+impl AnyCaaRecord {
+    pub fn record_type(&self) -> &'static str {
+        "CAA"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyNaptrRecord {
+    pub flags: String,
+    pub service: String,
+    pub regexp: String,
+    pub replacement: String,
+    pub order: u16,
+    pub preference: u16,
+}
+
+impl AnyNaptrRecord {
+    pub fn record_type(&self) -> &'static str {
+        "NAPTR"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnyTlsaRecord {
+    pub cert_usage: u8,
+    pub selector: u8,
+    pub match_type: u8,
+    pub data: Vec<u8>,
+}
+
+impl AnyTlsaRecord {
+    pub fn record_type(&self) -> &'static str {
+        "TLSA"
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -324,12 +588,52 @@ impl Resolver {
         lookup(hostname)
     }
 
+    pub fn lookup_one(
+        &self,
+        hostname: &str,
+        options: LookupOneOptions,
+    ) -> NodeResult<LookupAddress> {
+        lookup_one(hostname, options)
+    }
+
+    pub fn lookup_all(
+        &self,
+        hostname: &str,
+        options: LookupAllOptions,
+    ) -> NodeResult<Vec<LookupAddress>> {
+        lookup_all(hostname, options)
+    }
+
     pub fn resolve4(&self, hostname: &str) -> NodeResult<Vec<String>> {
         resolve4(hostname)
     }
 
     pub fn resolve6(&self, hostname: &str) -> NodeResult<Vec<String>> {
         resolve6(hostname)
+    }
+
+    pub fn resolve4_with_ttl(&self, hostname: &str) -> NodeResult<Vec<RecordWithTtl>> {
+        resolve4_with_ttl(hostname)
+    }
+
+    pub fn resolve6_with_ttl(&self, hostname: &str) -> NodeResult<Vec<RecordWithTtl>> {
+        resolve6_with_ttl(hostname)
+    }
+
+    pub fn resolve4_with_options(
+        &self,
+        hostname: &str,
+        options: ResolveOptions,
+    ) -> NodeResult<ResolveAddressResult> {
+        resolve4_with_options(hostname, options)
+    }
+
+    pub fn resolve6_with_options(
+        &self,
+        hostname: &str,
+        options: ResolveOptions,
+    ) -> NodeResult<ResolveAddressResult> {
+        resolve6_with_options(hostname, options)
     }
 
     pub fn resolve(&self, hostname: &str, rrtype: Option<&str>) -> NodeResult<Vec<String>> {
@@ -387,10 +691,12 @@ impl Resolver {
 
 pub mod promises {
     use super::{
-        lookup, lookup_service, resolve, resolve4, resolve6, resolve_any, resolve_caa,
-        resolve_cname, resolve_mx, resolve_naptr, resolve_ns, resolve_ptr, resolve_soa,
-        resolve_srv, resolve_tlsa, resolve_txt, reverse, AnyRecord, CaaRecord, LookupAddress,
-        MxRecord, NaptrRecord, ResolverOptions, SoaRecord, SrvRecord, TlsaRecord,
+        lookup, lookup_all, lookup_one, lookup_service, resolve, resolve4, resolve4_with_options,
+        resolve4_with_ttl, resolve6, resolve6_with_options, resolve6_with_ttl, resolve_any,
+        resolve_caa, resolve_cname, resolve_mx, resolve_naptr, resolve_ns, resolve_ptr,
+        resolve_soa, resolve_srv, resolve_tlsa, resolve_txt, reverse, AnyRecord, CaaRecord,
+        LookupAddress, LookupAllOptions, LookupOneOptions, MxRecord, NaptrRecord, RecordWithTtl,
+        ResolveAddressResult, ResolveOptions, ResolverOptions, SoaRecord, SrvRecord, TlsaRecord,
     };
     use crate::error::NodeResult;
 
@@ -438,12 +744,52 @@ pub mod promises {
             self.inner.lookup(hostname)
         }
 
+        pub fn lookup_one(
+            &self,
+            hostname: &str,
+            options: LookupOneOptions,
+        ) -> NodeResult<LookupAddress> {
+            self.inner.lookup_one(hostname, options)
+        }
+
+        pub fn lookup_all(
+            &self,
+            hostname: &str,
+            options: LookupAllOptions,
+        ) -> NodeResult<Vec<LookupAddress>> {
+            self.inner.lookup_all(hostname, options)
+        }
+
         pub fn resolve4(&self, hostname: &str) -> NodeResult<Vec<String>> {
             self.inner.resolve4(hostname)
         }
 
         pub fn resolve6(&self, hostname: &str) -> NodeResult<Vec<String>> {
             self.inner.resolve6(hostname)
+        }
+
+        pub fn resolve4_with_ttl(&self, hostname: &str) -> NodeResult<Vec<RecordWithTtl>> {
+            self.inner.resolve4_with_ttl(hostname)
+        }
+
+        pub fn resolve6_with_ttl(&self, hostname: &str) -> NodeResult<Vec<RecordWithTtl>> {
+            self.inner.resolve6_with_ttl(hostname)
+        }
+
+        pub fn resolve4_with_options(
+            &self,
+            hostname: &str,
+            options: ResolveOptions,
+        ) -> NodeResult<ResolveAddressResult> {
+            self.inner.resolve4_with_options(hostname, options)
+        }
+
+        pub fn resolve6_with_options(
+            &self,
+            hostname: &str,
+            options: ResolveOptions,
+        ) -> NodeResult<ResolveAddressResult> {
+            self.inner.resolve6_with_options(hostname, options)
         }
 
         pub fn resolve(&self, hostname: &str, rrtype: Option<&str>) -> NodeResult<Vec<String>> {
@@ -503,12 +849,45 @@ pub mod promises {
         lookup(hostname)
     }
 
+    pub fn lookup_one_now(hostname: &str, options: LookupOneOptions) -> NodeResult<LookupAddress> {
+        lookup_one(hostname, options)
+    }
+
+    pub fn lookup_all_now(
+        hostname: &str,
+        options: LookupAllOptions,
+    ) -> NodeResult<Vec<LookupAddress>> {
+        lookup_all(hostname, options)
+    }
+
     pub fn resolve4_now(hostname: &str) -> NodeResult<Vec<String>> {
         resolve4(hostname)
     }
 
     pub fn resolve6_now(hostname: &str) -> NodeResult<Vec<String>> {
         resolve6(hostname)
+    }
+
+    pub fn resolve4_with_ttl_now(hostname: &str) -> NodeResult<Vec<RecordWithTtl>> {
+        resolve4_with_ttl(hostname)
+    }
+
+    pub fn resolve6_with_ttl_now(hostname: &str) -> NodeResult<Vec<RecordWithTtl>> {
+        resolve6_with_ttl(hostname)
+    }
+
+    pub fn resolve4_with_options_now(
+        hostname: &str,
+        options: ResolveOptions,
+    ) -> NodeResult<ResolveAddressResult> {
+        resolve4_with_options(hostname, options)
+    }
+
+    pub fn resolve6_with_options_now(
+        hostname: &str,
+        options: ResolveOptions,
+    ) -> NodeResult<ResolveAddressResult> {
+        resolve6_with_options(hostname, options)
     }
 
     pub fn resolve_now(hostname: &str, rrtype: Option<&str>) -> NodeResult<Vec<String>> {
@@ -570,6 +949,43 @@ pub mod promises {
 
 fn map_dns_error(error: std::io::Error) -> NodeError {
     NodeError::new("ENOTFOUND", error.to_string())
+}
+
+fn lookup_addresses(hostname: &str) -> NodeResult<Vec<LookupAddress>> {
+    let addresses = (hostname, 0)
+        .to_socket_addrs()
+        .map_err(map_dns_error)?
+        .map(|address| {
+            let ip = address.ip();
+            LookupAddress {
+                address: ip.to_string(),
+                family: if ip.is_ipv4() { 4 } else { 6 },
+            }
+        })
+        .collect::<Vec<_>>();
+    if addresses.is_empty() {
+        Err(NodeError::new(
+            "ENOTFOUND",
+            "DNS lookup returned no addresses",
+        ))
+    } else {
+        Ok(addresses)
+    }
+}
+
+fn apply_result_order(addresses: &mut [LookupAddress], order: Option<DefaultResultOrder>) {
+    match order.unwrap_or_else(get_default_result_order) {
+        DefaultResultOrder::Ipv4First => addresses.sort_by_key(|address| address.family != 4),
+        DefaultResultOrder::Ipv6First => addresses.sort_by_key(|address| address.family != 6),
+        DefaultResultOrder::Verbatim => {}
+    }
+}
+
+fn addresses_to_records_with_ttl(addresses: Vec<String>) -> Vec<RecordWithTtl> {
+    addresses
+        .into_iter()
+        .map(|address| RecordWithTtl { address, ttl: 0 })
+        .collect()
 }
 
 fn unsupported_record_type<T>(record_type: &str) -> NodeResult<Vec<T>> {
