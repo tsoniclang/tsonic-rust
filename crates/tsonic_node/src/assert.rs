@@ -1,6 +1,67 @@
 use crate::error::{NodeError, NodeResult};
 use tsonic_js::value::JsValue;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssertionDiff {
+    Simple,
+    Full,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssertionErrorOptions {
+    pub message: Option<String>,
+    pub actual: Option<JsValue>,
+    pub expected: Option<JsValue>,
+    pub operator: Option<String>,
+    pub diff: Option<AssertionDiff>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssertionError {
+    pub code: &'static str,
+    pub message: String,
+    pub actual: Option<JsValue>,
+    pub expected: Option<JsValue>,
+    pub operator: String,
+    pub generated_message: bool,
+    pub diff: Option<AssertionDiff>,
+}
+
+impl AssertionError {
+    pub fn new(options: AssertionErrorOptions) -> Self {
+        let operator = options.operator.unwrap_or_else(|| "fail".to_string());
+        let generated_message = options.message.is_none();
+        let message = options.message.unwrap_or_else(|| {
+            default_assertion_message(
+                options.actual.as_ref(),
+                options.expected.as_ref(),
+                &operator,
+            )
+        });
+        Self {
+            code: "ERR_ASSERTION",
+            message,
+            actual: options.actual,
+            expected: options.expected,
+            operator,
+            generated_message,
+            diff: options.diff,
+        }
+    }
+
+    pub fn into_node_error(self) -> NodeError {
+        NodeError::new(self.code, self.message)
+    }
+}
+
+impl std::fmt::Display for AssertionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for AssertionError {}
+
 pub fn fail(message: Option<&str>) -> NodeResult<()> {
     Err(assertion_error(message.unwrap_or("Failed")))
 }
@@ -161,5 +222,26 @@ pub fn does_not_match_string(actual: &str, pattern: &str, message: Option<&str>)
 }
 
 fn assertion_error(message: impl Into<String>) -> NodeError {
-    NodeError::new("ERR_ASSERTION", message)
+    AssertionError::new(AssertionErrorOptions {
+        message: Some(message.into()),
+        actual: None,
+        expected: None,
+        operator: Some("fail".to_string()),
+        diff: None,
+    })
+    .into_node_error()
+}
+
+fn default_assertion_message(
+    actual: Option<&JsValue>,
+    expected: Option<&JsValue>,
+    operator: &str,
+) -> String {
+    match (actual, expected) {
+        (Some(actual), Some(expected)) => {
+            format!("Expected {actual} {operator} {expected}")
+        }
+        (Some(actual), None) => format!("Assertion failed for {actual}"),
+        _ => "Assertion failed".to_string(),
+    }
 }

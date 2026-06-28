@@ -29,6 +29,21 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     assert::if_error(None).unwrap();
     assert!(assert::fail(Some("explicit")).is_err());
     assert!(assert::ok(false, Some("no")).is_err());
+    let assertion_error = assert::AssertionError::new(assert::AssertionErrorOptions {
+        message: None,
+        actual: Some(JsValue::Number(1.0)),
+        expected: Some(JsValue::Number(2.0)),
+        operator: Some("strictEqual".to_string()),
+        diff: Some(assert::AssertionDiff::Simple),
+    });
+    assert_eq!(assertion_error.code, "ERR_ASSERTION");
+    assert!(assertion_error.generated_message);
+    assert_eq!(assertion_error.operator, "strictEqual");
+    assert!(assertion_error.message.contains("strictEqual"));
+    assert_eq!(
+        assertion_error.clone().into_node_error().code(),
+        "ERR_ASSERTION"
+    );
     assert!(perf_hooks::performance_now() >= 0.0);
     assert_eq!(perf_hooks::time_origin(), 0.0);
     perf_hooks::clear_marks(None);

@@ -8,7 +8,8 @@ pub use crate::assert::{
     match_string as assert_match_string, not_deep_equal as assert_not_deep_equal,
     not_deep_strict_equal as assert_not_deep_strict_equal, not_equal as assert_not_equal,
     not_strict_equal as assert_not_strict_equal, ok as assert_ok, rejects as assert_rejects,
-    strict_equal as assert_strict_equal, throws as assert_throws,
+    strict_equal as assert_strict_equal, throws as assert_throws, AssertionDiff, AssertionError,
+    AssertionErrorOptions,
 };
 pub use crate::async_hooks::{
     async_wrap_providers, create_hook as async_hooks_create_hook,
