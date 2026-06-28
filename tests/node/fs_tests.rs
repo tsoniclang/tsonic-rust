@@ -29,6 +29,8 @@ fn fs_sync_file_lifecycle() {
     let dirents = fs::opendir_sync(&root_text).unwrap();
     assert_eq!(dirents[0].name, "a.txt");
     assert_eq!(dirents[0].parent_path(), root_text);
+    assert_eq!(dirents[0].parent_path_value(), root_text);
+    assert_eq!(dirents[0].file_type(), "file");
     assert!(dirents[0].is_file());
     assert!(!dirents[0].is_block_device());
     assert!(!dirents[0].is_character_device());
@@ -58,7 +60,23 @@ fn fs_extended_sync_file_lifecycle() {
     );
     let constants = fs::constants();
     assert_eq!(constants.f_ok, 0);
+    assert_eq!(constants.copyfile_excl, 1);
+    assert_eq!(constants.copyfile_ficlone, 2);
+    assert_eq!(constants.copyfile_ficlone_force, 4);
     assert_ne!(constants.o_append, constants.o_rdonly);
+    assert!(constants.o_rdwr >= 0);
+    assert!(constants.o_creat >= 0);
+    assert!(constants.o_excl >= 0);
+    assert!(constants.o_trunc >= 0);
+    assert_eq!(constants.s_ifmt, 0o170000);
+    assert_eq!(constants.s_ifreg, 0o100000);
+    assert_eq!(constants.s_ifdir, 0o040000);
+    assert_eq!(constants.s_irwxu, 0o700);
+    assert_eq!(constants.s_irusr, 0o400);
+    assert_eq!(constants.s_iwusr, 0o200);
+    assert_eq!(constants.s_ixusr, 0o100);
+    assert_eq!(constants.s_irwxg, 0o070);
+    assert_eq!(constants.s_iroth, 0o004);
 
     fs::access_sync(&file_text).unwrap();
     fs::chmod_sync(&file_text, 0o600).unwrap();

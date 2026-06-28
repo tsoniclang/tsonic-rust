@@ -115,13 +115,45 @@ pub struct FsConstants {
     pub w_ok: i32,
     pub x_ok: i32,
     pub copyfile_excl: i32,
+    pub copyfile_ficlone: i32,
+    pub copyfile_ficlone_force: i32,
     pub o_rdonly: i32,
     pub o_wronly: i32,
     pub o_rdwr: i32,
     pub o_creat: i32,
+    pub o_direct: i32,
+    pub o_directory: i32,
+    pub o_dsync: i32,
     pub o_excl: i32,
+    pub o_noatime: i32,
+    pub o_noctty: i32,
+    pub o_nofollow: i32,
+    pub o_nonblock: i32,
+    pub o_symlink: i32,
+    pub o_sync: i32,
     pub o_trunc: i32,
     pub o_append: i32,
+    pub s_ifmt: i32,
+    pub s_ifreg: i32,
+    pub s_ifdir: i32,
+    pub s_ifchr: i32,
+    pub s_ifblk: i32,
+    pub s_ififo: i32,
+    pub s_iflnk: i32,
+    pub s_ifsock: i32,
+    pub s_irwxu: i32,
+    pub s_irusr: i32,
+    pub s_iwusr: i32,
+    pub s_ixusr: i32,
+    pub s_irwxg: i32,
+    pub s_irgrp: i32,
+    pub s_iwgrp: i32,
+    pub s_ixgrp: i32,
+    pub s_irwxo: i32,
+    pub s_iroth: i32,
+    pub s_iwoth: i32,
+    pub s_ixoth: i32,
+    pub uv_fs_o_filemap: i32,
 }
 
 pub fn constants() -> FsConstants {
@@ -131,13 +163,45 @@ pub fn constants() -> FsConstants {
         w_ok: 2,
         x_ok: 1,
         copyfile_excl: 1,
+        copyfile_ficlone: 2,
+        copyfile_ficlone_force: 4,
         o_rdonly: platform_constant_o_rdonly(),
         o_wronly: platform_constant_o_wronly(),
         o_rdwr: platform_constant_o_rdwr(),
         o_creat: platform_constant_o_creat(),
+        o_direct: platform_constant_o_direct(),
+        o_directory: platform_constant_o_directory(),
+        o_dsync: platform_constant_o_dsync(),
         o_excl: platform_constant_o_excl(),
+        o_noatime: platform_constant_o_noatime(),
+        o_noctty: platform_constant_o_noctty(),
+        o_nofollow: platform_constant_o_nofollow(),
+        o_nonblock: platform_constant_o_nonblock(),
+        o_symlink: 0,
+        o_sync: platform_constant_o_sync(),
         o_trunc: platform_constant_o_trunc(),
         o_append: platform_constant_o_append(),
+        s_ifmt: 0o170000,
+        s_ifreg: 0o100000,
+        s_ifdir: 0o040000,
+        s_ifchr: 0o020000,
+        s_ifblk: 0o060000,
+        s_ififo: 0o010000,
+        s_iflnk: 0o120000,
+        s_ifsock: 0o140000,
+        s_irwxu: 0o700,
+        s_irusr: 0o400,
+        s_iwusr: 0o200,
+        s_ixusr: 0o100,
+        s_irwxg: 0o070,
+        s_irgrp: 0o040,
+        s_iwgrp: 0o020,
+        s_ixgrp: 0o010,
+        s_irwxo: 0o007,
+        s_iroth: 0o004,
+        s_iwoth: 0o002,
+        s_ixoth: 0o001,
+        uv_fs_o_filemap: 0,
     }
 }
 
@@ -185,6 +249,30 @@ impl Dirent {
 
     pub fn parent_path(&self) -> &str {
         &self.parent_path
+    }
+
+    pub fn parent_path_value(&self) -> String {
+        self.parent_path.clone()
+    }
+
+    pub fn file_type(&self) -> &'static str {
+        if self.is_file {
+            "file"
+        } else if self.is_directory {
+            "directory"
+        } else if self.is_symbolic_link {
+            "symlink"
+        } else if self.is_block_device {
+            "blockDevice"
+        } else if self.is_character_device {
+            "characterDevice"
+        } else if self.is_fifo {
+            "fifo"
+        } else if self.is_socket {
+            "socket"
+        } else {
+            "unknown"
+        }
     }
 }
 
@@ -1384,6 +1472,36 @@ fn platform_constant_o_creat() -> i32 {
     0x100
 }
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn platform_constant_o_direct() -> i32 {
+    libc::O_DIRECT
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn platform_constant_o_direct() -> i32 {
+    0
+}
+
+#[cfg(unix)]
+fn platform_constant_o_directory() -> i32 {
+    libc::O_DIRECTORY
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_directory() -> i32 {
+    0
+}
+
+#[cfg(unix)]
+fn platform_constant_o_dsync() -> i32 {
+    libc::O_DSYNC
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_dsync() -> i32 {
+    0
+}
+
 #[cfg(unix)]
 fn platform_constant_o_excl() -> i32 {
     libc::O_EXCL
@@ -1392,6 +1510,56 @@ fn platform_constant_o_excl() -> i32 {
 #[cfg(not(unix))]
 fn platform_constant_o_excl() -> i32 {
     0x400
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn platform_constant_o_noatime() -> i32 {
+    libc::O_NOATIME
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn platform_constant_o_noatime() -> i32 {
+    0
+}
+
+#[cfg(unix)]
+fn platform_constant_o_noctty() -> i32 {
+    libc::O_NOCTTY
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_noctty() -> i32 {
+    0
+}
+
+#[cfg(unix)]
+fn platform_constant_o_nofollow() -> i32 {
+    libc::O_NOFOLLOW
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_nofollow() -> i32 {
+    0
+}
+
+#[cfg(unix)]
+fn platform_constant_o_nonblock() -> i32 {
+    libc::O_NONBLOCK
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_nonblock() -> i32 {
+    0
+}
+
+#[cfg(unix)]
+fn platform_constant_o_sync() -> i32 {
+    libc::O_SYNC
+}
+
+#[cfg(not(unix))]
+fn platform_constant_o_sync() -> i32 {
+    0
 }
 
 #[cfg(unix)]

@@ -1789,6 +1789,50 @@ NODE-FS-CREATE-READ-STREAM	fs	createReadStream	implemented	N8	tsonic_node::fs::c
 NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	implemented	N8	tsonic_node::fs::create_write_stream	NODE-FS-STREAM-001	closed Writable stream shape for generated output
 NODE-FS-CONSTANTS-FN	fs	constants	implemented	N66	tsonic_node::fs::constants	NODE-FS-001	returns closed fs constants carrier
 NODE-FS-CONSTANTS-CARRIER	fs	FsConstants	implemented	N66	tsonic_node::fs::FsConstants	NODE-FS-001	closed fs constants carrier
+NODE-FS-CONSTANT-F-OK	fs	constants.F_OK	implemented	N83	tsonic_node::fs::FsConstants::f_ok	NODE-FS-001	fs access F_OK constant
+NODE-FS-CONSTANT-R-OK	fs	constants.R_OK	implemented	N83	tsonic_node::fs::FsConstants::r_ok	NODE-FS-001	fs access R_OK constant
+NODE-FS-CONSTANT-W-OK	fs	constants.W_OK	implemented	N83	tsonic_node::fs::FsConstants::w_ok	NODE-FS-001	fs access W_OK constant
+NODE-FS-CONSTANT-X-OK	fs	constants.X_OK	implemented	N83	tsonic_node::fs::FsConstants::x_ok	NODE-FS-001	fs access X_OK constant
+NODE-FS-CONSTANT-COPYFILE-EXCL	fs	constants.COPYFILE_EXCL	implemented	N83	tsonic_node::fs::FsConstants::copyfile_excl	NODE-FS-001	fs copyfile exclusive constant
+NODE-FS-CONSTANT-COPYFILE-FICLONE	fs	constants.COPYFILE_FICLONE	implemented	N83	tsonic_node::fs::FsConstants::copyfile_ficlone	NODE-FS-001	fs copyfile clone constant
+NODE-FS-CONSTANT-COPYFILE-FICLONE-FORCE	fs	constants.COPYFILE_FICLONE_FORCE	implemented	N83	tsonic_node::fs::FsConstants::copyfile_ficlone_force	NODE-FS-001	fs copyfile forced clone constant
+NODE-FS-CONSTANT-O-RDONLY	fs	constants.O_RDONLY	implemented	N83	tsonic_node::fs::FsConstants::o_rdonly	NODE-FS-001	fs open O_RDONLY constant
+NODE-FS-CONSTANT-O-WRONLY	fs	constants.O_WRONLY	implemented	N83	tsonic_node::fs::FsConstants::o_wronly	NODE-FS-001	fs open O_WRONLY constant
+NODE-FS-CONSTANT-O-RDWR	fs	constants.O_RDWR	implemented	N83	tsonic_node::fs::FsConstants::o_rdwr	NODE-FS-001	fs open O_RDWR constant
+NODE-FS-CONSTANT-O-CREAT	fs	constants.O_CREAT	implemented	N83	tsonic_node::fs::FsConstants::o_creat	NODE-FS-001	fs open O_CREAT constant
+NODE-FS-CONSTANT-O-DIRECT	fs	constants.O_DIRECT	implemented	N83	tsonic_node::fs::FsConstants::o_direct	NODE-FS-001	fs open O_DIRECT constant when available
+NODE-FS-CONSTANT-O-DIRECTORY	fs	constants.O_DIRECTORY	implemented	N83	tsonic_node::fs::FsConstants::o_directory	NODE-FS-001	fs open O_DIRECTORY constant when available
+NODE-FS-CONSTANT-O-DSYNC	fs	constants.O_DSYNC	implemented	N83	tsonic_node::fs::FsConstants::o_dsync	NODE-FS-001	fs open O_DSYNC constant when available
+NODE-FS-CONSTANT-O-EXCL	fs	constants.O_EXCL	implemented	N83	tsonic_node::fs::FsConstants::o_excl	NODE-FS-001	fs open O_EXCL constant
+NODE-FS-CONSTANT-O-NOATIME	fs	constants.O_NOATIME	implemented	N83	tsonic_node::fs::FsConstants::o_noatime	NODE-FS-001	fs open O_NOATIME constant when available
+NODE-FS-CONSTANT-O-NOCTTY	fs	constants.O_NOCTTY	implemented	N83	tsonic_node::fs::FsConstants::o_noctty	NODE-FS-001	fs open O_NOCTTY constant when available
+NODE-FS-CONSTANT-O-NOFOLLOW	fs	constants.O_NOFOLLOW	implemented	N83	tsonic_node::fs::FsConstants::o_nofollow	NODE-FS-001	fs open O_NOFOLLOW constant when available
+NODE-FS-CONSTANT-O-NONBLOCK	fs	constants.O_NONBLOCK	implemented	N83	tsonic_node::fs::FsConstants::o_nonblock	NODE-FS-001	fs open O_NONBLOCK constant when available
+NODE-FS-CONSTANT-O-SYMLINK	fs	constants.O_SYMLINK	implemented	N83	tsonic_node::fs::FsConstants::o_symlink	NODE-FS-001	fs open O_SYMLINK constant when unavailable as zero
+NODE-FS-CONSTANT-O-SYNC	fs	constants.O_SYNC	implemented	N83	tsonic_node::fs::FsConstants::o_sync	NODE-FS-001	fs open O_SYNC constant when available
+NODE-FS-CONSTANT-O-TRUNC	fs	constants.O_TRUNC	implemented	N83	tsonic_node::fs::FsConstants::o_trunc	NODE-FS-001	fs open O_TRUNC constant
+NODE-FS-CONSTANT-O-APPEND	fs	constants.O_APPEND	implemented	N83	tsonic_node::fs::FsConstants::o_append	NODE-FS-001	fs open O_APPEND constant
+NODE-FS-CONSTANT-S-IFMT	fs	constants.S_IFMT	implemented	N83	tsonic_node::fs::FsConstants::s_ifmt	NODE-FS-001	fs mode S_IFMT constant
+NODE-FS-CONSTANT-S-IFREG	fs	constants.S_IFREG	implemented	N83	tsonic_node::fs::FsConstants::s_ifreg	NODE-FS-001	fs mode S_IFREG constant
+NODE-FS-CONSTANT-S-IFDIR	fs	constants.S_IFDIR	implemented	N83	tsonic_node::fs::FsConstants::s_ifdir	NODE-FS-001	fs mode S_IFDIR constant
+NODE-FS-CONSTANT-S-IFCHR	fs	constants.S_IFCHR	implemented	N83	tsonic_node::fs::FsConstants::s_ifchr	NODE-FS-001	fs mode S_IFCHR constant
+NODE-FS-CONSTANT-S-IFBLK	fs	constants.S_IFBLK	implemented	N83	tsonic_node::fs::FsConstants::s_ifblk	NODE-FS-001	fs mode S_IFBLK constant
+NODE-FS-CONSTANT-S-IFIFO	fs	constants.S_IFIFO	implemented	N83	tsonic_node::fs::FsConstants::s_ififo	NODE-FS-001	fs mode S_IFIFO constant
+NODE-FS-CONSTANT-S-IFLNK	fs	constants.S_IFLNK	implemented	N83	tsonic_node::fs::FsConstants::s_iflnk	NODE-FS-001	fs mode S_IFLNK constant
+NODE-FS-CONSTANT-S-IFSOCK	fs	constants.S_IFSOCK	implemented	N83	tsonic_node::fs::FsConstants::s_ifsock	NODE-FS-001	fs mode S_IFSOCK constant
+NODE-FS-CONSTANT-S-IRWXU	fs	constants.S_IRWXU	implemented	N83	tsonic_node::fs::FsConstants::s_irwxu	NODE-FS-001	fs mode S_IRWXU constant
+NODE-FS-CONSTANT-S-IRUSR	fs	constants.S_IRUSR	implemented	N83	tsonic_node::fs::FsConstants::s_irusr	NODE-FS-001	fs mode S_IRUSR constant
+NODE-FS-CONSTANT-S-IWUSR	fs	constants.S_IWUSR	implemented	N83	tsonic_node::fs::FsConstants::s_iwusr	NODE-FS-001	fs mode S_IWUSR constant
+NODE-FS-CONSTANT-S-IXUSR	fs	constants.S_IXUSR	implemented	N83	tsonic_node::fs::FsConstants::s_ixusr	NODE-FS-001	fs mode S_IXUSR constant
+NODE-FS-CONSTANT-S-IRWXG	fs	constants.S_IRWXG	implemented	N83	tsonic_node::fs::FsConstants::s_irwxg	NODE-FS-001	fs mode S_IRWXG constant
+NODE-FS-CONSTANT-S-IRGRP	fs	constants.S_IRGRP	implemented	N83	tsonic_node::fs::FsConstants::s_irgrp	NODE-FS-001	fs mode S_IRGRP constant
+NODE-FS-CONSTANT-S-IWGRP	fs	constants.S_IWGRP	implemented	N83	tsonic_node::fs::FsConstants::s_iwgrp	NODE-FS-001	fs mode S_IWGRP constant
+NODE-FS-CONSTANT-S-IXGRP	fs	constants.S_IXGRP	implemented	N83	tsonic_node::fs::FsConstants::s_ixgrp	NODE-FS-001	fs mode S_IXGRP constant
+NODE-FS-CONSTANT-S-IRWXO	fs	constants.S_IRWXO	implemented	N83	tsonic_node::fs::FsConstants::s_irwxo	NODE-FS-001	fs mode S_IRWXO constant
+NODE-FS-CONSTANT-S-IROTH	fs	constants.S_IROTH	implemented	N83	tsonic_node::fs::FsConstants::s_iroth	NODE-FS-001	fs mode S_IROTH constant
+NODE-FS-CONSTANT-S-IWOTH	fs	constants.S_IWOTH	implemented	N83	tsonic_node::fs::FsConstants::s_iwoth	NODE-FS-001	fs mode S_IWOTH constant
+NODE-FS-CONSTANT-S-IXOTH	fs	constants.S_IXOTH	implemented	N83	tsonic_node::fs::FsConstants::s_ixoth	NODE-FS-001	fs mode S_IXOTH constant
+NODE-FS-CONSTANT-UV-FS-O-FILEMAP	fs	constants.UV_FS_O_FILEMAP	implemented	N83	tsonic_node::fs::FsConstants::uv_fs_o_filemap	NODE-FS-001	fs UV_FS_O_FILEMAP constant represented as zero when unavailable
 NODE-FS-PROMISES	fs	promises APIs	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-FSP-ACCESS	fs/promises	access	implemented	N65	tsonic_node::fs_promises::access	NODE-FSP-001	promise-shaped access helper over real filesystem checks
 NODE-FSP-READFILE-STRING	fs/promises	readFile string	implemented	N65	tsonic_node::fs_promises::read_file_string	NODE-FSP-001	promise-shaped readFile string helper with explicit encoding
