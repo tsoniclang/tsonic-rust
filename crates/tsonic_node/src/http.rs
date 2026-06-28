@@ -6,12 +6,79 @@ use crate::net;
 use crate::stream::{Readable, Writable};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentOptions {
+    pub keep_alive: bool,
+    pub keep_alive_msecs: u64,
+    pub max_sockets: usize,
+    pub max_free_sockets: usize,
+    pub max_total_sockets: usize,
+    pub timeout: Option<u64>,
+    pub scheduling: String,
+}
+
+impl Default for AgentOptions {
+    fn default() -> Self {
+        Self {
+            keep_alive: false,
+            keep_alive_msecs: 1_000,
+            max_sockets: usize::MAX,
+            max_free_sockets: 256,
+            max_total_sockets: usize::MAX,
+            timeout: None,
+            scheduling: "lifo".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Agent {
+    pub options: AgentOptions,
+    destroyed: bool,
+}
+
+impl Agent {
+    pub fn new(options: Option<AgentOptions>) -> Self {
+        Self {
+            options: options.unwrap_or_default(),
+            destroyed: false,
+        }
+    }
+
+    pub fn get_name(&self, options: Option<&RequestOptions>) -> String {
+        options
+            .map(|options| format!("{}:{}:{}", options.host, options.port, options.method))
+            .unwrap_or_else(|| "localhost:80:GET".to_string())
+    }
+
+    pub fn destroy(&mut self) {
+        self.destroyed = true;
+    }
+
+    pub fn destroyed(&self) -> bool {
+        self.destroyed
+    }
+
+    pub fn keep_socket_alive(&self) -> bool {
+        self.options.keep_alive
+    }
+
+    pub fn reuse_socket(&self) -> bool {
+        !self.destroyed
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestOptions {
     pub host: String,
     pub port: u16,
     pub path: String,
     pub method: String,
     pub headers: BTreeMap<String, String>,
+    pub protocol: String,
+    pub timeout: Option<u64>,
+    pub agent: Option<Agent>,
+    pub auth: Option<String>,
+    pub set_host: bool,
 }
 
 impl RequestOptions {
@@ -22,6 +89,11 @@ impl RequestOptions {
             path: path.into(),
             method: "GET".to_string(),
             headers: BTreeMap::new(),
+            protocol: "http:".to_string(),
+            timeout: None,
+            agent: None,
+            auth: None,
+            set_host: true,
         }
     }
 }
@@ -46,7 +118,19 @@ pub struct IncomingMessage {
     pub method: String,
     pub url: String,
     pub headers: BTreeMap<String, String>,
+    pub raw_headers: Vec<String>,
+    pub trailers: BTreeMap<String, String>,
+    pub raw_trailers: Vec<String>,
+    pub http_version: String,
+    pub http_version_major: u8,
+    pub http_version_minor: u8,
+    pub aborted: bool,
+    pub complete: bool,
+    pub status_code: Option<u16>,
+    pub status_message: Option<String>,
     pub body: Readable,
+    timeout: Option<u64>,
+    destroyed: bool,
 }
 
 impl IncomingMessage {
@@ -55,13 +139,50 @@ impl IncomingMessage {
             method: method.into(),
             url: url.into(),
             headers: BTreeMap::new(),
+            raw_headers: Vec::new(),
+            trailers: BTreeMap::new(),
+            raw_trailers: Vec::new(),
+            http_version: "1.1".to_string(),
+            http_version_major: 1,
+            http_version_minor: 1,
+            aborted: false,
+            complete: true,
+            status_code: None,
+            status_message: None,
             body: Readable::from_chunks(vec![Buffer::from_bytes(body)]),
+            timeout: None,
+            destroyed: false,
         }
     }
 
     pub fn set_header(&mut self, name: &str, value: &str) {
         self.headers
             .insert(name.to_ascii_lowercase(), value.to_string());
+        self.raw_headers.push(name.to_string());
+        self.raw_headers.push(value.to_string());
+    }
+
+    pub fn set_timeout(&mut self, msecs: u64, callback: Option<impl FnOnce()>) -> &mut Self {
+        self.timeout = Some(msecs);
+        if let Some(callback) = callback {
+            callback();
+        }
+        self
+    }
+
+    pub fn timeout(&self) -> Option<u64> {
+        self.timeout
+    }
+
+    pub fn destroy(&mut self) -> &mut Self {
+        self.destroyed = true;
+        self.aborted = true;
+        self.complete = false;
+        self
+    }
+
+    pub fn destroyed(&self) -> bool {
+        self.destroyed
     }
 }
 
@@ -70,7 +191,14 @@ pub struct ServerResponse {
     pub status_code: u16,
     pub status_message: String,
     pub headers: BTreeMap<String, String>,
+    pub trailers: BTreeMap<String, String>,
+    pub headers_sent: bool,
+    pub send_date: bool,
+    pub should_keep_alive: bool,
+    pub strict_content_length: bool,
     body: Writable,
+    timeout: Option<u64>,
+    finished: bool,
 }
 
 impl Default for ServerResponse {
@@ -79,7 +207,14 @@ impl Default for ServerResponse {
             status_code: 200,
             status_message: "OK".to_string(),
             headers: BTreeMap::new(),
+            trailers: BTreeMap::new(),
+            headers_sent: false,
+            send_date: true,
+            should_keep_alive: true,
+            strict_content_length: false,
             body: Writable::new(),
+            timeout: None,
+            finished: false,
         }
     }
 }
@@ -94,16 +229,98 @@ impl ServerResponse {
             .insert(name.to_ascii_lowercase(), value.to_string());
     }
 
+    pub fn append_header(&mut self, name: &str, value: &str) {
+        let key = name.to_ascii_lowercase();
+        self.headers
+            .entry(key)
+            .and_modify(|existing| {
+                existing.push_str(", ");
+                existing.push_str(value);
+            })
+            .or_insert_with(|| value.to_string());
+    }
+
+    pub fn set_headers(&mut self, headers: &BTreeMap<String, String>) {
+        for (name, value) in headers {
+            self.set_header(name, value);
+        }
+    }
+
     pub fn get_header(&self, name: &str) -> Option<String> {
         self.headers.get(&name.to_ascii_lowercase()).cloned()
+    }
+
+    pub fn has_header(&self, name: &str) -> bool {
+        self.headers.contains_key(&name.to_ascii_lowercase())
+    }
+
+    pub fn remove_header(&mut self, name: &str) {
+        self.headers.remove(&name.to_ascii_lowercase());
+    }
+
+    pub fn get_header_names(&self) -> Vec<String> {
+        self.headers.keys().cloned().collect()
+    }
+
+    pub fn get_headers(&self) -> BTreeMap<String, String> {
+        self.headers.clone()
     }
 
     pub fn write_head(&mut self, status_code: u16, headers: &[(&str, &str)]) {
         self.status_code = status_code;
         self.status_message = canonical_status_message(status_code).to_string();
+        self.headers_sent = true;
         for (name, value) in headers {
             self.set_header(name, value);
         }
+    }
+
+    pub fn write_continue(&self, callback: Option<impl FnOnce()>) {
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
+    pub fn write_processing(&self, callback: Option<impl FnOnce()>) {
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
+    pub fn write_early_hints(
+        &mut self,
+        hints: &BTreeMap<String, String>,
+        callback: Option<impl FnOnce()>,
+    ) {
+        for (name, value) in hints {
+            self.set_header(name, value);
+        }
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
+    pub fn add_trailers(&mut self, trailers: &BTreeMap<String, String>) {
+        for (name, value) in trailers {
+            self.trailers
+                .insert(name.to_ascii_lowercase(), value.to_string());
+        }
+    }
+
+    pub fn flush_headers(&mut self) {
+        self.headers_sent = true;
+    }
+
+    pub fn set_timeout(&mut self, msecs: u64, callback: Option<impl FnOnce()>) -> &mut Self {
+        self.timeout = Some(msecs);
+        if let Some(callback) = callback {
+            callback();
+        }
+        self
+    }
+
+    pub fn timeout(&self) -> Option<u64> {
+        self.timeout
     }
 
     pub fn write(&mut self, chunk: Buffer) -> bool {
@@ -115,6 +332,7 @@ impl ServerResponse {
             self.write(chunk);
         }
         self.body.end();
+        self.finished = true;
     }
 
     pub fn body(&self) -> &[Buffer] {
@@ -128,6 +346,79 @@ impl ServerResponse {
             headers: self.headers.clone(),
             body: Buffer::concat(self.body.chunks()).as_bytes().to_vec(),
         }
+    }
+
+    pub fn finished(&self) -> bool {
+        self.finished
+    }
+}
+
+#[derive(Debug)]
+pub struct ClientRequest {
+    pub options: RequestOptions,
+    pub method: String,
+    pub host: String,
+    pub path: String,
+    pub protocol: String,
+    pub aborted: bool,
+    pub reused_socket: bool,
+    pub max_headers_count: usize,
+    timeout: Option<u64>,
+    no_delay: bool,
+    keep_alive: Option<u64>,
+}
+
+impl ClientRequest {
+    pub fn new(options: RequestOptions) -> Self {
+        Self {
+            method: options.method.clone(),
+            host: options.host.clone(),
+            path: options.path.clone(),
+            protocol: options.protocol.clone(),
+            options,
+            aborted: false,
+            reused_socket: false,
+            max_headers_count: 2_000,
+            timeout: None,
+            no_delay: false,
+            keep_alive: None,
+        }
+    }
+
+    pub fn set_timeout(&mut self, timeout: u64, callback: Option<impl FnOnce()>) -> &mut Self {
+        self.timeout = Some(timeout);
+        if let Some(callback) = callback {
+            callback();
+        }
+        self
+    }
+
+    pub fn timeout(&self) -> Option<u64> {
+        self.timeout
+    }
+
+    pub fn set_no_delay(&mut self, no_delay: bool) {
+        self.no_delay = no_delay;
+    }
+
+    pub fn no_delay(&self) -> bool {
+        self.no_delay
+    }
+
+    pub fn set_socket_keep_alive(&mut self, enable: bool, initial_delay: Option<u64>) {
+        self.keep_alive = enable.then_some(initial_delay.unwrap_or(0));
+    }
+
+    pub fn keep_alive_delay(&self) -> Option<u64> {
+        self.keep_alive
+    }
+
+    pub fn abort(&mut self) {
+        self.aborted = true;
+    }
+
+    pub fn on_socket(&mut self) {
+        self.reused_socket = true;
     }
 }
 

@@ -62,22 +62,101 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
     let server = http::create_server(|request, response| {
         assert_eq!(request.method, "POST");
         assert_eq!(request.url, "/submit");
+        assert_eq!(request.http_version, "1.1");
+        assert!(request.complete);
         response.set_header("content-type", "text/plain");
+        response.append_header("vary", "accept");
+        response.append_header("vary", "encoding");
+        assert_eq!(response.get_header("vary").unwrap(), "accept, encoding");
+        assert!(response.has_header("content-type"));
+        let mut extra = BTreeMap::new();
+        extra.insert("x-extra".to_string(), "1".to_string());
+        response.set_headers(&extra);
+        assert!(response.get_header_names().contains(&"x-extra".to_string()));
+        let mut hints = BTreeMap::new();
+        hints.insert("link".to_string(), "</style.css>; rel=preload".to_string());
+        let hinted = std::cell::Cell::new(false);
+        response.write_early_hints(&hints, Some(|| hinted.set(true)));
+        assert!(hinted.get());
         response.write_head(201, &[("x-powered-by", "tsonic")]);
+        response.flush_headers();
+        assert!(response.headers_sent);
+        let mut trailers = BTreeMap::new();
+        trailers.insert("x-trailer".to_string(), "done".to_string());
+        response.add_trailers(&trailers);
+        let timed = std::cell::Cell::new(false);
+        response.set_timeout(500, Some(|| timed.set(true)));
+        assert_eq!(response.timeout(), Some(500));
+        assert!(timed.get());
+        response.write_continue(Some(|| {}));
+        response.write_processing(Some(|| {}));
         response.end(Some(
             tsonic_node::buffer::Buffer::from_string("created", Some("utf8")).unwrap(),
         ));
+        assert!(response.finished());
     });
 
     let mut request = http::IncomingMessage::new("POST", "/submit", b"payload".to_vec());
     request.set_header("content-type", "text/plain");
+    assert_eq!(request.raw_headers, vec!["content-type", "text/plain"]);
+    let incoming_timed = std::cell::Cell::new(false);
+    request.set_timeout(250, Some(|| incoming_timed.set(true)));
+    assert_eq!(request.timeout(), Some(250));
+    assert!(incoming_timed.get());
     let response = server.handle(request);
     assert_eq!(response.status_code, 201);
     assert_eq!(response.status_message, "Created");
     assert_eq!(response.headers.get("content-type").unwrap(), "text/plain");
     assert_eq!(response.headers.get("x-powered-by").unwrap(), "tsonic");
+    assert_eq!(
+        response.headers.get("link").unwrap(),
+        "</style.css>; rel=preload"
+    );
     assert_eq!(response.text().unwrap(), "created");
     server.close();
+
+    let mut destroyed = http::IncomingMessage::new("GET", "/aborted", Vec::new());
+    destroyed.destroy();
+    assert!(destroyed.destroyed());
+    assert!(destroyed.aborted);
+    assert!(!destroyed.complete);
+}
+
+#[test]
+fn http_agent_and_client_request_expose_common_state() {
+    let agent = http::Agent::new(Some(http::AgentOptions {
+        keep_alive: true,
+        keep_alive_msecs: 250,
+        max_sockets: 16,
+        max_free_sockets: 4,
+        max_total_sockets: 32,
+        timeout: Some(1_000),
+        scheduling: "fifo".to_string(),
+    }));
+    let mut options = http::RequestOptions::get("example.test", 80, "/");
+    options.agent = Some(agent.clone());
+    options.auth = Some("u:p".to_string());
+    assert_eq!(agent.get_name(Some(&options)), "example.test:80:GET");
+    assert!(agent.keep_socket_alive());
+    assert!(agent.reuse_socket());
+    let mut agent_to_destroy = agent.clone();
+    agent_to_destroy.destroy();
+    assert!(agent_to_destroy.destroyed());
+    assert!(!agent_to_destroy.reuse_socket());
+
+    let mut request = http::ClientRequest::new(options);
+    assert_eq!(request.method, "GET");
+    assert_eq!(request.host, "example.test");
+    request.set_timeout(2_000, Some(|| {}));
+    assert_eq!(request.timeout(), Some(2_000));
+    request.set_no_delay(true);
+    assert!(request.no_delay());
+    request.set_socket_keep_alive(true, Some(123));
+    assert_eq!(request.keep_alive_delay(), Some(123));
+    request.on_socket();
+    assert!(request.reused_socket);
+    request.abort();
+    assert!(request.aborted);
 }
 
 #[test]

@@ -134,7 +134,8 @@ pub use crate::fs_promises::{
 };
 pub use crate::http::{
     create_server as http_create_server, get as http_get, parse_response as http_parse_response,
-    request as http_request, IncomingMessage as HttpIncomingMessage,
+    request as http_request, Agent as HttpAgent, AgentOptions as HttpAgentOptions,
+    ClientRequest as HttpClientRequest, IncomingMessage as HttpIncomingMessage,
     RequestOptions as HttpRequestOptions, Response as HttpResponse, Server as HttpServer,
     ServerResponse as HttpServerResponse,
 };
