@@ -13,6 +13,22 @@ fn console_formats_to_injectable_writer() {
     console::error_to(&mut err, &[JsValue::Bool(false)]).unwrap();
     assert_eq!(String::from_utf8(err).unwrap(), "false\n");
 
+    let mut warn = Vec::new();
+    console::warn_to(&mut warn, &[JsValue::String("careful".to_string())]).unwrap();
+    assert_eq!(String::from_utf8(warn).unwrap(), "\"careful\"\n");
+
+    let mut info = Vec::new();
+    console::info_to(&mut info, &[JsValue::String("info".to_string())]).unwrap();
+    assert_eq!(String::from_utf8(info).unwrap(), "\"info\"\n");
+
+    let mut debug = Vec::new();
+    console::debug_to(&mut debug, &[JsValue::String("debug".to_string())]).unwrap();
+    assert_eq!(String::from_utf8(debug).unwrap(), "\"debug\"\n");
+
+    let mut dir = Vec::new();
+    console::dir_to(&mut dir, &JsValue::Bool(true)).unwrap();
+    assert_eq!(String::from_utf8(dir).unwrap(), "true\n");
+
     let mut trace = Vec::new();
     console::trace_to(&mut trace, &[JsValue::String("here".to_string())]).unwrap();
     assert_eq!(String::from_utf8(trace).unwrap(), "Trace: \"here\"\n");
@@ -110,4 +126,23 @@ fn console_options_profiles_timestamps_and_dirxml_are_closed() {
     assert!(String::from_utf8(profile)
         .unwrap()
         .contains("Profile 'render':"));
+
+    let mut assertion = Vec::new();
+    console.assert_to(&mut assertion, true, &[]).unwrap();
+    assert!(assertion.is_empty());
+    console
+        .assert_to(
+            &mut assertion,
+            false,
+            &[JsValue::String("broken".to_string())],
+        )
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(assertion).unwrap(),
+        "Assertion failed: \"broken\"\n"
+    );
+
+    let mut cleared = Vec::new();
+    console.clear_to(&mut cleared).unwrap();
+    assert_eq!(cleared, b"\x1b[2J\x1b[H");
 }

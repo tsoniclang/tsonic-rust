@@ -146,6 +146,10 @@ JS-BINARY-007	implemented	M	tsonic_js::abi::DataView	JS-DATAVIEW-001	endian-awar
 JS-BINARY-008	hard-reject	M	n/a	REJECT-JS-SHARED-ATOMICS	concurrency semantics
 JS-CONSOLE-001	implemented	F/M	tsonic_js::abi::{Console,console_log_to,console_error_to,console_warn_to,console_info_to,console_debug_to,console_dir_to,console_table_to,console_trace_to}	JS-CON-001, JS-CON-002	injectable writers, counters, timers, groups, trace, table, dir
 JS-CONSOLE-002	implemented	N24	tsonic_js::abi::{ConsoleOptions,ConsoleColorMode,console_dirxml_to}	JS-CON-003	Console options, dirxml, profile/profileEnd, timeStamp, groupCollapsed, and configurable indentation
+JS-CONSOLE-003	implemented	N75	tsonic_js::abi::{console_format_args,console_log_to,console_error_to,console_warn_to,console_info_to,console_debug_to,console_dir_to}	JS-CON-001	console format and base writer helpers are individually inventoried
+JS-CONSOLE-004	implemented	N75	tsonic_js::abi::{console_table_to,console_trace_to,console_dirxml_to}	JS-CON-002,JS-CON-003	console table, trace, and dirxml writer helpers are individually inventoried
+JS-CONSOLE-005	implemented	N75	tsonic_js::abi::{Console,ConsoleOptions,ConsoleColorMode}	JS-CON-002,JS-CON-003	Console carrier, options, and color mode are individually inventoried
+JS-CONSOLE-006	implemented	N75	tsonic_js::abi::Console	JS-CON-002,JS-CON-003	Console instance format, assert, count, timer, group, clear, timeStamp, and profile helpers are individually inventoried
 JS-WEB-001	implemented	N11	tsonic_js::abi::{AbortController,AbortSignal}	JS-WEB-001	closed abort signal and controller carrier
 JS-WEB-002	implemented	N11	tsonic_js::abi::DomException	JS-WEB-002	DOMException name, message, and legacy code constants
 JS-WEB-003	implemented	N11	tsonic_js::abi::{Event,EventInit,CustomEvent,EventTarget,AddEventListenerOptions,EventListenerOptions}	JS-WEB-003	closed Event and EventTarget callback carrier
