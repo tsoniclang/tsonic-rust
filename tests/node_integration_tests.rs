@@ -2,6 +2,8 @@
 mod buffer_tests;
 #[path = "node/crypto_tests.rs"]
 mod crypto_tests;
+#[path = "node/dgram_tests.rs"]
+mod dgram_tests;
 #[path = "node/events_async_tests.rs"]
 mod events_async_tests;
 #[path = "node/fs_promises_tests.rs"]

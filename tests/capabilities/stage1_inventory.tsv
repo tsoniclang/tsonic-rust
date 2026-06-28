@@ -199,7 +199,7 @@ NODE-MOD-005	implemented	N4	tsonic_node::abi::child_process_spawn_file_sync	NODE
 NODE-MOD-006	later	N6	n/a	LATER-NODE-CLUSTER	process orchestration requires lifecycle/supervisor contract
 NODE-MOD-007	implemented	F/M	tsonic_js::abi::console_*_to	JS-CON-001, JS-CON-002	injectable writer runtime API through JS console support
 NODE-MOD-008	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001 through NODE-CRYPTO-003	randomBytes/hash subset implemented; broader crypto has explicit hard-reject rows
-NODE-MOD-009	later	N6	n/a	LATER-NODE-DGRAM	UDP runtime requires socket contract and platform tests
+NODE-MOD-009	implemented	N7	tsonic_node::abi::dgram_create_socket	NODE-DGRAM-001	UDP datagram socket over std net
 NODE-MOD-010	implemented	N3	tsonic_node::abi::{diagnostics_channel,diagnostics_publish}	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
 NODE-MOD-011	implemented	N3	tsonic_node::abi::{dns_lookup,dns_resolve4,dns_resolve6}	NODE-DNS-001	platform resolver lookup and address helpers
 NODE-MOD-012	hard-reject	M	n/a	REJECT-NODE-DOMAIN	legacy async error domain runtime out of Stage 1

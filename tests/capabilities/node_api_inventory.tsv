@@ -7,7 +7,7 @@ NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child
 NODE-MODULE-CLUSTER	cluster	module	later	N6	n/a	LATER-NODE-CLUSTER	process orchestration requires lifecycle/supervisor contract
 NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
 NODE-MODULE-CRYPTO	crypto	module	implemented	L	tsonic_node::crypto	NODE-CRYPTO-001	closed crypto subset
-NODE-MODULE-DGRAM	dgram	module	later	N6	n/a	LATER-NODE-DGRAM	UDP runtime requires socket contract and platform tests
+NODE-MODULE-DGRAM	dgram	module	implemented	N7	tsonic_node::dgram	NODE-DGRAM-001	UDP datagram socket over std net
 NODE-MODULE-DIAGNOSTICS-CHANNEL	diagnostics_channel	module	implemented	N3	tsonic_node::diagnostics_channel	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
 NODE-MODULE-DNS	dns	module	implemented	N3	tsonic_node::dns	NODE-DNS-001	platform resolver lookup and address helpers
 NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded

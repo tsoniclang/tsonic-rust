@@ -6,6 +6,7 @@ pub mod async_hooks;
 pub mod buffer;
 pub mod child_process;
 pub mod crypto;
+pub mod dgram;
 pub mod diagnostics_channel;
 pub mod dns;
 pub mod error;
