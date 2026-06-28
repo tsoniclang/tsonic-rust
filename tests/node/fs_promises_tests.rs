@@ -94,6 +94,15 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     assert_eq!(handle.read(&mut buffer, 0, 5, Some(6)).unwrap(), 5);
     assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
     handle.write_string("rust", Some(6), "utf8").unwrap();
+    assert_eq!(handle.read_file_string("utf8").unwrap(), "hello rustd!");
+    handle.append_file_string("?", "utf8").unwrap();
+    handle
+        .append_file_buffer(&Buffer::from_string("#", Some("utf8")).unwrap())
+        .unwrap();
+    assert_eq!(handle.read_file_buffer().unwrap().len(), 14);
+    let readable_web = handle.readable_web_stream().unwrap();
+    assert_eq!(readable_web.chunks().len(), 1);
+    assert!(!handle.writable_web_stream().closed());
     handle.sync().unwrap();
     handle.datasync().unwrap();
     handle.truncate(10).unwrap();
@@ -113,6 +122,14 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     fs_promises::mkdir(&nested_text, false).unwrap();
     let nested_file = nested.join("n.txt");
     fs_promises::write_file_string(&nested_file.to_string_lossy(), "n", "utf8").unwrap();
+    let mut dir = fs_promises::opendir_handle(&nested_text).unwrap();
+    let first = dir.read().unwrap().unwrap();
+    assert_eq!(first.name, "n.txt");
+    assert!(dir.read().unwrap().is_none());
+    assert_eq!(dir.entries().len(), 1);
+    dir.close();
+    assert!(dir.closed());
+    assert!(dir.read().is_err());
     let copied_dir = root.join("copied");
     fs_promises::cp(&nested_text, &copied_dir.to_string_lossy(), true).unwrap();
     assert!(

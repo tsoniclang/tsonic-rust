@@ -123,14 +123,16 @@ pub use crate::fs_promises::{
     chown as fs_promises_chown, copy_file as fs_promises_copy_file, cp as fs_promises_cp,
     lchown as fs_promises_lchown, link as fs_promises_link, lstat as fs_promises_lstat,
     mkdir as fs_promises_mkdir, mkdtemp as fs_promises_mkdtemp, open as fs_promises_open,
-    opendir as fs_promises_opendir, read_file_buffer as fs_promises_read_file_buffer,
+    opendir as fs_promises_opendir, opendir_handle as fs_promises_opendir_handle,
+    read_file_buffer as fs_promises_read_file_buffer,
     read_file_string as fs_promises_read_file_string, readdir as fs_promises_readdir,
     readlink as fs_promises_readlink, realpath as fs_promises_realpath,
     rename as fs_promises_rename, rm as fs_promises_rm, rmdir as fs_promises_rmdir,
     stat as fs_promises_stat, statfs as fs_promises_statfs, symlink as fs_promises_symlink,
     truncate as fs_promises_truncate, unlink as fs_promises_unlink, utimes as fs_promises_utimes,
     write_file_buffer as fs_promises_write_file_buffer,
-    write_file_string as fs_promises_write_file_string, FileHandle as FsPromisesFileHandle,
+    write_file_string as fs_promises_write_file_string, Dir as FsPromisesDir,
+    FileHandle as FsPromisesFileHandle,
 };
 pub use crate::http::{
     create_server as http_create_server, get as http_get, parse_response as http_parse_response,

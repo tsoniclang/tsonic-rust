@@ -7,6 +7,41 @@ pub struct FileHandle {
     fd: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dir {
+    entries: Vec<Dirent>,
+    index: usize,
+    closed: bool,
+}
+
+impl Dir {
+    pub fn read(&mut self) -> NodeResult<Option<Dirent>> {
+        if self.closed {
+            return Err(crate::error::NodeError::new(
+                "ERR_DIR_CLOSED",
+                "directory is closed",
+            ));
+        }
+        let entry = self.entries.get(self.index).cloned();
+        if entry.is_some() {
+            self.index += 1;
+        }
+        Ok(entry)
+    }
+
+    pub fn entries(&self) -> &[Dirent] {
+        &self.entries
+    }
+
+    pub fn close(&mut self) {
+        self.closed = true;
+    }
+
+    pub fn closed(&self) -> bool {
+        self.closed
+    }
+}
+
 impl FileHandle {
     pub fn fd(&self) -> i32 {
         self.fd
@@ -67,6 +102,37 @@ impl FileHandle {
         encoding: &str,
     ) -> NodeResult<usize> {
         fs::write_sync_string(self.fd, value, position, encoding)
+    }
+
+    pub fn append_file_string(&self, value: &str, encoding: &str) -> NodeResult<usize> {
+        let position = Some(self.stat()?.size);
+        self.write_string(value, position, encoding)
+    }
+
+    pub fn append_file_buffer(&self, value: &Buffer) -> NodeResult<usize> {
+        let position = Some(self.stat()?.size);
+        self.write_buffer(value, 0, value.len(), position)
+    }
+
+    pub fn read_file_buffer(&self) -> NodeResult<Buffer> {
+        let size = self.stat()?.size as usize;
+        let mut buffer = Buffer::alloc(size);
+        let read = self.read(&mut buffer, 0, size, Some(0))?;
+        Ok(Buffer::from_bytes(buffer.as_bytes()[..read].to_vec()))
+    }
+
+    pub fn read_file_string(&self, encoding: &str) -> NodeResult<String> {
+        self.read_file_buffer()?.to_string(Some(encoding))
+    }
+
+    pub fn readable_web_stream(&self) -> NodeResult<crate::stream::web::ReadableStream> {
+        Ok(crate::stream::web::ReadableStream::from_chunks(vec![
+            self.read_file_buffer()?
+        ]))
+    }
+
+    pub fn writable_web_stream(&self) -> crate::stream::web::WritableStream {
+        crate::stream::web::WritableStream::new()
     }
 
     pub fn close(self) -> NodeResult<()> {
@@ -188,6 +254,14 @@ pub fn readdir(path: &str) -> NodeResult<Vec<String>> {
 
 pub fn opendir(path: &str) -> NodeResult<Vec<Dirent>> {
     fs::opendir_sync(path)
+}
+
+pub fn opendir_handle(path: &str) -> NodeResult<Dir> {
+    Ok(Dir {
+        entries: opendir(path)?,
+        index: 0,
+        closed: false,
+    })
 }
 
 pub fn open(path: &str, flags: &str) -> NodeResult<FileHandle> {

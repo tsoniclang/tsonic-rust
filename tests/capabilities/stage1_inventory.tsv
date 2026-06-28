@@ -237,6 +237,7 @@ NODE-EVENTS-002	implemented	N28	tsonic_node::abi::{NodeEventTarget,EventEmitterA
 NODE-EVENTS-003	implemented	N34	tsonic_node::abi::{events_default_max_listeners,events_set_default_max_listeners,events_error_monitor,events_capture_rejection_symbol}	NODE-EVENTS-003	global max-listener policy and EventEmitter symbol name constants
 NODE-MOD-014	implemented	K	tsonic_node::abi::fs_*	NODE-FS-001 through NODE-FS-010	selected synchronous file APIs only
 NODE-MOD-015	implemented	N3	tsonic_node::abi::fs_promises_*	NODE-FSP-001	blocking-now fs/promises shape over broad filesystem helpers
+NODE-FSP-002	implemented	N42	tsonic_node::abi::{FsPromisesFileHandle,FsPromisesDir,fs_promises_opendir_handle}	NODE-FSP-002	FileHandle readFile/appendFile/web stream carriers and Dir read/close handle shape
 NODE-MOD-016	implemented	N4	tsonic_node::abi::{http_get,http_request}	NODE-HTTP-001	HTTP/1 client request/response over real TCP
 NODE-HTTP-002	implemented	N36	tsonic_node::abi::{HttpAgent,HttpAgentOptions,HttpClientRequest,HttpIncomingMessage,HttpServerResponse}	NODE-HTTP-002	common HTTP state carriers, header operations, trailers, timeout/abort metadata, and agent options
 NODE-MOD-017	implemented	N9	tsonic_node::http2	NODE-HTTP2-001	HTTP/2 client request/session shape over approved reqwest rustls/http2 dependency

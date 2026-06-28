@@ -120,6 +120,8 @@ NODE-FS-CREATE-READ-STREAM	fs	createReadStream	implemented	N8	tsonic_node::fs::c
 NODE-FS-CREATE-WRITE-STREAM	fs	createWriteStream	implemented	N8	tsonic_node::fs::create_write_stream	NODE-FS-STREAM-001	closed Writable stream shape for generated output
 NODE-FS-ASYNC-CALLBACKS	fs	callback APIs	implemented	N16	tsonic_node::fs::{access_callback,exists_callback,read_file_callback_string,write_file_callback_string,append_file_callback_string,stat_callback,lstat_callback,readdir_callback,mkdir_callback,copy_file_callback,rename_callback,unlink_callback,rm_callback}	NODE-FS-CALLBACK-001	callback-shaped fs APIs execute real sync IO deterministically
 NODE-FS-PROMISES	fs	promises APIs	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
+NODE-FSP-FILEHANDLE	fs/promises	FileHandle readFile/write/appendFile/web streams	implemented	N42	tsonic_node::fs_promises::FileHandle	NODE-FSP-002	FileHandle stat/sync/datasync/truncate/chmod/chown/utimes/read/write/readFile/appendFile and web stream carriers
+NODE-FSP-DIR	fs/promises	Dir read/close async iterator shape	implemented	N42	tsonic_node::fs_promises::{Dir,opendir_handle}	NODE-FSP-002	closed fs/promises Dir handle with read, entries, close, and closed-state errors
 NODE-PATH-BASENAME	path	basename	implemented	J	tsonic_node::path::basename	NODE-PATH-001	path helper
 NODE-PATH-DIRNAME	path	dirname	implemented	J	tsonic_node::path::dirname	NODE-PATH-001	path helper
 NODE-PATH-EXTNAME	path	extname	implemented	J	tsonic_node::path::extname	NODE-PATH-001	path helper
