@@ -234,6 +234,7 @@ NODE-DNS-002	implemented	N26	tsonic_node::abi::{dns_resolve_any,dns_resolve_ns,d
 NODE-MOD-012	hard-reject	M	n/a	REJECT-NODE-DOMAIN	legacy async error domain runtime out of Stage 1
 NODE-MOD-013	implemented	N3	tsonic_node::abi::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-EVENTS-002	implemented	N28	tsonic_node::abi::{NodeEventTarget,EventEmitterAsyncResource,EventEmitterOptions,events_on}	NODE-EVENTS-002	NodeEventTarget, captureRejections option, static on helper, and EventEmitterAsyncResource
+NODE-EVENTS-003	implemented	N34	tsonic_node::abi::{events_default_max_listeners,events_set_default_max_listeners,events_error_monitor,events_capture_rejection_symbol}	NODE-EVENTS-003	global max-listener policy and EventEmitter symbol name constants
 NODE-MOD-014	implemented	K	tsonic_node::abi::fs_*	NODE-FS-001 through NODE-FS-010	selected synchronous file APIs only
 NODE-MOD-015	implemented	N3	tsonic_node::abi::fs_promises_*	NODE-FSP-001	blocking-now fs/promises shape over broad filesystem helpers
 NODE-MOD-016	implemented	N4	tsonic_node::abi::{http_get,http_request}	NODE-HTTP-001	HTTP/1 client request/response over real TCP

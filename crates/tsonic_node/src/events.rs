@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use tsonic_js::JsValue;
 
@@ -6,6 +7,11 @@ use crate::async_hooks::{AsyncResource, AsyncResourceOptions};
 
 type Listener = Box<dyn FnMut(&[JsValue])>;
 type ListenerMap = BTreeMap<String, Vec<ListenerEntry>>;
+static DEFAULT_MAX_LISTENERS: AtomicUsize = AtomicUsize::new(10);
+static CAPTURE_REJECTIONS: AtomicBool = AtomicBool::new(false);
+
+pub const ERROR_MONITOR: &str = "events.errorMonitor";
+pub const CAPTURE_REJECTION_SYMBOL: &str = "events.captureRejectionSymbol";
 
 struct ListenerEntry {
     id: usize,
@@ -23,11 +29,16 @@ pub struct EventEmitter {
 
 impl EventEmitter {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            max_listeners: Some(default_max_listeners()),
+            capture_rejections: capture_rejections(),
+            ..Self::default()
+        }
     }
 
     pub fn with_options(options: EventEmitterOptions) -> Self {
         Self {
+            max_listeners: Some(default_max_listeners()),
             capture_rejections: options.capture_rejections,
             ..Self::default()
         }
@@ -198,6 +209,10 @@ impl EventEmitter {
     pub fn get_max_listeners(&self) -> Option<usize> {
         self.max_listeners
     }
+
+    pub fn has_listeners(&self, event: &str) -> bool {
+        self.listener_count(event) > 0
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -361,4 +376,28 @@ pub fn set_max_listeners(max: usize, emitters: &mut [&mut EventEmitter]) {
     for emitter in emitters {
         emitter.set_max_listeners(max);
     }
+}
+
+pub fn default_max_listeners() -> usize {
+    DEFAULT_MAX_LISTENERS.load(Ordering::SeqCst)
+}
+
+pub fn set_default_max_listeners(max: usize) {
+    DEFAULT_MAX_LISTENERS.store(max, Ordering::SeqCst);
+}
+
+pub fn capture_rejections() -> bool {
+    CAPTURE_REJECTIONS.load(Ordering::SeqCst)
+}
+
+pub fn set_capture_rejections(value: bool) {
+    CAPTURE_REJECTIONS.store(value, Ordering::SeqCst);
+}
+
+pub fn error_monitor() -> &'static str {
+    ERROR_MONITOR
+}
+
+pub fn capture_rejection_symbol() -> &'static str {
+    CAPTURE_REJECTION_SYMBOL
 }

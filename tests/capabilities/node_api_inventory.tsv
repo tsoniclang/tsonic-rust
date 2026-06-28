@@ -21,6 +21,7 @@ NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecate
 NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-EVENTS-TARGET	events	NodeEventTarget/static helpers/captureRejections	implemented	N28	tsonic_node::events::{NodeEventTarget,EventEmitterOptions,on}	NODE-EVENTS-002	NodeEventTarget, EventEmitter captureRejections option, and static on helper shape
 NODE-EVENTS-ASYNC-RESOURCE	events	EventEmitterAsyncResource	implemented	N28	tsonic_node::events::{EventEmitterAsyncResource,EventEmitterAsyncResourceOptions}	NODE-EVENTS-002	EventEmitterAsyncResource over closed AsyncResource identity
+NODE-EVENTS-GLOBALS	events	defaultMaxListeners/errorMonitor/captureRejectionSymbol	implemented	N34	tsonic_node::events::{default_max_listeners,set_default_max_listeners,error_monitor,capture_rejection_symbol}	NODE-EVENTS-003	global max-listener policy and EventEmitter symbol name constants
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
 NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-MODULE-HTTP	http	module	implemented	N4	tsonic_node::http	NODE-HTTP-001	HTTP/1 client request/response over real TCP

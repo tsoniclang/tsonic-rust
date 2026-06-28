@@ -5,7 +5,7 @@ use tsonic_js::JsValue;
 use tsonic_node::{
     async_hooks::{self, AsyncLocalStorage},
     diagnostics_channel,
-    events::{EventEmitter, EventEmitterAsyncResource, NodeEventTarget},
+    events::{self, EventEmitter, EventEmitterAsyncResource, NodeEventTarget},
 };
 
 #[test]
@@ -43,8 +43,20 @@ fn event_emitter_dispatches_in_registration_order() {
 
 #[test]
 fn event_emitter_supports_prepend_remove_and_static_helpers() {
+    let previous_default = events::default_max_listeners();
+    events::set_default_max_listeners(12);
+    events::set_capture_rejections(true);
+    assert_eq!(events::error_monitor(), events::ERROR_MONITOR);
+    assert_eq!(
+        events::capture_rejection_symbol(),
+        events::CAPTURE_REJECTION_SYMBOL
+    );
+    assert!(events::capture_rejections());
+
     let seen = Rc::new(RefCell::new(Vec::new()));
     let mut emitter = EventEmitter::new();
+    assert_eq!(emitter.get_max_listeners(), Some(12));
+    assert!(emitter.capture_rejections());
 
     let first = Rc::clone(&seen);
     let first_id = emitter.on_with_id("ready", move |_| first.borrow_mut().push("first"));
@@ -70,6 +82,7 @@ fn event_emitter_supports_prepend_remove_and_static_helpers() {
     assert_eq!(emitter.listeners("ready"), vec![first_id]);
     emitter.remove_listener("ready", first_id);
     assert_eq!(emitter.listener_count("ready"), 0);
+    assert!(!emitter.has_listeners("ready"));
 
     let mut one = EventEmitter::new();
     let mut two = EventEmitter::new();
@@ -81,6 +94,8 @@ fn event_emitter_supports_prepend_remove_and_static_helpers() {
         capture_rejections: true,
     });
     assert!(capturing.capture_rejections());
+    events::set_capture_rejections(false);
+    events::set_default_max_listeners(previous_default);
 }
 
 #[test]

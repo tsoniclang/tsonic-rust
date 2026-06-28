@@ -73,10 +73,14 @@ pub use crate::dns::{
     TlsaRecord as DnsTlsaRecord,
 };
 pub use crate::events::{
+    capture_rejection_symbol as events_capture_rejection_symbol,
+    capture_rejections as events_capture_rejections,
+    default_max_listeners as events_default_max_listeners, error_monitor as events_error_monitor,
     get_event_listeners as events_get_event_listeners, listener_count as events_listener_count,
-    on as events_on, once as events_once, set_max_listeners as events_set_max_listeners,
-    EventEmitter, EventEmitterAsyncResource, EventEmitterAsyncResourceOptions, EventEmitterOptions,
-    NodeEventTarget,
+    on as events_on, once as events_once, set_capture_rejections as events_set_capture_rejections,
+    set_default_max_listeners as events_set_default_max_listeners,
+    set_max_listeners as events_set_max_listeners, EventEmitter, EventEmitterAsyncResource,
+    EventEmitterAsyncResourceOptions, EventEmitterOptions, NodeEventTarget,
 };
 pub use crate::fetch::{fetch, fetch_request, FetchInit};
 pub use crate::fs::{
