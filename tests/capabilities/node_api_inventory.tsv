@@ -103,16 +103,51 @@ NODE-DNS-COMMON-RESOLVE	dns	resolve/resolve4/resolve6/reverse	implemented	N56	ts
 NODE-DNS-RECORD-CARRIERS	dns	MxRecord/SrvRecord/CaaRecord/NaptrRecord/SoaRecord/TlsaRecord/AnyRecord	implemented	N56	tsonic_node::dns::{MxRecord,SrvRecord,CaaRecord,NaptrRecord,SoaRecord,TlsaRecord,AnyRecord}	NODE-DNS-002	closed typed DNS record carriers for all exposed record APIs
 NODE-DNS-PROMISES-COMMON	dns/promises	lookup/lookupService/resolve/reverse promise common helpers	implemented	N56	tsonic_node::dns::promises::{lookup_now,lookup_service_now,resolve_now,reverse_now}	NODE-DNS-002	blocking-now promise helpers reuse deterministic DNS function implementations
 NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded
-NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
-NODE-EVENTS-TARGET	events	NodeEventTarget/static helpers/captureRejections	implemented	N28	tsonic_node::events::{NodeEventTarget,EventEmitterOptions,on}	NODE-EVENTS-002	NodeEventTarget, EventEmitter captureRejections option, and static on helper shape
-NODE-EVENTS-ASYNC-RESOURCE	events	EventEmitterAsyncResource	implemented	N28	tsonic_node::events::{EventEmitterAsyncResource,EventEmitterAsyncResourceOptions}	NODE-EVENTS-002	EventEmitterAsyncResource over closed AsyncResource identity
-NODE-EVENTS-GLOBALS	events	defaultMaxListeners/errorMonitor/captureRejectionSymbol	implemented	N34	tsonic_node::events::{default_max_listeners,set_default_max_listeners,error_monitor,capture_rejection_symbol}	NODE-EVENTS-003	global max-listener policy and EventEmitter symbol name constants
-NODE-EVENTS-LISTENER-REGISTRATION	events	EventEmitter on/once/addListener/prependListener/prependOnceListener	implemented	N57	tsonic_node::events::EventEmitter	NODE-EVENTS-001,NODE-EVENTS-002	closed listener registration order and once/prepend semantics
-NODE-EVENTS-LISTENER-REMOVAL	events	EventEmitter off/removeListener/removeAllListeners	implemented	N57	tsonic_node::events::EventEmitter	NODE-EVENTS-001,NODE-EVENTS-002	listener ids provide deterministic removal without function reflection
-NODE-EVENTS-INTROSPECTION	events	EventEmitter listeners/rawListeners/listenerCount/eventNames/getMaxListeners/setMaxListeners	implemented	N57	tsonic_node::events::{EventEmitter,get_event_listeners,listener_count,set_max_listeners}	NODE-EVENTS-001,NODE-EVENTS-002,NODE-EVENTS-003	closed listener introspection and max-listener policy
-NODE-EVENTS-STATIC-HELPERS	events	events.once/events.on/events.getEventListeners/events.setMaxListeners/events.listenerCount	implemented	N57	tsonic_node::events::{once,on,get_event_listeners,set_max_listeners,listener_count}	NODE-EVENTS-002,NODE-EVENTS-003	static helpers over explicit EventEmitter references
-NODE-EVENTS-TARGET-METHODS	events	NodeEventTarget on/once/off/removeListener/removeAllListeners/emit/listenerCount/eventNames/maxListeners	implemented	N57	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	closed NodeEventTarget method surface forwarding to EventEmitter carrier
-NODE-EVENTS-ASYNC-RESOURCE-METADATA	events	EventEmitterAsyncResource asyncId/triggerAsyncId/asyncResource/eventEmitter/emitDestroy	implemented	N57	tsonic_node::events::EventEmitterAsyncResource	NODE-EVENTS-002	closed async resource metadata and destroy lifecycle
+NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events	NODE-EVENTS-001	closed events module surface
+NODE-EVENTS-EMITTER-NEW	events	EventEmitter constructor	implemented	N3	tsonic_node::events::EventEmitter::new	NODE-EVENTS-001	closed EventEmitter listener carrier
+NODE-EVENTS-EMITTER-OPTIONS	events	EventEmitter options	implemented	N28	tsonic_node::events::{EventEmitter::with_options,EventEmitterOptions}	NODE-EVENTS-002	captureRejections constructor option
+NODE-EVENTS-CAPTURE-REJECTIONS	events	EventEmitter.captureRejections	implemented	N28	tsonic_node::events::EventEmitter::capture_rejections	NODE-EVENTS-002	captureRejections accessor
+NODE-EVENTS-ON	events	EventEmitter.on	implemented	N57	tsonic_node::events::EventEmitter::on	NODE-EVENTS-001	listener registration
+NODE-EVENTS-ON-WITH-ID	events	EventEmitter listener id registration	implemented	N57	tsonic_node::events::EventEmitter::on_with_id	NODE-EVENTS-002	deterministic listener id registration for generated Rust
+NODE-EVENTS-ADD-LISTENER	events	EventEmitter.addListener	implemented	N57	tsonic_node::events::EventEmitter::add_listener	NODE-EVENTS-002	addListener alias over on
+NODE-EVENTS-ONCE	events	EventEmitter.once	implemented	N57	tsonic_node::events::EventEmitter::once	NODE-EVENTS-001	once listener removal after first emit
+NODE-EVENTS-ONCE-WITH-ID	events	EventEmitter once id registration	implemented	N57	tsonic_node::events::EventEmitter::once_with_id	NODE-EVENTS-002	deterministic once listener id registration
+NODE-EVENTS-PREPEND-LISTENER	events	EventEmitter.prependListener	implemented	N57	tsonic_node::events::EventEmitter::prepend_listener	NODE-EVENTS-002	prepend listener ordering
+NODE-EVENTS-PREPEND-LISTENER-WITH-ID	events	EventEmitter prepend id registration	implemented	N57	tsonic_node::events::EventEmitter::prepend_listener_with_id	NODE-EVENTS-002	deterministic prepended listener id registration
+NODE-EVENTS-PREPEND-ONCE	events	EventEmitter.prependOnceListener	implemented	N57	tsonic_node::events::EventEmitter::prepend_once_listener	NODE-EVENTS-002	prepended once listener ordering
+NODE-EVENTS-PREPEND-ONCE-WITH-ID	events	EventEmitter prepend once id registration	implemented	N57	tsonic_node::events::EventEmitter::prepend_once_listener_with_id	NODE-EVENTS-002	deterministic prepended once listener id registration
+NODE-EVENTS-EMIT	events	EventEmitter.emit	implemented	N57	tsonic_node::events::EventEmitter::emit	NODE-EVENTS-001	closed listener dispatch
+NODE-EVENTS-OFF	events	EventEmitter.off	implemented	N57	tsonic_node::events::EventEmitter::off	NODE-EVENTS-002	listener id removal
+NODE-EVENTS-OFF-BY-ID	events	EventEmitter offById	implemented	N57	tsonic_node::events::EventEmitter::off_by_id	NODE-EVENTS-002	explicit listener id removal helper
+NODE-EVENTS-REMOVE-LISTENER	events	EventEmitter.removeListener	implemented	N57	tsonic_node::events::EventEmitter::remove_listener	NODE-EVENTS-002	removeListener alias over id removal
+NODE-EVENTS-REMOVE-LISTENER-BY-ID	events	EventEmitter removeListenerById	implemented	N57	tsonic_node::events::EventEmitter::remove_listener_by_id	NODE-EVENTS-002	explicit removeListener id helper
+NODE-EVENTS-REMOVE-ALL	events	EventEmitter.removeAllListeners	implemented	N57	tsonic_node::events::EventEmitter::remove_all_listeners	NODE-EVENTS-001	remove all listeners by event or globally
+NODE-EVENTS-LISTENERS	events	EventEmitter.listeners	implemented	N57	tsonic_node::events::EventEmitter::listeners	NODE-EVENTS-002	closed listener id introspection
+NODE-EVENTS-RAW-LISTENERS	events	EventEmitter.rawListeners	implemented	N57	tsonic_node::events::EventEmitter::raw_listeners	NODE-EVENTS-002	closed raw listener id introspection
+NODE-EVENTS-LISTENER-COUNT	events	EventEmitter.listenerCount	implemented	N57	tsonic_node::events::EventEmitter::listener_count	NODE-EVENTS-001,NODE-EVENTS-002	listener count introspection
+NODE-EVENTS-EVENT-NAMES	events	EventEmitter.eventNames	implemented	N57	tsonic_node::events::EventEmitter::event_names	NODE-EVENTS-001	event name introspection
+NODE-EVENTS-SET-MAX-LISTENERS	events	EventEmitter.setMaxListeners	implemented	N57	tsonic_node::events::EventEmitter::set_max_listeners	NODE-EVENTS-002	max listener setter
+NODE-EVENTS-GET-MAX-LISTENERS	events	EventEmitter.getMaxListeners	implemented	N57	tsonic_node::events::EventEmitter::get_max_listeners	NODE-EVENTS-002	max listener accessor
+NODE-EVENTS-HAS-LISTENERS	events	EventEmitter has listeners	implemented	N57	tsonic_node::events::EventEmitter::has_listeners	NODE-EVENTS-002	generated Rust listener presence helper
+NODE-EVENTS-STATIC-ONCE	events	events.once	implemented	N57	tsonic_node::events::once	NODE-EVENTS-002	static once helper over explicit emitter
+NODE-EVENTS-STATIC-ON	events	events.on	implemented	N57	tsonic_node::events::on	NODE-EVENTS-002	static on helper over explicit emitter
+NODE-EVENTS-STATIC-LISTENER-COUNT	events	events.listenerCount	implemented	N57	tsonic_node::events::listener_count	NODE-EVENTS-003	static listener count helper
+NODE-EVENTS-STATIC-GET-LISTENERS	events	events.getEventListeners	implemented	N57	tsonic_node::events::get_event_listeners	NODE-EVENTS-002,NODE-EVENTS-003	static listener introspection helper
+NODE-EVENTS-STATIC-SET-MAX	events	events.setMaxListeners	implemented	N57	tsonic_node::events::set_max_listeners	NODE-EVENTS-002,NODE-EVENTS-003	static max listener helper over explicit emitters
+NODE-EVENTS-DEFAULT-MAX	events	events.defaultMaxListeners	implemented	N34	tsonic_node::events::{default_max_listeners,set_default_max_listeners}	NODE-EVENTS-003	global max listener policy
+NODE-EVENTS-GLOBAL-CAPTURE	events	events.captureRejections	implemented	N34	tsonic_node::events::{capture_rejections,set_capture_rejections}	NODE-EVENTS-003	global captureRejections policy
+NODE-EVENTS-ERROR-MONITOR	events	events.errorMonitor	implemented	N34	tsonic_node::events::error_monitor	NODE-EVENTS-003	errorMonitor symbol name constant
+NODE-EVENTS-CAPTURE-SYMBOL	events	events.captureRejectionSymbol	implemented	N34	tsonic_node::events::capture_rejection_symbol	NODE-EVENTS-003	captureRejectionSymbol name constant
+NODE-EVENTS-TARGET-CARRIER	events	NodeEventTarget	implemented	N28	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	NodeEventTarget carrier forwards to EventEmitter
+NODE-EVENTS-TARGET-REGISTRATION	events	NodeEventTarget on/addListener/once	implemented	N57	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	NodeEventTarget registration helpers
+NODE-EVENTS-TARGET-REMOVAL	events	NodeEventTarget off/removeListener/removeAllListeners	implemented	N57	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	NodeEventTarget removal helpers
+NODE-EVENTS-TARGET-EMIT	events	NodeEventTarget emit	implemented	N57	tsonic_node::events::NodeEventTarget::emit	NODE-EVENTS-002	NodeEventTarget dispatch
+NODE-EVENTS-TARGET-INTROSPECTION	events	NodeEventTarget listenerCount/eventNames/maxListeners	implemented	N57	tsonic_node::events::NodeEventTarget	NODE-EVENTS-002	NodeEventTarget listener introspection and max listener policy
+NODE-EVENTS-ASYNC-RESOURCE-CARRIER	events	EventEmitterAsyncResource	implemented	N28	tsonic_node::events::{EventEmitterAsyncResource,EventEmitterAsyncResourceOptions}	NODE-EVENTS-002	EventEmitterAsyncResource over closed AsyncResource identity
+NODE-EVENTS-ASYNC-RESOURCE-EMITTER	events	EventEmitterAsyncResource eventEmitter	implemented	N57	tsonic_node::events::{EventEmitterAsyncResource::event_emitter,EventEmitterAsyncResource::event_emitter_mut}	NODE-EVENTS-002	access to inner EventEmitter carrier
+NODE-EVENTS-ASYNC-RESOURCE-RESOURCE	events	EventEmitterAsyncResource asyncResource	implemented	N57	tsonic_node::events::EventEmitterAsyncResource::async_resource	NODE-EVENTS-002	access to inner AsyncResource carrier
+NODE-EVENTS-ASYNC-RESOURCE-IDS	events	EventEmitterAsyncResource asyncId/triggerAsyncId	implemented	N57	tsonic_node::events::{EventEmitterAsyncResource::async_id,EventEmitterAsyncResource::trigger_async_id}	NODE-EVENTS-002	async resource id accessors
+NODE-EVENTS-ASYNC-RESOURCE-DESTROY	events	EventEmitterAsyncResource.emitDestroy	implemented	N57	tsonic_node::events::EventEmitterAsyncResource::emit_destroy	NODE-EVENTS-002	destroy lifecycle helper
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
 NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-MODULE-HTTP	http	module	implemented	N4	tsonic_node::http	NODE-HTTP-001	HTTP/1 client request/response over real TCP

@@ -65,8 +65,13 @@ fn event_emitter_supports_prepend_remove_and_static_helpers() {
         .prepend_listener_with_id("ready", move |_| prepended.borrow_mut().push("prepended"));
     let once = Rc::clone(&seen);
     emitter.prepend_once_listener("ready", move |_| once.borrow_mut().push("once"));
+    let once_id = emitter.once_with_id("ready", |_| {});
+    let prepend_once_id = emitter.prepend_once_listener_with_id("ready", |_| {});
 
-    assert_eq!(emitter.listeners("ready"), vec![3, prepended_id, first_id]);
+    assert_eq!(
+        emitter.listeners("ready"),
+        vec![prepend_once_id, 3, prepended_id, first_id, once_id]
+    );
     assert_eq!(
         tsonic_node::events::get_event_listeners(&emitter, "ready"),
         emitter.raw_listeners("ready")
@@ -83,6 +88,13 @@ fn event_emitter_supports_prepend_remove_and_static_helpers() {
     emitter.remove_listener("ready", first_id);
     assert_eq!(emitter.listener_count("ready"), 0);
     assert!(!emitter.has_listeners("ready"));
+
+    let mut via_static = EventEmitter::new();
+    events::on(&mut via_static, "tick", |_| {});
+    events::once(&mut via_static, "tick", |_| {});
+    assert_eq!(events::listener_count(&via_static, "tick"), 2);
+    assert!(via_static.emit("tick", &[]));
+    assert_eq!(events::listener_count(&via_static, "tick"), 1);
 
     let mut one = EventEmitter::new();
     let mut two = EventEmitter::new();
@@ -112,6 +124,8 @@ fn node_event_target_and_async_resource_shapes_forward_events() {
     assert_eq!(target.event_names(), vec!["message".to_string()]);
     assert_eq!(target.listener_count("message"), 1);
     assert_eq!(seen.borrow().as_slice(), &["\"hello\"".to_string()]);
+    target.remove_all_listeners(Some("message"));
+    assert_eq!(target.listener_count("message"), 0);
 
     let mut resource =
         EventEmitterAsyncResource::new(tsonic_node::events::EventEmitterAsyncResourceOptions {
