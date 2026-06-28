@@ -19,6 +19,21 @@ fn zlib_gzip_and_deflate_round_trip_buffers() {
         inflate.to_string(Some("utf8")).unwrap(),
         "framework ready compression"
     );
+    let tuned_deflate = tsonic_node::zlib::deflate_sync_with_options(
+        &input,
+        &tsonic_node::zlib::ZlibOptions {
+            level: tsonic_node::zlib::constants::Z_BEST_SPEED,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        tsonic_node::zlib::inflate_sync(&tuned_deflate)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "framework ready compression"
+    );
 
     let raw = tsonic_node::zlib::deflate_raw_sync(&input).unwrap();
     let raw_inflate = tsonic_node::zlib::inflate_raw_sync(&raw).unwrap();
@@ -93,9 +108,42 @@ fn zlib_options_constants_and_class_carriers_are_closed_shapes() {
     assert!(closed.get());
     assert!(gzip.closed());
 
+    let mut deflate = tsonic_node::zlib::create_deflate(None);
+    let deflated = deflate.process(&input).unwrap();
+    let mut inflate = tsonic_node::zlib::create_inflate(None);
+    assert_eq!(
+        inflate
+            .process(&deflated)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "class payload"
+    );
+
+    let mut deflate_raw = tsonic_node::zlib::create_deflate_raw(None);
+    let raw = deflate_raw.process(&input).unwrap();
+    let mut inflate_raw = tsonic_node::zlib::create_inflate_raw(None);
+    assert_eq!(
+        inflate_raw
+            .process(&raw)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "class payload"
+    );
+
     let mut gunzip = tsonic_node::zlib::create_gunzip(None);
     assert_eq!(
         gunzip
+            .process(&output)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "class payload"
+    );
+    let mut unzip = tsonic_node::zlib::create_unzip(None);
+    assert_eq!(
+        unzip
             .process(&output)
             .unwrap()
             .to_string(Some("utf8"))
@@ -116,8 +164,11 @@ fn zlib_options_constants_and_class_carriers_are_closed_shapes() {
     );
 
     assert!(tsonic_node::zlib::zstd_compress_sync(&input).is_err());
+    assert!(tsonic_node::zlib::zstd_decompress_sync(&input).is_err());
     let mut zstd = tsonic_node::zlib::create_zstd_compress(Some(Default::default()));
     assert!(zstd.process(&input).is_err());
+    let mut unzstd = tsonic_node::zlib::create_zstd_decompress(Some(Default::default()));
+    assert!(unzstd.process(&input).is_err());
 }
 
 #[test]

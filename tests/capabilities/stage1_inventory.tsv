@@ -338,6 +338,11 @@ NODE-WORKER-002	implemented	N32	tsonic_node::abi::{WorkerOptions,WorkerResourceL
 NODE-MOD-044	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
 NODE-ZLIB-002	implemented	N35	tsonic_node::abi::{ZlibOptions,BrotliOptions,ZstdOptions,Zlib,zlib_create_gzip,zlib_create_gunzip,zlib_deflate_raw_sync,zlib_inflate_raw_sync,zlib_unzip_sync,zlib_constants}	NODE-ZLIB-002	stream-class carrier shape, bytesWritten, reset/flush/params/close, raw/unzip aliases, and constants
 NODE-ZLIB-003	implemented	N35	tsonic_node::abi::{zlib_create_zstd_compress,zlib_create_zstd_decompress,zlib_zstd_compress_sync,zlib_zstd_decompress_sync}	NODE-ZLIB-002	explicit dependency-gated Zstd unsupported error until approved zstd implementation lands
+NODE-ZLIB-004	implemented	N66	tsonic_node::abi::{zlib_gzip_sync,zlib_gzip_sync_with_options,zlib_gunzip_sync,zlib_gzip_string_sync,zlib_gunzip_string_sync}	NODE-ZLIB-001,NODE-ZLIB-002	gzip/gunzip sync and string helpers are individually inventoried
+NODE-ZLIB-005	implemented	N66	tsonic_node::abi::{zlib_deflate_sync,zlib_deflate_sync_with_options,zlib_inflate_sync,zlib_deflate_raw_sync,zlib_inflate_raw_sync,zlib_unzip_sync}	NODE-ZLIB-001,NODE-ZLIB-002	deflate/inflate/raw/unzip sync helpers are individually inventoried
+NODE-ZLIB-006	implemented	N66	tsonic_node::abi::{zlib_brotli_compress_sync,zlib_brotli_decompress_sync,zlib_create_brotli_compress,zlib_create_brotli_decompress}	NODE-ZLIB-002	Brotli sync helpers and class factories are individually inventoried
+NODE-ZLIB-007	implemented	N66	tsonic_node::abi::{Zlib,ZlibMode,zlib_create_deflate,zlib_create_inflate,zlib_create_gzip,zlib_create_gunzip,zlib_create_deflate_raw,zlib_create_inflate_raw,zlib_create_unzip}	NODE-ZLIB-002	Zlib class carrier and factory aliases are individually inventoried
+NODE-ZLIB-008	implemented	N66	tsonic_node::abi::zlib_constants	NODE-ZLIB-002	common zlib/brotli/zstd constants are individually inventoried
 NODE-MOD-045	hard-reject	M	n/a	REJECT-NODE-NAPI	native addon ABI not runtime surface
 NODE-MOD-046	hard-reject	M	n/a	REJECT-NODE-LOADER	module resolution belongs to compiler/provider, not runtime crate
 NODE-PROCESS-010	implemented	N5	tsonic_node::abi::process_next_tick	NODE-PROC-007	deterministic nextTick callback hook

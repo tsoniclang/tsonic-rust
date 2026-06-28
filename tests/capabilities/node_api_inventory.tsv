@@ -121,6 +121,44 @@ NODE-WORKER-OPTIONS	worker_threads	WorkerOptions/resourceLimits/environmentData/
 NODE-MODULE-ZLIB	zlib	module	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
 NODE-ZLIB-CLASSES	zlib	Zlib classes/options/constants/raw/unzip	implemented	N35	tsonic_node::zlib::{ZlibOptions,BrotliOptions,ZstdOptions,Zlib,create_gzip,create_gunzip,deflate_raw_sync,inflate_raw_sync,unzip_sync,constants}	NODE-ZLIB-002	stream-class carrier shape, bytesWritten, reset/flush/params/close, raw/unzip aliases, and constants
 NODE-ZLIB-ZSTD-GATE	zlib	ZstdCompress/ZstdDecompress	implemented	N35	tsonic_node::zlib::{create_zstd_compress,create_zstd_decompress,zstd_compress_sync,zstd_decompress_sync}	NODE-ZLIB-002	explicit dependency-gated Zstd unsupported error until approved zstd implementation lands
+NODE-ZLIB-OPTIONS	zlib	ZlibOptions	implemented	N66	tsonic_node::zlib::ZlibOptions	NODE-ZLIB-002	closed compression option carrier with flush, finishFlush, chunkSize, level, strategy, windowBits, memLevel, maxOutputLength
+NODE-ZLIB-BROTLI-OPTIONS	zlib	BrotliOptions	implemented	N66	tsonic_node::zlib::BrotliOptions	NODE-ZLIB-002	closed Brotli option carrier
+NODE-ZLIB-ZSTD-OPTIONS	zlib	ZstdOptions	implemented	N66	tsonic_node::zlib::ZstdOptions	NODE-ZLIB-002	closed Zstd option carrier for dependency-gated unsupported path
+NODE-ZLIB-MODE	zlib	ZlibMode	implemented	N66	tsonic_node::zlib::ZlibMode	NODE-ZLIB-002	closed compression/decompression mode identity carrier
+NODE-ZLIB-CLASS	zlib	Zlib	implemented	N66	tsonic_node::zlib::Zlib	NODE-ZLIB-002	closed Zlib class carrier with process, bytesWritten, reset, params, flush, close, and closed state
+NODE-ZLIB-CLASS-PROCESS	zlib	Zlib.process	implemented	N66	tsonic_node::zlib::Zlib::process	NODE-ZLIB-002	class carrier processes Buffer input according to selected mode
+NODE-ZLIB-CLASS-BYTES-WRITTEN	zlib	Zlib.bytesWritten	implemented	N66	tsonic_node::zlib::Zlib::bytes_written	NODE-ZLIB-002	class carrier reports processed input byte count
+NODE-ZLIB-CLASS-RESET	zlib	Zlib.reset	implemented	N66	tsonic_node::zlib::Zlib::reset	NODE-ZLIB-002	class carrier reset clears byte count without dynamic stream state
+NODE-ZLIB-CLASS-PARAMS	zlib	Zlib.params	implemented	N66	tsonic_node::zlib::Zlib::params	NODE-ZLIB-002	class carrier accepts level/strategy updates and callback without hidden async runtime
+NODE-ZLIB-CLASS-FLUSH	zlib	Zlib.flush	implemented	N66	tsonic_node::zlib::Zlib::flush	NODE-ZLIB-002	class carrier flush invokes explicit callback deterministically
+NODE-ZLIB-CLASS-CLOSE	zlib	Zlib.close	implemented	N66	tsonic_node::zlib::Zlib::close	NODE-ZLIB-002	class carrier close marks closed and invokes explicit callback deterministically
+NODE-ZLIB-CREATE-DEFLATE	zlib	createDeflate	implemented	N66	tsonic_node::zlib::create_deflate	NODE-ZLIB-002	closed Deflate class factory
+NODE-ZLIB-CREATE-INFLATE	zlib	createInflate	implemented	N66	tsonic_node::zlib::create_inflate	NODE-ZLIB-002	closed Inflate class factory
+NODE-ZLIB-CREATE-GZIP	zlib	createGzip	implemented	N66	tsonic_node::zlib::create_gzip	NODE-ZLIB-002	closed Gzip class factory
+NODE-ZLIB-CREATE-GUNZIP	zlib	createGunzip	implemented	N66	tsonic_node::zlib::create_gunzip	NODE-ZLIB-002	closed Gunzip class factory
+NODE-ZLIB-CREATE-DEFLATE-RAW	zlib	createDeflateRaw	implemented	N66	tsonic_node::zlib::create_deflate_raw	NODE-ZLIB-002	closed DeflateRaw class factory
+NODE-ZLIB-CREATE-INFLATE-RAW	zlib	createInflateRaw	implemented	N66	tsonic_node::zlib::create_inflate_raw	NODE-ZLIB-002	closed InflateRaw class factory
+NODE-ZLIB-CREATE-UNZIP	zlib	createUnzip	implemented	N66	tsonic_node::zlib::create_unzip	NODE-ZLIB-002	closed Unzip class factory
+NODE-ZLIB-CREATE-BROTLI-COMPRESS	zlib	createBrotliCompress	implemented	N66	tsonic_node::zlib::create_brotli_compress	NODE-ZLIB-002	closed BrotliCompress class factory
+NODE-ZLIB-CREATE-BROTLI-DECOMPRESS	zlib	createBrotliDecompress	implemented	N66	tsonic_node::zlib::create_brotli_decompress	NODE-ZLIB-002	closed BrotliDecompress class factory
+NODE-ZLIB-CREATE-ZSTD-COMPRESS	zlib	createZstdCompress	implemented	N66	tsonic_node::zlib::create_zstd_compress	NODE-ZLIB-002	dependency-gated ZstdCompress class factory returns explicit unsupported errors on process
+NODE-ZLIB-CREATE-ZSTD-DECOMPRESS	zlib	createZstdDecompress	implemented	N66	tsonic_node::zlib::create_zstd_decompress	NODE-ZLIB-002	dependency-gated ZstdDecompress class factory returns explicit unsupported errors on process
+NODE-ZLIB-GZIP-SYNC	zlib	gzipSync	implemented	N66	tsonic_node::zlib::gzip_sync	NODE-ZLIB-001	gzipSync compresses Buffer input with approved flate2 dependency
+NODE-ZLIB-GZIP-SYNC-OPTIONS	zlib	gzipSync options	implemented	N66	tsonic_node::zlib::gzip_sync_with_options	NODE-ZLIB-002	gzipSync accepts closed options carrier including compression level
+NODE-ZLIB-GUNZIP-SYNC	zlib	gunzipSync	implemented	N66	tsonic_node::zlib::gunzip_sync	NODE-ZLIB-001	gunzipSync decompresses gzip Buffer input
+NODE-ZLIB-DEFLATE-SYNC	zlib	deflateSync	implemented	N66	tsonic_node::zlib::deflate_sync	NODE-ZLIB-001	deflateSync compresses Buffer input with zlib wrapper
+NODE-ZLIB-DEFLATE-SYNC-OPTIONS	zlib	deflateSync options	implemented	N66	tsonic_node::zlib::deflate_sync_with_options	NODE-ZLIB-002	deflateSync accepts closed options carrier including compression level
+NODE-ZLIB-INFLATE-SYNC	zlib	inflateSync	implemented	N66	tsonic_node::zlib::inflate_sync	NODE-ZLIB-001	inflateSync decompresses zlib-wrapped Buffer input
+NODE-ZLIB-DEFLATE-RAW-SYNC	zlib	deflateRawSync	implemented	N66	tsonic_node::zlib::deflate_raw_sync	NODE-ZLIB-002	deflateRawSync compresses Buffer input without zlib wrapper
+NODE-ZLIB-INFLATE-RAW-SYNC	zlib	inflateRawSync	implemented	N66	tsonic_node::zlib::inflate_raw_sync	NODE-ZLIB-002	inflateRawSync decompresses raw deflate Buffer input
+NODE-ZLIB-UNZIP-SYNC	zlib	unzipSync	implemented	N66	tsonic_node::zlib::unzip_sync	NODE-ZLIB-002	unzipSync handles gzip/zlib auto-detection subset
+NODE-ZLIB-GZIP-STRING-SYNC	zlib	gzip string helper	implemented	N66	tsonic_node::zlib::gzip_string_sync	NODE-ZLIB-002	string gzip helper uses closed Buffer encoding path
+NODE-ZLIB-GUNZIP-STRING-SYNC	zlib	gunzip string helper	implemented	N66	tsonic_node::zlib::gunzip_string_sync	NODE-ZLIB-002	string gunzip helper uses closed Buffer decoding path
+NODE-ZLIB-BROTLI-COMPRESS-SYNC	zlib	brotliCompressSync	implemented	N66	tsonic_node::zlib::brotli_compress_sync	NODE-ZLIB-002	brotliCompressSync compresses Buffer input through approved brotli dependency
+NODE-ZLIB-BROTLI-DECOMPRESS-SYNC	zlib	brotliDecompressSync	implemented	N66	tsonic_node::zlib::brotli_decompress_sync	NODE-ZLIB-002	brotliDecompressSync decompresses Brotli Buffer input
+NODE-ZLIB-ZSTD-COMPRESS-SYNC	zlib	zstdCompressSync	implemented	N66	tsonic_node::zlib::zstd_compress_sync	NODE-ZLIB-002	dependency-gated zstdCompressSync returns explicit unsupported error until approved implementation lands
+NODE-ZLIB-ZSTD-DECOMPRESS-SYNC	zlib	zstdDecompressSync	implemented	N66	tsonic_node::zlib::zstd_decompress_sync	NODE-ZLIB-002	dependency-gated zstdDecompressSync returns explicit unsupported error until approved implementation lands
+NODE-ZLIB-CONSTANTS	zlib	constants	implemented	N66	tsonic_node::zlib::constants	NODE-ZLIB-002	closed common zlib/brotli/zstd constant values
 WEB-ABORT	web-globals/abortcontroller	AbortController/AbortSignal	implemented	W1	tsonic_js::web::{AbortController,AbortSignal}	JS-WEB-001	closed abort signal/controller carrier with reason, timeout, any, and throwIfAborted
 WEB-DOM-EXCEPTION	web-globals/domexception	DOMException	implemented	W1	tsonic_js::web::DomException	JS-WEB-002	DOMException name/message and legacy code constants
 WEB-EVENTS	web-globals/events	Event/CustomEvent/EventTarget	implemented	W1	tsonic_js::web::{Event,CustomEvent,EventTarget}	JS-WEB-003	closed EventTarget listener carrier, cancellation, once, custom detail, and dispatch result
