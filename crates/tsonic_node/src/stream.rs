@@ -171,6 +171,68 @@ impl Readable {
         out
     }
 
+    pub fn drop(&mut self, limit: usize) -> Vec<Buffer> {
+        for _ in 0..limit {
+            if self.read().is_none() {
+                break;
+            }
+        }
+        self.drain_remaining()
+    }
+
+    pub fn map(&mut self, mapper: impl Fn(Buffer) -> Buffer) -> Readable {
+        let chunks = self
+            .drain_remaining()
+            .into_iter()
+            .map(mapper)
+            .collect::<Vec<_>>();
+        Readable::from_chunks_with_options(chunks, self.options.clone())
+    }
+
+    pub fn filter(&mut self, predicate: impl Fn(&Buffer) -> bool) -> Readable {
+        let chunks = self
+            .drain_remaining()
+            .into_iter()
+            .filter(predicate)
+            .collect::<Vec<_>>();
+        Readable::from_chunks_with_options(chunks, self.options.clone())
+    }
+
+    pub fn flat_map(&mut self, mapper: impl Fn(Buffer) -> Vec<Buffer>) -> Readable {
+        let chunks = self
+            .drain_remaining()
+            .into_iter()
+            .flat_map(mapper)
+            .collect::<Vec<_>>();
+        Readable::from_chunks_with_options(chunks, self.options.clone())
+    }
+
+    pub fn for_each(&mut self, mut callback: impl FnMut(Buffer)) {
+        while let Some(chunk) = self.read() {
+            callback(chunk);
+        }
+    }
+
+    pub fn every(&mut self, predicate: impl Fn(&Buffer) -> bool) -> bool {
+        self.drain_remaining().iter().all(predicate)
+    }
+
+    pub fn some(&mut self, predicate: impl Fn(&Buffer) -> bool) -> bool {
+        self.drain_remaining().iter().any(predicate)
+    }
+
+    pub fn find(&mut self, predicate: impl Fn(&Buffer) -> bool) -> Option<Buffer> {
+        self.drain_remaining().into_iter().find(predicate)
+    }
+
+    pub fn reduce<T>(&mut self, initial: T, reducer: impl Fn(T, Buffer) -> T) -> T {
+        self.drain_remaining().into_iter().fold(initial, reducer)
+    }
+
+    pub fn compose(self, next: impl Fn(Readable) -> Readable) -> Readable {
+        next(self)
+    }
+
     pub fn to_array(&mut self) -> Vec<Buffer> {
         self.drain_remaining()
     }

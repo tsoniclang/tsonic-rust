@@ -242,6 +242,96 @@ fn stream_state_options_and_backpressure_are_explicit_carriers() {
 }
 
 #[test]
+fn stream_readable_functional_operators_are_closed_buffer_transforms() {
+    let chunks = || {
+        stream::Readable::from(vec![
+            Buffer::from_string("a", Some("utf8")).unwrap(),
+            Buffer::from_string("bb", Some("utf8")).unwrap(),
+            Buffer::from_string("ccc", Some("utf8")).unwrap(),
+        ])
+    };
+
+    let mut readable = chunks();
+    let mapped = readable.map(|chunk| {
+        Buffer::from_string(
+            &chunk.to_string(Some("utf8")).unwrap().to_ascii_uppercase(),
+            Some("utf8"),
+        )
+        .unwrap()
+    });
+    assert_eq!(
+        mapped
+            .to_vec()
+            .into_iter()
+            .map(|chunk| chunk.to_string(Some("utf8")).unwrap())
+            .collect::<Vec<_>>(),
+        vec!["A", "BB", "CCC"]
+    );
+
+    let mut readable = chunks();
+    assert_eq!(
+        readable
+            .filter(|chunk| chunk.len() > 1)
+            .to_vec()
+            .into_iter()
+            .map(|chunk| chunk.to_string(Some("utf8")).unwrap())
+            .collect::<Vec<_>>(),
+        vec!["bb", "ccc"]
+    );
+
+    let mut readable = chunks();
+    assert_eq!(
+        readable
+            .flat_map(|chunk| vec![chunk.clone(), chunk])
+            .to_vec()
+            .len(),
+        6
+    );
+
+    let mut readable = chunks();
+    assert_eq!(
+        readable
+            .drop(1)
+            .into_iter()
+            .map(|chunk| chunk.to_string(Some("utf8")).unwrap())
+            .collect::<Vec<_>>(),
+        vec!["bb", "ccc"]
+    );
+
+    let mut readable = chunks();
+    assert!(readable.every(|chunk| !chunk.is_empty()));
+    let mut readable = chunks();
+    assert!(readable.some(|chunk| chunk.len() == 2));
+    let mut readable = chunks();
+    assert_eq!(
+        readable
+            .find(|chunk| chunk.len() == 3)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "ccc"
+    );
+    let mut readable = chunks();
+    assert_eq!(readable.reduce(0, |total, chunk| total + chunk.len()), 6);
+
+    let mut seen = Vec::new();
+    let mut readable = chunks();
+    readable.for_each(|chunk| seen.push(chunk.to_string(Some("utf8")).unwrap()));
+    assert_eq!(seen, vec!["a", "bb", "ccc"]);
+
+    let composed = chunks()
+        .compose(|mut readable| readable.map(|chunk| Buffer::from_bytes(vec![chunk.len() as u8])));
+    assert_eq!(
+        composed
+            .to_vec()
+            .into_iter()
+            .map(|chunk| chunk.as_bytes()[0])
+            .collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
+}
+
+#[test]
 fn web_streams_support_reader_writer_pipe_and_transform_shapes() {
     let mut readable = stream::web::ReadableStream::from_chunks(vec![
         Buffer::from_string("a", Some("utf8")).unwrap(),

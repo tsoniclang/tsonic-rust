@@ -56,6 +56,7 @@ NODE-MODULE-SQLITE	sqlite	module	implemented	N9	tsonic_node::sqlite::DatabaseSyn
 NODE-MODULE-STREAM	stream	module	implemented	N3	tsonic_node::stream	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
 NODE-STREAM-READABLE-STATE	stream	Readable options/pause/push/unshift/iterator	implemented	N38	tsonic_node::stream::Readable	NODE-STREAM-004	readable highWaterMark, encoding, pause/resume, push/unshift, take/toArray, destroy/error state
 NODE-STREAM-WRITABLE-STATE	stream	Writable options/cork/drain/writev/final	implemented	N38	tsonic_node::stream::Writable	NODE-STREAM-004	writable highWaterMark, defaultEncoding, cork/uncork, writev, drain, final/construct callbacks, destroy/error state
+NODE-STREAM-READABLE-OPERATORS	stream	Readable map/filter/flatMap/drop/every/some/find/forEach/reduce/compose	implemented	N47	tsonic_node::stream::Readable	NODE-STREAM-005	closed Readable functional operators over Buffer chunks without dynamic callback dispatch or source guessing
 NODE-MODULE-STRING-DECODER	string_decoder	module	implemented	N1	tsonic_node::string_decoder	NODE-MISC-003	UTF-8 string decoder subset
 NODE-STRING-DECODER-STATE	string_decoder	StringDecoder streaming state	implemented	N29	tsonic_node::string_decoder::StringDecoder	NODE-STRING-DECODER-001	streaming UTF-8 partial sequence buffering and replacement on end
 NODE-MODULE-TEST	test	module	hard-reject	N0	n/a	REJECT-NODE-TEST	test runner module excluded from generated runtime ABI
