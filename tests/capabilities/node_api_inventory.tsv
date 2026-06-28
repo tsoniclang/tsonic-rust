@@ -705,35 +705,71 @@ NODE-UTIL-TEXT-DECODER	util	TextDecoder.decode/encoding/fatal/ignoreBOM	implemen
 NODE-UTIL-PARSE-ARGS-SHAPES	util	ParseArgsConfig/ParseArgsOptionDescriptor/ParseArgsResult	implemented	N60	tsonic_node::util::{ParseArgsConfig,ParseArgsOptionDescriptor,ParseArgsResult,ParseArgsOptionType}	NODE-UTIL-006	closed parseArgs configuration/result carrier shapes
 NODE-UTIL-MIME-PARAMS	util	MIMEParams get/set/delete/has	implemented	N60	tsonic_node::util::MIMEParams	NODE-UTIL-006	ordered MIME parameter mutation and lookup carrier
 NODE-UTIL-RUNTIME-PREDICATES	util	util.types common predicates	implemented	N60	tsonic_node::util::types	NODE-UTIL-001,NODE-UTIL-007	closed runtime predicate helpers for JsValue, ArrayBuffer, typed array, date, regexp, promise/error/proxy negatives
-NODE-PROCESS-ENV	process	env	implemented	J	tsonic_node::process::{env_get,env_set,env_delete}	NODE-PROC-001	env helpers
-NODE-PROCESS-CWD	process	cwd/chdir	implemented	J	tsonic_node::process::{cwd,chdir}	NODE-PROC-001	cwd helpers
-NODE-PROCESS-ARGS	process	argv/execPath	implemented	J	tsonic_node::process::{argv,exec_path}	NODE-PROC-001	process args
-NODE-PROCESS-ARGS-EXT	process	argv0/execArgv	implemented	N62	tsonic_node::process::{argv0,exec_argv}	NODE-PROC-001,NODE-PROC-013	closed argv0 and execArgv shapes for generated CLI/runtime code
-NODE-PROCESS-PLATFORM	process	platform/arch	implemented	J	tsonic_node::process::{platform,arch}	NODE-PROC-001	platform helpers
-NODE-PROCESS-EXIT	process	exit/exitCode	implemented	J	tsonic_node::process::{exit,exit_code,set_exit_code}	NODE-PROC-001	exit code state
+NODE-PROCESS-ENV-GET	process	env get	implemented	J	tsonic_node::process::env_get	NODE-PROC-001	environment variable getter
+NODE-PROCESS-ENV-SET	process	env set	implemented	J	tsonic_node::process::env_set	NODE-PROC-001	environment variable setter
+NODE-PROCESS-ENV-DELETE	process	env delete	implemented	J	tsonic_node::process::env_delete	NODE-PROC-001	environment variable deleter
+NODE-PROCESS-CWD	process	cwd	implemented	J	tsonic_node::process::cwd	NODE-PROC-001	current working directory getter
+NODE-PROCESS-CHDIR	process	chdir	implemented	J	tsonic_node::process::chdir	NODE-PROC-001	current working directory setter
+NODE-PROCESS-ARGV	process	argv	implemented	J	tsonic_node::process::argv	NODE-PROC-001	process argv
+NODE-PROCESS-ARGV0	process	argv0	implemented	N62	tsonic_node::process::argv0	NODE-PROC-001,NODE-PROC-013	process argv0 shape
+NODE-PROCESS-EXEC-ARGV	process	execArgv	implemented	N62	tsonic_node::process::exec_argv	NODE-PROC-001,NODE-PROC-013	process execArgv shape
+NODE-PROCESS-EXEC-PATH	process	execPath	implemented	J	tsonic_node::process::exec_path	NODE-PROC-001	process executable path
+NODE-PROCESS-PLATFORM	process	platform	implemented	J	tsonic_node::process::platform	NODE-PROC-001	Node platform spelling
+NODE-PROCESS-ARCH	process	arch	implemented	J	tsonic_node::process::arch	NODE-PROC-001	Node arch spelling
+NODE-PROCESS-EXIT	process	exit	implemented	J	tsonic_node::process::exit	NODE-PROC-001	process termination helper
+NODE-PROCESS-EXIT-CODE-GET	process	exitCode get	implemented	J	tsonic_node::process::exit_code	NODE-PROC-001	exit code state getter
+NODE-PROCESS-EXIT-CODE-SET	process	exitCode set	implemented	J	tsonic_node::process::set_exit_code	NODE-PROC-001	exit code state setter
 NODE-PROCESS-PID	process	pid	implemented	J	tsonic_node::process::pid	NODE-PROC-002	process id
-NODE-PROCESS-IDENTITY	process	getuid/getgid/geteuid/getegid/getgroups	implemented	N13	tsonic_node::process::{getuid,getgid,geteuid,getegid,getgroups}	NODE-PROC-IDENTITY-001	Unix process identity/group queries; unsupported platforms return explicit absence
-NODE-PROCESS-SIGNAL	process	kill	implemented	N13	tsonic_node::process::kill	NODE-PROC-SIGNAL-001	Unix process signal dispatch/probe; unsupported platforms fail explicitly
-NODE-PROCESS-VERSION	process	version/versions	implemented	J	tsonic_node::process::{version,versions}	NODE-PROC-002	stable tsonic runtime version shape
-NODE-PROCESS-TIME	process	uptime/hrtime/hrtime.bigint	implemented	J	tsonic_node::process::{uptime,hrtime,hrtime_bigint}	NODE-PROC-002	monotonic process timers
-NODE-PROCESS-MEMORY	process	memoryUsage	implemented	J	tsonic_node::process::memory_usage	NODE-PROC-002	RSS plus closed heap fields
-NODE-PROCESS-CPU	process	cpuUsage	implemented	N62	tsonic_node::process::cpu_usage	NODE-PROC-013	closed CPU usage carrier with optional delta input
-NODE-PROCESS-RESOURCE-USAGE	process	resourceUsage	implemented	N62	tsonic_node::process::resource_usage	NODE-PROC-013	closed ResourceUsage carrier with platform-backed CPU/RSS and zeroed unavailable counters
-NODE-PROCESS-MEMORY-RSS	process	memoryUsage.rss/constrainedMemory	implemented	N49	tsonic_node::process::{memory_usage_rss,constrained_memory}	NODE-PROC-013	closed RSS and constrained memory helpers backed by platform memory query where available
+NODE-PROCESS-PPID	process	ppid	implemented	J	tsonic_node::process::ppid	NODE-PROC-002	parent process id
+NODE-PROCESS-GETUID	process	getuid	implemented	N13	tsonic_node::process::getuid	NODE-PROC-IDENTITY-001	Unix user id query; unsupported platforms return explicit absence
+NODE-PROCESS-GETEUID	process	geteuid	implemented	N13	tsonic_node::process::geteuid	NODE-PROC-IDENTITY-001	Unix effective user id query; unsupported platforms return explicit absence
+NODE-PROCESS-GETGID	process	getgid	implemented	N13	tsonic_node::process::getgid	NODE-PROC-IDENTITY-001	Unix group id query; unsupported platforms return explicit absence
+NODE-PROCESS-GETEGID	process	getegid	implemented	N13	tsonic_node::process::getegid	NODE-PROC-IDENTITY-001	Unix effective group id query; unsupported platforms return explicit absence
+NODE-PROCESS-GETGROUPS	process	getgroups	implemented	N13	tsonic_node::process::getgroups	NODE-PROC-IDENTITY-001	Unix groups query; unsupported platforms return empty vector
+NODE-PROCESS-KILL	process	kill	implemented	N13	tsonic_node::process::kill	NODE-PROC-SIGNAL-001	Unix process signal dispatch/probe; unsupported platforms fail explicitly
+NODE-PROCESS-VERSION	process	version	implemented	J	tsonic_node::process::version	NODE-PROC-002	stable tsonic runtime version
+NODE-PROCESS-VERSIONS	process	versions	implemented	J	tsonic_node::process::versions	NODE-PROC-002	stable tsonic runtime versions table
+NODE-PROCESS-UPTIME	process	uptime	implemented	J	tsonic_node::process::uptime	NODE-PROC-002	monotonic process uptime
+NODE-PROCESS-HRTIME	process	hrtime	implemented	J	tsonic_node::process::hrtime	NODE-PROC-002	monotonic high-resolution time tuple
+NODE-PROCESS-HRTIME-BIGINT	process	hrtime.bigint	implemented	J	tsonic_node::process::hrtime_bigint	NODE-PROC-002	monotonic high-resolution bigint nanoseconds
+NODE-PROCESS-MEMORY-USAGE-CARRIER	process	MemoryUsage	implemented	J	tsonic_node::process::MemoryUsage	NODE-PROC-002	memory usage carrier
+NODE-PROCESS-MEMORY-USAGE	process	memoryUsage	implemented	J	tsonic_node::process::memory_usage	NODE-PROC-002	RSS plus closed heap fields
+NODE-PROCESS-CPU-USAGE-CARRIER	process	CpuUsage	implemented	N62	tsonic_node::process::CpuUsage	NODE-PROC-013	CPU usage carrier
+NODE-PROCESS-CPU-USAGE	process	cpuUsage	implemented	N62	tsonic_node::process::cpu_usage	NODE-PROC-013	closed CPU usage helper with optional delta input
+NODE-PROCESS-RESOURCE-USAGE-CARRIER	process	ResourceUsage	implemented	N49	tsonic_node::process::ResourceUsage	NODE-PROC-013	closed ResourceUsage full field carrier
+NODE-PROCESS-RESOURCE-USAGE	process	resourceUsage	implemented	N62	tsonic_node::process::resource_usage	NODE-PROC-013	platform-backed CPU/RSS and zeroed unavailable counters
+NODE-PROCESS-MEMORY-RSS	process	memoryUsage.rss	implemented	N49	tsonic_node::process::memory_usage_rss	NODE-PROC-013	closed RSS helper backed by platform memory query where available
+NODE-PROCESS-CONSTRAINED-MEMORY	process	constrainedMemory	implemented	N49	tsonic_node::process::constrained_memory	NODE-PROC-013	closed constrained memory helper
 NODE-PROCESS-THREAD-CPU	process	threadCpuUsage	implemented	N49	tsonic_node::process::thread_cpu_usage	NODE-PROC-013	thread CPU shape mirrors closed process CPU usage in single-runtime carrier
-NODE-PROCESS-METADATA	process	title/features/config/release	implemented	N15	tsonic_node::process::{title,set_title,features,config,release}	NODE-PROC-METADATA-001	closed runtime metadata and compile configuration shape
-NODE-PROCESS-RELEASE	process	release/version/versions	implemented	N62	tsonic_node::process::{release,version,versions}	NODE-PROC-002,NODE-PROC-METADATA-001	stable tsonic runtime release/version carrier
-NODE-PROCESS-FEATURES-CONFIG	process	features/config	implemented	N62	tsonic_node::process::{features,config,ProcessFeatures,ProcessConfig}	NODE-PROC-METADATA-001	closed process feature and compile configuration carrier shapes
-NODE-PROCESS-METADATA-EXT	process	sourceMapsEnabled/debugPort/getBuiltinModule/ref/unref	implemented	N49	tsonic_node::process::{source_maps_enabled,debug_port,get_builtin_module,ref_handle,unref_handle}	NODE-PROC-013	closed metadata and ref/unref helpers without loader execution or host introspection
-NODE-PROCESS-WARNINGS	process	emitWarning/warnings	implemented	N15	tsonic_node::process::{emit_warning,emitted_warnings,clear_warnings}	NODE-PROC-METADATA-001	closed warning capture for generated runtime diagnostics
-NODE-PROCESS-RESOURCES	process	availableMemory/getActiveResourcesInfo/allowedNodeEnvironmentFlags	implemented	N15	tsonic_node::process::{available_memory,get_active_resources_info,allowed_node_environment_flags}	NODE-PROC-METADATA-001	closed resource and environment flag metadata without host introspection
-NODE-PROCESS-RESOURCE-USAGE-EXT	process	resourceUsage extended fields	implemented	N49	tsonic_node::process::ResourceUsage	NODE-PROC-013	closed ResourceUsage full field carrier with platform-backed CPU/RSS and zeroed unavailable counters
+NODE-PROCESS-RELEASE-CARRIER	process	Release	implemented	N62	tsonic_node::process::Release	NODE-PROC-METADATA-001	release carrier
+NODE-PROCESS-RELEASE	process	release	implemented	N62	tsonic_node::process::release	NODE-PROC-002,NODE-PROC-METADATA-001	stable tsonic runtime release carrier
+NODE-PROCESS-TITLE-GET	process	title get	implemented	N15	tsonic_node::process::title	NODE-PROC-METADATA-001	process title getter
+NODE-PROCESS-TITLE-SET	process	title set	implemented	N15	tsonic_node::process::set_title	NODE-PROC-METADATA-001	process title setter
+NODE-PROCESS-FEATURES-CARRIER	process	ProcessFeatures	implemented	N62	tsonic_node::process::ProcessFeatures	NODE-PROC-METADATA-001	closed process feature carrier
+NODE-PROCESS-FEATURES	process	features	implemented	N62	tsonic_node::process::features	NODE-PROC-METADATA-001	closed process feature query
+NODE-PROCESS-CONFIG-CARRIER	process	ProcessConfig	implemented	N62	tsonic_node::process::ProcessConfig	NODE-PROC-METADATA-001	closed process compile configuration carrier
+NODE-PROCESS-CONFIG	process	config	implemented	N62	tsonic_node::process::config	NODE-PROC-METADATA-001	closed process compile configuration query
+NODE-PROCESS-SOURCE-MAPS	process	sourceMapsEnabled	implemented	N49	tsonic_node::process::source_maps_enabled	NODE-PROC-013	closed source map support state
+NODE-PROCESS-DEBUG-PORT	process	debugPort	implemented	N49	tsonic_node::process::debug_port	NODE-PROC-013	closed debug port helper
+NODE-PROCESS-GET-BUILTIN-MODULE	process	getBuiltinModule	implemented	N49	tsonic_node::process::get_builtin_module	NODE-PROC-013	builtin module lookup without loader execution
+NODE-PROCESS-REF-HANDLE	process	ref	implemented	N49	tsonic_node::process::ref_handle	NODE-PROC-013	no-op ref helper for explicit generated handles
+NODE-PROCESS-UNREF-HANDLE	process	unref	implemented	N49	tsonic_node::process::unref_handle	NODE-PROC-013	no-op unref helper for explicit generated handles
+NODE-PROCESS-WARNING-CARRIER	process	ProcessWarning	implemented	N15	tsonic_node::process::ProcessWarning	NODE-PROC-METADATA-001	warning carrier
+NODE-PROCESS-EMIT-WARNING	process	emitWarning	implemented	N15	tsonic_node::process::emit_warning	NODE-PROC-METADATA-001	closed warning capture helper
+NODE-PROCESS-EMITTED-WARNINGS	process	warnings	implemented	N15	tsonic_node::process::emitted_warnings	NODE-PROC-METADATA-001	closed warning list accessor
+NODE-PROCESS-CLEAR-WARNINGS	process	clear warnings	implemented	N15	tsonic_node::process::clear_warnings	NODE-PROC-METADATA-001	warning list reset helper
+NODE-PROCESS-AVAILABLE-MEMORY	process	availableMemory	implemented	N15	tsonic_node::process::available_memory	NODE-PROC-METADATA-001	closed available memory query
+NODE-PROCESS-ACTIVE-RESOURCES	process	getActiveResourcesInfo	implemented	N15	tsonic_node::process::get_active_resources_info	NODE-PROC-METADATA-001	closed active resource metadata
+NODE-PROCESS-ALLOWED-FLAGS	process	allowedNodeEnvironmentFlags	implemented	N15	tsonic_node::process::allowed_node_environment_flags	NODE-PROC-METADATA-001	closed environment flag metadata
 NODE-PROCESS-LOAD-ENV-FILE	process	loadEnvFile	implemented	N49	tsonic_node::process::load_env_file	NODE-PROC-013	deterministic .env loader for key=value lines; no shell expansion
 NODE-PROCESS-UMASK	process	umask	implemented	N49	tsonic_node::process::umask	NODE-PROC-013	platform umask get/set on Unix; zero fallback elsewhere
-NODE-PROCESS-IO	process	stdin/stdout/stderr	implemented	N8	tsonic_node::process::{stdout,stderr,stdin_is_tty}	NODE-PROC-IO-001	closed stdio stream shapes
-NODE-PROCESS-STDIO-STREAMS	process	stdout/stderr/stdin isTTY	implemented	N62	tsonic_node::process::{stdout,stderr,stdin_is_tty}	NODE-PROC-IO-001	closed Writable stdout/stderr carriers and stdin TTY probe
-NODE-PROCESS-EVENTS	process	on/emit	implemented	N10	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	closed process event emitter shape for generated runtimes
-NODE-PROCESS-EVENTS-CARRIER	process	ProcessEvents on/emit/listenerCount	implemented	N62	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	process lifecycle events use closed EventEmitter carrier
+NODE-PROCESS-STDOUT	process	stdout	implemented	N62	tsonic_node::process::stdout	NODE-PROC-IO-001	closed Writable stdout carrier
+NODE-PROCESS-STDERR	process	stderr	implemented	N62	tsonic_node::process::stderr	NODE-PROC-IO-001	closed Writable stderr carrier
+NODE-PROCESS-STDIN-ISTTY	process	stdin isTTY	implemented	N62	tsonic_node::process::stdin_is_tty	NODE-PROC-IO-001	closed stdin TTY probe
+NODE-PROCESS-EVENTS-CARRIER	process	ProcessEvents	implemented	N62	tsonic_node::process::ProcessEvents	NODE-PROC-EVENTS-001	process lifecycle events use closed EventEmitter carrier
+NODE-PROCESS-EVENTS-ON	process	ProcessEvents.on	implemented	N62	tsonic_node::process::ProcessEvents::on	NODE-PROC-EVENTS-001	process event listener registration
+NODE-PROCESS-EVENTS-EMIT	process	ProcessEvents.emit	implemented	N62	tsonic_node::process::ProcessEvents::emit	NODE-PROC-EVENTS-001	process event dispatch
+NODE-PROCESS-EVENTS-LISTENER-COUNT	process	ProcessEvents.listenerCount	implemented	N62	tsonic_node::process::ProcessEvents::listener_count	NODE-PROC-EVENTS-001	process event listener count
 NODE-OS-PLATFORM	os	platform/arch	implemented	J	tsonic_node::os::{platform,arch}	NODE-OS-001	platform helpers
 NODE-OS-MEM	os	freemem/totalmem	implemented	J	tsonic_node::os::{freemem,totalmem}	NODE-OS-001	memory helpers
 NODE-OS-HOME-TMP	os	homedir/tmpdir	implemented	J	tsonic_node::os::{homedir,tmpdir}	NODE-OS-001	directory helpers
