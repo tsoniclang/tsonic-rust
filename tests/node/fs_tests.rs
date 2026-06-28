@@ -26,6 +26,14 @@ fn fs_sync_file_lifecycle() {
     );
     let names = fs::readdir_sync(&root_text).unwrap();
     assert_eq!(names, vec!["a.txt"]);
+    let dirents = fs::opendir_sync(&root_text).unwrap();
+    assert_eq!(dirents[0].name, "a.txt");
+    assert_eq!(dirents[0].parent_path(), root_text);
+    assert!(dirents[0].is_file());
+    assert!(!dirents[0].is_block_device());
+    assert!(!dirents[0].is_character_device());
+    assert!(!dirents[0].is_fifo());
+    assert!(!dirents[0].is_socket());
     let copy = root.join("b.txt");
     let copy_text = copy.to_string_lossy().to_string();
     fs::copy_file_sync(&file_text, &copy_text).unwrap();
@@ -66,12 +74,21 @@ fn fs_extended_sync_file_lifecycle() {
     let filesystem = fs::statfs_sync(&file_text).unwrap();
     assert!(filesystem.bsize > 0);
     assert!(filesystem.blocks > 0);
+    assert!(filesystem.bavail <= filesystem.blocks);
     let stats = fs::stat_sync(&file_text).unwrap();
     assert_eq!(stats.size, 11);
     assert!(stats.mode & 0o600 != 0);
     assert!(stats.nlink >= 1);
+    assert!(stats.is_file());
+    assert!(!stats.is_directory());
+    assert!(!stats.is_block_device());
+    assert!(!stats.is_character_device());
+    assert!(!stats.is_fifo());
+    assert!(!stats.is_socket());
     assert!(stats.mtime_ms() > 0.0);
     assert!(stats.ctime_ms() > 0.0);
+    assert!(stats.mtime_ns() >= stats.mtime_ms() as u128);
+    assert!(stats.ctime_ns() >= stats.ctime_ms() as u128);
 
     let fd = fs::open_sync(&file_text, "r+").unwrap();
     assert_eq!(fs::fstat_sync(fd).unwrap().size, 11);

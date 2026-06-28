@@ -191,6 +191,7 @@ NODE-FS-011	implemented	N13	tsonic_node::abi::{fs_statfs_sync,StatFs}	NODE-FS-ST
 NODE-FS-012	implemented	N13	tsonic_node::abi::{fs_chown_sync,fs_fchown_sync,fs_lchown_sync,fs_promises_chown,fs_promises_lchown}	NODE-FS-OWNER-001	Unix owner/group mutation through explicit platform binding; unsupported platforms fail explicitly
 NODE-FS-013	implemented	N16	tsonic_node::abi::{fs_access_callback,fs_exists_callback,fs_stat_callback,fs_readdir_callback,fs_copy_file_callback,fs_rename_callback,fs_unlink_callback}	NODE-FS-CALLBACK-001	callback-shaped fs APIs over deterministic filesystem helpers
 NODE-FS-014	implemented	N44	tsonic_node::abi::{fs_constants,FsConstants,Stats}	NODE-FS-META-001	fs constants and expanded Stats metadata fields for generated Rust ABI
+NODE-FS-016	implemented	N53	tsonic_node::abi::{Stats,Dirent}	NODE-FS-META-002	Stats and Dirent expanded type predicate and nanosecond timestamp helpers
 NODE-FS-015	implemented	N44	tsonic_node::abi::{fs_chmod_callback,fs_statfs_callback,fs_mkdtemp_callback,fs_realpath_callback,fs_open_callback,fs_read_callback,fs_write_callback_string,fs_close_callback}	NODE-FS-CALLBACK-002	extended callback and fd callback matrix over deterministic filesystem helpers
 NODE-BUFFER-001	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-001 through NODE-BUF-003, NODE-BUF-006	utf8/hex/base64 first
 NODE-BUFFER-002	implemented	K	tsonic_node::abi::Buffer	NODE-BUF-005	checked byte access

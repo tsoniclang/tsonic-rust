@@ -40,6 +40,10 @@ pub struct Stats {
     pub is_file: bool,
     pub is_directory: bool,
     pub is_symbolic_link: bool,
+    pub is_block_device: bool,
+    pub is_character_device: bool,
+    pub is_fifo: bool,
+    pub is_socket: bool,
 }
 
 impl Stats {
@@ -53,6 +57,22 @@ impl Stats {
 
     pub fn is_symbolic_link(&self) -> bool {
         self.is_symbolic_link
+    }
+
+    pub fn is_block_device(&self) -> bool {
+        self.is_block_device
+    }
+
+    pub fn is_character_device(&self) -> bool {
+        self.is_character_device
+    }
+
+    pub fn is_fifo(&self) -> bool {
+        self.is_fifo
+    }
+
+    pub fn is_socket(&self) -> bool {
+        self.is_socket
     }
 
     pub fn atime_ms(&self) -> f64 {
@@ -69,6 +89,22 @@ impl Stats {
 
     pub fn birthtime_ms(&self) -> f64 {
         self.birthtime_ms
+    }
+
+    pub fn atime_ns(&self) -> u128 {
+        ms_to_ns(self.atime_ms)
+    }
+
+    pub fn mtime_ns(&self) -> u128 {
+        ms_to_ns(self.mtime_ms)
+    }
+
+    pub fn ctime_ns(&self) -> u128 {
+        ms_to_ns(self.ctime_ms)
+    }
+
+    pub fn birthtime_ns(&self) -> u128 {
+        ms_to_ns(self.birthtime_ms)
     }
 }
 
@@ -112,6 +148,10 @@ pub struct Dirent {
     pub is_file: bool,
     pub is_directory: bool,
     pub is_symbolic_link: bool,
+    pub is_block_device: bool,
+    pub is_character_device: bool,
+    pub is_fifo: bool,
+    pub is_socket: bool,
 }
 
 impl Dirent {
@@ -125,6 +165,26 @@ impl Dirent {
 
     pub fn is_symbolic_link(&self) -> bool {
         self.is_symbolic_link
+    }
+
+    pub fn is_block_device(&self) -> bool {
+        self.is_block_device
+    }
+
+    pub fn is_character_device(&self) -> bool {
+        self.is_character_device
+    }
+
+    pub fn is_fifo(&self) -> bool {
+        self.is_fifo
+    }
+
+    pub fn is_socket(&self) -> bool {
+        self.is_socket
+    }
+
+    pub fn parent_path(&self) -> &str {
+        &self.parent_path
     }
 }
 
@@ -568,6 +628,10 @@ pub fn opendir_sync(path: &str) -> NodeResult<Vec<Dirent>> {
             is_file: metadata.is_file(),
             is_directory: metadata.is_dir(),
             is_symbolic_link: metadata.is_symlink(),
+            is_block_device: false,
+            is_character_device: false,
+            is_fifo: false,
+            is_socket: false,
         });
     }
     entries.sort_by(|left, right| left.name.cmp(&right.name));
@@ -1045,6 +1109,18 @@ fn stats_from_metadata(metadata: &fs::Metadata) -> Stats {
         is_file: metadata.is_file(),
         is_directory: metadata.is_dir(),
         is_symbolic_link: metadata.file_type().is_symlink(),
+        is_block_device: metadata_is_block_device(metadata),
+        is_character_device: metadata_is_character_device(metadata),
+        is_fifo: metadata_is_fifo(metadata),
+        is_socket: metadata_is_socket(metadata),
+    }
+}
+
+fn ms_to_ns(value: f64) -> u128 {
+    if value.is_finite() && value > 0.0 {
+        (value * 1_000_000.0).round() as u128
+    } else {
+        0
     }
 }
 
@@ -1156,6 +1232,50 @@ fn metadata_blocks(metadata: &fs::Metadata) -> u64 {
 #[cfg(not(unix))]
 fn metadata_blocks(_metadata: &fs::Metadata) -> u64 {
     0
+}
+
+#[cfg(unix)]
+fn metadata_is_block_device(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    metadata.file_type().is_block_device()
+}
+
+#[cfg(not(unix))]
+fn metadata_is_block_device(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn metadata_is_character_device(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    metadata.file_type().is_char_device()
+}
+
+#[cfg(not(unix))]
+fn metadata_is_character_device(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn metadata_is_fifo(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    metadata.file_type().is_fifo()
+}
+
+#[cfg(not(unix))]
+fn metadata_is_fifo(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn metadata_is_socket(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    metadata.file_type().is_socket()
+}
+
+#[cfg(not(unix))]
+fn metadata_is_socket(_metadata: &fs::Metadata) -> bool {
+    false
 }
 
 #[cfg(unix)]
