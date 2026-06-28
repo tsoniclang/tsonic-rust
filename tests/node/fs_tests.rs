@@ -125,6 +125,10 @@ fn fs_extended_sync_file_lifecycle() {
     assert!(!stats.is_socket());
     assert!(stats.mtime_ms() > 0.0);
     assert!(stats.ctime_ms() > 0.0);
+    assert_eq!(stats.atime().get_time(), stats.atime_ms());
+    assert_eq!(stats.mtime().get_time(), stats.mtime_ms());
+    assert_eq!(stats.ctime().get_time(), stats.ctime_ms());
+    assert_eq!(stats.birthtime().get_time(), stats.birthtime_ms());
     assert!(stats.mtime_ns() >= stats.mtime_ms() as u128);
     assert!(stats.ctime_ns() >= stats.ctime_ms() as u128);
 
@@ -729,6 +733,210 @@ fn fs_utf8_stream_is_a_closed_file_writer_shape() {
     stream.destroy();
 
     fs::rm_sync(&root_text, true, false).unwrap();
+}
+
+#[test]
+fn fs_option_result_and_stream_carriers_expose_backend_legal_fields() {
+    let object_encoding = fs::ObjectEncodingOptions::string("utf8");
+    assert_eq!(object_encoding.encoding.as_deref(), Some("utf8"));
+    assert_eq!(fs::ObjectEncodingOptions::buffer().encoding, None);
+
+    let bigint = fs::BigIntOptions { bigint: true };
+    assert!(bigint.bigint);
+    let stat_options = fs::StatOptions {
+        bigint: true,
+        throw_if_no_entry: false,
+    };
+    assert!(stat_options.bigint);
+    assert!(!stat_options.throw_if_no_entry);
+    assert!(fs::StatFsOptions { bigint: true }.bigint);
+
+    let mkdir = fs::MakeDirectoryOptions {
+        recursive: true,
+        mode: 0o755,
+    };
+    assert!(mkdir.recursive);
+    assert_eq!(mkdir.mode, 0o755);
+    let rm = fs::RmOptions {
+        recursive: true,
+        force: true,
+        max_retries: 2,
+        retry_delay_ms: 3,
+    };
+    assert!(rm.recursive);
+    assert!(rm.force);
+    assert_eq!(rm.max_retries, 2);
+    assert_eq!(rm.retry_delay_ms, 3);
+
+    let copy_base = fs::CopyOptionsBase {
+        dereference: true,
+        error_on_exist: true,
+        force: false,
+        mode: fs::constants().copyfile_excl,
+        preserve_timestamps: true,
+        recursive: true,
+        verbatim_symlinks: true,
+    };
+    assert!(copy_base.dereference);
+    assert!(copy_base.error_on_exist);
+    assert!(!copy_base.force);
+    assert_eq!(copy_base.mode, fs::constants().copyfile_excl);
+    assert!(copy_base.preserve_timestamps);
+    assert!(copy_base.recursive);
+    assert!(copy_base.verbatim_symlinks);
+    assert!(fs::CopyFilter::AcceptAll.accepts("a", "b"));
+    assert!(!fs::CopyFilter::RejectAll.accepts("a", "b"));
+    let copy = fs::CopyOptions {
+        base: copy_base.clone(),
+        filter: Some(fs::CopyFilter::AcceptAll),
+    };
+    assert_eq!(copy.base.mode, fs::constants().copyfile_excl);
+    assert!(copy.filter.as_ref().unwrap().accepts("a", "b"));
+    let copy_sync = fs::CopySyncOptions {
+        base: copy_base,
+        filter: Some(fs::CopyFilter::RejectAll),
+    };
+    assert!(!copy_sync.filter.as_ref().unwrap().accepts("a", "b"));
+
+    let opendir = fs::OpenDirOptions {
+        encoding: Some("buffer".to_string()),
+        buffer_size: 64,
+        recursive: true,
+    };
+    assert_eq!(opendir.encoding.as_deref(), Some("buffer"));
+    assert_eq!(opendir.buffer_size, 64);
+    assert!(opendir.recursive);
+
+    let read_options = fs::ReadOptions {
+        offset: 1,
+        length: 2,
+        position: Some(3),
+    };
+    assert_eq!(read_options.offset, 1);
+    assert_eq!(read_options.length, 2);
+    assert_eq!(read_options.position, Some(3));
+    let read_result = fs::ReadResult {
+        bytes_read: 2,
+        buffer: tsonic_node::buffer::Buffer::from_bytes(vec![1, 2]),
+    };
+    assert_eq!(read_result.bytes_read, 2);
+    assert_eq!(read_result.buffer.len(), 2);
+    let readv_result = fs::ReadVResult {
+        bytes_read: 3,
+        buffers: vec![tsonic_node::buffer::Buffer::from_bytes(vec![1, 2, 3])],
+    };
+    assert_eq!(readv_result.bytes_read, 3);
+    assert_eq!(readv_result.buffers[0].len(), 3);
+
+    let write_buffer_options = fs::WriteOptions::buffer(4, 5, Some(6));
+    assert_eq!(write_buffer_options.offset, 4);
+    assert_eq!(write_buffer_options.length, 5);
+    assert_eq!(write_buffer_options.position, Some(6));
+    let write_string_options = fs::WriteOptions::string(Some(7), "utf8");
+    assert_eq!(write_string_options.encoding, "utf8");
+    let write_result = fs::WriteResult {
+        bytes_written: 4,
+        buffer: Some(tsonic_node::buffer::Buffer::from_bytes(vec![4])),
+    };
+    assert_eq!(write_result.bytes_written, 4);
+    assert_eq!(write_result.buffer.as_ref().unwrap().len(), 1);
+    let writev_result = fs::WriteVResult {
+        bytes_written: 5,
+        buffers: vec![tsonic_node::buffer::Buffer::from_bytes(vec![5])],
+    };
+    assert_eq!(writev_result.bytes_written, 5);
+    assert_eq!(writev_result.buffers.len(), 1);
+
+    let stream = fs::FsStreamOptions {
+        flags: "a".to_string(),
+        encoding: Some("utf8".to_string()),
+        fd: Some(10),
+        mode: 0o644,
+        auto_close: false,
+        emit_close: false,
+        start: Some(1),
+        end: Some(8),
+        high_water_mark: 1024,
+        flush: true,
+        signal_aborted: true,
+    };
+    assert_eq!(stream.flags, "a");
+    assert_eq!(stream.encoding.as_deref(), Some("utf8"));
+    assert_eq!(stream.fd, Some(10));
+    assert_eq!(stream.mode, 0o644);
+    assert!(!stream.auto_close);
+    assert!(!stream.emit_close);
+    assert_eq!(stream.start, Some(1));
+    assert_eq!(stream.end, Some(8));
+    assert_eq!(stream.high_water_mark, 1024);
+    assert!(stream.flush);
+    assert!(stream.signal_aborted);
+    assert_eq!(
+        fs::ReadStreamOptions {
+            stream: stream.clone()
+        }
+        .stream
+        .high_water_mark,
+        1024
+    );
+    assert_eq!(
+        fs::WriteStreamOptions {
+            stream: stream.clone()
+        }
+        .stream
+        .flags,
+        "a"
+    );
+
+    let watch = fs::WatchOptions {
+        persistent: false,
+        recursive: true,
+        encoding: Some("utf8".to_string()),
+        signal_aborted: true,
+        max_queue: 10,
+        overflow: "throw".to_string(),
+    };
+    assert!(!watch.persistent);
+    assert!(watch.recursive);
+    assert_eq!(watch.encoding.as_deref(), Some("utf8"));
+    assert!(watch.signal_aborted);
+    assert_eq!(watch.max_queue, 10);
+    assert_eq!(watch.overflow, "throw");
+    let watch_file = fs::WatchFileOptions {
+        bigint: true,
+        persistent: false,
+        interval_ms: 20,
+    };
+    assert!(watch_file.bigint);
+    assert!(!watch_file.persistent);
+    assert_eq!(watch_file.interval_ms, 20);
+
+    let utf8_options = fs::Utf8StreamOptions {
+        dest: Some("out.log".to_string()),
+        fd: Some(11),
+        min_length: 1,
+        max_length: 2,
+        max_write: 3,
+        content_mode: "buffer".to_string(),
+        append: true,
+        sync: true,
+        fsync: true,
+        mkdir: true,
+        mode: 0o600,
+        periodic_flush_ms: Some(50),
+    };
+    assert_eq!(utf8_options.dest.as_deref(), Some("out.log"));
+    assert_eq!(utf8_options.fd, Some(11));
+    assert_eq!(utf8_options.min_length, 1);
+    assert_eq!(utf8_options.max_length, 2);
+    assert_eq!(utf8_options.max_write, 3);
+    assert_eq!(utf8_options.content_mode, "buffer");
+    assert!(utf8_options.append);
+    assert!(utf8_options.sync);
+    assert!(utf8_options.fsync);
+    assert!(utf8_options.mkdir);
+    assert_eq!(utf8_options.mode, 0o600);
+    assert_eq!(utf8_options.periodic_flush_ms, Some(50));
 }
 
 fn temp_root(label: &str) -> std::path::PathBuf {

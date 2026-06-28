@@ -91,6 +91,22 @@ impl Stats {
         self.birthtime_ms
     }
 
+    pub fn atime(&self) -> tsonic_js::date::JsDate {
+        tsonic_js::date::JsDate::from_millis(self.atime_ms)
+    }
+
+    pub fn mtime(&self) -> tsonic_js::date::JsDate {
+        tsonic_js::date::JsDate::from_millis(self.mtime_ms)
+    }
+
+    pub fn ctime(&self) -> tsonic_js::date::JsDate {
+        tsonic_js::date::JsDate::from_millis(self.ctime_ms)
+    }
+
+    pub fn birthtime(&self) -> tsonic_js::date::JsDate {
+        tsonic_js::date::JsDate::from_millis(self.birthtime_ms)
+    }
+
     pub fn atime_ns(&self) -> u128 {
         ms_to_ns(self.atime_ms)
     }

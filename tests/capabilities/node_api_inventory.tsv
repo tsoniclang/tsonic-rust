@@ -1612,6 +1612,41 @@ NODE-FS-DIRENT-IS-CHARACTER-DEVICE	fs	Dirent.isCharacterDevice	implemented	N53	t
 NODE-FS-DIRENT-IS-FIFO	fs	Dirent.isFIFO	implemented	N53	tsonic_node::fs::Dirent::is_fifo	NODE-FS-META-002	Dirent.isFIFO closed Dirent helper
 NODE-FS-DIRENT-IS-SOCKET	fs	Dirent.isSocket	implemented	N53	tsonic_node::fs::Dirent::is_socket	NODE-FS-META-002	Dirent.isSocket closed Dirent helper
 NODE-FS-DIRENT-PARENT-PATH	fs	Dirent.parentPath	implemented	N53	tsonic_node::fs::Dirent::parent_path	NODE-FS-META-002	Dirent.parentPath closed Dirent helper
+NODE-FS-MEMBER-BIG-INT-STATS-ATIME	fs	BigIntStats.atime	implemented	N89	tsonic_node::fs::BigIntStats::atime	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-MTIME	fs	BigIntStats.mtime	implemented	N89	tsonic_node::fs::BigIntStats::mtime	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-CTIME	fs	BigIntStats.ctime	implemented	N89	tsonic_node::fs::BigIntStats::ctime	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-BIRTHTIME	fs	BigIntStats.birthtime	implemented	N89	tsonic_node::fs::BigIntStats::birthtime	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-ATIME-NS	fs	BigIntStats.atimeNs	implemented	N89	tsonic_node::fs::BigIntStats::atime_ns	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-MTIME-NS	fs	BigIntStats.mtimeNs	implemented	N89	tsonic_node::fs::BigIntStats::mtime_ns	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-CTIME-NS	fs	BigIntStats.ctimeNs	implemented	N89	tsonic_node::fs::BigIntStats::ctime_ns	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-BIRTHTIME-NS	fs	BigIntStats.birthtimeNs	implemented	N89	tsonic_node::fs::BigIntStats::birthtime_ns	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-DEV	fs	BigIntStats.dev	implemented	N89	tsonic_node::fs::BigIntStats::dev	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-INO	fs	BigIntStats.ino	implemented	N89	tsonic_node::fs::BigIntStats::ino	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-MODE	fs	BigIntStats.mode	implemented	N89	tsonic_node::fs::BigIntStats::mode	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-BIG-INT-STATS-NLINK	fs	BigIntStats.nlink	implemented	N89	tsonic_node::fs::BigIntStats::nlink	NODE-FS-CARRIER-001	Stats/BigIntStats metadata accessor backed by platform metadata
+NODE-FS-MEMBER-STATS-FS-BASE-TYPE	fs	StatsFsBase.type	implemented	N89	tsonic_node::fs::StatsFsBase::type	NODE-FS-CARRIER-001	StatFs metadata field backed by platform statfs
+NODE-FS-MEMBER-STATS-FS-BASE-BSIZE	fs	StatsFsBase.bsize	implemented	N89	tsonic_node::fs::StatsFsBase::bsize	NODE-FS-CARRIER-001	StatFs metadata field backed by platform statfs
+NODE-FS-MEMBER-STATS-FS-BASE-BLOCKS	fs	StatsFsBase.blocks	implemented	N89	tsonic_node::fs::StatsFsBase::blocks	NODE-FS-CARRIER-001	StatFs metadata field backed by platform statfs
+NODE-FS-MEMBER-STATS-FS-BASE-BFREE	fs	StatsFsBase.bfree	implemented	N89	tsonic_node::fs::StatsFsBase::bfree	NODE-FS-CARRIER-001	StatFs metadata field backed by platform statfs
+NODE-FS-MEMBER-STATS-FS-BASE-BAVAIL	fs	StatsFsBase.bavail	implemented	N89	tsonic_node::fs::StatsFsBase::bavail	NODE-FS-CARRIER-001	StatFs metadata field backed by platform statfs
+NODE-FS-MEMBER-STATS-FS-BASE-FILES	fs	StatsFsBase.files	implemented	N89	tsonic_node::fs::StatsFsBase::files	NODE-FS-CARRIER-001	StatFs metadata field backed by platform statfs
+NODE-FS-MEMBER-STATS-FS-BASE-FFREE	fs	StatsFsBase.ffree	implemented	N89	tsonic_node::fs::StatsFsBase::ffree	NODE-FS-CARRIER-001	StatFs metadata field backed by platform statfs
+NODE-FS-MEMBER-COPY-FILTER-ACCEPTS	fs	CopyFilter.accepts	implemented	N89	tsonic_node::fs::CopyFilter::accepts	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-FLAGS	fs	FsStreamOptions.flags	implemented	N89	tsonic_node::fs::FsStreamOptions::flags	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-ENCODING	fs	FsStreamOptions.encoding	implemented	N89	tsonic_node::fs::FsStreamOptions::encoding	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-FD	fs	FsStreamOptions.fd	implemented	N89	tsonic_node::fs::FsStreamOptions::fd	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-MODE	fs	FsStreamOptions.mode	implemented	N89	tsonic_node::fs::FsStreamOptions::mode	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-AUTO-CLOSE	fs	FsStreamOptions.autoClose	implemented	N89	tsonic_node::fs::FsStreamOptions::auto_close	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-EMIT-CLOSE	fs	FsStreamOptions.emitClose	implemented	N89	tsonic_node::fs::FsStreamOptions::emit_close	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-START	fs	FsStreamOptions.start	implemented	N89	tsonic_node::fs::FsStreamOptions::start	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-END	fs	FsStreamOptions.end	implemented	N89	tsonic_node::fs::FsStreamOptions::end	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-HIGH-WATER-MARK	fs	FsStreamOptions.highWaterMark	implemented	N89	tsonic_node::fs::FsStreamOptions::high_water_mark	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-FLUSH	fs	FsStreamOptions.flush	implemented	N89	tsonic_node::fs::FsStreamOptions::flush	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-STREAM-OPTIONS-SIGNAL	fs	FsStreamOptions.signal	implemented	N89	tsonic_node::fs::FsStreamOptions::signal_aborted	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-READ-STREAM-OPTIONS-STREAM	fs	ReadStreamOptions.stream	implemented	N89	tsonic_node::fs::ReadStreamOptions::stream	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-WRITE-STREAM-OPTIONS-STREAM	fs	WriteStreamOptions.stream	implemented	N89	tsonic_node::fs::WriteStreamOptions::stream	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-WATCH-EVENT-EVENT-TYPE	fs	FsWatchEvent.eventType	implemented	N89	tsonic_node::fs::FsWatchEvent::event_type	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
+NODE-FS-MEMBER-FS-WATCH-EVENT-FILENAME	fs	FsWatchEvent.filename	implemented	N89	tsonic_node::fs::FsWatchEvent::filename	NODE-FS-CARRIER-001	closed FS carrier field/member covered by runtime tests
 NODE-FSP-FILEHANDLE-CARRIER	fs/promises	FileHandle	implemented	N42	tsonic_node::fs_promises::FileHandle	NODE-FSP-002	closed FileHandle carrier
 NODE-FSP-DIR-CARRIER	fs/promises	Dir	implemented	N42	tsonic_node::fs_promises::Dir	NODE-FSP-002	closed Dir handle carrier
 NODE-STREAM-READABLE-IS-ENDED	stream	Readable.isEnded	implemented	N38	tsonic_node::stream::Readable::is_ended	NODE-STREAM-004	readable end-state query
