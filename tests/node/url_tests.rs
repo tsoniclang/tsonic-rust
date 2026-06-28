@@ -10,9 +10,12 @@ fn url_parses_common_absolute_and_base_forms() {
     assert_eq!(url.username(), "user");
     assert_eq!(url.password(), "pass");
     assert_eq!(url.host(), "example.com:8443");
+    assert_eq!(url.hostname(), "example.com");
+    assert_eq!(url.port(), "8443");
     assert_eq!(url.pathname(), "/a/b");
     assert_eq!(url.search(), "?x=1");
     assert_eq!(url.hash(), "#h");
+    assert_eq!(url.to_string(), url.href());
 
     let relative = Url::parse("child", Some("https://example.com/base/file")).unwrap();
     assert_eq!(relative.href(), "https://example.com/base/child");
@@ -24,6 +27,7 @@ fn url_search_params_preserve_order() {
     assert_eq!(params.get("a").as_deref(), Some("1"));
     assert_eq!(params.get_all("a"), vec!["1", "2"]);
     assert_eq!(params.get("b").as_deref(), Some("hello world"));
+    assert!(params.has("a"));
     params.set("a", "3");
     params.append("c", "4");
     assert_eq!(params.size(), 3);
@@ -44,6 +48,15 @@ fn url_search_params_preserve_order() {
     params.sort();
     assert_eq!(params.keys(), vec!["a", "b", "c"]);
     assert_eq!(params.to_string(), "a=3&b=hello+world&c=4");
+    params.delete("b");
+    assert!(!params.has("b"));
+    assert_eq!(params.to_string(), "a=3&c=4");
+
+    let from_records = UrlSearchParams::from_records(&std::collections::BTreeMap::from([
+        ("x".to_string(), "1".to_string()),
+        ("y".to_string(), "2".to_string()),
+    ]));
+    assert_eq!(from_records.to_string(), "x=1&y=2");
 }
 
 #[test]

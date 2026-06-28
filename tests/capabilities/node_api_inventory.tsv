@@ -636,16 +636,48 @@ NODE-CRYPTO-X509-LEGACY	crypto	X509Certificate.toLegacyObject/fingerprint256/raw
 NODE-CRYPTO-KDF	crypto	pbkdf2Sync/hkdfSync	implemented	N63	tsonic_node::crypto::{pbkdf2_sync,hkdf_sync}	NODE-CRYPTO-KDF-001	approved PBKDF2/HKDF derivation helpers over supported digest algorithms
 NODE-CRYPTO-WEBCRYPTO	crypto	webcrypto.subtle.digest/getRandomValues/randomUUID	implemented	N63	tsonic_node::crypto::webcrypto	NODE-CRYPTO-006	closed WebCrypto digest and random helpers over same crypto runtime
 WEB-CRYPTO-GLOBAL	web-globals/crypto	crypto.getRandomValues/randomUUID/subtle.digest	implemented	N63	tsonic_node::crypto::webcrypto	NODE-CRYPTO-006	Web global crypto subset backed by closed crypto provider
-NODE-URL-URL	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL parser/mutators
-NODE-URL-SEARCH-PARAMS	url	URLSearchParams	implemented	L	tsonic_node::url::UrlSearchParams	NODE-URL-002	query parameter carrier
-NODE-URL-FILE	url	fileURLToPath/pathToFileURL	implemented	L	tsonic_node::url::{file_url_to_path,path_to_file_url}	NODE-URL-003	file URL helpers
-NODE-URL-PARSE-BASE	url	URL constructor with base	implemented	N59	tsonic_node::url::Url	NODE-URL-001	absolute and base-relative URL parse with accessors for protocol/auth/host/path/search/hash
-NODE-URL-MUTATORS	url	URL set pathname/search/hash	implemented	N59	tsonic_node::url::Url	NODE-URL-009	closed URL mutation and href reserialization
-NODE-URL-SEARCH-PARAMS-OPS	url	URLSearchParams append/set/get/getAll/size/sort/toString	implemented	N59	tsonic_node::url::UrlSearchParams	NODE-URL-002,NODE-URL-005	ordered query parameter mutation and serialization
-NODE-URL-SEARCH-PARAMS-ITERATION	url	URLSearchParams keys/values/entries/forEach	implemented	N59	tsonic_node::url::UrlSearchParams	NODE-URL-002,NODE-URL-005	closed URLSearchParams iteration snapshots without JS iterator runtime
-NODE-URL-LEGACY	url	parse/format/resolve/LegacyUrlObject	implemented	N59	tsonic_node::url::{parse,format,resolve,LegacyUrlObject}	NODE-URL-004	legacy Node url.parse/format/resolve shape
-NODE-URL-DOMAIN	url	domainToASCII/domainToUnicode	implemented	N59	tsonic_node::url::{domain_to_ascii,domain_to_unicode}	NODE-URL-011	IDNA domain conversion through approved URL dependency
-NODE-URL-HTTP-OPTIONS	url	urlToHttpOptions	implemented	N59	tsonic_node::url::{url_to_http_options,HttpOptions}	NODE-URL-011	closed HTTP options carrier derived from URL state
+NODE-URL-CARRIER	url	URL	implemented	L	tsonic_node::url::Url	NODE-URL-001	URL carrier
+NODE-URL-PARSE	url	URL constructor	implemented	L	tsonic_node::url::Url::parse	NODE-URL-001	absolute and base-relative URL parse
+NODE-URL-HREF	url	URL.href	implemented	N59	tsonic_node::url::Url::href	NODE-URL-001,NODE-URL-009	href accessor and reserialization
+NODE-URL-PROTOCOL	url	URL.protocol	implemented	N59	tsonic_node::url::Url::protocol	NODE-URL-001	protocol accessor
+NODE-URL-USERNAME	url	URL.username	implemented	N59	tsonic_node::url::Url::username	NODE-URL-001	username accessor
+NODE-URL-PASSWORD	url	URL.password	implemented	N59	tsonic_node::url::Url::password	NODE-URL-001	password accessor
+NODE-URL-HOST	url	URL.host	implemented	N59	tsonic_node::url::Url::host	NODE-URL-001	host accessor
+NODE-URL-HOSTNAME	url	URL.hostname	implemented	N59	tsonic_node::url::Url::hostname	NODE-URL-011	hostname accessor
+NODE-URL-PORT	url	URL.port	implemented	N59	tsonic_node::url::Url::port	NODE-URL-011	port accessor
+NODE-URL-PATHNAME	url	URL.pathname	implemented	N59	tsonic_node::url::Url::pathname	NODE-URL-001,NODE-URL-003	pathname accessor
+NODE-URL-SEARCH	url	URL.search	implemented	N59	tsonic_node::url::Url::search	NODE-URL-001	URL search accessor
+NODE-URL-HASH	url	URL.hash	implemented	N59	tsonic_node::url::Url::hash	NODE-URL-001	URL hash accessor
+NODE-URL-SET-PATHNAME	url	URL set pathname	implemented	N59	tsonic_node::url::Url::set_pathname	NODE-URL-009	pathname mutation and href reserialization
+NODE-URL-SET-SEARCH	url	URL set search	implemented	N59	tsonic_node::url::Url::set_search	NODE-URL-009	search mutation and href reserialization
+NODE-URL-SET-HASH	url	URL set hash	implemented	N59	tsonic_node::url::Url::set_hash	NODE-URL-009	hash mutation and href reserialization
+NODE-URL-DISPLAY	url	URL string display	implemented	N59	tsonic_node::url::Url::to_string	NODE-URL-009	Display emits href
+NODE-URL-SEARCH-PARAMS-CARRIER	url	URLSearchParams	implemented	L	tsonic_node::url::UrlSearchParams	NODE-URL-002	query parameter carrier
+NODE-URL-SEARCH-PARAMS-NEW	url	URLSearchParams constructor	implemented	L	tsonic_node::url::UrlSearchParams::new	NODE-URL-002	query string parser
+NODE-URL-SEARCH-PARAMS-GET	url	URLSearchParams.get	implemented	N59	tsonic_node::url::UrlSearchParams::get	NODE-URL-002	ordered first-value lookup
+NODE-URL-SEARCH-PARAMS-GET-ALL	url	URLSearchParams.getAll	implemented	N59	tsonic_node::url::UrlSearchParams::get_all	NODE-URL-002	ordered all-values lookup
+NODE-URL-SEARCH-PARAMS-HAS	url	URLSearchParams.has	implemented	N59	tsonic_node::url::UrlSearchParams::has	NODE-URL-005	key presence lookup
+NODE-URL-SEARCH-PARAMS-SIZE	url	URLSearchParams.size	implemented	N59	tsonic_node::url::UrlSearchParams::size	NODE-URL-002	params size accessor
+NODE-URL-SEARCH-PARAMS-KEYS	url	URLSearchParams.keys	implemented	N59	tsonic_node::url::UrlSearchParams::keys	NODE-URL-002,NODE-URL-005	ordered key snapshot
+NODE-URL-SEARCH-PARAMS-VALUES	url	URLSearchParams.values	implemented	N59	tsonic_node::url::UrlSearchParams::values	NODE-URL-002,NODE-URL-005	ordered value snapshot
+NODE-URL-SEARCH-PARAMS-ENTRIES	url	URLSearchParams.entries	implemented	N59	tsonic_node::url::UrlSearchParams::entries	NODE-URL-002,NODE-URL-005	ordered entry snapshot
+NODE-URL-SEARCH-PARAMS-SORT	url	URLSearchParams.sort	implemented	N59	tsonic_node::url::UrlSearchParams::sort	NODE-URL-005	stable key sort over closed entries
+NODE-URL-SEARCH-PARAMS-FOREACH	url	URLSearchParams.forEach	implemented	N59	tsonic_node::url::UrlSearchParams::for_each	NODE-URL-005	closed callback iteration over snapshots
+NODE-URL-SEARCH-PARAMS-FROM-RECORDS	url	URLSearchParams records constructor	implemented	N59	tsonic_node::url::UrlSearchParams::from_records	NODE-URL-005	record map constructor for generated Rust
+NODE-URL-SEARCH-PARAMS-APPEND	url	URLSearchParams.append	implemented	N59	tsonic_node::url::UrlSearchParams::append	NODE-URL-002	ordered append operation
+NODE-URL-SEARCH-PARAMS-SET	url	URLSearchParams.set	implemented	N59	tsonic_node::url::UrlSearchParams::set	NODE-URL-002	replace all values then append
+NODE-URL-SEARCH-PARAMS-DELETE	url	URLSearchParams.delete	implemented	N59	tsonic_node::url::UrlSearchParams::delete	NODE-URL-005	delete all values for key
+NODE-URL-SEARCH-PARAMS-STRING	url	URLSearchParams.toString	implemented	N59	tsonic_node::url::UrlSearchParams::to_string	NODE-URL-002,NODE-URL-005	percent-encoded query serialization
+NODE-URL-LEGACY-CARRIER	url	LegacyUrlObject	implemented	N59	tsonic_node::url::LegacyUrlObject	NODE-URL-004	legacy url object carrier
+NODE-URL-LEGACY-PARSE	url	parse	implemented	N59	tsonic_node::url::parse	NODE-URL-004	legacy parse helper
+NODE-URL-LEGACY-FORMAT	url	format	implemented	N59	tsonic_node::url::format	NODE-URL-004	legacy format helper
+NODE-URL-LEGACY-RESOLVE	url	resolve	implemented	N59	tsonic_node::url::resolve	NODE-URL-004	legacy resolve helper
+NODE-URL-DOMAIN-ASCII	url	domainToASCII	implemented	N59	tsonic_node::url::domain_to_ascii	NODE-URL-011	IDNA domain ASCII conversion through approved dependency
+NODE-URL-DOMAIN-UNICODE	url	domainToUnicode	implemented	N59	tsonic_node::url::domain_to_unicode	NODE-URL-011	IDNA domain Unicode conversion through approved dependency
+NODE-URL-HTTP-OPTIONS-CARRIER	url	HttpOptions	implemented	N59	tsonic_node::url::HttpOptions	NODE-URL-011	closed HTTP options carrier derived from URL state
+NODE-URL-HTTP-OPTIONS	url	urlToHttpOptions	implemented	N59	tsonic_node::url::url_to_http_options	NODE-URL-011	closed HTTP options derivation
+NODE-URL-PATH-TO-FILE	url	pathToFileURL	implemented	L	tsonic_node::url::path_to_file_url	NODE-URL-003	path to file URL conversion
+NODE-URL-FILE-TO-PATH	url	fileURLToPath	implemented	L	tsonic_node::url::file_url_to_path	NODE-URL-003	file URL to path conversion with scheme validation
 NODE-URL-CANPARSE	url	URL.canParse	implemented	N59	tsonic_node::url::can_parse	NODE-URL-004	boolean parse validation without throwing
 NODE-UTIL-FORMAT	util	format	implemented	L	tsonic_node::util::format	NODE-UTIL-001	format subset
 NODE-UTIL-INSPECT	util	inspect	implemented	L	tsonic_node::util::inspect	NODE-UTIL-001	closed value inspection
