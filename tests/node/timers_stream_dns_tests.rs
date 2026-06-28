@@ -172,6 +172,76 @@ fn stream_classes_promises_and_web_bridges_use_closed_buffers() {
 }
 
 #[test]
+fn stream_state_options_and_backpressure_are_explicit_carriers() {
+    let mut readable = stream::Readable::from_chunks_with_options(
+        vec![Buffer::from_string("b", Some("utf8")).unwrap()],
+        stream::StreamOptions {
+            high_water_mark: 2,
+            object_mode: false,
+            emit_close: true,
+            auto_destroy: true,
+            allow_half_open: false,
+            default_encoding: "utf8".to_string(),
+        },
+    );
+    readable.unshift(Buffer::from_string("a", Some("utf8")).unwrap());
+    assert_eq!(readable.readable_length(), 2);
+    assert_eq!(readable.readable_high_water_mark(), 2);
+    readable.set_encoding("UTF8");
+    assert_eq!(readable.readable_encoding(), Some("utf8"));
+    readable.pause();
+    assert!(readable.is_paused());
+    assert!(readable.read().is_none());
+    readable.resume();
+    assert_eq!(readable.take(1)[0].to_string(Some("utf8")).unwrap(), "a");
+    assert!(!readable.push(Buffer::from_string("c", Some("utf8")).unwrap()));
+    assert_eq!(readable.to_array().len(), 2);
+    assert!(readable.readable_ended());
+    readable.destroy_with_error("boom");
+    assert!(readable.destroyed());
+    assert_eq!(readable.errored(), Some("boom"));
+    assert!(stream::Readable::wrap(readable).closed());
+
+    let mut writable = stream::Writable::with_options(stream::StreamOptions {
+        high_water_mark: 1,
+        object_mode: false,
+        emit_close: true,
+        auto_destroy: true,
+        allow_half_open: false,
+        default_encoding: "utf8".to_string(),
+    });
+    assert_eq!(writable.writable_high_water_mark(), 1);
+    assert!(!writable.write(Buffer::from_string("x", Some("utf8")).unwrap()));
+    assert!(writable.writable_need_drain());
+    writable.clear_drain();
+    assert!(!writable.writable_need_drain());
+    writable.cork();
+    writable.cork();
+    assert_eq!(writable.writable_corked(), 2);
+    writable.uncork();
+    assert_eq!(writable.writable_corked(), 1);
+    writable.set_default_encoding("latin1");
+    assert_eq!(writable.default_encoding(), "latin1");
+    assert!(!writable.write_str("y", Some("utf8")));
+    assert!(!writable.writev(&[Buffer::from_string("z", Some("utf8")).unwrap()]));
+    assert_eq!(writable.writable_length(), 3);
+    assert!(writable.flush());
+    let finalized = Cell::new(false);
+    writable.final_callback(|| finalized.set(true));
+    assert!(finalized.get());
+    assert!(writable.writable_ended());
+    assert!(writable.writable_finished());
+    assert!(writable.closed());
+
+    let constructed = Cell::new(false);
+    writable.construct_callback(|| constructed.set(true));
+    assert!(constructed.get());
+    writable.destroy_with_error("closed");
+    assert!(writable.destroyed());
+    assert_eq!(writable.errored(), Some("closed"));
+}
+
+#[test]
 fn web_streams_support_reader_writer_pipe_and_transform_shapes() {
     let mut readable = stream::web::ReadableStream::from_chunks(vec![
         Buffer::from_string("a", Some("utf8")).unwrap(),

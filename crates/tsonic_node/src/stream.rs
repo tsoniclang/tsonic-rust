@@ -1,18 +1,64 @@
 use crate::buffer::Buffer;
 use crate::error::NodeResult;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamOptions {
+    pub high_water_mark: usize,
+    pub object_mode: bool,
+    pub emit_close: bool,
+    pub auto_destroy: bool,
+    pub allow_half_open: bool,
+    pub default_encoding: String,
+}
+
+impl Default for StreamOptions {
+    fn default() -> Self {
+        Self {
+            high_water_mark: 16 * 1024,
+            object_mode: false,
+            emit_close: true,
+            auto_destroy: true,
+            allow_half_open: false,
+            default_encoding: "utf8".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Readable {
     chunks: Vec<Buffer>,
     index: usize,
+    options: StreamOptions,
+    paused: bool,
+    destroyed: bool,
+    errored: Option<String>,
+    encoding: Option<String>,
 }
 
 impl Readable {
     pub fn from_chunks(chunks: Vec<Buffer>) -> Self {
-        Self { chunks, index: 0 }
+        Self {
+            chunks,
+            index: 0,
+            options: StreamOptions::default(),
+            paused: false,
+            destroyed: false,
+            errored: None,
+            encoding: None,
+        }
+    }
+
+    pub fn from_chunks_with_options(chunks: Vec<Buffer>, options: StreamOptions) -> Self {
+        Self {
+            options,
+            ..Self::from_chunks(chunks)
+        }
     }
 
     pub fn read(&mut self) -> Option<Buffer> {
+        if self.paused || self.destroyed {
+            return None;
+        }
         let chunk = self.chunks.get(self.index).cloned();
         if chunk.is_some() {
             self.index += 1;
@@ -22,6 +68,26 @@ impl Readable {
 
     pub fn is_ended(&self) -> bool {
         self.index >= self.chunks.len()
+    }
+
+    pub fn readable(&self) -> bool {
+        !self.destroyed && !self.is_ended()
+    }
+
+    pub fn readable_ended(&self) -> bool {
+        self.is_ended()
+    }
+
+    pub fn readable_length(&self) -> usize {
+        self.chunks.len().saturating_sub(self.index)
+    }
+
+    pub fn readable_high_water_mark(&self) -> usize {
+        self.options.high_water_mark
+    }
+
+    pub fn readable_encoding(&self) -> Option<&str> {
+        self.encoding.as_deref()
     }
 
     pub fn from(chunks: Vec<Buffer>) -> Self {
@@ -38,9 +104,82 @@ impl Readable {
 
     pub fn destroy(&mut self) {
         self.index = self.chunks.len();
+        self.destroyed = true;
+    }
+
+    pub fn destroy_with_error(&mut self, error: impl Into<String>) {
+        self.errored = Some(error.into());
+        self.destroy();
+    }
+
+    pub fn destroyed(&self) -> bool {
+        self.destroyed
+    }
+
+    pub fn closed(&self) -> bool {
+        self.destroyed || self.is_ended()
+    }
+
+    pub fn errored(&self) -> Option<&str> {
+        self.errored.as_deref()
+    }
+
+    pub fn pause(&mut self) {
+        self.paused = true;
+    }
+
+    pub fn resume(&mut self) {
+        self.paused = false;
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+
+    pub fn set_encoding(&mut self, encoding: &str) {
+        self.encoding = Some(encoding.to_ascii_lowercase());
+    }
+
+    pub fn push(&mut self, chunk: Buffer) -> bool {
+        if self.destroyed {
+            return false;
+        }
+        self.chunks.push(chunk);
+        self.readable_length() < self.options.high_water_mark
+    }
+
+    pub fn unshift(&mut self, chunk: Buffer) {
+        self.chunks.insert(self.index, chunk);
+    }
+
+    pub fn wrap(readable: Readable) -> Self {
+        readable
+    }
+
+    pub fn iterator(&mut self) -> Vec<Buffer> {
+        self.drain_remaining()
+    }
+
+    pub fn take(&mut self, limit: usize) -> Vec<Buffer> {
+        let mut out = Vec::new();
+        while out.len() < limit {
+            let Some(chunk) = self.read() else {
+                break;
+            };
+            out.push(chunk);
+        }
+        out
+    }
+
+    pub fn to_array(&mut self) -> Vec<Buffer> {
+        self.drain_remaining()
     }
 
     pub fn to_vec(mut self) -> Vec<Buffer> {
+        self.drain_remaining()
+    }
+
+    fn drain_remaining(&mut self) -> Vec<Buffer> {
         let mut out = Vec::new();
         while let Some(chunk) = self.read() {
             out.push(chunk);
@@ -53,6 +192,11 @@ impl Readable {
 pub struct Writable {
     chunks: Vec<Buffer>,
     ended: bool,
+    options: StreamOptions,
+    destroyed: bool,
+    errored: Option<String>,
+    corked: usize,
+    need_drain: bool,
 }
 
 impl Writable {
@@ -60,11 +204,125 @@ impl Writable {
         Self::default()
     }
 
+    pub fn with_options(options: StreamOptions) -> Self {
+        Self {
+            options,
+            ..Self::default()
+        }
+    }
+
     pub fn write(&mut self, chunk: Buffer) -> bool {
-        if self.ended {
+        if self.ended || self.destroyed {
             return false;
         }
         self.chunks.push(chunk);
+        self.need_drain = self.chunks.len() >= self.options.high_water_mark;
+        !self.need_drain
+    }
+
+    pub fn writev(&mut self, chunks: &[Buffer]) -> bool {
+        let mut ok = true;
+        for chunk in chunks {
+            ok = self.write(chunk.clone()) && ok;
+        }
+        ok
+    }
+
+    pub fn cork(&mut self) {
+        self.corked += 1;
+    }
+
+    pub fn uncork(&mut self) {
+        self.corked = self.corked.saturating_sub(1);
+    }
+
+    pub fn writable_corked(&self) -> usize {
+        self.corked
+    }
+
+    pub fn set_default_encoding(&mut self, encoding: &str) {
+        self.options.default_encoding = encoding.to_ascii_lowercase();
+    }
+
+    pub fn default_encoding(&self) -> &str {
+        &self.options.default_encoding
+    }
+
+    pub fn writable_high_water_mark(&self) -> usize {
+        self.options.high_water_mark
+    }
+
+    pub fn writable_length(&self) -> usize {
+        self.chunks.len()
+    }
+
+    pub fn writable_need_drain(&self) -> bool {
+        self.need_drain
+    }
+
+    pub fn writable(&self) -> bool {
+        !self.ended && !self.destroyed
+    }
+
+    pub fn writable_ended(&self) -> bool {
+        self.ended
+    }
+
+    pub fn writable_finished(&self) -> bool {
+        self.ended && !self.destroyed
+    }
+
+    pub fn writable_aborted(&self) -> bool {
+        self.destroyed && !self.ended
+    }
+
+    pub fn emit_close(&self) -> bool {
+        self.options.emit_close
+    }
+
+    pub fn errored(&self) -> Option<&str> {
+        self.errored.as_deref()
+    }
+
+    pub fn closed(&self) -> bool {
+        self.ended || self.destroyed
+    }
+
+    pub fn destroyed(&self) -> bool {
+        self.destroyed
+    }
+
+    pub fn clear_drain(&mut self) {
+        self.need_drain = false;
+    }
+
+    pub fn final_callback(&mut self, callback: impl FnOnce()) {
+        self.end();
+        callback();
+    }
+
+    pub fn construct_callback(&self, callback: impl FnOnce()) {
+        callback();
+    }
+
+    pub fn destroy_with_error(&mut self, error: impl Into<String>) {
+        self.errored = Some(error.into());
+        self.destroy();
+    }
+
+    pub fn add_chunk(&mut self, chunk: Buffer) -> bool {
+        self.write(chunk)
+    }
+
+    pub fn write_str(&mut self, value: &str, encoding: Option<&str>) -> bool {
+        match Buffer::from_string(value, encoding) {
+            Ok(buffer) => self.write(buffer),
+            Err(_) => false,
+        }
+    }
+
+    pub fn flush(&mut self) -> bool {
+        self.clear_drain();
         true
     }
 
@@ -73,6 +331,7 @@ impl Writable {
     }
 
     pub fn destroy(&mut self) {
+        self.destroyed = true;
         self.ended = true;
     }
 

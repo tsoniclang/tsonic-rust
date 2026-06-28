@@ -265,6 +265,7 @@ NODE-MOD-030	implemented	N9	tsonic_node::sqlite::DatabaseSync	NODE-SQLITE-001	cl
 NODE-MOD-031	implemented	N3	tsonic_node::abi::{Readable,Writable,stream_pipeline}	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
 NODE-STREAM-CONSUMERS-001	implemented	N11	tsonic_node::stream::consumers::{buffer,text,array_buffer,blob,json}	NODE-STREAM-002	closed stream consumers over Buffer, ArrayBuffer, Blob, text, and JSON carriers
 NODE-STREAM-WEB-001	implemented	N11	tsonic_node::stream::web::{ReadableStream,WritableStream,TransformStream}	NODE-STREAM-003	closed Web stream reader, writer, pipe, and transform carrier shape
+NODE-STREAM-004	implemented	N38	tsonic_node::abi::{Readable,Writable,StreamOptions}	NODE-STREAM-004	readable/writable state, highWaterMark/defaultEncoding, pause/resume, push/unshift, cork/drain/writev, and lifecycle callbacks
 NODE-MOD-032	implemented	M	tsonic_node::abi::StringDecoder	NODE-MISC-002	Buffer encoding subset first; decoder state machine later (completed in full-completion branch)
 NODE-STRING-DECODER-001	implemented	N29	tsonic_node::abi::StringDecoder	NODE-STRING-DECODER-001	streaming UTF-8 partial sequence buffering and replacement on end
 NODE-MOD-033	hard-reject	M	n/a	REJECT-NODE-TEST	test runner/reporters not runtime surface

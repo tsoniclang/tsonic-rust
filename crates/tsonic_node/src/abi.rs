@@ -247,8 +247,8 @@ pub use crate::sqlite::{
 };
 pub use crate::stream::{
     consumers as stream_consumers, finished as stream_finished, pipeline as stream_pipeline,
-    promises as stream_promises, web as stream_web, Duplex, PassThrough, Readable, Transform,
-    Writable,
+    promises as stream_promises, web as stream_web, Duplex, PassThrough, Readable, StreamOptions,
+    Transform, Writable,
 };
 pub use crate::string_decoder::StringDecoder;
 pub use crate::timers::{
