@@ -201,6 +201,7 @@ NODE-CRYPTO-001	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,Digest
 NODE-CRYPTO-002	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-002, NODE-CRYPTO-003	closed in-repo SHA-1/SHA-256 implementation; result is `DigestResult`
 NODE-CRYPTO-003	implemented	M	tsonic_node::abi::{crypto_hmac_digest,crypto_random_uuid}	NODE-CRYPTO-004	HMAC SHA-1/SHA-256 and UUID v4 implemented
 NODE-CRYPTO-004	implemented	N9	tsonic_node::crypto::{aes_256_gcm_encrypt,aes_256_gcm_decrypt,generate_rsa_key_pair,sign_sha256,verify_sha256}	NODE-CRYPTO-CIPHER-001,NODE-CRYPTO-PKI-001	approved dependency-backed cipher and key/sign/verify subset
+NODE-CRYPTO-005	implemented	N12	tsonic_node::crypto::{pbkdf2_sync,hkdf_sync}	NODE-CRYPTO-KDF-001	common PBKDF2/HKDF key derivation with SHA-1/SHA-256/SHA-384/SHA-512 support
 NODE-MOD-001	implemented	M	tsonic_node::abi::{assert_ok,assert_strict_equal}	NODE-MISC-001	assertion formatting/deep equality policy separate from runtime surface (completed in full-completion branch)
 NODE-MOD-002	hard-reject	M	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation runtime out of Stage 1
 NODE-MOD-003	implemented	N3	tsonic_node::abi::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime

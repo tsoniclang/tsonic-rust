@@ -6,7 +6,7 @@ use rand::rngs::OsRng;
 use rsa::pkcs1v15::{Signature as RsaSignature, SigningKey, VerifyingKey};
 use rsa::signature::{SignatureEncoding, Signer, Verifier};
 use rsa::{RsaPrivateKey, RsaPublicKey};
-use sha2::Sha256;
+use sha2::{Digest, Sha256, Sha384, Sha512};
 
 pub fn random_bytes(size: usize) -> NodeResult<Buffer> {
     let mut bytes = vec![0_u8; size];
@@ -78,7 +78,7 @@ pub fn timing_safe_equal(left: &Buffer, right: &Buffer) -> NodeResult<bool> {
 }
 
 pub fn get_hashes() -> Vec<&'static str> {
-    vec!["sha1", "sha256"]
+    vec!["sha1", "sha256", "sha384", "sha512"]
 }
 
 pub fn create_hash(algorithm: &str) -> NodeResult<Hash> {
@@ -101,6 +101,8 @@ pub struct Hash {
 enum Algorithm {
     Sha1,
     Sha256,
+    Sha384,
+    Sha512,
 }
 
 impl Hash {
@@ -226,17 +228,18 @@ fn hmac_digest_algorithm(
     data: &[u8],
     encoding: Option<&str>,
 ) -> NodeResult<DigestResult> {
-    let mut key_block = [0_u8; 64];
-    let normalized_key = if key.len() > 64 {
+    let block_size = hmac_block_size(algorithm);
+    let mut key_block = vec![0_u8; block_size];
+    let normalized_key = if key.len() > block_size {
         digest_bytes(algorithm, key)
     } else {
         key.to_vec()
     };
     key_block[..normalized_key.len()].copy_from_slice(&normalized_key);
 
-    let mut outer = vec![0x5c_u8; 64];
-    let mut inner = vec![0x36_u8; 64];
-    for index in 0..64 {
+    let mut outer = vec![0x5c_u8; block_size];
+    let mut inner = vec![0x36_u8; block_size];
+    for index in 0..block_size {
         outer[index] ^= key_block[index];
         inner[index] ^= key_block[index];
     }
@@ -249,6 +252,83 @@ fn hmac_digest_algorithm(
         None => Ok(DigestResult::Buffer(Buffer::from_bytes(bytes))),
         Some(encoding) => Ok(DigestResult::String(decode_bytes(&bytes, Some(encoding))?)),
     }
+}
+
+pub fn pbkdf2_sync(
+    password: &[u8],
+    salt: &[u8],
+    iterations: u32,
+    key_len: usize,
+    digest: &str,
+) -> NodeResult<Buffer> {
+    if iterations == 0 {
+        return Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "PBKDF2 iterations must be greater than zero",
+        ));
+    }
+    let algorithm = parse_algorithm(digest)?;
+    let digest_len = digest_len(algorithm);
+    let mut output = Vec::with_capacity(key_len);
+    let mut block_index = 1_u32;
+    while output.len() < key_len {
+        let mut block_salt = Vec::with_capacity(salt.len() + 4);
+        block_salt.extend_from_slice(salt);
+        block_salt.extend_from_slice(&block_index.to_be_bytes());
+        let mut u = hmac_digest_buffer(algorithm, password, &block_salt);
+        let mut t = u.clone();
+        for _ in 1..iterations {
+            u = hmac_digest_buffer(algorithm, password, &u);
+            for (left, right) in t.iter_mut().zip(&u) {
+                *left ^= *right;
+            }
+        }
+        output.extend_from_slice(&t[..digest_len]);
+        block_index = block_index
+            .checked_add(1)
+            .ok_or_else(|| NodeError::new("ERR_OUT_OF_RANGE", "PBKDF2 key length too large"))?;
+    }
+    output.truncate(key_len);
+    Ok(Buffer::from_bytes(output))
+}
+
+pub fn hkdf_sync(
+    digest: &str,
+    input_keying_material: &[u8],
+    salt: &[u8],
+    info: &[u8],
+    key_len: usize,
+) -> NodeResult<Buffer> {
+    let algorithm = parse_algorithm(digest)?;
+    let digest_len = digest_len(algorithm);
+    if key_len > 255 * digest_len {
+        return Err(NodeError::new(
+            "ERR_OUT_OF_RANGE",
+            "HKDF key length exceeds 255 digest blocks",
+        ));
+    }
+    let effective_salt = if salt.is_empty() {
+        vec![0_u8; digest_len]
+    } else {
+        salt.to_vec()
+    };
+    let prk = hmac_digest_buffer(algorithm, &effective_salt, input_keying_material);
+    let mut output = Vec::with_capacity(key_len);
+    let mut previous = Vec::new();
+    let mut counter = 1_u8;
+    while output.len() < key_len {
+        let mut data = Vec::with_capacity(previous.len() + info.len() + 1);
+        data.extend_from_slice(&previous);
+        data.extend_from_slice(info);
+        data.push(counter);
+        previous = hmac_digest_buffer(algorithm, &prk, &data);
+        output.extend_from_slice(&previous);
+        counter = counter
+            .checked_add(1)
+            .ok_or_else(|| NodeError::new("ERR_OUT_OF_RANGE", "HKDF block counter overflow"))?;
+    }
+    output.truncate(key_len);
+    Ok(Buffer::from_bytes(output))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -444,6 +524,8 @@ fn parse_algorithm(algorithm: &str) -> NodeResult<Algorithm> {
     match algorithm.to_ascii_lowercase().as_str() {
         "sha256" | "sha-256" => Ok(Algorithm::Sha256),
         "sha1" | "sha-1" => Ok(Algorithm::Sha1),
+        "sha384" | "sha-384" => Ok(Algorithm::Sha384),
+        "sha512" | "sha-512" => Ok(Algorithm::Sha512),
         other => Err(NodeError::new(
             "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
             format!("unsupported hash algorithm `{other}`"),
@@ -455,6 +537,31 @@ fn digest_bytes(algorithm: Algorithm, input: &[u8]) -> Vec<u8> {
     match algorithm {
         Algorithm::Sha1 => sha1(input).to_vec(),
         Algorithm::Sha256 => sha256(input).to_vec(),
+        Algorithm::Sha384 => Sha384::digest(input).to_vec(),
+        Algorithm::Sha512 => Sha512::digest(input).to_vec(),
+    }
+}
+
+fn hmac_digest_buffer(algorithm: Algorithm, key: &[u8], data: &[u8]) -> Vec<u8> {
+    match hmac_digest_algorithm(algorithm, key, data, None).expect("valid HMAC digest") {
+        DigestResult::Buffer(buffer) => buffer.as_bytes().to_vec(),
+        DigestResult::String(_) => unreachable!("buffer digest requested"),
+    }
+}
+
+fn digest_len(algorithm: Algorithm) -> usize {
+    match algorithm {
+        Algorithm::Sha1 => 20,
+        Algorithm::Sha256 => 32,
+        Algorithm::Sha384 => 48,
+        Algorithm::Sha512 => 64,
+    }
+}
+
+fn hmac_block_size(algorithm: Algorithm) -> usize {
+    match algorithm {
+        Algorithm::Sha1 | Algorithm::Sha256 => 64,
+        Algorithm::Sha384 | Algorithm::Sha512 => 128,
     }
 }
 

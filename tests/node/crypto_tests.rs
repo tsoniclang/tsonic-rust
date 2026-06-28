@@ -32,6 +32,15 @@ fn crypto_sha256_known_vector() {
         sha1.digest(Some("hex")).unwrap(),
         DigestResult::String("a9993e364706816aba3e25717850c26c9cd0d89d".to_string())
     );
+
+    let mut sha512 = Hash::create("sha512").unwrap();
+    sha512.update_string("abc", Some("utf8")).unwrap();
+    assert_eq!(
+        sha512.digest_string("hex").unwrap(),
+        "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a\
+         2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"
+            .replace(' ', "")
+    );
 }
 
 #[test]
@@ -88,4 +97,31 @@ fn crypto_hmac_keyobject_and_webcrypto_shapes_are_closed_wrappers() {
     crypto.get_random_values(&mut random).unwrap();
     assert_eq!(random.len(), 8);
     assert_eq!(crypto.random_uuid().unwrap().len(), 36);
+}
+
+#[test]
+fn crypto_pbkdf2_and_hkdf_match_standard_vectors() {
+    let derived = tsonic_node::crypto::pbkdf2_sync(b"password", b"salt", 1, 32, "sha256").unwrap();
+    assert_eq!(
+        derived.to_string(Some("hex")).unwrap(),
+        "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"
+    );
+
+    let hkdf = tsonic_node::crypto::hkdf_sync(
+        "sha256",
+        &[0x0b; 22],
+        &[
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
+        ],
+        &[0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9],
+        42,
+    )
+    .unwrap();
+    assert_eq!(
+        hkdf.to_string(Some("hex")).unwrap(),
+        "3cb25f25faacd57a90434f64d0362f2a\
+         2d2d0a90cf1a5a4c5db02d56ecc4c5bf\
+         34007208d5b887185865"
+            .replace(' ', "")
+    );
 }
