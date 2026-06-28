@@ -202,12 +202,61 @@ NODE-CHILD-EXEC-SYNC	child_process	execSync	implemented	N14	tsonic_node::child_p
 NODE-CHILD-EXEC-COMMAND-SYNC-REJECT	child_process	exec command string	implemented	N33	tsonic_node::child_process::exec_command_sync	NODE-CHILD-003	rejects shell command string execution explicitly
 NODE-CHILD-SPAWN-SHELL-SYNC-REJECT	child_process	spawn shell string	implemented	N33	tsonic_node::child_process::spawn_shell_sync	NODE-CHILD-003	rejects shell spawn execution explicitly
 NODE-CLUSTER-SETTINGS-CARRIER	cluster	ClusterSettings	implemented	N9	tsonic_node::cluster::ClusterSettings	NODE-CLUSTER-001	closed cluster primary settings carrier
+NODE-CLUSTER-SETTINGS-EXEC	cluster	ClusterSettings.exec	implemented	N80	tsonic_node::cluster::ClusterSettings::exec	NODE-CLUSTER-001	cluster executable setting
+NODE-CLUSTER-SETTINGS-ARGS	cluster	ClusterSettings.args	implemented	N80	tsonic_node::cluster::ClusterSettings::args	NODE-CLUSTER-001	cluster args setting
+NODE-CLUSTER-SETTINGS-EXEC-ARGV	cluster	ClusterSettings.execArgv	implemented	N80	tsonic_node::cluster::ClusterSettings::exec_argv	NODE-CLUSTER-001	cluster execArgv setting
+NODE-CLUSTER-SETTINGS-CWD	cluster	ClusterSettings.cwd	implemented	N80	tsonic_node::cluster::ClusterSettings::cwd	NODE-CLUSTER-001	cluster cwd setting
+NODE-CLUSTER-SETTINGS-SERIALIZATION	cluster	ClusterSettings.serialization	implemented	N80	tsonic_node::cluster::ClusterSettings::serialization	NODE-CLUSTER-001	cluster serialization setting
+NODE-CLUSTER-SETTINGS-SILENT	cluster	ClusterSettings.silent	implemented	N80	tsonic_node::cluster::ClusterSettings::silent	NODE-CLUSTER-001	cluster silent setting
+NODE-CLUSTER-SETTINGS-STDIO	cluster	ClusterSettings.stdio	implemented	N80	tsonic_node::cluster::ClusterSettings::stdio	NODE-CLUSTER-001	cluster stdio setting
+NODE-CLUSTER-SETTINGS-UID	cluster	ClusterSettings.uid	implemented	N80	tsonic_node::cluster::ClusterSettings::uid	NODE-CLUSTER-001	cluster uid setting
+NODE-CLUSTER-SETTINGS-GID	cluster	ClusterSettings.gid	implemented	N80	tsonic_node::cluster::ClusterSettings::gid	NODE-CLUSTER-001	cluster gid setting
+NODE-CLUSTER-SETTINGS-INSPECT-PORT	cluster	ClusterSettings.inspectPort	implemented	N80	tsonic_node::cluster::ClusterSettings::inspect_port	NODE-CLUSTER-001	cluster inspectPort setting
+NODE-CLUSTER-SETTINGS-WINDOWS-HIDE	cluster	ClusterSettings.windowsHide	implemented	N80	tsonic_node::cluster::ClusterSettings::windows_hide	NODE-CLUSTER-001	cluster windowsHide setting
+NODE-CLUSTER-SETTINGS-WITH-EXEC-ARGV	cluster	ClusterSettings.withExecArgv	implemented	N80	tsonic_node::cluster::ClusterSettings::with_exec_argv	NODE-CLUSTER-001	cluster settings builder for execArgv
+NODE-CLUSTER-SETTINGS-WITH-CWD	cluster	ClusterSettings.withCwd	implemented	N80	tsonic_node::cluster::ClusterSettings::with_cwd	NODE-CLUSTER-001	cluster settings builder for cwd
+NODE-CLUSTER-SETTINGS-WITH-SERIALIZATION	cluster	ClusterSettings.withSerialization	implemented	N80	tsonic_node::cluster::ClusterSettings::with_serialization	NODE-CLUSTER-001	cluster settings builder for serialization
+NODE-CLUSTER-SETTINGS-WITH-SILENT	cluster	ClusterSettings.withSilent	implemented	N80	tsonic_node::cluster::ClusterSettings::with_silent	NODE-CLUSTER-001	cluster settings builder for silent
+NODE-CLUSTER-WORKER-OPTIONS-CARRIER	cluster	WorkerOptions	implemented	N80	tsonic_node::cluster::WorkerOptions	NODE-CLUSTER-001	closed worker options carrier
+NODE-CLUSTER-WORKER-OPTIONS-ID	cluster	WorkerOptions.id	implemented	N80	tsonic_node::cluster::WorkerOptions::id	NODE-CLUSTER-001	worker id option
+NODE-CLUSTER-WORKER-OPTIONS-STATE	cluster	WorkerOptions.state	implemented	N80	tsonic_node::cluster::WorkerOptions::state	NODE-CLUSTER-001	worker state option
+NODE-CLUSTER-ADDRESS-CARRIER	cluster	Address	implemented	N80	tsonic_node::cluster::Address	NODE-CLUSTER-001	closed cluster address carrier
+NODE-CLUSTER-ADDRESS-ADDRESS	cluster	Address.address	implemented	N80	tsonic_node::cluster::Address::address	NODE-CLUSTER-001	cluster address field
+NODE-CLUSTER-ADDRESS-PORT	cluster	Address.port	implemented	N80	tsonic_node::cluster::Address::port	NODE-CLUSTER-001	cluster address port field
+NODE-CLUSTER-ADDRESS-TYPE	cluster	Address.addressType	implemented	N80	tsonic_node::cluster::Address::address_type	NODE-CLUSTER-001	cluster address type field
+NODE-CLUSTER-ADDRESS-TYPE-CARRIER	cluster	AddressType	implemented	N80	tsonic_node::cluster::AddressType	NODE-CLUSTER-001	closed cluster address type carrier
+NODE-CLUSTER-CARRIER	cluster	Cluster	implemented	N80	tsonic_node::cluster::Cluster	NODE-CLUSTER-001	closed cluster state carrier
+NODE-CLUSTER-SCHED-NONE	cluster	SCHED_NONE	implemented	N80	tsonic_node::cluster::SCHED_NONE	NODE-CLUSTER-001	cluster SCHED_NONE constant
+NODE-CLUSTER-SCHED-RR	cluster	SCHED_RR	implemented	N80	tsonic_node::cluster::SCHED_RR	NODE-CLUSTER-001	cluster SCHED_RR constant
 NODE-CLUSTER-WORKER-CARRIER	cluster	Worker	implemented	N9	tsonic_node::cluster::Worker	NODE-CLUSTER-001	closed cluster worker process carrier
+NODE-CLUSTER-WORKER-NEW	cluster	Worker.new	implemented	N80	tsonic_node::cluster::Worker::new	NODE-CLUSTER-001	constructs closed worker carrier from options and process id
+NODE-CLUSTER-WORKER-PROCESS	cluster	Worker.process	implemented	N80	tsonic_node::cluster::Worker::process_id	NODE-CLUSTER-001	worker process id carrier
+NODE-CLUSTER-WORKER-STATE	cluster	Worker.state	implemented	N80	tsonic_node::cluster::Worker::state	NODE-CLUSTER-001	worker state field
+NODE-CLUSTER-WORKER-EXITED-AFTER-DISCONNECT	cluster	Worker.exitedAfterDisconnect	implemented	N80	tsonic_node::cluster::Worker::exited_after_disconnect	NODE-CLUSTER-001	worker exitedAfterDisconnect field
+NODE-CLUSTER-WORKER-IS-CONNECTED	cluster	Worker.isConnected	implemented	N80	tsonic_node::cluster::Worker::is_connected	NODE-CLUSTER-001	closed worker connection-state query
+NODE-CLUSTER-WORKER-IS-DEAD	cluster	Worker.isDead	implemented	N80	tsonic_node::cluster::Worker::is_dead	NODE-CLUSTER-001	closed worker dead-state query
+NODE-CLUSTER-WORKER-DISCONNECT	cluster	Worker.disconnect	implemented	N80	tsonic_node::cluster::Worker::disconnect	NODE-CLUSTER-001	closed worker disconnect transition
+NODE-CLUSTER-WORKER-KILL	cluster	Worker.kill	implemented	N80	tsonic_node::cluster::Worker::kill	NODE-CLUSTER-001	closed worker kill transition
+NODE-CLUSTER-WORKER-DESTROY	cluster	Worker.destroy	implemented	N80	tsonic_node::cluster::Worker::destroy	NODE-CLUSTER-001	closed worker destroy transition
+NODE-CLUSTER-WORKER-SEND	cluster	Worker.send	implemented	N80	tsonic_node::cluster::Worker::send	NODE-CLUSTER-001	closed worker send availability check
 NODE-CLUSTER-IS-PRIMARY	cluster	isPrimary	implemented	N9	tsonic_node::cluster::is_primary	NODE-CLUSTER-001	detects primary process via explicit environment marker
+NODE-CLUSTER-IS-MASTER	cluster	isMaster	implemented	N80	tsonic_node::cluster::Cluster::is_master	NODE-CLUSTER-001	legacy isMaster alias over primary state
 NODE-CLUSTER-IS-WORKER	cluster	isWorker	implemented	N9	tsonic_node::cluster::is_worker	NODE-CLUSTER-001	detects worker process via explicit environment marker
 NODE-CLUSTER-WORKER-ID	cluster	worker.id	implemented	N9	tsonic_node::cluster::worker_id	NODE-CLUSTER-001	reads explicit worker id environment marker
 NODE-CLUSTER-SETUP-PRIMARY	cluster	setupPrimary	implemented	N9	tsonic_node::cluster::setup_primary	NODE-CLUSTER-001	creates explicit primary execution settings
+NODE-CLUSTER-SETUP-MASTER	cluster	setupMaster	implemented	N80	tsonic_node::cluster::setup_master	NODE-CLUSTER-001	legacy setupMaster alias over setupPrimary
 NODE-CLUSTER-FORK	cluster	fork	implemented	N9	tsonic_node::cluster::fork	NODE-CLUSTER-001	forks worker process through approved file-spawn model
+NODE-CLUSTER-NEW	cluster	Cluster.new	implemented	N80	tsonic_node::cluster::Cluster::new	NODE-CLUSTER-001	constructs closed Cluster state carrier
+NODE-CLUSTER-SETTINGS	cluster	Cluster.settings	implemented	N80	tsonic_node::cluster::Cluster::settings	NODE-CLUSTER-001	reads Cluster settings carrier
+NODE-CLUSTER-WORKERS	cluster	Cluster.workers	implemented	N80	tsonic_node::cluster::Cluster::workers	NODE-CLUSTER-001	reads Cluster workers map
+NODE-CLUSTER-SCHEDULING-POLICY	cluster	Cluster.schedulingPolicy	implemented	N80	tsonic_node::cluster::Cluster::scheduling_policy	NODE-CLUSTER-001	reads Cluster scheduling policy
+NODE-CLUSTER-SET-SCHEDULING-POLICY	cluster	Cluster.setSchedulingPolicy	implemented	N80	tsonic_node::cluster::Cluster::set_scheduling_policy	NODE-CLUSTER-001	sets Cluster scheduling policy
+NODE-CLUSTER-CLUSTER-IS-PRIMARY	cluster	Cluster.isPrimary	implemented	N80	tsonic_node::cluster::Cluster::is_primary	NODE-CLUSTER-001	cluster primary-state query
+NODE-CLUSTER-CLUSTER-IS-WORKER	cluster	Cluster.isWorker	implemented	N80	tsonic_node::cluster::Cluster::is_worker	NODE-CLUSTER-001	cluster worker-state query
+NODE-CLUSTER-CLUSTER-SETUP-PRIMARY	cluster	Cluster.setupPrimary	implemented	N80	tsonic_node::cluster::Cluster::setup_primary	NODE-CLUSTER-001	sets Cluster primary settings
+NODE-CLUSTER-CLUSTER-SETUP-MASTER	cluster	Cluster.setupMaster	implemented	N80	tsonic_node::cluster::Cluster::setup_master	NODE-CLUSTER-001	legacy Cluster setupMaster alias
+NODE-CLUSTER-CLUSTER-FORK	cluster	Cluster.fork	implemented	N80	tsonic_node::cluster::Cluster::fork	NODE-CLUSTER-001	forks and records worker in Cluster workers map
+NODE-CLUSTER-CLUSTER-DISCONNECT	cluster	Cluster.disconnect	implemented	N80	tsonic_node::cluster::Cluster::disconnect	NODE-CLUSTER-001	disconnects recorded workers and invokes explicit callback
 NODE-WORKER-MESSAGE-PORT-CARRIER	worker_threads	MessagePort	implemented	N32	tsonic_node::worker_threads::MessagePort	NODE-WORKER-001	closed message port carrier
 NODE-WORKER-MESSAGE-PORT-POST	worker_threads	MessagePort.postMessage	implemented	N32	tsonic_node::worker_threads::MessagePort::post_message	NODE-WORKER-001	sends closed JsValue through channel
 NODE-WORKER-MESSAGE-PORT-RECEIVE	worker_threads	MessagePort.receiveMessage	implemented	N32	tsonic_node::worker_threads::MessagePort::receive_message	NODE-WORKER-001	receives closed JsValue without dynamic runtime

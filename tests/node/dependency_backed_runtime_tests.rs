@@ -233,14 +233,74 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
 
 #[test]
 fn cluster_exposes_closed_primary_worker_model() {
-    let settings = tsonic_node::cluster::setup_primary("/bin/echo", &["worker"]);
+    let settings = tsonic_node::cluster::setup_primary("/bin/echo", &["worker"])
+        .with_exec_argv(&["--enable-source-maps"])
+        .with_cwd("/")
+        .with_serialization("advanced")
+        .with_silent(true);
     assert_eq!(settings.exec, "/bin/echo");
     assert_eq!(settings.args, vec!["worker".to_string()]);
+    assert_eq!(settings.exec_argv, vec!["--enable-source-maps".to_string()]);
+    assert_eq!(settings.cwd, Some("/".to_string()));
+    assert_eq!(settings.serialization, Some("advanced".to_string()));
+    assert!(settings.silent);
     assert!(tsonic_node::cluster::is_primary());
     assert!(!tsonic_node::cluster::is_worker());
+    assert_eq!(
+        tsonic_node::cluster::setup_master("/bin/echo", &[]).exec,
+        "/bin/echo"
+    );
 
     let env = BTreeMap::new();
-    let worker = tsonic_node::cluster::fork(&settings, 1, &env).unwrap();
+    let mut worker = tsonic_node::cluster::fork(&settings, 1, &env).unwrap();
     assert_eq!(worker.id, 1);
     assert!(worker.process_id > 0);
+    assert_eq!(worker.state, "online");
+    assert!(worker.is_connected());
+    assert!(worker.send("ready"));
+    worker.disconnect();
+    assert!(worker.exited_after_disconnect);
+    assert!(!worker.is_connected());
+    worker.destroy(Some("SIGTERM"));
+    assert!(worker.is_dead());
+
+    let mut manual_worker = tsonic_node::cluster::Worker::new(
+        tsonic_node::cluster::WorkerOptions {
+            id: Some(7),
+            state: Some("listening".to_string()),
+        },
+        123,
+    );
+    assert_eq!(manual_worker.id, 7);
+    assert_eq!(manual_worker.state, "listening");
+    manual_worker.kill(None);
+    assert!(manual_worker.is_dead());
+
+    let address = tsonic_node::cluster::Address {
+        address: "127.0.0.1".to_string(),
+        port: 3000,
+        address_type: tsonic_node::cluster::AddressType::Ipv4,
+    };
+    assert_eq!(address.port, 3000);
+
+    let mut cluster = tsonic_node::cluster::Cluster::new(settings.clone());
+    assert_eq!(cluster.settings().exec, "/bin/echo");
+    assert_eq!(cluster.scheduling_policy(), tsonic_node::cluster::SCHED_RR);
+    cluster.set_scheduling_policy(tsonic_node::cluster::SCHED_NONE);
+    assert_eq!(
+        cluster.scheduling_policy(),
+        tsonic_node::cluster::SCHED_NONE
+    );
+    assert!(cluster.is_primary());
+    assert!(cluster.is_master());
+    assert!(!cluster.is_worker());
+    cluster.setup_master(tsonic_node::cluster::setup_primary("/bin/echo", &["again"]));
+    assert_eq!(cluster.settings().args, vec!["again".to_string()]);
+    let forked = cluster.fork(2, &env).unwrap();
+    assert_eq!(forked.id, 2);
+    assert!(cluster.workers().contains_key(&2));
+    let called = std::cell::Cell::new(false);
+    cluster.disconnect(Some(|| called.set(true)));
+    assert!(called.get());
+    assert!(!cluster.workers().get(&2).unwrap().is_connected());
 }
