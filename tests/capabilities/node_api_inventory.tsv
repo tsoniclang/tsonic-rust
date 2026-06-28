@@ -166,6 +166,27 @@ NODE-TIMERS-OPTIONS	timers	TimerOptions/_onTimeout/_onImmediate	implemented	N30	
 NODE-TIMERS-HANDLE-METHODS	timers	Timeout/Immediate/Timer ref/unref/hasRef/refresh/close	implemented	N55	tsonic_node::timers::{Timeout,Immediate,Timer}	NODE-TIMERS-001,NODE-TIMERS-002	closed timer handle ref state, refresh, and close methods
 NODE-TIMERS-PROMISES	timers/promises	setTimeout/setImmediate/setInterval/scheduler.wait/scheduler.yield	implemented	N55	tsonic_node::timers::promises	NODE-TIMERS-002	promise-style blocking-now timer values and scheduler helpers
 WEB-TIMERS-CALLBACK-OPTIONS	web-globals/timers	callback/delay option shapes	implemented	N55	tsonic_node::timers::{set_timeout_with_options,set_interval_with_options,set_immediate_with_options,TimerOptions}	NODE-TIMERS-002	web-compatible timer callback and delay option carrier shape
+NODE-TIMERS-SET-TIMEOUT	timers	setTimeout	implemented	N71	tsonic_node::timers::set_timeout	NODE-TIMERS-001	deterministic setTimeout executes callback through explicit runtime helper
+NODE-TIMERS-SET-TIMEOUT-OPTIONS	timers	setTimeout options	implemented	N71	tsonic_node::timers::set_timeout_with_options	NODE-TIMERS-002	setTimeout options support ref and abort controls
+NODE-TIMERS-SET-IMMEDIATE	timers	setImmediate	implemented	N71	tsonic_node::timers::set_immediate	NODE-TIMERS-001	deterministic setImmediate executes callback through explicit runtime helper
+NODE-TIMERS-SET-IMMEDIATE-OPTIONS	timers	setImmediate options	implemented	N71	tsonic_node::timers::set_immediate_with_options	NODE-TIMERS-002	setImmediate options support ref and abort controls
+NODE-TIMERS-SET-INTERVAL	timers	setInterval	implemented	N71	tsonic_node::timers::set_interval	NODE-TIMERS-001	deterministic setInterval executes callback once in closed blocking-now runtime shape
+NODE-TIMERS-SET-INTERVAL-OPTIONS	timers	setInterval options	implemented	N71	tsonic_node::timers::set_interval_with_options	NODE-TIMERS-002	setInterval options support ref and abort controls
+NODE-TIMERS-CLEAR-TIMEOUT	timers	clearTimeout	implemented	N71	tsonic_node::timers::clear_timeout	NODE-TIMERS-001	clearTimeout deactivates Timeout carrier
+NODE-TIMERS-CLEAR-IMMEDIATE	timers	clearImmediate	implemented	N71	tsonic_node::timers::clear_immediate	NODE-TIMERS-001	clearImmediate deactivates Immediate carrier
+NODE-TIMERS-CLEAR-INTERVAL	timers	clearInterval	implemented	N71	tsonic_node::timers::clear_interval	NODE-TIMERS-001	clearInterval deactivates Timer carrier
+NODE-TIMERS-TIMEOUT-CARRIER	timers	Timeout	implemented	N71	tsonic_node::timers::Timeout	NODE-TIMERS-001	closed Timeout carrier with id, delay, ref state, refresh, close, and callback hooks
+NODE-TIMERS-IMMEDIATE-CARRIER	timers	Immediate	implemented	N71	tsonic_node::timers::Immediate	NODE-TIMERS-001	Immediate aliases closed Timeout carrier
+NODE-TIMERS-TIMER-CARRIER	timers	Timer	implemented	N71	tsonic_node::timers::Timer	NODE-TIMERS-001	Timer aliases closed Timeout carrier
+NODE-TIMERS-OPTIONS-CARRIER	timers	TimerOptions	implemented	N71	tsonic_node::timers::TimerOptions	NODE-TIMERS-002	closed timer options carrier with ref and signal_aborted
+NODE-TIMERS-PROMISES-SET-TIMEOUT	timers/promises	setTimeout	implemented	N71	tsonic_node::timers::promises::set_timeout_value	NODE-TIMERS-002	promise-style timeout value helper
+NODE-TIMERS-PROMISES-SET-TIMEOUT-OPTIONS	timers/promises	setTimeout options	implemented	N71	tsonic_node::timers::promises::set_timeout_value_with_options	NODE-TIMERS-002	promise-style timeout value helper with options
+NODE-TIMERS-PROMISES-SET-IMMEDIATE	timers/promises	setImmediate	implemented	N71	tsonic_node::timers::promises::set_immediate_value	NODE-TIMERS-002	promise-style immediate value helper
+NODE-TIMERS-PROMISES-SET-IMMEDIATE-OPTIONS	timers/promises	setImmediate options	implemented	N71	tsonic_node::timers::promises::set_immediate_value_with_options	NODE-TIMERS-002	promise-style immediate value helper with options
+NODE-TIMERS-PROMISES-SET-INTERVAL	timers/promises	setInterval	implemented	N71	tsonic_node::timers::promises::set_interval_values	NODE-TIMERS-002	promise-style interval values helper
+NODE-TIMERS-PROMISES-SET-INTERVAL-OPTIONS	timers/promises	setInterval options	implemented	N71	tsonic_node::timers::promises::set_interval_values_with_options	NODE-TIMERS-002	promise-style interval values helper with options
+NODE-TIMERS-PROMISES-SCHEDULER-WAIT	timers/promises	scheduler.wait	implemented	N71	tsonic_node::timers::promises::scheduler::wait	NODE-TIMERS-002	promise-style scheduler wait helper
+NODE-TIMERS-PROMISES-SCHEDULER-YIELD	timers/promises	scheduler.yield	implemented	N71	tsonic_node::timers::promises::scheduler::yield_now	NODE-TIMERS-002	promise-style scheduler yield helper
 NODE-MODULE-TLS	tls	module	implemented	N9	tsonic_node::tls	NODE-TLS-001	TLS identity/options and HTTPS connect helper over approved rustls transport
 NODE-TLS-SOCKET-METADATA	tls	TLSSocket certificate/cipher/session/trace	implemented	N40	tsonic_node::tls::{TlsSocket,Certificate,CipherInfo,EphemeralKeyInfo}	NODE-TLS-002	closed TLS socket metadata for peer/local certificate, cipher, session reuse, finished bytes, signature algorithms, ticket keys, and trace flag
 NODE-TLS-CONTEXT-OPTIONS	tls	SecureContextOptions extended key/cert/options	implemented	N40	tsonic_node::tls::{SecureContext,SecureContextOptions}	NODE-TLS-002	key/cert/pfx/passphrase/ca/alpn/cipher/sigalgs/minVersion/maxVersion/honorCipherOrder option shape

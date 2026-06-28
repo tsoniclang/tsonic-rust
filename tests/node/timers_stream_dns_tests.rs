@@ -48,15 +48,42 @@ fn timers_cover_interval_immediate_and_scheduler_shapes() {
     assert_eq!(count.get(), 3);
     timers::clear_immediate(&mut immediate);
     assert!(!immediate.has_ref());
+    let immediate_options = timers::set_immediate_with_options(
+        || count.set(count.get() + 1),
+        timers::TimerOptions {
+            r#ref: false,
+            signal_aborted: false,
+        },
+    );
+    assert_eq!(count.get(), 4);
+    assert!(!immediate_options.has_ref());
 
     let mut another = timers::set_interval(|| {}, 0);
     timers::clear_interval(&mut another);
     assert!(!another.has_ref());
+    let interval_options = timers::set_interval_with_options(
+        || count.set(count.get() + 1),
+        0,
+        timers::TimerOptions {
+            r#ref: false,
+            signal_aborted: false,
+        },
+    );
+    assert_eq!(count.get(), 5);
+    assert!(!interval_options.has_ref());
 
     let (_, values) = timers::promises::set_interval_values(0, "tick", 3);
     assert_eq!(values, vec!["tick", "tick", "tick"]);
     let (_, value) = timers::promises::set_immediate_value("immediate");
     assert_eq!(value, "immediate");
+    let (_, value) = timers::promises::set_immediate_value_with_options(
+        "immediate options",
+        timers::TimerOptions {
+            r#ref: false,
+            signal_aborted: false,
+        },
+    );
+    assert_eq!(value, "immediate options");
     let (unrefed, value) = timers::promises::set_timeout_value_with_options(
         0,
         "quiet",
@@ -67,6 +94,17 @@ fn timers_cover_interval_immediate_and_scheduler_shapes() {
     );
     assert_eq!(value, "quiet");
     assert!(!unrefed.has_ref());
+    let (unrefed_interval, values) = timers::promises::set_interval_values_with_options(
+        0,
+        "quiet tick",
+        2,
+        timers::TimerOptions {
+            r#ref: false,
+            signal_aborted: false,
+        },
+    );
+    assert_eq!(values, vec!["quiet tick", "quiet tick"]);
+    assert!(!unrefed_interval.has_ref());
     timers::promises::scheduler::wait(0);
     timers::promises::scheduler::yield_now();
 }
