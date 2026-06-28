@@ -37,6 +37,7 @@ pub use crate::typed_array::{
 pub use crate::uri::{decode_uri, decode_uri_component, encode_uri, encode_uri_component};
 pub use crate::value::JsValue;
 pub use crate::web::{
-    AbortController, AbortSignal, Blob, BlobPart, Body, DomException, File, FormData,
+    AbortController, AbortSignal, AddEventListenerOptions, Blob, BlobPart, Body, CustomEvent,
+    DomException, Event, EventInit, EventListenerOptions, EventTarget, File, FormData,
     FormDataValue, Headers, Navigator, Request, Response, Storage,
 };

@@ -1,6 +1,9 @@
+use std::sync::{Arc, Mutex};
+
 use tsonic_js::web::{
-    AbortController, AbortSignal, Blob, BlobPart, Body, DomException, File, FormData,
-    FormDataValue, Headers, Navigator, Request, Response, Storage,
+    AbortController, AbortSignal, AddEventListenerOptions, Blob, BlobPart, Body, CustomEvent,
+    DomException, Event, EventInit, EventTarget, File, FormData, FormDataValue, Headers, Navigator,
+    Request, Response, Storage,
 };
 use tsonic_js::{JsObject, JsValue};
 
@@ -30,6 +33,80 @@ fn dom_exception_exposes_legacy_codes() {
 
     let custom = DomException::new("custom", "ApplicationError");
     assert_eq!(custom.code(), 0);
+}
+
+#[test]
+fn event_target_dispatches_and_removes_listeners() {
+    let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+    let mut target = EventTarget::new();
+    let first_seen = Arc::clone(&seen);
+    let first = target.add_event_listener(
+        "ready",
+        move |event| {
+            first_seen
+                .lock()
+                .unwrap()
+                .push(event.event_type().to_string());
+        },
+        AddEventListenerOptions::default(),
+    );
+    let second_seen = Arc::clone(&seen);
+    target.add_event_listener(
+        "ready",
+        move |event| {
+            second_seen.lock().unwrap().push("once".to_string());
+            event.prevent_default();
+        },
+        AddEventListenerOptions {
+            once: true,
+            ..Default::default()
+        },
+    );
+
+    let mut event = Event::new(
+        "ready",
+        EventInit {
+            cancelable: true,
+            ..Default::default()
+        },
+    );
+    assert!(!target.dispatch_event(&mut event));
+    assert!(event.default_prevented());
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        &["ready".to_string(), "once".to_string()]
+    );
+
+    let mut second = Event::new("ready", EventInit::default());
+    assert!(target.dispatch_event(&mut second));
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        &["ready".to_string(), "once".to_string(), "ready".to_string()]
+    );
+
+    assert!(target.remove_event_listener(first));
+    let mut third = Event::new("ready", EventInit::default());
+    assert!(target.dispatch_event(&mut third));
+    assert_eq!(seen.lock().unwrap().len(), 3);
+}
+
+#[test]
+fn custom_event_carries_detail_and_init_state() {
+    let detail = JsValue::Object(JsObject::from_pairs([("id", JsValue::Number(1.0))]));
+    let custom = CustomEvent::new(
+        "selected",
+        detail.clone(),
+        EventInit {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+        },
+    );
+    assert_eq!(custom.event().event_type(), "selected");
+    assert!(custom.event().bubbles());
+    assert!(custom.event().cancelable());
+    assert!(custom.event().composed());
+    assert_eq!(custom.detail(), &detail);
 }
 
 #[test]

@@ -40,6 +40,7 @@ pub use typed_array::{
 };
 pub use value::JsValue;
 pub use web::{
-    AbortController, AbortSignal, Blob, BlobPart, Body, DomException, File, FormData,
+    AbortController, AbortSignal, AddEventListenerOptions, Blob, BlobPart, Body, CustomEvent,
+    DomException, Event, EventInit, EventListenerOptions, EventTarget, File, FormData,
     FormDataValue, Headers, Navigator, Request, Response, Storage,
 };

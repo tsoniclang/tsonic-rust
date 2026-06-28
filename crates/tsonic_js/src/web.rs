@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::array_buffer::ArrayBuffer;
 use crate::errors::{type_error, JsResult};
@@ -60,6 +61,207 @@ impl DomException {
 
     pub fn code(&self) -> u16 {
         self.code
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Event {
+    event_type: String,
+    bubbles: bool,
+    cancelable: bool,
+    composed: bool,
+    default_prevented: bool,
+    propagation_stopped: bool,
+    immediate_propagation_stopped: bool,
+    time_stamp: f64,
+}
+
+impl Event {
+    pub fn new(event_type: impl Into<String>, init: EventInit) -> Self {
+        Self {
+            event_type: event_type.into(),
+            bubbles: init.bubbles,
+            cancelable: init.cancelable,
+            composed: init.composed,
+            default_prevented: false,
+            propagation_stopped: false,
+            immediate_propagation_stopped: false,
+            time_stamp: now_millis(),
+        }
+    }
+
+    pub fn event_type(&self) -> &str {
+        &self.event_type
+    }
+
+    pub fn bubbles(&self) -> bool {
+        self.bubbles
+    }
+
+    pub fn cancelable(&self) -> bool {
+        self.cancelable
+    }
+
+    pub fn composed(&self) -> bool {
+        self.composed
+    }
+
+    pub fn default_prevented(&self) -> bool {
+        self.default_prevented
+    }
+
+    pub fn cancel_bubble(&self) -> bool {
+        self.propagation_stopped
+    }
+
+    pub fn return_value(&self) -> bool {
+        !self.default_prevented
+    }
+
+    pub fn time_stamp(&self) -> f64 {
+        self.time_stamp
+    }
+
+    pub fn prevent_default(&mut self) {
+        if self.cancelable {
+            self.default_prevented = true;
+        }
+    }
+
+    pub fn stop_propagation(&mut self) {
+        self.propagation_stopped = true;
+    }
+
+    pub fn stop_immediate_propagation(&mut self) {
+        self.immediate_propagation_stopped = true;
+        self.propagation_stopped = true;
+    }
+
+    pub fn init_event(&mut self, event_type: impl Into<String>, bubbles: bool, cancelable: bool) {
+        self.event_type = event_type.into();
+        self.bubbles = bubbles;
+        self.cancelable = cancelable;
+        self.default_prevented = false;
+        self.propagation_stopped = false;
+        self.immediate_propagation_stopped = false;
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EventInit {
+    pub bubbles: bool,
+    pub cancelable: bool,
+    pub composed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomEvent {
+    event: Event,
+    detail: JsValue,
+}
+
+impl CustomEvent {
+    pub fn new(event_type: impl Into<String>, detail: JsValue, init: EventInit) -> Self {
+        Self {
+            event: Event::new(event_type, init),
+            detail,
+        }
+    }
+
+    pub fn event(&self) -> &Event {
+        &self.event
+    }
+
+    pub fn event_mut(&mut self) -> &mut Event {
+        &mut self.event
+    }
+
+    pub fn detail(&self) -> &JsValue {
+        &self.detail
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EventListenerOptions {
+    pub capture: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AddEventListenerOptions {
+    pub capture: bool,
+    pub once: bool,
+    pub passive: bool,
+}
+
+type EventCallback = dyn FnMut(&mut Event) + Send;
+
+struct ListenerEntry {
+    id: u64,
+    event_type: String,
+    once: bool,
+    callback: Box<EventCallback>,
+}
+
+pub struct EventTarget {
+    next_listener_id: u64,
+    listeners: Vec<ListenerEntry>,
+}
+
+impl Default for EventTarget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EventTarget {
+    pub fn new() -> Self {
+        Self {
+            next_listener_id: 1,
+            listeners: Vec::new(),
+        }
+    }
+
+    pub fn add_event_listener(
+        &mut self,
+        event_type: impl Into<String>,
+        callback: impl FnMut(&mut Event) + Send + 'static,
+        options: AddEventListenerOptions,
+    ) -> u64 {
+        let id = self.next_listener_id;
+        self.next_listener_id += 1;
+        self.listeners.push(ListenerEntry {
+            id,
+            event_type: event_type.into(),
+            once: options.once,
+            callback: Box::new(callback),
+        });
+        id
+    }
+
+    pub fn remove_event_listener(&mut self, listener_id: u64) -> bool {
+        let before = self.listeners.len();
+        self.listeners.retain(|listener| listener.id != listener_id);
+        before != self.listeners.len()
+    }
+
+    pub fn dispatch_event(&mut self, event: &mut Event) -> bool {
+        let mut remove_ids = Vec::new();
+        for listener in &mut self.listeners {
+            if listener.event_type != event.event_type {
+                continue;
+            }
+            (listener.callback)(event);
+            if listener.once {
+                remove_ids.push(listener.id);
+            }
+            if event.immediate_propagation_stopped {
+                break;
+            }
+        }
+        for id in remove_ids {
+            self.remove_event_listener(id);
+        }
+        !event.default_prevented()
     }
 }
 
@@ -653,6 +855,13 @@ impl Default for Navigator {
 
 fn normalize_header_name(key: impl AsRef<str>) -> String {
     key.as_ref().trim().to_ascii_lowercase()
+}
+
+fn now_millis() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs_f64() * 1000.0)
+        .unwrap_or(0.0)
 }
 
 fn dom_exception_code(name: &str) -> u16 {

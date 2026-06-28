@@ -147,12 +147,13 @@ JS-BINARY-008	hard-reject	M	n/a	REJECT-JS-SHARED-ATOMICS	concurrency semantics
 JS-CONSOLE-001	implemented	F/M	tsonic_js::abi::{Console,console_log_to,console_error_to,console_warn_to,console_info_to,console_debug_to,console_dir_to,console_table_to,console_trace_to}	JS-CON-001, JS-CON-002	injectable writers, counters, timers, groups, trace, table, dir
 JS-WEB-001	implemented	N11	tsonic_js::abi::{AbortController,AbortSignal}	JS-WEB-001	closed abort signal and controller carrier
 JS-WEB-002	implemented	N11	tsonic_js::abi::DomException	JS-WEB-002	DOMException name, message, and legacy code constants
-JS-WEB-003	implemented	N11	tsonic_js::abi::{Blob,BlobPart,File,Body}	JS-WEB-003	closed byte/text/file body carriers
-JS-WEB-004	implemented	N11	tsonic_js::abi::Headers	JS-WEB-004	case-insensitive Fetch headers carrier
-JS-WEB-005	implemented	N11	tsonic_js::abi::{FormData,FormDataValue}	JS-WEB-005	ordered form-data carrier
-JS-WEB-006	implemented	N11	tsonic_js::abi::{Request,Response}	JS-WEB-006	Fetch request and response shape without network execution
-JS-WEB-007	implemented	N11	tsonic_js::abi::{Storage,Navigator}	JS-WEB-007	common Web global storage and navigator shape
-JS-WEB-008	implemented	N11	tsonic_node::abi::{fetch,fetch_request,FetchInit}	JS-WEB-008	Node-backed fetch over reqwest into closed Web Request/Response carriers
+JS-WEB-003	implemented	N11	tsonic_js::abi::{Event,EventInit,CustomEvent,EventTarget,AddEventListenerOptions,EventListenerOptions}	JS-WEB-003	closed Event and EventTarget callback carrier
+JS-WEB-004	implemented	N11	tsonic_js::abi::{Blob,BlobPart,File,Body}	JS-WEB-004	closed byte/text/file body carriers
+JS-WEB-005	implemented	N11	tsonic_js::abi::Headers	JS-WEB-005	case-insensitive Fetch headers carrier
+JS-WEB-006	implemented	N11	tsonic_js::abi::{FormData,FormDataValue}	JS-WEB-006	ordered form-data carrier
+JS-WEB-007	implemented	N11	tsonic_js::abi::{Request,Response}	JS-WEB-007	Fetch request and response shape without network execution
+JS-WEB-008	implemented	N11	tsonic_js::abi::{Storage,Navigator}	JS-WEB-008	common Web global storage and navigator shape
+JS-WEB-009	implemented	N11	tsonic_node::abi::{fetch,fetch_request,FetchInit}	JS-WEB-009	Node-backed fetch over reqwest into closed Web Request/Response carriers
 NODE-PATH-001	implemented	J	tsonic_node::abi::path_*	path tests	host/default plus posix/win32
 NODE-PATH-002	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-003	string semantics
 NODE-PATH-003	implemented	J	tsonic_node::abi::path_*	NODE-PATH-004 through NODE-PATH-006	string semantics
