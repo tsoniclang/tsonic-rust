@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tsonic_node::fs_promises;
+use tsonic_node::{buffer::Buffer, fs_promises};
 
 #[test]
 fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
@@ -18,12 +18,60 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
 
     fs_promises::write_file_string(&file_text, "hello", "utf8").unwrap();
     fs_promises::append_file_string(&file_text, " world", "utf8").unwrap();
+    fs_promises::append_file_buffer(&file_text, &Buffer::from_string("!", Some("utf8")).unwrap())
+        .unwrap();
     assert_eq!(
         fs_promises::read_file_string(&file_text, "utf8").unwrap(),
-        "hello world"
+        "hello world!"
     );
-    assert_eq!(fs_promises::stat(&file_text).unwrap().size, 11);
+    assert_eq!(fs_promises::stat(&file_text).unwrap().size, 12);
+    fs_promises::access(&file_text).unwrap();
+    fs_promises::chmod(&file_text, 0o600).unwrap();
+
+    let copy = root.join("copy.txt");
+    let copy_text = copy.to_string_lossy().to_string();
+    fs_promises::copy_file(&file_text, &copy_text).unwrap();
+    let renamed = root.join("renamed.txt");
+    let renamed_text = renamed.to_string_lossy().to_string();
+    fs_promises::rename(&copy_text, &renamed_text).unwrap();
+    assert_eq!(
+        fs_promises::read_file_string(&renamed_text, "utf8").unwrap(),
+        "hello world!"
+    );
+    fs_promises::unlink(&renamed_text).unwrap();
+
     assert_eq!(fs_promises::readdir(&root_text).unwrap(), vec!["a.txt"]);
     assert_eq!(fs_promises::opendir(&root_text).unwrap()[0].name, "a.txt");
+
+    let handle = fs_promises::open(&file_text, "r+").unwrap();
+    assert_eq!(handle.stat().unwrap().size, 12);
+    handle.chmod(0o600).unwrap();
+    let mut buffer = Buffer::alloc(5);
+    assert_eq!(handle.read(&mut buffer, 0, 5, Some(6)).unwrap(), 5);
+    assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");
+    handle.write_string("rust", Some(6), "utf8").unwrap();
+    handle.sync().unwrap();
+    handle.datasync().unwrap();
+    handle.truncate(10).unwrap();
+    handle.close().unwrap();
+    assert_eq!(
+        fs_promises::read_file_string(&file_text, "utf8").unwrap(),
+        "hello rust"
+    );
+
+    let nested = root.join("nested");
+    let nested_text = nested.to_string_lossy().to_string();
+    fs_promises::mkdir(&nested_text, false).unwrap();
+    let nested_file = nested.join("n.txt");
+    fs_promises::write_file_string(&nested_file.to_string_lossy(), "n", "utf8").unwrap();
+    let copied_dir = root.join("copied");
+    fs_promises::cp(&nested_text, &copied_dir.to_string_lossy(), true).unwrap();
+    assert!(
+        fs_promises::stat(&copied_dir.join("n.txt").to_string_lossy())
+            .unwrap()
+            .is_file()
+    );
+    assert!(fs_promises::lstat(&file_text).unwrap().is_file());
+
     fs_promises::rm(&root_text, true, false).unwrap();
 }

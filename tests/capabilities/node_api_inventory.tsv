@@ -51,7 +51,7 @@ NODE-FS-CLOSE	fs	closeSync	implemented	K	tsonic_node::fs::close_sync	NODE-FS-EXT
 NODE-FS-COPY-FILE	fs	copyFileSync	implemented	K	tsonic_node::fs::copy_file_sync	NODE-FS-001	file copy
 NODE-FS-CP	fs	cpSync	implemented	K	tsonic_node::fs::cp_sync	NODE-FS-EXT-002	recursive directory copy
 NODE-FS-EXISTS	fs	existsSync	implemented	K	tsonic_node::fs::exists_sync	NODE-FS-001	boolean existence
-NODE-FS-FCHMOD	fs	fchmodSync	hard-reject	N0	n/a	REJECT-NODE-FS-FD-PERMISSIONS	fd permission mutation not in closed fd table
+NODE-FS-FCHMOD	fs	fchmodSync	implemented	K	tsonic_node::fs::fchmod_sync	NODE-FS-EXT-003	fd permission mutation through closed fd table
 NODE-FS-FCHOWN	fs	fchownSync	hard-reject	N0	n/a	REJECT-NODE-FS-OWNERSHIP	owner/group mutation requires platform-specific privileged APIs
 NODE-FS-FDATASYNC	fs	fdatasyncSync	implemented	K	tsonic_node::fs::fdatasync_sync	NODE-FS-EXT-001	file data sync
 NODE-FS-FSTAT	fs	fstatSync	implemented	K	tsonic_node::fs::fstat_sync	NODE-FS-EXT-001	fd stat

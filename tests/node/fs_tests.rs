@@ -54,6 +54,7 @@ fn fs_extended_sync_file_lifecycle() {
 
     let fd = fs::open_sync(&file_text, "r+").unwrap();
     assert_eq!(fs::fstat_sync(fd).unwrap().size, 11);
+    fs::fchmod_sync(fd, 0o600).unwrap();
     let mut buffer = tsonic_node::buffer::Buffer::alloc(5);
     assert_eq!(fs::read_sync(fd, &mut buffer, 0, 5, Some(6)).unwrap(), 5);
     assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "world");

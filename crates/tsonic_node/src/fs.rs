@@ -170,6 +170,21 @@ pub fn lstat_sync(path: &str) -> NodeResult<Stats> {
 
 pub fn chmod_sync(path: &str, mode: u32) -> NodeResult<()> {
     let mut permissions = fs::metadata(path).map_err(map_io_error)?.permissions();
+    set_permissions_mode(&mut permissions, mode);
+    fs::set_permissions(path, permissions).map_err(map_io_error)
+}
+
+pub fn fchmod_sync(fd: i32, mode: u32) -> NodeResult<()> {
+    let table = file_table().lock().unwrap();
+    let file = table
+        .get(&fd)
+        .ok_or_else(|| NodeError::new("EBADF", "bad file descriptor"))?;
+    let mut permissions = file.metadata().map_err(map_io_error)?.permissions();
+    set_permissions_mode(&mut permissions, mode);
+    file.set_permissions(permissions).map_err(map_io_error)
+}
+
+fn set_permissions_mode(permissions: &mut fs::Permissions, mode: u32) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -179,7 +194,6 @@ pub fn chmod_sync(path: &str, mode: u32) -> NodeResult<()> {
     {
         permissions.set_readonly(mode & 0o200 == 0);
     }
-    fs::set_permissions(path, permissions).map_err(map_io_error)
 }
 
 pub fn mkdir_sync(path: &str, recursive: bool) -> NodeResult<()> {
