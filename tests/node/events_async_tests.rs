@@ -5,7 +5,7 @@ use tsonic_js::JsValue;
 use tsonic_node::{
     async_hooks::{self, AsyncLocalStorage},
     diagnostics_channel,
-    events::EventEmitter,
+    events::{EventEmitter, EventEmitterAsyncResource, NodeEventTarget},
 };
 
 #[test]
@@ -76,6 +76,45 @@ fn event_emitter_supports_prepend_remove_and_static_helpers() {
     tsonic_node::events::set_max_listeners(7, &mut [&mut one, &mut two]);
     assert_eq!(one.get_max_listeners(), Some(7));
     assert_eq!(two.get_max_listeners(), Some(7));
+
+    let capturing = EventEmitter::with_options(tsonic_node::events::EventEmitterOptions {
+        capture_rejections: true,
+    });
+    assert!(capturing.capture_rejections());
+}
+
+#[test]
+fn node_event_target_and_async_resource_shapes_forward_events() {
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let mut target = NodeEventTarget::new();
+    let target_seen = Rc::clone(&seen);
+    target.on("message", move |args| {
+        target_seen.borrow_mut().push(args[0].inspect());
+    });
+    target.set_max_listeners(4);
+    assert_eq!(target.get_max_listeners(), Some(4));
+    assert!(target.emit("message", &[JsValue::String("hello".to_string())]));
+    assert_eq!(target.event_names(), vec!["message".to_string()]);
+    assert_eq!(target.listener_count("message"), 1);
+    assert_eq!(seen.borrow().as_slice(), &["\"hello\"".to_string()]);
+
+    let mut resource =
+        EventEmitterAsyncResource::new(tsonic_node::events::EventEmitterAsyncResourceOptions {
+            name: Some("resource".to_string()),
+            trigger_async_id: Some(10),
+            require_manual_destroy: true,
+            capture_rejections: true,
+        });
+    assert_eq!(resource.trigger_async_id(), 10);
+    assert!(resource.async_id() > 0);
+    assert!(resource.event_emitter().capture_rejections());
+    let resource_seen = Rc::clone(&seen);
+    resource.event_emitter_mut().on("done", move |_| {
+        resource_seen.borrow_mut().push("done".to_string())
+    });
+    assert!(resource.event_emitter_mut().emit("done", &[]));
+    resource.emit_destroy();
+    assert!(resource.async_resource().destroyed());
 }
 
 #[test]

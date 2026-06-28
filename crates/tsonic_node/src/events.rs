@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use tsonic_js::JsValue;
 
+use crate::async_hooks::{AsyncResource, AsyncResourceOptions};
+
 type Listener = Box<dyn FnMut(&[JsValue])>;
 type ListenerMap = BTreeMap<String, Vec<ListenerEntry>>;
 
@@ -16,11 +18,23 @@ pub struct EventEmitter {
     listeners: ListenerMap,
     max_listeners: Option<usize>,
     next_listener_id: usize,
+    capture_rejections: bool,
 }
 
 impl EventEmitter {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn with_options(options: EventEmitterOptions) -> Self {
+        Self {
+            capture_rejections: options.capture_rejections,
+            ..Self::default()
+        }
+    }
+
+    pub fn capture_rejections(&self) -> bool {
+        self.capture_rejections
     }
 
     pub fn on<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
@@ -186,11 +200,153 @@ impl EventEmitter {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EventEmitterOptions {
+    pub capture_rejections: bool,
+}
+
+pub struct NodeEventTarget {
+    emitter: EventEmitter,
+}
+
+impl Default for NodeEventTarget {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl NodeEventTarget {
+    pub fn new() -> Self {
+        Self {
+            emitter: EventEmitter::new(),
+        }
+    }
+
+    pub fn on<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.on(event, listener);
+        self
+    }
+
+    pub fn add_listener<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.on(event, listener)
+    }
+
+    pub fn once<F>(&mut self, event: impl Into<String>, listener: F) -> &mut Self
+    where
+        F: FnMut(&[JsValue]) + 'static,
+    {
+        self.emitter.once(event, listener);
+        self
+    }
+
+    pub fn off(&mut self, event: &str, listener_id: usize) -> &mut Self {
+        self.emitter.off(event, listener_id);
+        self
+    }
+
+    pub fn remove_listener(&mut self, event: &str, listener_id: usize) -> &mut Self {
+        self.off(event, listener_id)
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        self.emitter.remove_all_listeners(event);
+        self
+    }
+
+    pub fn emit(&mut self, event: &str, args: &[JsValue]) -> bool {
+        self.emitter.emit(event, args)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.emitter.listener_count(event)
+    }
+
+    pub fn event_names(&self) -> Vec<String> {
+        self.emitter.event_names()
+    }
+
+    pub fn set_max_listeners(&mut self, max: usize) {
+        self.emitter.set_max_listeners(max);
+    }
+
+    pub fn get_max_listeners(&self) -> Option<usize> {
+        self.emitter.get_max_listeners()
+    }
+}
+
+pub struct EventEmitterAsyncResource {
+    emitter: EventEmitter,
+    async_resource: AsyncResource,
+}
+
+impl EventEmitterAsyncResource {
+    pub fn new(options: EventEmitterAsyncResourceOptions) -> Self {
+        let async_resource = AsyncResource::new(
+            options.name.unwrap_or_else(|| "EventEmitter".to_string()),
+            Some(AsyncResourceOptions {
+                trigger_async_id: options.trigger_async_id,
+                require_manual_destroy: options.require_manual_destroy,
+            }),
+        );
+        Self {
+            emitter: EventEmitter::with_options(EventEmitterOptions {
+                capture_rejections: options.capture_rejections,
+            }),
+            async_resource,
+        }
+    }
+
+    pub fn event_emitter(&self) -> &EventEmitter {
+        &self.emitter
+    }
+
+    pub fn event_emitter_mut(&mut self) -> &mut EventEmitter {
+        &mut self.emitter
+    }
+
+    pub fn async_resource(&self) -> &AsyncResource {
+        &self.async_resource
+    }
+
+    pub fn async_id(&self) -> u64 {
+        self.async_resource.async_id()
+    }
+
+    pub fn trigger_async_id(&self) -> u64 {
+        self.async_resource.trigger_async_id()
+    }
+
+    pub fn emit_destroy(&mut self) {
+        self.async_resource.emit_destroy();
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EventEmitterAsyncResourceOptions {
+    pub name: Option<String>,
+    pub trigger_async_id: Option<u64>,
+    pub require_manual_destroy: bool,
+    pub capture_rejections: bool,
+}
+
 pub fn once<F>(emitter: &mut EventEmitter, event: impl Into<String>, listener: F)
 where
     F: FnMut(&[JsValue]) + 'static,
 {
     emitter.once(event, listener);
+}
+
+pub fn on<F>(emitter: &mut EventEmitter, event: impl Into<String>, listener: F)
+where
+    F: FnMut(&[JsValue]) + 'static,
+{
+    emitter.on(event, listener);
 }
 
 pub fn listener_count(emitter: &EventEmitter, event: &str) -> usize {

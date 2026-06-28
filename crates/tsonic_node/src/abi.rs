@@ -73,7 +73,9 @@ pub use crate::dns::{
 };
 pub use crate::events::{
     get_event_listeners as events_get_event_listeners, listener_count as events_listener_count,
-    once as events_once, set_max_listeners as events_set_max_listeners, EventEmitter,
+    on as events_on, once as events_once, set_max_listeners as events_set_max_listeners,
+    EventEmitter, EventEmitterAsyncResource, EventEmitterAsyncResourceOptions, EventEmitterOptions,
+    NodeEventTarget,
 };
 pub use crate::fetch::{fetch, fetch_request, FetchInit};
 pub use crate::fs::{

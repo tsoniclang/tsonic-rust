@@ -19,6 +19,8 @@ NODE-DNS-RESOLVER	dns	Resolver complete common shape	implemented	N26	tsonic_node
 NODE-DNS-PROMISES	dns/promises	promise record helpers	implemented	N26	tsonic_node::dns::promises	NODE-DNS-002	blocking-now promise-shaped DNS record helpers over same closed resolver APIs
 NODE-MODULE-DOMAIN	domain	module	hard-reject	N0	n/a	REJECT-NODE-DOMAIN	deprecated async domain model excluded
 NODE-MODULE-EVENTS	events	module	implemented	N3	tsonic_node::events::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
+NODE-EVENTS-TARGET	events	NodeEventTarget/static helpers/captureRejections	implemented	N28	tsonic_node::events::{NodeEventTarget,EventEmitterOptions,on}	NODE-EVENTS-002	NodeEventTarget, EventEmitter captureRejections option, and static on helper shape
+NODE-EVENTS-ASYNC-RESOURCE	events	EventEmitterAsyncResource	implemented	N28	tsonic_node::events::{EventEmitterAsyncResource,EventEmitterAsyncResourceOptions}	NODE-EVENTS-002	EventEmitterAsyncResource over closed AsyncResource identity
 NODE-MODULE-FS	fs	module	implemented	K	tsonic_node::fs	NODE-FS-001	synchronous filesystem subset implemented; async/streams/watchers rejected separately
 NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promises	NODE-FSP-001	blocking-now fs/promises shape over filesystem helpers
 NODE-MODULE-HTTP	http	module	implemented	N4	tsonic_node::http	NODE-HTTP-001	HTTP/1 client request/response over real TCP
