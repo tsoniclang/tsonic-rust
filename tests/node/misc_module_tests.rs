@@ -78,4 +78,22 @@ fn module_helpers_cover_safe_common_node_shapes() {
 #[test]
 fn tty_is_explicitly_non_interactive_by_default() {
     assert!(!tty::isatty(1));
+    let mut input = tty::ReadStream::new(0);
+    assert_eq!(input.fd(), 0);
+    assert!(!input.is_tty());
+    assert!(!input.is_raw());
+    input.set_raw_mode(true);
+    assert!(input.is_raw());
+
+    let output = tty::WriteStream::new(1);
+    assert_eq!(output.fd(), 1);
+    assert!(!output.is_tty());
+    assert_eq!(output.columns(), 80);
+    assert_eq!(output.rows(), 24);
+    assert_eq!(output.get_color_depth(), 1);
+    assert!(!output.has_colors());
+    assert!(!output.clear_line());
+    assert!(!output.clear_screen_down());
+    assert!(!output.cursor_to(0, None));
+    assert!(!output.move_cursor(1, 1));
 }

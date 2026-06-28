@@ -165,7 +165,9 @@ pub use crate::tls::{
     check_server_identity as tls_check_server_identity, connect_get as tls_connect_get,
     default_port as tls_default_port, ConnectOptions as TlsConnectOptions,
 };
-pub use crate::tty::isatty as tty_isatty;
+pub use crate::tty::{
+    isatty as tty_isatty, ReadStream as TtyReadStream, WriteStream as TtyWriteStream,
+};
 pub use crate::url::{
     can_parse as url_can_parse, domain_to_ascii as url_domain_to_ascii,
     domain_to_unicode as url_domain_to_unicode, file_url_to_path, format as url_format,
