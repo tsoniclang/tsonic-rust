@@ -10,6 +10,17 @@ use crate::stream::{Readable, Writable};
 use filetime::FileTime;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatFs {
+    pub r#type: i64,
+    pub bsize: u64,
+    pub blocks: u64,
+    pub bfree: u64,
+    pub bavail: u64,
+    pub files: u64,
+    pub ffree: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stats {
     pub size: u64,
     pub is_file: bool,
@@ -185,6 +196,10 @@ pub fn fchmod_sync(fd: i32, mode: u32) -> NodeResult<()> {
     file.set_permissions(permissions).map_err(map_io_error)
 }
 
+pub fn statfs_sync(path: &str) -> NodeResult<StatFs> {
+    statfs_impl(path)
+}
+
 pub fn utimes_sync(path: &str, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
     let atime = file_time_from_seconds(atime_seconds)?;
     let mtime = file_time_from_seconds(mtime_seconds)?;
@@ -243,6 +258,44 @@ fn file_time_from_seconds(value: f64) -> NodeResult<FileTime> {
         nanos -= 1_000_000_000;
     }
     Ok(FileTime::from_unix_time(seconds, nanos))
+}
+
+#[cfg(target_os = "linux")]
+fn statfs_impl(path: &str) -> NodeResult<StatFs> {
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+    use std::os::unix::ffi::OsStrExt;
+
+    let path = std::path::Path::new(path);
+    let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {
+        NodeError::new(
+            "ERR_INVALID_ARG_VALUE",
+            "path contains an interior NUL byte",
+        )
+    })?;
+    let mut stats = MaybeUninit::<libc::statfs>::uninit();
+    let result = unsafe { libc::statfs(path.as_ptr(), stats.as_mut_ptr()) };
+    if result != 0 {
+        return Err(map_io_error(std::io::Error::last_os_error()));
+    }
+    let stats = unsafe { stats.assume_init() };
+    Ok(StatFs {
+        r#type: stats.f_type,
+        bsize: stats.f_bsize as u64,
+        blocks: stats.f_blocks,
+        bfree: stats.f_bfree,
+        bavail: stats.f_bavail,
+        files: stats.f_files,
+        ffree: stats.f_ffree,
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn statfs_impl(_path: &str) -> NodeResult<StatFs> {
+    Err(NodeError::new(
+        "ERR_FEATURE_UNAVAILABLE",
+        "statfs is currently implemented for Linux targets",
+    ))
 }
 
 pub fn mkdir_sync(path: &str, recursive: bool) -> NodeResult<()> {

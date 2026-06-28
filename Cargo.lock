@@ -1573,6 +1573,7 @@ dependencies = [
  "flate2",
  "get_if_addrs",
  "glob",
+ "libc",
  "rand 0.8.6",
  "reqwest",
  "rsa",

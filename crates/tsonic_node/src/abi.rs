@@ -74,12 +74,12 @@ pub use crate::fs::{
     read_file_sync_string as fs_read_file_sync_string, read_sync as fs_read_sync,
     readdir_sync as fs_readdir_sync, readlink_sync as fs_readlink_sync,
     realpath_sync as fs_realpath_sync, rename_sync as fs_rename_sync, rm_sync as fs_rm_sync,
-    rmdir_sync as fs_rmdir_sync, stat_sync as fs_stat_sync, symlink_sync as fs_symlink_sync,
-    truncate_sync as fs_truncate_sync, unlink_sync as fs_unlink_sync,
-    utimes_sync as fs_utimes_sync, watch as fs_watch, watch_file as fs_watch_file,
-    write_file_sync_buffer as fs_write_file_sync_buffer,
+    rmdir_sync as fs_rmdir_sync, stat_sync as fs_stat_sync, statfs_sync as fs_statfs_sync,
+    symlink_sync as fs_symlink_sync, truncate_sync as fs_truncate_sync,
+    unlink_sync as fs_unlink_sync, utimes_sync as fs_utimes_sync, watch as fs_watch,
+    watch_file as fs_watch_file, write_file_sync_buffer as fs_write_file_sync_buffer,
     write_file_sync_string as fs_write_file_sync_string, write_sync_buffer as fs_write_sync_buffer,
-    write_sync_string as fs_write_sync_string, Dirent, FsWatchEvent, FsWatcher, Stats,
+    write_sync_string as fs_write_sync_string, Dirent, FsWatchEvent, FsWatcher, StatFs, Stats,
 };
 pub use crate::fs_promises::{
     access as fs_promises_access, append_file_buffer as fs_promises_append_file_buffer,

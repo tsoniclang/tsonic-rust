@@ -51,6 +51,9 @@ fn fs_extended_sync_file_lifecycle() {
 
     fs::access_sync(&file_text).unwrap();
     fs::chmod_sync(&file_text, 0o600).unwrap();
+    let filesystem = fs::statfs_sync(&file_text).unwrap();
+    assert!(filesystem.bsize > 0);
+    assert!(filesystem.blocks > 0);
 
     let fd = fs::open_sync(&file_text, "r+").unwrap();
     assert_eq!(fs::fstat_sync(fd).unwrap().size, 11);

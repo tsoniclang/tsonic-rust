@@ -76,7 +76,7 @@ NODE-FS-RENAME	fs	renameSync	implemented	K	tsonic_node::fs::rename_sync	NODE-FS-
 NODE-FS-RM	fs	rmSync	implemented	K	tsonic_node::fs::rm_sync	NODE-FS-001	recursive/force controls
 NODE-FS-RMDIR	fs	rmdirSync	implemented	K	tsonic_node::fs::rmdir_sync	NODE-FS-EXT-002	empty directory removal
 NODE-FS-STAT	fs	statSync	implemented	K	tsonic_node::fs::stat_sync	NODE-FS-001	basic Stats
-NODE-FS-STATFS	fs	statfsSync	hard-reject	N0	n/a	REJECT-NODE-FS-STATFS	exact statvfs needs platform binding/dependency; fake zeros banned
+NODE-FS-STATFS	fs	statfsSync	implemented	N13	tsonic_node::fs::statfs_sync	NODE-FS-STATFS-001	exact Linux statfs values through approved platform binding; unsupported platforms fail explicitly
 NODE-FS-SYMLINK	fs	symlinkSync	implemented	K	tsonic_node::fs::symlink_sync	NODE-FS-EXT-002	platform symlink helper
 NODE-FS-TRUNCATE	fs	truncateSync	implemented	K	tsonic_node::fs::truncate_sync	NODE-FS-EXT-002	path truncate
 NODE-FS-UNLINK	fs	unlinkSync	implemented	K	tsonic_node::fs::unlink_sync	NODE-FS-001	remove file
