@@ -146,6 +146,9 @@ pub struct ProxyEnv {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ClientRequestArgs {
+    pub url: Option<String>,
+    pub options: Option<RequestOptions>,
+    pub callback: bool,
     pub protocol: Option<String>,
     pub host: Option<String>,
     pub hostname: Option<String>,
@@ -198,6 +201,7 @@ impl ClientRequestArgs {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentOptions {
     pub protocol: Option<String>,
+    pub callback: bool,
     pub keep_alive: bool,
     pub keep_alive_msecs: u64,
     pub max_sockets: usize,
@@ -214,6 +218,7 @@ impl Default for AgentOptions {
     fn default() -> Self {
         Self {
             protocol: Some("http:".to_string()),
+            callback: false,
             keep_alive: false,
             keep_alive_msecs: 1_000,
             max_sockets: usize::MAX,
@@ -231,6 +236,7 @@ impl Default for AgentOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Agent {
     pub options: AgentOptions,
+    pub callback: bool,
     pub max_sockets: usize,
     pub max_free_sockets: usize,
     pub max_total_sockets: usize,
@@ -247,6 +253,7 @@ impl Agent {
             max_sockets: options.max_sockets,
             max_free_sockets: options.max_free_sockets,
             max_total_sockets: options.max_total_sockets,
+            callback: options.callback,
             options,
             sockets: BTreeMap::new(),
             free_sockets: BTreeMap::new(),
@@ -326,6 +333,55 @@ impl RequestOptions {
             agent: None,
             auth: None,
             set_host: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServerOptions {
+    pub incoming_message: Option<String>,
+    pub server_response: Option<String>,
+    pub high_water_mark: Option<usize>,
+    pub insecure_http_parser: bool,
+    pub max_header_size: Option<usize>,
+    pub no_delay: bool,
+    pub keep_alive: bool,
+    pub keep_alive_initial_delay: Option<u64>,
+    pub keep_alive_timeout: u64,
+    pub keep_alive_timeout_buffer: u64,
+    pub request_timeout: u64,
+    pub headers_timeout: u64,
+    pub connections_checking_interval: Option<u64>,
+    pub join_duplicate_headers: bool,
+    pub unique_headers: Vec<String>,
+    pub require_host_header: bool,
+    pub reject_non_standard_body_writes: bool,
+    pub optimize_empty_requests: bool,
+    pub should_upgrade_callback: bool,
+}
+
+impl Default for ServerOptions {
+    fn default() -> Self {
+        Self {
+            incoming_message: None,
+            server_response: None,
+            high_water_mark: None,
+            insecure_http_parser: false,
+            max_header_size: Some(MAX_HEADER_SIZE),
+            no_delay: true,
+            keep_alive: true,
+            keep_alive_initial_delay: None,
+            keep_alive_timeout: 5_000,
+            keep_alive_timeout_buffer: 1_000,
+            request_timeout: 300_000,
+            headers_timeout: 60_000,
+            connections_checking_interval: Some(30_000),
+            join_duplicate_headers: false,
+            unique_headers: Vec::new(),
+            require_host_header: true,
+            reject_non_standard_body_writes: false,
+            optimize_empty_requests: false,
+            should_upgrade_callback: false,
         }
     }
 }
@@ -959,6 +1015,14 @@ impl ClientRequest {
 type RequestHandler = dyn Fn(IncomingMessage, &mut ServerResponse) + Send + Sync;
 
 pub struct Server {
+    pub options: ServerOptions,
+    pub timeout: u64,
+    pub request_timeout: u64,
+    pub headers_timeout: u64,
+    pub keep_alive_timeout: u64,
+    pub keep_alive_timeout_buffer: u64,
+    pub max_headers_count: Option<usize>,
+    pub max_requests_per_socket: Option<usize>,
     handler: Box<RequestHandler>,
     listeners: HttpListenerMap,
 }
@@ -967,7 +1031,22 @@ impl Server {
     pub fn new(
         handler: impl Fn(IncomingMessage, &mut ServerResponse) + Send + Sync + 'static,
     ) -> Self {
+        Self::with_options(ServerOptions::default(), handler)
+    }
+
+    pub fn with_options(
+        options: ServerOptions,
+        handler: impl Fn(IncomingMessage, &mut ServerResponse) + Send + Sync + 'static,
+    ) -> Self {
         Self {
+            timeout: 0,
+            request_timeout: options.request_timeout,
+            headers_timeout: options.headers_timeout,
+            keep_alive_timeout: options.keep_alive_timeout,
+            keep_alive_timeout_buffer: options.keep_alive_timeout_buffer,
+            max_headers_count: Some(2_000),
+            max_requests_per_socket: None,
+            options,
             handler: Box::new(handler),
             listeners: BTreeMap::new(),
         }
@@ -984,6 +1063,14 @@ impl Server {
     pub fn close_idle_connections(&self) {}
 
     pub fn close_all_connections(&self) {}
+
+    pub fn set_timeout(&mut self, msecs: u64, callback: Option<impl FnOnce()>) -> &mut Self {
+        self.timeout = msecs;
+        if let Some(callback) = callback {
+            callback();
+        }
+        self
+    }
 
     pub fn add_listener(&mut self, event: &str) -> &mut Self {
         http_add_listener(&mut self.listeners, event, false);

@@ -281,6 +281,70 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
     server.close_idle_connections();
     server.close_all_connections();
     server.close();
+    let mut configured_server = http::Server::with_options(
+        http::ServerOptions {
+            incoming_message: Some("IncomingMessage".to_string()),
+            server_response: Some("ServerResponse".to_string()),
+            high_water_mark: Some(64 * 1024),
+            insecure_http_parser: true,
+            max_header_size: Some(32 * 1024),
+            no_delay: false,
+            keep_alive: false,
+            keep_alive_initial_delay: Some(1_000),
+            keep_alive_timeout: 7_500,
+            keep_alive_timeout_buffer: 250,
+            request_timeout: 120_000,
+            headers_timeout: 30_000,
+            connections_checking_interval: Some(15_000),
+            join_duplicate_headers: true,
+            unique_headers: vec!["set-cookie".to_string()],
+            require_host_header: false,
+            reject_non_standard_body_writes: true,
+            optimize_empty_requests: true,
+            should_upgrade_callback: true,
+        },
+        |_request, response| response.set_status_code(204),
+    );
+    assert_eq!(configured_server.options.high_water_mark, Some(64 * 1024));
+    assert!(configured_server.options.insecure_http_parser);
+    assert_eq!(configured_server.options.max_header_size, Some(32 * 1024));
+    assert!(!configured_server.options.no_delay);
+    assert!(!configured_server.options.keep_alive);
+    assert_eq!(
+        configured_server.options.keep_alive_initial_delay,
+        Some(1_000)
+    );
+    assert_eq!(configured_server.keep_alive_timeout, 7_500);
+    assert_eq!(configured_server.keep_alive_timeout_buffer, 250);
+    assert_eq!(configured_server.request_timeout, 120_000);
+    assert_eq!(configured_server.headers_timeout, 30_000);
+    assert_eq!(
+        configured_server.options.connections_checking_interval,
+        Some(15_000)
+    );
+    assert!(configured_server.options.join_duplicate_headers);
+    assert_eq!(
+        configured_server.options.unique_headers,
+        vec!["set-cookie".to_string()]
+    );
+    assert!(!configured_server.options.require_host_header);
+    assert!(configured_server.options.reject_non_standard_body_writes);
+    assert!(configured_server.options.optimize_empty_requests);
+    assert!(configured_server.options.should_upgrade_callback);
+    configured_server.max_requests_per_socket = Some(100);
+    configured_server.max_headers_count = Some(128);
+    assert_eq!(configured_server.max_requests_per_socket, Some(100));
+    assert_eq!(configured_server.max_headers_count, Some(128));
+    let server_timed = std::cell::Cell::new(false);
+    configured_server.set_timeout(2_500, Some(|| server_timed.set(true)));
+    assert_eq!(configured_server.timeout, 2_500);
+    assert!(server_timed.get());
+    assert_eq!(
+        configured_server
+            .handle(http::IncomingMessage::new("GET", "/", Vec::new()))
+            .status_code,
+        204
+    );
 
     let mut destroyed = http::IncomingMessage::new("GET", "/aborted", Vec::new());
     destroyed.destroy();
@@ -293,6 +357,7 @@ fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
 fn http_agent_and_client_request_expose_common_state() {
     let agent = http::Agent::new(Some(http::AgentOptions {
         protocol: Some("http:".to_string()),
+        callback: true,
         keep_alive: true,
         keep_alive_msecs: 250,
         max_sockets: 16,
@@ -320,6 +385,7 @@ fn http_agent_and_client_request_expose_common_state() {
     assert_eq!(agent.max_sockets, 16);
     assert_eq!(agent.max_free_sockets, 4);
     assert_eq!(agent.max_total_sockets, 32);
+    assert!(agent.callback);
     assert_eq!(agent.options.default_port.as_deref(), Some("80"));
     let mut tracked_agent = agent.clone();
     tracked_agent.record_socket("example.test:80:GET", "socket-1");
@@ -343,6 +409,9 @@ fn http_agent_and_client_request_expose_common_state() {
     assert!(!agent_to_destroy.reuse_socket());
 
     let args = http::ClientRequestArgs {
+        url: Some("http://example.test/from-args".to_string()),
+        options: Some(options.clone()),
+        callback: true,
         host: Some("example.test".to_string()),
         port: Some(80),
         path: Some("/from-args".to_string()),
@@ -372,6 +441,9 @@ fn http_agent_and_client_request_expose_common_state() {
     assert_eq!(args.local_port, Some(0));
     assert!(args.set_default_headers);
     assert_eq!(args.max_header_size, Some(16_384));
+    assert_eq!(args.url.as_deref(), Some("http://example.test/from-args"));
+    assert_eq!(args.options.as_ref().unwrap().path, "/");
+    assert!(args.callback);
 
     let mut request = http::ClientRequest::new(options);
     assert_eq!(request.method, "GET");
