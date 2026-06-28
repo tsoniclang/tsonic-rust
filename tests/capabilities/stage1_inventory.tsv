@@ -240,6 +240,7 @@ NODE-DGRAM-002	implemented	N18	tsonic_node::abi::{DgramSocket,DgramAddressInfo}	
 NODE-MOD-010	implemented	N3	tsonic_node::abi::{diagnostics_channel,diagnostics_publish}	NODE-DIAG-001	named diagnostics channel publish/subscribe runtime
 NODE-MOD-011	implemented	N3	tsonic_node::abi::{dns_lookup,dns_resolve4,dns_resolve6}	NODE-DNS-001	platform resolver lookup and address helpers
 NODE-DNS-002	implemented	N26	tsonic_node::abi::{dns_resolve_any,dns_resolve_ns,dns_resolve_ptr,dns_resolve_caa,dns_resolve_naptr,dns_resolve_soa,dns_resolve_tlsa,DnsResolver}	NODE-DNS-002	complete DNS record function shape with explicit unsupported-record failures and Resolver method coverage
+NODE-DNS-003	implemented	N56	tsonic_node::abi::{DnsLookupAddress,DnsDefaultResultOrder,dns_lookup_service,dns_set_default_result_order,dns_get_default_result_order,dns_promises}	NODE-DNS-001,NODE-DNS-002	lookupService, default result order, common resolve/reverse, typed record carriers, and promise common helpers
 NODE-MOD-012	hard-reject	M	n/a	REJECT-NODE-DOMAIN	legacy async error domain runtime out of Stage 1
 NODE-MOD-013	implemented	N3	tsonic_node::abi::EventEmitter	NODE-EVENTS-001	closed EventEmitter listener and emit model
 NODE-EVENTS-002	implemented	N28	tsonic_node::abi::{NodeEventTarget,EventEmitterAsyncResource,EventEmitterOptions,events_on}	NODE-EVENTS-002	NodeEventTarget, captureRejections option, static on helper, and EventEmitterAsyncResource
@@ -283,6 +284,8 @@ NODE-STREAM-CONSUMERS-001	implemented	N11	tsonic_node::stream::consumers::{buffe
 NODE-STREAM-WEB-001	implemented	N11	tsonic_node::stream::web::{ReadableStream,WritableStream,TransformStream}	NODE-STREAM-003	closed Web stream reader, writer, pipe, and transform carrier shape
 NODE-STREAM-004	implemented	N38	tsonic_node::abi::{Readable,Writable,StreamOptions}	NODE-STREAM-004	readable/writable state, highWaterMark/defaultEncoding, pause/resume, push/unshift, cork/drain/writev, and lifecycle callbacks
 NODE-STREAM-005	implemented	N47	tsonic_node::abi::Readable	NODE-STREAM-005	Readable functional operators map/filter/flatMap/drop/every/some/find/forEach/reduce/compose over closed Buffer chunks
+NODE-STREAM-006	implemented	N56	tsonic_node::abi::{Readable,Writable,Duplex,Transform,PassThrough,stream_finished,stream_promises_pipeline,stream_promises_finished}	NODE-STREAM-001,NODE-STREAM-003	core stream classes, pipeline/finished, and promise-shaped helpers over closed Buffer chunks
+NODE-STREAM-007	implemented	N56	tsonic_node::abi::{ReadableStream,WritableStream,TransformStream,ReadableStreamDefaultReader,WritableStreamDefaultWriter}	NODE-STREAM-003	Web Readable/Writable/Transform stream reader, writer, lock, pipe, cancel, close, abort, and bridge shapes
 NODE-MOD-032	implemented	M	tsonic_node::abi::StringDecoder	NODE-MISC-002	Buffer encoding subset first; decoder state machine later (completed in full-completion branch)
 NODE-STRING-DECODER-001	implemented	N29	tsonic_node::abi::StringDecoder	NODE-STRING-DECODER-001	streaming UTF-8 partial sequence buffering and replacement on end
 NODE-MOD-033	hard-reject	M	n/a	REJECT-NODE-TEST	test runner/reporters not runtime surface
