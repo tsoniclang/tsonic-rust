@@ -134,16 +134,32 @@ pub fn user_info() -> UserInfo {
 }
 
 pub fn cpus() -> Vec<CpuInfo> {
-    let count = available_parallelism();
-    (0..count)
-        .map(|_| CpuInfo {
-            model: std::env::consts::ARCH.to_string(),
-            speed: 0,
-        })
-        .collect()
+    cpuinfo().unwrap_or_else(|| {
+        let count = available_parallelism();
+        (0..count)
+            .map(|_| CpuInfo {
+                model: std::env::consts::ARCH.to_string(),
+                speed: 0,
+            })
+            .collect()
+    })
 }
 
 pub fn loadavg() -> [f64; 3] {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(value) = std::fs::read_to_string("/proc/loadavg") {
+            let mut parts = value
+                .split_whitespace()
+                .take(3)
+                .filter_map(|part| part.parse::<f64>().ok());
+            if let (Some(one), Some(five), Some(fifteen)) =
+                (parts.next(), parts.next(), parts.next())
+            {
+                return [one, five, fifteen];
+            }
+        }
+    }
     [0.0, 0.0, 0.0]
 }
 
@@ -197,5 +213,55 @@ fn meminfo_kb(key: &str) -> Option<u64> {
 
 #[cfg(not(target_os = "linux"))]
 fn meminfo_kb(_key: &str) -> Option<u64> {
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn cpuinfo() -> Option<Vec<CpuInfo>> {
+    let text = std::fs::read_to_string("/proc/cpuinfo").ok()?;
+    let mut values = Vec::new();
+    let mut model = None::<String>;
+    let mut speed = None::<u32>;
+
+    for line in text.lines().chain(std::iter::once("")) {
+        if line.trim().is_empty() {
+            if model.is_some() || speed.is_some() {
+                values.push(CpuInfo {
+                    model: model
+                        .take()
+                        .unwrap_or_else(|| std::env::consts::ARCH.to_string()),
+                    speed: speed.take().unwrap_or(0),
+                });
+            }
+            continue;
+        }
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+        match key {
+            "model name" | "Processor" | "Hardware" if model.is_none() => {
+                model = Some(value.to_string());
+            }
+            "cpu MHz" if speed.is_none() => {
+                speed = value
+                    .parse::<f64>()
+                    .ok()
+                    .map(|value| value.round().max(0.0) as u32);
+            }
+            _ => {}
+        }
+    }
+
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn cpuinfo() -> Option<Vec<CpuInfo>> {
     None
 }

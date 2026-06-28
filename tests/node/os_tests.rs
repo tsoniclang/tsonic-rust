@@ -9,9 +9,15 @@ fn os_wrappers_have_stable_shapes() {
     assert!(!os::hostname().is_empty());
     assert!(!os::r#type().is_empty());
     let _version = os::version();
-    assert!(!os::cpus().is_empty());
+    let cpus = os::cpus();
+    assert!(!cpus.is_empty());
+    assert!(cpus.iter().all(|cpu| !cpu.model.is_empty()));
     assert!(os::available_parallelism() >= 1);
-    assert_eq!(os::loadavg().len(), 3);
+    let loadavg = os::loadavg();
+    assert_eq!(loadavg.len(), 3);
+    assert!(loadavg
+        .iter()
+        .all(|value| value.is_finite() && *value >= 0.0));
     assert!(os::totalmem() >= os::freemem());
     assert!(os::uptime() >= 0.0);
     assert!(!os::machine().is_empty());
