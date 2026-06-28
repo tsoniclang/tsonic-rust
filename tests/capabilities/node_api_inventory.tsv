@@ -916,6 +916,11 @@ NODE-SQLITE-AGGREGATE-OPTIONS-CARRIER	sqlite	AggregateOptions	implemented	N76	ts
 NODE-SQLITE-CONSTANTS	sqlite	constants	implemented	N76	tsonic_node::sqlite::constants	NODE-SQLITE-001	NODE-const SQLITE_* constants exposed as closed numeric constants
 NODE-MODULE-STREAM	stream	module	implemented	N3	tsonic_node::stream	NODE-STREAM-001	closed in-memory readable/writable/pipeline substrate
 NODE-STREAM-OPTIONS	stream	StreamOptions	implemented	N38	tsonic_node::stream::StreamOptions	NODE-STREAM-004	closed stream option carrier with highWaterMark/objectMode/emitClose/autoDestroy/allowHalfOpen/defaultEncoding
+NODE-STREAM-FINISHED-OPTIONS-CARRIER	stream	FinishedOptions	implemented	N77	tsonic_node::stream::FinishedOptions	NODE-STREAM-003	closed finished option carrier
+NODE-STREAM-FINISHED-OPTIONS-ERROR	stream	FinishedOptions.error	implemented	N77	tsonic_node::stream::FinishedOptions::error	NODE-STREAM-003	option controls whether stream error state participates in finished check
+NODE-STREAM-FINISHED-OPTIONS-READABLE	stream	FinishedOptions.readable	implemented	N77	tsonic_node::stream::FinishedOptions::readable	NODE-STREAM-003	option controls whether readable completion is required
+NODE-STREAM-FINISHED-OPTIONS-WRITABLE	stream	FinishedOptions.writable	implemented	N77	tsonic_node::stream::FinishedOptions::writable	NODE-STREAM-003	option controls whether writable completion is required
+NODE-STREAM-FINISHED-OPTIONS-CLEANUP	stream	FinishedOptions.cleanup	implemented	N77	tsonic_node::stream::FinishedOptions::cleanup	NODE-STREAM-003	explicit cleanup option carrier for generated Rust
 NODE-STREAM-READABLE-CARRIER	stream	Readable	implemented	N38	tsonic_node::stream::Readable	NODE-STREAM-004	closed readable carrier over Buffer chunks
 NODE-STREAM-READABLE-FROM-CHUNKS	stream	Readable.from_chunks	implemented	N38	tsonic_node::stream::Readable::from_chunks	NODE-STREAM-004	constructs readable from closed Buffer chunk vector
 NODE-STREAM-READABLE-FROM-CHUNKS-OPTIONS	stream	Readable.from_chunks_with_options	implemented	N38	tsonic_node::stream::Readable::from_chunks_with_options	NODE-STREAM-004	constructs readable with explicit StreamOptions carrier
@@ -1090,8 +1095,16 @@ NODE-STREAM-PASSTHROUGH-READ	stream	PassThrough.read	implemented	N56	tsonic_node
 NODE-STREAM-PASSTHROUGH-END	stream	PassThrough.end	implemented	N56	tsonic_node::stream::PassThrough::end	NODE-STREAM-003	ends passthrough writable side
 NODE-STREAM-PIPELINE	stream	pipeline	implemented	N56	tsonic_node::stream::pipeline	NODE-STREAM-001	pipeline moves Buffer chunks from Readable to Writable
 NODE-STREAM-FINISHED	stream	finished	implemented	N56	tsonic_node::stream::finished	NODE-STREAM-001	finished checks closed readable/writable end state
+NODE-STREAM-FINISHED-WITH-OPTIONS	stream	finishedWithOptions	implemented	N77	tsonic_node::stream::finished_with_options	NODE-STREAM-003	option-aware finished helper over closed stream state
+NODE-STREAM-PROMISES-PIPELINE-OPTIONS-CARRIER	stream/promises	PipelineOptions	implemented	N77	tsonic_node::stream::promises::PipelineOptions	NODE-STREAM-003	closed stream/promises PipelineOptions carrier
+NODE-STREAM-PROMISES-PIPELINE-OPTIONS-END	stream/promises	PipelineOptions.end	implemented	N77	tsonic_node::stream::promises::PipelineOptions::end	NODE-STREAM-003	option controls whether destination is ended
+NODE-STREAM-PROMISES-PIPELINE-OPTIONS-SIGNAL-ABORTED	stream/promises	PipelineOptions.signalAborted	implemented	N77	tsonic_node::stream::promises::PipelineOptions::signal_aborted	NODE-STREAM-003	explicit abort state for generated Rust pipeline calls
 NODE-STREAM-PROMISES-PIPELINE	stream/promises	pipeline	implemented	N56	tsonic_node::stream::promises::pipeline	NODE-STREAM-003	blocking-now promise-shaped pipeline over same closed stream runtime
+NODE-STREAM-PROMISES-PIPELINE-WITH-OPTIONS	stream/promises	pipelineWithOptions	implemented	N77	tsonic_node::stream::promises::pipeline_with_options	NODE-STREAM-003	option-aware stream/promises pipeline helper
+NODE-STREAM-PROMISES-PIPELINE-TRANSFORM	stream/promises	pipelineTransform	implemented	N77	tsonic_node::stream::promises::pipeline_transform	NODE-STREAM-003	stream/promises pipeline with one explicit generated Rust Buffer transform
+NODE-STREAM-PROMISES-PIPELINE-TRANSFORMS	stream/promises	pipelineTransforms	implemented	N77	tsonic_node::stream::promises::pipeline_transforms	NODE-STREAM-003	stream/promises pipeline with explicit generated Rust Buffer transform chain
 NODE-STREAM-PROMISES-FINISHED	stream/promises	finished	implemented	N56	tsonic_node::stream::promises::finished	NODE-STREAM-003	blocking-now promise-shaped finished helper over same closed stream runtime
+NODE-STREAM-PROMISES-FINISHED-WITH-OPTIONS	stream/promises	finishedWithOptions	implemented	N77	tsonic_node::stream::promises::finished_with_options	NODE-STREAM-003	option-aware stream/promises finished helper
 NODE-STREAM-CONSUMERS-BUFFER	stream/consumers	buffer	implemented	N56	tsonic_node::stream::consumers::buffer	NODE-STREAM-002	materializes remaining chunks into Buffer
 NODE-STREAM-CONSUMERS-TEXT	stream/consumers	text	implemented	N56	tsonic_node::stream::consumers::text	NODE-STREAM-002	materializes remaining chunks into string through explicit encoding
 NODE-STREAM-CONSUMERS-ARRAY-BUFFER	stream/consumers	arrayBuffer	implemented	N56	tsonic_node::stream::consumers::array_buffer	NODE-STREAM-002	materializes remaining chunks into ArrayBuffer

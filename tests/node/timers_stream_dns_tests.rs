@@ -197,6 +197,11 @@ fn stream_classes_promises_and_web_bridges_use_closed_buffers() {
     let mut writable = stream::Writable::new();
     stream::promises::pipeline(&mut readable, &mut writable).unwrap();
     assert!(stream::promises::finished(&readable, &writable));
+    assert!(stream::promises::finished_with_options(
+        &readable,
+        &writable,
+        &stream::FinishedOptions::default()
+    ));
 
     let web_readable =
         stream::web::readable_to_web(stream::Readable::from(writable.chunks().to_vec()));
@@ -207,6 +212,93 @@ fn stream_classes_promises_and_web_bridges_use_closed_buffers() {
     assert_eq!(web_writable.chunks().len(), 1);
     let native_writable = stream::web::writable_from_web(web_writable);
     assert_eq!(native_writable.chunks().len(), 1);
+}
+
+#[test]
+fn stream_promises_options_and_transform_chains_are_explicit() {
+    fn uppercase(chunk: Buffer) -> Buffer {
+        Buffer::from_string(
+            &chunk.to_string(Some("utf8")).unwrap().to_ascii_uppercase(),
+            Some("utf8"),
+        )
+        .unwrap()
+    }
+
+    fn suffix(chunk: Buffer) -> Buffer {
+        Buffer::from_string(
+            &(chunk.to_string(Some("utf8")).unwrap() + "!"),
+            Some("utf8"),
+        )
+        .unwrap()
+    }
+
+    let mut readable = stream::Readable::from(vec![
+        Buffer::from_string("a", Some("utf8")).unwrap(),
+        Buffer::from_string("b", Some("utf8")).unwrap(),
+    ]);
+    let mut writable = stream::Writable::new();
+    let written = stream::promises::pipeline_with_options(
+        &mut readable,
+        &mut writable,
+        &stream::promises::PipelineOptions {
+            end: false,
+            signal_aborted: false,
+        },
+    )
+    .unwrap();
+    assert_eq!(written, 2);
+    assert!(!writable.writable_ended());
+    assert!(stream::promises::finished_with_options(
+        &readable,
+        &writable,
+        &stream::FinishedOptions {
+            readable: true,
+            writable: false,
+            error: true,
+            cleanup: true,
+        }
+    ));
+
+    let mut readable =
+        stream::Readable::from(vec![Buffer::from_string("x", Some("utf8")).unwrap()]);
+    let mut writable = stream::Writable::new();
+    stream::promises::pipeline_transform(
+        &mut readable,
+        uppercase,
+        &mut writable,
+        &stream::promises::PipelineOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(writable.chunks()[0].to_string(Some("utf8")).unwrap(), "X");
+    assert!(writable.writable_ended());
+
+    let mut readable =
+        stream::Readable::from(vec![Buffer::from_string("y", Some("utf8")).unwrap()]);
+    let mut writable = stream::Writable::new();
+    stream::promises::pipeline_transforms(
+        &mut readable,
+        &[uppercase, suffix],
+        &mut writable,
+        &stream::promises::PipelineOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(writable.chunks()[0].to_string(Some("utf8")).unwrap(), "Y!");
+
+    let mut readable =
+        stream::Readable::from(vec![Buffer::from_string("z", Some("utf8")).unwrap()]);
+    let mut writable = stream::Writable::new();
+    let error = stream::promises::pipeline_with_options(
+        &mut readable,
+        &mut writable,
+        &stream::promises::PipelineOptions {
+            end: true,
+            signal_aborted: true,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "ABORT_ERR");
+    assert_eq!(readable.readable_length(), 1);
+    assert!(writable.chunks().is_empty());
 }
 
 #[test]
