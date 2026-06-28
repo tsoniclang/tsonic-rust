@@ -7,8 +7,10 @@ pub use crate::assert::{
     strict_equal as assert_strict_equal,
 };
 pub use crate::async_hooks::AsyncLocalStorage;
-pub use crate::buffer::transcode as buffer_transcode;
 pub use crate::buffer::Buffer;
+pub use crate::buffer::{
+    is_buffer as buffer_is_buffer, is_encoding as buffer_is_encoding, transcode as buffer_transcode,
+};
 pub use crate::child_process::{
     spawn_file_sync as child_process_spawn_file_sync, SpawnOutput as ChildProcessOutput,
 };

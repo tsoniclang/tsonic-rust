@@ -26,6 +26,10 @@ impl Buffer {
         Self::from_bytes(vec![0; size])
     }
 
+    pub fn alloc_unsafe(size: usize) -> Self {
+        Self::alloc(size)
+    }
+
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         let len = bytes.len();
         Self {
@@ -73,6 +77,46 @@ impl Buffer {
         Ok(())
     }
 
+    pub fn fill(&mut self, value: u8, start: usize, end: Option<usize>) -> NodeResult<&mut Self> {
+        let end = end.unwrap_or(self.len).min(self.len);
+        if start > end {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "buffer fill start is after end",
+            ));
+        }
+        for index in start..end {
+            self.set(index, value)?;
+        }
+        Ok(self)
+    }
+
+    pub fn copy(
+        &self,
+        target: &mut Buffer,
+        target_start: usize,
+        source_start: usize,
+        source_end: Option<usize>,
+    ) -> NodeResult<usize> {
+        if target_start > target.len || source_start > self.len {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "buffer copy range is outside buffer",
+            ));
+        }
+        let source_end = source_end.unwrap_or(self.len).min(self.len);
+        if source_start > source_end {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "buffer copy source start is after source end",
+            ));
+        }
+        let count = (source_end - source_start).min(target.len - target_start);
+        let bytes = self.read_exact(source_start, count)?;
+        target.write_exact(target_start, &bytes)?;
+        Ok(count)
+    }
+
     pub fn slice(&self, start: isize, end: Option<isize>) -> Self {
         self.view(start, end)
     }
@@ -109,6 +153,40 @@ impl Buffer {
         }
     }
 
+    pub fn includes(&self, needle: &[u8], byte_offset: isize) -> bool {
+        self.index_of(needle, byte_offset).is_some()
+    }
+
+    pub fn index_of(&self, needle: &[u8], byte_offset: isize) -> Option<usize> {
+        if needle.is_empty() {
+            return Some(normalize_search_start(self.len, byte_offset));
+        }
+        let start = normalize_search_start(self.len, byte_offset);
+        self.to_vec()[start..]
+            .windows(needle.len())
+            .position(|window| window == needle)
+            .map(|index| index + start)
+    }
+
+    pub fn last_index_of(&self, needle: &[u8], byte_offset: Option<isize>) -> Option<usize> {
+        if needle.is_empty() {
+            return Some(
+                byte_offset.map_or(self.len, |offset| normalize_search_start(self.len, offset)),
+            );
+        }
+        if needle.len() > self.len {
+            return None;
+        }
+        let max_start = self.len - needle.len();
+        let start = byte_offset
+            .map(|offset| normalize_search_start(self.len, offset).min(max_start))
+            .unwrap_or(max_start);
+        let bytes = self.to_vec();
+        (0..=start)
+            .rev()
+            .find(|index| &bytes[*index..*index + needle.len()] == needle)
+    }
+
     pub fn concat(buffers: &[Buffer]) -> Buffer {
         let mut out = Vec::new();
         for buffer in buffers {
@@ -122,6 +200,88 @@ impl Buffer {
         Ok(u32::from_le_bytes(bytes.try_into().unwrap()))
     }
 
+    pub fn read_uint8(&self, offset: usize) -> NodeResult<u8> {
+        Ok(self.read_exact(offset, 1)?[0])
+    }
+
+    pub fn read_int8(&self, offset: usize) -> NodeResult<i8> {
+        Ok(self.read_uint8(offset)? as i8)
+    }
+
+    pub fn read_uint16_le(&self, offset: usize) -> NodeResult<u16> {
+        let bytes = self.read_exact(offset, 2)?;
+        Ok(u16::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_uint16_be(&self, offset: usize) -> NodeResult<u16> {
+        let bytes = self.read_exact(offset, 2)?;
+        Ok(u16::from_be_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_int16_le(&self, offset: usize) -> NodeResult<i16> {
+        let bytes = self.read_exact(offset, 2)?;
+        Ok(i16::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_int16_be(&self, offset: usize) -> NodeResult<i16> {
+        let bytes = self.read_exact(offset, 2)?;
+        Ok(i16::from_be_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_int32_le(&self, offset: usize) -> NodeResult<i32> {
+        let bytes = self.read_exact(offset, 4)?;
+        Ok(i32::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_int32_be(&self, offset: usize) -> NodeResult<i32> {
+        let bytes = self.read_exact(offset, 4)?;
+        Ok(i32::from_be_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_float_le(&self, offset: usize) -> NodeResult<f32> {
+        let bytes = self.read_exact(offset, 4)?;
+        Ok(f32::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_float_be(&self, offset: usize) -> NodeResult<f32> {
+        let bytes = self.read_exact(offset, 4)?;
+        Ok(f32::from_be_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_double_le(&self, offset: usize) -> NodeResult<f64> {
+        let bytes = self.read_exact(offset, 8)?;
+        Ok(f64::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_double_be(&self, offset: usize) -> NodeResult<f64> {
+        let bytes = self.read_exact(offset, 8)?;
+        Ok(f64::from_be_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn write_uint8(&mut self, value: u8, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &[value])
+    }
+
+    pub fn write_int8(&mut self, value: i8, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &[value as u8])
+    }
+
+    pub fn write_uint16_le(&mut self, value: u16, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_le_bytes())
+    }
+
+    pub fn write_uint16_be(&mut self, value: u16, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_be_bytes())
+    }
+
+    pub fn write_int16_le(&mut self, value: i16, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_le_bytes())
+    }
+
+    pub fn write_int16_be(&mut self, value: i16, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_be_bytes())
+    }
+
     pub fn read_uint32_be(&self, offset: usize) -> NodeResult<u32> {
         let bytes = self.read_exact(offset, 4)?;
         Ok(u32::from_be_bytes(bytes.try_into().unwrap()))
@@ -132,6 +292,30 @@ impl Buffer {
     }
 
     pub fn write_uint32_be(&mut self, value: u32, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_be_bytes())
+    }
+
+    pub fn write_int32_le(&mut self, value: i32, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_le_bytes())
+    }
+
+    pub fn write_int32_be(&mut self, value: i32, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_be_bytes())
+    }
+
+    pub fn write_float_le(&mut self, value: f32, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_le_bytes())
+    }
+
+    pub fn write_float_be(&mut self, value: f32, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_be_bytes())
+    }
+
+    pub fn write_double_le(&mut self, value: f64, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_le_bytes())
+    }
+
+    pub fn write_double_be(&mut self, value: f64, offset: usize) -> NodeResult<()> {
         self.write_exact(offset, &value.to_be_bytes())
     }
 
@@ -215,6 +399,14 @@ pub fn transcode(buffer: &Buffer, from_encoding: &str, to_encoding: &str) -> Nod
     Buffer::from_string(&text, Some(to_encoding))
 }
 
+pub fn is_buffer(_value: &Buffer) -> bool {
+    true
+}
+
+pub fn is_encoding(encoding: &str) -> bool {
+    normalize_encoding(Some(encoding)).is_ok()
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Encoding {
     Utf8,
@@ -254,6 +446,14 @@ fn normalize_index(len: usize, index: isize) -> usize {
     let len = len as isize;
     let normalized = if index < 0 { len + index } else { index };
     normalized.clamp(0, len) as usize
+}
+
+fn normalize_search_start(len: usize, offset: isize) -> usize {
+    if offset < 0 {
+        (len as isize + offset).clamp(0, len as isize) as usize
+    } else {
+        (offset as usize).min(len)
+    }
 }
 
 fn encode_hex(bytes: &[u8]) -> String {
