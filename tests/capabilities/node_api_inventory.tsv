@@ -732,10 +732,39 @@ NODE-READLINE-PROMISES-STREAM	readline/promises	Readline.stream	implemented	N72	
 NODE-READLINE-PROMISES-PENDING	readline/promises	Readline.pending	implemented	N72	tsonic_node::readline::Readline::pending	NODE-READLINE-002	reads pending command queue
 NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers
 NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	NODE-MISC-001	performance.now subset
-NODE-PERF-RESOURCE-TIMING	perf_hooks	PerformanceResourceTiming/nodeTiming/timerify/constants	implemented	N31	tsonic_node::perf_hooks::{PerformanceResourceTiming,node_timing,timerify,CONSTANTS}	NODE-PERF-003	resource timing entries, node timing shape, GC constants, and function timing
-NODE-PERF-PERFORMANCE-FACADE	perf_hooks	Performance now/mark/measure/getEntries/clear/toJSON	implemented	N54	tsonic_node::perf_hooks::Performance	NODE-PERF-004	closed Performance object facade over existing timing stores without host runtime introspection
-NODE-PERF-MARK-MEASURE-OPTIONS	perf_hooks	PerformanceMarkOptions/PerformanceMeasureOptions/detail/start/duration	implemented	N54	tsonic_node::perf_hooks::{PerformanceMarkOptions,PerformanceMeasureOptions,mark_with_options,measure_with_options}	NODE-PERF-004	mark and measure option carriers including explicit start time, duration, and detail
-NODE-PERF-HISTOGRAM-EXT	perf_hooks	Histogram bigint/percentiles/exceeds fields	implemented	N54	tsonic_node::perf_hooks::Histogram	NODE-PERF-004	expanded histogram bigint and percentile map helpers with closed zero-exceeds carrier
+NODE-PERF-RESOURCE-TIMING-TO-ENTRY	perf_hooks	PerformanceResourceTiming.toEntry	implemented	N61	tsonic_node::perf_hooks::PerformanceResourceTiming::to_entry	NODE-PERF-001	converts resource timing into PerformanceEntry
+NODE-PERF-RESOURCE-TIMING-TO-JSON	perf_hooks	PerformanceResourceTiming.toJSON	implemented	N61	tsonic_node::perf_hooks::PerformanceResourceTiming::to_json	NODE-PERF-001	serializes resource timing fields without reflection
+NODE-PERF-RESOURCE-TIMING-WORKER-START	perf_hooks	PerformanceResourceTiming.workerStart	implemented	N61	tsonic_node::perf_hooks::PerformanceResourceTiming::worker_start	NODE-PERF-001	closed workerStart field
+NODE-PERF-RESOURCE-TIMING-DELIVERY-TYPE	perf_hooks	PerformanceResourceTiming.deliveryType	implemented	N61	tsonic_node::perf_hooks::PerformanceResourceTiming::delivery_type	NODE-PERF-001	closed deliveryType field
+NODE-PERF-PERFORMANCE-CARRIER	perf_hooks	Performance	implemented	N61	tsonic_node::perf_hooks::Performance	NODE-PERF-001	closed global performance carrier
+NODE-PERF-PERFORMANCE-NEW	perf_hooks	Performance.new	implemented	N61	tsonic_node::perf_hooks::Performance::new	NODE-PERF-001	constructs performance facade
+NODE-PERF-PERFORMANCE-MARK	perf_hooks	performance.mark	implemented	N61	tsonic_node::perf_hooks::Performance::mark	NODE-PERF-001	records mark through facade
+NODE-PERF-PERFORMANCE-MEASURE	perf_hooks	performance.measure	implemented	N61	tsonic_node::perf_hooks::Performance::measure	NODE-PERF-001	records measure through facade
+NODE-PERF-PERFORMANCE-GET-ENTRIES	perf_hooks	performance.getEntries	implemented	N61	tsonic_node::perf_hooks::Performance::get_entries	NODE-PERF-001	returns closed performance entries
+NODE-PERF-PERFORMANCE-GET-ENTRIES-BY-NAME	perf_hooks	performance.getEntriesByName	implemented	N61	tsonic_node::perf_hooks::Performance::get_entries_by_name	NODE-PERF-001	filters entries by name and optional type
+NODE-PERF-PERFORMANCE-GET-ENTRIES-BY-TYPE	perf_hooks	performance.getEntriesByType	implemented	N61	tsonic_node::perf_hooks::Performance::get_entries_by_type	NODE-PERF-001	filters entries by type
+NODE-PERF-PERFORMANCE-CLEAR-MARKS	perf_hooks	performance.clearMarks	implemented	N61	tsonic_node::perf_hooks::Performance::clear_marks	NODE-PERF-001	clears marks by optional name
+NODE-PERF-PERFORMANCE-CLEAR-MEASURES	perf_hooks	performance.clearMeasures	implemented	N61	tsonic_node::perf_hooks::Performance::clear_measures	NODE-PERF-001	clears measures by optional name
+NODE-PERF-PERFORMANCE-CLEAR-RESOURCE-TIMINGS	perf_hooks	performance.clearResourceTimings	implemented	N61	tsonic_node::perf_hooks::Performance::clear_resource_timings	NODE-PERF-001	clears resource timings by optional name
+NODE-PERF-PERFORMANCE-SET-RESOURCE-TIMING-BUFFER-SIZE	perf_hooks	performance.setResourceTimingBufferSize	implemented	N61	tsonic_node::perf_hooks::Performance::set_resource_timing_buffer_size	NODE-PERF-001	sets closed resource timing buffer size
+NODE-PERF-PERFORMANCE-NODE-TIMING	perf_hooks	performance.nodeTiming	implemented	N61	tsonic_node::perf_hooks::Performance::node_timing	NODE-PERF-001	returns closed node timing carrier
+NODE-PERF-PERFORMANCE-EVENT-LOOP-UTILIZATION	perf_hooks	performance.eventLoopUtilization	implemented	N61	tsonic_node::perf_hooks::Performance::event_loop_utilization	NODE-PERF-001	closed event loop utilization delta
+NODE-PERF-PERFORMANCE-TO-JSON	perf_hooks	performance.toJSON	implemented	N61	tsonic_node::perf_hooks::Performance::to_json	NODE-PERF-001	serializes performance facade fields
+NODE-PERF-MARK-OPTIONS-CARRIER	perf_hooks	PerformanceMarkOptions	implemented	N61	tsonic_node::perf_hooks::PerformanceMarkOptions	NODE-PERF-001	closed mark options carrier
+NODE-PERF-MARK-OPTIONS-DETAIL	perf_hooks	PerformanceMarkOptions.detail	implemented	N61	tsonic_node::perf_hooks::PerformanceMarkOptions::detail	NODE-PERF-001	mark detail option
+NODE-PERF-MARK-OPTIONS-START-TIME	perf_hooks	PerformanceMarkOptions.startTime	implemented	N61	tsonic_node::perf_hooks::PerformanceMarkOptions::start_time	NODE-PERF-001	mark startTime option
+NODE-PERF-MEASURE-OPTIONS-CARRIER	perf_hooks	PerformanceMeasureOptions	implemented	N61	tsonic_node::perf_hooks::PerformanceMeasureOptions	NODE-PERF-001	closed measure options carrier
+NODE-PERF-MEASURE-OPTIONS-START	perf_hooks	PerformanceMeasureOptions.start	implemented	N61	tsonic_node::perf_hooks::PerformanceMeasureOptions::start	NODE-PERF-001	measure start option
+NODE-PERF-MEASURE-OPTIONS-END	perf_hooks	PerformanceMeasureOptions.end	implemented	N61	tsonic_node::perf_hooks::PerformanceMeasureOptions::end	NODE-PERF-001	measure end option
+NODE-PERF-MEASURE-OPTIONS-DURATION	perf_hooks	PerformanceMeasureOptions.duration	implemented	N61	tsonic_node::perf_hooks::PerformanceMeasureOptions::duration	NODE-PERF-001	measure duration option
+NODE-PERF-MEASURE-OPTIONS-DETAIL	perf_hooks	PerformanceMeasureOptions.detail	implemented	N61	tsonic_node::perf_hooks::PerformanceMeasureOptions::detail	NODE-PERF-001	measure detail option
+NODE-PERF-HISTOGRAM-COUNT-BIGINT	perf_hooks	Histogram.countBigInt	implemented	N61	tsonic_node::perf_hooks::Histogram::count_bigint	NODE-PERF-001	bigint count accessor
+NODE-PERF-HISTOGRAM-MIN-BIGINT	perf_hooks	Histogram.minBigInt	implemented	N61	tsonic_node::perf_hooks::Histogram::min_bigint	NODE-PERF-001	bigint min accessor
+NODE-PERF-HISTOGRAM-MAX-BIGINT	perf_hooks	Histogram.maxBigInt	implemented	N61	tsonic_node::perf_hooks::Histogram::max_bigint	NODE-PERF-001	bigint max accessor
+NODE-PERF-HISTOGRAM-PERCENTILE-BIGINT	perf_hooks	Histogram.percentileBigInt	implemented	N61	tsonic_node::perf_hooks::Histogram::percentile_bigint	NODE-PERF-001	bigint percentile helper
+NODE-PERF-HISTOGRAM-PERCENTILES-BIGINT	perf_hooks	Histogram.percentilesBigInt	implemented	N61	tsonic_node::perf_hooks::Histogram::percentiles_bigint	NODE-PERF-001	bigint percentile map helper
+NODE-PERF-HISTOGRAM-EXCEEDS	perf_hooks	Histogram.exceeds	implemented	N61	tsonic_node::perf_hooks::Histogram::exceeds	NODE-PERF-001	closed exceeds count
+NODE-PERF-HISTOGRAM-EXCEEDS-BIGINT	perf_hooks	Histogram.exceedsBigInt	implemented	N61	tsonic_node::perf_hooks::Histogram::exceeds_bigint	NODE-PERF-001	closed bigint exceeds count
 NODE-PERF-NOW	perf_hooks	performance.now	implemented	N70	tsonic_node::perf_hooks::performance_now	NODE-PERF-004	closed monotonic performance.now helper
 NODE-PERF-TIME-ORIGIN	perf_hooks	performance.timeOrigin	implemented	N70	tsonic_node::perf_hooks::time_origin	NODE-PERF-004	closed timeOrigin helper
 NODE-PERF-PERFORMANCE-OBJECT	perf_hooks	performance object	implemented	N70	tsonic_node::perf_hooks::performance	NODE-PERF-004	closed Performance object factory
@@ -1049,8 +1078,14 @@ NODE-TLS-CHECK-SERVER-IDENTITY	tls	checkServerIdentity	implemented	N64	tsonic_no
 NODE-TLS-CREATE-SECURE-CONTEXT	tls	createSecureContext	implemented	N64	tsonic_node::tls::create_secure_context	NODE-TLS-002	creates closed secure context carrier from explicit options
 NODE-MODULE-TRACE-EVENTS	trace_events	module	hard-reject	N0	n/a	REJECT-NODE-TRACE-EVENTS	instrumentation excluded
 NODE-MODULE-TTY	tty	module	implemented	N1	tsonic_node::tty	NODE-MISC-004	isatty helper
-NODE-TTY-STREAMS	tty	ReadStream/WriteStream terminal helpers	implemented	N27	tsonic_node::tty::{ReadStream,WriteStream}	NODE-TTY-001	raw mode, window size, color depth, cursor movement, and clear callbacks
-NODE-TTY-EVENTS	tty	ReadStream/WriteStream EventEmitter methods	implemented	N52	tsonic_node::tty::{ReadStream,WriteStream}	NODE-TTY-002	closed stream event listener and emit helpers backed by runtime EventEmitter carrier
+NODE-TTY-READSTREAM-NEW	tty	ReadStream.new	implemented	N63	tsonic_node::tty::ReadStream::new	NODE-TTY-001	constructs read stream for explicit fd
+NODE-TTY-WRITESTREAM-NEW	tty	WriteStream.new	implemented	N63	tsonic_node::tty::WriteStream::new	NODE-TTY-001	constructs write stream for explicit fd
+NODE-TTY-WRITESTREAM-WITH-SIZE	tty	WriteStream.withSize	implemented	N63	tsonic_node::tty::WriteStream::with_size	NODE-TTY-001	constructs write stream with explicit terminal dimensions
+NODE-TTY-READSTREAM-ON	tty	ReadStream.on	implemented	N63	tsonic_node::tty::ReadStream::on	NODE-TTY-001	read stream event listener registration
+NODE-TTY-READSTREAM-ONCE	tty	ReadStream.once	implemented	N63	tsonic_node::tty::ReadStream::once	NODE-TTY-001	read stream one-shot listener registration
+NODE-TTY-READSTREAM-EMIT	tty	ReadStream.emit	implemented	N63	tsonic_node::tty::ReadStream::emit	NODE-TTY-001	read stream event emit helper
+NODE-TTY-READSTREAM-LISTENER-COUNT	tty	ReadStream.listenerCount	implemented	N63	tsonic_node::tty::ReadStream::listener_count	NODE-TTY-001	read stream listener count
+NODE-TTY-READSTREAM-REMOVE-ALL-LISTENERS	tty	ReadStream.removeAllListeners	implemented	N63	tsonic_node::tty::ReadStream::remove_all_listeners	NODE-TTY-001	read stream listener cleanup
 NODE-TTY-ISATTY	tty	isatty	implemented	N73	tsonic_node::tty::isatty	NODE-TTY-001	explicit non-interactive default TTY probe
 NODE-TTY-READSTREAM-CARRIER	tty	ReadStream	implemented	N73	tsonic_node::tty::ReadStream	NODE-TTY-001	closed ReadStream carrier with fd, isTTY, raw mode, and event helpers
 NODE-TTY-READSTREAM-FD	tty	ReadStream.fd	implemented	N73	tsonic_node::tty::ReadStream::fd	NODE-TTY-001	ReadStream exposes fd carrier
@@ -1060,11 +1095,33 @@ NODE-TTY-READSTREAM-EVENTS	tty	ReadStream events	implemented	N73	tsonic_node::tt
 NODE-TTY-WRITESTREAM-CARRIER	tty	WriteStream	implemented	N73	tsonic_node::tty::WriteStream	NODE-TTY-001	closed WriteStream carrier with fd, size, color, cursor, clear, and event helpers
 NODE-TTY-WRITESTREAM-FD	tty	WriteStream.fd	implemented	N73	tsonic_node::tty::WriteStream::fd	NODE-TTY-001	WriteStream exposes fd carrier
 NODE-TTY-WRITESTREAM-ISTTY	tty	WriteStream.isTTY	implemented	N73	tsonic_node::tty::WriteStream::is_tty	NODE-TTY-001	WriteStream isTTY uses explicit TTY probe
-NODE-TTY-WRITESTREAM-SIZE	tty	WriteStream columns/rows/windowSize	implemented	N73	tsonic_node::tty::WriteStream::{columns,rows,set_window_size,get_window_size}	NODE-TTY-001	WriteStream window size is explicit state
-NODE-TTY-WRITESTREAM-COLOR	tty	WriteStream colorDepth/hasColors	implemented	N73	tsonic_node::tty::WriteStream::{get_color_depth,set_color_depth,has_colors}	NODE-TTY-001	WriteStream color depth is explicit state
-NODE-TTY-WRITESTREAM-CLEAR	tty	WriteStream clearLine/clearScreenDown	implemented	N73	tsonic_node::tty::WriteStream::{clear_line,clear_line_with_callback,clear_screen_down,clear_screen_down_with_callback}	NODE-TTY-001	WriteStream clear helpers return deterministic success and invoke explicit callbacks
-NODE-TTY-WRITESTREAM-CURSOR	tty	WriteStream cursorTo/moveCursor/cursor	implemented	N73	tsonic_node::tty::WriteStream::{cursor,cursor_to,cursor_to_with_callback,move_cursor,move_cursor_with_callback}	NODE-TTY-001	WriteStream cursor helpers update explicit cursor state
-NODE-TTY-WRITESTREAM-EVENTS	tty	WriteStream events	implemented	N73	tsonic_node::tty::WriteStream::{on,once,add_listener,prepend_listener,prepend_once_listener,off_by_id,emit,listeners,raw_listeners,listener_count,remove_all_listeners}	NODE-TTY-002	WriteStream event helpers use closed EventEmitter carrier
+NODE-TTY-WRITESTREAM-COLUMNS	tty	WriteStream.columns	implemented	N63	tsonic_node::tty::WriteStream::columns	NODE-TTY-001	write stream column count
+NODE-TTY-WRITESTREAM-ROWS	tty	WriteStream.rows	implemented	N63	tsonic_node::tty::WriteStream::rows	NODE-TTY-001	write stream row count
+NODE-TTY-WRITESTREAM-SET-WINDOW-SIZE	tty	WriteStream.setWindowSize	implemented	N63	tsonic_node::tty::WriteStream::set_window_size	NODE-TTY-001	sets write stream window size
+NODE-TTY-WRITESTREAM-GET-WINDOW-SIZE	tty	WriteStream.getWindowSize	implemented	N63	tsonic_node::tty::WriteStream::get_window_size	NODE-TTY-001	returns write stream window size
+NODE-TTY-WRITESTREAM-GET-COLOR-DEPTH	tty	WriteStream.getColorDepth	implemented	N63	tsonic_node::tty::WriteStream::get_color_depth	NODE-TTY-001	gets write stream color depth
+NODE-TTY-WRITESTREAM-SET-COLOR-DEPTH	tty	WriteStream.setColorDepth	implemented	N63	tsonic_node::tty::WriteStream::set_color_depth	NODE-TTY-001	sets write stream color depth
+NODE-TTY-WRITESTREAM-HAS-COLORS	tty	WriteStream.hasColors	implemented	N63	tsonic_node::tty::WriteStream::has_colors	NODE-TTY-001	reports color support from configured depth
+NODE-TTY-WRITESTREAM-CLEAR-LINE	tty	WriteStream.clearLine	implemented	N63	tsonic_node::tty::WriteStream::clear_line	NODE-TTY-001	closed clear line helper
+NODE-TTY-WRITESTREAM-CLEAR-LINE-CALLBACK	tty	WriteStream.clearLine callback	implemented	N63	tsonic_node::tty::WriteStream::clear_line_with_callback	NODE-TTY-001	clear line callback helper
+NODE-TTY-WRITESTREAM-CLEAR-SCREEN-DOWN	tty	WriteStream.clearScreenDown	implemented	N63	tsonic_node::tty::WriteStream::clear_screen_down	NODE-TTY-001	closed clear screen down helper
+NODE-TTY-WRITESTREAM-CLEAR-SCREEN-DOWN-CALLBACK	tty	WriteStream.clearScreenDown callback	implemented	N63	tsonic_node::tty::WriteStream::clear_screen_down_with_callback	NODE-TTY-001	clear screen callback helper
+NODE-TTY-WRITESTREAM-CURSOR	tty	WriteStream.cursor	implemented	N63	tsonic_node::tty::WriteStream::cursor	NODE-TTY-001	returns closed cursor position
+NODE-TTY-WRITESTREAM-CURSOR-TO	tty	WriteStream.cursorTo	implemented	N63	tsonic_node::tty::WriteStream::cursor_to	NODE-TTY-001	moves cursor to coordinate
+NODE-TTY-WRITESTREAM-CURSOR-TO-CALLBACK	tty	WriteStream.cursorTo callback	implemented	N63	tsonic_node::tty::WriteStream::cursor_to_with_callback	NODE-TTY-001	cursorTo callback helper
+NODE-TTY-WRITESTREAM-MOVE-CURSOR	tty	WriteStream.moveCursor	implemented	N63	tsonic_node::tty::WriteStream::move_cursor	NODE-TTY-001	moves cursor by delta
+NODE-TTY-WRITESTREAM-MOVE-CURSOR-CALLBACK	tty	WriteStream.moveCursor callback	implemented	N63	tsonic_node::tty::WriteStream::move_cursor_with_callback	NODE-TTY-001	moveCursor callback helper
+NODE-TTY-WRITESTREAM-ON	tty	WriteStream.on	implemented	N63	tsonic_node::tty::WriteStream::on	NODE-TTY-001	write stream event listener registration
+NODE-TTY-WRITESTREAM-ONCE	tty	WriteStream.once	implemented	N63	tsonic_node::tty::WriteStream::once	NODE-TTY-001	write stream one-shot listener registration
+NODE-TTY-WRITESTREAM-ADD-LISTENER	tty	WriteStream.addListener	implemented	N63	tsonic_node::tty::WriteStream::add_listener	NODE-TTY-001	write stream listener alias
+NODE-TTY-WRITESTREAM-PREPEND-LISTENER	tty	WriteStream.prependListener	implemented	N63	tsonic_node::tty::WriteStream::prepend_listener	NODE-TTY-001	write stream prepend listener
+NODE-TTY-WRITESTREAM-PREPEND-ONCE-LISTENER	tty	WriteStream.prependOnceListener	implemented	N63	tsonic_node::tty::WriteStream::prepend_once_listener	NODE-TTY-001	write stream prepend once listener
+NODE-TTY-WRITESTREAM-OFF-BY-ID	tty	WriteStream.offById	implemented	N63	tsonic_node::tty::WriteStream::off_by_id	NODE-TTY-001	write stream explicit listener removal
+NODE-TTY-WRITESTREAM-EMIT	tty	WriteStream.emit	implemented	N63	tsonic_node::tty::WriteStream::emit	NODE-TTY-001	write stream event emit helper
+NODE-TTY-WRITESTREAM-LISTENERS	tty	WriteStream.listeners	implemented	N63	tsonic_node::tty::WriteStream::listeners	NODE-TTY-001	write stream listener ids
+NODE-TTY-WRITESTREAM-RAW-LISTENERS	tty	WriteStream.rawListeners	implemented	N63	tsonic_node::tty::WriteStream::raw_listeners	NODE-TTY-001	write stream raw listener ids
+NODE-TTY-WRITESTREAM-LISTENER-COUNT	tty	WriteStream.listenerCount	implemented	N63	tsonic_node::tty::WriteStream::listener_count	NODE-TTY-001	write stream listener count
+NODE-TTY-WRITESTREAM-REMOVE-ALL-LISTENERS	tty	WriteStream.removeAllListeners	implemented	N63	tsonic_node::tty::WriteStream::remove_all_listeners	NODE-TTY-001	write stream listener cleanup
 NODE-MODULE-URL	url	module	implemented	L	tsonic_node::url	NODE-URL-001	URL and URLSearchParams helpers
 NODE-MODULE-UTIL	util	module	implemented	L	tsonic_node::util	NODE-UTIL-001	format/inspect/types subset
 NODE-MODULE-V8	v8	module	hard-reject	N0	n/a	REJECT-NODE-V8	V8-specific APIs irrelevant to Rust runtime
@@ -1695,6 +1752,21 @@ NODE-READLINE-PROMISES-CURSOR-TO	readline/promises	Readline.cursorTo	implemented
 NODE-READLINE-PROMISES-MOVE-CURSOR	readline/promises	Readline.moveCursor	implemented	N72	tsonic_node::readline::Readline::move_cursor	NODE-READLINE-002	moveCursor queues deterministic cursor command
 NODE-READLINE-PROMISES-COMMIT	readline/promises	Readline.commit	implemented	N72	tsonic_node::readline::Readline::commit	NODE-READLINE-002	commit flushes pending terminal commands
 NODE-READLINE-PROMISES-ROLLBACK	readline/promises	Readline.rollback	implemented	N72	tsonic_node::readline::Readline::rollback	NODE-READLINE-002	rollback clears pending terminal commands
-NODE-PERF-HISTOGRAM	perf_hooks	Histogram/RecordableHistogram/IntervalHistogram	implemented	N20	tsonic_node::perf_hooks::{Histogram,create_histogram}	NODE-PERF-002	closed histogram count/min/max/mean/stddev/percentile/enable/disable/reset helpers
-NODE-PERF-EVENTLOOP	perf_hooks	eventLoopUtilization/resource timing controls	implemented	N20	tsonic_node::perf_hooks::{event_loop_utilization,set_resource_timing_buffer_size,clear_resource_timings}	NODE-PERF-002	closed event-loop utilization and resource timing control shape
+NODE-PERF-HISTOGRAM-CARRIER	perf_hooks	Histogram	implemented	N61	tsonic_node::perf_hooks::Histogram	NODE-PERF-001	closed histogram carrier
+NODE-PERF-HISTOGRAM-RECORD	perf_hooks	Histogram.record	implemented	N61	tsonic_node::perf_hooks::Histogram::record	NODE-PERF-001	records explicit histogram value
+NODE-PERF-HISTOGRAM-RECORD-DELTA	perf_hooks	Histogram.recordDelta	implemented	N61	tsonic_node::perf_hooks::Histogram::record_delta	NODE-PERF-001	records elapsed delta value
+NODE-PERF-HISTOGRAM-ADD	perf_hooks	Histogram.add	implemented	N61	tsonic_node::perf_hooks::Histogram::add	NODE-PERF-001	adds another histogram values
+NODE-PERF-HISTOGRAM-RESET	perf_hooks	Histogram.reset	implemented	N61	tsonic_node::perf_hooks::Histogram::reset	NODE-PERF-001	clears histogram values
+NODE-PERF-HISTOGRAM-ENABLE	perf_hooks	Histogram.enable	implemented	N61	tsonic_node::perf_hooks::Histogram::enable	NODE-PERF-001	enables histogram recording
+NODE-PERF-HISTOGRAM-DISABLE	perf_hooks	Histogram.disable	implemented	N61	tsonic_node::perf_hooks::Histogram::disable	NODE-PERF-001	disables histogram recording
+NODE-PERF-HISTOGRAM-COUNT	perf_hooks	Histogram.count	implemented	N61	tsonic_node::perf_hooks::Histogram::count	NODE-PERF-001	histogram count accessor
+NODE-PERF-HISTOGRAM-MIN	perf_hooks	Histogram.min	implemented	N61	tsonic_node::perf_hooks::Histogram::min	NODE-PERF-001	histogram min accessor
+NODE-PERF-HISTOGRAM-MAX	perf_hooks	Histogram.max	implemented	N61	tsonic_node::perf_hooks::Histogram::max	NODE-PERF-001	histogram max accessor
+NODE-PERF-HISTOGRAM-MEAN	perf_hooks	Histogram.mean	implemented	N61	tsonic_node::perf_hooks::Histogram::mean	NODE-PERF-001	histogram mean accessor
+NODE-PERF-HISTOGRAM-STDDEV	perf_hooks	Histogram.stddev	implemented	N61	tsonic_node::perf_hooks::Histogram::stddev	NODE-PERF-001	histogram stddev accessor
+NODE-PERF-HISTOGRAM-PERCENTILE	perf_hooks	Histogram.percentile	implemented	N61	tsonic_node::perf_hooks::Histogram::percentile	NODE-PERF-001	histogram percentile helper
+NODE-PERF-HISTOGRAM-PERCENTILES	perf_hooks	Histogram.percentiles	implemented	N61	tsonic_node::perf_hooks::Histogram::percentiles	NODE-PERF-001	histogram percentile map helper
+NODE-PERF-EVENT-LOOP-UTILIZATION-MODULE	perf_hooks	eventLoopUtilization	implemented	N61	tsonic_node::perf_hooks::event_loop_utilization	NODE-PERF-001	closed event loop utilization helper
+NODE-PERF-SET-RESOURCE-TIMING-BUFFER-SIZE-MODULE	perf_hooks	setResourceTimingBufferSize	implemented	N61	tsonic_node::perf_hooks::set_resource_timing_buffer_size	NODE-PERF-001	sets module resource timing buffer size
+NODE-PERF-CLEAR-RESOURCE-TIMINGS-MODULE	perf_hooks	clearResourceTimings	implemented	N61	tsonic_node::perf_hooks::clear_resource_timings	NODE-PERF-001	clears module resource timings
 NODE-PROCESS-NEXTTICK	process	nextTick	implemented	N5	tsonic_node::process::next_tick	NODE-PROC-007	deterministic nextTick callback hook
