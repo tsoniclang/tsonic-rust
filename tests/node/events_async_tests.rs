@@ -2,7 +2,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use tsonic_js::JsValue;
-use tsonic_node::{async_hooks::AsyncLocalStorage, diagnostics_channel, events::EventEmitter};
+use tsonic_node::{
+    async_hooks::{self, AsyncLocalStorage},
+    diagnostics_channel,
+    events::EventEmitter,
+};
 
 #[test]
 fn event_emitter_dispatches_in_registration_order() {
@@ -87,6 +91,83 @@ fn async_local_storage_tracks_nested_store_scope() {
     });
     assert_eq!(result, 42);
     assert_eq!(storage.get_store(), None);
+
+    let storage =
+        AsyncLocalStorage::with_options(Some("request".to_string()), Some("default".to_string()));
+    assert_eq!(storage.name(), Some("request"));
+    assert_eq!(storage.get_store().as_deref(), Some("default"));
+    {
+        let mut scope = storage.with_scope("scoped".to_string());
+        assert_eq!(storage.get_store().as_deref(), Some("scoped"));
+        scope.dispose();
+    }
+    assert_eq!(storage.get_store().as_deref(), Some("default"));
+}
+
+#[test]
+fn async_hooks_resource_and_hook_callbacks_are_closed_shapes() {
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let init_seen = Rc::clone(&seen);
+    let before_seen = Rc::clone(&seen);
+    let after_seen = Rc::clone(&seen);
+    let destroy_seen = Rc::clone(&seen);
+    let promise_seen = Rc::clone(&seen);
+    let mut hook = async_hooks::create_hook(async_hooks::HookCallbacks {
+        init: Some(Box::new(move |id, resource_type, trigger| {
+            init_seen
+                .borrow_mut()
+                .push(format!("init:{id}:{resource_type}:{trigger}"));
+        })),
+        before: Some(Box::new(move |id| {
+            before_seen.borrow_mut().push(format!("before:{id}"))
+        })),
+        after: Some(Box::new(move |id| {
+            after_seen.borrow_mut().push(format!("after:{id}"))
+        })),
+        destroy: Some(Box::new(move |id| {
+            destroy_seen.borrow_mut().push(format!("destroy:{id}"));
+        })),
+        promise_resolve: Some(Box::new(move |id| {
+            promise_seen.borrow_mut().push(format!("promise:{id}"));
+        })),
+    });
+    assert!(!hook.enabled());
+    hook.enable();
+
+    let mut resource = async_hooks::AsyncResource::new(
+        "HTTPCLIENTREQUEST",
+        Some(async_hooks::AsyncResourceOptions {
+            trigger_async_id: 7.into(),
+            require_manual_destroy: true,
+        }),
+    );
+    assert_eq!(resource.resource_type(), "HTTPCLIENTREQUEST");
+    assert_eq!(resource.trigger_async_id(), 7);
+    hook.emit_init(
+        resource.async_id(),
+        resource.resource_type(),
+        resource.trigger_async_id(),
+    );
+    hook.emit_before(resource.async_id());
+    assert_eq!(resource.run_in_async_scope(|| 5), 5);
+    let bound = resource.bind(|value: i32| value + 1);
+    assert_eq!(bound.async_id(), resource.async_id());
+    assert_eq!(bound.call(|function| function(2)), 3);
+    hook.emit_after(resource.async_id());
+    hook.emit_promise_resolve(resource.async_id());
+    resource.emit_destroy();
+    hook.emit_destroy(resource.async_id());
+    assert!(resource.destroyed());
+    hook.disable();
+    hook.emit_before(resource.async_id());
+    assert_eq!(async_hooks::execution_async_id(), 0);
+    assert_eq!(async_hooks::trigger_async_id(), 0);
+    assert_eq!(async_hooks::async_wrap_providers::HTTPCLIENTREQUEST, 9);
+    assert!(seen.borrow().iter().any(|entry| entry.starts_with("init:")));
+    assert!(seen
+        .borrow()
+        .iter()
+        .any(|entry| entry.starts_with("promise:")));
 }
 
 #[test]

@@ -10,7 +10,12 @@ pub use crate::assert::{
     not_strict_equal as assert_not_strict_equal, ok as assert_ok, rejects as assert_rejects,
     strict_equal as assert_strict_equal, throws as assert_throws,
 };
-pub use crate::async_hooks::AsyncLocalStorage;
+pub use crate::async_hooks::{
+    async_wrap_providers, create_hook as async_hooks_create_hook,
+    execution_async_id as async_hooks_execution_async_id,
+    trigger_async_id as async_hooks_trigger_async_id, AsyncHook, AsyncLocalStorage, AsyncResource,
+    AsyncResourceOptions, BoundAsyncFunction, HookCallbacks, RunScope,
+};
 pub use crate::buffer::Buffer;
 pub use crate::buffer::{
     is_buffer as buffer_is_buffer, is_encoding as buffer_is_encoding, transcode as buffer_transcode,

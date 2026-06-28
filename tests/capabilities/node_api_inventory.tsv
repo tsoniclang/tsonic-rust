@@ -2,6 +2,8 @@ id	module	api	status	packet	rust_api	evidence	reason
 NODE-MODULE-ASSERT	assert	module	implemented	N2	tsonic_node::assert	NODE-ASSERT-001	closed assertion helpers
 NODE-MODULE-ASYNC-CONTEXT	async_context	module	hard-reject	N0	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation is outside closed runtime externals
 NODE-MODULE-ASYNC-HOOKS	async_hooks	module	implemented	N3	tsonic_node::async_hooks::AsyncLocalStorage	NODE-ASYNC-001	AsyncLocalStorage scoped store runtime
+NODE-ASYNC-HOOK	async_hooks	createHook/AsyncHook callbacks	implemented	N23	tsonic_node::async_hooks::{create_hook,AsyncHook,HookCallbacks}	NODE-ASYNC-002	explicit callback lifecycle carrier; no implicit runtime instrumentation
+NODE-ASYNC-RESOURCE	async_hooks	AsyncResource/async ids/providers	implemented	N23	tsonic_node::async_hooks::{AsyncResource,AsyncResourceOptions,async_wrap_providers}	NODE-ASYNC-002	closed async resource identity, bind, destroy, and provider constants
 NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	closed Buffer carrier
 NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process	NODE-CHILD-001	capability-gated shell-free file process spawn and child process shape
 NODE-MODULE-CLUSTER	cluster	module	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary/worker process orchestration over approved file-spawn model
