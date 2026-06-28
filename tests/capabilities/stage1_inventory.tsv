@@ -288,6 +288,7 @@ NODE-STRING-DECODER-001	implemented	N29	tsonic_node::abi::StringDecoder	NODE-STR
 NODE-MOD-033	hard-reject	M	n/a	REJECT-NODE-TEST	test runner/reporters not runtime surface
 NODE-MOD-034	implemented	N3	tsonic_node::abi::{set_timeout,set_immediate,Timeout}	NODE-TIMERS-001	deterministic timer handles and callback execution
 NODE-TIMERS-002	implemented	N30	tsonic_node::abi::{TimerOptions,set_timeout_with_options,set_immediate_with_options,set_interval_with_options}	NODE-TIMERS-002	ref/abort timer options and explicit _onTimeout/_onImmediate handle methods
+NODE-TIMERS-003	implemented	N55	tsonic_node::abi::{Timeout,Immediate,Timer,TimerOptions,timers_promises}	NODE-TIMERS-001,NODE-TIMERS-002	timer handle methods, timers/promises values, and scheduler helpers
 NODE-MOD-035	implemented	N9	tsonic_node::tls	NODE-TLS-001	TLS identity/options and HTTPS connect helper over approved rustls transport
 NODE-TLS-002	implemented	N40	tsonic_node::abi::{TlsSocket,TlsCertificate,TlsCipherInfo,TlsEphemeralKeyInfo,TlsSecureContextOptions}	NODE-TLS-002	TLS certificate/cipher/session/finished/signature/ticket/trace metadata and extended secure context option carriers
 NODE-MOD-036	hard-reject	M	n/a	REJECT-NODE-TRACE-EVENTS	tracing integration out of Stage 1
