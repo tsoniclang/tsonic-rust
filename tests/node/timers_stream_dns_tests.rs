@@ -146,6 +146,51 @@ fn stream_classes_promises_and_web_bridges_use_closed_buffers() {
 }
 
 #[test]
+fn web_streams_support_reader_writer_pipe_and_transform_shapes() {
+    let mut readable = stream::web::ReadableStream::from_chunks(vec![
+        Buffer::from_string("a", Some("utf8")).unwrap(),
+        Buffer::from_string("b", Some("utf8")).unwrap(),
+    ]);
+    assert!(!readable.locked());
+    {
+        let mut reader = readable.get_reader().unwrap();
+        assert_eq!(reader.read().unwrap().to_string(Some("utf8")).unwrap(), "a");
+        reader.release_lock();
+    }
+    assert!(!readable.locked());
+
+    let mut writable = stream::web::WritableStream::new();
+    {
+        let mut writer = writable.get_writer().unwrap();
+        writer
+            .write(Buffer::from_string("x", Some("utf8")).unwrap())
+            .unwrap();
+        writer.close();
+    }
+    assert!(writable.closed());
+    assert_eq!(writable.chunks().len(), 1);
+    assert!(writable
+        .write(Buffer::from_string("late", Some("utf8")).unwrap())
+        .is_err());
+
+    let mut source = stream::web::ReadableStream::from_chunks(vec![
+        Buffer::from_string("p", Some("utf8")).unwrap(),
+        Buffer::from_string("q", Some("utf8")).unwrap(),
+    ]);
+    let mut destination = stream::web::WritableStream::new();
+    source.pipe_to(&mut destination).unwrap();
+    assert!(destination.closed());
+    assert_eq!(destination.chunks().len(), 2);
+
+    let mut transform = stream::web::TransformStream::new();
+    transform
+        .write_passthrough(Buffer::from_string("z", Some("utf8")).unwrap())
+        .unwrap();
+    assert_eq!(transform.readable().chunks().len(), 1);
+    assert_eq!(transform.writable().chunks().len(), 1);
+}
+
+#[test]
 fn dns_lookup_uses_platform_resolver_without_shelling_out() {
     let lookup = dns::lookup("localhost").unwrap();
     assert!(lookup.family == 4 || lookup.family == 6);

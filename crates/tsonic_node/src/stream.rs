@@ -203,33 +203,228 @@ pub mod promises {
 pub mod web {
     use super::{Readable, Writable};
     use crate::buffer::Buffer;
+    use crate::error::{NodeError, NodeResult};
 
     #[derive(Debug, Clone, Default, PartialEq, Eq)]
     pub struct ReadableStream {
         chunks: Vec<Buffer>,
+        index: usize,
+        locked: bool,
+        canceled: bool,
     }
 
     impl ReadableStream {
+        pub fn from_chunks(chunks: Vec<Buffer>) -> Self {
+            Self {
+                chunks,
+                index: 0,
+                locked: false,
+                canceled: false,
+            }
+        }
+
         pub fn chunks(&self) -> &[Buffer] {
             &self.chunks
+        }
+
+        pub fn locked(&self) -> bool {
+            self.locked
+        }
+
+        pub fn canceled(&self) -> bool {
+            self.canceled
+        }
+
+        pub fn get_reader(&mut self) -> NodeResult<ReadableStreamDefaultReader<'_>> {
+            if self.locked {
+                return Err(NodeError::new("ERR_INVALID_STATE", "stream is locked"));
+            }
+            self.locked = true;
+            Ok(ReadableStreamDefaultReader {
+                stream: self,
+                released: false,
+            })
+        }
+
+        pub fn cancel(&mut self) {
+            self.canceled = true;
+            self.index = self.chunks.len();
+        }
+
+        pub fn values(&mut self) -> Vec<Buffer> {
+            let mut values = Vec::new();
+            while self.index < self.chunks.len() {
+                values.push(self.chunks[self.index].clone());
+                self.index += 1;
+            }
+            values
+        }
+
+        pub fn pipe_to(&mut self, destination: &mut WritableStream) -> NodeResult<()> {
+            let chunks = self.values();
+            for chunk in chunks {
+                destination.write(chunk)?;
+            }
+            destination.close();
+            Ok(())
         }
     }
 
     #[derive(Debug, Clone, Default, PartialEq, Eq)]
     pub struct WritableStream {
         chunks: Vec<Buffer>,
+        locked: bool,
+        closed: bool,
+        aborted: bool,
     }
 
     impl WritableStream {
+        pub fn new() -> Self {
+            Self::default()
+        }
+
         pub fn chunks(&self) -> &[Buffer] {
             &self.chunks
+        }
+
+        pub fn locked(&self) -> bool {
+            self.locked
+        }
+
+        pub fn closed(&self) -> bool {
+            self.closed
+        }
+
+        pub fn aborted(&self) -> bool {
+            self.aborted
+        }
+
+        pub fn write(&mut self, chunk: Buffer) -> NodeResult<()> {
+            if self.closed || self.aborted {
+                return Err(NodeError::new(
+                    "ERR_STREAM_WRITE_AFTER_END",
+                    "cannot write after stream is closed",
+                ));
+            }
+            self.chunks.push(chunk);
+            Ok(())
+        }
+
+        pub fn close(&mut self) {
+            self.closed = true;
+        }
+
+        pub fn abort(&mut self) {
+            self.aborted = true;
+            self.closed = true;
+        }
+
+        pub fn get_writer(&mut self) -> NodeResult<WritableStreamDefaultWriter<'_>> {
+            if self.locked {
+                return Err(NodeError::new("ERR_INVALID_STATE", "stream is locked"));
+            }
+            self.locked = true;
+            Ok(WritableStreamDefaultWriter {
+                stream: self,
+                released: false,
+            })
+        }
+    }
+
+    pub struct ReadableStreamDefaultReader<'a> {
+        stream: &'a mut ReadableStream,
+        released: bool,
+    }
+
+    impl ReadableStreamDefaultReader<'_> {
+        pub fn read(&mut self) -> Option<Buffer> {
+            if self.released || self.stream.canceled {
+                return None;
+            }
+            let chunk = self.stream.chunks.get(self.stream.index).cloned();
+            if chunk.is_some() {
+                self.stream.index += 1;
+            }
+            chunk
+        }
+
+        pub fn release_lock(&mut self) {
+            if !self.released {
+                self.released = true;
+                self.stream.locked = false;
+            }
+        }
+    }
+
+    impl Drop for ReadableStreamDefaultReader<'_> {
+        fn drop(&mut self) {
+            self.release_lock();
+        }
+    }
+
+    pub struct WritableStreamDefaultWriter<'a> {
+        stream: &'a mut WritableStream,
+        released: bool,
+    }
+
+    impl WritableStreamDefaultWriter<'_> {
+        pub fn write(&mut self, chunk: Buffer) -> NodeResult<()> {
+            if self.released {
+                return Err(NodeError::new("ERR_INVALID_STATE", "writer lock released"));
+            }
+            self.stream.write(chunk)
+        }
+
+        pub fn close(&mut self) {
+            self.stream.close();
+        }
+
+        pub fn abort(&mut self) {
+            self.stream.abort();
+        }
+
+        pub fn release_lock(&mut self) {
+            if !self.released {
+                self.released = true;
+                self.stream.locked = false;
+            }
+        }
+    }
+
+    impl Drop for WritableStreamDefaultWriter<'_> {
+        fn drop(&mut self) {
+            self.release_lock();
+        }
+    }
+
+    #[derive(Debug, Clone, Default, PartialEq, Eq)]
+    pub struct TransformStream {
+        readable: ReadableStream,
+        writable: WritableStream,
+    }
+
+    impl TransformStream {
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        pub fn readable(&self) -> &ReadableStream {
+            &self.readable
+        }
+
+        pub fn writable(&self) -> &WritableStream {
+            &self.writable
+        }
+
+        pub fn write_passthrough(&mut self, chunk: Buffer) -> NodeResult<()> {
+            self.writable.write(chunk.clone())?;
+            self.readable.chunks.push(chunk);
+            Ok(())
         }
     }
 
     pub fn readable_to_web(readable: Readable) -> ReadableStream {
-        ReadableStream {
-            chunks: readable.to_vec(),
-        }
+        ReadableStream::from_chunks(readable.to_vec())
     }
 
     pub fn readable_from_web(stream: ReadableStream) -> Readable {
@@ -237,9 +432,9 @@ pub mod web {
     }
 
     pub fn writable_to_web(writable: Writable) -> WritableStream {
-        WritableStream {
-            chunks: writable.chunks().to_vec(),
-        }
+        let mut stream = WritableStream::new();
+        stream.chunks = writable.chunks().to_vec();
+        stream
     }
 
     pub fn writable_from_web(stream: WritableStream) -> Writable {
