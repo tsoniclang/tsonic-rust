@@ -151,8 +151,8 @@ pub use crate::http2::{
 };
 pub use crate::https::{
     create_server as https_create_server, get as https_get, request as https_request,
-    RequestOptions as HttpsRequestOptions, Server as HttpsServer,
-    ServerOptions as HttpsServerOptions,
+    Agent as HttpsAgent, AgentOptions as HttpsAgentOptions, RequestOptions as HttpsRequestOptions,
+    Server as HttpsServer, ServerOptions as HttpsServerOptions,
 };
 pub use crate::module::{
     builtin_modules as module_builtin_modules, create_require as module_create_require,

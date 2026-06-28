@@ -103,11 +103,41 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     let https_options = tsonic_node::https::RequestOptions::get("https://example.com/");
     assert_eq!(https_options.method, "GET");
     assert!(tsonic_node::https::get("http://example.com/").is_err());
-    let https_server = tsonic_node::https::create_server(
-        tsonic_node::https::ServerOptions::default(),
+    let mut agent = tsonic_node::https::Agent::new(Some(tsonic_node::https::AgentOptions {
+        keep_alive: true,
+        keep_alive_msecs: 500,
+        max_sockets: 8,
+        max_free_sockets: 2,
+        max_cached_sessions: 32,
+        timeout: Some(1_000),
+        reject_unauthorized: true,
+        servername: Some("example.com".to_string()),
+    }));
+    assert!(agent.keep_socket_alive());
+    assert!(agent.reuse_socket());
+    assert!(agent.get_name(Some(&https_options)).contains("example.com"));
+    agent.destroy();
+    assert!(agent.destroyed());
+    assert!(!agent.reuse_socket());
+    let mut https_server = tsonic_node::https::create_server(
+        tsonic_node::https::ServerOptions {
+            request_cert: true,
+            handshake_timeout: Some(30_000),
+            max_cached_sessions: 64,
+            ..tsonic_node::https::ServerOptions::default()
+        },
         |_, response| response.end(None),
     );
     assert!(https_server.options().ca.is_empty());
+    assert!(https_server.options().request_cert);
+    https_server.set_timeout(2_000, Some(|| {}));
+    assert_eq!(https_server.timeout(), Some(2_000));
+    https_server.close_idle_connections();
+    https_server.close_all_connections();
+    assert!(https_server.idle_connections_closed());
+    assert!(https_server.all_connections_closed());
+    https_server.close();
+    assert!(https_server.closed());
 
     let http2 = tsonic_node::http2::connect("https://example.com").unwrap();
     assert_eq!(http2.authority, "https://example.com");
