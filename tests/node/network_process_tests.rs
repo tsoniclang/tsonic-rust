@@ -25,6 +25,29 @@ fn net_socket_and_http_client_use_real_local_tcp() {
 }
 
 #[test]
+fn http_server_shapes_handle_in_memory_requests_without_dynamic_runtime() {
+    let server = http::create_server(|request, response| {
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.url, "/submit");
+        response.set_header("content-type", "text/plain");
+        response.write_head(201, &[("x-powered-by", "tsonic")]);
+        response.end(Some(
+            tsonic_node::buffer::Buffer::from_string("created", Some("utf8")).unwrap(),
+        ));
+    });
+
+    let mut request = http::IncomingMessage::new("POST", "/submit", b"payload".to_vec());
+    request.set_header("content-type", "text/plain");
+    let response = server.handle(request);
+    assert_eq!(response.status_code, 201);
+    assert_eq!(response.status_message, "Created");
+    assert_eq!(response.headers.get("content-type").unwrap(), "text/plain");
+    assert_eq!(response.headers.get("x-powered-by").unwrap(), "tsonic");
+    assert_eq!(response.text().unwrap(), "created");
+    server.close();
+}
+
+#[test]
 fn module_safe_helpers_do_not_execute_loaders() {
     let builtins = module::builtin_modules();
     assert!(builtins.contains(&"fs"));

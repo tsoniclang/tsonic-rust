@@ -64,6 +64,48 @@ fn stream_pipeline_moves_closed_buffer_chunks() {
 }
 
 #[test]
+fn stream_classes_promises_and_web_bridges_use_closed_buffers() {
+    let mut pass = stream::PassThrough::new();
+    assert!(pass.write(Buffer::from_string("a", Some("utf8")).unwrap()));
+    assert_eq!(pass.read().unwrap().to_string(Some("utf8")).unwrap(), "a");
+    pass.end();
+
+    let mut transform = stream::Transform::new(|chunk| {
+        Buffer::from_string(
+            &chunk.to_string(Some("utf8")).unwrap().to_ascii_uppercase(),
+            Some("utf8"),
+        )
+        .unwrap()
+    });
+    assert!(transform.write(Buffer::from_string("hello", Some("utf8")).unwrap()));
+    assert_eq!(
+        transform.read().unwrap().to_string(Some("utf8")).unwrap(),
+        "HELLO"
+    );
+
+    let mut duplex = stream::Duplex::new(stream::Readable::from(vec![]), stream::Writable::new());
+    assert!(duplex.write(Buffer::from_string("x", Some("utf8")).unwrap()));
+    duplex.end();
+    assert_eq!(duplex.writable_chunks().len(), 1);
+
+    let mut readable =
+        stream::Readable::from(vec![Buffer::from_string("web", Some("utf8")).unwrap()]);
+    let mut writable = stream::Writable::new();
+    stream::promises::pipeline(&mut readable, &mut writable).unwrap();
+    assert!(stream::promises::finished(&readable, &writable));
+
+    let web_readable =
+        stream::web::readable_to_web(stream::Readable::from(writable.chunks().to_vec()));
+    assert_eq!(web_readable.chunks().len(), 1);
+    let native_readable = stream::web::readable_from_web(web_readable);
+    assert_eq!(native_readable.to_vec().len(), 1);
+    let web_writable = stream::web::writable_to_web(writable.clone());
+    assert_eq!(web_writable.chunks().len(), 1);
+    let native_writable = stream::web::writable_from_web(web_writable);
+    assert_eq!(native_writable.chunks().len(), 1);
+}
+
+#[test]
 fn dns_lookup_uses_platform_resolver_without_shelling_out() {
     let lookup = dns::lookup("localhost").unwrap();
     assert!(lookup.family == 4 || lookup.family == 6);

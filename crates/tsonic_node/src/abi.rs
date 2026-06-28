@@ -75,8 +75,10 @@ pub use crate::fs_promises::{
     write_file_string as fs_promises_write_file_string,
 };
 pub use crate::http::{
-    get as http_get, parse_response as http_parse_response, request as http_request,
-    RequestOptions as HttpRequestOptions, Response as HttpResponse,
+    create_server as http_create_server, get as http_get, parse_response as http_parse_response,
+    request as http_request, IncomingMessage as HttpIncomingMessage,
+    RequestOptions as HttpRequestOptions, Response as HttpResponse, Server as HttpServer,
+    ServerResponse as HttpServerResponse,
 };
 pub use crate::http2::{
     connect as http2_connect, request as http2_request,
@@ -141,7 +143,9 @@ pub use crate::sqlite::{
     DatabaseSync as SqliteDatabaseSync, RunResult as SqliteRunResult, SqlValue,
 };
 pub use crate::stream::{
-    consumers as stream_consumers, pipeline as stream_pipeline, Readable, Writable,
+    consumers as stream_consumers, finished as stream_finished, pipeline as stream_pipeline,
+    promises as stream_promises, web as stream_web, Duplex, PassThrough, Readable, Transform,
+    Writable,
 };
 pub use crate::string_decoder::StringDecoder;
 pub use crate::timers::{
