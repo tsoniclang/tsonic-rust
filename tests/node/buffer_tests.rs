@@ -10,6 +10,10 @@ fn buffer_encodings_and_views() {
     let mut view = buffer.slice(1, None);
     view.set(0, b'o').unwrap();
     assert_eq!(buffer.to_string(Some("utf8")).unwrap(), "ho");
+    assert!(tsonic_node::buffer::is_utf8("ok".as_bytes()));
+    assert!(tsonic_node::buffer::is_ascii(b"ascii"));
+    assert!(!tsonic_node::buffer::is_ascii("é".as_bytes()));
+    assert!(tsonic_node::buffer::resolve_object_url("blob:n/a").is_none());
 }
 
 #[test]
@@ -18,8 +22,11 @@ fn buffer_compare_equals_concat_and_json() {
     let two = Buffer::from_bytes(vec![3]);
     let concat = Buffer::concat(&[one.clone(), two.clone()]);
     assert_eq!(concat.as_bytes(), vec![1, 2, 3]);
+    let padded = Buffer::concat_with_total_length(&[one.clone(), two.clone()], 5);
+    assert_eq!(padded.as_bytes(), vec![1, 2, 3, 0, 0]);
     assert!(one.equals(&Buffer::from_bytes(vec![1, 2])));
     assert_eq!(one.compare(&two), -1);
+    assert_eq!(tsonic_node::buffer::compare(&one, &two), -1);
     assert!(matches!(concat.to_json(), tsonic_js::JsValue::Object(_)));
 }
 
@@ -54,6 +61,16 @@ fn buffer_common_mutation_search_and_predicates() {
     assert!(empty.is_empty());
 
     let mut buffer = Buffer::alloc_unsafe(8);
+    let slow = Buffer::alloc_unsafe_slow(2);
+    assert_eq!(slow.as_bytes(), vec![0, 0]);
+    assert_eq!(Buffer::of(&[1, 2, 3]).as_bytes(), vec![1, 2, 3]);
+    assert_eq!(Buffer::from_array_like(&[4, 5]).as_bytes(), vec![4, 5]);
+    assert_eq!(
+        Buffer::copy_bytes_from(&[9, 8, 7, 6], 1, Some(2))
+            .unwrap()
+            .as_bytes(),
+        vec![8, 7]
+    );
     assert_eq!(buffer.len(), 8);
     assert!(!buffer.is_empty());
     assert!(tsonic_node::buffer::is_buffer(&buffer));
@@ -75,6 +92,23 @@ fn buffer_common_mutation_search_and_predicates() {
     let mut subarray = buffer.subarray(1, Some(3));
     subarray.set(0, b'c').unwrap();
     assert_eq!(buffer.get(1), Some(b'c'));
+
+    let mut writable = Buffer::alloc(5);
+    assert_eq!(
+        writable.write("hello", 0, Some(4), Some("utf8")).unwrap(),
+        4
+    );
+    assert_eq!(writable.to_string(Some("utf8")).unwrap(), "hell\0");
+    writable.reverse();
+    assert_eq!(writable.as_bytes(), vec![0, b'l', b'l', b'e', b'h']);
+
+    let mut swap = Buffer::from_bytes(vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    swap.swap16().unwrap();
+    assert_eq!(swap.as_bytes(), vec![2, 1, 4, 3, 6, 5, 8, 7]);
+    swap.swap32().unwrap();
+    assert_eq!(swap.as_bytes(), vec![3, 4, 1, 2, 7, 8, 5, 6]);
+    swap.swap64().unwrap();
+    assert_eq!(swap.as_bytes(), vec![6, 5, 8, 7, 2, 1, 4, 3]);
 }
 
 #[test]
@@ -103,6 +137,56 @@ fn buffer_numeric_read_write_matrix() {
     let mut big = Buffer::alloc(8);
     big.write_double_be(-0.5, 0).unwrap();
     assert_eq!(big.read_double_be(0).unwrap(), -0.5);
+    big.write_big_uint64_le(0x0102_0304_0506_0708, 0).unwrap();
+    assert_eq!(big.read_big_uint64_le(0).unwrap(), 0x0102_0304_0506_0708);
+    big.write_big_uint64_be(0x0102_0304_0506_0708, 0).unwrap();
+    assert_eq!(big.read_big_uint64_be(0).unwrap(), 0x0102_0304_0506_0708);
+    big.write_big_int64_le(-42, 0).unwrap();
+    assert_eq!(big.read_big_int64_le(0).unwrap(), -42);
+    big.write_big_int64_be(-43, 0).unwrap();
+    assert_eq!(big.read_big_int64_be(0).unwrap(), -43);
+}
+
+#[test]
+fn buffer_blob_file_and_constants_are_closed_carriers() {
+    assert_eq!(tsonic_node::buffer::INSPECT_MAX_BYTES, 50);
+    assert_eq!(
+        tsonic_node::buffer::constants::MAX_STRING_LENGTH,
+        tsonic_node::buffer::MAX_STRING_LENGTH
+    );
+    assert_eq!(tsonic_node::buffer::DEFAULT_POOL_SIZE, 8192);
+
+    let blob_options = tsonic_node::buffer::BlobPropertyBag {
+        endings: Some("transparent".to_string()),
+        content_type: Some("text/plain".to_string()),
+    };
+    assert_eq!(blob_options.content_type.as_deref(), Some("text/plain"));
+    let blob = tsonic_node::buffer::Blob::new(
+        &[tsonic_node::buffer::BlobPart::Text("blob".to_string())],
+        blob_options.content_type.clone().unwrap(),
+    );
+    assert_eq!(blob.size(), 4);
+    assert_eq!(blob.content_type(), "text/plain");
+    assert_eq!(blob.text().unwrap(), "blob");
+    assert_eq!(blob.bytes(), b"blob");
+    assert_eq!(blob.slice(1, Some(3), "text/plain").text().unwrap(), "lo");
+
+    let file_options = tsonic_node::buffer::FilePropertyBag {
+        endings: Some("native".to_string()),
+        content_type: Some("text/plain".to_string()),
+        last_modified: Some(123),
+    };
+    let file = tsonic_node::buffer::File::new(
+        &[tsonic_node::buffer::BlobPart::Text("file".to_string())],
+        "a.txt",
+        file_options.content_type.clone().unwrap(),
+        file_options.last_modified.unwrap(),
+    );
+    assert_eq!(file.name(), "a.txt");
+    assert_eq!(file.last_modified(), 123);
+    assert_eq!(file.content_type(), "text/plain");
+    assert_eq!(file.text().unwrap(), "file");
+    assert_eq!(file.array_buffer().byte_length(), 4);
 }
 
 #[test]

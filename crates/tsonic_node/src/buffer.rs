@@ -3,8 +3,39 @@ use std::rc::Rc;
 
 use tsonic_js::object::JsObject;
 use tsonic_js::value::JsValue;
+pub use tsonic_js::web::{Blob, BlobPart, File};
 
 use crate::error::{NodeError, NodeResult};
+
+pub const INSPECT_MAX_BYTES: usize = 50;
+pub const K_MAX_LENGTH: usize = isize::MAX as usize;
+pub const K_STRING_MAX_LENGTH: usize = i32::MAX as usize;
+pub const MAX_LENGTH: usize = K_MAX_LENGTH;
+pub const MAX_STRING_LENGTH: usize = K_STRING_MAX_LENGTH;
+pub const DEFAULT_POOL_SIZE: usize = 8 * 1024;
+
+pub mod constants {
+    pub const MAX_LENGTH: usize = super::MAX_LENGTH;
+    pub const MAX_STRING_LENGTH: usize = super::MAX_STRING_LENGTH;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BlobPropertyBag {
+    pub endings: Option<String>,
+    pub content_type: Option<String>,
+}
+
+pub type BlobOptions = BlobPropertyBag;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FilePropertyBag {
+    pub endings: Option<String>,
+    pub content_type: Option<String>,
+    pub last_modified: Option<i64>,
+}
+
+pub type FileOptions = FilePropertyBag;
+pub type BlobPartCarrier = BlobPart;
 
 #[derive(Debug, Clone)]
 pub struct Buffer {
@@ -30,6 +61,14 @@ impl Buffer {
         Self::alloc(size)
     }
 
+    pub fn alloc_unsafe_slow(size: usize) -> Self {
+        Self::alloc(size)
+    }
+
+    pub fn of(items: &[u8]) -> Self {
+        Self::from_bytes(items.to_vec())
+    }
+
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         let len = bytes.len();
         Self {
@@ -41,6 +80,27 @@ impl Buffer {
 
     pub fn from_string(value: &str, encoding: Option<&str>) -> NodeResult<Self> {
         Ok(Self::from_bytes(encode_string(value, encoding)?))
+    }
+
+    pub fn from_array_like(values: &[u8]) -> Self {
+        Self::from_bytes(values.to_vec())
+    }
+
+    pub fn copy_bytes_from(view: &[u8], offset: usize, length: Option<usize>) -> NodeResult<Self> {
+        if offset > view.len() {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "copyBytesFrom offset is outside view",
+            ));
+        }
+        let end = offset.saturating_add(length.unwrap_or(view.len() - offset));
+        if end > view.len() {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "copyBytesFrom length is outside view",
+            ));
+        }
+        Ok(Self::from_bytes(view[offset..end].to_vec()))
     }
 
     pub fn byte_length(value: &str, encoding: Option<&str>) -> NodeResult<usize> {
@@ -193,6 +253,80 @@ impl Buffer {
             out.extend_from_slice(&buffer.to_vec());
         }
         Buffer::from_bytes(out)
+    }
+
+    pub fn concat_with_total_length(buffers: &[Buffer], total_length: usize) -> Buffer {
+        let mut out = Vec::with_capacity(total_length);
+        for buffer in buffers {
+            out.extend_from_slice(&buffer.to_vec());
+            if out.len() >= total_length {
+                out.truncate(total_length);
+                return Buffer::from_bytes(out);
+            }
+        }
+        out.resize(total_length, 0);
+        Buffer::from_bytes(out)
+    }
+
+    pub fn write(
+        &mut self,
+        value: &str,
+        offset: usize,
+        length: Option<usize>,
+        encoding: Option<&str>,
+    ) -> NodeResult<usize> {
+        if offset > self.len {
+            return Err(NodeError::new(
+                "ERR_OUT_OF_RANGE",
+                "buffer write offset out of range",
+            ));
+        }
+        let bytes = encode_string(value, encoding)?;
+        let count = bytes
+            .len()
+            .min(length.unwrap_or(bytes.len()))
+            .min(self.len - offset);
+        self.write_exact(offset, &bytes[..count])?;
+        Ok(count)
+    }
+
+    pub fn swap16(&mut self) -> NodeResult<&mut Self> {
+        self.swap_chunks(2)
+    }
+
+    pub fn swap32(&mut self) -> NodeResult<&mut Self> {
+        self.swap_chunks(4)
+    }
+
+    pub fn swap64(&mut self) -> NodeResult<&mut Self> {
+        self.swap_chunks(8)
+    }
+
+    pub fn reverse(&mut self) -> &mut Self {
+        let mut bytes = self.to_vec();
+        bytes.reverse();
+        self.storage.borrow_mut()[self.offset..self.offset + self.len].copy_from_slice(&bytes);
+        self
+    }
+
+    pub fn read_big_uint64_le(&self, offset: usize) -> NodeResult<u64> {
+        let bytes = self.read_exact(offset, 8)?;
+        Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_big_uint64_be(&self, offset: usize) -> NodeResult<u64> {
+        let bytes = self.read_exact(offset, 8)?;
+        Ok(u64::from_be_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_big_int64_le(&self, offset: usize) -> NodeResult<i64> {
+        let bytes = self.read_exact(offset, 8)?;
+        Ok(i64::from_le_bytes(bytes.try_into().unwrap()))
+    }
+
+    pub fn read_big_int64_be(&self, offset: usize) -> NodeResult<i64> {
+        let bytes = self.read_exact(offset, 8)?;
+        Ok(i64::from_be_bytes(bytes.try_into().unwrap()))
     }
 
     pub fn read_uint32_le(&self, offset: usize) -> NodeResult<u32> {
@@ -372,6 +506,22 @@ impl Buffer {
         self.write_exact(offset, &value.to_be_bytes())
     }
 
+    pub fn write_big_uint64_le(&mut self, value: u64, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_le_bytes())
+    }
+
+    pub fn write_big_uint64_be(&mut self, value: u64, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_be_bytes())
+    }
+
+    pub fn write_big_int64_le(&mut self, value: i64, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_le_bytes())
+    }
+
+    pub fn write_big_int64_be(&mut self, value: i64, offset: usize) -> NodeResult<()> {
+        self.write_exact(offset, &value.to_be_bytes())
+    }
+
     pub fn write_int32_le(&mut self, value: i32, offset: usize) -> NodeResult<()> {
         self.write_exact(offset, &value.to_le_bytes())
     }
@@ -430,6 +580,21 @@ impl Buffer {
             .copy_from_slice(bytes);
         Ok(())
     }
+
+    fn swap_chunks(&mut self, width: usize) -> NodeResult<&mut Self> {
+        if !self.len.is_multiple_of(width) {
+            return Err(NodeError::new(
+                "ERR_INVALID_BUFFER_SIZE",
+                "buffer length must be a multiple of element size",
+            ));
+        }
+        let mut storage = self.storage.borrow_mut();
+        for chunk in storage[self.offset..self.offset + self.len].chunks_exact_mut(width) {
+            chunk.reverse();
+        }
+        drop(storage);
+        Ok(self)
+    }
 }
 
 pub fn encode_string(value: &str, encoding: Option<&str>) -> NodeResult<Vec<u8>> {
@@ -476,12 +641,28 @@ pub fn transcode(buffer: &Buffer, from_encoding: &str, to_encoding: &str) -> Nod
     Buffer::from_string(&text, Some(to_encoding))
 }
 
+pub fn compare(buf1: &Buffer, buf2: &Buffer) -> i32 {
+    buf1.compare(buf2)
+}
+
 pub fn is_buffer(_value: &Buffer) -> bool {
     true
 }
 
 pub fn is_encoding(encoding: &str) -> bool {
     normalize_encoding(Some(encoding)).is_ok()
+}
+
+pub fn is_utf8(input: &[u8]) -> bool {
+    std::str::from_utf8(input).is_ok()
+}
+
+pub fn is_ascii(input: &[u8]) -> bool {
+    input.is_ascii()
+}
+
+pub fn resolve_object_url(_id: &str) -> Option<Blob> {
+    None
 }
 
 #[derive(Debug, Clone, Copy)]

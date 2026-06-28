@@ -91,6 +91,42 @@ fn zlib_options_constants_and_class_carriers_are_closed_shapes() {
     assert_eq!(tsonic_node::zlib::constants::GZIP, 3);
     assert_eq!(tsonic_node::zlib::constants::BROTLI_MODE_TEXT, 1);
     assert_eq!(tsonic_node::zlib::constants::ZSTD_CLEVEL_DEFAULT, 3);
+    let known_constants = [
+        tsonic_node::zlib::constants::BROTLI_DECODER_NO_ERROR,
+        tsonic_node::zlib::constants::BROTLI_DECODER_RESULT_SUCCESS,
+        tsonic_node::zlib::constants::BROTLI_DECODER_ERROR_FORMAT_WINDOW_BITS,
+        tsonic_node::zlib::constants::BROTLI_PARAM_SIZE_HINT,
+        tsonic_node::zlib::constants::Z_DEFAULT_LEVEL,
+        tsonic_node::zlib::constants::ZLIB_VERNUM,
+        tsonic_node::zlib::constants::ZSTD_c_compressionLevel,
+        tsonic_node::zlib::constants::ZSTD_c_nbWorkers,
+        tsonic_node::zlib::constants::ZSTD_d_windowLogMax,
+        tsonic_node::zlib::constants::ZSTD_e_flush,
+        tsonic_node::zlib::constants::ZSTD_error_no_error,
+        tsonic_node::zlib::constants::ZSTD_error_srcSize_wrong,
+        tsonic_node::zlib::constants::ZSTD_fast,
+        tsonic_node::zlib::constants::ZSTD_btultra2,
+    ];
+    assert!(known_constants.iter().any(|value| *value > 0));
+    let brotli_options = tsonic_node::zlib::BrotliOptions {
+        flush: Some(tsonic_node::zlib::constants::BROTLI_OPERATION_FLUSH),
+        finish_flush: Some(tsonic_node::zlib::constants::BROTLI_OPERATION_FINISH),
+        chunk_size: 4096,
+        max_output_length: Some(4096),
+        info: true,
+        ..Default::default()
+    };
+    assert_eq!(brotli_options.chunk_size, 4096);
+    let zstd_options = tsonic_node::zlib::ZstdOptions {
+        flush: Some(tsonic_node::zlib::constants::ZSTD_e_flush),
+        finish_flush: Some(tsonic_node::zlib::constants::ZSTD_e_end),
+        chunk_size: 1024,
+        max_output_length: Some(1024),
+        dictionary: Some(Buffer::from_bytes(vec![1, 2, 3])),
+        info: true,
+        ..Default::default()
+    };
+    assert_eq!(zstd_options.dictionary.unwrap().len(), 3);
 
     let mut gzip = tsonic_node::zlib::create_gzip(Some(options));
     let output = gzip.process(&input).unwrap();
