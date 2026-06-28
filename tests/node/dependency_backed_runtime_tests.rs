@@ -156,6 +156,7 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     assert_eq!(https_options.method, "GET");
     assert!(tsonic_node::https::get("http://example.com/").is_err());
     let mut agent = tsonic_node::https::Agent::new(Some(tsonic_node::https::AgentOptions {
+        callback: true,
         keep_alive: true,
         keep_alive_msecs: 500,
         max_sockets: 8,
@@ -165,6 +166,7 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
         reject_unauthorized: true,
         servername: Some("example.com".to_string()),
     }));
+    assert!(agent.callback);
     assert!(agent.keep_socket_alive());
     assert!(agent.reuse_socket());
     assert!(agent.get_name(Some(&https_options)).contains("example.com"));
@@ -188,6 +190,27 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     https_server.close_all_connections();
     assert!(https_server.idle_connections_closed());
     assert!(https_server.all_connections_closed());
+    https_server
+        .add_listener("request")
+        .prepend_listener("request")
+        .once("secureConnection")
+        .prepend_once_listener("secureConnection");
+    assert_eq!(https_server.listener_count("request"), 2);
+    assert_eq!(
+        https_server.listeners("request"),
+        vec!["request", "request"]
+    );
+    assert_eq!(
+        https_server.raw_listeners("secureConnection"),
+        vec!["secureConnection", "secureConnection"]
+    );
+    assert!(https_server.emit("request"));
+    https_server.off("request");
+    assert_eq!(https_server.listener_count("request"), 1);
+    https_server.remove_all_listeners(Some("secureConnection"));
+    assert_eq!(https_server.listener_count("secureConnection"), 0);
+    https_server.on("close").remove_listener("close");
+    assert!(!https_server.emit("close"));
     https_server.close();
     assert!(https_server.closed());
 

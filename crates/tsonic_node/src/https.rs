@@ -3,8 +3,41 @@ use std::collections::BTreeMap;
 use crate::error::{NodeError, NodeResult};
 use crate::http::{IncomingMessage, Response, ServerResponse};
 
+type HttpsListenerMap = BTreeMap<String, Vec<String>>;
+
+fn https_add_listener(listeners: &mut HttpsListenerMap, event: &str, prepend: bool) {
+    let entry = listeners.entry(event.to_string()).or_default();
+    if prepend {
+        entry.insert(0, event.to_string());
+    } else {
+        entry.push(event.to_string());
+    }
+}
+
+fn https_remove_listener(listeners: &mut HttpsListenerMap, event: &str) {
+    if let Some(values) = listeners.get_mut(event) {
+        values.pop();
+        if values.is_empty() {
+            listeners.remove(event);
+        }
+    }
+}
+
+fn https_remove_all_listeners(listeners: &mut HttpsListenerMap, event: Option<&str>) {
+    if let Some(event) = event {
+        listeners.remove(event);
+    } else {
+        listeners.clear();
+    }
+}
+
+fn https_listeners(listeners: &HttpsListenerMap, event: &str) -> Vec<String> {
+    listeners.get(event).cloned().unwrap_or_default()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentOptions {
+    pub callback: bool,
     pub keep_alive: bool,
     pub keep_alive_msecs: u64,
     pub max_sockets: usize,
@@ -18,6 +51,7 @@ pub struct AgentOptions {
 impl Default for AgentOptions {
     fn default() -> Self {
         Self {
+            callback: false,
             keep_alive: false,
             keep_alive_msecs: 1_000,
             max_sockets: usize::MAX,
@@ -33,13 +67,16 @@ impl Default for AgentOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Agent {
     pub options: AgentOptions,
+    pub callback: bool,
     destroyed: bool,
 }
 
 impl Agent {
     pub fn new(options: Option<AgentOptions>) -> Self {
+        let options = options.unwrap_or_default();
         Self {
-            options: options.unwrap_or_default(),
+            callback: options.callback,
+            options,
             destroyed: false,
         }
     }
@@ -125,6 +162,7 @@ pub struct Server {
     idle_closed: bool,
     all_closed: bool,
     timeout: Option<u64>,
+    listeners: HttpsListenerMap,
 }
 
 impl Server {
@@ -139,6 +177,7 @@ impl Server {
             idle_closed: false,
             all_closed: false,
             timeout: None,
+            listeners: BTreeMap::new(),
         }
     }
 
@@ -185,6 +224,58 @@ impl Server {
 
     pub fn all_connections_closed(&self) -> bool {
         self.all_closed
+    }
+
+    pub fn add_listener(&mut self, event: &str) -> &mut Self {
+        https_add_listener(&mut self.listeners, event, false);
+        self
+    }
+
+    pub fn on(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn once(&mut self, event: &str) -> &mut Self {
+        self.add_listener(event)
+    }
+
+    pub fn prepend_listener(&mut self, event: &str) -> &mut Self {
+        https_add_listener(&mut self.listeners, event, true);
+        self
+    }
+
+    pub fn prepend_once_listener(&mut self, event: &str) -> &mut Self {
+        self.prepend_listener(event)
+    }
+
+    pub fn remove_listener(&mut self, event: &str) -> &mut Self {
+        https_remove_listener(&mut self.listeners, event);
+        self
+    }
+
+    pub fn off(&mut self, event: &str) -> &mut Self {
+        self.remove_listener(event)
+    }
+
+    pub fn remove_all_listeners(&mut self, event: Option<&str>) -> &mut Self {
+        https_remove_all_listeners(&mut self.listeners, event);
+        self
+    }
+
+    pub fn listeners(&self, event: &str) -> Vec<String> {
+        https_listeners(&self.listeners, event)
+    }
+
+    pub fn raw_listeners(&self, event: &str) -> Vec<String> {
+        self.listeners(event)
+    }
+
+    pub fn listener_count(&self, event: &str) -> usize {
+        self.listeners.get(event).map_or(0, Vec::len)
+    }
+
+    pub fn emit(&self, event: &str) -> bool {
+        self.listener_count(event) > 0
     }
 }
 
