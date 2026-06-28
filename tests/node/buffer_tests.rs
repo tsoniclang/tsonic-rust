@@ -49,9 +49,17 @@ fn buffer_common_mutation_search_and_predicates() {
     assert!(tsonic_node::buffer::is_encoding("base64url"));
     assert!(!tsonic_node::buffer::is_encoding("made-up"));
 
+    let empty = Buffer::alloc(0);
+    assert_eq!(empty.len(), 0);
+    assert!(empty.is_empty());
+
     let mut buffer = Buffer::alloc_unsafe(8);
+    assert_eq!(buffer.len(), 8);
+    assert!(!buffer.is_empty());
     assert!(tsonic_node::buffer::is_buffer(&buffer));
     buffer.fill(b'a', 0, None).unwrap();
+    assert_eq!(buffer.get(0), Some(b'a'));
+    assert_eq!(buffer.get(99), None);
     buffer.write_uint8(b'b', 1).unwrap();
     buffer.write_int8(-1, 2).unwrap();
     assert_eq!(buffer.read_uint8(1).unwrap(), b'b');
@@ -63,6 +71,10 @@ fn buffer_common_mutation_search_and_predicates() {
     let mut target = Buffer::alloc(4);
     assert_eq!(buffer.copy(&mut target, 1, 0, Some(3)).unwrap(), 3);
     assert_eq!(target.as_bytes(), vec![0, b'a', b'b', 255]);
+
+    let mut subarray = buffer.subarray(1, Some(3));
+    subarray.set(0, b'c').unwrap();
+    assert_eq!(buffer.get(1), Some(b'c'));
 }
 
 #[test]

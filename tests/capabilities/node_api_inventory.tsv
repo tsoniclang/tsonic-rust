@@ -437,21 +437,69 @@ NODE-PATH-POSIX	path	posix basename/dirname/extname/format/isAbsolute/join/norma
 NODE-PATH-WIN32	path	win32 basename/dirname/extname/format/isAbsolute/join/normalize/parse/relative/sep/delimiter	implemented	N61	tsonic_node::path::win32	NODE-PATH-001	explicit Win32 path helper namespace over pure string semantics
 NODE-PATH-PARSED-PATH	path	ParsedPath root/dir/base/ext/name	implemented	N61	tsonic_node::path::ParsedPath	NODE-PATH-001	closed ParsedPath carrier for parse/format
 NODE-PATH-PLATFORM	path	platform basename/dirname/extname/format/isAbsolute/join/normalize/parse/relative/resolve/sep/delimiter	implemented	N61	tsonic_node::path	NODE-PATH-001	host platform path helper namespace using std path separator policy
-NODE-BUFFER-ALLOC	buffer	alloc/from	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-001	closed byte carrier
-NODE-BUFFER-ENCODING	buffer	encodings	implemented	K	tsonic_node::buffer::{encode_string,decode_bytes}	NODE-BUF-001	utf8/latin1/utf16le/hex/base64/base64url
-NODE-BUFFER-SLICE	buffer	slice/subarray	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-002	shared views
-NODE-BUFFER-COMPARE	buffer	equals/compare/concat	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-003	byte comparisons
-NODE-BUFFER-INTEGERS	buffer	read/write integers	implemented	K	tsonic_node::buffer::Buffer	NODE-BUF-004	fixed-width and variable-width endian integer helpers
+NODE-BUFFER-ALLOC	buffer	Buffer.alloc	implemented	K	tsonic_node::buffer::Buffer::alloc	NODE-BUF-001	zero-filled closed byte carrier
+NODE-BUFFER-ALLOC-UNSAFE	buffer	Buffer.allocUnsafe	implemented	K	tsonic_node::buffer::Buffer::alloc_unsafe	NODE-BUF-010	closed runtime maps unsafe allocation to deterministic zero-filled carrier
+NODE-BUFFER-FROM-BYTES	buffer	Buffer.from bytes	implemented	K	tsonic_node::buffer::Buffer::from_bytes	NODE-BUF-003	constructs closed Buffer from byte vector
+NODE-BUFFER-FROM-STRING	buffer	Buffer.from string	implemented	K	tsonic_node::buffer::Buffer::from_string	NODE-BUF-001	constructs Buffer from supported encodings
+NODE-BUFFER-BYTE-LENGTH	buffer	Buffer.byteLength	implemented	K	tsonic_node::buffer::Buffer::byte_length	NODE-BUF-001	byte length follows encoding parser
+NODE-BUFFER-LENGTH	buffer	buf.length	implemented	N58	tsonic_node::buffer::Buffer::len	NODE-BUF-010	length accessor for generated Rust
+NODE-BUFFER-IS-EMPTY	buffer	Buffer empty check	implemented	N58	tsonic_node::buffer::Buffer::is_empty	NODE-BUF-010	explicit empty predicate
+NODE-BUFFER-AS-BYTES	buffer	byte materialization	implemented	N58	tsonic_node::buffer::Buffer::as_bytes	NODE-BUF-003	materializes visible view bytes
+NODE-BUFFER-GET	buffer	index read	implemented	N58	tsonic_node::buffer::Buffer::get	NODE-BUF-010	checked byte access returns optional value
+NODE-BUFFER-SET	buffer	index write	implemented	N58	tsonic_node::buffer::Buffer::set	NODE-BUF-002,NODE-BUF-010	checked byte mutation updates shared storage
+NODE-BUFFER-FILL	buffer	buf.fill	implemented	N58	tsonic_node::buffer::Buffer::fill	NODE-BUF-010	bounds-validated fill helper
+NODE-BUFFER-COPY	buffer	buf.copy	implemented	N58	tsonic_node::buffer::Buffer::copy	NODE-BUF-010	bounds-validated copy helper
+NODE-BUFFER-SLICE	buffer	buf.slice	implemented	K	tsonic_node::buffer::Buffer::slice	NODE-BUF-002	shared view semantics
+NODE-BUFFER-SUBARRAY	buffer	buf.subarray	implemented	K	tsonic_node::buffer::Buffer::subarray	NODE-BUF-010	shared view semantics
+NODE-BUFFER-TO-STRING	buffer	buf.toString	implemented	K	tsonic_node::buffer::Buffer::to_string	NODE-BUF-001,NODE-BUF-010	decodes supported encodings
+NODE-BUFFER-TO-JSON	buffer	buf.toJSON	implemented	N58	tsonic_node::buffer::Buffer::to_json	NODE-BUF-004	closed Buffer JSON shape with type Buffer and data byte array
+NODE-BUFFER-EQUALS	buffer	buf.equals	implemented	K	tsonic_node::buffer::Buffer::equals	NODE-BUF-003	byte equality
+NODE-BUFFER-COMPARE	buffer	buf.compare	implemented	K	tsonic_node::buffer::Buffer::compare	NODE-BUF-003	lexicographic byte comparison
+NODE-BUFFER-INCLUDES	buffer	buf.includes	implemented	N58	tsonic_node::buffer::Buffer::includes	NODE-BUF-010	byte search helper with offset normalization
+NODE-BUFFER-INDEX-OF	buffer	buf.indexOf	implemented	N58	tsonic_node::buffer::Buffer::index_of	NODE-BUF-010	forward byte search helper with offset normalization
+NODE-BUFFER-LAST-INDEX-OF	buffer	buf.lastIndexOf	implemented	N58	tsonic_node::buffer::Buffer::last_index_of	NODE-BUF-010	reverse byte search helper with offset normalization
+NODE-BUFFER-CONCAT	buffer	Buffer.concat	implemented	K	tsonic_node::buffer::Buffer::concat	NODE-BUF-003	independent concatenated Buffer
+NODE-BUFFER-READ-UINT-LE	buffer	readUIntLE	implemented	N58	tsonic_node::buffer::Buffer::read_uint_le	NODE-BUF-010	variable-width little-endian unsigned integer read
+NODE-BUFFER-READ-UINT-BE	buffer	readUIntBE	implemented	N58	tsonic_node::buffer::Buffer::read_uint_be	NODE-BUF-010	variable-width big-endian unsigned integer read
+NODE-BUFFER-READ-INT-LE	buffer	readIntLE	implemented	N58	tsonic_node::buffer::Buffer::read_int_le	NODE-BUF-010	variable-width little-endian signed integer read
+NODE-BUFFER-READ-INT-BE	buffer	readIntBE	implemented	N58	tsonic_node::buffer::Buffer::read_int_be	NODE-BUF-010	variable-width big-endian signed integer read
+NODE-BUFFER-READ-UINT8	buffer	readUInt8	implemented	N58	tsonic_node::buffer::Buffer::read_uint8	NODE-BUF-010	one-byte unsigned read
+NODE-BUFFER-READ-INT8	buffer	readInt8	implemented	N58	tsonic_node::buffer::Buffer::read_int8	NODE-BUF-010	one-byte signed read
+NODE-BUFFER-READ-UINT16LE	buffer	readUInt16LE	implemented	N58	tsonic_node::buffer::Buffer::read_uint16_le	NODE-BUF-010	fixed-width little-endian u16 read
+NODE-BUFFER-READ-UINT16BE	buffer	readUInt16BE	implemented	N58	tsonic_node::buffer::Buffer::read_uint16_be	NODE-BUF-010	fixed-width big-endian u16 read
+NODE-BUFFER-READ-INT16LE	buffer	readInt16LE	implemented	N58	tsonic_node::buffer::Buffer::read_int16_le	NODE-BUF-010	fixed-width little-endian i16 read
+NODE-BUFFER-READ-INT16BE	buffer	readInt16BE	implemented	N58	tsonic_node::buffer::Buffer::read_int16_be	NODE-BUF-010	fixed-width big-endian i16 read
+NODE-BUFFER-READ-UINT32LE	buffer	readUInt32LE	implemented	N58	tsonic_node::buffer::Buffer::read_uint32_le	NODE-BUF-010	fixed-width little-endian u32 read
+NODE-BUFFER-READ-UINT32BE	buffer	readUInt32BE	implemented	N58	tsonic_node::buffer::Buffer::read_uint32_be	NODE-BUF-004,NODE-BUF-010	fixed-width big-endian u32 read
+NODE-BUFFER-READ-INT32LE	buffer	readInt32LE	implemented	N58	tsonic_node::buffer::Buffer::read_int32_le	NODE-BUF-010	fixed-width little-endian i32 read
+NODE-BUFFER-READ-INT32BE	buffer	readInt32BE	implemented	N58	tsonic_node::buffer::Buffer::read_int32_be	NODE-BUF-010	fixed-width big-endian i32 read
+NODE-BUFFER-READ-FLOATLE	buffer	readFloatLE	implemented	N58	tsonic_node::buffer::Buffer::read_float_le	NODE-BUF-010	IEEE float little-endian read
+NODE-BUFFER-READ-FLOATBE	buffer	readFloatBE	implemented	N58	tsonic_node::buffer::Buffer::read_float_be	NODE-BUF-010	IEEE float big-endian read
+NODE-BUFFER-READ-DOUBLELE	buffer	readDoubleLE	implemented	N58	tsonic_node::buffer::Buffer::read_double_le	NODE-BUF-010	IEEE double little-endian read
+NODE-BUFFER-READ-DOUBLEBE	buffer	readDoubleBE	implemented	N58	tsonic_node::buffer::Buffer::read_double_be	NODE-BUF-010	IEEE double big-endian read
+NODE-BUFFER-WRITE-UINT-LE	buffer	writeUIntLE	implemented	N58	tsonic_node::buffer::Buffer::write_uint_le	NODE-BUF-010	variable-width little-endian unsigned integer write
+NODE-BUFFER-WRITE-UINT-BE	buffer	writeUIntBE	implemented	N58	tsonic_node::buffer::Buffer::write_uint_be	NODE-BUF-010	variable-width big-endian unsigned integer write
+NODE-BUFFER-WRITE-INT-LE	buffer	writeIntLE	implemented	N58	tsonic_node::buffer::Buffer::write_int_le	NODE-BUF-010	variable-width little-endian signed integer write
+NODE-BUFFER-WRITE-INT-BE	buffer	writeIntBE	implemented	N58	tsonic_node::buffer::Buffer::write_int_be	NODE-BUF-010	variable-width big-endian signed integer write
+NODE-BUFFER-WRITE-UINT8	buffer	writeUInt8	implemented	N58	tsonic_node::buffer::Buffer::write_uint8	NODE-BUF-010	one-byte unsigned write
+NODE-BUFFER-WRITE-INT8	buffer	writeInt8	implemented	N58	tsonic_node::buffer::Buffer::write_int8	NODE-BUF-010	one-byte signed write
+NODE-BUFFER-WRITE-UINT16LE	buffer	writeUInt16LE	implemented	N58	tsonic_node::buffer::Buffer::write_uint16_le	NODE-BUF-010	fixed-width little-endian u16 write
+NODE-BUFFER-WRITE-UINT16BE	buffer	writeUInt16BE	implemented	N58	tsonic_node::buffer::Buffer::write_uint16_be	NODE-BUF-010	fixed-width big-endian u16 write
+NODE-BUFFER-WRITE-INT16LE	buffer	writeInt16LE	implemented	N58	tsonic_node::buffer::Buffer::write_int16_le	NODE-BUF-010	fixed-width little-endian i16 write
+NODE-BUFFER-WRITE-INT16BE	buffer	writeInt16BE	implemented	N58	tsonic_node::buffer::Buffer::write_int16_be	NODE-BUF-010	fixed-width big-endian i16 write
+NODE-BUFFER-WRITE-UINT32LE	buffer	writeUInt32LE	implemented	N58	tsonic_node::buffer::Buffer::write_uint32_le	NODE-BUF-004,NODE-BUF-010	fixed-width little-endian u32 write
+NODE-BUFFER-WRITE-UINT32BE	buffer	writeUInt32BE	implemented	N58	tsonic_node::buffer::Buffer::write_uint32_be	NODE-BUF-010	fixed-width big-endian u32 write
+NODE-BUFFER-WRITE-INT32LE	buffer	writeInt32LE	implemented	N58	tsonic_node::buffer::Buffer::write_int32_le	NODE-BUF-010	fixed-width little-endian i32 write
+NODE-BUFFER-WRITE-INT32BE	buffer	writeInt32BE	implemented	N58	tsonic_node::buffer::Buffer::write_int32_be	NODE-BUF-010	fixed-width big-endian i32 write
+NODE-BUFFER-WRITE-FLOATLE	buffer	writeFloatLE	implemented	N58	tsonic_node::buffer::Buffer::write_float_le	NODE-BUF-010	IEEE float little-endian write
+NODE-BUFFER-WRITE-FLOATBE	buffer	writeFloatBE	implemented	N58	tsonic_node::buffer::Buffer::write_float_be	NODE-BUF-010	IEEE float big-endian write
+NODE-BUFFER-WRITE-DOUBLELE	buffer	writeDoubleLE	implemented	N58	tsonic_node::buffer::Buffer::write_double_le	NODE-BUF-010	IEEE double little-endian write
+NODE-BUFFER-WRITE-DOUBLEBE	buffer	writeDoubleBE	implemented	N58	tsonic_node::buffer::Buffer::write_double_be	NODE-BUF-010	IEEE double big-endian write
+NODE-BUFFER-ENCODE-STRING	buffer	encode string	implemented	K	tsonic_node::buffer::encode_string	NODE-BUF-001,NODE-BUF-010	utf8/latin1/utf16le/hex/base64/base64url input encoder
+NODE-BUFFER-DECODE-BYTES	buffer	decode bytes	implemented	K	tsonic_node::buffer::decode_bytes	NODE-BUF-001,NODE-BUF-010	utf8/latin1/utf16le/hex/base64/base64url output decoder
 NODE-BUFFER-TRANSCODE	buffer	transcode	implemented	N8	tsonic_node::buffer::transcode	NODE-BUF-TRANSCODE-001	transcode across supported encodings
-NODE-BUFFER-STATICS	buffer	Buffer.alloc/allocUnsafe/from/byteLength/concat/isBuffer/isEncoding	implemented	N58	tsonic_node::buffer::{Buffer,is_buffer,is_encoding}	NODE-BUF-001,NODE-BUF-003,NODE-BUF-010	closed Buffer static constructors, length, concat, and predicates
-NODE-BUFFER-VIEWS	buffer	length/indexing/get/set/slice/subarray	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-002,NODE-BUF-005,NODE-BUF-007	shared view semantics with checked byte access
-NODE-BUFFER-ENCODING-MATRIX	buffer	utf8/hex/base64/base64url/latin1/ascii/utf16le/ucs2	implemented	N58	tsonic_node::buffer::{encode_string,decode_bytes}	NODE-BUF-001,NODE-BUF-010	supported Node Buffer encoding spellings with deterministic unsupported encoding errors
-NODE-BUFFER-MUTATION	buffer	fill/copy/writeUInt8/writeInt8	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	buffer mutation helpers with bounds validation
-NODE-BUFFER-SEARCH	buffer	includes/indexOf/lastIndexOf	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	byte search helpers with offset normalization
-NODE-BUFFER-JSON	buffer	toJSON	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-004	closed Buffer JSON shape with type Buffer and data byte array
-NODE-BUFFER-UINTS	buffer	readUIntLE/readUIntBE/writeUIntLE/writeUIntBE/readUInt8/readUInt16LE/BE/readUInt32LE/BE/writeUInt8/writeUInt16LE/BE/writeUInt32LE/BE	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	unsigned fixed-width and variable-width endian matrix
-NODE-BUFFER-INTS	buffer	readIntLE/readIntBE/writeIntLE/writeIntBE/readInt8/readInt16LE/BE/readInt32LE/BE/writeInt8/writeInt16LE/BE/writeInt32LE/BE	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	signed fixed-width and variable-width endian matrix
-NODE-BUFFER-FLOATS	buffer	readFloatLE/BE readDoubleLE/BE writeFloatLE/BE writeDoubleLE/BE	implemented	N58	tsonic_node::buffer::Buffer	NODE-BUF-010	IEEE float and double endian read/write matrix
+NODE-BUFFER-IS-BUFFER	buffer	Buffer.isBuffer	implemented	N58	tsonic_node::buffer::is_buffer	NODE-BUF-010	closed Buffer predicate over known carrier
+NODE-BUFFER-IS-ENCODING	buffer	Buffer.isEncoding	implemented	N58	tsonic_node::buffer::is_encoding	NODE-BUF-010	supported encoding predicate
 NODE-CHILD-SPAWN-SYNC	child_process	spawnSync/spawnFileSync	implemented	N14	tsonic_node::child_process::{spawn_sync,spawn_file_sync,spawn_file_sync_with_options}	NODE-CHILD-001	shell-free sync file process execution with stdout/stderr/status shape
 NODE-CHILD-SPAWN	child_process	spawn/spawnFile	implemented	N14	tsonic_node::child_process::{spawn,spawn_file,spawn_file_with_options,ChildProcess}	NODE-CHILD-002	shell-free running child process shape with pid/stdio/wait/ref/unref/disconnect
 NODE-CHILD-EXEC-FILE	child_process	execFile/execFileSync	implemented	N14	tsonic_node::child_process::{exec_file,exec_file_sync,exec_file_sync_string}	NODE-CHILD-002	file execution helpers without shell evaluation
