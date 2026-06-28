@@ -55,7 +55,192 @@ NODE-ASYNC-TRIGGER-ID	async_hooks	triggerAsyncId	implemented	N23	tsonic_node::as
 NODE-ASYNC-PROVIDERS	async_hooks	asyncWrapProviders	implemented	N23	tsonic_node::async_hooks::async_wrap_providers	NODE-ASYNC-002	closed async provider constants
 NODE-MODULE-BUFFER	buffer	module	implemented	K	tsonic_node::buffer	NODE-BUF-001	closed Buffer carrier
 NODE-MODULE-CHILD-PROCESS	child_process	module	implemented	N4	tsonic_node::child_process	NODE-CHILD-001	capability-gated shell-free file process spawn and child process shape
-NODE-MODULE-CLUSTER	cluster	module	implemented	N9	tsonic_node::cluster	NODE-CLUSTER-001	closed primary/worker process orchestration over approved file-spawn model
+NODE-NET-ADDRESS-INFO	net	AddressInfo	implemented	N64	tsonic_node::net::AddressInfo	NODE-NET-002	closed TCP address info carrier
+NODE-NET-SOCKET-ADDRESS-CARRIER	net	SocketAddress	implemented	N64	tsonic_node::net::SocketAddress	NODE-NET-003	closed host/port/family socket address carrier
+NODE-NET-SOCKET-ADDRESS-NEW	net	SocketAddress.new	implemented	N64	tsonic_node::net::SocketAddress::new	NODE-NET-003	parses explicit IP address and port without name guessing
+NODE-NET-SOCKET-ADDRESS-PARSE	net	SocketAddress.parse	implemented	N64	tsonic_node::net::SocketAddress::parse	NODE-NET-003	parses socket address string into closed carrier
+NODE-NET-SOCKET-CONSTRUCTOR-OPTS	net	SocketConstructorOpts	implemented	N64	tsonic_node::net::SocketConstructorOpts	NODE-NET-003	closed socket constructor options with explicit fd rejection
+NODE-NET-CONNECT-OPTIONS-CARRIER	net	ConnectOptions	implemented	N64	tsonic_node::net::ConnectOptions	NODE-NET-003	closed connect option carrier
+NODE-NET-CONNECT-OPTIONS-NEW	net	ConnectOptions.new	implemented	N64	tsonic_node::net::ConnectOptions::new	NODE-NET-003	constructs explicit host/port connect options
+NODE-NET-LISTEN-OPTIONS-CARRIER	net	ListenOptions	implemented	N64	tsonic_node::net::ListenOptions	NODE-NET-003	closed listen option carrier
+NODE-NET-LISTEN-OPTIONS-NEW	net	ListenOptions.new	implemented	N64	tsonic_node::net::ListenOptions::new	NODE-NET-003	constructs explicit host/port listen options
+NODE-NET-BLOCKLIST-CARRIER	net	BlockList	implemented	N37	tsonic_node::net::BlockList	NODE-NET-003	closed block list carrier
+NODE-NET-BLOCKLIST-NEW	net	BlockList.new	implemented	N37	tsonic_node::net::BlockList::new	NODE-NET-003	constructs empty block list
+NODE-NET-BLOCKLIST-ADD-ADDRESS	net	BlockList.addAddress	implemented	N37	tsonic_node::net::BlockList::add_address	NODE-NET-003	adds explicit blocked address
+NODE-NET-BLOCKLIST-ADD-RANGE	net	BlockList.addRange	implemented	N37	tsonic_node::net::BlockList::add_range	NODE-NET-003	adds explicit blocked address range
+NODE-NET-BLOCKLIST-ADD-SUBNET	net	BlockList.addSubnet	implemented	N37	tsonic_node::net::BlockList::add_subnet	NODE-NET-003	adds explicit blocked subnet with prefix validation
+NODE-NET-BLOCKLIST-CHECK	net	BlockList.check	implemented	N37	tsonic_node::net::BlockList::check	NODE-NET-003	checks address against explicit block rules
+NODE-NET-BLOCKLIST-RULES	net	BlockList.rules	implemented	N37	tsonic_node::net::BlockList::rules	NODE-NET-003	serializes explicit block rules
+NODE-NET-BLOCKLIST-FROM-JSON	net	BlockList.fromJSON	implemented	N37	tsonic_node::net::BlockList::from_json	NODE-NET-003	reconstructs block list from explicit rule strings
+NODE-NET-SOCKET-CARRIER	net	Socket	implemented	N17	tsonic_node::net::Socket	NODE-NET-002	closed TCP socket carrier
+NODE-NET-SOCKET-CONNECT-STATIC	net	Socket.connect	implemented	N17	tsonic_node::net::Socket::connect	NODE-NET-002	connects TCP socket to explicit host and port
+NODE-NET-SOCKET-FROM-STREAM	net	Socket.fromStream	implemented	N17	tsonic_node::net::Socket::from_stream	NODE-NET-002	wraps proven TcpStream without dynamic dispatch
+NODE-NET-SOCKET-NEW-WITH-OPTIONS	net	Socket.newWithOptions	implemented	N37	tsonic_node::net::Socket::new_with_options	NODE-NET-003	constructs unconnected socket from closed options and rejects fd takeover
+NODE-NET-SOCKET-WRITE-ALL	net	Socket.writeAll	implemented	N17	tsonic_node::net::Socket::write_all	NODE-NET-002	writes full byte buffer to TCP stream
+NODE-NET-SOCKET-WRITE	net	Socket.write	implemented	N17	tsonic_node::net::Socket::write	NODE-NET-002	writes byte buffer and returns closed success state
+NODE-NET-SOCKET-READ-TO-END	net	Socket.readToEnd	implemented	N17	tsonic_node::net::Socket::read_to_end	NODE-NET-002	reads bytes from TCP stream without JS runtime
+NODE-NET-SOCKET-END	net	Socket.end	implemented	N17	tsonic_node::net::Socket::end	NODE-NET-002	optionally writes final bytes and shuts down write side
+NODE-NET-SOCKET-SHUTDOWN	net	Socket.shutdown	implemented	N17	tsonic_node::net::Socket::shutdown	NODE-NET-002	shuts down socket explicitly
+NODE-NET-SOCKET-DESTROY	net	Socket.destroy	implemented	N17	tsonic_node::net::Socket::destroy	NODE-NET-002	destroys socket carrier state
+NODE-NET-SOCKET-DESTROY-SOON	net	Socket.destroySoon	implemented	N17	tsonic_node::net::Socket::destroy_soon	NODE-NET-002	destroySoon maps to explicit destroy operation
+NODE-NET-SOCKET-RESET-AND-DESTROY	net	Socket.resetAndDestroy	implemented	N17	tsonic_node::net::Socket::reset_and_destroy	NODE-NET-002	resetAndDestroy maps to explicit destroy operation
+NODE-NET-SOCKET-DESTROYED	net	Socket.destroyed	implemented	N17	tsonic_node::net::Socket::destroyed	NODE-NET-002	reads closed destroyed state
+NODE-NET-SOCKET-ADDRESS	net	Socket.address	implemented	N17	tsonic_node::net::Socket::address	NODE-NET-002	returns local address info
+NODE-NET-SOCKET-LOCAL-ADDRESS	net	Socket.localAddress	implemented	N17	tsonic_node::net::Socket::local_address	NODE-NET-002	returns local address string
+NODE-NET-SOCKET-LOCAL-PORT	net	Socket.localPort	implemented	N17	tsonic_node::net::Socket::local_port	NODE-NET-002	returns local port
+NODE-NET-SOCKET-LOCAL-FAMILY	net	Socket.localFamily	implemented	N17	tsonic_node::net::Socket::local_family	NODE-NET-002	returns local address family
+NODE-NET-SOCKET-REMOTE-ADDRESS	net	Socket.remoteAddress	implemented	N17	tsonic_node::net::Socket::remote_address	NODE-NET-002	returns remote address string
+NODE-NET-SOCKET-REMOTE-PORT	net	Socket.remotePort	implemented	N17	tsonic_node::net::Socket::remote_port	NODE-NET-002	returns remote port
+NODE-NET-SOCKET-REMOTE-FAMILY	net	Socket.remoteFamily	implemented	N17	tsonic_node::net::Socket::remote_family	NODE-NET-002	returns remote address family
+NODE-NET-SOCKET-BYTES-READ	net	Socket.bytesRead	implemented	N17	tsonic_node::net::Socket::bytes_read	NODE-NET-002	tracks bytes read counter
+NODE-NET-SOCKET-BYTES-WRITTEN	net	Socket.bytesWritten	implemented	N17	tsonic_node::net::Socket::bytes_written	NODE-NET-002	tracks bytes written counter
+NODE-NET-SOCKET-BUFFER-SIZE	net	Socket.bufferSize	implemented	N17	tsonic_node::net::Socket::buffer_size	NODE-NET-002	reports closed buffer size state
+NODE-NET-SOCKET-PENDING	net	Socket.pending	implemented	N17	tsonic_node::net::Socket::pending	NODE-NET-002	reports pending connection state
+NODE-NET-SOCKET-CONNECTING	net	Socket.connecting	implemented	N17	tsonic_node::net::Socket::connecting	NODE-NET-002	reports connecting state
+NODE-NET-SOCKET-READY-STATE	net	Socket.readyState	implemented	N17	tsonic_node::net::Socket::ready_state	NODE-NET-002	returns explicit ready state string
+NODE-NET-SOCKET-SET-NO-DELAY	net	Socket.setNoDelay	implemented	N17	tsonic_node::net::Socket::set_no_delay	NODE-NET-002	sets noDelay on TCP stream
+NODE-NET-SOCKET-SET-KEEP-ALIVE	net	Socket.setKeepAlive	implemented	N17	tsonic_node::net::Socket::set_keep_alive	NODE-NET-002	records keep-alive state and delay
+NODE-NET-SOCKET-KEEP-ALIVE	net	Socket.keepAlive	implemented	N17	tsonic_node::net::Socket::keep_alive	NODE-NET-002	reads keep-alive state
+NODE-NET-SOCKET-KEEP-ALIVE-DELAY	net	Socket.keepAliveInitialDelay	implemented	N17	tsonic_node::net::Socket::keep_alive_initial_delay	NODE-NET-002	reads keep-alive initial delay
+NODE-NET-SOCKET-SET-TYPE-OF-SERVICE	net	Socket.setTypeOfService	implemented	N17	tsonic_node::net::Socket::set_type_of_service	NODE-NET-002	records explicit type-of-service state
+NODE-NET-SOCKET-TYPE-OF-SERVICE	net	Socket.typeOfService	implemented	N17	tsonic_node::net::Socket::type_of_service	NODE-NET-002	reads type-of-service state
+NODE-NET-SOCKET-SET-TIMEOUT	net	Socket.setTimeout	implemented	N17	tsonic_node::net::Socket::set_timeout	NODE-NET-002	sets socket read/write timeout state
+NODE-NET-SOCKET-TIMEOUT	net	Socket.timeout	implemented	N17	tsonic_node::net::Socket::timeout	NODE-NET-002	reads socket timeout state
+NODE-NET-SOCKET-SET-ENCODING	net	Socket.setEncoding	implemented	N17	tsonic_node::net::Socket::set_encoding	NODE-NET-002	records explicit stream encoding
+NODE-NET-SOCKET-ENCODING	net	Socket.encoding	implemented	N17	tsonic_node::net::Socket::encoding	NODE-NET-002	reads stream encoding state
+NODE-NET-SOCKET-REF	net	Socket.ref	implemented	N17	tsonic_node::net::Socket::ref	NODE-NET-002	sets ref state
+NODE-NET-SOCKET-UNREF	net	Socket.unref	implemented	N17	tsonic_node::net::Socket::unref	NODE-NET-002	clears ref state
+NODE-NET-SOCKET-HAS-REF	net	Socket.hasRef	implemented	N17	tsonic_node::net::Socket::has_ref	NODE-NET-002	reads ref state
+NODE-NET-SOCKET-PAUSE	net	Socket.pause	implemented	N17	tsonic_node::net::Socket::pause	NODE-NET-002	sets paused state
+NODE-NET-SOCKET-RESUME	net	Socket.resume	implemented	N17	tsonic_node::net::Socket::resume	NODE-NET-002	clears paused state
+NODE-NET-SOCKET-IS-PAUSED	net	Socket.isPaused	implemented	N17	tsonic_node::net::Socket::is_paused	NODE-NET-002	reads paused state
+NODE-NET-SOCKET-ALLOW-HALF-OPEN	net	Socket.allowHalfOpen	implemented	N37	tsonic_node::net::Socket::allow_half_open	NODE-NET-003	reads socket half-open option
+NODE-NET-SERVER-CARRIER	net	Server	implemented	N17	tsonic_node::net::Server	NODE-NET-002	closed TCP server carrier
+NODE-NET-SERVER-LISTEN	net	Server.listen	implemented	N17	tsonic_node::net::Server::listen	NODE-NET-002	binds TCP server to host and port
+NODE-NET-SERVER-LISTEN-OPTIONS	net	Server.listenWithOptions	implemented	N37	tsonic_node::net::Server::listen_with_options	NODE-NET-003	binds TCP server from closed listen options
+NODE-NET-SERVER-ADDRESS	net	Server.address	implemented	N17	tsonic_node::net::Server::address	NODE-NET-002	returns server address info
+NODE-NET-SERVER-LOCAL-ADDR	net	Server.localAddr	implemented	N17	tsonic_node::net::Server::local_addr	NODE-NET-002	returns local server address
+NODE-NET-SERVER-LOCAL-PORT	net	Server.localPort	implemented	N17	tsonic_node::net::Server::local_port	NODE-NET-002	returns local server port
+NODE-NET-SERVER-ACCEPT	net	Server.accept	implemented	N17	tsonic_node::net::Server::accept	NODE-NET-002	accepts TCP connection into closed Socket carrier
+NODE-NET-SERVER-CLOSE	net	Server.close	implemented	N17	tsonic_node::net::Server::close	NODE-NET-002	closes server carrier
+NODE-NET-SERVER-LISTENING	net	Server.listening	implemented	N17	tsonic_node::net::Server::listening	NODE-NET-002	reads listening state
+NODE-NET-SERVER-MAX-CONNECTIONS	net	Server.maxConnections	implemented	N17	tsonic_node::net::Server::max_connections	NODE-NET-002	reads max connection state
+NODE-NET-SERVER-SET-MAX-CONNECTIONS	net	Server.setMaxConnections	implemented	N17	tsonic_node::net::Server::set_max_connections	NODE-NET-002	sets max connection state
+NODE-NET-SERVER-CONNECTIONS	net	Server.connections	implemented	N17	tsonic_node::net::Server::connections	NODE-NET-002	reads accepted connection count
+NODE-NET-SERVER-GET-CONNECTIONS	net	Server.getConnections	implemented	N17	tsonic_node::net::Server::get_connections	NODE-NET-002	returns accepted connection count
+NODE-NET-SERVER-REF	net	Server.ref	implemented	N17	tsonic_node::net::Server::ref	NODE-NET-002	sets server ref state
+NODE-NET-SERVER-UNREF	net	Server.unref	implemented	N17	tsonic_node::net::Server::unref	NODE-NET-002	clears server ref state
+NODE-NET-SERVER-HAS-REF	net	Server.hasRef	implemented	N17	tsonic_node::net::Server::has_ref	NODE-NET-002	reads server ref state
+NODE-NET-IS-IP	net	isIP	implemented	N37	tsonic_node::net::is_ip	NODE-NET-003	classifies IPv4 and IPv6 literals
+NODE-NET-IS-IPV4	net	isIPv4	implemented	N37	tsonic_node::net::is_ipv4	NODE-NET-003	checks IPv4 literal
+NODE-NET-IS-IPV6	net	isIPv6	implemented	N37	tsonic_node::net::is_ipv6	NODE-NET-003	checks IPv6 literal
+NODE-NET-CONNECT-FN	net	connect	implemented	N64	tsonic_node::net::connect	NODE-NET-001	connect helper over explicit host and port
+NODE-NET-CONNECT-OPTIONS-FN	net	connect options	implemented	N64	tsonic_node::net::connect_with_options	NODE-NET-003	connect helper over closed options
+NODE-NET-CREATE-CONNECTION	net	createConnection	implemented	N64	tsonic_node::net::create_connection	NODE-NET-001	createConnection alias over explicit host and port
+NODE-NET-CREATE-CONNECTION-OPTIONS	net	createConnection options	implemented	N64	tsonic_node::net::create_connection_with_options	NODE-NET-003	createConnection helper over closed options
+NODE-NET-CREATE-SERVER	net	createServer	implemented	N64	tsonic_node::net::create_server	NODE-NET-001	createServer helper over explicit host and port
+NODE-NET-CREATE-SERVER-OPTIONS	net	createServer options	implemented	N64	tsonic_node::net::create_server_with_options	NODE-NET-003	createServer helper over closed listen options
+NODE-NET-LOOKUP-ENDPOINT	net	lookupEndpoint	implemented	N37	tsonic_node::net::lookup_endpoint	NODE-NET-003	resolves endpoint strings without shelling out
+NODE-DGRAM-ADDRESS-INFO	dgram	AddressInfo	implemented	N18	tsonic_node::dgram::AddressInfo	NODE-DGRAM-002	closed UDP address info carrier
+NODE-DGRAM-SOCKET-CARRIER	dgram	Socket	implemented	N18	tsonic_node::dgram::Socket	NODE-DGRAM-002	closed UDP socket carrier
+NODE-DGRAM-SOCKET-BIND	dgram	Socket.bind	implemented	N18	tsonic_node::dgram::Socket::bind	NODE-DGRAM-002	binds UDP socket to host and port
+NODE-DGRAM-SOCKET-ADDRESS	dgram	Socket.address	implemented	N18	tsonic_node::dgram::Socket::address	NODE-DGRAM-002	returns local UDP address info
+NODE-DGRAM-SOCKET-LOCAL-PORT	dgram	Socket.localPort	implemented	N18	tsonic_node::dgram::Socket::local_port	NODE-DGRAM-002	returns local UDP port
+NODE-DGRAM-SOCKET-CONNECT	dgram	Socket.connect	implemented	N18	tsonic_node::dgram::Socket::connect	NODE-DGRAM-002	connects UDP socket to explicit peer
+NODE-DGRAM-SOCKET-DISCONNECT	dgram	Socket.disconnect	implemented	N18	tsonic_node::dgram::Socket::disconnect	NODE-DGRAM-002	disconnects UDP socket where platform supports it
+NODE-DGRAM-SOCKET-REMOTE-ADDRESS	dgram	Socket.remoteAddress	implemented	N18	tsonic_node::dgram::Socket::remote_address	NODE-DGRAM-002	returns connected peer address info
+NODE-DGRAM-SOCKET-SEND	dgram	Socket.send	implemented	N18	tsonic_node::dgram::Socket::send	NODE-DGRAM-002	sends datagram to connected peer
+NODE-DGRAM-SOCKET-SEND-TO	dgram	Socket.sendTo	implemented	N18	tsonic_node::dgram::Socket::send_to	NODE-DGRAM-002	sends datagram to explicit peer
+NODE-DGRAM-SOCKET-RECV-FROM	dgram	Socket.recvFrom	implemented	N18	tsonic_node::dgram::Socket::recv_from	NODE-DGRAM-002	receives datagram and source address
+NODE-DGRAM-SOCKET-CLOSE	dgram	Socket.close	implemented	N18	tsonic_node::dgram::Socket::close	NODE-DGRAM-002	closes UDP socket carrier
+NODE-DGRAM-SOCKET-CLOSED	dgram	Socket.closed	implemented	N18	tsonic_node::dgram::Socket::closed	NODE-DGRAM-002	reads closed state
+NODE-DGRAM-SOCKET-REF	dgram	Socket.ref	implemented	N18	tsonic_node::dgram::Socket::ref	NODE-DGRAM-002	sets ref state
+NODE-DGRAM-SOCKET-UNREF	dgram	Socket.unref	implemented	N18	tsonic_node::dgram::Socket::unref	NODE-DGRAM-002	clears ref state
+NODE-DGRAM-SOCKET-HAS-REF	dgram	Socket.hasRef	implemented	N18	tsonic_node::dgram::Socket::has_ref	NODE-DGRAM-002	reads ref state
+NODE-DGRAM-SOCKET-SET-BROADCAST	dgram	Socket.setBroadcast	implemented	N18	tsonic_node::dgram::Socket::set_broadcast	NODE-DGRAM-002	sets broadcast option
+NODE-DGRAM-SOCKET-BROADCAST	dgram	Socket.broadcast	implemented	N18	tsonic_node::dgram::Socket::broadcast	NODE-DGRAM-002	reads broadcast option state
+NODE-DGRAM-SOCKET-SET-TTL	dgram	Socket.setTTL	implemented	N18	tsonic_node::dgram::Socket::set_ttl	NODE-DGRAM-002	sets UDP ttl
+NODE-DGRAM-SOCKET-TTL	dgram	Socket.ttl	implemented	N18	tsonic_node::dgram::Socket::ttl	NODE-DGRAM-002	reads UDP ttl state
+NODE-DGRAM-SOCKET-SET-MULTICAST-TTL	dgram	Socket.setMulticastTTL	implemented	N18	tsonic_node::dgram::Socket::set_multicast_ttl	NODE-DGRAM-002	sets multicast ttl
+NODE-DGRAM-SOCKET-MULTICAST-TTL	dgram	Socket.multicastTTL	implemented	N18	tsonic_node::dgram::Socket::multicast_ttl	NODE-DGRAM-002	reads multicast ttl state
+NODE-DGRAM-SOCKET-SET-RECV-BUFFER-SIZE	dgram	Socket.setRecvBufferSize	implemented	N18	tsonic_node::dgram::Socket::set_recv_buffer_size	NODE-DGRAM-002	sets explicit receive buffer size state
+NODE-DGRAM-SOCKET-GET-RECV-BUFFER-SIZE	dgram	Socket.getRecvBufferSize	implemented	N18	tsonic_node::dgram::Socket::get_recv_buffer_size	NODE-DGRAM-002	reads receive buffer size state
+NODE-DGRAM-SOCKET-SET-SEND-BUFFER-SIZE	dgram	Socket.setSendBufferSize	implemented	N18	tsonic_node::dgram::Socket::set_send_buffer_size	NODE-DGRAM-002	sets explicit send buffer size state
+NODE-DGRAM-SOCKET-GET-SEND-BUFFER-SIZE	dgram	Socket.getSendBufferSize	implemented	N18	tsonic_node::dgram::Socket::get_send_buffer_size	NODE-DGRAM-002	reads send buffer size state
+NODE-DGRAM-SOCKET-GET-SEND-QUEUE-SIZE	dgram	Socket.getSendQueueSize	implemented	N18	tsonic_node::dgram::Socket::get_send_queue_size	NODE-DGRAM-002	returns closed send queue size state
+NODE-DGRAM-SOCKET-GET-SEND-QUEUE-COUNT	dgram	Socket.getSendQueueCount	implemented	N18	tsonic_node::dgram::Socket::get_send_queue_count	NODE-DGRAM-002	returns closed send queue count state
+NODE-DGRAM-SOCKET-ADD-MEMBERSHIP	dgram	Socket.addMembership	implemented	N18	tsonic_node::dgram::Socket::add_membership	NODE-DGRAM-002	records membership API as closed no-op carrier operation
+NODE-DGRAM-SOCKET-DROP-MEMBERSHIP	dgram	Socket.dropMembership	implemented	N18	tsonic_node::dgram::Socket::drop_membership	NODE-DGRAM-002	records membership removal API as closed no-op carrier operation
+NODE-DGRAM-CREATE-SOCKET	dgram	createSocket	implemented	N18	tsonic_node::dgram::create_socket	NODE-DGRAM-001	creates UDP socket bound to loopback ephemeral port
+NODE-CHILD-SPAWN-OPTIONS-CARRIER	child_process	SpawnOptions	implemented	N33	tsonic_node::child_process::SpawnOptions	NODE-CHILD-003	closed spawn option carrier with explicit shell rejection
+NODE-CHILD-SPAWN-OUTPUT-CARRIER	child_process	SpawnOutput	implemented	N14	tsonic_node::child_process::SpawnOutput	NODE-CHILD-001	closed spawn output carrier
+NODE-CHILD-SPAWN-OUTPUT-STDOUT-STRING	child_process	SpawnOutput.stdoutString	implemented	N14	tsonic_node::child_process::SpawnOutput::stdout_string	NODE-CHILD-001	decodes stdout as UTF-8 explicitly
+NODE-CHILD-SPAWN-OUTPUT-STDERR-STRING	child_process	SpawnOutput.stderrString	implemented	N14	tsonic_node::child_process::SpawnOutput::stderr_string	NODE-CHILD-001	decodes stderr as UTF-8 explicitly
+NODE-CHILD-SPAWN-OUTPUT-SUCCESS	child_process	SpawnOutput.success	implemented	N14	tsonic_node::child_process::SpawnOutput::success	NODE-CHILD-001	reports zero exit status
+NODE-CHILD-PROCESS-CARRIER	child_process	ChildProcess	implemented	N14	tsonic_node::child_process::ChildProcess	NODE-CHILD-002	closed running child process carrier
+NODE-CHILD-PROCESS-KILL	child_process	ChildProcess.kill	implemented	N14	tsonic_node::child_process::ChildProcess::kill	NODE-CHILD-002	kills child process explicitly
+NODE-CHILD-PROCESS-WAIT	child_process	ChildProcess.wait	implemented	N14	tsonic_node::child_process::ChildProcess::wait	NODE-CHILD-002	waits for child and captures output
+NODE-CHILD-PROCESS-REF	child_process	ChildProcess.ref	implemented	N14	tsonic_node::child_process::ChildProcess::ref_process	NODE-CHILD-002	sets child ref state
+NODE-CHILD-PROCESS-UNREF	child_process	ChildProcess.unref	implemented	N14	tsonic_node::child_process::ChildProcess::unref_process	NODE-CHILD-002	clears child ref state
+NODE-CHILD-PROCESS-HAS-REF	child_process	ChildProcess.hasRef	implemented	N14	tsonic_node::child_process::ChildProcess::has_ref	NODE-CHILD-002	reads child ref state
+NODE-CHILD-PROCESS-DISCONNECT	child_process	ChildProcess.disconnect	implemented	N14	tsonic_node::child_process::ChildProcess::disconnect	NODE-CHILD-002	closes IPC connected state
+NODE-CHILD-PROCESS-SEND	child_process	ChildProcess.send	implemented	N14	tsonic_node::child_process::ChildProcess::send	NODE-CHILD-002	sends only over explicit connected IPC state
+NODE-CHILD-SPAWN-FILE-SYNC	child_process	spawnFileSync	implemented	N14	tsonic_node::child_process::spawn_file_sync	NODE-CHILD-001	shell-free sync file process execution
+NODE-CHILD-SPAWN-FILE-SYNC-OPTIONS	child_process	spawnFileSync options	implemented	N33	tsonic_node::child_process::spawn_file_sync_with_options	NODE-CHILD-003	shell-free sync file process execution with closed options
+NODE-CHILD-SPAWN-SYNC	child_process	spawnSync	implemented	N14	tsonic_node::child_process::spawn_sync	NODE-CHILD-001	spawnSync alias over shell-free file process execution
+NODE-CHILD-SPAWN-FILE	child_process	spawnFile	implemented	N14	tsonic_node::child_process::spawn_file	NODE-CHILD-002	starts shell-free child process
+NODE-CHILD-SPAWN	child_process	spawn	implemented	N14	tsonic_node::child_process::spawn	NODE-CHILD-002	spawn alias over shell-free file process execution
+NODE-CHILD-SPAWN-FILE-OPTIONS	child_process	spawnFile options	implemented	N33	tsonic_node::child_process::spawn_file_with_options	NODE-CHILD-003	starts shell-free child process with closed options
+NODE-CHILD-EXEC-FILE	child_process	execFile	implemented	N14	tsonic_node::child_process::exec_file	NODE-CHILD-002	execFile maps to shell-free file execution
+NODE-CHILD-EXEC-FILE-SYNC	child_process	execFileSync	implemented	N14	tsonic_node::child_process::exec_file_sync	NODE-CHILD-001	returns stdout bytes for successful shell-free file execution
+NODE-CHILD-EXEC-FILE-SYNC-STRING	child_process	execFileSync string	implemented	N14	tsonic_node::child_process::exec_file_sync_string	NODE-CHILD-001	returns UTF-8 stdout string for successful shell-free file execution
+NODE-CHILD-EXEC-SYNC	child_process	execSync	implemented	N14	tsonic_node::child_process::exec_sync	NODE-CHILD-001	execSync closed ABI accepts explicit program and args only
+NODE-CHILD-EXEC-COMMAND-SYNC-REJECT	child_process	exec command string	implemented	N33	tsonic_node::child_process::exec_command_sync	NODE-CHILD-003	rejects shell command string execution explicitly
+NODE-CHILD-SPAWN-SHELL-SYNC-REJECT	child_process	spawn shell string	implemented	N33	tsonic_node::child_process::spawn_shell_sync	NODE-CHILD-003	rejects shell spawn execution explicitly
+NODE-CLUSTER-SETTINGS-CARRIER	cluster	ClusterSettings	implemented	N9	tsonic_node::cluster::ClusterSettings	NODE-CLUSTER-001	closed cluster primary settings carrier
+NODE-CLUSTER-WORKER-CARRIER	cluster	Worker	implemented	N9	tsonic_node::cluster::Worker	NODE-CLUSTER-001	closed cluster worker process carrier
+NODE-CLUSTER-IS-PRIMARY	cluster	isPrimary	implemented	N9	tsonic_node::cluster::is_primary	NODE-CLUSTER-001	detects primary process via explicit environment marker
+NODE-CLUSTER-IS-WORKER	cluster	isWorker	implemented	N9	tsonic_node::cluster::is_worker	NODE-CLUSTER-001	detects worker process via explicit environment marker
+NODE-CLUSTER-WORKER-ID	cluster	worker.id	implemented	N9	tsonic_node::cluster::worker_id	NODE-CLUSTER-001	reads explicit worker id environment marker
+NODE-CLUSTER-SETUP-PRIMARY	cluster	setupPrimary	implemented	N9	tsonic_node::cluster::setup_primary	NODE-CLUSTER-001	creates explicit primary execution settings
+NODE-CLUSTER-FORK	cluster	fork	implemented	N9	tsonic_node::cluster::fork	NODE-CLUSTER-001	forks worker process through approved file-spawn model
+NODE-WORKER-MESSAGE-PORT-CARRIER	worker_threads	MessagePort	implemented	N32	tsonic_node::worker_threads::MessagePort	NODE-WORKER-001	closed message port carrier
+NODE-WORKER-MESSAGE-PORT-POST	worker_threads	MessagePort.postMessage	implemented	N32	tsonic_node::worker_threads::MessagePort::post_message	NODE-WORKER-001	sends closed JsValue through channel
+NODE-WORKER-MESSAGE-PORT-RECEIVE	worker_threads	MessagePort.receiveMessage	implemented	N32	tsonic_node::worker_threads::MessagePort::receive_message	NODE-WORKER-001	receives closed JsValue without dynamic runtime
+NODE-WORKER-MESSAGE-PORT-CLOSE	worker_threads	MessagePort.close	implemented	N32	tsonic_node::worker_threads::MessagePort::close	NODE-WORKER-001	closes message port state
+NODE-WORKER-MESSAGE-PORT-START	worker_threads	MessagePort.start	implemented	N32	tsonic_node::worker_threads::MessagePort::start	NODE-WORKER-001	start is explicit no-op for eager Rust channel
+NODE-WORKER-MESSAGE-PORT-UNREF	worker_threads	MessagePort.unref	implemented	N32	tsonic_node::worker_threads::MessagePort::unref	NODE-WORKER-001	clears message port ref state
+NODE-WORKER-MESSAGE-PORT-REF	worker_threads	MessagePort.ref	implemented	N32	tsonic_node::worker_threads::MessagePort::ref	NODE-WORKER-001	sets message port ref state
+NODE-WORKER-MESSAGE-PORT-HAS-REF	worker_threads	MessagePort.hasRef	implemented	N32	tsonic_node::worker_threads::MessagePort::has_ref	NODE-WORKER-001	reads message port ref state
+NODE-WORKER-MESSAGE-CHANNEL-CARRIER	worker_threads	MessageChannel	implemented	N32	tsonic_node::worker_threads::MessageChannel	NODE-WORKER-001	closed message channel carrier
+NODE-WORKER-MESSAGE-CHANNEL-NEW	worker_threads	MessageChannel.new	implemented	N32	tsonic_node::worker_threads::MessageChannel::new	NODE-WORKER-001	creates paired closed message ports
+NODE-WORKER-RESOURCE-LIMITS-CARRIER	worker_threads	ResourceLimits	implemented	N32	tsonic_node::worker_threads::ResourceLimits	NODE-WORKER-002	closed resource limit metadata carrier
+NODE-WORKER-OPTIONS-CARRIER	worker_threads	WorkerOptions	implemented	N32	tsonic_node::worker_threads::WorkerOptions	NODE-WORKER-002	closed worker options carrier
+NODE-WORKER-CARRIER	worker_threads	Worker	implemented	N32	tsonic_node::worker_threads::Worker	NODE-WORKER-001	closed Rust closure worker carrier
+NODE-WORKER-SPAWN	worker_threads	Worker.spawn	implemented	N32	tsonic_node::worker_threads::Worker::spawn	NODE-WORKER-001	spawns approved Rust closure worker
+NODE-WORKER-SPAWN-WITH-OPTIONS	worker_threads	Worker.spawnWithOptions	implemented	N32	tsonic_node::worker_threads::Worker::spawn_with_options	NODE-WORKER-002	spawns approved Rust closure worker with closed options
+NODE-WORKER-JOIN	worker_threads	Worker.join	implemented	N32	tsonic_node::worker_threads::Worker::join	NODE-WORKER-001	joins Rust worker and reports panic as Node error
+NODE-WORKER-THREAD-ID	worker_threads	Worker.threadId	implemented	N32	tsonic_node::worker_threads::Worker::thread_id	NODE-WORKER-002	returns closed worker thread id
+NODE-WORKER-NAME	worker_threads	Worker.name	implemented	N32	tsonic_node::worker_threads::Worker::name	NODE-WORKER-002	returns configured worker name
+NODE-WORKER-RESOURCE-LIMITS	worker_threads	Worker.resourceLimits	implemented	N32	tsonic_node::worker_threads::Worker::resource_limits	NODE-WORKER-002	returns configured resource limit metadata
+NODE-WORKER-UNREF	worker_threads	Worker.unref	implemented	N32	tsonic_node::worker_threads::Worker::unref	NODE-WORKER-002	clears worker ref state
+NODE-WORKER-REF	worker_threads	Worker.ref	implemented	N32	tsonic_node::worker_threads::Worker::ref	NODE-WORKER-002	sets worker ref state
+NODE-WORKER-HAS-REF	worker_threads	Worker.hasRef	implemented	N32	tsonic_node::worker_threads::Worker::has_ref	NODE-WORKER-002	reads worker ref state
+NODE-WORKER-RECEIVE-MESSAGE-ON-PORT	worker_threads	receiveMessageOnPort	implemented	N32	tsonic_node::worker_threads::receive_message_on_port	NODE-WORKER-001	receives one closed message from port
+NODE-WORKER-IS-MAIN-THREAD	worker_threads	isMainThread	implemented	N32	tsonic_node::worker_threads::is_main_thread	NODE-WORKER-002	reports main-thread state
+NODE-WORKER-PARENT-PORT	worker_threads	parentPort	implemented	N32	tsonic_node::worker_threads::parent_port	NODE-WORKER-002	returns explicit absent parent port for closure workers
+NODE-WORKER-DATA	worker_threads	workerData	implemented	N32	tsonic_node::worker_threads::worker_data	NODE-WORKER-002	returns explicit closed worker data value
+NODE-WORKER-SET-ENVIRONMENT-DATA	worker_threads	setEnvironmentData	implemented	N32	tsonic_node::worker_threads::set_environment_data	NODE-WORKER-002	sets closed environment data value
+NODE-WORKER-GET-ENVIRONMENT-DATA	worker_threads	getEnvironmentData	implemented	N32	tsonic_node::worker_threads::get_environment_data	NODE-WORKER-002	gets closed environment data value
+NODE-WORKER-MARK-UNTRANSFERABLE	worker_threads	markAsUntransferable	implemented	N32	tsonic_node::worker_threads::mark_as_untransferable_token	NODE-WORKER-002	records explicit untransferable token marker
+NODE-WORKER-IS-MARKED-UNTRANSFERABLE	worker_threads	isMarkedAsUntransferable	implemented	N32	tsonic_node::worker_threads::is_marked_as_untransferable_token	NODE-WORKER-002	checks explicit untransferable token marker
+NODE-WORKER-MOVE-PORT-TO-CONTEXT	worker_threads	moveMessagePortToContext	implemented	N32	tsonic_node::worker_threads::move_message_port_to_context	NODE-WORKER-002	returns port unchanged because no VM contexts exist
+NODE-WORKER-BROADCAST-CHANNEL-CARRIER	worker_threads	BroadcastChannel	implemented	N32	tsonic_node::worker_threads::BroadcastChannel	NODE-WORKER-002	closed broadcast channel carrier
+NODE-WORKER-BROADCAST-CHANNEL-NEW	worker_threads	BroadcastChannel.new	implemented	N32	tsonic_node::worker_threads::BroadcastChannel::new	NODE-WORKER-002	creates named broadcast channel
+NODE-WORKER-BROADCAST-CHANNEL-NAME	worker_threads	BroadcastChannel.name	implemented	N32	tsonic_node::worker_threads::BroadcastChannel::name	NODE-WORKER-002	returns broadcast channel name
+NODE-WORKER-BROADCAST-CHANNEL-POST	worker_threads	BroadcastChannel.postMessage	implemented	N32	tsonic_node::worker_threads::BroadcastChannel::post_message	NODE-WORKER-002	posts closed JsValue to named channel table
+NODE-WORKER-BROADCAST-CHANNEL-RECEIVE	worker_threads	BroadcastChannel.receiveMessage	implemented	N32	tsonic_node::worker_threads::BroadcastChannel::receive_message	NODE-WORKER-002	receives closed JsValue from named channel table
+NODE-WORKER-BROADCAST-CHANNEL-CLOSE	worker_threads	BroadcastChannel.close	implemented	N32	tsonic_node::worker_threads::BroadcastChannel::close	NODE-WORKER-002	closes broadcast channel API as explicit no-op state
 NODE-MODULE-CONSOLE	console	module	implemented	N1	tsonic_js::console	JS-CONSOLE-001	console helpers use host output policy
 NODE-CONSOLE-NEW	console	Console.new	implemented	N75	tsonic_js::console::Console::new	JS-CON-002	constructs console carrier with default options
 NODE-CONSOLE-WITH-OPTIONS	console	Console.withOptions	implemented	N75	tsonic_js::console::Console::with_options	JS-CON-003	constructs console carrier with explicit options
@@ -459,8 +644,6 @@ NODE-MODULE-SOURCEMAP-SUPPORT-SET-OPTIONS	module	setSourceMapsSupport options	im
 NODE-MODULE-STRIP-TS-MODE	module	StripTypeScriptMode	implemented	N74	tsonic_node::module::StripTypeScriptMode	NODE-MODULE-002	closed strip/transform mode carrier
 NODE-MODULE-STRIP-TS-OPTIONS	module	StripTypeScriptTypesOptions	implemented	N74	tsonic_node::module::StripTypeScriptTypesOptions	NODE-MODULE-002	closed strip TypeScript options carrier
 NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
-NODE-NET-CONNECT	net	connect/createConnection/connectWithOptions	implemented	N64	tsonic_node::net::{connect,connect_with_options,create_connection,create_connection_with_options}	NODE-NET-001,NODE-NET-003	real TCP connect helpers with explicit option carrier
-NODE-NET-SERVER-CREATE	net	createServer/createServerWithOptions/listen/accept/close	implemented	N64	tsonic_node::net::{create_server,create_server_with_options,Server}	NODE-NET-001,NODE-NET-002,NODE-NET-003	TCP server creation, accept, address, close, and connection count carrier
 NODE-MODULE-OS	os	module	implemented	J	tsonic_node::os	NODE-OS-001	closed OS query helpers
 NODE-OS-CONSTANTS	os	constants/userInfo options	implemented	N31	tsonic_node::os::{constants,user_info_with_options,OsConstants,UserInfoOptions}	NODE-OS-004	errno, signal, priority, dlopen, uv constants and userInfo option shape
 NODE-OS-CONSTANTS-EXT	os	errno Windows aliases and extended POSIX names	implemented	N50	tsonic_node::os::constants	NODE-OS-005	expanded closed errno constants table including high-use POSIX names and WSA aliases without host introspection
@@ -722,7 +905,6 @@ NODE-MODULE-V8	v8	module	hard-reject	N0	n/a	REJECT-NODE-V8	V8-specific APIs irre
 NODE-MODULE-VM	vm	module	hard-reject	N0	n/a	REJECT-NODE-VM	dynamic code execution excluded
 NODE-MODULE-WASI	wasi	module	hard-reject	N0	n/a	REJECT-NODE-WASI	WASI runtime embedding excluded
 NODE-MODULE-WORKER-THREADS	worker_threads	module	implemented	N5	tsonic_node::worker_threads	NODE-WORKER-001	message channel and Rust closure worker substrate
-NODE-WORKER-OPTIONS	worker_threads	WorkerOptions/resourceLimits/environmentData/transfer markers	implemented	N32	tsonic_node::worker_threads::{WorkerOptions,ResourceLimits,set_environment_data,get_environment_data,mark_as_untransferable_token}	NODE-WORKER-002	closed worker options, resource-limit metadata, environment data, and transfer marker state
 NODE-MODULE-ZLIB	zlib	module	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
 NODE-ZLIB-CLASSES	zlib	Zlib classes/options/constants/raw/unzip	implemented	N35	tsonic_node::zlib::{ZlibOptions,BrotliOptions,ZstdOptions,Zlib,create_gzip,create_gunzip,deflate_raw_sync,inflate_raw_sync,unzip_sync,constants}	NODE-ZLIB-002	stream-class carrier shape, bytesWritten, reset/flush/params/close, raw/unzip aliases, and constants
 NODE-ZLIB-ZSTD-GATE	zlib	ZstdCompress/ZstdDecompress	implemented	N35	tsonic_node::zlib::{create_zstd_compress,create_zstd_decompress,zstd_compress_sync,zstd_decompress_sync}	NODE-ZLIB-002	explicit dependency-gated Zstd unsupported error until approved zstd implementation lands
@@ -959,11 +1141,6 @@ NODE-BUFFER-DECODE-BYTES	buffer	decode bytes	implemented	K	tsonic_node::buffer::
 NODE-BUFFER-TRANSCODE	buffer	transcode	implemented	N8	tsonic_node::buffer::transcode	NODE-BUF-TRANSCODE-001	transcode across supported encodings
 NODE-BUFFER-IS-BUFFER	buffer	Buffer.isBuffer	implemented	N58	tsonic_node::buffer::is_buffer	NODE-BUF-010	closed Buffer predicate over known carrier
 NODE-BUFFER-IS-ENCODING	buffer	Buffer.isEncoding	implemented	N58	tsonic_node::buffer::is_encoding	NODE-BUF-010	supported encoding predicate
-NODE-CHILD-SPAWN-SYNC	child_process	spawnSync/spawnFileSync	implemented	N14	tsonic_node::child_process::{spawn_sync,spawn_file_sync,spawn_file_sync_with_options}	NODE-CHILD-001	shell-free sync file process execution with stdout/stderr/status shape
-NODE-CHILD-SPAWN	child_process	spawn/spawnFile	implemented	N14	tsonic_node::child_process::{spawn,spawn_file,spawn_file_with_options,ChildProcess}	NODE-CHILD-002	shell-free running child process shape with pid/stdio/wait/ref/unref/disconnect
-NODE-CHILD-EXEC-FILE	child_process	execFile/execFileSync	implemented	N14	tsonic_node::child_process::{exec_file,exec_file_sync,exec_file_sync_string}	NODE-CHILD-002	file execution helpers without shell evaluation
-NODE-CHILD-EXEC-SYNC	child_process	execSync	implemented	N14	tsonic_node::child_process::exec_sync	NODE-CHILD-001	closed shell-free exec alias for generated Rust ABI
-NODE-CHILD-OPTIONS	child_process	spawn/exec options and shell rejection	implemented	N33	tsonic_node::child_process::{SpawnOptions,spawn_file_sync_with_options,exec_command_sync,spawn_shell_sync}	NODE-CHILD-003	stdin input, cwd/env/timeout metadata, and explicit shell-command rejection
 NODE-CRYPTO-RANDOM-BYTES	crypto	randomBytes	implemented	L	tsonic_node::crypto::random_bytes	NODE-CRYPTO-001	OS randomness
 NODE-CRYPTO-RANDOM-FILL	crypto	randomFill/randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	buffer random fill
 NODE-CRYPTO-RANDOM-INT	crypto	randomInt	implemented	L	tsonic_node::crypto::{random_int,random_int_range}	NODE-CRYPTO-001	range-limited random integer
@@ -1153,12 +1330,6 @@ NODE-OS-CONSTANTS-FN	os	constants	implemented	N67	tsonic_node::os::constants	NOD
 NODE-OS-CPUINFO-CARRIER	os	CpuInfo/CpuTimes	implemented	N67	tsonic_node::os::{CpuInfo,CpuTimes}	NODE-OS-001	CPU info and CPU times carriers
 NODE-OS-USERINFO-CARRIER	os	UserInfo/UserInfoOptions	implemented	N67	tsonic_node::os::{UserInfo,UserInfoOptions}	NODE-OS-004	user info and options carriers
 NODE-OS-CONSTANTS-CARRIER	os	OsConstants/PriorityConstants	implemented	N67	tsonic_node::os::{OsConstants,PriorityConstants}	NODE-OS-004	OS constants carrier objects
-NODE-NET-SOCKET	net	Socket address/write/end/ref/timeout metadata	implemented	N17	tsonic_node::net::Socket	NODE-NET-002	TCP socket address, byte counter, timeout, encoding, ref/unref, and close helpers
-NODE-NET-SERVER	net	Server address/listen/ref metadata	implemented	N17	tsonic_node::net::Server	NODE-NET-002	TCP server address and ref/unref shape
-NODE-NET-OPTIONS	net	ConnectOptions/ListenOptions/SocketConstructorOpts	implemented	N37	tsonic_node::net::{ConnectOptions,ListenOptions,SocketConstructorOpts}	NODE-NET-003	closed connect/listen/socket constructor option carriers without fd takeover or dynamic lookup hooks
-NODE-NET-BLOCKLIST	net	BlockList	implemented	N37	tsonic_node::net::BlockList	NODE-NET-003	address/range/subnet block list checks and rules serialization
-NODE-NET-SOCKET-ADDRESS	net	SocketAddress	implemented	N37	tsonic_node::net::SocketAddress	NODE-NET-003	host/port/family socket address carrier and parser
-NODE-DGRAM-SOCKET	dgram	Socket address/connect/send/close/ref/ttl/buffer metadata	implemented	N18	tsonic_node::dgram::Socket	NODE-DGRAM-002	UDP socket address, connected send, ref/unref, close, queue, buffer, TTL, and broadcast helpers
 NODE-READLINE-INTERFACE	readline	Interface prompt/cursor/key/terminal methods	implemented	N19	tsonic_node::readline::Interface	NODE-READLINE-002	buffered Interface prompt, cursor, key-write, terminal, pause/resume, and close behavior
 NODE-READLINE-PROMISES	readline/promises	Readline commit/rollback/cursor methods	implemented	N19	tsonic_node::readline::promises	NODE-READLINE-002	promises Readline controller command queue with commit/rollback semantics
 NODE-READLINE-CREATE-INTERFACE	readline	createInterface	implemented	N72	tsonic_node::readline::create_interface	NODE-READLINE-001	closed readline interface factory over explicit input lines
