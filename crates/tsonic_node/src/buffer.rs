@@ -665,6 +665,64 @@ pub fn resolve_object_url(_id: &str) -> Option<Blob> {
     None
 }
 
+pub fn blob_size(blob: &Blob) -> usize {
+    blob.size()
+}
+
+pub fn blob_type(blob: &Blob) -> &str {
+    blob.content_type()
+}
+
+pub fn blob_text(blob: &Blob) -> NodeResult<String> {
+    blob.text()
+        .map_err(|error| NodeError::new(error.kind().to_string(), error.message().to_string()))
+}
+
+pub fn blob_array_buffer(blob: &Blob) -> tsonic_js::ArrayBuffer {
+    blob.array_buffer()
+}
+
+pub fn blob_bytes(blob: &Blob) -> Vec<u8> {
+    blob.bytes().to_vec()
+}
+
+pub fn blob_slice(blob: &Blob, start: usize, end: Option<usize>, content_type: &str) -> Blob {
+    blob.slice(start, end, content_type)
+}
+
+pub fn blob_stream(blob: &Blob) -> crate::stream::web::ReadableStream {
+    crate::stream::web::ReadableStream::from_chunks(vec![Buffer::from_bytes(blob.bytes().to_vec())])
+}
+
+pub fn file_name(file: &File) -> &str {
+    file.name()
+}
+
+pub fn file_last_modified(file: &File) -> i64 {
+    file.last_modified()
+}
+
+pub fn file_webkit_relative_path(_file: &File) -> &str {
+    ""
+}
+
+pub fn file_size(file: &File) -> usize {
+    file.size()
+}
+
+pub fn file_type(file: &File) -> &str {
+    file.content_type()
+}
+
+pub fn file_text(file: &File) -> NodeResult<String> {
+    file.text()
+        .map_err(|error| NodeError::new(error.kind().to_string(), error.message().to_string()))
+}
+
+pub fn file_array_buffer(file: &File) -> tsonic_js::ArrayBuffer {
+    file.array_buffer()
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Encoding {
     Utf8,

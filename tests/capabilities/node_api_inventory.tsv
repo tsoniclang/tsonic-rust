@@ -2671,10 +2671,42 @@ NODE-BUFFER-WRITE-BIG-UINT64LE	buffer	writeBigUInt64LE	implemented	N79	tsonic_no
 NODE-BUFFER-WRITE-BIG-UINT64BE	buffer	writeBigUInt64BE	implemented	N79	tsonic_node::buffer::Buffer::write_big_uint64_be	NODE-BUF-010	64-bit big-endian unsigned write
 NODE-BUFFER-WRITE-BIG-INT64LE	buffer	writeBigInt64LE	implemented	N79	tsonic_node::buffer::Buffer::write_big_int64_le	NODE-BUF-010	64-bit little-endian signed write
 NODE-BUFFER-WRITE-BIG-INT64BE	buffer	writeBigInt64BE	implemented	N79	tsonic_node::buffer::Buffer::write_big_int64_be	NODE-BUF-010	64-bit big-endian signed write
+NODE-BUFFER-READ-UINT-LE-ALIAS	buffer	readUintLE	implemented	N86	tsonic_node::buffer::Buffer::read_uint_le	NODE-BUF-010	Node readUintLE alias for readUIntLE
+NODE-BUFFER-READ-UINT-BE-ALIAS	buffer	readUintBE	implemented	N86	tsonic_node::buffer::Buffer::read_uint_be	NODE-BUF-010	Node readUintBE alias for readUIntBE
+NODE-BUFFER-READ-UINT8-ALIAS	buffer	readUint8	implemented	N86	tsonic_node::buffer::Buffer::read_uint8	NODE-BUF-010	Node readUint8 alias for readUInt8
+NODE-BUFFER-READ-UINT16LE-ALIAS	buffer	readUint16LE	implemented	N86	tsonic_node::buffer::Buffer::read_uint16_le	NODE-BUF-010	Node readUint16LE alias for readUInt16LE
+NODE-BUFFER-READ-UINT16BE-ALIAS	buffer	readUint16BE	implemented	N86	tsonic_node::buffer::Buffer::read_uint16_be	NODE-BUF-010	Node readUint16BE alias for readUInt16BE
+NODE-BUFFER-READ-UINT32LE-ALIAS	buffer	readUint32LE	implemented	N86	tsonic_node::buffer::Buffer::read_uint32_le	NODE-BUF-010	Node readUint32LE alias for readUInt32LE
+NODE-BUFFER-READ-UINT32BE-ALIAS	buffer	readUint32BE	implemented	N86	tsonic_node::buffer::Buffer::read_uint32_be	NODE-BUF-010	Node readUint32BE alias for readUInt32BE
+NODE-BUFFER-WRITE-UINT-LE-ALIAS	buffer	writeUintLE	implemented	N86	tsonic_node::buffer::Buffer::write_uint_le	NODE-BUF-010	Node writeUintLE alias for writeUIntLE
+NODE-BUFFER-WRITE-UINT-BE-ALIAS	buffer	writeUintBE	implemented	N86	tsonic_node::buffer::Buffer::write_uint_be	NODE-BUF-010	Node writeUintBE alias for writeUIntBE
+NODE-BUFFER-WRITE-UINT8-ALIAS	buffer	writeUint8	implemented	N86	tsonic_node::buffer::Buffer::write_uint8	NODE-BUF-010	Node writeUint8 alias for writeUInt8
+NODE-BUFFER-WRITE-UINT16LE-ALIAS	buffer	writeUint16LE	implemented	N86	tsonic_node::buffer::Buffer::write_uint16_le	NODE-BUF-010	Node writeUint16LE alias for writeUInt16LE
+NODE-BUFFER-WRITE-UINT16BE-ALIAS	buffer	writeUint16BE	implemented	N86	tsonic_node::buffer::Buffer::write_uint16_be	NODE-BUF-010	Node writeUint16BE alias for writeUInt16BE
+NODE-BUFFER-WRITE-UINT32LE-ALIAS	buffer	writeUint32LE	implemented	N86	tsonic_node::buffer::Buffer::write_uint32_le	NODE-BUF-010	Node writeUint32LE alias for writeUInt32LE
+NODE-BUFFER-WRITE-UINT32BE-ALIAS	buffer	writeUint32BE	implemented	N86	tsonic_node::buffer::Buffer::write_uint32_be	NODE-BUF-010	Node writeUint32BE alias for writeUInt32BE
+NODE-BUFFER-READ-BIG-UINT64LE-ALIAS	buffer	readBigUint64LE	implemented	N86	tsonic_node::buffer::Buffer::read_big_uint64_le	NODE-BUF-010	Node readBigUint64LE alias for readBigUInt64LE
+NODE-BUFFER-READ-BIG-UINT64BE-ALIAS	buffer	readBigUint64BE	implemented	N86	tsonic_node::buffer::Buffer::read_big_uint64_be	NODE-BUF-010	Node readBigUint64BE alias for readBigUInt64BE
+NODE-BUFFER-WRITE-BIG-UINT64LE-ALIAS	buffer	writeBigUint64LE	implemented	N86	tsonic_node::buffer::Buffer::write_big_uint64_le	NODE-BUF-010	Node writeBigUint64LE alias for writeBigUInt64LE
+NODE-BUFFER-WRITE-BIG-UINT64BE-ALIAS	buffer	writeBigUint64BE	implemented	N86	tsonic_node::buffer::Buffer::write_big_uint64_be	NODE-BUF-010	Node writeBigUint64BE alias for writeBigUInt64BE
 NODE-BUFFER-COMPARE-STATIC	buffer	Buffer.compare	implemented	N79	tsonic_node::buffer::compare	NODE-BUF-003	static Buffer compare helper
 NODE-BUFFER-IS-UTF8	buffer	isUtf8	implemented	N79	tsonic_node::buffer::is_utf8	NODE-BUF-011	UTF-8 validation helper
 NODE-BUFFER-IS-ASCII	buffer	isAscii	implemented	N79	tsonic_node::buffer::is_ascii	NODE-BUF-011	ASCII validation helper
 NODE-BUFFER-RESOLVE-OBJECT-URL	buffer	resolveObjectURL	implemented	N79	tsonic_node::buffer::resolve_object_url	NODE-BUF-011	closed object URL resolver returns explicit absence
+NODE-BUFFER-BLOB-SIZE	buffer	Blob.size	implemented	N86	tsonic_node::buffer::blob_size	NODE-BUF-011	backend-legal Blob size helper
+NODE-BUFFER-BLOB-TYPE	buffer	Blob.type	implemented	N86	tsonic_node::buffer::blob_type	NODE-BUF-011	backend-legal Blob type helper
+NODE-BUFFER-BLOB-TEXT	buffer	Blob.text	implemented	N86	tsonic_node::buffer::blob_text	NODE-BUF-011	backend-legal Blob UTF-8 text helper
+NODE-BUFFER-BLOB-ARRAY-BUFFER	buffer	Blob.arrayBuffer	implemented	N86	tsonic_node::buffer::blob_array_buffer	NODE-BUF-011	backend-legal Blob ArrayBuffer helper
+NODE-BUFFER-BLOB-BYTES	buffer	Blob.bytes	implemented	N86	tsonic_node::buffer::blob_bytes	NODE-BUF-011	backend-legal Blob bytes helper
+NODE-BUFFER-BLOB-SLICE	buffer	Blob.slice	implemented	N86	tsonic_node::buffer::blob_slice	NODE-BUF-011	backend-legal Blob slice helper
+NODE-BUFFER-BLOB-STREAM	buffer	Blob.stream	implemented	N86	tsonic_node::buffer::blob_stream	NODE-BUF-011	backend-legal Blob ReadableStream helper
+NODE-BUFFER-FILE-NAME	buffer	File.name	implemented	N86	tsonic_node::buffer::file_name	NODE-BUF-011	backend-legal File name helper
+NODE-BUFFER-FILE-LAST-MODIFIED	buffer	File.lastModified	implemented	N86	tsonic_node::buffer::file_last_modified	NODE-BUF-011	backend-legal File lastModified helper
+NODE-BUFFER-FILE-WEBKIT-RELATIVE-PATH	buffer	File.webkitRelativePath	implemented	N86	tsonic_node::buffer::file_webkit_relative_path	NODE-BUF-011	backend-legal File webkitRelativePath helper returning Node-compatible empty default
+NODE-BUFFER-FILE-SIZE	buffer	File.size	implemented	N86	tsonic_node::buffer::file_size	NODE-BUF-011	backend-legal File size helper
+NODE-BUFFER-FILE-TYPE	buffer	File.type	implemented	N86	tsonic_node::buffer::file_type	NODE-BUF-011	backend-legal File type helper
+NODE-BUFFER-FILE-TEXT	buffer	File.text	implemented	N86	tsonic_node::buffer::file_text	NODE-BUF-011	backend-legal File UTF-8 text helper
+NODE-BUFFER-FILE-ARRAY-BUFFER	buffer	File.arrayBuffer	implemented	N86	tsonic_node::buffer::file_array_buffer	NODE-BUF-011	backend-legal File ArrayBuffer helper
 NODE-CRYPTO-RANDOM-BYTES	crypto	randomBytes	implemented	L	tsonic_node::crypto::random_bytes	NODE-CRYPTO-001	OS randomness
 NODE-CRYPTO-RANDOM-FILL	crypto	randomFill	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	fills Buffer with OS randomness
 NODE-CRYPTO-RANDOM-FILL-SYNC	crypto	randomFillSync	implemented	L	tsonic_node::crypto::random_fill	NODE-CRYPTO-001	sync randomFill alias over same closed helper

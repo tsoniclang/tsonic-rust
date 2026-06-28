@@ -170,6 +170,24 @@ fn buffer_blob_file_and_constants_are_closed_carriers() {
     assert_eq!(blob.text().unwrap(), "blob");
     assert_eq!(blob.bytes(), b"blob");
     assert_eq!(blob.slice(1, Some(3), "text/plain").text().unwrap(), "lo");
+    assert_eq!(tsonic_node::buffer::blob_size(&blob), 4);
+    assert_eq!(tsonic_node::buffer::blob_type(&blob), "text/plain");
+    assert_eq!(tsonic_node::buffer::blob_text(&blob).unwrap(), "blob");
+    assert_eq!(
+        tsonic_node::buffer::blob_array_buffer(&blob).as_bytes(),
+        b"blob"
+    );
+    assert_eq!(tsonic_node::buffer::blob_bytes(&blob), b"blob");
+    assert_eq!(
+        tsonic_node::buffer::blob_slice(&blob, 1, Some(3), "text/plain")
+            .text()
+            .unwrap(),
+        "lo"
+    );
+    assert_eq!(
+        tsonic_node::buffer::blob_stream(&blob).chunks()[0].as_bytes(),
+        b"blob"
+    );
 
     let file_options = tsonic_node::buffer::FilePropertyBag {
         endings: Some("native".to_string()),
@@ -187,6 +205,16 @@ fn buffer_blob_file_and_constants_are_closed_carriers() {
     assert_eq!(file.content_type(), "text/plain");
     assert_eq!(file.text().unwrap(), "file");
     assert_eq!(file.array_buffer().byte_length(), 4);
+    assert_eq!(tsonic_node::buffer::file_name(&file), "a.txt");
+    assert_eq!(tsonic_node::buffer::file_last_modified(&file), 123);
+    assert_eq!(tsonic_node::buffer::file_webkit_relative_path(&file), "");
+    assert_eq!(tsonic_node::buffer::file_size(&file), 4);
+    assert_eq!(tsonic_node::buffer::file_type(&file), "text/plain");
+    assert_eq!(tsonic_node::buffer::file_text(&file).unwrap(), "file");
+    assert_eq!(
+        tsonic_node::buffer::file_array_buffer(&file).as_bytes(),
+        b"file"
+    );
 }
 
 #[test]
