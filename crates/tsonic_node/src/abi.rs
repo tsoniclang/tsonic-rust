@@ -143,7 +143,11 @@ pub use crate::http2::{
     connect as http2_connect, connect_session as http2_connect_session,
     create_secure_server as http2_create_secure_server, create_server as http2_create_server,
     request as http2_request, ClientSessionOptions as Http2ClientSessionOptions, Http2Server,
-    Http2Session, Http2Stream, ServerOptions as Http2ServerOptions,
+    Http2Session, Http2SessionState, Http2Settings, Http2Stream,
+    ServerOptions as Http2ServerOptions, HTTP2_HEADER_AUTHORITY, HTTP2_HEADER_CONTENT_LENGTH,
+    HTTP2_HEADER_CONTENT_TYPE, HTTP2_HEADER_METHOD, HTTP2_HEADER_PATH, HTTP2_HEADER_STATUS,
+    HTTP2_METHOD_GET, HTTP2_METHOD_POST, HTTP_STATUS_NOT_FOUND, HTTP_STATUS_OK, NGHTTP2_CANCEL,
+    NGHTTP2_NO_ERROR, NGHTTP2_PROTOCOL_ERROR, NGHTTP2_REFUSED_STREAM,
 };
 pub use crate::https::{
     create_server as https_create_server, get as https_get, request as https_request,

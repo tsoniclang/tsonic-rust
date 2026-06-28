@@ -240,6 +240,7 @@ NODE-MOD-015	implemented	N3	tsonic_node::abi::fs_promises_*	NODE-FSP-001	blockin
 NODE-MOD-016	implemented	N4	tsonic_node::abi::{http_get,http_request}	NODE-HTTP-001	HTTP/1 client request/response over real TCP
 NODE-HTTP-002	implemented	N36	tsonic_node::abi::{HttpAgent,HttpAgentOptions,HttpClientRequest,HttpIncomingMessage,HttpServerResponse}	NODE-HTTP-002	common HTTP state carriers, header operations, trailers, timeout/abort metadata, and agent options
 NODE-MOD-017	implemented	N9	tsonic_node::http2	NODE-HTTP2-001	HTTP/2 client request/session shape over approved reqwest rustls/http2 dependency
+NODE-HTTP2-002	implemented	N39	tsonic_node::abi::{Http2Settings,Http2SessionState,Http2Stream,HTTP2_HEADER_METHOD,NGHTTP2_NO_ERROR}	NODE-HTTP2-002	HTTP2 constants, session settings/state/ping/goaway/timeout, stream headers/respond/trailers/rst, and server timeout/close metadata
 NODE-MOD-018	implemented	N9	tsonic_node::https	NODE-HTTPS-001	HTTPS client request shape over approved reqwest rustls dependency
 NODE-MOD-019	hard-reject	M	n/a	REJECT-NODE-INSPECTOR	debugger/inspector protocol out of Stage 1
 NODE-MOD-020	implemented	N4	tsonic_node::abi::{module_builtin_modules,module_create_require}	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution

@@ -27,6 +27,9 @@ NODE-MODULE-FS-PROMISES	fs/promises	module	implemented	N3	tsonic_node::fs_promis
 NODE-MODULE-HTTP	http	module	implemented	N4	tsonic_node::http	NODE-HTTP-001	HTTP/1 client request/response over real TCP
 NODE-HTTP-METADATA	http	Agent/ClientRequest/headers/trailers/timeouts	implemented	N36	tsonic_node::http::{Agent,AgentOptions,ClientRequest,IncomingMessage,ServerResponse}	NODE-HTTP-002	common HTTP state carriers, header operations, trailers, timeout/abort metadata, and agent options
 NODE-MODULE-HTTP2	http2	module	implemented	N9	tsonic_node::http2	NODE-HTTP2-001	HTTP/2 client request/session shape over approved reqwest rustls/http2 dependency
+NODE-HTTP2-CONSTANTS	http2	constants/header/method/status/error codes	implemented	N39	tsonic_node::http2::{HTTP2_HEADER_METHOD,HTTP2_HEADER_PATH,HTTP2_HEADER_STATUS,NGHTTP2_NO_ERROR}	NODE-HTTP2-002	common HTTP2 header, method, status, and nghttp2 constants
+NODE-HTTP2-SESSION-STATE	http2	session settings/state/ping/goaway/timeout	implemented	N39	tsonic_node::http2::{Http2Session,Http2Settings,Http2SessionState}	NODE-HTTP2-002	closed HTTP2 session settings, state snapshot, ping, goaway, timeout, close, and destroy metadata
+NODE-HTTP2-STREAM-STATE	http2	stream headers/respond/trailers/rst/timeout	implemented	N39	tsonic_node::http2::Http2Stream	NODE-HTTP2-002	closed HTTP2 stream header access, response headers, trailers, data, reset code, timeout, close, and destroy metadata
 NODE-MODULE-HTTPS	https	module	implemented	N9	tsonic_node::https	NODE-HTTPS-001	HTTPS client request shape over approved reqwest rustls dependency
 NODE-MODULE-INSPECTOR	inspector	module	hard-reject	N0	n/a	REJECT-NODE-INSPECTOR	debugger protocol excluded
 NODE-MODULE-MODULE	module	module	implemented	N4	tsonic_node::module	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution

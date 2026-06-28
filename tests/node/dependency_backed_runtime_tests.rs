@@ -74,17 +74,79 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     let mut session = tsonic_node::http2::connect_session("https://example.com").unwrap();
     assert_eq!(session.authority(), "https://example.com");
     assert!(!session.closed());
-    session.close();
+    assert_eq!(session.local_settings().initial_window_size, 65_535);
+    session.settings(tsonic_node::http2::Http2Settings {
+        enable_push: false,
+        max_concurrent_streams: Some(100),
+        ..tsonic_node::http2::Http2Settings::default()
+    });
+    assert!(!session.local_settings().enable_push);
+    assert_eq!(session.ping(b"123").unwrap(), b"123\0\0\0\0\0".to_vec());
+    assert!(session.ping(b"too-long-payload").is_err());
+    let timed = std::cell::Cell::new(false);
+    session.set_timeout(50, Some(|| timed.set(true)));
+    assert_eq!(session.timeout(), Some(50));
+    assert!(timed.get());
+    let state = session.state();
+    assert_eq!(state.local_window_size, 65_535);
+    session.goaway(tsonic_node::http2::NGHTTP2_CANCEL);
+    assert_eq!(
+        session.goaway_code(),
+        Some(tsonic_node::http2::NGHTTP2_CANCEL)
+    );
     assert!(session.closed());
-    let server = tsonic_node::http2::create_secure_server(tsonic_node::http2::ServerOptions {
+    session.destroy();
+    assert!(session.destroyed());
+    let mut server = tsonic_node::http2::create_secure_server(tsonic_node::http2::ServerOptions {
         allow_http1: true,
         settings: BTreeMap::new(),
     });
     assert!(server.secure());
     assert!(server.options().allow_http1);
-    let mut stream = tsonic_node::http2::Http2Stream::new(BTreeMap::new());
+    server.set_timeout(100, Some(|| {}));
+    assert_eq!(server.timeout(), Some(100));
+    server.close();
+    assert!(server.closed());
+    let mut stream = tsonic_node::http2::Http2Stream::new(BTreeMap::from([
+        (
+            tsonic_node::http2::HTTP2_HEADER_METHOD.to_string(),
+            tsonic_node::http2::HTTP2_METHOD_GET.to_string(),
+        ),
+        (
+            tsonic_node::http2::HTTP2_HEADER_PATH.to_string(),
+            "/".to_string(),
+        ),
+    ]));
+    assert_eq!(
+        stream.get_header(tsonic_node::http2::HTTP2_HEADER_METHOD),
+        Some("GET")
+    );
+    assert!(stream
+        .get_header_names()
+        .contains(&tsonic_node::http2::HTTP2_HEADER_PATH.to_string()));
+    let headers = BTreeMap::from([(
+        tsonic_node::http2::HTTP2_HEADER_STATUS.to_string(),
+        tsonic_node::http2::HTTP_STATUS_OK.to_string(),
+    )]);
+    stream.respond(&headers);
+    stream.additional_headers(&BTreeMap::from([("x-extra".to_string(), "1".to_string())]));
+    stream.respond_with_file("/tmp/file.txt", &BTreeMap::new());
+    assert!(stream.headers_sent());
+    assert_eq!(stream.sent_headers().len(), 3);
+    stream.send_trailers(&BTreeMap::from([(
+        "x-trailer".to_string(),
+        "done".to_string(),
+    )]));
+    assert_eq!(stream.trailers().get("x-trailer").unwrap(), "done");
+    stream.set_timeout(25, Some(|| {}));
+    assert_eq!(stream.timeout(), Some(25));
     stream.write(b"hello");
     assert_eq!(stream.data(), b"hello");
+    stream.close_with_code(tsonic_node::http2::NGHTTP2_NO_ERROR);
+    assert_eq!(stream.rst_code(), tsonic_node::http2::NGHTTP2_NO_ERROR);
+    assert!(stream.closed());
+    stream.destroy();
+    assert!(stream.destroyed());
     stream.end();
 }
 
