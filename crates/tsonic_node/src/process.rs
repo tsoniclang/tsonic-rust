@@ -68,6 +68,54 @@ pub fn ppid() -> u32 {
     parent_process_id().unwrap_or(0)
 }
 
+pub fn getuid() -> Option<u32> {
+    #[cfg(unix)]
+    {
+        Some(unsafe { libc::getuid() })
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
+pub fn geteuid() -> Option<u32> {
+    #[cfg(unix)]
+    {
+        Some(unsafe { libc::geteuid() })
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
+pub fn getgid() -> Option<u32> {
+    #[cfg(unix)]
+    {
+        Some(unsafe { libc::getgid() })
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
+pub fn getegid() -> Option<u32> {
+    #[cfg(unix)]
+    {
+        Some(unsafe { libc::getegid() })
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
+pub fn getgroups() -> NodeResult<Vec<u32>> {
+    getgroups_impl()
+}
+
 pub fn exec_path() -> NodeResult<String> {
     std::env::current_exe()
         .map(|path| path.to_string_lossy().to_string())
@@ -266,6 +314,32 @@ fn parent_process_id() -> Option<u32> {
 #[cfg(not(target_os = "linux"))]
 fn parent_process_id() -> Option<u32> {
     None
+}
+
+#[cfg(unix)]
+fn getgroups_impl() -> NodeResult<Vec<u32>> {
+    let count = unsafe { libc::getgroups(0, std::ptr::null_mut()) };
+    if count < 0 {
+        return Err(NodeError::new(
+            "ERR_PROCESS_GROUPS",
+            std::io::Error::last_os_error().to_string(),
+        ));
+    }
+    let mut groups = vec![0 as libc::gid_t; count as usize];
+    let actual = unsafe { libc::getgroups(count, groups.as_mut_ptr()) };
+    if actual < 0 {
+        return Err(NodeError::new(
+            "ERR_PROCESS_GROUPS",
+            std::io::Error::last_os_error().to_string(),
+        ));
+    }
+    groups.truncate(actual as usize);
+    Ok(groups)
+}
+
+#[cfg(not(unix))]
+fn getgroups_impl() -> NodeResult<Vec<u32>> {
+    Ok(Vec::new())
 }
 
 #[cfg(target_os = "linux")]

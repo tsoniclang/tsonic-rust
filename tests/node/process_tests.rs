@@ -26,6 +26,26 @@ fn process_platform_and_arch_use_node_spellings() {
 }
 
 #[test]
+fn process_identity_queries_use_platform_values() {
+    #[cfg(unix)]
+    {
+        assert!(process::getuid().is_some());
+        assert!(process::geteuid().is_some());
+        assert!(process::getgid().is_some());
+        assert!(process::getegid().is_some());
+        assert!(process::getgroups().is_ok());
+    }
+    #[cfg(not(unix))]
+    {
+        assert_eq!(process::getuid(), None);
+        assert_eq!(process::geteuid(), None);
+        assert_eq!(process::getgid(), None);
+        assert_eq!(process::getegid(), None);
+        assert!(process::getgroups().unwrap().is_empty());
+    }
+}
+
+#[test]
 fn process_runtime_queries_have_stable_shapes() {
     assert!(process::pid() > 0);
     assert!(!process::version().is_empty());
