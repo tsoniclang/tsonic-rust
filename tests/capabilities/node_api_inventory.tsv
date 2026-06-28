@@ -332,17 +332,104 @@ NODE-HTTP-REQUEST	http	request	implemented	N64	tsonic_node::http::request	NODE-H
 NODE-HTTP-GET	http	get	implemented	N64	tsonic_node::http::get	NODE-HTTP-001	GET convenience helper over request options
 NODE-HTTP-PARSE-RESPONSE	http	parseResponse	implemented	N64	tsonic_node::http::parse_response	NODE-HTTP-001	parses raw HTTP response bytes into closed Response carrier
 NODE-MODULE-HTTP2	http2	module	implemented	N9	tsonic_node::http2	NODE-HTTP2-001	HTTP/2 client request/session shape over approved reqwest rustls/http2 dependency
-NODE-HTTP2-CONSTANTS	http2	constants/header/method/status/error codes	implemented	N39	tsonic_node::http2::{HTTP2_HEADER_METHOD,HTTP2_HEADER_PATH,HTTP2_HEADER_STATUS,NGHTTP2_NO_ERROR}	NODE-HTTP2-002	common HTTP2 header, method, status, and nghttp2 constants
-NODE-HTTP2-SESSION-STATE	http2	session settings/state/ping/goaway/timeout	implemented	N39	tsonic_node::http2::{Http2Session,Http2Settings,Http2SessionState}	NODE-HTTP2-002	closed HTTP2 session settings, state snapshot, ping, goaway, timeout, close, and destroy metadata
-NODE-HTTP2-STREAM-STATE	http2	stream headers/respond/trailers/rst/timeout	implemented	N39	tsonic_node::http2::Http2Stream	NODE-HTTP2-002	closed HTTP2 stream header access, response headers, trailers, data, reset code, timeout, close, and destroy metadata
-NODE-HTTP2-CONNECT	http2	connect/connectSession/request	implemented	N64	tsonic_node::http2::{connect,connect_session,request,ClientSessionOptions}	NODE-HTTP2-001,NODE-HTTP2-002	closed HTTP2 client session option, connect, and request helpers
-NODE-HTTP2-SERVER	http2	createServer/createSecureServer/Http2Server/ServerOptions	implemented	N64	tsonic_node::http2::{create_server,create_secure_server,Http2Server,ServerOptions}	NODE-HTTP2-002	closed HTTP2 server option, secure flag, timeout, close, and destroy carrier
-NODE-HTTP2-SETTINGS	http2	Http2Settings/Http2SessionState	implemented	N64	tsonic_node::http2::{Http2Settings,Http2SessionState}	NODE-HTTP2-002	closed HTTP2 settings and session state snapshot carrier
+NODE-HTTP2-HEADER-METHOD	http2	HTTP2_HEADER_METHOD	implemented	N39	tsonic_node::http2::HTTP2_HEADER_METHOD	NODE-HTTP2-002	closed HTTP2 pseudo-header constant
+NODE-HTTP2-HEADER-PATH	http2	HTTP2_HEADER_PATH	implemented	N39	tsonic_node::http2::HTTP2_HEADER_PATH	NODE-HTTP2-002	closed HTTP2 pseudo-header constant
+NODE-HTTP2-HEADER-STATUS	http2	HTTP2_HEADER_STATUS	implemented	N39	tsonic_node::http2::HTTP2_HEADER_STATUS	NODE-HTTP2-002	closed HTTP2 pseudo-header constant
+NODE-HTTP2-HEADER-AUTHORITY	http2	HTTP2_HEADER_AUTHORITY	implemented	N39	tsonic_node::http2::HTTP2_HEADER_AUTHORITY	NODE-HTTP2-002	closed HTTP2 authority header constant
+NODE-HTTP2-HEADER-CONTENT-TYPE	http2	HTTP2_HEADER_CONTENT_TYPE	implemented	N39	tsonic_node::http2::HTTP2_HEADER_CONTENT_TYPE	NODE-HTTP2-002	closed HTTP2 content-type header constant
+NODE-HTTP2-HEADER-CONTENT-LENGTH	http2	HTTP2_HEADER_CONTENT_LENGTH	implemented	N39	tsonic_node::http2::HTTP2_HEADER_CONTENT_LENGTH	NODE-HTTP2-002	closed HTTP2 content-length header constant
+NODE-HTTP2-METHOD-GET	http2	HTTP2_METHOD_GET	implemented	N39	tsonic_node::http2::HTTP2_METHOD_GET	NODE-HTTP2-002	closed HTTP2 GET method constant
+NODE-HTTP2-METHOD-POST	http2	HTTP2_METHOD_POST	implemented	N39	tsonic_node::http2::HTTP2_METHOD_POST	NODE-HTTP2-002	closed HTTP2 POST method constant
+NODE-HTTP2-STATUS-OK	http2	HTTP_STATUS_OK	implemented	N39	tsonic_node::http2::HTTP_STATUS_OK	NODE-HTTP2-002	closed HTTP status constant
+NODE-HTTP2-STATUS-NOT-FOUND	http2	HTTP_STATUS_NOT_FOUND	implemented	N39	tsonic_node::http2::HTTP_STATUS_NOT_FOUND	NODE-HTTP2-002	closed HTTP status constant
+NODE-HTTP2-NGHTTP2-NO-ERROR	http2	NGHTTP2_NO_ERROR	implemented	N39	tsonic_node::http2::NGHTTP2_NO_ERROR	NODE-HTTP2-002	closed nghttp2 code constant
+NODE-HTTP2-NGHTTP2-CANCEL	http2	NGHTTP2_CANCEL	implemented	N39	tsonic_node::http2::NGHTTP2_CANCEL	NODE-HTTP2-002	closed nghttp2 code constant
+NODE-HTTP2-NGHTTP2-PROTOCOL-ERROR	http2	NGHTTP2_PROTOCOL_ERROR	implemented	N39	tsonic_node::http2::NGHTTP2_PROTOCOL_ERROR	NODE-HTTP2-002	closed nghttp2 code constant
+NODE-HTTP2-NGHTTP2-REFUSED-STREAM	http2	NGHTTP2_REFUSED_STREAM	implemented	N39	tsonic_node::http2::NGHTTP2_REFUSED_STREAM	NODE-HTTP2-002	closed nghttp2 code constant
+NODE-HTTP2-CLIENT-SESSION-OPTIONS	http2	ClientSessionOptions	implemented	N64	tsonic_node::http2::ClientSessionOptions	NODE-HTTP2-002	closed HTTP2 client session option carrier
+NODE-HTTP2-SESSION-CARRIER	http2	Http2Session	implemented	N39	tsonic_node::http2::Http2Session	NODE-HTTP2-002	closed HTTP2 session carrier
+NODE-HTTP2-SESSION-ID	http2	Http2Session.id	implemented	N39	tsonic_node::http2::Http2Session::id	NODE-HTTP2-002	HTTP2 session id accessor
+NODE-HTTP2-SESSION-AUTHORITY	http2	Http2Session.authority	implemented	N39	tsonic_node::http2::Http2Session::authority	NODE-HTTP2-002	HTTP2 session authority accessor
+NODE-HTTP2-SESSION-CLOSED	http2	Http2Session.closed	implemented	N39	tsonic_node::http2::Http2Session::closed	NODE-HTTP2-002	HTTP2 session closed-state accessor
+NODE-HTTP2-SESSION-DESTROYED	http2	Http2Session.destroyed	implemented	N39	tsonic_node::http2::Http2Session::destroyed	NODE-HTTP2-002	HTTP2 session destroyed-state accessor
+NODE-HTTP2-SESSION-STATE-SNAPSHOT	http2	Http2Session.state	implemented	N39	tsonic_node::http2::Http2Session::state	NODE-HTTP2-002	HTTP2 session state snapshot carrier
+NODE-HTTP2-SESSION-LOCAL-SETTINGS	http2	Http2Session.localSettings	implemented	N39	tsonic_node::http2::Http2Session::local_settings	NODE-HTTP2-002	HTTP2 local settings accessor
+NODE-HTTP2-SESSION-REMOTE-SETTINGS	http2	Http2Session.remoteSettings	implemented	N39	tsonic_node::http2::Http2Session::remote_settings	NODE-HTTP2-002	HTTP2 remote settings accessor
+NODE-HTTP2-SESSION-SETTINGS	http2	Http2Session.settings	implemented	N39	tsonic_node::http2::Http2Session::settings	NODE-HTTP2-002	HTTP2 local settings setter
+NODE-HTTP2-SESSION-SET-TIMEOUT	http2	Http2Session.setTimeout	implemented	N39	tsonic_node::http2::Http2Session::set_timeout	NODE-HTTP2-002	sets timeout and invokes explicit callback
+NODE-HTTP2-SESSION-TIMEOUT	http2	Http2Session.timeout	implemented	N39	tsonic_node::http2::Http2Session::timeout	NODE-HTTP2-002	HTTP2 session timeout accessor
+NODE-HTTP2-SESSION-PING	http2	Http2Session.ping	implemented	N39	tsonic_node::http2::Http2Session::ping	NODE-HTTP2-002	validates ping payload and pads to 8 bytes
+NODE-HTTP2-SESSION-GOAWAY	http2	Http2Session.goaway	implemented	N39	tsonic_node::http2::Http2Session::goaway	NODE-HTTP2-002	sets GOAWAY code and closes session
+NODE-HTTP2-SESSION-GOAWAY-CODE	http2	Http2Session.goawayCode	implemented	N39	tsonic_node::http2::Http2Session::goaway_code	NODE-HTTP2-002	GOAWAY code accessor
+NODE-HTTP2-SESSION-CLOSE	http2	Http2Session.close	implemented	N39	tsonic_node::http2::Http2Session::close	NODE-HTTP2-002	closes HTTP2 session carrier
+NODE-HTTP2-SESSION-DESTROY	http2	Http2Session.destroy	implemented	N39	tsonic_node::http2::Http2Session::destroy	NODE-HTTP2-002	destroys and closes HTTP2 session carrier
+NODE-HTTP2-STREAM-CARRIER	http2	Http2Stream	implemented	N39	tsonic_node::http2::Http2Stream	NODE-HTTP2-002	closed HTTP2 stream carrier
+NODE-HTTP2-STREAM-NEW	http2	Http2Stream.new	implemented	N39	tsonic_node::http2::Http2Stream::new	NODE-HTTP2-002	constructs stream from explicit header map
+NODE-HTTP2-STREAM-ID	http2	Http2Stream.id	implemented	N39	tsonic_node::http2::Http2Stream::id	NODE-HTTP2-002	HTTP2 stream id accessor
+NODE-HTTP2-STREAM-HEADERS	http2	Http2Stream.headers	implemented	N39	tsonic_node::http2::Http2Stream::headers	NODE-HTTP2-002	HTTP2 stream headers accessor
+NODE-HTTP2-STREAM-GET-HEADERS	http2	Http2Stream.getHeaders	implemented	N39	tsonic_node::http2::Http2Stream::get_headers	NODE-HTTP2-002	HTTP2 stream header map accessor
+NODE-HTTP2-STREAM-GET-HEADER	http2	Http2Stream.getHeader	implemented	N39	tsonic_node::http2::Http2Stream::get_header	NODE-HTTP2-002	HTTP2 stream case-normalized header accessor
+NODE-HTTP2-STREAM-GET-HEADER-NAMES	http2	Http2Stream.getHeaderNames	implemented	N39	tsonic_node::http2::Http2Stream::get_header_names	NODE-HTTP2-002	HTTP2 stream header-name accessor
+NODE-HTTP2-STREAM-HEADERS-SENT	http2	Http2Stream.headersSent	implemented	N39	tsonic_node::http2::Http2Stream::headers_sent	NODE-HTTP2-002	HTTP2 stream headers-sent accessor
+NODE-HTTP2-STREAM-SENT-HEADERS	http2	Http2Stream.sentHeaders	implemented	N39	tsonic_node::http2::Http2Stream::sent_headers	NODE-HTTP2-002	HTTP2 sent headers accessor
+NODE-HTTP2-STREAM-TRAILERS	http2	Http2Stream.trailers	implemented	N39	tsonic_node::http2::Http2Stream::trailers	NODE-HTTP2-002	HTTP2 trailers accessor
+NODE-HTTP2-STREAM-WRITE	http2	Http2Stream.write	implemented	N39	tsonic_node::http2::Http2Stream::write	NODE-HTTP2-002	appends explicit bytes to stream data
+NODE-HTTP2-STREAM-DATA	http2	Http2Stream.data	implemented	N39	tsonic_node::http2::Http2Stream::data	NODE-HTTP2-002	HTTP2 stream data accessor
+NODE-HTTP2-STREAM-RESPOND	http2	Http2Stream.respond	implemented	N39	tsonic_node::http2::Http2Stream::respond	NODE-HTTP2-002	records explicit response headers
+NODE-HTTP2-STREAM-RESPOND-WITH-FILE	http2	Http2Stream.respondWithFile	implemented	N39	tsonic_node::http2::Http2Stream::respond_with_file	NODE-HTTP2-002	records explicit file response marker and headers
+NODE-HTTP2-STREAM-ADDITIONAL-HEADERS	http2	Http2Stream.additionalHeaders	implemented	N39	tsonic_node::http2::Http2Stream::additional_headers	NODE-HTTP2-002	records explicit additional headers
+NODE-HTTP2-STREAM-SEND-TRAILERS	http2	Http2Stream.sendTrailers	implemented	N39	tsonic_node::http2::Http2Stream::send_trailers	NODE-HTTP2-002	records explicit trailers
+NODE-HTTP2-STREAM-SET-TIMEOUT	http2	Http2Stream.setTimeout	implemented	N39	tsonic_node::http2::Http2Stream::set_timeout	NODE-HTTP2-002	sets timeout and invokes explicit callback
+NODE-HTTP2-STREAM-TIMEOUT	http2	Http2Stream.timeout	implemented	N39	tsonic_node::http2::Http2Stream::timeout	NODE-HTTP2-002	HTTP2 stream timeout accessor
+NODE-HTTP2-STREAM-RST-CODE	http2	Http2Stream.rstCode	implemented	N39	tsonic_node::http2::Http2Stream::rst_code	NODE-HTTP2-002	HTTP2 stream reset code accessor
+NODE-HTTP2-STREAM-CLOSE-WITH-CODE	http2	Http2Stream.closeWithCode	implemented	N39	tsonic_node::http2::Http2Stream::close_with_code	NODE-HTTP2-002	sets reset code and closes stream
+NODE-HTTP2-STREAM-END	http2	Http2Stream.end	implemented	N39	tsonic_node::http2::Http2Stream::end	NODE-HTTP2-002	closes stream carrier
+NODE-HTTP2-STREAM-CLOSED	http2	Http2Stream.closed	implemented	N39	tsonic_node::http2::Http2Stream::closed	NODE-HTTP2-002	HTTP2 stream closed-state accessor
+NODE-HTTP2-STREAM-DESTROYED	http2	Http2Stream.destroyed	implemented	N39	tsonic_node::http2::Http2Stream::destroyed	NODE-HTTP2-002	HTTP2 stream destroyed-state accessor
+NODE-HTTP2-STREAM-DESTROY	http2	Http2Stream.destroy	implemented	N39	tsonic_node::http2::Http2Stream::destroy	NODE-HTTP2-002	destroys and closes stream carrier
+NODE-HTTP2-CLIENT-SESSION-OPTIONS-CONNECT	http2	ClientSessionOptions.connect	implemented	N64	tsonic_node::http2::ClientSessionOptions::connect	NODE-HTTP2-002	constructs client session options from authority
+NODE-HTTP2-REQUEST	http2	request	implemented	N64	tsonic_node::http2::request	NODE-HTTP2-001	HTTP2 client request helper over approved TLS transport
+NODE-HTTP2-CONNECT	http2	connect	implemented	N64	tsonic_node::http2::connect	NODE-HTTP2-001	validates authority and returns client session options
+NODE-HTTP2-CONNECT-SESSION	http2	connectSession	implemented	N64	tsonic_node::http2::connect_session	NODE-HTTP2-002	validates authority and returns closed session carrier
+NODE-HTTP2-SERVER-OPTIONS	http2	ServerOptions	implemented	N64	tsonic_node::http2::ServerOptions	NODE-HTTP2-002	closed HTTP2 server options carrier
+NODE-HTTP2-SERVER-CARRIER	http2	Http2Server	implemented	N64	tsonic_node::http2::Http2Server	NODE-HTTP2-002	closed HTTP2 server carrier
+NODE-HTTP2-SERVER-OPTIONS-ACCESSOR	http2	Http2Server.options	implemented	N64	tsonic_node::http2::Http2Server::options	NODE-HTTP2-002	HTTP2 server options accessor
+NODE-HTTP2-SERVER-SECURE	http2	Http2Server.secure	implemented	N64	tsonic_node::http2::Http2Server::secure	NODE-HTTP2-002	HTTP2 server secure-state accessor
+NODE-HTTP2-SERVER-TIMEOUT	http2	Http2Server.timeout	implemented	N64	tsonic_node::http2::Http2Server::timeout	NODE-HTTP2-002	HTTP2 server timeout accessor
+NODE-HTTP2-SERVER-SET-TIMEOUT	http2	Http2Server.setTimeout	implemented	N64	tsonic_node::http2::Http2Server::set_timeout	NODE-HTTP2-002	sets HTTP2 server timeout and invokes explicit callback
+NODE-HTTP2-SERVER-CLOSED	http2	Http2Server.closed	implemented	N64	tsonic_node::http2::Http2Server::closed	NODE-HTTP2-002	HTTP2 server closed-state accessor
+NODE-HTTP2-SERVER-CLOSE	http2	Http2Server.close	implemented	N64	tsonic_node::http2::Http2Server::close	NODE-HTTP2-002	closes HTTP2 server carrier
+NODE-HTTP2-CREATE-SERVER	http2	createServer	implemented	N64	tsonic_node::http2::create_server	NODE-HTTP2-002	creates non-secure HTTP2 server carrier
+NODE-HTTP2-CREATE-SECURE-SERVER	http2	createSecureServer	implemented	N64	tsonic_node::http2::create_secure_server	NODE-HTTP2-002	creates secure HTTP2 server carrier
+NODE-HTTP2-SETTINGS-CARRIER	http2	Http2Settings	implemented	N64	tsonic_node::http2::Http2Settings	NODE-HTTP2-002	closed HTTP2 settings carrier
+NODE-HTTP2-SESSION-STATE-CARRIER	http2	Http2SessionState	implemented	N64	tsonic_node::http2::Http2SessionState	NODE-HTTP2-002	closed HTTP2 session state snapshot carrier
 NODE-MODULE-HTTPS	https	module	implemented	N9	tsonic_node::https	NODE-HTTPS-001	HTTPS client request shape over approved reqwest rustls dependency
-NODE-HTTPS-AGENT	https	Agent/AgentOptions/getName/session cache	implemented	N41	tsonic_node::https::{Agent,AgentOptions}	NODE-HTTPS-002	closed HTTPS agent keepalive, max socket/session cache, timeout, servername, getName, destroy, and reuse metadata
-NODE-HTTPS-SERVER-STATE	https	Server options/closeAllConnections/closeIdleConnections/timeout	implemented	N41	tsonic_node::https::{Server,ServerOptions}	NODE-HTTPS-002	HTTPS server requestCert/rejectUnauthorized/handshake/session option shape and close/idle/all connection state
-NODE-HTTPS-CLIENT	https	request/get/RequestOptions	implemented	N64	tsonic_node::https::{request,get,RequestOptions}	NODE-HTTPS-001,NODE-HTTPS-002	closed HTTPS request/get helpers and option carrier over approved TLS transport
-NODE-HTTPS-SERVER	https	createServer/Server/ServerOptions	implemented	N64	tsonic_node::https::{create_server,Server,ServerOptions}	NODE-HTTPS-002	closed HTTPS server carrier with TLS option, timeout, idle/all close, and lifecycle state
+NODE-HTTPS-AGENT-OPTIONS	https	AgentOptions	implemented	N41	tsonic_node::https::AgentOptions	NODE-HTTPS-002	closed HTTPS agent options carrier
+NODE-HTTPS-AGENT-CARRIER	https	Agent	implemented	N41	tsonic_node::https::Agent	NODE-HTTPS-002	closed HTTPS agent carrier
+NODE-HTTPS-AGENT-NEW	https	Agent.new	implemented	N41	tsonic_node::https::Agent::new	NODE-HTTPS-002	constructs HTTPS agent from explicit options
+NODE-HTTPS-AGENT-GET-NAME	https	Agent.getName	implemented	N41	tsonic_node::https::Agent::get_name	NODE-HTTPS-002	deterministic HTTPS agent cache key
+NODE-HTTPS-AGENT-KEEP-SOCKET-ALIVE	https	Agent.keepSocketAlive	implemented	N41	tsonic_node::https::Agent::keep_socket_alive	NODE-HTTPS-002	HTTPS keepAlive policy accessor
+NODE-HTTPS-AGENT-REUSE-SOCKET	https	Agent.reuseSocket	implemented	N41	tsonic_node::https::Agent::reuse_socket	NODE-HTTPS-002	HTTPS reuse policy accessor rejects destroyed agent
+NODE-HTTPS-AGENT-DESTROY	https	Agent.destroy	implemented	N41	tsonic_node::https::Agent::destroy	NODE-HTTPS-002	destroys HTTPS agent carrier
+NODE-HTTPS-AGENT-DESTROYED	https	Agent.destroyed	implemented	N41	tsonic_node::https::Agent::destroyed	NODE-HTTPS-002	HTTPS agent destroyed-state accessor
+NODE-HTTPS-SERVER-OPTIONS	https	ServerOptions	implemented	N41	tsonic_node::https::ServerOptions	NODE-HTTPS-002	closed HTTPS server options carrier
+NODE-HTTPS-SERVER-CARRIER	https	Server	implemented	N41	tsonic_node::https::Server	NODE-HTTPS-002	closed HTTPS server carrier
+NODE-HTTPS-SERVER-NEW	https	Server.new	implemented	N41	tsonic_node::https::Server::new	NODE-HTTPS-002	constructs HTTPS server from options and explicit handler
+NODE-HTTPS-SERVER-OPTIONS-ACCESSOR	https	Server.options	implemented	N41	tsonic_node::https::Server::options	NODE-HTTPS-002	HTTPS server options accessor
+NODE-HTTPS-SERVER-HANDLE	https	Server.handle	implemented	N41	tsonic_node::https::Server::handle	NODE-HTTPS-002	invokes explicit HTTPS handler and returns response carrier
+NODE-HTTPS-SERVER-SET-TIMEOUT	https	Server.setTimeout	implemented	N41	tsonic_node::https::Server::set_timeout	NODE-HTTPS-002	sets timeout and invokes explicit callback
+NODE-HTTPS-SERVER-TIMEOUT	https	Server.timeout	implemented	N41	tsonic_node::https::Server::timeout	NODE-HTTPS-002	HTTPS server timeout accessor
+NODE-HTTPS-SERVER-CLOSE	https	Server.close	implemented	N41	tsonic_node::https::Server::close	NODE-HTTPS-002	closes HTTPS server carrier
+NODE-HTTPS-SERVER-CLOSE-IDLE	https	Server.closeIdleConnections	implemented	N41	tsonic_node::https::Server::close_idle_connections	NODE-HTTPS-002	marks idle HTTPS connections closed
+NODE-HTTPS-SERVER-CLOSE-ALL	https	Server.closeAllConnections	implemented	N41	tsonic_node::https::Server::close_all_connections	NODE-HTTPS-002	marks all HTTPS connections closed
+NODE-HTTPS-SERVER-CLOSED	https	Server.closed	implemented	N41	tsonic_node::https::Server::closed	NODE-HTTPS-002	HTTPS server closed-state accessor
+NODE-HTTPS-SERVER-IDLE-CLOSED	https	Server.idleConnectionsClosed	implemented	N41	tsonic_node::https::Server::idle_connections_closed	NODE-HTTPS-002	HTTPS idle connections closed-state accessor
+NODE-HTTPS-SERVER-ALL-CLOSED	https	Server.allConnectionsClosed	implemented	N41	tsonic_node::https::Server::all_connections_closed	NODE-HTTPS-002	HTTPS all connections closed-state accessor
+NODE-HTTPS-REQUEST-OPTIONS	https	RequestOptions	implemented	N64	tsonic_node::https::RequestOptions	NODE-HTTPS-002	closed HTTPS request options carrier
+NODE-HTTPS-REQUEST-OPTIONS-GET	https	RequestOptions.get	implemented	N64	tsonic_node::https::RequestOptions::get	NODE-HTTPS-002	constructs GET request options from URL
+NODE-HTTPS-GET	https	get	implemented	N64	tsonic_node::https::get	NODE-HTTPS-001	HTTPS GET helper over approved TLS transport
+NODE-HTTPS-REQUEST	https	request	implemented	N64	tsonic_node::https::request	NODE-HTTPS-001	HTTPS request helper over approved TLS transport
+NODE-HTTPS-CREATE-SERVER	https	createServer	implemented	N64	tsonic_node::https::create_server	NODE-HTTPS-002	creates HTTPS server carrier from explicit options and handler
 NODE-MODULE-INSPECTOR	inspector	module	hard-reject	N0	n/a	REJECT-NODE-INSPECTOR	debugger protocol excluded
 NODE-MODULE-MODULE	module	module	implemented	N4	tsonic_node::module	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution
 NODE-MODULE-SOURCEMAP	module	SourceMap/source map support	implemented	N21	tsonic_node::module::{SourceMap,SourceMapPayload,SourceMapping,SourceMapsSupport}	NODE-MODULE-002	closed source map carrier and global source map support toggles without loader execution
@@ -581,10 +668,36 @@ NODE-TIMERS-PROMISES-SET-INTERVAL-OPTIONS	timers/promises	setInterval options	im
 NODE-TIMERS-PROMISES-SCHEDULER-WAIT	timers/promises	scheduler.wait	implemented	N71	tsonic_node::timers::promises::scheduler::wait	NODE-TIMERS-002	promise-style scheduler wait helper
 NODE-TIMERS-PROMISES-SCHEDULER-YIELD	timers/promises	scheduler.yield	implemented	N71	tsonic_node::timers::promises::scheduler::yield_now	NODE-TIMERS-002	promise-style scheduler yield helper
 NODE-MODULE-TLS	tls	module	implemented	N9	tsonic_node::tls	NODE-TLS-001	TLS identity/options and HTTPS connect helper over approved rustls transport
-NODE-TLS-SOCKET-METADATA	tls	TLSSocket certificate/cipher/session/trace	implemented	N40	tsonic_node::tls::{TlsSocket,Certificate,CipherInfo,EphemeralKeyInfo}	NODE-TLS-002	closed TLS socket metadata for peer/local certificate, cipher, session reuse, finished bytes, signature algorithms, ticket keys, and trace flag
-NODE-TLS-CONTEXT-OPTIONS	tls	SecureContextOptions extended key/cert/options	implemented	N40	tsonic_node::tls::{SecureContext,SecureContextOptions}	NODE-TLS-002	key/cert/pfx/passphrase/ca/alpn/cipher/sigalgs/minVersion/maxVersion/honorCipherOrder option shape
-NODE-TLS-CONNECT	tls	connect/connectGet/ConnectOptions/defaultPort/checkServerIdentity	implemented	N64	tsonic_node::tls::{connect,connect_get,ConnectOptions,default_port,check_server_identity}	NODE-TLS-001,NODE-TLS-002	closed TLS connection options, identity validation, default port, and HTTPS GET helper
-NODE-TLS-SECURE-CONTEXT	tls	createSecureContext/SecureContext/SecureContextOptions	implemented	N64	tsonic_node::tls::{create_secure_context,SecureContext,SecureContextOptions}	NODE-TLS-002	closed secure context option carrier over key/cert/ca/alpn/cipher/version metadata
+NODE-TLS-CONNECT-OPTIONS	tls	ConnectOptions	implemented	N64	tsonic_node::tls::ConnectOptions	NODE-TLS-002	closed TLS connect options carrier
+NODE-TLS-SOCKET-CARRIER	tls	TLSSocket	implemented	N40	tsonic_node::tls::TlsSocket	NODE-TLS-002	closed TLS socket metadata carrier
+NODE-TLS-SOCKET-SERVERNAME	tls	TLSSocket.servername	implemented	N40	tsonic_node::tls::TlsSocket::servername	NODE-TLS-002	TLS server name accessor
+NODE-TLS-SOCKET-AUTHORIZED	tls	TLSSocket.authorized	implemented	N40	tsonic_node::tls::TlsSocket::authorized	NODE-TLS-002	TLS authorization-state accessor
+NODE-TLS-SOCKET-AUTHORIZATION-ERROR	tls	TLSSocket.authorizationError	implemented	N40	tsonic_node::tls::TlsSocket::authorization_error	NODE-TLS-002	TLS authorization error accessor
+NODE-TLS-SOCKET-ALPN	tls	TLSSocket.alpnProtocol	implemented	N40	tsonic_node::tls::TlsSocket::alpn_protocol	NODE-TLS-002	TLS ALPN protocol accessor
+NODE-TLS-SOCKET-CIPHER	tls	TLSSocket.getCipher	implemented	N40	tsonic_node::tls::TlsSocket::get_cipher	NODE-TLS-002	TLS cipher info accessor
+NODE-TLS-SOCKET-PEER-CERTIFICATE	tls	TLSSocket.getPeerCertificate	implemented	N40	tsonic_node::tls::TlsSocket::get_peer_certificate	NODE-TLS-002	TLS peer certificate accessor
+NODE-TLS-SOCKET-CERTIFICATE	tls	TLSSocket.getCertificate	implemented	N40	tsonic_node::tls::TlsSocket::get_certificate	NODE-TLS-002	TLS local certificate accessor
+NODE-TLS-SOCKET-EPHEMERAL-KEY	tls	TLSSocket.getEphemeralKeyInfo	implemented	N40	tsonic_node::tls::TlsSocket::get_ephemeral_key_info	NODE-TLS-002	TLS ephemeral key info accessor
+NODE-TLS-SOCKET-SESSION	tls	TLSSocket.getSession	implemented	N40	tsonic_node::tls::TlsSocket::get_session	NODE-TLS-002	TLS session bytes accessor
+NODE-TLS-SOCKET-SESSION-REUSED	tls	TLSSocket.isSessionReused	implemented	N40	tsonic_node::tls::TlsSocket::is_session_reused	NODE-TLS-002	TLS session reuse accessor
+NODE-TLS-SOCKET-FINISHED	tls	TLSSocket.getFinished	implemented	N40	tsonic_node::tls::TlsSocket::get_finished	NODE-TLS-002	deterministic TLS finished bytes accessor
+NODE-TLS-SOCKET-PEER-FINISHED	tls	TLSSocket.getPeerFinished	implemented	N40	tsonic_node::tls::TlsSocket::get_peer_finished	NODE-TLS-002	deterministic TLS peer-finished bytes accessor
+NODE-TLS-SOCKET-SIGALGS	tls	TLSSocket.getSharedSigalgs	implemented	N40	tsonic_node::tls::TlsSocket::get_shared_sigalgs	NODE-TLS-002	TLS shared signature algorithms accessor
+NODE-TLS-SOCKET-TICKET-KEYS	tls	TLSSocket.setTicketKeys	implemented	N40	tsonic_node::tls::TlsSocket::set_ticket_keys	NODE-TLS-002	validates and stores explicit 48-byte ticket keys
+NODE-TLS-SOCKET-ENABLE-TRACE	tls	TLSSocket.enableTrace	implemented	N40	tsonic_node::tls::TlsSocket::enable_trace	NODE-TLS-002	enables explicit TLS trace flag
+NODE-TLS-SOCKET-TRACE-ENABLED	tls	TLSSocket.traceEnabled	implemented	N40	tsonic_node::tls::TlsSocket::trace_enabled	NODE-TLS-002	TLS trace flag accessor
+NODE-TLS-CIPHER-INFO	tls	CipherInfo	implemented	N40	tsonic_node::tls::CipherInfo	NODE-TLS-002	closed TLS cipher info carrier
+NODE-TLS-CERTIFICATE	tls	Certificate	implemented	N40	tsonic_node::tls::Certificate	NODE-TLS-002	closed TLS certificate metadata carrier
+NODE-TLS-EPHEMERAL-KEY-INFO	tls	EphemeralKeyInfo	implemented	N40	tsonic_node::tls::EphemeralKeyInfo	NODE-TLS-002	closed TLS ephemeral key metadata carrier
+NODE-TLS-SECURE-CONTEXT-OPTIONS	tls	SecureContextOptions	implemented	N40	tsonic_node::tls::SecureContextOptions	NODE-TLS-002	closed secure context options carrier
+NODE-TLS-SECURE-CONTEXT-CARRIER	tls	SecureContext	implemented	N40	tsonic_node::tls::SecureContext	NODE-TLS-002	closed secure context carrier
+NODE-TLS-SECURE-CONTEXT-OPTIONS-ACCESSOR	tls	SecureContext.options	implemented	N40	tsonic_node::tls::SecureContext::options	NODE-TLS-002	secure context options accessor
+NODE-TLS-CONNECT-OPTIONS-NEW	tls	ConnectOptions.new	implemented	N64	tsonic_node::tls::ConnectOptions::new	NODE-TLS-002	constructs TLS connect options from server name and port
+NODE-TLS-CREATE-CONNECTION	tls	connect	implemented	N64	tsonic_node::tls::connect	NODE-TLS-001	validates server identity and returns closed TLS socket carrier
+NODE-TLS-CONNECT-GET	tls	connectGet	implemented	N64	tsonic_node::tls::connect_get	NODE-TLS-001	TLS GET helper over HTTPS transport
+NODE-TLS-DEFAULT-PORT	tls	defaultPort	implemented	N64	tsonic_node::tls::default_port	NODE-TLS-002	closed TLS default port constant helper
+NODE-TLS-CHECK-SERVER-IDENTITY	tls	checkServerIdentity	implemented	N64	tsonic_node::tls::check_server_identity	NODE-TLS-002	validates closed TLS server-name shape
+NODE-TLS-CREATE-SECURE-CONTEXT	tls	createSecureContext	implemented	N64	tsonic_node::tls::create_secure_context	NODE-TLS-002	creates closed secure context carrier from explicit options
 NODE-MODULE-TRACE-EVENTS	trace_events	module	hard-reject	N0	n/a	REJECT-NODE-TRACE-EVENTS	instrumentation excluded
 NODE-MODULE-TTY	tty	module	implemented	N1	tsonic_node::tty	NODE-MISC-004	isatty helper
 NODE-TTY-STREAMS	tty	ReadStream/WriteStream terminal helpers	implemented	N27	tsonic_node::tty::{ReadStream,WriteStream}	NODE-TTY-001	raw mode, window size, color depth, cursor movement, and clear callbacks
