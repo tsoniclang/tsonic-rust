@@ -126,16 +126,35 @@ JS-SET-003	implemented	G	tsonic_js::abi::JsSet	JS-SET-003	entries are value/valu
 JS-SET-004	implemented	B/G	tsonic_js::abi::JsSet	JS-SET-004	no `PartialEq` fallback
 JS-SET-005	implemented	M	tsonic_js::JsSet::{from_values,for_each}	JS-SET-006	iterable constructor and forEach over closed values
 JS-WEAK-001	hard-reject	M	n/a	REJECT-JS-WEAK-COLLECTIONS	weak references/lifetime semantics (closed as principled non-runtime surface)
-JS-DATE-001	implemented	H	tsonic_js::abi::JsDate	JS-DATE-001	millis carrier
-JS-DATE-002	implemented	H	tsonic_js::abi::JsDate	JS-DATE-003	injectable clock for tests
-JS-DATE-003	implemented	H	tsonic_js::abi::JsDate	JS-DATE-002	UTC ISO
-JS-DATE-004	implemented	H/M	tsonic_js::abi::JsDate	date parse tests	dependency choice is parent-owned; no locale parser guessing
-JS-DATE-005	implemented	M	tsonic_js::abi::JsDate UTC accessors	completion tests	timezone/calendar matrix (completed in full-completion branch)
-JS-DATE-006	hard-reject	M	n/a	REJECT-JS-DATE-LOCALE	no locale engine
-JS-REGEXP-001	implemented	H	tsonic_js::abi::JsRegExp	JS-RE-001	accepted subset only; validate flags
-JS-REGEXP-002	implemented	H	tsonic_js::abi::JsRegExp	JS-RE-001 through JS-RE-003	`g`/`y` update rules
-JS-REGEXP-003	hard-reject	M	n/a	REJECT-JS-REGEXP-ADVANCED	selected regex strategy may hard-reject unsupported subfeatures explicitly (closed as principled non-runtime surface)
-JS-REGEXP-004	hard-reject	M	n/a	REJECT-JS-STRING-REGEXP	separate integration packet (closed as principled non-runtime surface)
+JS-DATE-001	implemented	H	tsonic_js::abi::JsDate::from_millis	JS-DATE-001	millisecond carrier construction
+JS-DATE-002	implemented	H	tsonic_js::abi::JsDate::now	JS-DATE-004	system clock milliseconds since Unix epoch
+JS-DATE-003	implemented	H	tsonic_js::abi::JsDate::parse	JS-DATE-001,numeric parse tests	numeric millisecond parse without locale guessing
+JS-DATE-004	implemented	H	tsonic_js::abi::JsDate::parse	JS-DATE-001,JS-DATE-002	UTC ISO parse without locale guessing
+JS-DATE-005	implemented	H	tsonic_js::abi::JsDate::get_time	JS-DATE-001	millisecond getter
+JS-DATE-006	implemented	H	tsonic_js::abi::JsDate::value_of	JS-DATE-004	primitive millisecond value
+JS-DATE-007	implemented	H	tsonic_js::abi::JsDate::to_iso_string	JS-DATE-001,JS-DATE-002	UTC ISO serialization
+JS-DATE-008	implemented	H	tsonic_js::abi::JsDate::to_json	JS-DATE-004	JSON serialization delegates to UTC ISO
+JS-DATE-009	implemented	H	tsonic_js::abi::JsDate::get_utc_full_year	JS-DATE-002	UTC year accessor
+JS-DATE-010	implemented	H	tsonic_js::abi::JsDate::get_utc_month	JS-DATE-002	UTC zero-based month accessor
+JS-DATE-011	implemented	H	tsonic_js::abi::JsDate::get_utc_date	JS-DATE-002	UTC day-of-month accessor
+JS-DATE-012	implemented	H	tsonic_js::abi::JsDate::get_utc_hours	JS-DATE-002	UTC hour accessor
+JS-DATE-013	implemented	H	tsonic_js::abi::JsDate::get_utc_minutes	JS-DATE-002	UTC minute accessor
+JS-DATE-014	implemented	H	tsonic_js::abi::JsDate::get_utc_seconds	JS-DATE-002	UTC second accessor
+JS-DATE-015	implemented	H	tsonic_js::abi::JsDate::get_utc_milliseconds	JS-DATE-002	UTC millisecond accessor
+JS-DATE-016	hard-reject	M	n/a	REJECT-JS-DATE-LOCALE	no locale engine
+JS-REGEXP-001	implemented	H	tsonic_js::abi::JsRegExp::new	JS-RE-001	literal pattern construction
+JS-REGEXP-002	implemented	H	tsonic_js::abi::JsRegExp::new	JS-RE-003	flag validation and duplicate rejection
+JS-REGEXP-003	implemented	H	tsonic_js::abi::JsRegExp::flags	JS-RE-004	flags accessor
+JS-REGEXP-004	implemented	H	tsonic_js::abi::JsRegExp::last_index	JS-RE-002	global lastIndex getter
+JS-REGEXP-005	implemented	H	tsonic_js::abi::JsRegExp::set_last_index	JS-RE-004	explicit lastIndex setter for generated Rust
+JS-REGEXP-006	implemented	H	tsonic_js::abi::JsRegExp::test	JS-RE-001,JS-RE-002	boolean match operation
+JS-REGEXP-007	implemented	H	tsonic_js::abi::JsRegExp::exec	JS-RE-001	match object operation
+JS-REGEXP-008	implemented	H	tsonic_js::abi::JsRegExp::exec	JS-RE-002	global update and reset rules
+JS-REGEXP-009	implemented	H	tsonic_js::abi::JsRegExp::exec	JS-RE-004	sticky update and reset rules
+JS-REGEXP-010	implemented	H	tsonic_js::abi::JsRegExp::exec	JS-RE-004	ignore-case literal matching
+JS-REGEXP-011	implemented	H	tsonic_js::abi::JsRegExp::exec	JS-RE-004	closed lowercase ASCII capture subset
+JS-REGEXP-012	hard-reject	M	n/a	REJECT-JS-REGEXP-ADVANCED	selected regex strategy may hard-reject unsupported subfeatures explicitly
+JS-REGEXP-013	hard-reject	M	n/a	REJECT-JS-STRING-REGEXP	separate integration packet closed as principled non-runtime surface
 JS-BINARY-001	implemented	I	tsonic_js::abi::{ArrayBuffer,*Array}	JS-AB-001	`slice` copies
 JS-BINARY-002	implemented	I	tsonic_js::abi::{ArrayBuffer,*Array}	JS-TA-001, JS-TA-002	conversion per kind
 JS-BINARY-003	implemented	I	tsonic_js::abi::{ArrayBuffer,*Array}	JS-TA-003	bounds-safe
