@@ -16,7 +16,27 @@ fn uri_helpers_encode_and_decode_utf8() {
         abi::decode_uri_component("a%20b%2F%F0%9F%98%80").unwrap(),
         "a b/😀"
     );
-    assert!(abi::decode_uri_component("%zz").is_err());
+    assert_eq!(
+        abi::decode_uri_component("%zz").unwrap_err().kind(),
+        tsonic_runtime::JsErrorKind::URIError
+    );
+}
+
+#[test]
+fn js_error_subtypes_and_string_raw_are_available() {
+    assert_eq!(
+        tsonic_js::reference_error("missing").kind(),
+        tsonic_runtime::JsErrorKind::ReferenceError
+    );
+    assert_eq!(
+        tsonic_js::eval_error("eval").kind(),
+        tsonic_runtime::JsErrorKind::EvalError
+    );
+    assert_eq!(
+        tsonic_js::aggregate_error("many").kind(),
+        tsonic_runtime::JsErrorKind::AggregateError
+    );
+    assert_eq!(tsonic_js::string::raw(&["a", "c"], &["b"]), "abc");
 }
 
 #[test]

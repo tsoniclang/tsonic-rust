@@ -1,4 +1,4 @@
-use crate::errors::{type_error, JsResult};
+use crate::errors::{uri_error, JsResult};
 
 pub fn encode_uri_component(value: &str) -> String {
     percent_encode(value, ComponentMode::Component)
@@ -57,14 +57,14 @@ fn percent_decode(value: &str) -> JsResult<String> {
             continue;
         }
         if index + 2 >= bytes.len() {
-            return Err(type_error("malformed URI sequence"));
+            return Err(uri_error("malformed URI sequence"));
         }
         let hi = hex_value(bytes[index + 1])?;
         let lo = hex_value(bytes[index + 2])?;
         out.push((hi << 4) | lo);
         index += 3;
     }
-    String::from_utf8(out).map_err(|_| type_error("malformed URI sequence"))
+    String::from_utf8(out).map_err(|_| uri_error("malformed URI sequence"))
 }
 
 fn hex(value: u8) -> char {
@@ -76,6 +76,6 @@ fn hex_value(value: u8) -> JsResult<u8> {
         b'0'..=b'9' => Ok(value - b'0'),
         b'a'..=b'f' => Ok(value - b'a' + 10),
         b'A'..=b'F' => Ok(value - b'A' + 10),
-        _ => Err(type_error("malformed URI sequence")),
+        _ => Err(uri_error("malformed URI sequence")),
     }
 }

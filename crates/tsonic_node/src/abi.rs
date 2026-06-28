@@ -2,7 +2,10 @@
 
 pub use crate::assert::{ok as assert_ok, strict_equal as assert_strict_equal};
 pub use crate::buffer::Buffer;
-pub use crate::crypto::{random_bytes as crypto_random_bytes, DigestResult, Hash};
+pub use crate::crypto::{
+    hmac_digest as crypto_hmac_digest, random_bytes as crypto_random_bytes,
+    random_uuid as crypto_random_uuid, DigestResult, Hash,
+};
 pub use crate::fs::{
     copy_file_sync as fs_copy_file_sync, exists_sync as fs_exists_sync,
     lstat_sync as fs_lstat_sync, mkdir_sync as fs_mkdir_sync,

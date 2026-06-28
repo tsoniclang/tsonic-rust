@@ -45,16 +45,7 @@ enum Algorithm {
 
 impl Hash {
     pub fn create(algorithm: &str) -> NodeResult<Self> {
-        let algorithm = match algorithm.to_ascii_lowercase().as_str() {
-            "sha256" | "sha-256" => Algorithm::Sha256,
-            "sha1" | "sha-1" => Algorithm::Sha1,
-            other => {
-                return Err(NodeError::new(
-                    "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
-                    format!("unsupported hash algorithm `{other}`"),
-                ))
-            }
-        };
+        let algorithm = parse_algorithm(algorithm)?;
         Ok(Self {
             algorithm,
             bytes: Vec::new(),
@@ -72,10 +63,7 @@ impl Hash {
     }
 
     pub fn digest(self, encoding: Option<&str>) -> NodeResult<DigestResult> {
-        let bytes = match self.algorithm {
-            Algorithm::Sha1 => sha1(&self.bytes).to_vec(),
-            Algorithm::Sha256 => sha256(&self.bytes).to_vec(),
-        };
+        let bytes = digest_bytes(self.algorithm, &self.bytes);
         match encoding {
             None => Ok(DigestResult::Buffer(Buffer::from_bytes(bytes))),
             Some(encoding) => Ok(DigestResult::String(decode_bytes(&bytes, Some(encoding))?)),
@@ -100,6 +88,71 @@ impl Hash {
                 "hash buffer digest returned a string",
             )),
         }
+    }
+}
+
+pub fn hmac_digest(
+    algorithm: &str,
+    key: &[u8],
+    data: &[u8],
+    encoding: Option<&str>,
+) -> NodeResult<DigestResult> {
+    let algorithm = parse_algorithm(algorithm)?;
+    let mut key_block = [0_u8; 64];
+    let normalized_key = if key.len() > 64 {
+        digest_bytes(algorithm, key)
+    } else {
+        key.to_vec()
+    };
+    key_block[..normalized_key.len()].copy_from_slice(&normalized_key);
+
+    let mut outer = vec![0x5c_u8; 64];
+    let mut inner = vec![0x36_u8; 64];
+    for index in 0..64 {
+        outer[index] ^= key_block[index];
+        inner[index] ^= key_block[index];
+    }
+    inner.extend_from_slice(data);
+    let inner_hash = digest_bytes(algorithm, &inner);
+    outer.extend_from_slice(&inner_hash);
+    let bytes = digest_bytes(algorithm, &outer);
+
+    match encoding {
+        None => Ok(DigestResult::Buffer(Buffer::from_bytes(bytes))),
+        Some(encoding) => Ok(DigestResult::String(decode_bytes(&bytes, Some(encoding))?)),
+    }
+}
+
+pub fn random_uuid() -> NodeResult<String> {
+    let bytes = random_bytes(16)?.as_bytes();
+    let mut bytes: [u8; 16] = bytes.try_into().unwrap();
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    Ok(format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        bytes[0], bytes[1], bytes[2], bytes[3],
+        bytes[4], bytes[5],
+        bytes[6], bytes[7],
+        bytes[8], bytes[9],
+        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+    ))
+}
+
+fn parse_algorithm(algorithm: &str) -> NodeResult<Algorithm> {
+    match algorithm.to_ascii_lowercase().as_str() {
+        "sha256" | "sha-256" => Ok(Algorithm::Sha256),
+        "sha1" | "sha-1" => Ok(Algorithm::Sha1),
+        other => Err(NodeError::new(
+            "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
+            format!("unsupported hash algorithm `{other}`"),
+        )),
+    }
+}
+
+fn digest_bytes(algorithm: Algorithm, input: &[u8]) -> Vec<u8> {
+    match algorithm {
+        Algorithm::Sha1 => sha1(input).to_vec(),
+        Algorithm::Sha256 => sha256(input).to_vec(),
     }
 }
 

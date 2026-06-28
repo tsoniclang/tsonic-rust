@@ -352,3 +352,14 @@ pub fn from_code_point(code_points: &[u32]) -> Result<String, JsError> {
     }
     Ok(out)
 }
+
+pub fn raw(raw_parts: &[&str], substitutions: &[&str]) -> String {
+    let mut out = String::new();
+    for (index, part) in raw_parts.iter().enumerate() {
+        out.push_str(part);
+        if let Some(value) = substitutions.get(index) {
+            out.push_str(value);
+        }
+    }
+    out
+}

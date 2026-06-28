@@ -25,7 +25,10 @@ pub mod wrappers;
 pub use array::{JsArray, JsSlot};
 pub use array_buffer::ArrayBuffer;
 pub use data_view::DataView;
-pub use errors::{range_error, syntax_error, type_error, unsupported, JsResult};
+pub use errors::{
+    aggregate_error, eval_error, range_error, reference_error, syntax_error, type_error,
+    unsupported, uri_error, JsResult,
+};
 pub use map::JsMap;
 pub use object::{JsObject, JsPropertyValue};
 pub use set::JsSet;

@@ -13,7 +13,7 @@ JS-GLOBAL-011	hard-reject	M	n/a	REJECT-JS-BIGINT	requires bigint carrier and ari
 JS-GLOBAL-012	hard-reject	M	n/a	REJECT-JS-PROMISE	async runtime is out of Stage 1
 JS-GLOBAL-013	hard-reject	M	n/a	REJECT-JS-PROXY	dynamic meta-object protocol
 JS-GLOBAL-014	implemented	A	tsonic_runtime::{JsError,JsErrorKind,TsonicError,TsonicResult}	error tests	`JsErrorKind`
-JS-GLOBAL-015	hard-reject	M	n/a	REJECT-JS-ERROR-SUBTYPES	add only when selected by runtime APIs (closed as principled non-runtime surface)
+JS-GLOBAL-015	implemented	M	tsonic_js::{aggregate_error,eval_error,reference_error}	JS-GLOBALS-005	closed JS error subtype constructors
 JS-GLOBAL-016	hard-reject	M	n/a	REJECT-JS-INTL	locale engine not in runtime layer
 JS-BUILTIN-001	hard-reject	M	n/a	REJECT-JS-GLOBALTHIS	global object identity requires backend/runtime embedding policy (closed as principled non-runtime surface)
 JS-BUILTIN-002	implemented	M	tsonic_js::abi::{decode_uri,decode_uri_component}	JS-URI-001	URI percent-decoding needs exact JS error behavior (completed in full-completion branch)
@@ -46,10 +46,10 @@ JS-BUILTIN-028	implemented	I	tsonic_js::abi::{JsValue,ArrayBuffer,*Array}	JS-TA-
 JS-BUILTIN-029	hard-reject	M	n/a	REJECT-JS-ATOMICS	shared-memory concurrency semantics out of Stage 1
 JS-BUILTIN-030	hard-reject	M	n/a	REJECT-JS-WASM	external VM/runtime integration out of Stage 1
 JS-BUILTIN-031	hard-reject	M	n/a	REJECT-JS-TEMPORAL	not ECMAScript 2024 baseline runtime target
-JS-BUILTIN-032	hard-reject	A/M	n/a	REJECT-JS-ERROR-SUBTYPES	error category mapping should be added only with selected operations (closed as principled non-runtime surface)
-JS-BUILTIN-033	hard-reject	M	n/a	REJECT-JS-URIERROR	tied to URI helper implementation (closed as principled non-runtime surface)
+JS-BUILTIN-032	implemented	A/M	tsonic_js::{aggregate_error,eval_error,reference_error}	JS-GLOBALS-005	selected error subtype categories implemented
+JS-BUILTIN-033	implemented	M	tsonic_js::uri_error and URI helpers	JS-URI-001	URIError emitted for malformed URI sequences
 JS-BUILTIN-034	hard-reject	M	n/a	REJECT-JS-REGEXP-LEGACY-STATICS	mutable global RegExp state out of closed runtime design
-JS-BUILTIN-035	hard-reject	M	n/a	REJECT-JS-STRING-RAW	template raw-string lowering belongs with compiler/backend contract (closed as principled non-runtime surface)
+JS-BUILTIN-035	implemented	M	tsonic_js::string::raw	JS-GLOBALS-005	String.raw closed helper implemented
 JS-BUILTIN-036	hard-reject	I/M	n/a	REJECT-JS-RESIZABLE-BUFFER	resizable/detached buffer semantics need explicit carrier (closed as principled non-runtime surface)
 JS-BUILTIN-037	hard-reject	I/M	n/a	REJECT-JS-DETACHED-BUFFER	requires explicit detached state in buffer carrier (closed as principled non-runtime surface)
 JS-BUILTIN-038	hard-reject	A/M	n/a	REJECT-JS-ERROR-STACK	stack/runtime integration not in first wave (closed as principled non-runtime surface)
@@ -119,12 +119,12 @@ JS-MAP-001	implemented	G	tsonic_js::abi::JsMap	JS-MAP-001	insertion order
 JS-MAP-002	implemented	G	tsonic_js::abi::JsMap	JS-MAP-001, JS-MAP-002, JS-MAP-004, JS-MAP-006	SameValueZero keys
 JS-MAP-003	implemented	G	tsonic_js::abi::JsMap	JS-MAP-003	insertion order
 JS-MAP-004	implemented	B/G	tsonic_js::abi::JsMap	JS-MAP-005	no `PartialEq` fallback
-JS-MAP-005	hard-reject	M	n/a	REJECT-JS-MAP-ITERABLE-CALLBACK	iterator/callback ABI (closed as principled non-runtime surface)
+JS-MAP-005	implemented	M	tsonic_js::JsMap::{from_entries,for_each}	JS-MAP-006	iterable constructor and forEach over closed entries
 JS-SET-001	implemented	G	tsonic_js::abi::JsSet	JS-SET-001	insertion order
 JS-SET-002	implemented	G	tsonic_js::abi::JsSet	JS-SET-001, JS-SET-002, JS-SET-005	SameValueZero values
 JS-SET-003	implemented	G	tsonic_js::abi::JsSet	JS-SET-003	entries are value/value
 JS-SET-004	implemented	B/G	tsonic_js::abi::JsSet	JS-SET-004	no `PartialEq` fallback
-JS-SET-005	hard-reject	M	n/a	REJECT-JS-SET-ITERABLE-CALLBACK	iterator/callback ABI (closed as principled non-runtime surface)
+JS-SET-005	implemented	M	tsonic_js::JsSet::{from_values,for_each}	JS-SET-006	iterable constructor and forEach over closed values
 JS-WEAK-001	hard-reject	M	n/a	REJECT-JS-WEAK-COLLECTIONS	weak references/lifetime semantics (closed as principled non-runtime surface)
 JS-DATE-001	implemented	H	tsonic_js::abi::JsDate	JS-DATE-001	millis carrier
 JS-DATE-002	implemented	H	tsonic_js::abi::JsDate	JS-DATE-003	injectable clock for tests
@@ -189,7 +189,7 @@ NODE-UTIL-004	hard-reject	M	n/a	REJECT-NODE-UTIL-ASYNC	async/callback runtime
 NODE-UTIL-005	implemented	M	tsonic_node::abi::util_types	NODE-UTIL-005	closed predicates only (completed in full-completion branch)
 NODE-CRYPTO-001	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-001	RNG dependency approval is parent-owned; no shellout
 NODE-CRYPTO-002	implemented	L	tsonic_node::abi::{crypto_random_bytes,Hash,DigestResult}	NODE-CRYPTO-002, NODE-CRYPTO-003	closed in-repo SHA-1/SHA-256 implementation; result is `DigestResult`
-NODE-CRYPTO-003	hard-reject	M	n/a	REJECT-NODE-CRYPTO-HMAC-UUID	separate carrier/policy (closed as principled non-runtime surface)
+NODE-CRYPTO-003	implemented	M	tsonic_node::abi::{crypto_hmac_digest,crypto_random_uuid}	NODE-CRYPTO-004	HMAC SHA-1/SHA-256 and UUID v4 implemented
 NODE-CRYPTO-004	hard-reject	M	n/a	REJECT-NODE-CRYPTO-BROAD	broad crypto surface
 NODE-MOD-001	implemented	M	tsonic_node::abi::{assert_ok,assert_strict_equal}	NODE-MISC-001	assertion formatting/deep equality policy separate from runtime surface (completed in full-completion branch)
 NODE-MOD-002	hard-reject	M	n/a	REJECT-NODE-ASYNC-CONTEXT	async context propagation runtime out of Stage 1
