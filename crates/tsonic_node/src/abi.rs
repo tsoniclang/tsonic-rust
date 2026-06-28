@@ -263,7 +263,8 @@ pub use crate::timers::{
 pub use crate::tls::{
     check_server_identity as tls_check_server_identity, connect as tls_connect,
     connect_get as tls_connect_get, create_secure_context as tls_create_secure_context,
-    default_port as tls_default_port, ConnectOptions as TlsConnectOptions,
+    default_port as tls_default_port, Certificate as TlsCertificate, CipherInfo as TlsCipherInfo,
+    ConnectOptions as TlsConnectOptions, EphemeralKeyInfo as TlsEphemeralKeyInfo,
     SecureContext as TlsSecureContext, SecureContextOptions as TlsSecureContextOptions, TlsSocket,
 };
 pub use crate::tty::{

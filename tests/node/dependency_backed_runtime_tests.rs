@@ -47,17 +47,58 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     assert!(tsonic_node::tls::check_server_identity("https://example.com").is_err());
     let mut tls_options = tsonic_node::tls::ConnectOptions::new("example.com", 443);
     tls_options.alpn_protocols.push("h2".to_string());
+    tls_options.min_version = Some("TLSv1.3".to_string());
+    tls_options.request_ocsp = true;
     let socket = tsonic_node::tls::connect(&tls_options).unwrap();
     assert_eq!(socket.servername(), "example.com");
     assert!(socket.authorized());
+    assert_eq!(socket.authorization_error(), None);
     assert_eq!(socket.alpn_protocol(), Some("h2"));
+    assert_eq!(socket.get_cipher().name, "TLS_AES_256_GCM_SHA384");
+    assert_eq!(socket.get_cipher().version, "TLSv1.3");
+    assert!(socket
+        .get_peer_certificate()
+        .subjectaltname
+        .contains("example.com"));
+    assert!(socket.get_certificate().subject.contains("localhost"));
+    assert_eq!(socket.get_ephemeral_key_info().name, "X25519");
+    assert_eq!(socket.get_session().len(), 32);
+    assert!(!socket.is_session_reused());
+    assert_eq!(socket.get_finished().len(), 32);
+    assert_eq!(socket.get_peer_finished().len(), 32);
+    assert!(socket
+        .get_shared_sigalgs()
+        .contains(&"rsa_pss_rsae_sha256".to_string()));
+    let mut reused_options = tsonic_node::tls::ConnectOptions::new("example.com", 443);
+    reused_options.session = Some(socket.get_session().to_vec());
+    reused_options.reject_unauthorized = false;
+    let mut reused = tsonic_node::tls::connect(&reused_options).unwrap();
+    assert!(reused.is_session_reused());
+    assert!(!reused.authorized());
+    assert_eq!(
+        reused.authorization_error(),
+        Some("UNABLE_TO_VERIFY_LEAF_SIGNATURE")
+    );
+    assert!(reused.set_ticket_keys(&[1; 47]).is_err());
+    reused.set_ticket_keys(&[2; 48]).unwrap();
+    assert_eq!(reused.get_session(), &[2; 48]);
+    reused.enable_trace();
+    assert!(reused.trace_enabled());
     let context = tsonic_node::tls::create_secure_context(tsonic_node::tls::SecureContextOptions {
         key: Some("key".to_string()),
         cert: Some("cert".to_string()),
+        pfx: Some("pfx".to_string()),
+        passphrase: Some("secret".to_string()),
         ca: vec!["ca".to_string()],
         alpn_protocols: vec!["h2".to_string()],
+        ciphers: Some("TLS_AES_256_GCM_SHA384".to_string()),
+        sigalgs: Some("rsa_pss_rsae_sha256".to_string()),
+        min_version: Some("TLSv1.2".to_string()),
+        max_version: Some("TLSv1.3".to_string()),
+        honor_cipher_order: true,
     });
     assert_eq!(context.options().alpn_protocols, vec!["h2".to_string()]);
+    assert!(context.options().honor_cipher_order);
 
     let https_options = tsonic_node::https::RequestOptions::get("https://example.com/");
     assert_eq!(https_options.method, "GET");
