@@ -93,17 +93,54 @@ JS-STRING-012	hard-reject	M	n/a	REJECT-JS-STRING-REGEXP	depends on RegExp integr
 JS-STRING-013	hard-reject	M	n/a	REJECT-JS-STRING-NORMALIZE	Unicode normalization dependency (closed as principled non-runtime surface)
 JS-STRING-014	hard-reject	M	n/a	REJECT-JS-STRING-LOCALE	no locale engine
 JS-STRING-015	hard-reject	M	n/a	REJECT-JSSTRING-CARRIER	future `JsString` (closed as principled non-runtime surface)
-JS-NUMBER-001	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	number tests	safe integer/infinity constants
-JS-NUMBER-002	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-NUM-001, JS-NUM-002	prefix parse
-JS-NUMBER-003	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-NUM-003, JS-NUM-004	non-coercive
-JS-NUMBER-004	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	number tests	range validation
-JS-NUMBER-005	implemented	M	tsonic_js::number format helpers	completion tests	formatting parity (completed in full-completion branch)
-JS-MATH-001	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	math tests	f64 constants
-JS-MATH-002	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	math tests	JS edge cases required
-JS-MATH-003	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-MATH-001, JS-MATH-002	zero-arg behavior
-JS-MATH-004	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-MATH-003, JS-MATH-004	explicit JS conversions
-JS-MATH-005	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	JS-MATH-005	runtime operator helpers
-JS-MATH-006	implemented	B	tsonic_js::{number,math,equality} and tsonic_runtime::operators	math tests	range only unless injectable RNG
+JS-NUMBER-001	implemented	B	tsonic_js::number::EPSILON	JS-NUM-005	Number.EPSILON constant
+JS-NUMBER-002	implemented	B	tsonic_js::number::MAX_SAFE_INTEGER	JS-NUM-005	Number.MAX_SAFE_INTEGER constant
+JS-NUMBER-003	implemented	B	tsonic_js::number::MIN_SAFE_INTEGER	JS-NUM-005	Number.MIN_SAFE_INTEGER constant
+JS-NUMBER-004	implemented	B	tsonic_js::number::POSITIVE_INFINITY	JS-NUM-005	Number.POSITIVE_INFINITY constant
+JS-NUMBER-005	implemented	B	tsonic_js::number::NEGATIVE_INFINITY	JS-NUM-005	Number.NEGATIVE_INFINITY constant
+JS-NUMBER-006	implemented	B	tsonic_js::number::NAN	JS-NUM-005	Number.NaN constant
+JS-NUMBER-007	implemented	B	tsonic_js::number::parse_int	JS-NUM-001	parseInt prefix and radix parsing
+JS-NUMBER-008	implemented	B	tsonic_js::number::parse_float	JS-NUM-002	parseFloat prefix parsing and Infinity handling
+JS-NUMBER-009	implemented	B	tsonic_js::number::is_nan	JS-NUM-003	Number.isNaN non-coercive predicate
+JS-NUMBER-010	implemented	B	tsonic_js::number::is_finite	JS-NUM-003	Number.isFinite non-coercive predicate
+JS-NUMBER-011	implemented	B	tsonic_js::number::is_integer	JS-NUM-003	Number.isInteger predicate
+JS-NUMBER-012	implemented	B	tsonic_js::number::is_safe_integer	JS-NUM-003	Number.isSafeInteger predicate
+JS-NUMBER-013	implemented	B	tsonic_js::number::to_fixed	JS-NUM-004	Number.prototype.toFixed formatting and range validation
+JS-NUMBER-014	implemented	B	tsonic_js::number::to_exponential	JS-NUM-004	Number.prototype.toExponential formatting and range validation
+JS-NUMBER-015	implemented	B	tsonic_js::number::to_precision	JS-NUM-004	Number.prototype.toPrecision formatting and range validation
+JS-NUMBER-016	implemented	B	tsonic_js::number::to_string_radix	JS-NUM-006	Number.prototype.toString radix formatting and range validation
+JS-MATH-001	implemented	B	tsonic_js::math::E	JS-MATH-006	Math.E constant
+JS-MATH-002	implemented	B	tsonic_js::math::LN10	JS-MATH-006	Math.LN10 constant
+JS-MATH-003	implemented	B	tsonic_js::math::LN2	JS-MATH-006	Math.LN2 constant
+JS-MATH-004	implemented	B	tsonic_js::math::LOG10E	JS-MATH-006	Math.LOG10E constant
+JS-MATH-005	implemented	B	tsonic_js::math::LOG2E	JS-MATH-006	Math.LOG2E constant
+JS-MATH-006	implemented	B	tsonic_js::math::PI	JS-MATH-006	Math.PI constant
+JS-MATH-007	implemented	B	tsonic_js::math::SQRT1_2	JS-MATH-006	Math.SQRT1_2 constant
+JS-MATH-008	implemented	B	tsonic_js::math::SQRT2	JS-MATH-006	Math.SQRT2 constant
+JS-MATH-009	implemented	B	tsonic_js::math::abs	JS-MATH-007	Math.abs helper
+JS-MATH-010	implemented	B	tsonic_js::math::acos	JS-MATH-007	Math.acos helper
+JS-MATH-011	implemented	B	tsonic_js::math::asin	JS-MATH-007	Math.asin helper
+JS-MATH-012	implemented	B	tsonic_js::math::atan	JS-MATH-007	Math.atan helper
+JS-MATH-013	implemented	B	tsonic_js::math::atan2	JS-MATH-007	Math.atan2 helper
+JS-MATH-014	implemented	B	tsonic_js::math::ceil	JS-MATH-004	Math.ceil helper
+JS-MATH-015	implemented	B	tsonic_js::math::floor	JS-MATH-004	Math.floor helper
+JS-MATH-016	implemented	B	tsonic_js::math::clz32	JS-MATH-003	Math.clz32 ToUint32 helper
+JS-MATH-017	implemented	B	tsonic_js::math::cos	JS-MATH-007	Math.cos helper
+JS-MATH-018	implemented	B	tsonic_js::math::exp	JS-MATH-007	Math.exp helper
+JS-MATH-019	implemented	B	tsonic_js::math::fround	JS-MATH-007	Math.fround helper
+JS-MATH-020	implemented	B	tsonic_js::math::hypot	JS-MATH-007	Math.hypot helper
+JS-MATH-021	implemented	B	tsonic_js::math::imul	JS-MATH-003	Math.imul wrapping multiply helper
+JS-MATH-022	implemented	B	tsonic_js::math::log	JS-MATH-007	Math.log helper
+JS-MATH-023	implemented	B	tsonic_js::math::max	JS-MATH-001	Math.max empty, NaN, and signed-zero behavior
+JS-MATH-024	implemented	B	tsonic_js::math::min	JS-MATH-001	Math.min empty, NaN, and signed-zero behavior
+JS-MATH-025	implemented	B	tsonic_js::math::pow	JS-MATH-007	Math.pow helper
+JS-MATH-026	implemented	B	tsonic_js::math::random	JS-MATH-003	Math.random range helper
+JS-MATH-027	implemented	B	tsonic_js::math::round	JS-MATH-004	Math.round JS signed-zero behavior
+JS-MATH-028	implemented	B	tsonic_js::math::sign	JS-MATH-003	Math.sign JS signed-zero and NaN behavior
+JS-MATH-029	implemented	B	tsonic_js::math::sin	JS-MATH-007	Math.sin helper
+JS-MATH-030	implemented	B	tsonic_js::math::sqrt	JS-MATH-007	Math.sqrt helper
+JS-MATH-031	implemented	B	tsonic_js::math::tan	JS-MATH-007	Math.tan helper
+JS-MATH-032	implemented	B	tsonic_js::math::trunc	JS-MATH-004	Math.trunc helper
 JS-OBJECT-001	implemented	F	tsonic_js::abi::JsObject	JS-OBJ-001 through JS-OBJ-003	closed `JsObject`
 JS-OBJECT-002	implemented	F	tsonic_js::abi::JsObject	JS-OBJ-004	own enumerable only
 JS-OBJECT-003	implemented	F	tsonic_js::abi::JsObject	JS-OBJ-005	own enumerable copy

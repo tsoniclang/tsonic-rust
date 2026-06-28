@@ -82,14 +82,13 @@ pub fn parse_float(text: &str) -> f64 {
         return f64::NAN;
     }
 
-    let lower = trimmed.to_lowercase();
     let without_sign = if let Some(without_sign) = trimmed.strip_prefix('+') {
         without_sign
     } else {
         trimmed.strip_prefix('-').unwrap_or(trimmed)
     };
-    if without_sign.to_lowercase().starts_with("infinity") {
-        if lower.starts_with("-") {
+    if without_sign.starts_with("Infinity") {
+        if trimmed.starts_with('-') {
             return f64::NEG_INFINITY;
         }
         return f64::INFINITY;
