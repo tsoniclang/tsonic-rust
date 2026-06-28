@@ -1072,9 +1072,94 @@ NODE-MODULE-VM	vm	module	hard-reject	N0	n/a	REJECT-NODE-VM	dynamic code executio
 NODE-MODULE-WASI	wasi	module	hard-reject	N0	n/a	REJECT-NODE-WASI	WASI runtime embedding excluded
 NODE-MODULE-WORKER-THREADS	worker_threads	module	implemented	N5	tsonic_node::worker_threads	NODE-WORKER-001	message channel and Rust closure worker substrate
 NODE-MODULE-ZLIB	zlib	module	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
-NODE-ZLIB-CLASSES	zlib	Zlib classes/options/constants/raw/unzip	implemented	N35	tsonic_node::zlib::{ZlibOptions,BrotliOptions,ZstdOptions,Zlib,create_gzip,create_gunzip,deflate_raw_sync,inflate_raw_sync,unzip_sync,constants}	NODE-ZLIB-002	stream-class carrier shape, bytesWritten, reset/flush/params/close, raw/unzip aliases, and constants
-NODE-ZLIB-ZSTD-GATE	zlib	ZstdCompress/ZstdDecompress	implemented	N35	tsonic_node::zlib::{create_zstd_compress,create_zstd_decompress,zstd_compress_sync,zstd_decompress_sync}	NODE-ZLIB-002	explicit dependency-gated Zstd unsupported error until approved zstd implementation lands
-NODE-ZLIB-OPTIONS	zlib	ZlibOptions	implemented	N66	tsonic_node::zlib::ZlibOptions	NODE-ZLIB-002	closed compression option carrier with flush, finishFlush, chunkSize, level, strategy, windowBits, memLevel, maxOutputLength
+NODE-ZLIB-OPTIONS-FLUSH	zlib	ZlibOptions.flush	implemented	N66	tsonic_node::zlib::ZlibOptions::flush	NODE-ZLIB-002	closed zlib option field flush
+NODE-ZLIB-OPTIONS-FINISH_FLUSH	zlib	ZlibOptions.finishflush	implemented	N66	tsonic_node::zlib::ZlibOptions::finish_flush	NODE-ZLIB-002	closed zlib option field finish_flush
+NODE-ZLIB-OPTIONS-CHUNK_SIZE	zlib	ZlibOptions.chunksize	implemented	N66	tsonic_node::zlib::ZlibOptions::chunk_size	NODE-ZLIB-002	closed zlib option field chunk_size
+NODE-ZLIB-OPTIONS-WINDOW_BITS	zlib	ZlibOptions.windowbits	implemented	N66	tsonic_node::zlib::ZlibOptions::window_bits	NODE-ZLIB-002	closed zlib option field window_bits
+NODE-ZLIB-OPTIONS-LEVEL	zlib	ZlibOptions.level	implemented	N66	tsonic_node::zlib::ZlibOptions::level	NODE-ZLIB-002	closed zlib option field level
+NODE-ZLIB-OPTIONS-MEM_LEVEL	zlib	ZlibOptions.memlevel	implemented	N66	tsonic_node::zlib::ZlibOptions::mem_level	NODE-ZLIB-002	closed zlib option field mem_level
+NODE-ZLIB-OPTIONS-STRATEGY	zlib	ZlibOptions.strategy	implemented	N66	tsonic_node::zlib::ZlibOptions::strategy	NODE-ZLIB-002	closed zlib option field strategy
+NODE-ZLIB-OPTIONS-MAX_OUTPUT_LENGTH	zlib	ZlibOptions.maxoutputlength	implemented	N66	tsonic_node::zlib::ZlibOptions::max_output_length	NODE-ZLIB-002	closed zlib option field max_output_length
+NODE-ZLIB-BROTLI-OPTIONS-QUALITY	zlib	BrotliOptions.quality	implemented	N66	tsonic_node::zlib::BrotliOptions::quality	NODE-ZLIB-002	closed Brotli option field quality
+NODE-ZLIB-BROTLI-OPTIONS-LGWIN	zlib	BrotliOptions.lgwin	implemented	N66	tsonic_node::zlib::BrotliOptions::lgwin	NODE-ZLIB-002	closed Brotli option field lgwin
+NODE-ZLIB-ZSTD-OPTIONS-LEVEL	zlib	ZstdOptions.level	implemented	N66	tsonic_node::zlib::ZstdOptions::level	NODE-ZLIB-002	closed Zstd option field level
+NODE-ZLIB-MODE-DEFLATE	zlib	ZlibMode.Deflate	implemented	N66	tsonic_node::zlib::ZlibMode::Deflate	NODE-ZLIB-002	closed zlib mode Deflate
+NODE-ZLIB-MODE-INFLATE	zlib	ZlibMode.Inflate	implemented	N66	tsonic_node::zlib::ZlibMode::Inflate	NODE-ZLIB-002	closed zlib mode Inflate
+NODE-ZLIB-MODE-GZIP	zlib	ZlibMode.Gzip	implemented	N66	tsonic_node::zlib::ZlibMode::Gzip	NODE-ZLIB-002	closed zlib mode Gzip
+NODE-ZLIB-MODE-GUNZIP	zlib	ZlibMode.Gunzip	implemented	N66	tsonic_node::zlib::ZlibMode::Gunzip	NODE-ZLIB-002	closed zlib mode Gunzip
+NODE-ZLIB-MODE-DEFLATERAW	zlib	ZlibMode.DeflateRaw	implemented	N66	tsonic_node::zlib::ZlibMode::DeflateRaw	NODE-ZLIB-002	closed zlib mode DeflateRaw
+NODE-ZLIB-MODE-INFLATERAW	zlib	ZlibMode.InflateRaw	implemented	N66	tsonic_node::zlib::ZlibMode::InflateRaw	NODE-ZLIB-002	closed zlib mode InflateRaw
+NODE-ZLIB-MODE-UNZIP	zlib	ZlibMode.Unzip	implemented	N66	tsonic_node::zlib::ZlibMode::Unzip	NODE-ZLIB-002	closed zlib mode Unzip
+NODE-ZLIB-MODE-BROTLICOMPRESS	zlib	ZlibMode.BrotliCompress	implemented	N66	tsonic_node::zlib::ZlibMode::BrotliCompress	NODE-ZLIB-002	closed zlib mode BrotliCompress
+NODE-ZLIB-MODE-BROTLIDECOMPRESS	zlib	ZlibMode.BrotliDecompress	implemented	N66	tsonic_node::zlib::ZlibMode::BrotliDecompress	NODE-ZLIB-002	closed zlib mode BrotliDecompress
+NODE-ZLIB-MODE-ZSTDCOMPRESS	zlib	ZlibMode.ZstdCompress	implemented	N66	tsonic_node::zlib::ZlibMode::ZstdCompress	NODE-ZLIB-002	closed zlib mode ZstdCompress
+NODE-ZLIB-MODE-ZSTDDECOMPRESS	zlib	ZlibMode.ZstdDecompress	implemented	N66	tsonic_node::zlib::ZlibMode::ZstdDecompress	NODE-ZLIB-002	closed zlib mode ZstdDecompress
+NODE-ZLIB-CLASS-NEW	zlib	Zlib.new	implemented	N66	tsonic_node::zlib::Zlib::new	NODE-ZLIB-002	class carrier Zlib.new
+NODE-ZLIB-CLASS-CLOSED	zlib	Zlib.closed	implemented	N66	tsonic_node::zlib::Zlib::closed	NODE-ZLIB-002	class carrier Zlib.closed
+NODE-ZLIB-CONSTANT-Z_NO_FLUSH	zlib	constants.Z_NO_FLUSH	implemented	N66	tsonic_node::zlib::constants::Z_NO_FLUSH	NODE-ZLIB-002	closed zlib constant Z_NO_FLUSH
+NODE-ZLIB-CONSTANT-Z_PARTIAL_FLUSH	zlib	constants.Z_PARTIAL_FLUSH	implemented	N66	tsonic_node::zlib::constants::Z_PARTIAL_FLUSH	NODE-ZLIB-002	closed zlib constant Z_PARTIAL_FLUSH
+NODE-ZLIB-CONSTANT-Z_SYNC_FLUSH	zlib	constants.Z_SYNC_FLUSH	implemented	N66	tsonic_node::zlib::constants::Z_SYNC_FLUSH	NODE-ZLIB-002	closed zlib constant Z_SYNC_FLUSH
+NODE-ZLIB-CONSTANT-Z_FULL_FLUSH	zlib	constants.Z_FULL_FLUSH	implemented	N66	tsonic_node::zlib::constants::Z_FULL_FLUSH	NODE-ZLIB-002	closed zlib constant Z_FULL_FLUSH
+NODE-ZLIB-CONSTANT-Z_FINISH	zlib	constants.Z_FINISH	implemented	N66	tsonic_node::zlib::constants::Z_FINISH	NODE-ZLIB-002	closed zlib constant Z_FINISH
+NODE-ZLIB-CONSTANT-Z_BLOCK	zlib	constants.Z_BLOCK	implemented	N66	tsonic_node::zlib::constants::Z_BLOCK	NODE-ZLIB-002	closed zlib constant Z_BLOCK
+NODE-ZLIB-CONSTANT-Z_OK	zlib	constants.Z_OK	implemented	N66	tsonic_node::zlib::constants::Z_OK	NODE-ZLIB-002	closed zlib constant Z_OK
+NODE-ZLIB-CONSTANT-Z_STREAM_END	zlib	constants.Z_STREAM_END	implemented	N66	tsonic_node::zlib::constants::Z_STREAM_END	NODE-ZLIB-002	closed zlib constant Z_STREAM_END
+NODE-ZLIB-CONSTANT-Z_NEED_DICT	zlib	constants.Z_NEED_DICT	implemented	N66	tsonic_node::zlib::constants::Z_NEED_DICT	NODE-ZLIB-002	closed zlib constant Z_NEED_DICT
+NODE-ZLIB-CONSTANT-Z_ERRNO	zlib	constants.Z_ERRNO	implemented	N66	tsonic_node::zlib::constants::Z_ERRNO	NODE-ZLIB-002	closed zlib constant Z_ERRNO
+NODE-ZLIB-CONSTANT-Z_STREAM_ERROR	zlib	constants.Z_STREAM_ERROR	implemented	N66	tsonic_node::zlib::constants::Z_STREAM_ERROR	NODE-ZLIB-002	closed zlib constant Z_STREAM_ERROR
+NODE-ZLIB-CONSTANT-Z_DATA_ERROR	zlib	constants.Z_DATA_ERROR	implemented	N66	tsonic_node::zlib::constants::Z_DATA_ERROR	NODE-ZLIB-002	closed zlib constant Z_DATA_ERROR
+NODE-ZLIB-CONSTANT-Z_MEM_ERROR	zlib	constants.Z_MEM_ERROR	implemented	N66	tsonic_node::zlib::constants::Z_MEM_ERROR	NODE-ZLIB-002	closed zlib constant Z_MEM_ERROR
+NODE-ZLIB-CONSTANT-Z_BUF_ERROR	zlib	constants.Z_BUF_ERROR	implemented	N66	tsonic_node::zlib::constants::Z_BUF_ERROR	NODE-ZLIB-002	closed zlib constant Z_BUF_ERROR
+NODE-ZLIB-CONSTANT-Z_VERSION_ERROR	zlib	constants.Z_VERSION_ERROR	implemented	N66	tsonic_node::zlib::constants::Z_VERSION_ERROR	NODE-ZLIB-002	closed zlib constant Z_VERSION_ERROR
+NODE-ZLIB-CONSTANT-Z_NO_COMPRESSION	zlib	constants.Z_NO_COMPRESSION	implemented	N66	tsonic_node::zlib::constants::Z_NO_COMPRESSION	NODE-ZLIB-002	closed zlib constant Z_NO_COMPRESSION
+NODE-ZLIB-CONSTANT-Z_BEST_SPEED	zlib	constants.Z_BEST_SPEED	implemented	N66	tsonic_node::zlib::constants::Z_BEST_SPEED	NODE-ZLIB-002	closed zlib constant Z_BEST_SPEED
+NODE-ZLIB-CONSTANT-Z_BEST_COMPRESSION	zlib	constants.Z_BEST_COMPRESSION	implemented	N66	tsonic_node::zlib::constants::Z_BEST_COMPRESSION	NODE-ZLIB-002	closed zlib constant Z_BEST_COMPRESSION
+NODE-ZLIB-CONSTANT-Z_DEFAULT_COMPRESSION	zlib	constants.Z_DEFAULT_COMPRESSION	implemented	N66	tsonic_node::zlib::constants::Z_DEFAULT_COMPRESSION	NODE-ZLIB-002	closed zlib constant Z_DEFAULT_COMPRESSION
+NODE-ZLIB-CONSTANT-Z_FILTERED	zlib	constants.Z_FILTERED	implemented	N66	tsonic_node::zlib::constants::Z_FILTERED	NODE-ZLIB-002	closed zlib constant Z_FILTERED
+NODE-ZLIB-CONSTANT-Z_HUFFMAN_ONLY	zlib	constants.Z_HUFFMAN_ONLY	implemented	N66	tsonic_node::zlib::constants::Z_HUFFMAN_ONLY	NODE-ZLIB-002	closed zlib constant Z_HUFFMAN_ONLY
+NODE-ZLIB-CONSTANT-Z_RLE	zlib	constants.Z_RLE	implemented	N66	tsonic_node::zlib::constants::Z_RLE	NODE-ZLIB-002	closed zlib constant Z_RLE
+NODE-ZLIB-CONSTANT-Z_FIXED	zlib	constants.Z_FIXED	implemented	N66	tsonic_node::zlib::constants::Z_FIXED	NODE-ZLIB-002	closed zlib constant Z_FIXED
+NODE-ZLIB-CONSTANT-Z_DEFAULT_STRATEGY	zlib	constants.Z_DEFAULT_STRATEGY	implemented	N66	tsonic_node::zlib::constants::Z_DEFAULT_STRATEGY	NODE-ZLIB-002	closed zlib constant Z_DEFAULT_STRATEGY
+NODE-ZLIB-CONSTANT-Z_MIN_WINDOWBITS	zlib	constants.Z_MIN_WINDOWBITS	implemented	N66	tsonic_node::zlib::constants::Z_MIN_WINDOWBITS	NODE-ZLIB-002	closed zlib constant Z_MIN_WINDOWBITS
+NODE-ZLIB-CONSTANT-Z_MAX_WINDOWBITS	zlib	constants.Z_MAX_WINDOWBITS	implemented	N66	tsonic_node::zlib::constants::Z_MAX_WINDOWBITS	NODE-ZLIB-002	closed zlib constant Z_MAX_WINDOWBITS
+NODE-ZLIB-CONSTANT-Z_DEFAULT_WINDOWBITS	zlib	constants.Z_DEFAULT_WINDOWBITS	implemented	N66	tsonic_node::zlib::constants::Z_DEFAULT_WINDOWBITS	NODE-ZLIB-002	closed zlib constant Z_DEFAULT_WINDOWBITS
+NODE-ZLIB-CONSTANT-Z_MIN_CHUNK	zlib	constants.Z_MIN_CHUNK	implemented	N66	tsonic_node::zlib::constants::Z_MIN_CHUNK	NODE-ZLIB-002	closed zlib constant Z_MIN_CHUNK
+NODE-ZLIB-CONSTANT-Z_MAX_CHUNK	zlib	constants.Z_MAX_CHUNK	implemented	N66	tsonic_node::zlib::constants::Z_MAX_CHUNK	NODE-ZLIB-002	closed zlib constant Z_MAX_CHUNK
+NODE-ZLIB-CONSTANT-Z_DEFAULT_CHUNK	zlib	constants.Z_DEFAULT_CHUNK	implemented	N66	tsonic_node::zlib::constants::Z_DEFAULT_CHUNK	NODE-ZLIB-002	closed zlib constant Z_DEFAULT_CHUNK
+NODE-ZLIB-CONSTANT-Z_MIN_MEMLEVEL	zlib	constants.Z_MIN_MEMLEVEL	implemented	N66	tsonic_node::zlib::constants::Z_MIN_MEMLEVEL	NODE-ZLIB-002	closed zlib constant Z_MIN_MEMLEVEL
+NODE-ZLIB-CONSTANT-Z_MAX_MEMLEVEL	zlib	constants.Z_MAX_MEMLEVEL	implemented	N66	tsonic_node::zlib::constants::Z_MAX_MEMLEVEL	NODE-ZLIB-002	closed zlib constant Z_MAX_MEMLEVEL
+NODE-ZLIB-CONSTANT-Z_DEFAULT_MEMLEVEL	zlib	constants.Z_DEFAULT_MEMLEVEL	implemented	N66	tsonic_node::zlib::constants::Z_DEFAULT_MEMLEVEL	NODE-ZLIB-002	closed zlib constant Z_DEFAULT_MEMLEVEL
+NODE-ZLIB-CONSTANT-DEFLATE	zlib	constants.DEFLATE	implemented	N66	tsonic_node::zlib::constants::DEFLATE	NODE-ZLIB-002	closed zlib constant DEFLATE
+NODE-ZLIB-CONSTANT-INFLATE	zlib	constants.INFLATE	implemented	N66	tsonic_node::zlib::constants::INFLATE	NODE-ZLIB-002	closed zlib constant INFLATE
+NODE-ZLIB-CONSTANT-GZIP	zlib	constants.GZIP	implemented	N66	tsonic_node::zlib::constants::GZIP	NODE-ZLIB-002	closed zlib constant GZIP
+NODE-ZLIB-CONSTANT-GUNZIP	zlib	constants.GUNZIP	implemented	N66	tsonic_node::zlib::constants::GUNZIP	NODE-ZLIB-002	closed zlib constant GUNZIP
+NODE-ZLIB-CONSTANT-DEFLATERAW	zlib	constants.DEFLATERAW	implemented	N66	tsonic_node::zlib::constants::DEFLATERAW	NODE-ZLIB-002	closed zlib constant DEFLATERAW
+NODE-ZLIB-CONSTANT-INFLATERAW	zlib	constants.INFLATERAW	implemented	N66	tsonic_node::zlib::constants::INFLATERAW	NODE-ZLIB-002	closed zlib constant INFLATERAW
+NODE-ZLIB-CONSTANT-UNZIP	zlib	constants.UNZIP	implemented	N66	tsonic_node::zlib::constants::UNZIP	NODE-ZLIB-002	closed zlib constant UNZIP
+NODE-ZLIB-CONSTANT-BROTLI_ENCODE	zlib	constants.BROTLI_ENCODE	implemented	N66	tsonic_node::zlib::constants::BROTLI_ENCODE	NODE-ZLIB-002	closed zlib constant BROTLI_ENCODE
+NODE-ZLIB-CONSTANT-BROTLI_DECODE	zlib	constants.BROTLI_DECODE	implemented	N66	tsonic_node::zlib::constants::BROTLI_DECODE	NODE-ZLIB-002	closed zlib constant BROTLI_DECODE
+NODE-ZLIB-CONSTANT-BROTLI_OPERATION_PROCESS	zlib	constants.BROTLI_OPERATION_PROCESS	implemented	N66	tsonic_node::zlib::constants::BROTLI_OPERATION_PROCESS	NODE-ZLIB-002	closed zlib constant BROTLI_OPERATION_PROCESS
+NODE-ZLIB-CONSTANT-BROTLI_OPERATION_FLUSH	zlib	constants.BROTLI_OPERATION_FLUSH	implemented	N66	tsonic_node::zlib::constants::BROTLI_OPERATION_FLUSH	NODE-ZLIB-002	closed zlib constant BROTLI_OPERATION_FLUSH
+NODE-ZLIB-CONSTANT-BROTLI_OPERATION_FINISH	zlib	constants.BROTLI_OPERATION_FINISH	implemented	N66	tsonic_node::zlib::constants::BROTLI_OPERATION_FINISH	NODE-ZLIB-002	closed zlib constant BROTLI_OPERATION_FINISH
+NODE-ZLIB-CONSTANT-BROTLI_OPERATION_EMIT_METADATA	zlib	constants.BROTLI_OPERATION_EMIT_METADATA	implemented	N66	tsonic_node::zlib::constants::BROTLI_OPERATION_EMIT_METADATA	NODE-ZLIB-002	closed zlib constant BROTLI_OPERATION_EMIT_METADATA
+NODE-ZLIB-CONSTANT-BROTLI_PARAM_MODE	zlib	constants.BROTLI_PARAM_MODE	implemented	N66	tsonic_node::zlib::constants::BROTLI_PARAM_MODE	NODE-ZLIB-002	closed zlib constant BROTLI_PARAM_MODE
+NODE-ZLIB-CONSTANT-BROTLI_PARAM_QUALITY	zlib	constants.BROTLI_PARAM_QUALITY	implemented	N66	tsonic_node::zlib::constants::BROTLI_PARAM_QUALITY	NODE-ZLIB-002	closed zlib constant BROTLI_PARAM_QUALITY
+NODE-ZLIB-CONSTANT-BROTLI_PARAM_LGWIN	zlib	constants.BROTLI_PARAM_LGWIN	implemented	N66	tsonic_node::zlib::constants::BROTLI_PARAM_LGWIN	NODE-ZLIB-002	closed zlib constant BROTLI_PARAM_LGWIN
+NODE-ZLIB-CONSTANT-BROTLI_PARAM_LGBLOCK	zlib	constants.BROTLI_PARAM_LGBLOCK	implemented	N66	tsonic_node::zlib::constants::BROTLI_PARAM_LGBLOCK	NODE-ZLIB-002	closed zlib constant BROTLI_PARAM_LGBLOCK
+NODE-ZLIB-CONSTANT-BROTLI_MODE_GENERIC	zlib	constants.BROTLI_MODE_GENERIC	implemented	N66	tsonic_node::zlib::constants::BROTLI_MODE_GENERIC	NODE-ZLIB-002	closed zlib constant BROTLI_MODE_GENERIC
+NODE-ZLIB-CONSTANT-BROTLI_MODE_TEXT	zlib	constants.BROTLI_MODE_TEXT	implemented	N66	tsonic_node::zlib::constants::BROTLI_MODE_TEXT	NODE-ZLIB-002	closed zlib constant BROTLI_MODE_TEXT
+NODE-ZLIB-CONSTANT-BROTLI_MODE_FONT	zlib	constants.BROTLI_MODE_FONT	implemented	N66	tsonic_node::zlib::constants::BROTLI_MODE_FONT	NODE-ZLIB-002	closed zlib constant BROTLI_MODE_FONT
+NODE-ZLIB-CONSTANT-BROTLI_DEFAULT_QUALITY	zlib	constants.BROTLI_DEFAULT_QUALITY	implemented	N66	tsonic_node::zlib::constants::BROTLI_DEFAULT_QUALITY	NODE-ZLIB-002	closed zlib constant BROTLI_DEFAULT_QUALITY
+NODE-ZLIB-CONSTANT-BROTLI_MIN_QUALITY	zlib	constants.BROTLI_MIN_QUALITY	implemented	N66	tsonic_node::zlib::constants::BROTLI_MIN_QUALITY	NODE-ZLIB-002	closed zlib constant BROTLI_MIN_QUALITY
+NODE-ZLIB-CONSTANT-BROTLI_MAX_QUALITY	zlib	constants.BROTLI_MAX_QUALITY	implemented	N66	tsonic_node::zlib::constants::BROTLI_MAX_QUALITY	NODE-ZLIB-002	closed zlib constant BROTLI_MAX_QUALITY
+NODE-ZLIB-CONSTANT-BROTLI_DEFAULT_WINDOW	zlib	constants.BROTLI_DEFAULT_WINDOW	implemented	N66	tsonic_node::zlib::constants::BROTLI_DEFAULT_WINDOW	NODE-ZLIB-002	closed zlib constant BROTLI_DEFAULT_WINDOW
+NODE-ZLIB-CONSTANT-BROTLI_MIN_WINDOW_BITS	zlib	constants.BROTLI_MIN_WINDOW_BITS	implemented	N66	tsonic_node::zlib::constants::BROTLI_MIN_WINDOW_BITS	NODE-ZLIB-002	closed zlib constant BROTLI_MIN_WINDOW_BITS
+NODE-ZLIB-CONSTANT-BROTLI_MAX_WINDOW_BITS	zlib	constants.BROTLI_MAX_WINDOW_BITS	implemented	N66	tsonic_node::zlib::constants::BROTLI_MAX_WINDOW_BITS	NODE-ZLIB-002	closed zlib constant BROTLI_MAX_WINDOW_BITS
+NODE-ZLIB-CONSTANT-ZSTD_COMPRESS	zlib	constants.ZSTD_COMPRESS	implemented	N66	tsonic_node::zlib::constants::ZSTD_COMPRESS	NODE-ZLIB-002	closed zlib constant ZSTD_COMPRESS
+NODE-ZLIB-CONSTANT-ZSTD_DECOMPRESS	zlib	constants.ZSTD_DECOMPRESS	implemented	N66	tsonic_node::zlib::constants::ZSTD_DECOMPRESS	NODE-ZLIB-002	closed zlib constant ZSTD_DECOMPRESS
+NODE-ZLIB-CONSTANT-ZSTD_CLEVEL_DEFAULT	zlib	constants.ZSTD_CLEVEL_DEFAULT	implemented	N66	tsonic_node::zlib::constants::ZSTD_CLEVEL_DEFAULT	NODE-ZLIB-002	closed zlib constant ZSTD_CLEVEL_DEFAULT
+NODE-ZLIB-ZSTD-COMPRESS-CARRIER	zlib	ZstdCompress	implemented	N66	tsonic_node::zlib::ZstdCompress	NODE-ZLIB-002	dependency-gated ZstdCompress carrier
+NODE-ZLIB-ZSTD-DECOMPRESS-CARRIER	zlib	ZstdDecompress	implemented	N66	tsonic_node::zlib::ZstdDecompress	NODE-ZLIB-002	dependency-gated ZstdDecompress carrier
 NODE-ZLIB-BROTLI-OPTIONS	zlib	BrotliOptions	implemented	N66	tsonic_node::zlib::BrotliOptions	NODE-ZLIB-002	closed Brotli option carrier
 NODE-ZLIB-ZSTD-OPTIONS	zlib	ZstdOptions	implemented	N66	tsonic_node::zlib::ZstdOptions	NODE-ZLIB-002	closed Zstd option carrier for dependency-gated unsupported path
 NODE-ZLIB-MODE	zlib	ZlibMode	implemented	N66	tsonic_node::zlib::ZlibMode	NODE-ZLIB-002	closed compression/decompression mode identity carrier
@@ -1111,7 +1196,6 @@ NODE-ZLIB-BROTLI-COMPRESS-SYNC	zlib	brotliCompressSync	implemented	N66	tsonic_no
 NODE-ZLIB-BROTLI-DECOMPRESS-SYNC	zlib	brotliDecompressSync	implemented	N66	tsonic_node::zlib::brotli_decompress_sync	NODE-ZLIB-002	brotliDecompressSync decompresses Brotli Buffer input
 NODE-ZLIB-ZSTD-COMPRESS-SYNC	zlib	zstdCompressSync	implemented	N66	tsonic_node::zlib::zstd_compress_sync	NODE-ZLIB-002	dependency-gated zstdCompressSync returns explicit unsupported error until approved implementation lands
 NODE-ZLIB-ZSTD-DECOMPRESS-SYNC	zlib	zstdDecompressSync	implemented	N66	tsonic_node::zlib::zstd_decompress_sync	NODE-ZLIB-002	dependency-gated zstdDecompressSync returns explicit unsupported error until approved implementation lands
-NODE-ZLIB-CONSTANTS	zlib	constants	implemented	N66	tsonic_node::zlib::constants	NODE-ZLIB-002	closed common zlib/brotli/zstd constant values
 WEB-ABORT	web-globals/abortcontroller	AbortController/AbortSignal	implemented	W1	tsonic_js::web::{AbortController,AbortSignal}	JS-WEB-001	closed abort signal/controller carrier with reason, timeout, any, and throwIfAborted
 WEB-DOM-EXCEPTION	web-globals/domexception	DOMException	implemented	W1	tsonic_js::web::DomException	JS-WEB-002	DOMException name/message and legacy code constants
 WEB-EVENTS	web-globals/events	Event/CustomEvent/EventTarget	implemented	W1	tsonic_js::web::{Event,CustomEvent,EventTarget}	JS-WEB-003	closed EventTarget listener carrier, cancellation, once, custom detail, and dispatch result
