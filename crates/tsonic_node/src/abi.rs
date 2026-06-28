@@ -183,10 +183,12 @@ pub use crate::module::{
     find_package_json as module_find_package_json,
     get_source_maps_support as module_get_source_maps_support, is_builtin as module_is_builtin,
     set_source_maps_support as module_set_source_maps_support,
+    set_source_maps_support_with_options as module_set_source_maps_support_with_options,
     strip_type_script_types as module_strip_type_script_types,
-    sync_builtin_esm_exports as module_sync_builtin_esm_exports, Require, SourceMap,
-    SourceMapConstructorOptions, SourceMapPayload, SourceMapping, SourceMapsSupport, SourceOrigin,
-    StripTypeScriptMode, StripTypeScriptTypesOptions,
+    sync_builtin_esm_exports as module_sync_builtin_esm_exports, Require,
+    SetSourceMapsSupportOptions, SourceMap, SourceMapConstructorOptions, SourceMapPayload,
+    SourceMapping, SourceMapsSupport, SourceOrigin, StripTypeScriptMode,
+    StripTypeScriptTypesOptions,
 };
 pub use crate::net::{
     connect as net_connect, connect_with_options as net_connect_with_options,
@@ -207,7 +209,7 @@ pub use crate::os::{
     r#type as os_type, release as os_release, tmpdir as os_tmpdir, totalmem as os_totalmem,
     uptime as os_uptime, user_info as os_user_info,
     user_info_with_options as os_user_info_with_options, version as os_version, CpuTimes,
-    OsConstants, PriorityConstants, UserInfoOptions,
+    NetworkInterfaceInfo, OsConstants, PriorityConstants, UserInfoOptions,
 };
 pub use crate::path::{
     basename as path_basename, delimiter as path_delimiter, dirname as path_dirname,

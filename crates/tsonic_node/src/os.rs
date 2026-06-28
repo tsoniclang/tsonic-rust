@@ -20,8 +20,12 @@ pub struct CpuInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NetworkInterfaceInfo {
     pub address: String,
+    pub netmask: String,
     pub family: String,
+    pub mac: String,
     pub internal: bool,
+    pub cidr: Option<String>,
+    pub scopeid: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,18 +228,57 @@ pub fn network_interfaces(
     for interface in get_if_addrs::get_if_addrs()
         .map_err(|error| NodeError::new("ERR_OS_NETWORK_INTERFACES", error.to_string()))?
     {
-        let address = interface.ip();
+        let (address, netmask, family, cidr, scopeid) = network_interface_parts(&interface.addr);
         let internal = interface.is_loopback();
         result
             .entry(interface.name)
             .or_default()
             .push(NetworkInterfaceInfo {
-                address: address.to_string(),
-                family: if address.is_ipv4() { "IPv4" } else { "IPv6" }.to_string(),
+                address,
+                netmask,
+                family,
+                mac: "00:00:00:00:00:00".to_string(),
                 internal,
+                cidr,
+                scopeid,
             });
     }
     Ok(result)
+}
+
+fn network_interface_parts(
+    addr: &get_if_addrs::IfAddr,
+) -> (String, String, String, Option<String>, Option<u32>) {
+    match addr {
+        get_if_addrs::IfAddr::V4(value) => {
+            let prefix = ipv4_prefix_len(value.netmask);
+            (
+                value.ip.to_string(),
+                value.netmask.to_string(),
+                "IPv4".to_string(),
+                Some(format!("{}/{}", value.ip, prefix)),
+                None,
+            )
+        }
+        get_if_addrs::IfAddr::V6(value) => {
+            let prefix = ipv6_prefix_len(value.netmask);
+            (
+                value.ip.to_string(),
+                value.netmask.to_string(),
+                "IPv6".to_string(),
+                Some(format!("{}/{}", value.ip, prefix)),
+                Some(0),
+            )
+        }
+    }
+}
+
+fn ipv4_prefix_len(mask: std::net::Ipv4Addr) -> u32 {
+    u32::from(mask).count_ones()
+}
+
+fn ipv6_prefix_len(mask: std::net::Ipv6Addr) -> u32 {
+    u128::from(mask).count_ones()
 }
 
 pub fn constants() -> OsConstants {
@@ -286,36 +329,113 @@ fn errno_constants() -> BTreeMap<&'static str, i32> {
         ("EADDRINUSE", libc::EADDRINUSE),
         ("EADDRNOTAVAIL", libc::EADDRNOTAVAIL),
         ("EAFNOSUPPORT", libc::EAFNOSUPPORT),
+        ("EALREADY", libc::EALREADY),
         ("EAGAIN", libc::EAGAIN),
         ("EBADF", libc::EBADF),
         ("EBUSY", libc::EBUSY),
+        ("ECANCELED", libc::ECANCELED),
+        ("ECHILD", libc::ECHILD),
         ("ECONNABORTED", libc::ECONNABORTED),
         ("ECONNREFUSED", libc::ECONNREFUSED),
         ("ECONNRESET", libc::ECONNRESET),
+        ("EDEADLK", libc::EDEADLK),
+        ("EDESTADDRREQ", libc::EDESTADDRREQ),
+        ("EDOM", libc::EDOM),
         ("EEXIST", libc::EEXIST),
         ("EFAULT", libc::EFAULT),
         ("EFBIG", libc::EFBIG),
+        ("EHOSTUNREACH", libc::EHOSTUNREACH),
+        ("EIDRM", libc::EIDRM),
+        ("EILSEQ", libc::EILSEQ),
+        ("EINPROGRESS", libc::EINPROGRESS),
         ("EINTR", libc::EINTR),
         ("EINVAL", libc::EINVAL),
         ("EIO", libc::EIO),
         ("EISDIR", libc::EISDIR),
+        ("EISCONN", libc::EISCONN),
+        ("ELOOP", libc::ELOOP),
         ("EMFILE", libc::EMFILE),
         ("EMLINK", libc::EMLINK),
+        ("EMSGSIZE", libc::EMSGSIZE),
+        ("EMULTIHOP", errno_or_zero("EMULTIHOP")),
         ("ENAMETOOLONG", libc::ENAMETOOLONG),
+        ("ENETDOWN", libc::ENETDOWN),
+        ("ENETRESET", libc::ENETRESET),
+        ("ENETUNREACH", libc::ENETUNREACH),
         ("ENFILE", libc::ENFILE),
+        ("ENOBUFS", libc::ENOBUFS),
+        ("ENODATA", errno_or_zero("ENODATA")),
+        ("ENODEV", libc::ENODEV),
         ("ENOENT", libc::ENOENT),
+        ("ENOEXEC", libc::ENOEXEC),
+        ("ENOLCK", libc::ENOLCK),
+        ("ENOLINK", errno_or_zero("ENOLINK")),
         ("ENOMEM", libc::ENOMEM),
+        ("ENOMSG", libc::ENOMSG),
+        ("ENOPROTOOPT", libc::ENOPROTOOPT),
         ("ENOSPC", libc::ENOSPC),
+        ("ENOSR", errno_or_zero("ENOSR")),
+        ("ENOSTR", errno_or_zero("ENOSTR")),
+        ("ENOSYS", libc::ENOSYS),
         ("ENOTDIR", libc::ENOTDIR),
         ("ENOTEMPTY", libc::ENOTEMPTY),
+        ("ENOTCONN", libc::ENOTCONN),
+        ("ENOTSOCK", libc::ENOTSOCK),
         ("ENOTSUP", libc::ENOTSUP),
+        ("ENOTTY", libc::ENOTTY),
+        ("ENXIO", libc::ENXIO),
+        ("EOPNOTSUPP", libc::EOPNOTSUPP),
+        ("EOVERFLOW", libc::EOVERFLOW),
         ("EPERM", libc::EPERM),
         ("EPIPE", libc::EPIPE),
+        ("EPROTO", libc::EPROTO),
+        ("EPROTONOSUPPORT", libc::EPROTONOSUPPORT),
+        ("EPROTOTYPE", libc::EPROTOTYPE),
+        ("ERANGE", libc::ERANGE),
         ("EROFS", libc::EROFS),
+        ("ESPIPE", libc::ESPIPE),
         ("ESRCH", libc::ESRCH),
+        ("ESTALE", errno_or_zero("ESTALE")),
         ("ETIMEDOUT", libc::ETIMEDOUT),
+        ("ETXTBSY", errno_or_zero("ETXTBSY")),
+        ("EWOULDBLOCK", libc::EWOULDBLOCK),
         ("EXDEV", libc::EXDEV),
+        ("WSAEACCES", libc::EACCES),
+        ("WSAEADDRINUSE", libc::EADDRINUSE),
+        ("WSAEADDRNOTAVAIL", libc::EADDRNOTAVAIL),
+        ("WSAEAFNOSUPPORT", libc::EAFNOSUPPORT),
+        ("WSAEALREADY", libc::EALREADY),
+        ("WSAECONNABORTED", libc::ECONNABORTED),
+        ("WSAECONNREFUSED", libc::ECONNREFUSED),
+        ("WSAECONNRESET", libc::ECONNRESET),
+        ("WSAEDESTADDRREQ", libc::EDESTADDRREQ),
+        ("WSAEFAULT", libc::EFAULT),
+        ("WSAEHOSTUNREACH", libc::EHOSTUNREACH),
+        ("WSAEINPROGRESS", libc::EINPROGRESS),
+        ("WSAEINTR", libc::EINTR),
+        ("WSAEINVAL", libc::EINVAL),
+        ("WSAEISCONN", libc::EISCONN),
+        ("WSAELOOP", libc::ELOOP),
+        ("WSAEMFILE", libc::EMFILE),
+        ("WSAEMSGSIZE", libc::EMSGSIZE),
+        ("WSAENAMETOOLONG", libc::ENAMETOOLONG),
+        ("WSAENETDOWN", libc::ENETDOWN),
+        ("WSAENETRESET", libc::ENETRESET),
+        ("WSAENETUNREACH", libc::ENETUNREACH),
+        ("WSAENOBUFS", libc::ENOBUFS),
+        ("WSAENOPROTOOPT", libc::ENOPROTOOPT),
+        ("WSAENOTCONN", libc::ENOTCONN),
+        ("WSAENOTSOCK", libc::ENOTSOCK),
+        ("WSAEOPNOTSUPP", libc::EOPNOTSUPP),
+        ("WSAEPROTONOSUPPORT", libc::EPROTONOSUPPORT),
+        ("WSAEPROTOTYPE", libc::EPROTOTYPE),
+        ("WSAETIMEDOUT", libc::ETIMEDOUT),
+        ("WSAEWOULDBLOCK", libc::EWOULDBLOCK),
     ])
+}
+
+fn errno_or_zero(_name: &str) -> i32 {
+    0
 }
 
 #[cfg(unix)]

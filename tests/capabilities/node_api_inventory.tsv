@@ -39,10 +39,12 @@ NODE-HTTPS-SERVER-STATE	https	Server options/closeAllConnections/closeIdleConnec
 NODE-MODULE-INSPECTOR	inspector	module	hard-reject	N0	n/a	REJECT-NODE-INSPECTOR	debugger protocol excluded
 NODE-MODULE-MODULE	module	module	implemented	N4	tsonic_node::module	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution
 NODE-MODULE-SOURCEMAP	module	SourceMap/source map support	implemented	N21	tsonic_node::module::{SourceMap,SourceMapPayload,SourceMapping,SourceMapsSupport}	NODE-MODULE-002	closed source map carrier and global source map support toggles without loader execution
+NODE-MODULE-SOURCEMAP-EXT	module	SourceMapPayload.file/SourceMapsSupport.enabled/setSourceMapsSupport options	implemented	N51	tsonic_node::module::{SourceMapPayload,SourceMapsSupport,SetSourceMapsSupportOptions,set_source_maps_support_with_options}	NODE-MODULE-003	expanded source map carrier fields and option-based support updates without loader execution
 NODE-MODULE-STRIP-TS	module	stripTypeScriptTypes	implemented	N21	tsonic_node::module::strip_type_script_types	NODE-MODULE-002	safe TypeScript type stripping helper; no evaluation or loader hook execution
 NODE-MODULE-NET	net	module	implemented	N4	tsonic_node::net	NODE-NET-001	TCP socket/server substrate over std net
 NODE-MODULE-OS	os	module	implemented	J	tsonic_node::os	NODE-OS-001	closed OS query helpers
 NODE-OS-CONSTANTS	os	constants/userInfo options	implemented	N31	tsonic_node::os::{constants,user_info_with_options,OsConstants,UserInfoOptions}	NODE-OS-004	errno, signal, priority, dlopen, uv constants and userInfo option shape
+NODE-OS-CONSTANTS-EXT	os	errno Windows aliases and extended POSIX names	implemented	N50	tsonic_node::os::constants	NODE-OS-005	expanded closed errno constants table including high-use POSIX names and WSA aliases without host introspection
 NODE-MODULE-PATH	path	module	implemented	J	tsonic_node::path	NODE-PATH-001	path/posix/win32 helpers
 NODE-MODULE-PERF-HOOKS	perf_hooks	module	implemented	N1	tsonic_node::perf_hooks	NODE-MISC-001	performance.now subset
 NODE-PERF-RESOURCE-TIMING	perf_hooks	PerformanceResourceTiming/nodeTiming/timerify/constants	implemented	N31	tsonic_node::perf_hooks::{PerformanceResourceTiming,node_timing,timerify,CONSTANTS}	NODE-PERF-003	resource timing entries, node timing shape, GC constants, and function timing
@@ -224,6 +226,7 @@ NODE-OS-HOME-TMP	os	homedir/tmpdir	implemented	J	tsonic_node::os::{homedir,tmpdi
 NODE-OS-HOST-RELEASE	os	hostname/type/release	implemented	J	tsonic_node::os::{hostname,type,release}	NODE-OS-001	host identity helpers
 NODE-OS-CPU	os	cpus/loadavg	implemented	J	tsonic_node::os::{cpus,loadavg}	NODE-OS-001	CPU/load helpers
 NODE-OS-NETWORK	os	networkInterfaces	implemented	N10	tsonic_node::os::network_interfaces	NODE-OS-NETWORK-001	platform network interface query through approved dependency
+NODE-OS-NETWORK-FIELDS	os	NetworkInterfaceInfo address/netmask/mac/internal/cidr/scopeid	implemented	N50	tsonic_node::os::{network_interfaces,NetworkInterfaceInfo}	NODE-OS-005	closed network interface field carrier with provider data where available and deterministic zero MAC/scope fallback
 NODE-NET-SOCKET	net	Socket address/write/end/ref/timeout metadata	implemented	N17	tsonic_node::net::Socket	NODE-NET-002	TCP socket address, byte counter, timeout, encoding, ref/unref, and close helpers
 NODE-NET-SERVER	net	Server address/listen/ref metadata	implemented	N17	tsonic_node::net::Server	NODE-NET-002	TCP server address and ref/unref shape
 NODE-NET-OPTIONS	net	ConnectOptions/ListenOptions/SocketConstructorOpts	implemented	N37	tsonic_node::net::{ConnectOptions,ListenOptions,SocketConstructorOpts}	NODE-NET-003	closed connect/listen/socket constructor option carriers without fd takeover or dynamic lookup hooks

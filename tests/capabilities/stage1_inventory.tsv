@@ -256,11 +256,13 @@ NODE-HTTPS-002	implemented	N41	tsonic_node::abi::{HttpsAgent,HttpsAgentOptions,H
 NODE-MOD-019	hard-reject	M	n/a	REJECT-NODE-INSPECTOR	debugger/inspector protocol out of Stage 1
 NODE-MOD-020	implemented	N4	tsonic_node::abi::{module_builtin_modules,module_create_require}	NODE-MODULE-001	safe builtinModules/createRequire helpers without loader execution
 NODE-MODULE-002	implemented	N21	tsonic_node::abi::{SourceMap,SourceMapPayload,SourceMapping,SourceMapsSupport,module_strip_type_script_types}	NODE-MODULE-002	source map carriers, source map support toggles, and safe TypeScript stripping without loader execution
+NODE-MODULE-003	implemented	N51	tsonic_node::abi::{module_set_source_maps_support_with_options,SetSourceMapsSupportOptions,SourceMapPayload,SourceMapsSupport}	NODE-MODULE-003	expanded source map payload/support fields and option-based source map support update
 NODE-MOD-021	implemented	N4	tsonic_node::abi::{net_connect,net_create_server}	NODE-NET-001	TCP socket/server substrate over std net
 NODE-NET-002	implemented	N17	tsonic_node::abi::{Socket,Server,NetAddressInfo}	NODE-NET-002	TCP socket/server address metadata, byte counters, timeout, ref/unref, and close helpers
 NODE-NET-003	implemented	N37	tsonic_node::abi::{NetConnectOptions,NetListenOptions,NetSocketConstructorOpts,NetBlockList,NetSocketAddress}	NODE-NET-003	closed net option carriers, socket address parser, block list, keepalive/TOS/pause/reset metadata, and server connection counters
 NODE-MOD-022	implemented	J	tsonic_node::abi::os_*	NODE-OS-001 through NODE-OS-003	platform/arch/eol/tmpdir/homedir only
 NODE-OS-004	implemented	N31	tsonic_node::abi::{os_constants,os_user_info_with_options,OsConstants,UserInfoOptions}	NODE-OS-004	errno, signal, priority, dlopen, uv constants and userInfo option shape
+NODE-OS-005	implemented	N50	tsonic_node::abi::{os_constants,os_network_interfaces,OsConstants,NetworkInterfaceInfo}	NODE-OS-005	expanded errno constants and full NetworkInterfaceInfo field carrier
 NODE-MOD-023	implemented	J	tsonic_node::abi::path_*	NODE-PATH-001 through NODE-PATH-008	pure string path helpers
 NODE-MOD-024	implemented	M	tsonic_node::abi::performance_now	NODE-MISC-001	performance timer/observer policy not first wave (completed in full-completion branch)
 NODE-PERF-001	implemented	N11	tsonic_node::perf_hooks::{PerformanceEntry,PerformanceObserver,PerformanceObserverEntryList}	NODE-PERF-001	mark, measure, entry queries, observer snapshots, and supported entry types

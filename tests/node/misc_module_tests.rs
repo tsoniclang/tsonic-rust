@@ -212,6 +212,7 @@ fn module_helpers_cover_safe_common_node_shapes() {
         vec!["main".to_string()],
         "",
     );
+    assert_eq!(payload.file, None);
     let source_map = module::SourceMap::with_decoded_mappings(
         payload.clone(),
         Some(module::SourceMapConstructorOptions::new(Some(vec![12, 20]))),
@@ -237,11 +238,26 @@ fn module_helpers_cover_safe_common_node_shapes() {
     assert_eq!(
         module::set_source_maps_support(true, true),
         module::SourceMapsSupport {
+            enabled: true,
             node_modules: true,
             generated_code: true,
         }
     );
     assert!(module::get_source_maps_support().generated_code);
+    assert_eq!(
+        module::set_source_maps_support_with_options(
+            true,
+            Some(module::SetSourceMapsSupportOptions {
+                node_modules: false,
+                generated_code: true,
+            })
+        ),
+        module::SourceMapsSupport {
+            enabled: true,
+            node_modules: false,
+            generated_code: true,
+        }
+    );
     let stripped = module::strip_type_script_types(
         "type T = number;\nconst x: number = 1;\nfunction f(y: string) { return y as const; }",
         Some(module::StripTypeScriptTypesOptions {

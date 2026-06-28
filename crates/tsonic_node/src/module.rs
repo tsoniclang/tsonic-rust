@@ -6,6 +6,7 @@ pub struct Require {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceMapPayload {
     pub version: u32,
+    pub file: Option<String>,
     pub sources: Vec<String>,
     pub names: Vec<String>,
     pub mappings: String,
@@ -44,6 +45,13 @@ pub struct SourceMap {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SourceMapsSupport {
+    pub enabled: bool,
+    pub node_modules: bool,
+    pub generated_code: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetSourceMapsSupportOptions {
     pub node_modules: bool,
     pub generated_code: bool,
 }
@@ -84,6 +92,7 @@ impl SourceMapPayload {
     ) -> Self {
         Self {
             version,
+            file: None,
             sources,
             names,
             mappings: mappings.into(),
@@ -227,8 +236,26 @@ pub fn get_source_maps_support() -> SourceMapsSupport {
 
 pub fn set_source_maps_support(enabled: bool, node_modules: bool) -> SourceMapsSupport {
     let support = SourceMapsSupport {
+        enabled,
         node_modules,
         generated_code: enabled,
+    };
+    *source_maps_support().lock().unwrap() = support;
+    support
+}
+
+pub fn set_source_maps_support_with_options(
+    enabled: bool,
+    options: Option<SetSourceMapsSupportOptions>,
+) -> SourceMapsSupport {
+    let options = options.unwrap_or(SetSourceMapsSupportOptions {
+        node_modules: false,
+        generated_code: enabled,
+    });
+    let support = SourceMapsSupport {
+        enabled,
+        node_modules: options.node_modules,
+        generated_code: options.generated_code,
     };
     *source_maps_support().lock().unwrap() = support;
     support
@@ -308,6 +335,7 @@ fn source_maps_support() -> &'static std::sync::Mutex<SourceMapsSupport> {
         std::sync::OnceLock::new();
     SOURCE_MAPS_SUPPORT.get_or_init(|| {
         std::sync::Mutex::new(SourceMapsSupport {
+            enabled: false,
             node_modules: false,
             generated_code: false,
         })

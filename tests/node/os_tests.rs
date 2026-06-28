@@ -33,6 +33,9 @@ fn os_wrappers_have_stable_shapes() {
     let constants = os::constants();
     assert_eq!(constants.priority.priority_normal, 0);
     assert!(constants.errno.contains_key("ENOENT"));
+    assert!(constants.errno.contains_key("ENOSYS"));
+    assert!(constants.errno.contains_key("EWOULDBLOCK"));
+    assert!(constants.errno.contains_key("WSAEADDRINUSE"));
     assert!(constants.signals.contains_key("SIGTERM") || cfg!(not(unix)));
     assert!(constants.dlopen.contains_key("RTLD_NOW") || cfg!(not(unix)));
     assert_eq!(constants.uv.get("UV_UDP_REUSEADDR"), Some(&4));
@@ -41,4 +44,13 @@ fn os_wrappers_have_stable_shapes() {
         .values()
         .flatten()
         .all(|interface| matches!(interface.family.as_str(), "IPv4" | "IPv6")));
+    assert!(interfaces.values().flatten().all(|interface| {
+        !interface.address.is_empty()
+            && !interface.netmask.is_empty()
+            && !interface.mac.is_empty()
+            && interface
+                .cidr
+                .as_ref()
+                .is_none_or(|cidr| cidr.contains('/'))
+    }));
 }
