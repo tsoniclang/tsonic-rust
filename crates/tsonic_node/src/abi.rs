@@ -133,8 +133,12 @@ pub use crate::path::{
 };
 pub use crate::perf_hooks::{
     clear_marks as performance_clear_marks, clear_measures as performance_clear_measures,
-    get_entries_by_name as performance_get_entries_by_name, mark as performance_mark,
-    measure as performance_measure, performance_now, time_origin as performance_time_origin,
+    get_entries as performance_get_entries, get_entries_by_name as performance_get_entries_by_name,
+    get_entries_by_name_entries as performance_get_entries_by_name_entries,
+    get_entries_by_type as performance_get_entries_by_type, mark as performance_mark,
+    mark_with_detail as performance_mark_with_detail, measure as performance_measure,
+    performance_now, time_origin as performance_time_origin, PerformanceEntry, PerformanceMark,
+    PerformanceMeasure, PerformanceObserver, PerformanceObserverEntryList,
 };
 pub use crate::process::{
     arch as process_arch, argv as process_argv, argv0 as process_argv0, chdir as process_chdir,

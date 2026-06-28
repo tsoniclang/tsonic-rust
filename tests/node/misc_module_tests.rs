@@ -35,13 +35,41 @@ fn assert_and_perf_hooks_are_closed_runtime_helpers() {
     perf_hooks::clear_measures(None);
     perf_hooks::mark("start");
     perf_hooks::mark("end");
+    let detailed = perf_hooks::mark_with_detail("detail", Some("payload".to_string()));
+    assert_eq!(detailed.detail, Some("payload".to_string()));
     let measure = perf_hooks::measure("duration", Some("start"), Some("end"));
     assert_eq!(measure.name, "duration");
     assert!(measure.duration >= 0.0);
+    assert_eq!(measure.detail, None);
     assert_eq!(
         perf_hooks::get_entries_by_name("duration"),
         vec!["duration".to_string()]
     );
+    assert_eq!(
+        perf_hooks::get_entries_by_type("mark")
+            .iter()
+            .filter(|entry| entry.name == "start")
+            .count(),
+        1
+    );
+    assert_eq!(
+        perf_hooks::get_entries_by_name_entries("duration", Some("measure"))[0].entry_type,
+        "measure"
+    );
+    let observed = std::sync::Arc::new(std::sync::Mutex::new(0_usize));
+    let observed_ref = std::sync::Arc::clone(&observed);
+    let mut observer = perf_hooks::PerformanceObserver::new(move |list| {
+        *observed_ref.lock().unwrap() = list.get_entries_by_type("measure").len();
+    });
+    assert_eq!(
+        perf_hooks::PerformanceObserver::supported_entry_types(),
+        &["mark", "measure"]
+    );
+    observer.observe(&["measure"], true);
+    assert!(*observed.lock().unwrap() >= 1);
+    assert!(!observer.take_records().is_empty());
+    observer.disconnect();
+    assert!(!observer.connected());
     perf_hooks::clear_marks(Some("start"));
     assert!(perf_hooks::get_entries_by_name("start").is_empty());
 }
