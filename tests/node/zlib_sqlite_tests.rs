@@ -19,6 +19,19 @@ fn zlib_gzip_and_deflate_round_trip_buffers() {
         inflate.to_string(Some("utf8")).unwrap(),
         "framework ready compression"
     );
+
+    let raw = tsonic_node::zlib::deflate_raw_sync(&input).unwrap();
+    let raw_inflate = tsonic_node::zlib::inflate_raw_sync(&raw).unwrap();
+    assert_eq!(
+        raw_inflate.to_string(Some("utf8")).unwrap(),
+        "framework ready compression"
+    );
+
+    let unzip_gzip = tsonic_node::zlib::unzip_sync(&gzip).unwrap();
+    assert_eq!(
+        unzip_gzip.to_string(Some("utf8")).unwrap(),
+        "framework ready compression"
+    );
 }
 
 #[test]
@@ -39,6 +52,72 @@ fn zlib_brotli_round_trips_buffers() {
         decompressed.to_string(Some("utf8")).unwrap(),
         "brotli payload"
     );
+}
+
+#[test]
+fn zlib_options_constants_and_class_carriers_are_closed_shapes() {
+    let input = Buffer::from_string("class payload", Some("utf8")).unwrap();
+    let options = tsonic_node::zlib::ZlibOptions {
+        level: tsonic_node::zlib::constants::Z_BEST_SPEED,
+        max_output_length: Some(1024),
+        ..tsonic_node::zlib::ZlibOptions::default()
+    };
+    let compressed = tsonic_node::zlib::gzip_sync_with_options(&input, &options).unwrap();
+    assert_eq!(
+        tsonic_node::zlib::gunzip_sync(&compressed)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "class payload"
+    );
+    assert_eq!(tsonic_node::zlib::constants::GZIP, 3);
+    assert_eq!(tsonic_node::zlib::constants::BROTLI_MODE_TEXT, 1);
+    assert_eq!(tsonic_node::zlib::constants::ZSTD_CLEVEL_DEFAULT, 3);
+
+    let mut gzip = tsonic_node::zlib::create_gzip(Some(options));
+    let output = gzip.process(&input).unwrap();
+    assert_eq!(gzip.bytes_written(), input.len());
+    assert!(!gzip.closed());
+    gzip.params(
+        tsonic_node::zlib::constants::Z_BEST_COMPRESSION,
+        tsonic_node::zlib::constants::Z_DEFAULT_STRATEGY,
+        || {},
+    );
+    let flushed = std::cell::Cell::new(false);
+    gzip.flush(Some(|| flushed.set(true)));
+    assert!(flushed.get());
+    gzip.reset();
+    assert_eq!(gzip.bytes_written(), 0);
+    let closed = std::cell::Cell::new(false);
+    gzip.close(Some(|| closed.set(true)));
+    assert!(closed.get());
+    assert!(gzip.closed());
+
+    let mut gunzip = tsonic_node::zlib::create_gunzip(None);
+    assert_eq!(
+        gunzip
+            .process(&output)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "class payload"
+    );
+
+    let mut brotli = tsonic_node::zlib::create_brotli_compress(Some(Default::default()));
+    let brotli_output = brotli.process(&input).unwrap();
+    let mut brotli_decode = tsonic_node::zlib::create_brotli_decompress(Some(Default::default()));
+    assert_eq!(
+        brotli_decode
+            .process(&brotli_output)
+            .unwrap()
+            .to_string(Some("utf8"))
+            .unwrap(),
+        "class payload"
+    );
+
+    assert!(tsonic_node::zlib::zstd_compress_sync(&input).is_err());
+    let mut zstd = tsonic_node::zlib::create_zstd_compress(Some(Default::default()));
+    assert!(zstd.process(&input).is_err());
 }
 
 #[test]

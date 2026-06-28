@@ -62,6 +62,8 @@ NODE-MODULE-WASI	wasi	module	hard-reject	N0	n/a	REJECT-NODE-WASI	WASI runtime em
 NODE-MODULE-WORKER-THREADS	worker_threads	module	implemented	N5	tsonic_node::worker_threads	NODE-WORKER-001	message channel and Rust closure worker substrate
 NODE-WORKER-OPTIONS	worker_threads	WorkerOptions/resourceLimits/environmentData/transfer markers	implemented	N32	tsonic_node::worker_threads::{WorkerOptions,ResourceLimits,set_environment_data,get_environment_data,mark_as_untransferable_token}	NODE-WORKER-002	closed worker options, resource-limit metadata, environment data, and transfer marker state
 NODE-MODULE-ZLIB	zlib	module	implemented	N9	tsonic_node::zlib	NODE-ZLIB-001	gzip/gunzip/deflate/inflate over approved flate2 dependency
+NODE-ZLIB-CLASSES	zlib	Zlib classes/options/constants/raw/unzip	implemented	N35	tsonic_node::zlib::{ZlibOptions,BrotliOptions,ZstdOptions,Zlib,create_gzip,create_gunzip,deflate_raw_sync,inflate_raw_sync,unzip_sync,constants}	NODE-ZLIB-002	stream-class carrier shape, bytesWritten, reset/flush/params/close, raw/unzip aliases, and constants
+NODE-ZLIB-ZSTD-GATE	zlib	ZstdCompress/ZstdDecompress	implemented	N35	tsonic_node::zlib::{create_zstd_compress,create_zstd_decompress,zstd_compress_sync,zstd_decompress_sync}	NODE-ZLIB-002	explicit dependency-gated Zstd unsupported error until approved zstd implementation lands
 NODE-FS-ACCESS	fs	accessSync	implemented	K	tsonic_node::fs::access_sync	NODE-FS-EXT-001	existence/access validation
 NODE-FS-APPEND-FILE	fs	appendFileSync	implemented	K	tsonic_node::fs::{append_file_sync_string,append_file_sync_buffer}	NODE-FS-EXT-001	string and buffer overloads
 NODE-FS-CHMOD	fs	chmodSync	implemented	K	tsonic_node::fs::chmod_sync	NODE-FS-EXT-001	numeric mode accepted; Windows maps writable bit
