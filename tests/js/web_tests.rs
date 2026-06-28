@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use tsonic_js::web::{
     AbortController, AbortSignal, AddEventListenerOptions, Blob, BlobPart, Body, CustomEvent,
-    DomException, Event, EventInit, EventTarget, File, FormData, FormDataValue, Headers, Navigator,
-    Request, Response, Storage,
+    DomException, Event, EventInit, EventTarget, File, FormData, FormDataValue, Headers,
+    ImportMeta, Navigator, Request, Response, Storage,
 };
 use tsonic_js::{JsObject, JsValue};
 
@@ -238,4 +238,21 @@ fn storage_and_navigator_cover_common_web_globals() {
     assert!(!navigator.platform().is_empty());
     assert_eq!(navigator.language(), "en-US");
     assert!(navigator.hardware_concurrency() >= 1);
+}
+
+#[test]
+fn import_meta_exposes_module_identity_and_safe_resolve() {
+    let meta = ImportMeta::new(
+        "file:///repo/src/app.ts",
+        "/repo/src",
+        "/repo/src/app.ts",
+        true,
+    );
+    assert_eq!(meta.url(), "file:///repo/src/app.ts");
+    assert_eq!(meta.dirname(), "/repo/src");
+    assert_eq!(meta.filename(), "/repo/src/app.ts");
+    assert!(meta.main());
+    assert_eq!(meta.resolve("./dep.ts"), "file:///repo/src/./dep.ts");
+    assert_eq!(meta.resolve("node:fs"), "node:fs");
+    assert_eq!(meta.resolve("/tmp/x.ts"), "file:///tmp/x.ts");
 }

@@ -39,5 +39,5 @@ pub use crate::value::JsValue;
 pub use crate::web::{
     AbortController, AbortSignal, AddEventListenerOptions, Blob, BlobPart, Body, CustomEvent,
     DomException, Event, EventInit, EventListenerOptions, EventTarget, File, FormData,
-    FormDataValue, Headers, Navigator, Request, Response, Storage,
+    FormDataValue, Headers, ImportMeta, Navigator, Request, Response, Storage,
 };

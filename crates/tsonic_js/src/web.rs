@@ -853,6 +853,61 @@ impl Default for Navigator {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportMeta {
+    url: String,
+    dirname: String,
+    filename: String,
+    main: bool,
+}
+
+impl ImportMeta {
+    pub fn new(
+        url: impl Into<String>,
+        dirname: impl Into<String>,
+        filename: impl Into<String>,
+        main: bool,
+    ) -> Self {
+        Self {
+            url: url.into(),
+            dirname: dirname.into(),
+            filename: filename.into(),
+            main,
+        }
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    pub fn dirname(&self) -> &str {
+        &self.dirname
+    }
+
+    pub fn filename(&self) -> &str {
+        &self.filename
+    }
+
+    pub fn main(&self) -> bool {
+        self.main
+    }
+
+    pub fn resolve(&self, specifier: &str) -> String {
+        if specifier.starts_with("node:")
+            || specifier.starts_with("file:")
+            || specifier.starts_with("http://")
+            || specifier.starts_with("https://")
+        {
+            return specifier.to_string();
+        }
+        if specifier.starts_with('/') {
+            return format!("file://{specifier}");
+        }
+        let base = self.dirname.trim_end_matches('/');
+        format!("file://{base}/{specifier}")
+    }
+}
+
 fn normalize_header_name(key: impl AsRef<str>) -> String {
     key.as_ref().trim().to_ascii_lowercase()
 }
