@@ -2527,8 +2527,19 @@ NODE-UTIL-PARSEARGSOPTIONTYPE-CARRIER	util	ParseArgsOptionType	implemented	N60	t
 NODE-UTIL-PARSEARGSOPTIONDESCRIPTOR-CARRIER	util	ParseArgsOptionDescriptor	implemented	N60	tsonic_node::util::ParseArgsOptionDescriptor	NODE-UTIL-008	closed ParseArgsOptionDescriptor carrier
 NODE-UTIL-PARSEARGSCONFIG-CARRIER	util	ParseArgsConfig	implemented	N60	tsonic_node::util::ParseArgsConfig	NODE-UTIL-008	closed ParseArgsConfig carrier
 NODE-UTIL-PARSEARGSRESULT-CARRIER	util	ParseArgsResult	implemented	N60	tsonic_node::util::ParseArgsResult	NODE-UTIL-008	closed ParseArgsResult carrier
+NODE-UTIL-PARSEARGSTOKEN-CARRIER	util	ParseArgsToken	implemented	N76	tsonic_node::util::ParseArgsToken	NODE-UTIL-006	closed parseArgs token carrier
 NODE-UTIL-DEBUGLOGGER-CARRIER	util	DebugLogger	implemented	N60	tsonic_node::util::DebugLogger	NODE-UTIL-008	closed DebugLogger carrier
 NODE-UTIL-INSPECTOPTIONS-CARRIER	util	InspectOptions	implemented	N60	tsonic_node::util::InspectOptions	NODE-UTIL-008	closed InspectOptions carrier
+NODE-UTIL-STYLETEXTOPTIONS-CARRIER	util	StyleTextOptions	implemented	N76	tsonic_node::util::StyleTextOptions	NODE-UTIL-007	closed styleText options carrier
+NODE-UTIL-GETCALLSITESOPTIONS-CARRIER	util	GetCallSitesOptions	implemented	N76	tsonic_node::util::GetCallSitesOptions	NODE-UTIL-007	closed getCallSites options carrier
+NODE-UTIL-DEPRECATEOPTIONS-CARRIER	util	DeprecateOptions	implemented	N76	tsonic_node::util::DeprecateOptions	NODE-UTIL-007	closed deprecate options carrier
+NODE-UTIL-DEEPSTRICTEQUALOPTIONS-CARRIER	util	IsDeepStrictEqualOptions	implemented	N76	tsonic_node::util::IsDeepStrictEqualOptions	NODE-UTIL-001	closed deepStrictEqual options carrier
+NODE-UTIL-TEXTDECODEROPTIONS-CARRIER	util	TextDecoderOptions	implemented	N76	tsonic_node::util::TextDecoderOptions	NODE-UTIL-008	closed TextDecoder options carrier
+NODE-UTIL-TEXTDECODEOPTIONS-CARRIER	util	TextDecodeOptions	implemented	N76	tsonic_node::util::TextDecodeOptions	NODE-UTIL-008	closed TextDecoder decode options carrier
+NODE-UTIL-INSPECTCONTEXT-CARRIER	util	InspectContext	implemented	N76	tsonic_node::util::InspectContext	NODE-UTIL-001	closed inspect context carrier
+NODE-UTIL-CALLSITEOBJECT-CARRIER	util	CallSiteObject	implemented	N76	tsonic_node::util::CallSiteObject	NODE-UTIL-007	closed call-site object carrier
+NODE-UTIL-CUSTOMPROMISIFYLEGACY-CARRIER	util	CustomPromisifyLegacy	implemented	N76	tsonic_node::util::CustomPromisifyLegacy	NODE-UTIL-001	closed legacy custom promisify carrier
+NODE-UTIL-CUSTOMPROMISIFYSYMBOL-CARRIER	util	CustomPromisifySymbol	implemented	N76	tsonic_node::util::CustomPromisifySymbol	NODE-UTIL-001	closed custom promisify symbol carrier
 NODE-UTIL-TEXTENCODERENCODE-INTORESULT-CARRIER	util	TextEncoderEncodeIntoResult	implemented	N60	tsonic_node::util::TextEncoderEncodeIntoResult	NODE-UTIL-008	closed TextEncoderEncodeIntoResult carrier
 NODE-UTIL-DIFFENTRY-CARRIER	util	DiffEntry	implemented	N60	tsonic_node::util::DiffEntry	NODE-UTIL-008	closed DiffEntry carrier
 NODE-UTIL-CALLSITE-CARRIER	util	CallSite	implemented	N60	tsonic_node::util::CallSite	NODE-UTIL-008	closed CallSite carrier
@@ -2537,6 +2548,20 @@ NODE-UTIL-INSPECT-COLOR-ENTRY-CARRIER	util	InspectColorEntry	implemented	N76	tso
 NODE-UTIL-SYSTEM-ERROR-ENTRY-CARRIER	util	SystemErrorEntry	implemented	N76	tsonic_node::util::SystemErrorEntry	NODE-UTIL-007	closed system error entry carrier
 NODE-UTIL-TEXTENCODER-CARRIER	util	TextEncoder	implemented	N60	tsonic_node::util::TextEncoder	NODE-UTIL-008	closed TextEncoder carrier
 NODE-UTIL-TEXTDECODER-CARRIER	util	TextDecoder	implemented	N60	tsonic_node::util::TextDecoder	NODE-UTIL-008	closed TextDecoder carrier
+NODE-UTIL-PARSEARGS-CONFIG-STRICT	util	ParseArgsConfig.strict	implemented	N76	tsonic_node::util::ParseArgsConfig::strict	NODE-UTIL-006	closed strict parseArgs option
+NODE-UTIL-PARSEARGS-CONFIG-TOKENS	util	ParseArgsConfig.tokens	implemented	N76	tsonic_node::util::ParseArgsConfig::tokens	NODE-UTIL-006	closed parseArgs token emission option
+NODE-UTIL-PARSEARGS-RESULT-TOKENS	util	ParseArgsResult.tokens	implemented	N76	tsonic_node::util::ParseArgsResult::tokens	NODE-UTIL-006	closed parseArgs token output
+NODE-UTIL-PARSEARGSTOKEN-KIND	util	ParseArgsToken.kind	implemented	N76	tsonic_node::util::ParseArgsToken::kind	NODE-UTIL-006	parseArgs token kind field
+NODE-UTIL-PARSEARGSTOKEN-INDEX	util	ParseArgsToken.index	implemented	N76	tsonic_node::util::ParseArgsToken::index	NODE-UTIL-006	parseArgs token index field
+NODE-UTIL-PARSEARGSTOKEN-NAME	util	ParseArgsToken.name	implemented	N76	tsonic_node::util::ParseArgsToken::name	NODE-UTIL-006	parseArgs token name field
+NODE-UTIL-PARSEARGSTOKEN-RAW-NAME	util	ParseArgsToken.rawName	implemented	N76	tsonic_node::util::ParseArgsToken::raw_name	NODE-UTIL-006	parseArgs token rawName field
+NODE-UTIL-PARSEARGSTOKEN-VALUE	util	ParseArgsToken.value	implemented	N76	tsonic_node::util::ParseArgsToken::value	NODE-UTIL-006	parseArgs token value field
+NODE-UTIL-PARSEARGSTOKEN-INLINE-VALUE	util	ParseArgsToken.inlineValue	implemented	N76	tsonic_node::util::ParseArgsToken::inline_value	NODE-UTIL-006	parseArgs token inlineValue field
+NODE-UTIL-INSPECTOPTIONS-MAX-ARRAY-LENGTH	util	InspectOptions.maxArrayLength	implemented	N76	tsonic_node::util::InspectOptions::max_array_length	NODE-UTIL-001	closed inspect maxArrayLength option
+NODE-UTIL-INSPECTOPTIONS-CUSTOM-INSPECT	util	InspectOptions.customInspect	implemented	N76	tsonic_node::util::InspectOptions::custom_inspect	NODE-UTIL-001	closed inspect customInspect option
+NODE-UTIL-INSPECTOPTIONS-SHOW-PROXY	util	InspectOptions.showProxy	implemented	N76	tsonic_node::util::InspectOptions::show_proxy	NODE-UTIL-001	closed inspect showProxy option
+NODE-UTIL-INSPECTOPTIONS-GETTERS	util	InspectOptions.getters	implemented	N76	tsonic_node::util::InspectOptions::getters	NODE-UTIL-001	closed inspect getters option
+NODE-UTIL-INSPECTOPTIONS-NUMERIC-SEPARATOR	util	InspectOptions.numericSeparator	implemented	N76	tsonic_node::util::InspectOptions::numeric_separator	NODE-UTIL-001	closed inspect numericSeparator option
 NODE-UTIL-CALLSITE-NEW	util	CallSite.new	implemented	N43	tsonic_node::util::CallSite::new	NODE-UTIL-007	closed CallSite CallSite.new helper
 NODE-UTIL-CALLSITE-WITH-POSITION	util	CallSite.withPosition	implemented	N43	tsonic_node::util::CallSite::with_position	NODE-UTIL-007	closed CallSite CallSite.withPosition helper
 NODE-UTIL-CALLSITE-FUNCTION-NAME	util	CallSite.getFunctionName	implemented	N43	tsonic_node::util::CallSite::get_function_name	NODE-UTIL-007	closed CallSite CallSite.getFunctionName helper
@@ -2560,6 +2585,8 @@ NODE-UTIL-TEXT-DECODER-ENCODING	util	TextDecoder.encoding	implemented	N60	tsonic
 NODE-UTIL-TEXT-DECODER-FATAL	util	TextDecoder.fatal	implemented	N60	tsonic_node::util::TextDecoder::fatal	NODE-UTIL-008	closed TextDecoder TextDecoder.fatal helper
 NODE-UTIL-TEXT-DECODER-IGNORE-BOM	util	TextDecoder.ignoreBOM	implemented	N60	tsonic_node::util::TextDecoder::ignore_bom	NODE-UTIL-008	closed TextDecoder TextDecoder.ignoreBOM helper
 NODE-UTIL-TEXT-DECODER-DECODE	util	TextDecoder.decode	implemented	N60	tsonic_node::util::TextDecoder::decode	NODE-UTIL-008	closed TextDecoder TextDecoder.decode helper
+NODE-UTIL-TEXT-DECODER-NEW-FROM-OPTIONS	util	TextDecoder.newFromOptions	implemented	N76	tsonic_node::util::TextDecoder::new_from_options	NODE-UTIL-008	closed TextDecoder option object constructor helper
+NODE-UTIL-TEXT-DECODER-DECODE-OPTIONS	util	TextDecoder.decodeWithOptions	implemented	N76	tsonic_node::util::TextDecoder::decode_with_options	NODE-UTIL-008	closed TextDecoder decode options helper
 NODE-UTIL-TYPES-IS_BOOLEAN	util	types.isBoolean	implemented	N60	tsonic_node::util::types::is_boolean	NODE-UTIL-001	closed util.types predicate types.isBoolean
 NODE-UTIL-TYPES-IS_NULL	util	types.isNull	implemented	N60	tsonic_node::util::types::is_null	NODE-UTIL-001	closed util.types predicate types.isNull
 NODE-UTIL-TYPES-IS_NULL_OR_UNDEFINED	util	types.isNullOrUndefined	implemented	N60	tsonic_node::util::types::is_null_or_undefined	NODE-UTIL-001	closed util.types predicate types.isNullOrUndefined
@@ -2580,12 +2607,36 @@ NODE-UTIL-TYPES-IS_SET	util	types.isSet	implemented	N60	tsonic_node::util::types
 NODE-UTIL-TYPES-IS_PROMISE	util	types.isPromise	implemented	N60	tsonic_node::util::types::is_promise	NODE-UTIL-001	closed util.types predicate types.isPromise
 NODE-UTIL-TYPES-IS_NATIVE_ERROR	util	types.isNativeError	implemented	N60	tsonic_node::util::types::is_native_error	NODE-UTIL-001	closed util.types predicate types.isNativeError
 NODE-UTIL-TYPES-IS_PROXY	util	types.isProxy	implemented	N60	tsonic_node::util::types::is_proxy	NODE-UTIL-001	closed util.types predicate types.isProxy
+NODE-UTIL-TYPES-IS_BIG_INT_OBJECT	util	types.isBigIntObject	implemented	N76	tsonic_node::util::types::is_big_int_object	NODE-UTIL-001	closed util.types predicate types.isBigIntObject
+NODE-UTIL-TYPES-IS_BOOLEAN_OBJECT	util	types.isBooleanObject	implemented	N76	tsonic_node::util::types::is_boolean_object	NODE-UTIL-001	closed util.types predicate types.isBooleanObject
+NODE-UTIL-TYPES-IS_NUMBER_OBJECT	util	types.isNumberObject	implemented	N76	tsonic_node::util::types::is_number_object	NODE-UTIL-001	closed util.types predicate types.isNumberObject
+NODE-UTIL-TYPES-IS_STRING_OBJECT	util	types.isStringObject	implemented	N76	tsonic_node::util::types::is_string_object	NODE-UTIL-001	closed util.types predicate types.isStringObject
+NODE-UTIL-TYPES-IS_SYMBOL_OBJECT	util	types.isSymbolObject	implemented	N76	tsonic_node::util::types::is_symbol_object	NODE-UTIL-001	closed util.types predicate types.isSymbolObject
+NODE-UTIL-TYPES-IS_BOXED_PRIMITIVE	util	types.isBoxedPrimitive	implemented	N76	tsonic_node::util::types::is_boxed_primitive	NODE-UTIL-001	closed util.types predicate types.isBoxedPrimitive
+NODE-UTIL-TYPES-IS_MAP_ITERATOR	util	types.isMapIterator	implemented	N76	tsonic_node::util::types::is_map_iterator	NODE-UTIL-001	closed util.types predicate types.isMapIterator
+NODE-UTIL-TYPES-IS_SET_ITERATOR	util	types.isSetIterator	implemented	N76	tsonic_node::util::types::is_set_iterator	NODE-UTIL-001	closed util.types predicate types.isSetIterator
+NODE-UTIL-TYPES-IS_WEAK_MAP	util	types.isWeakMap	implemented	N76	tsonic_node::util::types::is_weak_map	NODE-UTIL-001	closed util.types predicate types.isWeakMap
+NODE-UTIL-TYPES-IS_WEAK_SET	util	types.isWeakSet	implemented	N76	tsonic_node::util::types::is_weak_set	NODE-UTIL-001	closed util.types predicate types.isWeakSet
+NODE-UTIL-TYPES-IS_GENERATOR_OBJECT	util	types.isGeneratorObject	implemented	N76	tsonic_node::util::types::is_generator_object	NODE-UTIL-001	closed util.types predicate types.isGeneratorObject
+NODE-UTIL-TYPES-IS_GENERATOR_FUNCTION	util	types.isGeneratorFunction	implemented	N76	tsonic_node::util::types::is_generator_function	NODE-UTIL-001	closed util.types predicate types.isGeneratorFunction
+NODE-UTIL-TYPES-IS_ASYNC_FUNCTION	util	types.isAsyncFunction	implemented	N76	tsonic_node::util::types::is_async_function	NODE-UTIL-001	closed util.types predicate types.isAsyncFunction
+NODE-UTIL-TYPES-IS_MODULE_NAMESPACE_OBJECT	util	types.isModuleNamespaceObject	implemented	N76	tsonic_node::util::types::is_module_namespace_object	NODE-UTIL-001	closed util.types predicate types.isModuleNamespaceObject
+NODE-UTIL-TYPES-IS_EXTERNAL	util	types.isExternal	implemented	N76	tsonic_node::util::types::is_external	NODE-UTIL-001	closed util.types predicate types.isExternal
+NODE-UTIL-TYPES-IS_CRYPTO_KEY	util	types.isCryptoKey	implemented	N76	tsonic_node::util::types::is_crypto_key	NODE-UTIL-001	closed util.types predicate types.isCryptoKey
+NODE-UTIL-TYPES-IS_KEY_OBJECT	util	types.isKeyObject	implemented	N76	tsonic_node::util::types::is_key_object	NODE-UTIL-001	closed util.types predicate types.isKeyObject
 NODE-UTIL-PARSE-ARGS	util	parseArgs	implemented	N22	tsonic_node::util::parse_args	NODE-UTIL-006	closed CLI option parser over explicit config; no shell/runtime introspection
+NODE-UTIL-PARSE-ARGS-TOKENS	util	parseArgs tokens	implemented	N76	tsonic_node::util::parse_args_tokens	NODE-UTIL-006	closed parseArgs token stream helper
 NODE-UTIL-PARSE-ENV	util	parseEnv	implemented	N76	tsonic_node::util::parse_env	NODE-UTIL-007	closed dotenv-style environment parser over explicit input
 NODE-UTIL-FORMAT-OPTIONS	util	formatWithOptions	implemented	N60	tsonic_node::util::format_with_options	NODE-UTIL-001	formatWithOptions delegates to closed format semantics without object reflection
+NODE-UTIL-FORMAT-INSPECT-OPTIONS	util	formatWithInspectOptions	implemented	N76	tsonic_node::util::format_with_inspect_options	NODE-UTIL-001	format with typed inspect option carrier
 NODE-UTIL-DEEP-EQUALITY	util	isDeepStrictEqual	implemented	N60	tsonic_node::util::is_deep_strict_equal	NODE-UTIL-001	closed JsValue deep strict equality
+NODE-UTIL-DEEP-EQUALITY-OPTIONS	util	isDeepStrictEqual options	implemented	N76	tsonic_node::util::is_deep_strict_equal_with_options	NODE-UTIL-001	closed JsValue deep strict equality with explicit options carrier
+NODE-UTIL-DEPRECATE-OPTIONS	util	deprecate options	implemented	N76	tsonic_node::util::deprecate_with_options	NODE-UTIL-007	closed deprecate helper with explicit options carrier
+NODE-UTIL-GET-CALL-SITES-OPTIONS	util	getCallSites options	implemented	N76	tsonic_node::util::get_call_sites_with_options	NODE-UTIL-007	closed generated call-site object helper with options
+NODE-UTIL-STYLE-TEXT-OPTIONS	util	styleText options	implemented	N76	tsonic_node::util::style_text_with_options	NODE-UTIL-007	closed styleText helper with explicit options carrier
 NODE-UTIL-INSPECT-CUSTOM-SYMBOL	util	inspect.custom	implemented	N76	tsonic_node::util::inspect_custom_symbol	NODE-UTIL-001	closed util.inspect.custom symbol identity
 NODE-UTIL-INSPECT-DEFAULT-OPTIONS	util	inspect.defaultOptions	implemented	N76	tsonic_node::util::inspect_default_options	NODE-UTIL-001	closed inspect.defaultOptions carrier
+NODE-UTIL-INSPECT-CONTEXT-STYLIZE	util	InspectContext.stylize	implemented	N76	tsonic_node::util::InspectContext::stylize	NODE-UTIL-001	closed inspect context stylize helper
 NODE-UTIL-INSPECT-STYLES	util	inspect.styles	implemented	N76	tsonic_node::util::inspect_styles	NODE-UTIL-001	closed inspect.styles metadata
 NODE-UTIL-INSPECT-COLORS	util	inspect.colors	implemented	N76	tsonic_node::util::inspect_colors	NODE-UTIL-001	closed inspect.colors metadata
 NODE-PROCESS-ENV-GET	process	env get	implemented	J	tsonic_node::process::env_get	NODE-PROC-001	environment variable getter

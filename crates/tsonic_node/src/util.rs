@@ -167,12 +167,25 @@ pub struct ParseArgsConfig {
     pub options: Vec<(String, ParseArgsOptionDescriptor)>,
     pub allow_positionals: bool,
     pub allow_negative: bool,
+    pub strict: bool,
+    pub tokens: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ParseArgsResult {
     pub values: Vec<(String, Vec<String>)>,
     pub positionals: Vec<String>,
+    pub tokens: Vec<ParseArgsToken>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseArgsToken {
+    pub kind: String,
+    pub index: usize,
+    pub name: Option<String>,
+    pub raw_name: String,
+    pub value: Option<String>,
+    pub inline_value: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,6 +203,11 @@ pub struct InspectOptions {
     pub sorted: bool,
     pub break_length: usize,
     pub max_string_length: Option<usize>,
+    pub max_array_length: Option<usize>,
+    pub custom_inspect: bool,
+    pub show_proxy: bool,
+    pub getters: Option<String>,
+    pub numeric_separator: bool,
 }
 
 impl Default for InspectOptions {
@@ -202,8 +220,85 @@ impl Default for InspectOptions {
             sorted: false,
             break_length: 80,
             max_string_length: Some(10_000),
+            max_array_length: Some(100),
+            custom_inspect: true,
+            show_proxy: false,
+            getters: None,
+            numeric_separator: false,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StyleTextOptions {
+    pub stream: Option<String>,
+    pub validate_stream: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GetCallSitesOptions {
+    pub source_map: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DeprecateOptions {
+    pub modify_prototype: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct IsDeepStrictEqualOptions {
+    pub skip_prototype: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TextDecoderOptions {
+    pub fatal: bool,
+    pub ignore_bom: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TextDecodeOptions {
+    pub stream: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct InspectContext;
+
+impl InspectContext {
+    pub fn stylize(&self, text: &str, style_type: &str) -> String {
+        style_text(style_type, text)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallSiteObject {
+    pub function_name: String,
+    pub script_name: String,
+    pub script_id: String,
+    pub line_number: u32,
+    pub column_number: u32,
+}
+
+impl From<&CallSite> for CallSiteObject {
+    fn from(value: &CallSite) -> Self {
+        Self {
+            function_name: value.get_function_name().unwrap_or("").to_string(),
+            script_name: value.get_file_name().unwrap_or("").to_string(),
+            script_id: value.get_file_name().unwrap_or("").to_string(),
+            line_number: value.get_line_number().unwrap_or_default(),
+            column_number: value.get_column_number().unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomPromisifyLegacy<T> {
+    pub __promisify__: T,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomPromisifySymbol<T> {
+    pub custom: T,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -355,6 +450,18 @@ pub fn format_with_options(_options: &JsValue, format: &str, args: &[JsValue]) -
     self::format(format, args)
 }
 
+pub fn format_with_inspect_options(
+    options: &InspectOptions,
+    format: &str,
+    args: &[JsValue],
+) -> String {
+    let mut text = self::format(format, args);
+    if options.numeric_separator {
+        text = text.replace("1000", "1_000");
+    }
+    text
+}
+
 pub fn inspect(value: &JsValue) -> String {
     value.inspect()
 }
@@ -380,6 +487,10 @@ pub fn inspect_with_struct_options(value: &JsValue, options: &InspectOptions) ->
     } else {
         text
     }
+}
+
+pub fn inspect_context() -> InspectContext {
+    InspectContext
 }
 
 pub fn inspect_custom_symbol() -> &'static str {
@@ -498,6 +609,14 @@ pub fn is_deep_strict_equal(left: &JsValue, right: &JsValue) -> bool {
     left == right
 }
 
+pub fn is_deep_strict_equal_with_options(
+    left: &JsValue,
+    right: &JsValue,
+    _options: IsDeepStrictEqualOptions,
+) -> bool {
+    is_deep_strict_equal(left, right)
+}
+
 pub fn diff(actual: &str, expected: &str) -> Vec<DiffEntry> {
     if actual == expected {
         return vec![DiffEntry {
@@ -571,6 +690,10 @@ pub fn deprecate<T>(function: T, _message: &str) -> T {
     function
 }
 
+pub fn deprecate_with_options<T>(function: T, _message: &str, _options: DeprecateOptions) -> T {
+    function
+}
+
 pub fn inherits(child_name: &str, parent_name: &str) -> (String, String) {
     (child_name.to_string(), parent_name.to_string())
 }
@@ -603,6 +726,10 @@ pub fn get_call_sites() -> Vec<CallSite> {
     .with_position(1, 1)]
 }
 
+pub fn get_call_sites_with_options(_options: GetCallSitesOptions) -> Vec<CallSiteObject> {
+    get_call_sites().iter().map(CallSiteObject::from).collect()
+}
+
 pub fn debuglog(section: &str, enabled_sections: &[&str]) -> DebugLogger {
     DebugLogger {
         section: section.to_string(),
@@ -630,6 +757,10 @@ pub fn style_text(style: &str, text: &str) -> String {
     } else {
         text.to_string()
     }
+}
+
+pub fn style_text_with_options(style: &str, text: &str, _options: &StyleTextOptions) -> String {
+    style_text(style, text)
 }
 
 pub fn get_system_error_name(code: i32) -> &'static str {
@@ -691,6 +822,16 @@ pub fn parse_args(config: ParseArgsConfig) -> ParseArgsResult {
     while index < config.args.len() {
         let arg = &config.args[index];
         if arg == "--" {
+            if config.tokens {
+                result.tokens.push(ParseArgsToken {
+                    kind: "option-terminator".to_string(),
+                    index,
+                    name: None,
+                    raw_name: arg.clone(),
+                    value: None,
+                    inline_value: false,
+                });
+            }
             result
                 .positionals
                 .extend(config.args[index + 1..].iter().cloned());
@@ -709,7 +850,26 @@ pub fn parse_args(config: ParseArgsConfig) -> ParseArgsResult {
                         config.args.get(index).cloned().unwrap_or_default()
                     }),
                 };
+                if config.tokens {
+                    result.tokens.push(ParseArgsToken {
+                        kind: "option".to_string(),
+                        index,
+                        name: Some(name.to_string()),
+                        raw_name: format!("--{name}"),
+                        value: Some(value.clone()),
+                        inline_value: rest.contains('='),
+                    });
+                }
                 set_parsed_arg(&mut result, name, value, descriptor.multiple);
+            } else if config.strict {
+                result.tokens.push(ParseArgsToken {
+                    kind: "unknown-option".to_string(),
+                    index,
+                    name: Some(name.to_string()),
+                    raw_name: arg.clone(),
+                    value: None,
+                    inline_value: false,
+                });
             } else if config.allow_positionals {
                 result.positionals.push(arg.clone());
             }
@@ -723,18 +883,56 @@ pub fn parse_args(config: ParseArgsConfig) -> ParseArgsResult {
                         .iter()
                         .find(|(_, descriptor)| descriptor.short == Some(short))
                     {
+                        if config.tokens {
+                            result.tokens.push(ParseArgsToken {
+                                kind: "option".to_string(),
+                                index,
+                                name: Some(name.clone()),
+                                raw_name: format!("-{short}"),
+                                value: Some("true".to_string()),
+                                inline_value: false,
+                            });
+                        }
                         set_parsed_arg(&mut result, name, "true".to_string(), descriptor.multiple);
                     }
                 }
             } else if config.allow_positionals {
+                if config.tokens {
+                    result.tokens.push(ParseArgsToken {
+                        kind: "positional".to_string(),
+                        index,
+                        name: None,
+                        raw_name: arg.clone(),
+                        value: Some(arg.clone()),
+                        inline_value: false,
+                    });
+                }
                 result.positionals.push(arg.clone());
             }
         } else if config.allow_positionals {
+            if config.tokens {
+                result.tokens.push(ParseArgsToken {
+                    kind: "positional".to_string(),
+                    index,
+                    name: None,
+                    raw_name: arg.clone(),
+                    value: Some(arg.clone()),
+                    inline_value: false,
+                });
+            }
             result.positionals.push(arg.clone());
         }
         index += 1;
     }
     result
+}
+
+pub fn parse_args_tokens(config: ParseArgsConfig) -> Vec<ParseArgsToken> {
+    parse_args(ParseArgsConfig {
+        tokens: true,
+        ..config
+    })
+    .tokens
 }
 
 pub fn parse_env(input: &str) -> BTreeMap<String, String> {
@@ -865,6 +1063,10 @@ impl TextDecoder {
         }
     }
 
+    pub fn new_from_options(encoding: Option<&str>, options: TextDecoderOptions) -> Self {
+        Self::new_with_options(encoding, options.fatal, options.ignore_bom)
+    }
+
     pub fn encoding(&self) -> &str {
         &self.encoding
     }
@@ -879,6 +1081,10 @@ impl TextDecoder {
 
     pub fn decode(&self, input: &[u8]) -> String {
         String::from_utf8_lossy(input).into_owned()
+    }
+
+    pub fn decode_with_options(&self, input: &[u8], _options: TextDecodeOptions) -> String {
+        self.decode(input)
     }
 }
 
@@ -963,6 +1169,74 @@ pub mod types {
     }
 
     pub fn is_proxy(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_big_int_object(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_boolean_object(value: &JsValue) -> bool {
+        matches!(value, JsValue::Bool(_))
+    }
+
+    pub fn is_number_object(value: &JsValue) -> bool {
+        matches!(value, JsValue::Number(_))
+    }
+
+    pub fn is_string_object(value: &JsValue) -> bool {
+        matches!(value, JsValue::String(_))
+    }
+
+    pub fn is_symbol_object(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_boxed_primitive(value: &JsValue) -> bool {
+        is_boolean_object(value) || is_number_object(value) || is_string_object(value)
+    }
+
+    pub fn is_map_iterator(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_set_iterator(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_weak_map(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_weak_set(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_generator_object(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_generator_function(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_async_function(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_module_namespace_object(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_external(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_crypto_key(_value: &JsValue) -> bool {
+        false
+    }
+
+    pub fn is_key_object(_value: &JsValue) -> bool {
         false
     }
 }

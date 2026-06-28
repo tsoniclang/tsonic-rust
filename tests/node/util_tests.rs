@@ -20,6 +20,14 @@ fn util_format_and_inspect_closed_values() {
         util::format_with_options(&JsValue::Null, "%s", &[JsValue::String("x".to_string())]),
         "\"x\""
     );
+    let mut options = util::InspectOptions {
+        numeric_separator: true,
+        ..util::InspectOptions::default()
+    };
+    assert_eq!(
+        util::format_with_inspect_options(&options, "%d", &[JsValue::Number(1000.0)]),
+        "1_000"
+    );
     assert_eq!(util::inspect(&JsValue::Null), "null");
     assert_eq!(util::inspect_custom_symbol(), "nodejs.util.inspect.custom");
     assert_eq!(
@@ -30,15 +38,23 @@ fn util_format_and_inspect_closed_values() {
         util::inspect_with_options(&JsValue::Null, &JsValue::Null),
         "null"
     );
-    let mut options = util::default_inspect_options();
     options.max_string_length = Some(3);
+    options.numeric_separator = false;
     assert_eq!(
         util::inspect_with_struct_options(&JsValue::String("abcdef".to_string()), &options),
         "\"ab..."
     );
+    assert!(options.custom_inspect);
+    assert!(!options.show_proxy);
+    assert_eq!(options.max_array_length, Some(100));
+    assert_eq!(options.getters, None);
     assert_eq!(
         util::inspect_default_options(),
         util::default_inspect_options()
+    );
+    assert_eq!(
+        util::inspect_context().stylize("x", "red"),
+        "\u{1b}[31mx\u{1b}[0m"
     );
     let styles = util::inspect_styles();
     assert!(styles
@@ -53,6 +69,13 @@ fn util_format_and_inspect_closed_values() {
     assert_eq!(diff[1].operation, -1);
     assert_eq!(diff[2].operation, 1);
     assert!(util::is_deep_strict_equal(&JsValue::Null, &JsValue::Null));
+    assert!(util::is_deep_strict_equal_with_options(
+        &JsValue::Null,
+        &JsValue::Null,
+        util::IsDeepStrictEqualOptions {
+            skip_prototype: true,
+        }
+    ));
     assert!(util::types::is_string(&JsValue::String("x".to_string())));
     assert!(util::types::is_number(&JsValue::Number(1.0)));
     assert!(util::types::is_boolean(&JsValue::Bool(true)));
@@ -81,6 +104,18 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     let decoder = util::TextDecoder::new_with_options(Some("utf-8"), true, true);
     assert!(decoder.fatal());
     assert!(decoder.ignore_bom());
+    let decoder = util::TextDecoder::new_from_options(
+        Some("utf-8"),
+        util::TextDecoderOptions {
+            fatal: false,
+            ignore_bom: true,
+        },
+    );
+    assert_eq!(
+        decoder.decode_with_options("ok".as_bytes(), util::TextDecodeOptions { stream: true }),
+        "ok"
+    );
+    assert!(decoder.ignore_bom());
 
     assert_eq!(
         util::strip_vt_control_characters("\u{1b}[31mred\u{1b}[0m"),
@@ -92,8 +127,22 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
         ("Child".to_string(), "Parent".to_string())
     );
     assert_eq!(util::deprecate(1, "deprecated"), 1);
+    assert_eq!(
+        util::deprecate_with_options(
+            1,
+            "deprecated",
+            util::DeprecateOptions {
+                modify_prototype: true,
+            },
+        ),
+        1
+    );
     assert_eq!(util::promisify(2), 2);
     assert_eq!(util::callbackify(3), 3);
+    let legacy = util::CustomPromisifyLegacy { __promisify__: 4 };
+    assert_eq!(legacy.__promisify__, 4);
+    let symbol = util::CustomPromisifySymbol { custom: 5 };
+    assert_eq!(symbol.custom, 5);
     let controller = AbortController::new();
     assert!(!util::aborted(&controller.signal()));
     controller.abort(JsValue::String("stop".to_string()));
@@ -106,7 +155,22 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     assert_eq!(sites[0].get_line_number(), Some(1));
     assert!(!sites[0].is_eval());
     assert!(!sites[0].is_native());
+    let site_objects =
+        util::get_call_sites_with_options(util::GetCallSitesOptions { source_map: true });
+    assert_eq!(site_objects[0].function_name, "getCallSites");
+    assert_eq!(site_objects[0].line_number, 1);
     assert_eq!(util::style_text("red", "x"), "\u{1b}[31mx\u{1b}[0m");
+    assert_eq!(
+        util::style_text_with_options(
+            "green",
+            "x",
+            &util::StyleTextOptions {
+                stream: Some("stderr".to_string()),
+                validate_stream: true,
+            },
+        ),
+        "\u{1b}[32mx\u{1b}[0m"
+    );
     assert_eq!(util::style_text("unknown", "x"), "x");
     assert_eq!(util::get_system_error_name(2), "ENOENT");
     assert_eq!(util::get_system_error_message(13), "permission denied");
@@ -138,6 +202,27 @@ fn util_text_codecs_control_helpers_and_runtime_predicates() {
     assert!(!util::types::is_promise(&JsValue::Null));
     assert!(!util::types::is_native_error(&JsValue::Null));
     assert!(!util::types::is_proxy(&JsValue::Null));
+    assert!(util::types::is_boolean_object(&JsValue::Bool(true)));
+    assert!(util::types::is_number_object(&JsValue::Number(1.0)));
+    assert!(util::types::is_string_object(&JsValue::String(
+        "x".to_string()
+    )));
+    assert!(util::types::is_boxed_primitive(&JsValue::String(
+        "x".to_string()
+    )));
+    assert!(!util::types::is_big_int_object(&JsValue::Null));
+    assert!(!util::types::is_symbol_object(&JsValue::Null));
+    assert!(!util::types::is_map_iterator(&JsValue::Null));
+    assert!(!util::types::is_set_iterator(&JsValue::Null));
+    assert!(!util::types::is_weak_map(&JsValue::Null));
+    assert!(!util::types::is_weak_set(&JsValue::Null));
+    assert!(!util::types::is_generator_object(&JsValue::Null));
+    assert!(!util::types::is_generator_function(&JsValue::Null));
+    assert!(!util::types::is_async_function(&JsValue::Null));
+    assert!(!util::types::is_module_namespace_object(&JsValue::Null));
+    assert!(!util::types::is_external(&JsValue::Null));
+    assert!(!util::types::is_crypto_key(&JsValue::Null));
+    assert!(!util::types::is_key_object(&JsValue::Null));
 }
 
 #[test]
@@ -221,6 +306,8 @@ fn util_mime_and_parse_args_cover_common_tooling_shapes() {
         ],
         allow_positionals: true,
         allow_negative: false,
+        strict: false,
+        tokens: true,
     });
     assert_eq!(
         parsed.values,
@@ -234,6 +321,32 @@ fn util_mime_and_parse_args_cover_common_tooling_shapes() {
         ]
     );
     assert_eq!(parsed.positionals, vec!["src/index.ts".to_string()]);
+    assert_eq!(
+        parsed
+            .tokens
+            .iter()
+            .map(|token| (token.kind.as_str(), token.raw_name.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("option", "--name"),
+            ("option", "-v"),
+            ("positional", "src/index.ts"),
+            ("option", "--tag"),
+            ("option", "--tag"),
+        ]
+    );
+    assert!(parsed.tokens[3].inline_value);
+
+    let tokens = util::parse_args_tokens(util::ParseArgsConfig {
+        args: vec!["--unknown".to_string()],
+        options: Vec::new(),
+        allow_positionals: true,
+        allow_negative: false,
+        strict: true,
+        tokens: false,
+    });
+    assert_eq!(tokens[0].kind, "unknown-option");
+    assert_eq!(tokens[0].name.as_deref(), Some("unknown"));
 
     let env = util::parse_env(
         r#"
