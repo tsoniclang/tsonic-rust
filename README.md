@@ -1,13 +1,11 @@
 # tsonic-rust
-Rust backend for Tsonic
+Rust backend/provider shell for Tsonic.
 
-## Naming convention
+Runtime crates are intentionally split into sibling repositories, matching the
+C# package layout:
 
-- Workspace crate package names intentionally use underscore identifiers (`tsonic_runtime`, `tsonic_js`, `tsonic_node`) so
-  package names align with the architecture spec and avoid hidden `package =` alias mapping in manifests.
+- `rust-runtime` / `tsonic_rust_runtime`
+- `rust-js` / `tsonic_rust_js`
+- `rust-nodejs` / `tsonic_rust_node`
 
-## Stage 1 surface contract
-
-- `tests/capabilities/stage1_inventory.tsv` is the committed JS/Node surface ledger.
-- The ledger classifies every tracked surface row as `implemented` or `hard-reject`; no deferred rows are allowed.
-- `tests/capability_ledger_tests.rs` gates API evidence, dead nested tests, dependency policy, and explicit unsupported classifications.
+This repository should not own JS/Node runtime surface implementations.
