@@ -1,7 +1,8 @@
 use tsonic_node::url::{
     can_parse, domain_to_ascii, domain_to_unicode, file_url_to_path, format, parse,
     path_to_file_url, resolve, url_pattern_can_parse, url_to_http_options, LegacyUrlObject, Url,
-    UrlPattern, UrlPatternInit, UrlPatternInput, UrlPatternOptions, UrlSearchParams,
+    UrlFormatOptions, UrlPattern, UrlPatternInit, UrlPatternInput, UrlPatternOptions,
+    UrlSearchParams,
 };
 
 #[test]
@@ -133,6 +134,15 @@ fn url_setters_and_file_url_helpers() {
     let file = path_to_file_url("/tmp/a.txt");
     assert_eq!(file.protocol(), "file:");
     assert_eq!(file_url_to_path(&file).unwrap(), "/tmp/a.txt");
+
+    let file_options = tsonic_node::url::FileUrlToPathOptions {
+        windows: Some(false),
+    };
+    let path_options = tsonic_node::url::PathToFileUrlOptions {
+        windows: Some(true),
+    };
+    assert_eq!(file_options.windows, Some(false));
+    assert_eq!(path_options.windows, Some(true));
 }
 
 #[test]
@@ -163,6 +173,16 @@ fn url_static_and_legacy_helpers_cover_common_node_shapes() {
         path: "/docs?q=1".to_string(),
     });
     assert_eq!(built, "https://example.com/docs?q=1#top");
+    let format_options = UrlFormatOptions {
+        auth: Some(true),
+        fragment: Some(true),
+        search: Some(true),
+        unicode: Some(false),
+    };
+    assert_eq!(format_options.auth, Some(true));
+    assert_eq!(format_options.fragment, Some(true));
+    assert_eq!(format_options.search, Some(true));
+    assert_eq!(format_options.unicode, Some(false));
 
     assert_eq!(
         resolve("https://example.com/base/file", "child").unwrap(),

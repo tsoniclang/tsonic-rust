@@ -144,6 +144,28 @@ pub struct LegacyUrlObject {
     pub path: String,
 }
 
+pub type UrlObject = LegacyUrlObject;
+pub type UrlWithStringQuery = LegacyUrlObject;
+pub type UrlWithParsedQuery = LegacyUrlObject;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct UrlFormatOptions {
+    pub auth: Option<bool>,
+    pub fragment: Option<bool>,
+    pub search: Option<bool>,
+    pub unicode: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FileUrlToPathOptions {
+    pub windows: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PathToFileUrlOptions {
+    pub windows: Option<bool>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpOptions {
     pub protocol: String,
