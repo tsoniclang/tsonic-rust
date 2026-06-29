@@ -271,6 +271,7 @@ pub struct ServerStreamResponseOptions {
 pub struct ServerStreamFileResponseOptions {
     pub offset: Option<u64>,
     pub length: Option<u64>,
+    pub stat_check: Option<bool>,
     pub wait_for_trailers: bool,
 }
 
@@ -512,6 +513,10 @@ impl Http2Stream {
         !self.sent_headers.is_empty()
     }
 
+    pub fn push_allowed(&self) -> bool {
+        !self.closed && !self.destroyed
+    }
+
     pub fn aborted(&self) -> bool {
         self.aborted
     }
@@ -711,6 +716,7 @@ pub struct ServerOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Http2Settings {
     pub header_table_size: u32,
+    pub enable_connect_protocol: Option<bool>,
     pub enable_push: bool,
     pub initial_window_size: u32,
     pub max_frame_size: u32,
@@ -722,6 +728,7 @@ impl Default for Http2Settings {
     fn default() -> Self {
         Self {
             header_table_size: 4096,
+            enable_connect_protocol: None,
             enable_push: true,
             initial_window_size: 65_535,
             max_frame_size: 16_384,
@@ -730,6 +737,8 @@ impl Default for Http2Settings {
         }
     }
 }
+
+pub type Settings = Http2Settings;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Http2SessionState {
@@ -744,6 +753,8 @@ pub struct Http2SessionState {
     pub inflate_dynamic_table_size: u32,
 }
 
+pub type SessionState = Http2SessionState;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Http2Server {
     secure: bool,
@@ -751,6 +762,8 @@ pub struct Http2Server {
     closed: bool,
     timeout: Option<u64>,
 }
+
+pub type Http2ServerCommon = Http2Server;
 
 impl Http2Server {
     pub fn options(&self) -> &ServerOptions {
@@ -769,6 +782,38 @@ impl Http2Server {
         self.timeout = Some(timeout_millis);
         if let Some(callback) = callback {
             callback();
+        }
+    }
+
+    pub fn update_settings(&mut self, settings: Settings) {
+        self.options
+            .settings
+            .insert("headerTableSize".to_string(), settings.header_table_size);
+        self.options
+            .settings
+            .insert("enablePush".to_string(), u32::from(settings.enable_push));
+        if let Some(enable_connect_protocol) = settings.enable_connect_protocol {
+            self.options.settings.insert(
+                "enableConnectProtocol".to_string(),
+                u32::from(enable_connect_protocol),
+            );
+        }
+        self.options.settings.insert(
+            "initialWindowSize".to_string(),
+            settings.initial_window_size,
+        );
+        self.options
+            .settings
+            .insert("maxFrameSize".to_string(), settings.max_frame_size);
+        if let Some(max_concurrent_streams) = settings.max_concurrent_streams {
+            self.options
+                .settings
+                .insert("maxConcurrentStreams".to_string(), max_concurrent_streams);
+        }
+        if let Some(max_header_list_size) = settings.max_header_list_size {
+            self.options
+                .settings
+                .insert("maxHeaderListSize".to_string(), max_header_list_size);
         }
     }
 

@@ -829,3 +829,44 @@ fn http2_exposes_documented_unsigned_numeric_constants() {
 fn http2_exposes_documented_signed_numeric_constants() {
     assert_eq!(http2::NGHTTP2_ERR_FRAME_SIZE_ERROR, -522i32);
 }
+
+#[test]
+fn http2_exposes_exact_settings_and_session_state_aliases() {
+    let settings: http2::Settings = http2::Http2Settings {
+        header_table_size: 4096,
+        enable_connect_protocol: Some(true),
+        enable_push: true,
+        initial_window_size: 65_535,
+        max_frame_size: 16_384,
+        max_concurrent_streams: Some(100),
+        max_header_list_size: Some(8192),
+    };
+    assert_eq!(settings.header_table_size, 4096);
+    assert_eq!(settings.enable_connect_protocol, Some(true));
+    assert!(settings.enable_push);
+    assert_eq!(settings.initial_window_size, 65_535);
+    assert_eq!(settings.max_frame_size, 16_384);
+    assert_eq!(settings.max_concurrent_streams, Some(100));
+    assert_eq!(settings.max_header_list_size, Some(8192));
+
+    let state: http2::SessionState = http2::Http2SessionState {
+        effective_local_window_size: 65_535,
+        effective_recv_data_length: 12,
+        next_stream_id: 3,
+        local_window_size: 65_000,
+        last_proc_stream_id: 1,
+        remote_window_size: 64_000,
+        outbound_queue_size: 2,
+        deflate_dynamic_table_size: 4096,
+        inflate_dynamic_table_size: 4096,
+    };
+    assert_eq!(state.effective_local_window_size, 65_535);
+    assert_eq!(state.effective_recv_data_length, 12);
+    assert_eq!(state.next_stream_id, 3);
+    assert_eq!(state.local_window_size, 65_000);
+    assert_eq!(state.last_proc_stream_id, 1);
+    assert_eq!(state.remote_window_size, 64_000);
+    assert_eq!(state.outbound_queue_size, 2);
+    assert_eq!(state.deflate_dynamic_table_size, 4096);
+    assert_eq!(state.inflate_dynamic_table_size, 4096);
+}

@@ -317,6 +317,20 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     assert!(server.options().allow_http1);
     server.set_timeout(100, Some(|| {}));
     assert_eq!(server.timeout(), Some(100));
+    server.update_settings(tsonic_node::http2::Settings {
+        header_table_size: 8192,
+        enable_connect_protocol: Some(true),
+        enable_push: false,
+        initial_window_size: 100_000,
+        max_frame_size: 16_384,
+        max_concurrent_streams: Some(200),
+        max_header_list_size: Some(16_384),
+    });
+    assert_eq!(
+        server.options().settings.get("enableConnectProtocol"),
+        Some(&1)
+    );
+    assert_eq!(server.options().settings.get("enablePush"), Some(&0));
     server.close();
     assert!(server.closed());
     let mut stream = tsonic_node::http2::Http2Stream::new(BTreeMap::from([
@@ -363,6 +377,7 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     stream.additional_headers(&BTreeMap::from([("x-extra".to_string(), "1".to_string())]));
     stream.respond_with_file("/tmp/file.txt", &BTreeMap::new());
     assert!(stream.headers_sent());
+    assert!(stream.push_allowed());
     assert_eq!(stream.sent_headers().len(), 2);
     assert_eq!(stream.sent_info_headers().len(), 1);
     stream.send_trailers(&BTreeMap::from([(
@@ -393,6 +408,7 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
         tsonic_node::http2::ServerStreamFileResponseOptions {
             offset: Some(2),
             length: Some(4),
+            stat_check: Some(true),
             wait_for_trailers: true,
         },
     );
@@ -404,6 +420,7 @@ fn https_http2_and_tls_validate_closed_request_shapes() {
     stream.close_with_code(tsonic_node::http2::NGHTTP2_NO_ERROR);
     assert_eq!(stream.rst_code(), tsonic_node::http2::NGHTTP2_NO_ERROR);
     assert!(stream.closed());
+    assert!(!stream.push_allowed());
     stream.destroy();
     assert!(stream.destroyed());
     stream.end();
