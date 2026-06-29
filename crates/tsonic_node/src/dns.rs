@@ -209,6 +209,7 @@ pub struct CaaRecord {
     pub critical: u8,
     pub issue: Option<String>,
     pub issue_wild: Option<String>,
+    pub iodef: Option<String>,
     pub contact_email: Option<String>,
     pub contact_phone: Option<String>,
 }
@@ -356,6 +357,7 @@ pub struct AnyCaaRecord {
     pub critical: u8,
     pub issue: Option<String>,
     pub issue_wild: Option<String>,
+    pub iodef: Option<String>,
     pub contact_email: Option<String>,
     pub contact_phone: Option<String>,
 }

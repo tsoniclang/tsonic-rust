@@ -5448,3 +5448,23 @@ NODE-EXACT-PROCESS-1A101C9F	process	HRTime.bigint	implemented	N99	tsonic_node::p
 NODE-EXACT-PROCESS-728124C3	process	Process.unregister	implemented	N99	tsonic_node::process::finalization_unregister	NODE-PROC-014	exact process finalization unregister declaration maps to closed finalization state helper
 NODE-EXACT-PROCESS-95784459	process	ProcessConfig.node_shared_v8	implemented	N99	tsonic_node::process::ProcessConfig::node_shared_js_engine	NODE-PROC-014	exact process config node_shared_v8 declaration maps to closed JS-engine-neutral config field
 NODE-EXACT-PROCESS-CE0E4D23	process	ProcessConfig.v8_use_snapshot	implemented	N99	tsonic_node::process::ProcessConfig::js_engine_use_snapshot	NODE-PROC-014	exact process config v8_use_snapshot declaration maps to closed JS-engine-neutral config field
+NODE-EXACT-DNS-009063F8	dns	AnyCnameRecord.type	implemented	N100	tsonic_node::dns::AnyCnameRecord::record_type	NODE-DNS-003	exact DNS declaration AnyCnameRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-0A8131A0	dns	AnyCnameRecord.value	implemented	N100	tsonic_node::dns::AnyCnameRecord::value	NODE-DNS-003	exact DNS declaration AnyCnameRecord.value maps to closed Rust DNS carrier
+NODE-EXACT-DNS-13DBF26D	dns	AnySoaRecord.type	implemented	N100	tsonic_node::dns::AnySoaRecord::record_type	NODE-DNS-003	exact DNS declaration AnySoaRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-284E3E54	dns	Resolver.constructor	implemented	N100	tsonic_node::dns::Resolver::new	NODE-DNS-003	exact DNS declaration Resolver.constructor maps to closed Rust DNS carrier
+NODE-EXACT-DNS-2E1B77B2	dns	AnyAaaaRecord.type	implemented	N100	tsonic_node::dns::AnyAaaaRecord::record_type	NODE-DNS-003	exact DNS declaration AnyAaaaRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-41417080	dns	AnyPtrRecord.value	implemented	N100	tsonic_node::dns::AnyPtrRecord::value	NODE-DNS-003	exact DNS declaration AnyPtrRecord.value maps to closed Rust DNS carrier
+NODE-EXACT-DNS-4F475DC3	dns	AnyNsRecord.type	implemented	N100	tsonic_node::dns::AnyNsRecord::record_type	NODE-DNS-003	exact DNS declaration AnyNsRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-4F62E331	dns	AnySrvRecord.type	implemented	N100	tsonic_node::dns::AnySrvRecord::record_type	NODE-DNS-003	exact DNS declaration AnySrvRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-63D042D0	dns	AnyTxtRecord.entries	implemented	N100	tsonic_node::dns::AnyTxtRecord::entries	NODE-DNS-003	exact DNS declaration AnyTxtRecord.entries maps to closed Rust DNS carrier
+NODE-EXACT-DNS-649AEF60	dns	AnyPtrRecord.type	implemented	N100	tsonic_node::dns::AnyPtrRecord::record_type	NODE-DNS-003	exact DNS declaration AnyPtrRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-6D87D86C	dns	AnyCaaRecord.type	implemented	N100	tsonic_node::dns::AnyCaaRecord::record_type	NODE-DNS-003	exact DNS declaration AnyCaaRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-6E298B76	dns	LookupAllOptions.all	implemented	N100	tsonic_node::dns::LookupAllOptions::all	NODE-DNS-003	exact DNS declaration LookupAllOptions.all maps to closed Rust DNS carrier
+NODE-EXACT-DNS-79A66CF1	dns	AnyNsRecord.value	implemented	N100	tsonic_node::dns::AnyNsRecord::value	NODE-DNS-003	exact DNS declaration AnyNsRecord.value maps to closed Rust DNS carrier
+NODE-EXACT-DNS-9F2AC4C6	dns	AnyTlsaRecord.type	implemented	N100	tsonic_node::dns::AnyTlsaRecord::record_type	NODE-DNS-003	exact DNS declaration AnyTlsaRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-A1B03D8A	dns	AnyNaptrRecord.type	implemented	N100	tsonic_node::dns::AnyNaptrRecord::record_type	NODE-DNS-003	exact DNS declaration AnyNaptrRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-B4FE507B	dns	AnyTxtRecord.type	implemented	N100	tsonic_node::dns::AnyTxtRecord::record_type	NODE-DNS-003	exact DNS declaration AnyTxtRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-B5AE2CB8	dns	LookupOneOptions.all	implemented	N100	tsonic_node::dns::LookupOneOptions::all	NODE-DNS-003	exact DNS declaration LookupOneOptions.all maps to closed Rust DNS carrier
+NODE-EXACT-DNS-E9178114	dns	AnyMxRecord.type	implemented	N100	tsonic_node::dns::AnyMxRecord::record_type	NODE-DNS-003	exact DNS declaration AnyMxRecord.type maps to closed Rust DNS carrier
+NODE-EXACT-DNS-F3F7C7E4	dns	CaaRecord.iodef	implemented	N100	tsonic_node::dns::CaaRecord::iodef	NODE-DNS-003	exact DNS declaration CaaRecord.iodef maps to closed Rust DNS carrier
+NODE-EXACT-DNS-F6E6EA1C	dns	AnyARecord.type	implemented	N100	tsonic_node::dns::AnyARecord::record_type	NODE-DNS-003	exact DNS declaration AnyARecord.type maps to closed Rust DNS carrier

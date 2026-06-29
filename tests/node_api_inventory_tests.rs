@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 const INVENTORY: &str = include_str!("capabilities/node_api_inventory.tsv");
 const FULL_INVENTORY: &str = include_str!("capabilities/node_api_full_inventory.csv");
-const EXPECTED_ROW_COUNT: usize = 5449;
+const EXPECTED_ROW_COUNT: usize = 5469;
 
 #[derive(Debug)]
 struct NodeApiRow<'a> {
@@ -38,7 +38,7 @@ fn node_api_inventory_is_complete_classified_and_owned() {
         *by_status.entry(row.status).or_default() += 1;
     }
 
-    assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 5436);
+    assert_eq!(by_status.get("implemented").copied().unwrap_or(0), 5456);
     assert_eq!(by_status.get("later").copied().unwrap_or(0), 0);
     assert_eq!(by_status.get("hard-reject").copied().unwrap_or(0), 13);
 }

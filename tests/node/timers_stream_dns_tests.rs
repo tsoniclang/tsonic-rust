@@ -745,10 +745,12 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
         critical: 0,
         issue: Some("letsencrypt.org".to_string()),
         issue_wild: None,
+        iodef: Some("mailto:ops@example".to_string()),
         contact_email: Some("ops@example".to_string()),
         contact_phone: None,
     };
     assert_eq!(caa.issue.as_deref(), Some("letsencrypt.org"));
+    assert_eq!(caa.iodef.as_deref(), Some("mailto:ops@example"));
     let naptr = dns::NaptrRecord {
         flags: "s".to_string(),
         service: "SIP+D2U".to_string(),
@@ -802,6 +804,13 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
         "CNAME"
     );
     assert_eq!(
+        dns::AnyCnameRecord {
+            value: "alias".to_string()
+        }
+        .value,
+        "alias"
+    );
+    assert_eq!(
         dns::AnyNsRecord {
             value: "ns".to_string()
         }
@@ -809,11 +818,25 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
         "NS"
     );
     assert_eq!(
+        dns::AnyNsRecord {
+            value: "ns".to_string()
+        }
+        .value,
+        "ns"
+    );
+    assert_eq!(
         dns::AnyPtrRecord {
             value: "ptr".to_string()
         }
         .record_type(),
         "PTR"
+    );
+    assert_eq!(
+        dns::AnyPtrRecord {
+            value: "ptr".to_string()
+        }
+        .value,
+        "ptr"
     );
     assert_eq!(
         dns::AnyMxRecord {
@@ -841,6 +864,13 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
         "TXT"
     );
     assert_eq!(
+        dns::AnyTxtRecord {
+            entries: vec!["txt".to_string()]
+        }
+        .entries,
+        vec!["txt".to_string()]
+    );
+    assert_eq!(
         dns::AnySoaRecord {
             nsname: "ns".to_string(),
             hostmaster: "hostmaster".to_string(),
@@ -858,6 +888,7 @@ fn dns_lookup_uses_platform_resolver_without_shelling_out() {
             critical: 0,
             issue: None,
             issue_wild: None,
+            iodef: Some("mailto:ops@example".to_string()),
             contact_email: None,
             contact_phone: None,
         }
