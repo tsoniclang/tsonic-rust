@@ -28,3 +28,5 @@ mod set_tests;
 mod string_tests;
 #[path = "js/typed_array_tests.rs"]
 mod typed_array_tests;
+#[path = "js/web_tests.rs"]
+mod web_tests;

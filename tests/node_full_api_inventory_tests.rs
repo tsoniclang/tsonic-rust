@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 const INVENTORY: &str = include_str!("capabilities/node_api_full_inventory.csv");
-const EXPECTED_ROW_COUNT: usize = 7_741;
-const EXPECTED_PHASE1_COUNT: usize = 1_157;
-const EXPECTED_LATER_COUNT: usize = 4_086;
-const EXPECTED_HARD_REJECT_COUNT: usize = 2_498;
+const EXPECTED_ROW_COUNT: usize = 8_671;
+const EXPECTED_PHASE1_COUNT: usize = 6_322;
+const EXPECTED_LATER_COUNT: usize = 0;
+const EXPECTED_HARD_REJECT_COUNT: usize = 2_349;
 
 #[derive(Debug)]
 struct FullInventoryRow {
@@ -30,7 +30,7 @@ fn full_node_api_inventory_is_visible_and_phase_classified() {
     for row in &rows {
         assert!(ids.insert(row.id.clone()), "duplicate id {}", row.id);
         assert!(
-            matches!(row.phase.as_str(), "phase1" | "later" | "hard-reject"),
+            matches!(row.phase.as_str(), "phase1" | "hard-reject"),
             "bad phase for {}: {}",
             row.id,
             row.phase
@@ -47,6 +47,8 @@ fn full_node_api_inventory_is_visible_and_phase_classified() {
                 | "inline-method"
                 | "inline-property"
                 | "inline-indexer"
+                | "namespace-function"
+                | "namespace-const"
         ) {
             assert!(!row.member_of.is_empty(), "{} missing member_of", row.id);
         }
@@ -86,19 +88,41 @@ fn phase_one_contains_high_use_node_modules() {
 
     for module in [
         "assert",
+        "async_hooks",
         "buffer",
+        "child_process",
         "console",
         "crypto",
+        "diagnostics_channel",
+        "dns",
+        "dns/promises",
+        "events",
         "fs",
+        "fs/promises",
+        "http",
+        "http2",
+        "https",
+        "module",
+        "net",
         "os",
         "path",
         "perf_hooks",
         "process",
         "querystring",
+        "readline",
+        "readline/promises",
+        "stream",
+        "stream/promises",
+        "stream/web",
         "string_decoder",
+        "timers",
+        "timers/promises",
+        "tls",
         "tty",
         "url",
         "util",
+        "worker_threads",
+        "zlib",
     ] {
         assert!(
             phase1_modules.contains(module),
@@ -108,25 +132,57 @@ fn phase_one_contains_high_use_node_modules() {
 }
 
 #[test]
-fn event_loop_network_and_vm_surfaces_are_not_hidden() {
+fn framework_runtime_surfaces_are_phase_one_and_dynamic_surfaces_rejected() {
     let rows = rows();
     let modules = rows
         .iter()
         .map(|row| (row.module.as_str(), row.phase.as_str()))
         .collect::<BTreeSet<_>>();
 
-    for module in ["http", "https", "net", "stream", "events"] {
+    for module in [
+        "async_hooks",
+        "diagnostics_channel",
+        "dns",
+        "fs/promises",
+        "http",
+        "http2",
+        "https",
+        "net",
+        "stream",
+        "stream/promises",
+        "timers",
+        "timers/promises",
+        "tls",
+        "zlib",
+    ] {
         assert!(
-            modules.contains(&(module, "later")),
-            "{module} should be explicitly inventoried as later"
+            modules.contains(&(module, "phase1")),
+            "{module} should be explicitly inventoried as framework-ready phase1"
         );
     }
-    for module in ["vm", "inspector", "worker_threads", "child_process"] {
+    for module in ["vm", "inspector", "repl", "v8", "trace_events", "test"] {
         assert!(
             modules.contains(&(module, "hard-reject")),
             "{module} should be explicitly inventoried as hard-reject"
         );
     }
+}
+
+#[test]
+fn module_safe_helpers_are_phase_one_but_loader_hooks_are_rejected() {
+    let rows = rows();
+    assert!(
+        rows.iter().any(|row| row.module == "module"
+            && row.name == "createRequire"
+            && row.phase == "phase1"),
+        "module.createRequire should be framework-ready phase1"
+    );
+    assert!(
+        rows.iter().any(|row| row.module == "module"
+            && row.name == "deregister"
+            && row.phase == "hard-reject"),
+        "module hook APIs should stay hard-reject as dynamic loader machinery"
+    );
 }
 
 fn rows() -> Vec<FullInventoryRow> {

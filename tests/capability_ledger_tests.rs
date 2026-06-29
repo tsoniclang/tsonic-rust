@@ -3,10 +3,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const INVENTORY: &str = include_str!("capabilities/stage1_inventory.tsv");
-const EXPECTED_ROW_COUNT: usize = 238;
-const EXPECTED_IMPLEMENTED_COUNT: usize = 156;
+const DEPENDENCY_ALLOWLIST: &str = include_str!("capabilities/dependency_allowlist.tsv");
+const EXPECTED_ROW_COUNT: usize = 439;
+const EXPECTED_IMPLEMENTED_COUNT: usize = 382;
 const EXPECTED_DEFERRED_COUNT: usize = 0;
-const EXPECTED_HARD_REJECT_COUNT: usize = 82;
+const EXPECTED_HARD_REJECT_COUNT: usize = 57;
 
 #[derive(Clone, Debug)]
 struct CapabilityRow {
@@ -32,7 +33,7 @@ fn stage1_inventory_has_complete_classification() {
             row.id
         );
         assert!(
-            matches!(row.status.as_str(), "implemented" | "hard-reject"),
+            matches!(row.status.as_str(), "implemented" | "later" | "hard-reject"),
             "unexpected status {} for {}",
             row.status,
             row.id
@@ -50,7 +51,7 @@ fn stage1_inventory_has_complete_classification() {
         EXPECTED_IMPLEMENTED_COUNT
     );
     assert_eq!(
-        counts.get("deferred").copied().unwrap_or(0),
+        counts.get("later").copied().unwrap_or(0),
         EXPECTED_DEFERRED_COUNT
     );
     assert_eq!(
@@ -91,6 +92,23 @@ fn implemented_rows_have_api_and_test_evidence() {
 
 #[test]
 fn deferred_and_hard_reject_rows_are_explicit() {
+    for row in inventory_rows()
+        .into_iter()
+        .filter(|row| row.status == "later")
+    {
+        assert_eq!(
+            row.rust_api, "n/a",
+            "{} should not expose a Rust API yet",
+            row.id
+        );
+        assert!(
+            row.evidence.starts_with("LATER-NODE-"),
+            "later row {} must use LATER-NODE evidence, got {}",
+            row.id,
+            row.evidence
+        );
+        assert!(!row.notes.is_empty(), "{} needs a reason", row.id);
+    }
     for row in inventory_rows()
         .into_iter()
         .filter(|row| row.status == "hard-reject")
@@ -142,14 +160,20 @@ fn nested_test_files_are_wired_into_cargo_integration_tests() {
 }
 
 #[test]
-fn product_crates_use_only_workspace_path_dependencies() {
+fn product_crates_use_only_workspace_path_or_approved_dependencies() {
     let root = workspace_root();
+    let allowlist = dependency_allowlist();
     for manifest in rust_files_under(&root.join("crates"))
         .into_iter()
         .filter(|path| path.file_name().and_then(|name| name.to_str()) == Some("Cargo.toml"))
     {
         let source = fs::read_to_string(&manifest)
             .unwrap_or_else(|err| panic!("{}: {}", manifest.display(), err));
+        let crate_name = source
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("name = "))
+            .map(|value| value.trim_matches('"').to_string())
+            .unwrap_or_else(|| panic!("{} missing package name", manifest.display()));
         let mut in_dependencies = false;
         for line in source.lines() {
             let trimmed = line.trim();
@@ -160,13 +184,37 @@ fn product_crates_use_only_workspace_path_dependencies() {
             if !in_dependencies || trimmed.is_empty() {
                 continue;
             }
+            let dependency_name = trimmed
+                .split_once('=')
+                .map(|(name, _)| name.trim())
+                .unwrap_or(trimmed);
             assert!(
-                trimmed.contains("{ path = "),
-                "{} has non-path dependency line `{}`",
+                trimmed.contains("{ path = ")
+                    || allowlist.contains(&(crate_name.clone(), dependency_name.to_string())),
+                "{} has non-path dependency line `{}` without dependency_allowlist.tsv approval",
                 manifest.display(),
                 trimmed
             );
         }
+    }
+}
+
+#[test]
+fn dependency_allowlist_rows_are_specific_and_reasoned() {
+    let rows = dependency_allowlist_rows();
+    assert!(!rows.is_empty(), "dependency allowlist must be explicit");
+    let mut seen = BTreeSet::new();
+    for (crate_name, package, reason) in rows {
+        assert!(
+            seen.insert((crate_name.clone(), package.clone())),
+            "duplicate dependency allowlist entry {crate_name}/{package}"
+        );
+        assert!(!crate_name.is_empty(), "allowlist crate missing");
+        assert!(!package.is_empty(), "allowlist package missing");
+        assert!(
+            reason.contains("approved") && !reason.contains("temporary"),
+            "{crate_name}/{package} needs a durable approved reason"
+        );
     }
 }
 
@@ -186,6 +234,30 @@ fn inventory_rows() -> Vec<CapabilityRow> {
                 evidence: columns[4].to_string(),
                 notes: columns[5].to_string(),
             }
+        })
+        .collect()
+}
+
+fn dependency_allowlist() -> BTreeSet<(String, String)> {
+    dependency_allowlist_rows()
+        .into_iter()
+        .map(|(crate_name, package, _)| (crate_name, package))
+        .collect()
+}
+
+fn dependency_allowlist_rows() -> Vec<(String, String, String)> {
+    DEPENDENCY_ALLOWLIST
+        .lines()
+        .skip(1)
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let columns = line.split('\t').collect::<Vec<_>>();
+            assert_eq!(columns.len(), 3, "bad dependency allowlist row: {line}");
+            (
+                columns[0].to_string(),
+                columns[1].to_string(),
+                columns[2].to_string(),
+            )
         })
         .collect()
 }

@@ -21,6 +21,25 @@ fn regexp_global_updates_last_index() {
 }
 
 #[test]
+fn regexp_supports_flags_sticky_ignore_case_and_captures() {
+    let mut sticky = JsRegExp::new("bc", "y").unwrap();
+    assert_eq!(sticky.flags(), "y");
+    sticky.set_last_index(1);
+    assert!(sticky.test("abcd"));
+    assert_eq!(sticky.last_index(), 3);
+    assert!(!sticky.test("abcd"));
+    assert_eq!(sticky.last_index(), 0);
+
+    let mut ignore_case = JsRegExp::new("bc", "i").unwrap();
+    assert_eq!(ignore_case.exec("aBCd").unwrap().match_text, "BC");
+
+    let mut capture = JsRegExp::new("([a-z]+)", "").unwrap();
+    let found = capture.exec("123abc456").unwrap();
+    assert_eq!(found.match_text, "abc");
+    assert_eq!(found.groups, vec!["abc"]);
+}
+
+#[test]
 fn regexp_subset_rejects_unsupported_patterns() {
     assert!(JsRegExp::new("\\d+", "").is_err());
     assert!(JsRegExp::new("a", "gg").is_err());

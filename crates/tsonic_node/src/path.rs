@@ -95,6 +95,10 @@ pub fn to_namespaced_path(path: &str) -> String {
     }
 }
 
+pub fn matches_glob(path: &str, pattern: &str) -> bool {
+    glob_match(path.as_bytes(), pattern.as_bytes())
+}
+
 pub mod posix {
     pub use crate::path_posix::{
         basename, delimiter, dirname, extname, format, is_absolute, join, normalize, parse,
@@ -188,4 +192,35 @@ impl Platform {
     fn format(&self, path: &ParsedPath) -> String {
         crate::path_posix::format(path)
     }
+}
+
+fn glob_match(path: &[u8], pattern: &[u8]) -> bool {
+    let mut path_index = 0;
+    let mut pattern_index = 0;
+    let mut star_pattern = None;
+    let mut star_path = 0;
+
+    while path_index < path.len() {
+        if pattern_index < pattern.len()
+            && (pattern[pattern_index] == b'?' || pattern[pattern_index] == path[path_index])
+        {
+            path_index += 1;
+            pattern_index += 1;
+        } else if pattern_index < pattern.len() && pattern[pattern_index] == b'*' {
+            star_pattern = Some(pattern_index);
+            pattern_index += 1;
+            star_path = path_index;
+        } else if let Some(star) = star_pattern {
+            pattern_index = star + 1;
+            star_path += 1;
+            path_index = star_path;
+        } else {
+            return false;
+        }
+    }
+
+    while pattern_index < pattern.len() && pattern[pattern_index] == b'*' {
+        pattern_index += 1;
+    }
+    pattern_index == pattern.len()
 }

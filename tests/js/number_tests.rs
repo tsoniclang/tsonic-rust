@@ -21,7 +21,7 @@ fn parse_float_prefix_parse() {
     assert_eq!(number::parse_float("1e"), 1.0);
     assert_eq!(number::parse_float("1e+"), 1.0);
     assert_eq!(number::parse_float("Infinityx"), f64::INFINITY);
-    assert_eq!(number::parse_float("infinityx"), f64::INFINITY);
+    assert!(number::parse_float("infinityx").is_nan());
     assert!(number::parse_float("x").is_nan());
     assert!(
         number::parse_float("Infinity").is_infinite()
@@ -46,6 +46,22 @@ fn number_predicates() {
     assert!(number::is_integer(42.0));
     assert!(!number::is_integer(42.5));
     assert!(!number::is_safe_integer(9_007_199_254_740_993.0));
+}
+
+#[test]
+fn number_constants_are_exposed() {
+    let max_safe = std::hint::black_box(number::MAX_SAFE_INTEGER);
+    let min_safe = std::hint::black_box(number::MIN_SAFE_INTEGER);
+    let positive_infinity = std::hint::black_box(number::POSITIVE_INFINITY);
+    let negative_infinity = std::hint::black_box(number::NEGATIVE_INFINITY);
+    let nan = std::hint::black_box(number::NAN);
+    let epsilon = std::hint::black_box(number::EPSILON);
+    assert_eq!(max_safe, 9_007_199_254_740_991.0);
+    assert_eq!(min_safe, -9_007_199_254_740_991.0);
+    assert_eq!(positive_infinity, f64::INFINITY);
+    assert_eq!(negative_infinity, f64::NEG_INFINITY);
+    assert!(nan.is_nan());
+    assert!(epsilon > 0.0);
 }
 
 #[test]

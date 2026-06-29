@@ -20,6 +20,7 @@ pub mod string;
 pub mod typed_array;
 pub mod uri;
 pub mod value;
+pub mod web;
 pub mod wrappers;
 
 pub use array::{JsArray, JsSlot};
@@ -38,3 +39,8 @@ pub use typed_array::{
     Uint32Array, Uint8Array, Uint8ClampedArray,
 };
 pub use value::JsValue;
+pub use web::{
+    AbortController, AbortSignal, AddEventListenerOptions, Blob, BlobPart, Body, CustomEvent,
+    DomException, Event, EventInit, EventListenerOptions, EventTarget, File, FormData,
+    FormDataValue, Headers, ImportMeta, Navigator, Request, Response, Storage,
+};
