@@ -117,6 +117,61 @@ pub fn secure_heap_used() -> SecureHeapUsage {
     SecureHeapUsage::default()
 }
 
+pub const DH_CHECK_P_NOT_SAFE_PRIME: i32 = 2;
+pub const DH_CHECK_P_NOT_PRIME: i32 = 1;
+pub const DH_UNABLE_TO_CHECK_GENERATOR: i32 = 4;
+pub const DH_NOT_SUITABLE_GENERATOR: i32 = 8;
+pub const ENGINE_METHOD_NONE: i32 = 0;
+pub const ENGINE_METHOD_RSA: i32 = 1;
+pub const ENGINE_METHOD_DSA: i32 = 2;
+pub const ENGINE_METHOD_DH: i32 = 4;
+pub const ENGINE_METHOD_RAND: i32 = 8;
+pub const ENGINE_METHOD_EC: i32 = 2048;
+pub const ENGINE_METHOD_CIPHERS: i32 = 64;
+pub const ENGINE_METHOD_DIGESTS: i32 = 128;
+pub const ENGINE_METHOD_PKEY_METHS: i32 = 512;
+pub const ENGINE_METHOD_PKEY_ASN1_METHS: i32 = 1024;
+pub const ENGINE_METHOD_ALL: i32 = 0xffff;
+pub const RSA_PKCS1_PADDING: i32 = 1;
+pub const RSA_SSLV23_PADDING: i32 = 2;
+pub const RSA_SSL_V23_PADDING: i32 = 2;
+pub const RSA_NO_PADDING: i32 = 3;
+pub const RSA_PKCS1_OAEP_PADDING: i32 = 4;
+pub const RSA_X931_PADDING: i32 = 5;
+pub const RSA_PKCS1_PSS_PADDING: i32 = 6;
+pub const RSA_PSS_SALTLEN_DIGEST: i32 = -1;
+pub const RSA_PSS_SALTLEN_MAX_SIGN: i32 = -2;
+pub const RSA_PSS_SALTLEN_AUTO: i32 = -2;
+pub const POINT_CONVERSION_COMPRESSED: i32 = 2;
+pub const POINT_CONVERSION_UNCOMPRESSED: i32 = 4;
+pub const POINT_CONVERSION_HYBRID: i32 = 6;
+pub const DEFAULT_CORE_CIPHER_LIST: &str = "TLS_AES_256_GCM_SHA384";
+pub const DEFAULT_CIPHER_LIST: &str = "TLS_AES_256_GCM_SHA384";
+pub const OPENSSL_VERSION_NUMBER: u64 = 0;
+pub const SSL_OP_ALL: i64 = 2_147_485_776;
+pub const SSL_OP_ALLOW_NO_DHE_KEX: i64 = 1_024;
+pub const SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION: i64 = 262_144;
+pub const SSL_OP_CIPHER_SERVER_PREFERENCE: i64 = 4_194_304;
+pub const SSL_OP_CISCO_ANYCONNECT: i64 = 32_768;
+pub const SSL_OP_COOKIE_EXCHANGE: i64 = 8_192;
+pub const SSL_OP_CRYPTOPRO_TLSEXT_BUG: i64 = 2_147_483_648;
+pub const SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS: i64 = 2_048;
+pub const SSL_OP_LEGACY_SERVER_CONNECT: i64 = 4;
+pub const SSL_OP_NO_COMPRESSION: i64 = 131_072;
+pub const SSL_OP_NO_ENCRYPT_THEN_MAC: i64 = 524_288;
+pub const SSL_OP_NO_QUERY_MTU: i64 = 4_096;
+pub const SSL_OP_NO_RENEGOTIATION: i64 = 1_073_741_824;
+pub const SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION: i64 = 65_536;
+pub const SSL_OP_NO_SSLV2: i64 = 0;
+pub const SSL_OP_NO_SSLV3: i64 = 33_554_432;
+pub const SSL_OP_NO_TICKET: i64 = 16_384;
+pub const SSL_OP_NO_TLSV1: i64 = 67_108_864;
+pub const SSL_OP_NO_TLSV1_1: i64 = 268_435_456;
+pub const SSL_OP_NO_TLSV1_2: i64 = 134_217_728;
+pub const SSL_OP_NO_TLSV1_3: i64 = 536_870_912;
+pub const SSL_OP_PRIORITIZE_CHACHA: i64 = 2_097_152;
+pub const SSL_OP_TLS_ROLLBACK_BUG: i64 = 8_388_608;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CryptoConstants {
     pub dh_check_p_not_safe_prime: i32,
@@ -177,60 +232,61 @@ pub struct CryptoConstants {
 
 pub fn constants() -> CryptoConstants {
     CryptoConstants {
-        dh_check_p_not_safe_prime: 2,
-        dh_check_p_not_prime: 1,
-        dh_unable_to_check_generator: 4,
-        dh_not_suitable_generator: 8,
-        engine_method_none: 0,
-        engine_method_rsa: 1,
-        engine_method_dsa: 2,
-        engine_method_dh: 4,
-        engine_method_rand: 8,
-        engine_method_ec: 2048,
-        engine_method_ciphers: 64,
-        engine_method_digests: 128,
-        engine_method_pkey_meths: 512,
-        engine_method_pkey_asn1_meths: 1024,
-        engine_method_all: 0xffff,
-        rsa_pkcs1_padding: 1,
-        rsa_sslv23_padding: 2,
-        rsa_ssl_v23_padding: 2,
-        rsa_no_padding: 3,
-        rsa_pkcs1_oaep_padding: 4,
-        rsa_x931_padding: 5,
-        rsa_pkcs1_pss_padding: 6,
-        rsa_pss_saltlen_digest: -1,
-        rsa_pss_saltlen_max_sign: -2,
-        rsa_pss_saltlen_auto: -2,
-        point_conversion_compressed: 2,
-        point_conversion_uncompressed: 4,
-        point_conversion_hybrid: 6,
-        default_core_cipher_list: "TLS_AES_256_GCM_SHA384".to_string(),
-        default_cipher_list: "TLS_AES_256_GCM_SHA384".to_string(),
-        openssl_version_number: 0,
-        ssl_op_all: 2_147_485_776,
-        ssl_op_allow_no_dhe_kex: 1_024,
-        ssl_op_allow_unsafe_legacy_renegotiation: 262_144,
-        ssl_op_cipher_server_preference: 4_194_304,
-        ssl_op_cisco_anyconnect: 32_768,
-        ssl_op_cookie_exchange: 8_192,
-        ssl_op_cryptopro_tlsext_bug: 2_147_483_648,
-        ssl_op_dont_insert_empty_fragments: 2_048,
-        ssl_op_legacy_server_connect: 4,
-        ssl_op_no_compression: 131_072,
-        ssl_op_no_encrypt_then_mac: 524_288,
-        ssl_op_no_query_mtu: 4_096,
-        ssl_op_no_renegotiation: 1_073_741_824,
-        ssl_op_no_session_resumption_on_renegotiation: 65_536,
-        ssl_op_no_sslv2: 0,
-        ssl_op_no_sslv3: 33_554_432,
-        ssl_op_no_ticket: 16_384,
-        ssl_op_no_tlsv1: 67_108_864,
-        ssl_op_no_tlsv1_1: 268_435_456,
-        ssl_op_no_tlsv1_2: 134_217_728,
-        ssl_op_no_tlsv1_3: 536_870_912,
-        ssl_op_prioritize_chacha: 2_097_152,
-        ssl_op_tls_rollback_bug: 8_388_608,
+        dh_check_p_not_safe_prime: DH_CHECK_P_NOT_SAFE_PRIME,
+        dh_check_p_not_prime: DH_CHECK_P_NOT_PRIME,
+        dh_unable_to_check_generator: DH_UNABLE_TO_CHECK_GENERATOR,
+        dh_not_suitable_generator: DH_NOT_SUITABLE_GENERATOR,
+        engine_method_none: ENGINE_METHOD_NONE,
+        engine_method_rsa: ENGINE_METHOD_RSA,
+        engine_method_dsa: ENGINE_METHOD_DSA,
+        engine_method_dh: ENGINE_METHOD_DH,
+        engine_method_rand: ENGINE_METHOD_RAND,
+        engine_method_ec: ENGINE_METHOD_EC,
+        engine_method_ciphers: ENGINE_METHOD_CIPHERS,
+        engine_method_digests: ENGINE_METHOD_DIGESTS,
+        engine_method_pkey_meths: ENGINE_METHOD_PKEY_METHS,
+        engine_method_pkey_asn1_meths: ENGINE_METHOD_PKEY_ASN1_METHS,
+        engine_method_all: ENGINE_METHOD_ALL,
+        rsa_pkcs1_padding: RSA_PKCS1_PADDING,
+        rsa_sslv23_padding: RSA_SSLV23_PADDING,
+        rsa_ssl_v23_padding: RSA_SSL_V23_PADDING,
+        rsa_no_padding: RSA_NO_PADDING,
+        rsa_pkcs1_oaep_padding: RSA_PKCS1_OAEP_PADDING,
+        rsa_x931_padding: RSA_X931_PADDING,
+        rsa_pkcs1_pss_padding: RSA_PKCS1_PSS_PADDING,
+        rsa_pss_saltlen_digest: RSA_PSS_SALTLEN_DIGEST,
+        rsa_pss_saltlen_max_sign: RSA_PSS_SALTLEN_MAX_SIGN,
+        rsa_pss_saltlen_auto: RSA_PSS_SALTLEN_AUTO,
+        point_conversion_compressed: POINT_CONVERSION_COMPRESSED,
+        point_conversion_uncompressed: POINT_CONVERSION_UNCOMPRESSED,
+        point_conversion_hybrid: POINT_CONVERSION_HYBRID,
+        default_core_cipher_list: DEFAULT_CORE_CIPHER_LIST.to_string(),
+        default_cipher_list: DEFAULT_CIPHER_LIST.to_string(),
+        openssl_version_number: OPENSSL_VERSION_NUMBER,
+        ssl_op_all: SSL_OP_ALL,
+        ssl_op_allow_no_dhe_kex: SSL_OP_ALLOW_NO_DHE_KEX,
+        ssl_op_allow_unsafe_legacy_renegotiation: SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION,
+        ssl_op_cipher_server_preference: SSL_OP_CIPHER_SERVER_PREFERENCE,
+        ssl_op_cisco_anyconnect: SSL_OP_CISCO_ANYCONNECT,
+        ssl_op_cookie_exchange: SSL_OP_COOKIE_EXCHANGE,
+        ssl_op_cryptopro_tlsext_bug: SSL_OP_CRYPTOPRO_TLSEXT_BUG,
+        ssl_op_dont_insert_empty_fragments: SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS,
+        ssl_op_legacy_server_connect: SSL_OP_LEGACY_SERVER_CONNECT,
+        ssl_op_no_compression: SSL_OP_NO_COMPRESSION,
+        ssl_op_no_encrypt_then_mac: SSL_OP_NO_ENCRYPT_THEN_MAC,
+        ssl_op_no_query_mtu: SSL_OP_NO_QUERY_MTU,
+        ssl_op_no_renegotiation: SSL_OP_NO_RENEGOTIATION,
+        ssl_op_no_session_resumption_on_renegotiation:
+            SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION,
+        ssl_op_no_sslv2: SSL_OP_NO_SSLV2,
+        ssl_op_no_sslv3: SSL_OP_NO_SSLV3,
+        ssl_op_no_ticket: SSL_OP_NO_TICKET,
+        ssl_op_no_tlsv1: SSL_OP_NO_TLSV1,
+        ssl_op_no_tlsv1_1: SSL_OP_NO_TLSV1_1,
+        ssl_op_no_tlsv1_2: SSL_OP_NO_TLSV1_2,
+        ssl_op_no_tlsv1_3: SSL_OP_NO_TLSV1_3,
+        ssl_op_prioritize_chacha: SSL_OP_PRIORITIZE_CHACHA,
+        ssl_op_tls_rollback_bug: SSL_OP_TLS_ROLLBACK_BUG,
     }
 }
 
@@ -332,6 +388,11 @@ impl Hash {
         self.bytes.extend_from_slice(bytes);
     }
 
+    pub fn update(&mut self, bytes: &[u8]) -> &mut Self {
+        self.update_bytes(bytes);
+        self
+    }
+
     pub fn copy(&self) -> Self {
         self.clone()
     }
@@ -409,6 +470,11 @@ impl Hmac {
 
     pub fn update_bytes(&mut self, bytes: &[u8]) {
         self.bytes.extend_from_slice(bytes);
+    }
+
+    pub fn update(&mut self, bytes: &[u8]) -> &mut Self {
+        self.update_bytes(bytes);
+        self
     }
 
     pub fn update_string(&mut self, value: &str, encoding: Option<&str>) -> NodeResult<()> {

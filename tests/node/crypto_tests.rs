@@ -28,6 +28,220 @@ fn crypto_sha256_known_vector() {
         tsonic_node::crypto::constants().point_conversion_uncompressed,
         4
     );
+    let constants = tsonic_node::crypto::constants();
+    assert_eq!(
+        tsonic_node::crypto::DH_CHECK_P_NOT_SAFE_PRIME,
+        constants.dh_check_p_not_safe_prime
+    );
+    assert_eq!(
+        tsonic_node::crypto::DH_CHECK_P_NOT_PRIME,
+        constants.dh_check_p_not_prime
+    );
+    assert_eq!(
+        tsonic_node::crypto::DH_UNABLE_TO_CHECK_GENERATOR,
+        constants.dh_unable_to_check_generator
+    );
+    assert_eq!(
+        tsonic_node::crypto::DH_NOT_SUITABLE_GENERATOR,
+        constants.dh_not_suitable_generator
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_NONE,
+        constants.engine_method_none
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_RSA,
+        constants.engine_method_rsa
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_DSA,
+        constants.engine_method_dsa
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_DH,
+        constants.engine_method_dh
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_RAND,
+        constants.engine_method_rand
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_EC,
+        constants.engine_method_ec
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_CIPHERS,
+        constants.engine_method_ciphers
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_DIGESTS,
+        constants.engine_method_digests
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_PKEY_METHS,
+        constants.engine_method_pkey_meths
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_PKEY_ASN1_METHS,
+        constants.engine_method_pkey_asn1_meths
+    );
+    assert_eq!(
+        tsonic_node::crypto::ENGINE_METHOD_ALL,
+        constants.engine_method_all
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_PKCS1_PADDING,
+        constants.rsa_pkcs1_padding
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_SSLV23_PADDING,
+        constants.rsa_sslv23_padding
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_SSL_V23_PADDING,
+        constants.rsa_ssl_v23_padding
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_NO_PADDING,
+        constants.rsa_no_padding
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_PKCS1_OAEP_PADDING,
+        constants.rsa_pkcs1_oaep_padding
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_X931_PADDING,
+        constants.rsa_x931_padding
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_PKCS1_PSS_PADDING,
+        constants.rsa_pkcs1_pss_padding
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_PSS_SALTLEN_DIGEST,
+        constants.rsa_pss_saltlen_digest
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_PSS_SALTLEN_MAX_SIGN,
+        constants.rsa_pss_saltlen_max_sign
+    );
+    assert_eq!(
+        tsonic_node::crypto::RSA_PSS_SALTLEN_AUTO,
+        constants.rsa_pss_saltlen_auto
+    );
+    assert_eq!(
+        tsonic_node::crypto::POINT_CONVERSION_COMPRESSED,
+        constants.point_conversion_compressed
+    );
+    assert_eq!(
+        tsonic_node::crypto::POINT_CONVERSION_UNCOMPRESSED,
+        constants.point_conversion_uncompressed
+    );
+    assert_eq!(
+        tsonic_node::crypto::POINT_CONVERSION_HYBRID,
+        constants.point_conversion_hybrid
+    );
+    assert_eq!(
+        tsonic_node::crypto::DEFAULT_CORE_CIPHER_LIST,
+        constants.default_core_cipher_list
+    );
+    assert_eq!(
+        tsonic_node::crypto::DEFAULT_CIPHER_LIST,
+        constants.default_cipher_list
+    );
+    assert_eq!(
+        tsonic_node::crypto::OPENSSL_VERSION_NUMBER,
+        constants.openssl_version_number
+    );
+    assert_eq!(tsonic_node::crypto::SSL_OP_ALL, constants.ssl_op_all);
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_ALLOW_NO_DHE_KEX,
+        constants.ssl_op_allow_no_dhe_kex
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION,
+        constants.ssl_op_allow_unsafe_legacy_renegotiation
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_CIPHER_SERVER_PREFERENCE,
+        constants.ssl_op_cipher_server_preference
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_CISCO_ANYCONNECT,
+        constants.ssl_op_cisco_anyconnect
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_COOKIE_EXCHANGE,
+        constants.ssl_op_cookie_exchange
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_CRYPTOPRO_TLSEXT_BUG,
+        constants.ssl_op_cryptopro_tlsext_bug
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS,
+        constants.ssl_op_dont_insert_empty_fragments
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_LEGACY_SERVER_CONNECT,
+        constants.ssl_op_legacy_server_connect
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_COMPRESSION,
+        constants.ssl_op_no_compression
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_ENCRYPT_THEN_MAC,
+        constants.ssl_op_no_encrypt_then_mac
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_QUERY_MTU,
+        constants.ssl_op_no_query_mtu
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_RENEGOTIATION,
+        constants.ssl_op_no_renegotiation
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION,
+        constants.ssl_op_no_session_resumption_on_renegotiation
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_SSLV2,
+        constants.ssl_op_no_sslv2
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_SSLV3,
+        constants.ssl_op_no_sslv3
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_TICKET,
+        constants.ssl_op_no_ticket
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_TLSV1,
+        constants.ssl_op_no_tlsv1
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_TLSV1_1,
+        constants.ssl_op_no_tlsv1_1
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_TLSV1_2,
+        constants.ssl_op_no_tlsv1_2
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_NO_TLSV1_3,
+        constants.ssl_op_no_tlsv1_3
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_PRIORITIZE_CHACHA,
+        constants.ssl_op_prioritize_chacha
+    );
+    assert_eq!(
+        tsonic_node::crypto::SSL_OP_TLS_ROLLBACK_BUG,
+        constants.ssl_op_tls_rollback_bug
+    );
     assert_eq!(
         tsonic_node::crypto::hash("sha256", b"abc", Some("hex")).unwrap(),
         DigestResult::String(
@@ -58,7 +272,8 @@ fn crypto_sha256_known_vector() {
     )
     .is_err());
     let mut hash = tsonic_node::crypto::create_hash("sha256").unwrap();
-    hash.update_string("abc", Some("utf8")).unwrap();
+    hash.update(b"a");
+    hash.update_string("bc", Some("utf8")).unwrap();
     let copied = hash.copy();
     let digest = hash.digest(Some("hex")).unwrap();
     assert_eq!(
@@ -145,7 +360,8 @@ fn crypto_hmac_and_uuid_helpers_are_closed_runtime_apis() {
 #[test]
 fn crypto_hmac_keyobject_and_webcrypto_shapes_are_closed_wrappers() {
     let mut hmac = tsonic_node::crypto::create_hmac("sha256", b"key").unwrap();
-    hmac.update_string("The quick brown fox jumps over the lazy dog", Some("utf8"))
+    hmac.update(b"The quick brown fox ");
+    hmac.update_string("jumps over the lazy dog", Some("utf8"))
         .unwrap();
     assert_eq!(
         hmac.digest_string("hex").unwrap(),
