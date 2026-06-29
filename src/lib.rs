@@ -1,5 +1,8 @@
-//! Crate root for the packet workspace.
+//! Rust backend/provider shell for Tsonic.
 //!
-//! All runtime functionality is implemented in workspace members.
+//! Runtime crates live in sibling repositories:
+//! - `rust-runtime`
+//! - `rust-js`
+//! - `rust-nodejs`
 
-pub const _WORKSPACE_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
