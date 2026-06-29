@@ -128,8 +128,11 @@ fn process_metadata_warnings_and_feature_shapes_are_closed() {
     assert!(config.variables.iter().any(|(name, _)| name == "host_arch"));
     assert_eq!(config.default_configuration, "Release");
     assert_eq!(config.target_arch, process::arch());
+    assert_eq!(config.clang, 0);
     assert!(config.node_use_openssl);
     assert!(!config.node_shared_js_engine);
+    assert!(!config.node_use_dtrace);
+    assert!(!config.node_use_etw);
     assert_eq!(config.visibility, "default");
 
     assert!(process::allowed_node_environment_flags().contains(&"--trace-warnings"));
@@ -192,6 +195,12 @@ fn process_metadata_warnings_and_feature_shapes_are_closed() {
     assert_eq!(warnings.len(), 2);
     assert_eq!(warnings[1].name, "TypedWarning");
     assert_eq!(warnings[1].code.as_deref(), Some("TSONIC_TYPED"));
+
+    let stdout = process::stdout();
+    let stderr = process::stderr();
+    assert!(!stdout.closed());
+    assert!(!stderr.closed());
+    assert!(!process::stdin_is_tty());
 }
 
 #[test]

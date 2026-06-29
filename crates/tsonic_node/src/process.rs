@@ -74,6 +74,7 @@ pub struct ProcessFeatures {
 pub struct ProcessConfig {
     pub target_defaults: Vec<(String, String)>,
     pub variables: Vec<(String, String)>,
+    pub clang: i32,
     pub cflags: Vec<String>,
     pub defines: Vec<String>,
     pub include_dirs: Vec<String>,
@@ -308,6 +309,7 @@ pub fn config() -> ProcessConfig {
             ("host_arch".to_string(), std::env::consts::ARCH.to_string()),
             ("host_os".to_string(), std::env::consts::OS.to_string()),
         ],
+        clang: 0,
         cflags: Vec::new(),
         defines: Vec::new(),
         include_dirs: Vec::new(),
