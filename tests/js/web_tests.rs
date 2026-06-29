@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use tsonic_js::web::{
     AbortController, AbortSignal, AddEventListenerOptions, Blob, BlobPart, Body, CustomEvent,
-    DomException, Event, EventInit, EventTarget, File, FormData, FormDataValue, Headers,
-    ImportMeta, Navigator, Request, Response, Storage,
+    CustomEventInit, DomException, Event, EventInit, EventListenerObject, EventTarget, File,
+    FormData, FormDataValue, Headers, ImportMeta, Navigator, Request, Response, Storage,
 };
 use tsonic_js::{JsObject, JsValue};
 
@@ -96,6 +96,7 @@ fn event_target_dispatches_and_removes_listeners() {
         },
         AddEventListenerOptions {
             once: true,
+            signal_aborted: false,
             ..Default::default()
         },
     );
@@ -109,6 +110,14 @@ fn event_target_dispatches_and_removes_listeners() {
     );
     assert!(!target.dispatch_event(&mut event));
     assert!(event.default_prevented());
+    assert!(!event.is_trusted());
+    assert_eq!(event.event_phase(), 0);
+    assert_eq!(event.target(), Some("ready"));
+    assert_eq!(event.src_element(), Some("ready"));
+    assert_eq!(event.current_target(), None);
+    assert_eq!(event.composed_path(), vec!["ready".to_string()]);
+    EventListenerObject::handle_event(&mut event, |event| event.stop_propagation());
+    assert!(event.cancel_bubble());
     assert_eq!(
         seen.lock().unwrap().as_slice(),
         &["ready".to_string(), "once".to_string()]
@@ -144,6 +153,17 @@ fn custom_event_carries_detail_and_init_state() {
     assert!(custom.event().cancelable());
     assert!(custom.event().composed());
     assert_eq!(custom.detail(), &detail);
+    let init = CustomEventInit {
+        event: EventInit {
+            bubbles: true,
+            cancelable: false,
+            composed: true,
+        },
+        detail: Some(detail),
+    };
+    assert!(init.event.bubbles);
+    assert!(init.event.composed);
+    assert!(init.detail.is_some());
 }
 
 #[test]

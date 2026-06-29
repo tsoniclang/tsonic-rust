@@ -74,6 +74,11 @@ pub struct Event {
     propagation_stopped: bool,
     immediate_propagation_stopped: bool,
     time_stamp: f64,
+    is_trusted: bool,
+    event_phase: u8,
+    target: Option<String>,
+    current_target: Option<String>,
+    src_element: Option<String>,
 }
 
 impl Event {
@@ -87,6 +92,11 @@ impl Event {
             propagation_stopped: false,
             immediate_propagation_stopped: false,
             time_stamp: now_millis(),
+            is_trusted: false,
+            event_phase: 0,
+            target: None,
+            current_target: None,
+            src_element: None,
         }
     }
 
@@ -122,6 +132,30 @@ impl Event {
         self.time_stamp
     }
 
+    pub fn is_trusted(&self) -> bool {
+        self.is_trusted
+    }
+
+    pub fn event_phase(&self) -> u8 {
+        self.event_phase
+    }
+
+    pub fn target(&self) -> Option<&str> {
+        self.target.as_deref()
+    }
+
+    pub fn current_target(&self) -> Option<&str> {
+        self.current_target.as_deref()
+    }
+
+    pub fn src_element(&self) -> Option<&str> {
+        self.src_element.as_deref()
+    }
+
+    pub fn composed_path(&self) -> Vec<String> {
+        self.target.iter().cloned().collect()
+    }
+
     pub fn prevent_default(&mut self) {
         if self.cancelable {
             self.default_prevented = true;
@@ -144,6 +178,10 @@ impl Event {
         self.default_prevented = false;
         self.propagation_stopped = false;
         self.immediate_propagation_stopped = false;
+        self.event_phase = 0;
+        self.target = None;
+        self.current_target = None;
+        self.src_element = None;
     }
 }
 
@@ -158,6 +196,12 @@ pub struct EventInit {
 pub struct CustomEvent {
     event: Event,
     detail: JsValue,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CustomEventInit {
+    pub event: EventInit,
+    pub detail: Option<JsValue>,
 }
 
 impl CustomEvent {
@@ -191,6 +235,16 @@ pub struct AddEventListenerOptions {
     pub capture: bool,
     pub once: bool,
     pub passive: bool,
+    pub signal_aborted: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EventListenerObject;
+
+impl EventListenerObject {
+    pub fn handle_event(event: &mut Event, callback: impl FnOnce(&mut Event)) {
+        callback(event);
+    }
 }
 
 type EventCallback = dyn FnMut(&mut Event) + Send;
@@ -245,6 +299,12 @@ impl EventTarget {
     }
 
     pub fn dispatch_event(&mut self, event: &mut Event) -> bool {
+        event.event_phase = 2;
+        if event.target.is_none() {
+            event.target = Some(event.event_type.clone());
+            event.src_element = event.target.clone();
+        }
+        event.current_target = event.target.clone();
         let mut remove_ids = Vec::new();
         for listener in &mut self.listeners {
             if listener.event_type != event.event_type {
@@ -261,6 +321,8 @@ impl EventTarget {
         for id in remove_ids {
             self.remove_event_listener(id);
         }
+        event.event_phase = 0;
+        event.current_target = None;
         !event.default_prevented()
     }
 }
