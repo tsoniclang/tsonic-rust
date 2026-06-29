@@ -254,7 +254,7 @@ fn crypto_sha256_known_vector() {
             b"abc",
             tsonic_node::crypto::OneShotDigestOptions {
                 output_length: None,
-                encoding: Some("hex".to_string()),
+                output_encoding: Some("hex".to_string()),
             },
         )
         .unwrap(),
@@ -267,7 +267,7 @@ fn crypto_sha256_known_vector() {
         b"abc",
         tsonic_node::crypto::OneShotDigestOptions {
             output_length: Some(10),
-            encoding: None,
+            output_encoding: None,
         },
     )
     .is_err());
@@ -443,7 +443,7 @@ fn crypto_pbkdf2_and_hkdf_match_standard_vectors() {
         salt: tsonic_node::buffer::Buffer::from_string("salt", Some("utf8")).unwrap(),
         iterations: 1,
         key_len: 32,
-        digest: "sha256".to_string(),
+        hash: "sha256".to_string(),
     };
     assert_eq!(
         tsonic_node::crypto::pbkdf2_sync_params(&params).unwrap(),
@@ -473,7 +473,7 @@ fn crypto_pbkdf2_and_hkdf_match_standard_vectors() {
             .replace(' ', "")
     );
     let hkdf_params = tsonic_node::crypto::HkdfParams {
-        digest: "sha256".to_string(),
+        hash: "sha256".to_string(),
         input_keying_material: tsonic_node::buffer::Buffer::from_bytes(vec![0x0b; 22]),
         salt: tsonic_node::buffer::Buffer::from_bytes(vec![
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
@@ -555,9 +555,27 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
     assert_eq!(hash_options.output_length, None);
     let digest_options = tsonic_node::crypto::OneShotDigestOptions {
         output_length: None,
-        encoding: Some("hex".to_string()),
+        output_encoding: Some("hex".to_string()),
     };
-    assert_eq!(digest_options.encoding.as_deref(), Some("hex"));
+    assert_eq!(digest_options.output_encoding.as_deref(), Some("hex"));
+    let buffer_digest_options: tsonic_node::crypto::OneShotDigestOptionsWithBufferEncoding =
+        tsonic_node::crypto::OneShotDigestOptions {
+            output_length: None,
+            output_encoding: Some("buffer".to_string()),
+        };
+    assert_eq!(
+        buffer_digest_options.output_encoding.as_deref(),
+        Some("buffer")
+    );
+    let string_digest_options: tsonic_node::crypto::OneShotDigestOptionsWithStringEncoding =
+        tsonic_node::crypto::OneShotDigestOptions {
+            output_length: None,
+            output_encoding: Some("base64url".to_string()),
+        };
+    assert_eq!(
+        string_digest_options.output_encoding.as_deref(),
+        Some("base64url")
+    );
     let cipher_options = tsonic_node::crypto::CipherInfoOptions {
         key_length: Some(32),
         iv_length: Some(12),
@@ -573,16 +591,25 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
 
     let key_export = tsonic_node::crypto::KeyExportOptions {
         format: "buffer".to_string(),
-        key_type: Some("secret".to_string()),
+        r#type: Some("secret".to_string()),
         cipher: Some("aes-256-gcm".to_string()),
         passphrase: Some("pass".to_string()),
         encoding: Some("hex".to_string()),
     };
     assert_eq!(key_export.format, "buffer");
-    assert_eq!(key_export.key_type.as_deref(), Some("secret"));
+    assert_eq!(key_export.r#type.as_deref(), Some("secret"));
     assert_eq!(key_export.cipher.as_deref(), Some("aes-256-gcm"));
     assert_eq!(key_export.passphrase.as_deref(), Some("pass"));
     assert_eq!(key_export.encoding.as_deref(), Some("hex"));
+    let private_key_export: tsonic_node::crypto::PrivateKeyExportOptions = key_export.clone();
+    assert_eq!(private_key_export.r#type.as_deref(), Some("secret"));
+    assert_eq!(private_key_export.cipher.as_deref(), Some("aes-256-gcm"));
+    assert_eq!(private_key_export.passphrase.as_deref(), Some("pass"));
+    let public_key_export: tsonic_node::crypto::PublicKeyExportOptions = key_export.clone();
+    assert_eq!(public_key_export.format, "buffer");
+    assert_eq!(public_key_export.r#type.as_deref(), Some("secret"));
+    let symmetric_key_export: tsonic_node::crypto::SymmetricKeyExportOptions = key_export.clone();
+    assert_eq!(symmetric_key_export.format, "buffer");
 
     let jwk = tsonic_node::crypto::JsonWebKey {
         kty: Some("oct".to_string()),
@@ -608,8 +635,12 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
         key_ops: vec!["sign".to_string()],
         ext: true,
     };
-    let jwk_input = tsonic_node::crypto::JsonWebKeyInput { jwk: jwk.clone() };
-    assert_eq!(jwk_input.jwk.kty.as_deref(), Some("oct"));
+    let jwk_input = tsonic_node::crypto::JsonWebKeyInput {
+        key: jwk.clone(),
+        format: "jwk".to_string(),
+    };
+    assert_eq!(jwk_input.key.kty.as_deref(), Some("oct"));
+    assert_eq!(jwk_input.format, "jwk");
     assert_eq!(jwk.k.as_deref(), Some("abc"));
     assert_eq!(jwk.p.as_deref(), Some("p"));
     assert_eq!(jwk.q.as_deref(), Some("q"));
@@ -664,6 +695,13 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
     assert_eq!(verify.key, None);
     assert_eq!(verify.padding, signing.padding);
     assert_eq!(verify.salt_length, signing.salt_length);
+    let sign_input = tsonic_node::crypto::SignKeyObjectInput {
+        key: tsonic_node::crypto::create_secret_key_bytes(b"secret"),
+        padding: signing.padding,
+        salt_length: signing.salt_length,
+        dsa_encoding: signing.dsa_encoding.clone(),
+    };
+    assert_eq!(sign_input.key.key_type(), "secret");
 
     let scrypt = tsonic_node::crypto::ScryptOptions {
         cost: 1024,
@@ -679,6 +717,10 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
     let key_algorithm = tsonic_node::crypto::KeyAlgorithm {
         name: "SHA-256".to_string(),
     };
+    let algorithm = tsonic_node::crypto::Algorithm {
+        name: "SHA-256".to_string(),
+    };
+    assert_eq!(algorithm.name, "SHA-256");
     let rsa_algorithm = tsonic_node::crypto::RsaKeyAlgorithm {
         name: "RSA-PSS".to_string(),
         modulus_length: 2048,
@@ -690,6 +732,11 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
     };
     assert_eq!(rsa_hashed.rsa.modulus_length, 2048);
     assert_eq!(rsa_hashed.hash.name, "SHA-256");
+    let rsa_import = tsonic_node::crypto::RsaHashedImportParams {
+        name: "RSA-PSS".to_string(),
+        hash: "SHA-256".to_string(),
+    };
+    assert_eq!(rsa_import.hash, "SHA-256");
     let hmac_algorithm = tsonic_node::crypto::HmacKeyAlgorithm {
         name: "HMAC".to_string(),
         hash: key_algorithm.clone(),
@@ -714,6 +761,13 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
     };
     assert_eq!(key_pair.public_key.key_type, "secret");
     assert_eq!(key_pair.private_key.key_type, "secret");
+    let secret_key = tsonic_node::crypto::create_secret_key_bytes(b"secret");
+    let exported_key_pair = tsonic_node::crypto::KeyPairExportResult {
+        public_key: secret_key.clone(),
+        private_key: secret_key.clone(),
+    };
+    assert_eq!(exported_key_pair.public_key.key_type(), "secret");
+    assert_eq!(exported_key_pair.private_key.key_type(), "secret");
 
     let iv = tsonic_node::buffer::Buffer::from_bytes(vec![0; 12]);
     let aead = tsonic_node::crypto::AeadParams {
@@ -753,6 +807,38 @@ fn crypto_option_and_webcrypto_param_carriers_expose_closed_fields() {
         public: crypto_key,
     };
     assert_eq!(ecdh.public.key_type, "secret");
+    let context = tsonic_node::crypto::ContextParams {
+        context: iv.clone(),
+    };
+    assert_eq!(context.context.len(), 12);
+    let encapsulated_ciphertext = tsonic_node::buffer::Buffer::from_bytes(vec![1, 2, 3, 4]);
+    let encapsulated = tsonic_node::crypto::EncapsulatedKey {
+        shared_key: iv.clone(),
+        ciphertext: encapsulated_ciphertext,
+    };
+    assert_eq!(encapsulated.shared_key.len(), 12);
+    assert_eq!(encapsulated.ciphertext.len(), 4);
+    let encapsulated_bits: tsonic_node::crypto::EncapsulatedBits = encapsulated.clone();
+    assert_eq!(encapsulated_bits.ciphertext.len(), 4);
+    let gcm_options = tsonic_node::crypto::CipherGCMOptions {
+        auth_tag_length: 16,
+    };
+    assert_eq!(gcm_options.auth_tag_length, 16);
+    let ccm_options: tsonic_node::crypto::CipherCCMOptions =
+        tsonic_node::crypto::CipherGcmOptions {
+            auth_tag_length: 12,
+        };
+    assert_eq!(ccm_options.auth_tag_length, 12);
+    let ocb_options: tsonic_node::crypto::CipherOCBOptions =
+        tsonic_node::crypto::CipherGcmOptions {
+            auth_tag_length: 16,
+        };
+    assert_eq!(ocb_options.auth_tag_length, 16);
+    let chacha_options: tsonic_node::crypto::CipherChaCha20Poly1305Options =
+        tsonic_node::crypto::CipherGcmOptions {
+            auth_tag_length: 16,
+        };
+    assert_eq!(chacha_options.auth_tag_length, 16);
 }
 
 #[test]
@@ -761,23 +847,23 @@ fn crypto_extended_option_carriers_expose_documented_fields() {
     let private_input = tsonic_node::crypto::PrivateKeyInput {
         key: bytes.clone(),
         format: Some("pem".to_string()),
-        key_type: Some("pkcs8".to_string()),
+        r#type: Some("pkcs8".to_string()),
         encoding: Some("utf8".to_string()),
         passphrase: Some(bytes.clone()),
     };
     assert_eq!(private_input.key.len(), 4);
     assert_eq!(private_input.format.as_deref(), Some("pem"));
-    assert_eq!(private_input.key_type.as_deref(), Some("pkcs8"));
+    assert_eq!(private_input.r#type.as_deref(), Some("pkcs8"));
     assert_eq!(private_input.encoding.as_deref(), Some("utf8"));
     assert_eq!(private_input.passphrase.as_ref().unwrap().len(), 4);
 
     let public_input = tsonic_node::crypto::PublicKeyInput {
         key: bytes.clone(),
         format: Some("der".to_string()),
-        key_type: Some("spki".to_string()),
+        r#type: Some("spki".to_string()),
         encoding: None,
     };
-    assert_eq!(public_input.key_type.as_deref(), Some("spki"));
+    assert_eq!(public_input.r#type.as_deref(), Some("spki"));
 
     let rsa_private = tsonic_node::crypto::RsaPrivateKeyInput {
         key: bytes.clone(),
@@ -920,6 +1006,13 @@ fn crypto_extended_option_carriers_expose_documented_fields() {
         bigint: Some(false),
     };
     assert_eq!(prime.safe, Some(true));
+    let prime_array_buffer: tsonic_node::crypto::GeneratePrimeOptionsArrayBuffer = prime.clone();
+    assert_eq!(prime_array_buffer.bigint, Some(false));
+    let prime_bigint = tsonic_node::crypto::GeneratePrimeOptionsBigInt {
+        bigint: Some(true),
+        ..prime.clone()
+    };
+    assert_eq!(prime_bigint.bigint, Some(true));
     let check_prime = tsonic_node::crypto::CheckPrimeOptions { checks: Some(32) };
     assert_eq!(check_prime.checks, Some(32));
 
@@ -953,6 +1046,11 @@ fn crypto_extended_option_carriers_expose_documented_fields() {
         param_encoding: Some("named".to_string()),
     };
     assert_eq!(ec_pair.param_encoding.as_deref(), Some("named"));
+    let ec_algorithm = tsonic_node::crypto::EcKeyAlgorithm {
+        name: "ECDSA".to_string(),
+        named_curve: "P-256".to_string(),
+    };
+    assert_eq!(ec_algorithm.named_curve, "P-256");
 }
 
 #[test]

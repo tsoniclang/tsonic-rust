@@ -303,8 +303,11 @@ pub struct HashOptions {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct OneShotDigestOptions {
     pub output_length: Option<usize>,
-    pub encoding: Option<String>,
+    pub output_encoding: Option<String>,
 }
+
+pub type OneShotDigestOptionsWithBufferEncoding = OneShotDigestOptions;
+pub type OneShotDigestOptionsWithStringEncoding = OneShotDigestOptions;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CipherInfoOptions {
@@ -363,12 +366,12 @@ pub enum DigestResult {
 
 #[derive(Debug, Clone)]
 pub struct Hash {
-    algorithm: Algorithm,
+    algorithm: DigestAlgorithm,
     bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Algorithm {
+enum DigestAlgorithm {
     Sha1,
     Sha256,
     Sha384,
@@ -449,12 +452,12 @@ pub fn hash_with_options(
             "one-shot digest outputLength is only valid for unsupported XOF algorithms",
         ));
     }
-    hash(algorithm, data, options.encoding.as_deref())
+    hash(algorithm, data, options.output_encoding.as_deref())
 }
 
 #[derive(Debug, Clone)]
 pub struct Hmac {
-    algorithm: Algorithm,
+    algorithm: DigestAlgorithm,
     key: Vec<u8>,
     bytes: Vec<u8>,
 }
@@ -523,7 +526,7 @@ pub fn hmac_digest(
 }
 
 fn hmac_digest_algorithm(
-    algorithm: Algorithm,
+    algorithm: DigestAlgorithm,
     key: &[u8],
     data: &[u8],
     encoding: Option<&str>,
@@ -598,7 +601,7 @@ pub struct Pbkdf2Params {
     pub salt: Buffer,
     pub iterations: u32,
     pub key_len: usize,
-    pub digest: String,
+    pub hash: String,
 }
 
 pub fn pbkdf2_sync_params(params: &Pbkdf2Params) -> NodeResult<Buffer> {
@@ -607,7 +610,7 @@ pub fn pbkdf2_sync_params(params: &Pbkdf2Params) -> NodeResult<Buffer> {
         &params.salt.as_bytes(),
         params.iterations,
         params.key_len,
-        &params.digest,
+        &params.hash,
     )
 }
 
@@ -656,7 +659,7 @@ pub fn hkdf_sync(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HkdfParams {
-    pub digest: String,
+    pub hash: String,
     pub input_keying_material: Buffer,
     pub salt: Buffer,
     pub info: Buffer,
@@ -665,7 +668,7 @@ pub struct HkdfParams {
 
 pub fn hkdf_sync_params(params: &HkdfParams) -> NodeResult<Buffer> {
     hkdf_sync(
-        &params.digest,
+        &params.hash,
         &params.input_keying_material.as_bytes(),
         &params.salt.as_bytes(),
         &params.info.as_bytes(),
@@ -814,7 +817,7 @@ pub struct AsymmetricKeyDetails {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyExportOptions {
     pub format: String,
-    pub key_type: Option<String>,
+    pub r#type: Option<String>,
     pub cipher: Option<String>,
     pub passphrase: Option<String>,
     pub encoding: Option<String>,
@@ -824,7 +827,7 @@ impl Default for KeyExportOptions {
     fn default() -> Self {
         Self {
             format: "buffer".to_string(),
-            key_type: None,
+            r#type: None,
             cipher: None,
             passphrase: None,
             encoding: None,
@@ -873,7 +876,8 @@ pub struct JsonWebKey {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JsonWebKeyInput {
-    pub jwk: JsonWebKey,
+    pub key: JsonWebKey,
+    pub format: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -885,7 +889,7 @@ pub struct JwkKeyExportOptions {
 pub struct PrivateKeyInput {
     pub key: Buffer,
     pub format: Option<String>,
-    pub key_type: Option<String>,
+    pub r#type: Option<String>,
     pub encoding: Option<String>,
     pub passphrase: Option<Buffer>,
 }
@@ -894,7 +898,7 @@ pub struct PrivateKeyInput {
 pub struct PublicKeyInput {
     pub key: Buffer,
     pub format: Option<String>,
-    pub key_type: Option<String>,
+    pub r#type: Option<String>,
     pub encoding: Option<String>,
 }
 
@@ -1244,7 +1248,7 @@ pub fn sign_sha256(key_pair: &RsaKeyPair, data: &[u8]) -> Buffer {
 
 pub fn sign(algorithm: &str, key_pair: &RsaKeyPair, data: &[u8]) -> NodeResult<Buffer> {
     match parse_algorithm(algorithm)? {
-        Algorithm::Sha256 => Ok(sign_sha256(key_pair, data)),
+        DigestAlgorithm::Sha256 => Ok(sign_sha256(key_pair, data)),
         _ => Err(NodeError::new(
             "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
             "sign currently supports RSA-SHA256",
@@ -1258,6 +1262,14 @@ pub struct SigningOptions {
     pub salt_length: Option<i32>,
     pub dsa_encoding: Option<String>,
     pub context: Option<Buffer>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignKeyObjectInput {
+    pub key: KeyObject,
+    pub padding: Option<i32>,
+    pub salt_length: Option<i32>,
+    pub dsa_encoding: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1320,7 +1332,7 @@ pub fn verify(
     signature: &Buffer,
 ) -> NodeResult<bool> {
     match parse_algorithm(algorithm)? {
-        Algorithm::Sha256 => verify_sha256(public_key, data, signature),
+        DigestAlgorithm::Sha256 => verify_sha256(public_key, data, signature),
         _ => Err(NodeError::new(
             "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
             "verify currently supports RSA-SHA256",
@@ -1379,6 +1391,11 @@ pub fn create_verify(algorithm: &str) -> Verify {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Algorithm {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyAlgorithm {
     pub name: String,
 }
@@ -1430,6 +1447,12 @@ pub struct RsaHashedKeyAlgorithm {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RsaHashedImportParams {
+    pub name: String,
+    pub hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HmacKeyAlgorithm {
     pub name: String,
     pub hash: KeyAlgorithm,
@@ -1455,6 +1478,8 @@ pub struct EcKeyGenParams {
     pub name: String,
     pub named_curve: String,
 }
+
+pub type EcKeyAlgorithm = EcKeyGenParams;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EcKeyImportParams {
@@ -1496,6 +1521,12 @@ pub struct CryptoKeyPair {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyPairExportResult {
+    pub public_key: KeyObject,
+    pub private_key: KeyObject,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AeadParams {
     pub name: String,
     pub iv: Buffer,
@@ -1508,6 +1539,16 @@ pub struct AesCbcParams {
     pub name: String,
     pub iv: Buffer,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CipherGcmOptions {
+    pub auth_tag_length: usize,
+}
+
+pub type CipherCCMOptions = CipherGcmOptions;
+pub type CipherGCMOptions = CipherGcmOptions;
+pub type CipherOCBOptions = CipherGcmOptions;
+pub type CipherChaCha20Poly1305Options = CipherGcmOptions;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AesCtrParams {
@@ -1539,6 +1580,19 @@ pub struct EcdhKeyDeriveParams {
     pub name: String,
     pub public: CryptoKey,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContextParams {
+    pub context: Buffer,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EncapsulatedKey {
+    pub shared_key: Buffer,
+    pub ciphertext: Buffer,
+}
+
+pub type EncapsulatedBits = EncapsulatedKey;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CShakeParams {
@@ -1618,6 +1672,9 @@ pub struct GeneratePrimeOptions {
     pub safe: Option<bool>,
     pub bigint: Option<bool>,
 }
+
+pub type GeneratePrimeOptionsArrayBuffer = GeneratePrimeOptions;
+pub type GeneratePrimeOptionsBigInt = GeneratePrimeOptions;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CheckPrimeOptions {
@@ -1748,12 +1805,12 @@ pub mod webcrypto {
     }
 }
 
-fn parse_algorithm(algorithm: &str) -> NodeResult<Algorithm> {
+fn parse_algorithm(algorithm: &str) -> NodeResult<DigestAlgorithm> {
     match algorithm.to_ascii_lowercase().as_str() {
-        "sha256" | "sha-256" => Ok(Algorithm::Sha256),
-        "sha1" | "sha-1" => Ok(Algorithm::Sha1),
-        "sha384" | "sha-384" => Ok(Algorithm::Sha384),
-        "sha512" | "sha-512" => Ok(Algorithm::Sha512),
+        "sha256" | "sha-256" => Ok(DigestAlgorithm::Sha256),
+        "sha1" | "sha-1" => Ok(DigestAlgorithm::Sha1),
+        "sha384" | "sha-384" => Ok(DigestAlgorithm::Sha384),
+        "sha512" | "sha-512" => Ok(DigestAlgorithm::Sha512),
         other => Err(NodeError::new(
             "ERR_CRYPTO_UNSUPPORTED_ALGORITHM",
             format!("unsupported hash algorithm `{other}`"),
@@ -1761,35 +1818,35 @@ fn parse_algorithm(algorithm: &str) -> NodeResult<Algorithm> {
     }
 }
 
-fn digest_bytes(algorithm: Algorithm, input: &[u8]) -> Vec<u8> {
+fn digest_bytes(algorithm: DigestAlgorithm, input: &[u8]) -> Vec<u8> {
     match algorithm {
-        Algorithm::Sha1 => sha1(input).to_vec(),
-        Algorithm::Sha256 => sha256(input).to_vec(),
-        Algorithm::Sha384 => Sha384::digest(input).to_vec(),
-        Algorithm::Sha512 => Sha512::digest(input).to_vec(),
+        DigestAlgorithm::Sha1 => sha1(input).to_vec(),
+        DigestAlgorithm::Sha256 => sha256(input).to_vec(),
+        DigestAlgorithm::Sha384 => Sha384::digest(input).to_vec(),
+        DigestAlgorithm::Sha512 => Sha512::digest(input).to_vec(),
     }
 }
 
-fn hmac_digest_buffer(algorithm: Algorithm, key: &[u8], data: &[u8]) -> Vec<u8> {
+fn hmac_digest_buffer(algorithm: DigestAlgorithm, key: &[u8], data: &[u8]) -> Vec<u8> {
     match hmac_digest_algorithm(algorithm, key, data, None).expect("valid HMAC digest") {
         DigestResult::Buffer(buffer) => buffer.as_bytes().to_vec(),
         DigestResult::String(_) => unreachable!("buffer digest requested"),
     }
 }
 
-fn digest_len(algorithm: Algorithm) -> usize {
+fn digest_len(algorithm: DigestAlgorithm) -> usize {
     match algorithm {
-        Algorithm::Sha1 => 20,
-        Algorithm::Sha256 => 32,
-        Algorithm::Sha384 => 48,
-        Algorithm::Sha512 => 64,
+        DigestAlgorithm::Sha1 => 20,
+        DigestAlgorithm::Sha256 => 32,
+        DigestAlgorithm::Sha384 => 48,
+        DigestAlgorithm::Sha512 => 64,
     }
 }
 
-fn hmac_block_size(algorithm: Algorithm) -> usize {
+fn hmac_block_size(algorithm: DigestAlgorithm) -> usize {
     match algorithm {
-        Algorithm::Sha1 | Algorithm::Sha256 => 64,
-        Algorithm::Sha384 | Algorithm::Sha512 => 128,
+        DigestAlgorithm::Sha1 | DigestAlgorithm::Sha256 => 64,
+        DigestAlgorithm::Sha384 | DigestAlgorithm::Sha512 => 128,
     }
 }
 

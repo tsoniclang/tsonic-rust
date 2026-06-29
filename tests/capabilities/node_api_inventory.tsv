@@ -3917,7 +3917,7 @@ NODE-CRYPTO-SECURE-HEAP-USAGE-MIN	crypto	SecureHeapUsage.min	implemented	N85	tso
 NODE-CRYPTO-RANDOM-UUID-OPTIONS-DISABLE-ENTROPY-CACHE	crypto	RandomUUIDOptions.disableEntropyCache	implemented	N85	tsonic_node::crypto::RandomUUIDOptions::disable_entropy_cache	NODE-CRYPTO-007	randomUUID disableEntropyCache option field
 NODE-CRYPTO-HASH-OPTIONS-OUTPUT-LENGTH	crypto	HashOptions.outputLength	implemented	N85	tsonic_node::crypto::HashOptions::output_length	NODE-CRYPTO-007	HashOptions outputLength field
 NODE-CRYPTO-ONESHOT-DIGEST-OPTIONS-OUTPUT-LENGTH	crypto	OneShotDigestOptions.outputLength	implemented	N85	tsonic_node::crypto::OneShotDigestOptions::output_length	NODE-CRYPTO-007	one-shot digest outputLength field
-NODE-CRYPTO-ONESHOT-DIGEST-OPTIONS-ENCODING	crypto	OneShotDigestOptions.encoding	implemented	N85	tsonic_node::crypto::OneShotDigestOptions::encoding	NODE-CRYPTO-007	one-shot digest encoding field
+NODE-CRYPTO-ONESHOT-DIGEST-OPTIONS-ENCODING	crypto	OneShotDigestOptions.outputEncoding	implemented	N85	tsonic_node::crypto::OneShotDigestOptions::output_encoding	NODE-CRYPTO-007	one-shot digest outputEncoding field
 NODE-CRYPTO-CIPHER-INFO-OPTIONS-KEY-LENGTH	crypto	CipherInfoOptions.keyLength	implemented	N85	tsonic_node::crypto::CipherInfoOptions::key_length	NODE-CRYPTO-007	CipherInfoOptions keyLength field
 NODE-CRYPTO-CIPHER-INFO-OPTIONS-IV-LENGTH	crypto	CipherInfoOptions.ivLength	implemented	N85	tsonic_node::crypto::CipherInfoOptions::iv_length	NODE-CRYPTO-007	CipherInfoOptions ivLength field
 NODE-CRYPTO-CIPHER-INFO-NAME	crypto	CipherInfo.name	implemented	N85	tsonic_node::crypto::CipherInfo::name	NODE-CRYPTO-007	CipherInfo name field
@@ -3934,7 +3934,7 @@ NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-SALT-LENGTH	crypto	AsymmetricKeyDetails.saltL
 NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-NAMED-CURVE	crypto	AsymmetricKeyDetails.namedCurve	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::named_curve	NODE-CRYPTO-008	asymmetric key namedCurve field
 NODE-CRYPTO-ASYMMETRIC-KEY-DETAILS-DIVISOR-LENGTH	crypto	AsymmetricKeyDetails.divisorLength	implemented	N85	tsonic_node::crypto::AsymmetricKeyDetails::divisor_length	NODE-CRYPTO-008	asymmetric key divisorLength field
 NODE-CRYPTO-KEY-EXPORT-OPTIONS-FORMAT	crypto	KeyExportOptions.format	implemented	N85	tsonic_node::crypto::KeyExportOptions::format	NODE-CRYPTO-008	key export format field
-NODE-CRYPTO-KEY-EXPORT-OPTIONS-TYPE	crypto	KeyExportOptions.type	implemented	N85	tsonic_node::crypto::KeyExportOptions::key_type	NODE-CRYPTO-008	key export type field
+NODE-CRYPTO-KEY-EXPORT-OPTIONS-TYPE	crypto	KeyExportOptions.type	implemented	N85	tsonic_node::crypto::KeyExportOptions::r#type	NODE-CRYPTO-008	key export type field
 NODE-CRYPTO-KEY-EXPORT-OPTIONS-CIPHER	crypto	KeyExportOptions.cipher	implemented	N85	tsonic_node::crypto::KeyExportOptions::cipher	NODE-CRYPTO-008	key export cipher field
 NODE-CRYPTO-KEY-EXPORT-OPTIONS-PASSPHRASE	crypto	KeyExportOptions.passphrase	implemented	N85	tsonic_node::crypto::KeyExportOptions::passphrase	NODE-CRYPTO-008	key export passphrase field
 NODE-CRYPTO-KEY-EXPORT-OPTIONS-ENCODING	crypto	KeyExportOptions.encoding	implemented	N85	tsonic_node::crypto::KeyExportOptions::encoding	NODE-CRYPTO-008	key export encoding field
@@ -3949,7 +3949,7 @@ NODE-CRYPTO-JSONWEBKEY-K	crypto	JsonWebKey.k	implemented	N85	tsonic_node::crypto
 NODE-CRYPTO-JSONWEBKEY-ALG	crypto	JsonWebKey.alg	implemented	N85	tsonic_node::crypto::JsonWebKey::alg	NODE-CRYPTO-008	JWK alg field
 NODE-CRYPTO-JSONWEBKEY-KEY-OPS	crypto	JsonWebKey.key_ops	implemented	N85	tsonic_node::crypto::JsonWebKey::key_ops	NODE-CRYPTO-008	JWK key_ops field
 NODE-CRYPTO-JSONWEBKEY-EXT	crypto	JsonWebKey.ext	implemented	N85	tsonic_node::crypto::JsonWebKey::ext	NODE-CRYPTO-008	JWK ext field
-NODE-CRYPTO-JSONWEBKEY-INPUT-JWK	crypto	JsonWebKeyInput.jwk	implemented	N85	tsonic_node::crypto::JsonWebKeyInput::jwk	NODE-CRYPTO-008	JWK input field
+NODE-CRYPTO-JSONWEBKEY-INPUT-KEY	crypto	JsonWebKeyInput.key	implemented	N85	tsonic_node::crypto::JsonWebKeyInput::key	NODE-CRYPTO-008	JWK input key field
 NODE-CRYPTO-JWK-EXPORT-OPTIONS-FORMAT	crypto	JwkKeyExportOptions.format	implemented	N85	tsonic_node::crypto::JwkKeyExportOptions::format	NODE-CRYPTO-008	JWK export format field
 NODE-CRYPTO-SIGNING-OPTIONS-PADDING	crypto	SigningOptions.padding	implemented	N85	tsonic_node::crypto::SigningOptions::padding	NODE-CRYPTO-009	SigningOptions padding field
 NODE-CRYPTO-SIGNING-OPTIONS-SALT-LENGTH	crypto	SigningOptions.saltLength	implemented	N85	tsonic_node::crypto::SigningOptions::salt_length	NODE-CRYPTO-009	SigningOptions saltLength field
@@ -3960,8 +3960,8 @@ NODE-CRYPTO-PBKDF2-PARAMS-PASSWORD	crypto	Pbkdf2Params.password	implemented	N85	
 NODE-CRYPTO-PBKDF2-PARAMS-SALT	crypto	Pbkdf2Params.salt	implemented	N85	tsonic_node::crypto::Pbkdf2Params::salt	NODE-CRYPTO-KDF-002	PBKDF2 salt field
 NODE-CRYPTO-PBKDF2-PARAMS-ITERATIONS	crypto	Pbkdf2Params.iterations	implemented	N85	tsonic_node::crypto::Pbkdf2Params::iterations	NODE-CRYPTO-KDF-002	PBKDF2 iterations field
 NODE-CRYPTO-PBKDF2-PARAMS-KEY-LEN	crypto	Pbkdf2Params.keylen	implemented	N85	tsonic_node::crypto::Pbkdf2Params::key_len	NODE-CRYPTO-KDF-002	PBKDF2 key length field
-NODE-CRYPTO-PBKDF2-PARAMS-DIGEST	crypto	Pbkdf2Params.digest	implemented	N85	tsonic_node::crypto::Pbkdf2Params::digest	NODE-CRYPTO-KDF-002	PBKDF2 digest field
-NODE-CRYPTO-HKDF-PARAMS-DIGEST	crypto	HkdfParams.digest	implemented	N85	tsonic_node::crypto::HkdfParams::digest	NODE-CRYPTO-KDF-002	HKDF digest field
+NODE-CRYPTO-PBKDF2-PARAMS-DIGEST	crypto	Pbkdf2Params.hash	implemented	N85	tsonic_node::crypto::Pbkdf2Params::hash	NODE-CRYPTO-KDF-002	PBKDF2 hash field
+NODE-CRYPTO-HKDF-PARAMS-DIGEST	crypto	HkdfParams.hash	implemented	N85	tsonic_node::crypto::HkdfParams::hash	NODE-CRYPTO-KDF-002	HKDF hash field
 NODE-CRYPTO-HKDF-PARAMS-IKM	crypto	HkdfParams.inputKeyingMaterial	implemented	N85	tsonic_node::crypto::HkdfParams::input_keying_material	NODE-CRYPTO-KDF-002	HKDF input keying material field
 NODE-CRYPTO-HKDF-PARAMS-SALT	crypto	HkdfParams.salt	implemented	N85	tsonic_node::crypto::HkdfParams::salt	NODE-CRYPTO-KDF-002	HKDF salt field
 NODE-CRYPTO-HKDF-PARAMS-INFO	crypto	HkdfParams.info	implemented	N85	tsonic_node::crypto::HkdfParams::info	NODE-CRYPTO-KDF-002	HKDF info field
@@ -4021,13 +4021,13 @@ NODE-CRYPTO-JSONWEBKEY-USE	crypto	JsonWebKey.use	implemented	N86	tsonic_node::cr
 NODE-CRYPTO-PRIVATE-KEY-INPUT	crypto	PrivateKeyInput	implemented	N86	tsonic_node::crypto::PrivateKeyInput	NODE-CRYPTO-010	closed private key input carrier
 NODE-CRYPTO-PRIVATE-KEY-INPUT-KEY	crypto	PrivateKeyInput.key	implemented	N86	tsonic_node::crypto::PrivateKeyInput::key	NODE-CRYPTO-010	private key input key field
 NODE-CRYPTO-PRIVATE-KEY-INPUT-FORMAT	crypto	PrivateKeyInput.format	implemented	N86	tsonic_node::crypto::PrivateKeyInput::format	NODE-CRYPTO-010	private key input format field
-NODE-CRYPTO-PRIVATE-KEY-INPUT-TYPE	crypto	PrivateKeyInput.type	implemented	N86	tsonic_node::crypto::PrivateKeyInput::key_type	NODE-CRYPTO-010	private key input type field
+NODE-CRYPTO-PRIVATE-KEY-INPUT-TYPE	crypto	PrivateKeyInput.type	implemented	N86	tsonic_node::crypto::PrivateKeyInput::r#type	NODE-CRYPTO-010	private key input type field
 NODE-CRYPTO-PRIVATE-KEY-INPUT-ENCODING	crypto	PrivateKeyInput.encoding	implemented	N86	tsonic_node::crypto::PrivateKeyInput::encoding	NODE-CRYPTO-010	private key input encoding field
 NODE-CRYPTO-PRIVATE-KEY-INPUT-PASSPHRASE	crypto	PrivateKeyInput.passphrase	implemented	N86	tsonic_node::crypto::PrivateKeyInput::passphrase	NODE-CRYPTO-010	private key input passphrase field
 NODE-CRYPTO-PUBLIC-KEY-INPUT	crypto	PublicKeyInput	implemented	N86	tsonic_node::crypto::PublicKeyInput	NODE-CRYPTO-010	closed public key input carrier
 NODE-CRYPTO-PUBLIC-KEY-INPUT-KEY	crypto	PublicKeyInput.key	implemented	N86	tsonic_node::crypto::PublicKeyInput::key	NODE-CRYPTO-010	public key input key field
 NODE-CRYPTO-PUBLIC-KEY-INPUT-FORMAT	crypto	PublicKeyInput.format	implemented	N86	tsonic_node::crypto::PublicKeyInput::format	NODE-CRYPTO-010	public key input format field
-NODE-CRYPTO-PUBLIC-KEY-INPUT-TYPE	crypto	PublicKeyInput.type	implemented	N86	tsonic_node::crypto::PublicKeyInput::key_type	NODE-CRYPTO-010	public key input type field
+NODE-CRYPTO-PUBLIC-KEY-INPUT-TYPE	crypto	PublicKeyInput.type	implemented	N86	tsonic_node::crypto::PublicKeyInput::r#type	NODE-CRYPTO-010	public key input type field
 NODE-CRYPTO-PUBLIC-KEY-INPUT-ENCODING	crypto	PublicKeyInput.encoding	implemented	N86	tsonic_node::crypto::PublicKeyInput::encoding	NODE-CRYPTO-010	public key input encoding field
 NODE-CRYPTO-RSA-PRIVATE-KEY-INPUT	crypto	RsaPrivateKey	implemented	N86	tsonic_node::crypto::RsaPrivateKeyInput	NODE-CRYPTO-010	closed RSA private key input carrier
 NODE-CRYPTO-RSA-PRIVATE-KEY-INPUT-KEY	crypto	RsaPrivateKey.key	implemented	N86	tsonic_node::crypto::RsaPrivateKeyInput::key	NODE-CRYPTO-010	RSA private key input key field
@@ -5197,3 +5197,30 @@ NODE-EXACT-CRYPTO-D38FC9E5	crypto	defaultCipherList	implemented	N96	tsonic_node:
 NODE-EXACT-CRYPTO-B7CA5470	crypto	defaultCoreCipherList	implemented	N96	tsonic_node::crypto::DEFAULT_CORE_CIPHER_LIST	NODE-CRYPTO-CONSTANTS-EXACT-001	exact crypto constant API defaultCoreCipherList maps to closed Rust constant
 NODE-EXACT-CRYPTO-92DDC248	crypto	Hash.update	implemented	N96	tsonic_node::crypto::Hash::update	NODE-CRYPTO-001	exact streaming Hash.update API maps to closed byte update helper and covers NODEAPI-92ddc248,NODEAPI-9a3c3233
 NODE-EXACT-CRYPTO-58DF2AD0	crypto	Hmac.update	implemented	N96	tsonic_node::crypto::Hmac::update	NODE-CRYPTO-004	exact streaming Hmac.update API maps to closed byte update helper and covers NODEAPI-58df2ad0,NODEAPI-9cdf80b5
+NODE-EXACT-CRYPTO-5AA5AD63	crypto	OneShotDigestOptionsWithBufferEncoding.outputEncoding	implemented	N96	tsonic_node::crypto::OneShotDigestOptionsWithBufferEncoding::output_encoding	NODE-CRYPTO-007	exact one-shot digest buffer outputEncoding option maps to closed Rust option carrier
+NODE-EXACT-CRYPTO-D8338B5F	crypto	OneShotDigestOptionsWithStringEncoding.outputEncoding	implemented	N96	tsonic_node::crypto::OneShotDigestOptionsWithStringEncoding::output_encoding	NODE-CRYPTO-007	exact one-shot digest string outputEncoding option maps to closed Rust option carrier
+NODE-EXACT-CRYPTO-C117F371	crypto	JsonWebKeyInput.format	implemented	N96	tsonic_node::crypto::JsonWebKeyInput::format	NODE-CRYPTO-008	exact JWK input format field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-424BD824	crypto	PrivateKeyExportOptions.cipher	implemented	N96	tsonic_node::crypto::PrivateKeyExportOptions::cipher	NODE-CRYPTO-008	exact private key export cipher option maps through closed key export carrier
+NODE-EXACT-CRYPTO-3694FD8B	crypto	PrivateKeyExportOptions.format	implemented	N96	tsonic_node::crypto::PrivateKeyExportOptions::format	NODE-CRYPTO-008	exact private key export format option maps through closed key export carrier
+NODE-EXACT-CRYPTO-1AA869BA	crypto	PrivateKeyExportOptions.passphrase	implemented	N96	tsonic_node::crypto::PrivateKeyExportOptions::passphrase	NODE-CRYPTO-008	exact private key export passphrase option maps through closed key export carrier
+NODE-EXACT-CRYPTO-346A61A1	crypto	PrivateKeyExportOptions.type	implemented	N96	tsonic_node::crypto::PrivateKeyExportOptions::r#type	NODE-CRYPTO-008	exact private key export type option maps through closed key export carrier
+NODE-EXACT-CRYPTO-BC90CBBF	crypto	PublicKeyExportOptions.format	implemented	N96	tsonic_node::crypto::PublicKeyExportOptions::format	NODE-CRYPTO-008	exact public key export format option maps through closed key export carrier
+NODE-EXACT-CRYPTO-92802DBD	crypto	PublicKeyExportOptions.type	implemented	N96	tsonic_node::crypto::PublicKeyExportOptions::r#type	NODE-CRYPTO-008	exact public key export type option maps through closed key export carrier
+NODE-EXACT-CRYPTO-3AF5F663	crypto	SymmetricKeyExportOptions.format	implemented	N96	tsonic_node::crypto::SymmetricKeyExportOptions::format	NODE-CRYPTO-008	exact symmetric key export format option maps through closed key export carrier
+NODE-EXACT-CRYPTO-CB94F9D8	crypto	Algorithm.name	implemented	N96	tsonic_node::crypto::Algorithm::name	NODE-CRYPTO-010	exact WebCrypto algorithm name field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-3FF53982	crypto	CipherCCMOptions.authTagLength	implemented	N96	tsonic_node::crypto::CipherCCMOptions::auth_tag_length	NODE-CRYPTO-010	exact CCM authTagLength option maps to closed Rust carrier
+NODE-EXACT-CRYPTO-A16DD636	crypto	CipherChaCha20Poly1305Options.authTagLength	implemented	N96	tsonic_node::crypto::CipherChaCha20Poly1305Options::auth_tag_length	NODE-CRYPTO-010	exact ChaCha20-Poly1305 authTagLength option maps to closed Rust carrier
+NODE-EXACT-CRYPTO-36E994F7	crypto	CipherGCMOptions.authTagLength	implemented	N96	tsonic_node::crypto::CipherGCMOptions::auth_tag_length	NODE-CRYPTO-010	exact GCM authTagLength option maps to closed Rust carrier
+NODE-EXACT-CRYPTO-1EB8D04F	crypto	CipherOCBOptions.authTagLength	implemented	N96	tsonic_node::crypto::CipherOCBOptions::auth_tag_length	NODE-CRYPTO-010	exact OCB authTagLength option maps to closed Rust carrier
+NODE-EXACT-CRYPTO-FF1C13EB	crypto	ContextParams.context	implemented	N96	tsonic_node::crypto::ContextParams::context	NODE-CRYPTO-010	exact context parameter field maps to closed Rust Buffer carrier
+NODE-EXACT-CRYPTO-D20CF79E	crypto	EncapsulatedBits.ciphertext	implemented	N96	tsonic_node::crypto::EncapsulatedBits::ciphertext	NODE-CRYPTO-010	exact encapsulated bits ciphertext field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-9DE69785	crypto	EncapsulatedBits.sharedKey	implemented	N96	tsonic_node::crypto::EncapsulatedBits::shared_key	NODE-CRYPTO-010	exact encapsulated bits sharedKey field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-C6CEC0D0	crypto	EncapsulatedKey.ciphertext	implemented	N96	tsonic_node::crypto::EncapsulatedKey::ciphertext	NODE-CRYPTO-010	exact encapsulated key ciphertext field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-61F15F75	crypto	EncapsulatedKey.sharedKey	implemented	N96	tsonic_node::crypto::EncapsulatedKey::shared_key	NODE-CRYPTO-010	exact encapsulated key sharedKey field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-D50D52FB	crypto	GeneratePrimeOptionsArrayBuffer.bigint	implemented	N96	tsonic_node::crypto::GeneratePrimeOptionsArrayBuffer::bigint	NODE-CRYPTO-010	exact array-buffer generatePrime bigint option maps to closed Rust carrier
+NODE-EXACT-CRYPTO-5BD469E4	crypto	GeneratePrimeOptionsBigInt.bigint	implemented	N96	tsonic_node::crypto::GeneratePrimeOptionsBigInt::bigint	NODE-CRYPTO-010	exact bigint generatePrime bigint option maps to closed Rust carrier
+NODE-EXACT-CRYPTO-D393F517	crypto	KeyPairExportResult.privateKey	implemented	N96	tsonic_node::crypto::KeyPairExportResult::private_key	NODE-CRYPTO-010	exact key-pair export privateKey field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-89E90540	crypto	KeyPairExportResult.publicKey	implemented	N96	tsonic_node::crypto::KeyPairExportResult::public_key	NODE-CRYPTO-010	exact key-pair export publicKey field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-2A26B03C	crypto	RsaHashedImportParams.hash	implemented	N96	tsonic_node::crypto::RsaHashedImportParams::hash	NODE-CRYPTO-010	exact RSA hashed import hash field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-A5D6DA10	crypto	SignKeyObjectInput.key	implemented	N96	tsonic_node::crypto::SignKeyObjectInput::key	NODE-CRYPTO-010	exact sign key object input key field maps to closed Rust carrier
+NODE-EXACT-CRYPTO-DAFC48B0	crypto	EcKeyAlgorithm.namedCurve	implemented	N96	tsonic_node::crypto::EcKeyAlgorithm::named_curve	NODE-CRYPTO-010	exact EC key algorithm namedCurve field maps to closed Rust carrier
