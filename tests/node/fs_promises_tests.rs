@@ -72,7 +72,9 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     .unwrap()
     .is_none());
     fs_promises::access(&file_text).unwrap();
+    assert!(fs_promises::exists(&file_text).unwrap());
     fs_promises::chmod(&file_text, 0o600).unwrap();
+    fs_promises::lchmod(&file_text, 0o600).unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -122,6 +124,12 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
         "hello world!"
     );
     assert!(fs_promises::realpath(&link_text)
+        .unwrap()
+        .ends_with("hardlink.txt"));
+    assert!(fs_promises::realpath_native(&link_text)
+        .unwrap()
+        .ends_with("hardlink.txt"));
+    assert!(fs_promises::realpath_sync_native(&link_text)
         .unwrap()
         .ends_with("hardlink.txt"));
     fs_promises::unlink(&link_text).unwrap();
@@ -321,11 +329,121 @@ fn fs_promises_exposes_blocking_now_variants_with_node_shapes() {
     handle.sync().unwrap();
     handle.datasync().unwrap();
     handle.truncate(10).unwrap();
+    assert_eq!(fs_promises::fstat(handle.fd()).unwrap().size, 10);
+    assert_eq!(
+        fs_promises::fstat_with_options(handle.fd(), fs_promises::StatOptions::default())
+            .unwrap()
+            .size,
+        10
+    );
+    fs_promises::fsync(handle.fd()).unwrap();
+    fs_promises::fdatasync(handle.fd()).unwrap();
+    fs_promises::ftruncate(handle.fd(), 10).unwrap();
+    fs_promises::fchmod(handle.fd(), 0o600).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = std::fs::metadata(&file_text).unwrap();
+        fs_promises::fchown(handle.fd(), metadata.uid(), metadata.gid()).unwrap();
+    }
+    fs_promises::futimes(handle.fd(), 1_600_000_015.0, 1_600_000_016.0).unwrap();
     handle.close().unwrap();
     assert_eq!(
         fs_promises::read_file_string(&file_text, "utf8").unwrap(),
         "hello rust"
     );
+
+    let direct_fd = fs_promises::open(&file_text, "r+").unwrap().fd();
+    let mut direct_read_buffer = Buffer::alloc(5);
+    assert_eq!(
+        fs_promises::read(direct_fd, &mut direct_read_buffer, 0, 5, Some(0)).unwrap(),
+        5
+    );
+    assert_eq!(direct_read_buffer.to_string(Some("utf8")).unwrap(), "hello");
+    let direct_read_result = fs_promises::read_with_options(
+        direct_fd,
+        Buffer::alloc(5),
+        fs_promises::ReadOptions {
+            offset: 0,
+            length: 5,
+            position: Some(0),
+        },
+    )
+    .unwrap();
+    assert_eq!(direct_read_result.bytes_read, 5);
+    assert_eq!(
+        direct_read_result.buffer.to_string(Some("utf8")).unwrap(),
+        "hello"
+    );
+    assert_eq!(
+        fs_promises::write_string(direct_fd, "ABCDE", Some(0), "utf8").unwrap(),
+        5
+    );
+    assert_eq!(
+        fs_promises::write_string_with_options(
+            direct_fd,
+            "hi",
+            fs_promises::WriteOptions::string(Some(0), "utf8")
+        )
+        .unwrap()
+        .bytes_written,
+        2
+    );
+    let direct_buffer = Buffer::from_string("!!", Some("utf8")).unwrap();
+    assert_eq!(
+        fs_promises::write_buffer(direct_fd, &direct_buffer, 0, 2, Some(2)).unwrap(),
+        2
+    );
+    assert_eq!(
+        fs_promises::write_buffer_with_options(
+            direct_fd,
+            &direct_buffer,
+            fs_promises::WriteOptions::buffer(0, 1, Some(4))
+        )
+        .unwrap()
+        .bytes_written,
+        1
+    );
+    let mut direct_readv_buffers = [Buffer::alloc(2), Buffer::alloc(3)];
+    assert_eq!(
+        fs_promises::readv(direct_fd, &mut direct_readv_buffers, Some(0)).unwrap(),
+        5
+    );
+    let mut direct_readv_result_buffers = [Buffer::alloc(2), Buffer::alloc(3)];
+    assert_eq!(
+        fs_promises::readv_result(direct_fd, &mut direct_readv_result_buffers, Some(0))
+            .unwrap()
+            .bytes_read,
+        5
+    );
+    assert_eq!(
+        fs_promises::writev(
+            direct_fd,
+            &[
+                Buffer::from_string("O", Some("utf8")).unwrap(),
+                Buffer::from_string("K", Some("utf8")).unwrap(),
+            ],
+            Some(0)
+        )
+        .unwrap(),
+        2
+    );
+    assert_eq!(
+        fs_promises::writev_result(
+            direct_fd,
+            &[
+                Buffer::from_string("1", Some("utf8")).unwrap(),
+                Buffer::from_string("2", Some("utf8")).unwrap(),
+            ],
+            Some(2)
+        )
+        .unwrap()
+        .bytes_written,
+        2
+    );
+    fs_promises::close(direct_fd).unwrap();
+    fs_promises::write_file_string(&file_text, "hello rust", "utf8").unwrap();
     fs_promises::truncate(&file_text, 5).unwrap();
     assert_eq!(
         fs_promises::read_file_string(&file_text, "utf8").unwrap(),

@@ -3,11 +3,14 @@ use crate::error::NodeResult;
 use crate::fs::{self, FsWriteData};
 
 pub use crate::fs::{
-    BigIntOptions, CopyFilter, CopyOptions, CopyOptionsBase, CopySyncOptions, Dirent, FsReadResult,
-    FsStreamOptions, FsWatchEvent, FsWatcher, MakeDirectoryOptions, ObjectEncodingOptions,
-    OpenDirOptions, ReadOptions, ReadResult, ReadStreamOptions, ReadVResult, RmOptions, StatFs,
-    StatFsOptions, StatOptions, StatWatcher, Stats, StatsBase, WatchFileOptions, WatchOptions,
-    WriteOptions, WriteResult, WriteStreamOptions, WriteVResult,
+    BigIntOptions, BufferEncoding, CopyFilter, CopyOptions, CopyOptionsBase, CopySyncOptions,
+    CreateReadStreamOptions, CreateWriteStreamOptions, Dirent, FsReadResult, FsStreamOptions,
+    FsWatchEvent, FsWatcher, MakeDirectoryOptions, Mode, NoParamCallback, ObjectEncodingOptions,
+    OpenDirOptions, OpenMode, PathLike, PathOrFileDescriptor, ReadOptions, ReadPosition,
+    ReadResult, ReadStreamOptions, ReadVResult, RmOptions, StatFs, StatFsOptions, StatOptions,
+    StatWatcher, Stats, StatsBase, StreamOptions, TimeLike, WatchFileOptions, WatchOptions,
+    WatchOptionsWithBufferEncoding, WatchOptionsWithStringEncoding, WriteOptions, WriteResult,
+    WriteStreamOptions, WriteVResult,
 };
 
 pub type BigIntStats = Stats;
@@ -464,6 +467,10 @@ pub fn access(path: &str) -> NodeResult<()> {
     fs::access_sync(path)
 }
 
+pub fn exists(path: &str) -> NodeResult<bool> {
+    Ok(fs::exists_sync(path))
+}
+
 pub fn read_file_string(path: &str, encoding: &str) -> NodeResult<String> {
     fs::read_file_sync_string(path, encoding)
 }
@@ -533,6 +540,10 @@ pub fn append_file_buffer_with_options(
 
 pub fn chmod(path: &str, mode: u32) -> NodeResult<()> {
     fs::chmod_sync(path, mode)
+}
+
+pub fn lchmod(path: &str, mode: u32) -> NodeResult<()> {
+    fs::lchmod_sync(path, mode)
 }
 
 pub fn chown(path: &str, uid: u32, gid: u32) -> NodeResult<()> {
@@ -650,6 +661,14 @@ pub fn realpath(path: &str) -> NodeResult<String> {
     fs::realpath_sync(path)
 }
 
+pub fn realpath_native(path: &str) -> NodeResult<String> {
+    fs::realpath_native(path)
+}
+
+pub fn realpath_sync_native(path: &str) -> NodeResult<String> {
+    fs::realpath_sync_native(path)
+}
+
 pub fn readdir(path: &str) -> NodeResult<Vec<String>> {
     fs::readdir_sync(path)
 }
@@ -692,6 +711,115 @@ pub fn open_with_options(path: &str, options: FlagAndOpenMode) -> NodeResult<Fil
         handle.chmod(options.mode)?;
     }
     Ok(handle)
+}
+
+pub fn close(fd: i32) -> NodeResult<()> {
+    fs::close_sync(fd)
+}
+
+pub fn read(
+    fd: i32,
+    buffer: &mut Buffer,
+    offset: usize,
+    length: usize,
+    position: Option<u64>,
+) -> NodeResult<usize> {
+    fs::read_sync(fd, buffer, offset, length, position)
+}
+
+pub fn read_with_options(fd: i32, buffer: Buffer, options: ReadOptions) -> NodeResult<ReadResult> {
+    fs::read_sync_with_options(fd, buffer, options)
+}
+
+pub fn readv(fd: i32, buffers: &mut [Buffer], position: Option<u64>) -> NodeResult<usize> {
+    fs::readv_sync(fd, buffers, position)
+}
+
+pub fn readv_result(
+    fd: i32,
+    buffers: &mut [Buffer],
+    position: Option<u64>,
+) -> NodeResult<ReadVResult> {
+    fs::readv_sync_result(fd, buffers, position)
+}
+
+pub fn write_buffer(
+    fd: i32,
+    buffer: &Buffer,
+    offset: usize,
+    length: usize,
+    position: Option<u64>,
+) -> NodeResult<usize> {
+    fs::write_sync_buffer(fd, buffer, offset, length, position)
+}
+
+pub fn write_buffer_with_options(
+    fd: i32,
+    buffer: &Buffer,
+    options: WriteOptions,
+) -> NodeResult<WriteResult> {
+    fs::write_sync_buffer_with_options(fd, buffer, options)
+}
+
+pub fn write_string(
+    fd: i32,
+    value: &str,
+    position: Option<u64>,
+    encoding: &str,
+) -> NodeResult<usize> {
+    fs::write_sync_string(fd, value, position, encoding)
+}
+
+pub fn write_string_with_options(
+    fd: i32,
+    value: &str,
+    options: WriteOptions,
+) -> NodeResult<WriteResult> {
+    fs::write_sync_string_with_options(fd, value, options)
+}
+
+pub fn writev(fd: i32, buffers: &[Buffer], position: Option<u64>) -> NodeResult<usize> {
+    fs::writev_sync(fd, buffers, position)
+}
+
+pub fn writev_result(
+    fd: i32,
+    buffers: &[Buffer],
+    position: Option<u64>,
+) -> NodeResult<WriteVResult> {
+    fs::writev_sync_result(fd, buffers, position)
+}
+
+pub fn fstat(fd: i32) -> NodeResult<Stats> {
+    fs::fstat_sync(fd)
+}
+
+pub fn fstat_with_options(fd: i32, options: StatOptions) -> NodeResult<Stats> {
+    fs::fstat_sync_with_options(fd, options)
+}
+
+pub fn fsync(fd: i32) -> NodeResult<()> {
+    fs::fsync_sync(fd)
+}
+
+pub fn fdatasync(fd: i32) -> NodeResult<()> {
+    fs::fdatasync_sync(fd)
+}
+
+pub fn ftruncate(fd: i32, len: u64) -> NodeResult<()> {
+    fs::ftruncate_sync(fd, len)
+}
+
+pub fn fchmod(fd: i32, mode: u32) -> NodeResult<()> {
+    fs::fchmod_sync(fd, mode)
+}
+
+pub fn fchown(fd: i32, uid: u32, gid: u32) -> NodeResult<()> {
+    fs::fchown_sync(fd, uid, gid)
+}
+
+pub fn futimes(fd: i32, atime_seconds: f64, mtime_seconds: f64) -> NodeResult<()> {
+    fs::futimes_sync(fd, atime_seconds, mtime_seconds)
 }
 
 pub fn glob(pattern: &str) -> NodeResult<Vec<String>> {

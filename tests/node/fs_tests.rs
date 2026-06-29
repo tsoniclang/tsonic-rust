@@ -119,6 +119,7 @@ fn fs_extended_sync_file_lifecycle() {
 
     fs::access_sync(&file_text).unwrap();
     fs::chmod_sync(&file_text, 0o600).unwrap();
+    fs::lchmod_sync(&file_text, 0o600).unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -311,6 +312,11 @@ fn fs_extended_callback_matrix_uses_real_file_io() {
         chmod_result = Some(result);
     });
     chmod_result.unwrap().unwrap();
+    let mut lchmod_result = None;
+    fs::lchmod_callback(&file_text, 0o600, |result| {
+        lchmod_result = Some(result);
+    });
+    lchmod_result.unwrap().unwrap();
 
     let mut stat_result = None;
     fs::stat_callback(&file_text, |result| {
@@ -523,6 +529,12 @@ fn fs_extended_sync_directory_lifecycle() {
     assert!(fs::realpath_sync(&link_text)
         .unwrap()
         .ends_with("hardlink.txt"));
+    assert!(fs::realpath_native(&link_text)
+        .unwrap()
+        .ends_with("hardlink.txt"));
+    assert!(fs::realpath_sync_native(&link_text)
+        .unwrap()
+        .ends_with("hardlink.txt"));
 
     let truncate = root.join("truncate.txt");
     let truncate_text = truncate.to_string_lossy().to_string();
@@ -730,6 +742,7 @@ fn fs_utf8_stream_is_a_closed_file_writer_shape() {
 
     let mut stream = fs::Utf8Stream::new(fs::Utf8StreamOptions {
         dest: Some(file_text.clone()),
+        fs: None,
         min_length: 1,
         max_length: 64,
         content_mode: "utf8".to_string(),
@@ -950,6 +963,10 @@ fn fs_option_result_and_stream_carriers_expose_backend_legal_fields() {
     let utf8_options = fs::Utf8StreamOptions {
         dest: Some("out.log".to_string()),
         fd: Some(11),
+        fs: Some(fs::FsImplementation {
+            open: true,
+            close: true,
+        }),
         min_length: 1,
         max_length: 2,
         max_write: 3,
@@ -960,9 +977,11 @@ fn fs_option_result_and_stream_carriers_expose_backend_legal_fields() {
         mkdir: true,
         mode: 0o600,
         periodic_flush_ms: Some(50),
+        retry_eagain: true,
     };
     assert_eq!(utf8_options.dest.as_deref(), Some("out.log"));
     assert_eq!(utf8_options.fd, Some(11));
+    assert!(utf8_options.fs.unwrap().open);
     assert_eq!(utf8_options.min_length, 1);
     assert_eq!(utf8_options.max_length, 2);
     assert_eq!(utf8_options.max_write, 3);
@@ -973,6 +992,7 @@ fn fs_option_result_and_stream_carriers_expose_backend_legal_fields() {
     assert!(utf8_options.mkdir);
     assert_eq!(utf8_options.mode, 0o600);
     assert_eq!(utf8_options.periodic_flush_ms, Some(50));
+    assert!(utf8_options.retry_eagain);
 
     let glob = fs::GlobOptions {
         cwd: Some("/tmp".to_string()),

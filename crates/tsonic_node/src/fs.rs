@@ -304,6 +304,15 @@ pub enum FsWriteData<'a> {
     Bytes(&'a [u8]),
 }
 
+pub type PathLike = String;
+pub type PathOrFileDescriptor = String;
+pub type OpenMode = String;
+pub type BufferEncoding = String;
+pub type Mode = u32;
+pub type TimeLike = f64;
+pub type ReadPosition = u64;
+pub type NoParamCallback = fn(NodeResult<()>);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectEncodingOptions {
     pub encoding: Option<String>,
@@ -600,6 +609,7 @@ impl Default for WatchFileOptions {
 pub struct Utf8StreamOptions {
     pub dest: Option<String>,
     pub fd: Option<i32>,
+    pub fs: Option<FsImplementation>,
     pub min_length: usize,
     pub max_length: usize,
     pub max_write: usize,
@@ -610,6 +620,7 @@ pub struct Utf8StreamOptions {
     pub mkdir: bool,
     pub mode: u32,
     pub periodic_flush_ms: Option<u64>,
+    pub retry_eagain: bool,
 }
 
 impl Default for Utf8StreamOptions {
@@ -617,6 +628,7 @@ impl Default for Utf8StreamOptions {
         Self {
             dest: None,
             fd: None,
+            fs: None,
             min_length: 0,
             max_length: usize::MAX,
             max_write: usize::MAX,
@@ -627,6 +639,7 @@ impl Default for Utf8StreamOptions {
             mkdir: false,
             mode: 0o666,
             periodic_flush_ms: None,
+            retry_eagain: false,
         }
     }
 }
@@ -1001,7 +1014,13 @@ impl WriteStream {
 
 pub type StatsBase = Stats;
 pub type BigIntStats = Stats;
+pub type BigIntStatsFs = StatFs;
 pub type StatsFsBase = StatFs;
+pub type StreamOptions = FsStreamOptions;
+pub type CreateReadStreamOptions = ReadStreamOptions;
+pub type CreateWriteStreamOptions = WriteStreamOptions;
+pub type WatchOptionsWithBufferEncoding = WatchOptions;
+pub type WatchOptionsWithStringEncoding = WatchOptions;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dir {
@@ -1193,6 +1212,10 @@ pub fn chmod_sync(path: &str, mode: u32) -> NodeResult<()> {
     let mut permissions = fs::metadata(path).map_err(map_io_error)?.permissions();
     set_permissions_mode(&mut permissions, mode);
     fs::set_permissions(path, permissions).map_err(map_io_error)
+}
+
+pub fn lchmod_sync(path: &str, mode: u32) -> NodeResult<()> {
+    chmod_sync(path, mode)
 }
 
 pub fn fchmod_sync(fd: i32, mode: u32) -> NodeResult<()> {
@@ -1549,6 +1572,14 @@ pub fn realpath_sync(path: &str) -> NodeResult<String> {
     fs::canonicalize(path)
         .map(|path| path.to_string_lossy().to_string())
         .map_err(map_io_error)
+}
+
+pub fn realpath_native(path: &str) -> NodeResult<String> {
+    realpath_sync(path)
+}
+
+pub fn realpath_sync_native(path: &str) -> NodeResult<String> {
+    realpath_sync(path)
 }
 
 pub fn rmdir_sync(path: &str) -> NodeResult<()> {
@@ -1970,6 +2001,10 @@ pub fn lstat_callback(path: &str, callback: impl FnOnce(NodeResult<Stats>)) {
 
 pub fn lchown_callback(path: &str, uid: u32, gid: u32, callback: impl FnOnce(NodeResult<()>)) {
     callback(lchown_sync(path, uid, gid));
+}
+
+pub fn lchmod_callback(path: &str, mode: u32, callback: impl FnOnce(NodeResult<()>)) {
+    callback(lchmod_sync(path, mode));
 }
 
 pub fn utimes_callback(
