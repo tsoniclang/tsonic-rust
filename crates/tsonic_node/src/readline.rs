@@ -160,6 +160,14 @@ pub struct ReadlineOptions {
     pub terminal: bool,
     pub completer: Option<String>,
     pub auto_commit: bool,
+    pub signal: Option<String>,
+    pub history_size: Option<usize>,
+    pub history: Option<Vec<String>>,
+    pub remove_history_duplicates: bool,
+    pub escape_code_timeout: Option<u64>,
+    pub prompt: Option<String>,
+    pub crlf_delay: Option<u64>,
+    pub tab_size: Option<usize>,
 }
 
 impl Readline {

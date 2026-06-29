@@ -68,6 +68,14 @@ fn readline_interface_uses_explicit_input_and_output_buffers() {
         terminal: true,
         completer: Some("word-completer".to_string()),
         auto_commit: true,
+        signal: Some("abort-signal".to_string()),
+        history_size: Some(32),
+        history: Some(vec!["old".to_string()]),
+        remove_history_duplicates: true,
+        escape_code_timeout: Some(500),
+        prompt: Some("prompt> ".to_string()),
+        crlf_delay: Some(100),
+        tab_size: Some(4),
     });
     assert_eq!(configured.options().input.as_deref(), Some("stdin"));
     assert_eq!(configured.options().output.as_deref(), Some("stdout"));
@@ -76,6 +84,17 @@ fn readline_interface_uses_explicit_input_and_output_buffers() {
         configured.options().completer.as_deref(),
         Some("word-completer")
     );
+    assert_eq!(configured.options().signal.as_deref(), Some("abort-signal"));
+    assert_eq!(configured.options().history_size, Some(32));
+    assert_eq!(
+        configured.options().history.as_deref(),
+        Some(&["old".to_string()][..])
+    );
+    assert!(configured.options().remove_history_duplicates);
+    assert_eq!(configured.options().escape_code_timeout, Some(500));
+    assert_eq!(configured.options().prompt.as_deref(), Some("prompt> "));
+    assert_eq!(configured.options().crlf_delay, Some(100));
+    assert_eq!(configured.options().tab_size, Some(4));
 }
 
 #[test]
