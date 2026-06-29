@@ -13,6 +13,7 @@ pub struct HookCallbacks {
     pub after: Option<AsyncIdCallback>,
     pub destroy: Option<AsyncIdCallback>,
     pub promise_resolve: Option<AsyncIdCallback>,
+    pub track_promises: bool,
 }
 
 #[derive(Default)]
@@ -42,24 +43,57 @@ pub mod async_wrap_providers {
     pub const ELDHISTOGRAM: u32 = 3;
     pub const FILEHANDLE: u32 = 4;
     pub const FILEHANDLECLOSEREQ: u32 = 5;
-    pub const FSREQCALLBACK: u32 = 6;
-    pub const FSREQPROMISE: u32 = 7;
-    pub const GETADDRINFOREQWRAP: u32 = 8;
-    pub const HTTPCLIENTREQUEST: u32 = 9;
-    pub const HTTPINCOMINGMESSAGE: u32 = 10;
-    pub const MESSAGEPORT: u32 = 11;
-    pub const PIPEWRAP: u32 = 12;
-    pub const PROCESSWRAP: u32 = 13;
-    pub const PROMISE: u32 = 14;
-    pub const QUERYWRAP: u32 = 15;
-    pub const RANDOMBYTESREQUEST: u32 = 16;
-    pub const SIGNALWRAP: u32 = 17;
-    pub const TCPWRAP: u32 = 18;
-    pub const TLSWRAP: u32 = 19;
-    pub const TTYWRAP: u32 = 20;
-    pub const UDPWRAP: u32 = 21;
-    pub const WORKER: u32 = 22;
-    pub const ZLIB: u32 = 23;
+    pub const FIXEDSIZEBLOBCOPY: u32 = 6;
+    pub const FSEVENTWRAP: u32 = 7;
+    pub const FSREQCALLBACK: u32 = 8;
+    pub const FSREQPROMISE: u32 = 9;
+    pub const GETADDRINFOREQWRAP: u32 = 10;
+    pub const GETNAMEINFOREQWRAP: u32 = 11;
+    pub const HEAPSNAPSHOT: u32 = 12;
+    pub const HTTP2SESSION: u32 = 13;
+    pub const HTTP2STREAM: u32 = 14;
+    pub const HTTP2PING: u32 = 15;
+    pub const HTTP2SETTINGS: u32 = 16;
+    pub const HTTPINCOMINGMESSAGE: u32 = 17;
+    pub const HTTPCLIENTREQUEST: u32 = 18;
+    pub const JSSTREAM: u32 = 19;
+    pub const JSUDPWRAP: u32 = 20;
+    pub const MESSAGEPORT: u32 = 21;
+    pub const PIPECONNECTWRAP: u32 = 22;
+    pub const PIPESERVERWRAP: u32 = 23;
+    pub const PIPEWRAP: u32 = 24;
+    pub const PROCESSWRAP: u32 = 25;
+    pub const PROMISE: u32 = 26;
+    pub const QUERYWRAP: u32 = 27;
+    pub const SHUTDOWNWRAP: u32 = 28;
+    pub const SIGNALWRAP: u32 = 29;
+    pub const STATWATCHER: u32 = 30;
+    pub const STREAMPIPE: u32 = 31;
+    pub const TCPCONNECTWRAP: u32 = 32;
+    pub const TCPSERVERWRAP: u32 = 33;
+    pub const TCPWRAP: u32 = 34;
+    pub const TTYWRAP: u32 = 35;
+    pub const UDPSENDWRAP: u32 = 36;
+    pub const UDPWRAP: u32 = 37;
+    pub const SIGINTWATCHDOG: u32 = 38;
+    pub const WORKER: u32 = 39;
+    pub const WORKERHEAPSNAPSHOT: u32 = 40;
+    pub const WRITEWRAP: u32 = 41;
+    pub const ZLIB: u32 = 42;
+    pub const CHECKPRIMEREQUEST: u32 = 43;
+    pub const PBKDF2REQUEST: u32 = 44;
+    pub const KEYPAIRGENREQUEST: u32 = 45;
+    pub const KEYGENREQUEST: u32 = 46;
+    pub const KEYEXPORTREQUEST: u32 = 47;
+    pub const CIPHERREQUEST: u32 = 48;
+    pub const DERIVEBITSREQUEST: u32 = 49;
+    pub const HASHREQUEST: u32 = 50;
+    pub const RANDOMBYTESREQUEST: u32 = 51;
+    pub const RANDOMPRIMEREQUEST: u32 = 52;
+    pub const SCRYPTREQUEST: u32 = 53;
+    pub const SIGNREQUEST: u32 = 54;
+    pub const TLSWRAP: u32 = 55;
+    pub const VERIFYREQUEST: u32 = 56;
 }
 
 impl AsyncHook {
@@ -206,6 +240,21 @@ pub struct AsyncLocalStorage<T: Clone> {
     default_value: Option<T>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AsyncLocalStorageOptions<T: Clone> {
+    pub default_value: Option<T>,
+    pub name: Option<String>,
+}
+
+impl<T: Clone> Default for AsyncLocalStorageOptions<T> {
+    fn default() -> Self {
+        Self {
+            default_value: None,
+            name: None,
+        }
+    }
+}
+
 impl<T: Clone> Default for AsyncLocalStorage<T> {
     fn default() -> Self {
         Self {
@@ -222,10 +271,17 @@ impl<T: Clone> AsyncLocalStorage<T> {
     }
 
     pub fn with_options(name: Option<String>, default_value: Option<T>) -> Self {
-        Self {
-            stack: RefCell::new(Vec::new()),
+        Self::from_options(AsyncLocalStorageOptions {
             name,
             default_value,
+        })
+    }
+
+    pub fn from_options(options: AsyncLocalStorageOptions<T>) -> Self {
+        Self {
+            stack: RefCell::new(Vec::new()),
+            name: options.name,
+            default_value: options.default_value,
         }
     }
 

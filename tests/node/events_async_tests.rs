@@ -206,6 +206,7 @@ fn async_hooks_resource_and_hook_callbacks_are_closed_shapes() {
         promise_resolve: Some(Box::new(move |id| {
             promise_seen.borrow_mut().push(format!("promise:{id}"));
         })),
+        track_promises: true,
     });
     assert!(!hook.enabled());
     hook.enable();
@@ -238,12 +239,92 @@ fn async_hooks_resource_and_hook_callbacks_are_closed_shapes() {
     hook.emit_before(resource.async_id());
     assert_eq!(async_hooks::execution_async_id(), 0);
     assert_eq!(async_hooks::trigger_async_id(), 0);
-    assert_eq!(async_hooks::async_wrap_providers::HTTPCLIENTREQUEST, 9);
+    assert_eq!(async_hooks::async_wrap_providers::HTTPCLIENTREQUEST, 18);
+    assert_eq!(async_hooks::async_wrap_providers::VERIFYREQUEST, 56);
     assert!(seen.borrow().iter().any(|entry| entry.starts_with("init:")));
     assert!(seen
         .borrow()
         .iter()
         .any(|entry| entry.starts_with("promise:")));
+}
+
+#[test]
+fn async_hooks_exposes_exact_provider_constants_and_option_carriers() {
+    use async_hooks::async_wrap_providers as providers;
+
+    assert_eq!(providers::NONE, 0);
+    assert_eq!(providers::DIRHANDLE, 1);
+    assert_eq!(providers::DNSCHANNEL, 2);
+    assert_eq!(providers::ELDHISTOGRAM, 3);
+    assert_eq!(providers::FILEHANDLE, 4);
+    assert_eq!(providers::FILEHANDLECLOSEREQ, 5);
+    assert_eq!(providers::FIXEDSIZEBLOBCOPY, 6);
+    assert_eq!(providers::FSEVENTWRAP, 7);
+    assert_eq!(providers::FSREQCALLBACK, 8);
+    assert_eq!(providers::FSREQPROMISE, 9);
+    assert_eq!(providers::GETADDRINFOREQWRAP, 10);
+    assert_eq!(providers::GETNAMEINFOREQWRAP, 11);
+    assert_eq!(providers::HEAPSNAPSHOT, 12);
+    assert_eq!(providers::HTTP2SESSION, 13);
+    assert_eq!(providers::HTTP2STREAM, 14);
+    assert_eq!(providers::HTTP2PING, 15);
+    assert_eq!(providers::HTTP2SETTINGS, 16);
+    assert_eq!(providers::HTTPINCOMINGMESSAGE, 17);
+    assert_eq!(providers::HTTPCLIENTREQUEST, 18);
+    assert_eq!(providers::JSSTREAM, 19);
+    assert_eq!(providers::JSUDPWRAP, 20);
+    assert_eq!(providers::MESSAGEPORT, 21);
+    assert_eq!(providers::PIPECONNECTWRAP, 22);
+    assert_eq!(providers::PIPESERVERWRAP, 23);
+    assert_eq!(providers::PIPEWRAP, 24);
+    assert_eq!(providers::PROCESSWRAP, 25);
+    assert_eq!(providers::PROMISE, 26);
+    assert_eq!(providers::QUERYWRAP, 27);
+    assert_eq!(providers::SHUTDOWNWRAP, 28);
+    assert_eq!(providers::SIGNALWRAP, 29);
+    assert_eq!(providers::STATWATCHER, 30);
+    assert_eq!(providers::STREAMPIPE, 31);
+    assert_eq!(providers::TCPCONNECTWRAP, 32);
+    assert_eq!(providers::TCPSERVERWRAP, 33);
+    assert_eq!(providers::TCPWRAP, 34);
+    assert_eq!(providers::TTYWRAP, 35);
+    assert_eq!(providers::UDPSENDWRAP, 36);
+    assert_eq!(providers::UDPWRAP, 37);
+    assert_eq!(providers::SIGINTWATCHDOG, 38);
+    assert_eq!(providers::WORKER, 39);
+    assert_eq!(providers::WORKERHEAPSNAPSHOT, 40);
+    assert_eq!(providers::WRITEWRAP, 41);
+    assert_eq!(providers::ZLIB, 42);
+    assert_eq!(providers::CHECKPRIMEREQUEST, 43);
+    assert_eq!(providers::PBKDF2REQUEST, 44);
+    assert_eq!(providers::KEYPAIRGENREQUEST, 45);
+    assert_eq!(providers::KEYGENREQUEST, 46);
+    assert_eq!(providers::KEYEXPORTREQUEST, 47);
+    assert_eq!(providers::CIPHERREQUEST, 48);
+    assert_eq!(providers::DERIVEBITSREQUEST, 49);
+    assert_eq!(providers::HASHREQUEST, 50);
+    assert_eq!(providers::RANDOMBYTESREQUEST, 51);
+    assert_eq!(providers::RANDOMPRIMEREQUEST, 52);
+    assert_eq!(providers::SCRYPTREQUEST, 53);
+    assert_eq!(providers::SIGNREQUEST, 54);
+    assert_eq!(providers::TLSWRAP, 55);
+    assert_eq!(providers::VERIFYREQUEST, 56);
+
+    let options = async_hooks::AsyncLocalStorageOptions {
+        name: Some("request".to_string()),
+        default_value: Some("default".to_string()),
+    };
+    let storage = AsyncLocalStorage::from_options(options);
+    assert_eq!(storage.name(), Some("request"));
+    assert_eq!(storage.get_store().as_deref(), Some("default"));
+
+    let resource_options = async_hooks::AsyncResourceOptions {
+        trigger_async_id: Some(99),
+        require_manual_destroy: true,
+    };
+    let resource = async_hooks::AsyncResource::new("VERIFYREQUEST", Some(resource_options));
+    assert_eq!(resource.trigger_async_id(), 99);
+    assert_eq!(resource.resource_type(), "VERIFYREQUEST");
 }
 
 #[test]
