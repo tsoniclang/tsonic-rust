@@ -219,7 +219,7 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
   if (!isValidRustIdentifier(target)) {
     return undefined;
   }
-  return [{ kind: "assign", target, operator: fact.operator, value: { kind: "int-literal", text: "1" } }];
+  return [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value: { kind: "int-literal", text: "1" } }];
 }
 
 function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -271,7 +271,7 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
           return undefined;
         }
         const value = planExpression(right, context);
-        return value === undefined ? undefined : [{ kind: "assign", target, operator: fact.operator, value }];
+        return value === undefined ? undefined : [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value }];
       }
       const value = planExpression(right, context);
       if (value === undefined) {
@@ -284,9 +284,9 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         value.left.path === target &&
         ["+", "-", "*", "/", "%"].includes(value.operator)
       ) {
-        return [{ kind: "assign", target, operator: `${value.operator}=`, value: value.right }];
+        return [{ kind: "assign", target: { kind: "path", path: target }, operator: `${value.operator}=`, value: value.right }];
       }
-      return [{ kind: "assign", target, operator: "=", value }];
+      return [{ kind: "assign", target: { kind: "path", path: target }, operator: "=", value }];
     }
   }
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
