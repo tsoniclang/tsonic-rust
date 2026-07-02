@@ -1644,6 +1644,12 @@ function trySourceMemberAccess(
   }
   const memberKind = ast.kindName(memberDeclaration);
   if (memberKind === "KindPropertyDeclaration" || memberKind === "KindPropertySignature") {
+    if (memberKind === "KindPropertySignature") {
+      const owner = ast.parent(memberDeclaration);
+      if (owner === undefined || ast.kindName(owner) !== KindInterfaceDeclaration) {
+        return undefined;
+      }
+    }
     if (receiver !== undefined) {
       resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
     }
