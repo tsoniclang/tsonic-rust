@@ -12,8 +12,8 @@ const stringType = { kind: "string" } as const;
 // Node is a provider package, not a compiler surface. Supported rows map to
 // closed tsonic_rust_node APIs; every declared export without a row fails
 // closed with a deterministic diagnostic. Fallible Node APIs (fs, crypto,
-// process.cwd, ...) stay declared-but-unsupported until the shared error
-// model lands.
+// process.cwd, ...) are declared-but-unsupported: they require the shared
+// error model contract.
 
 function pathModule(): RustProviderModuleDefinition {
   const fn = (name: string, parameters: readonly { name: string; rest?: boolean }[], returns: { readonly kind: "string" } | { readonly kind: "boolean" } = stringType) => ({
@@ -41,7 +41,7 @@ function pathModule(): RustProviderModuleDefinition {
       fn("basename", [{ name: "path" }]),
       fn("extname", [{ name: "path" }]),
       fn("isAbsolute", [{ name: "path" }], { kind: "boolean" } as const),
-      // Declared but unsupported until the error model lands (fallible).
+      // Declared but unsupported: fallible, requires the error model contract.
       fn("resolve", [{ name: "paths", rest: true }]),
     ],
   };

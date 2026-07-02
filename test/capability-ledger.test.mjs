@@ -2,33 +2,33 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compileRust } from "./helpers/rust-session.mjs";
 
-// Capability ledger: every deferred lane must diagnose deterministically.
+// Capability ledger: every unsupported lane must diagnose deterministically.
 // Rows name the capability, a minimal repro, and the required behavior.
-const deferredLanes = [
+const unsupportedLanes = [
   {
     capability: "rust.backend.statement (switch)",
     files: { "index.ts": "export function f(x: number): number {\n  switch (x) {\n    default:\n      return x;\n  }\n}\n" },
   },
   {
-    capability: "error model (throw/try-catch)",
+    capability: "throw/try-catch (requires the error model contract)",
     files: { "index.ts": "export function f(flag: boolean): void {\n  try {\n    if (flag) {\n      throw new Error(\"boom\");\n    }\n  } catch (error) {\n  }\n}\n" },
   },
   {
-    capability: "discriminated object unions (narrowing facts)",
+    capability: "discriminated object unions (require narrowing facts)",
     files: { "index.ts": "export type Shape = { kind: \"circle\"; radius: number } | { kind: \"square\"; size: number };\nexport function make(): Shape {\n  return { kind: \"circle\", radius: 1 };\n}\n" },
   },
   {
-    capability: "RegExp (oracle parity pending)",
+    capability: "RegExp (requires oracle parity)",
     surfaces: ["js"],
     files: { "index.ts": "export function f(text: string): boolean {\n  const pattern = new RegExp(\"x\");\n  return pattern.test(text);\n}\n" },
   },
   {
-    capability: "callback iteration (fnptr lanes)",
+    capability: "callback iteration (requires function pointer lanes)",
     surfaces: ["js"],
     files: { "index.ts": "import type { int32 } from \"@tsonic/core/types.js\";\nexport function f(xs: int32[]): int32[] {\n  return xs.map((x) => x);\n}\n" },
   },
   {
-    capability: "JSON (fallible; error model)",
+    capability: "JSON (fallible; requires the error model contract)",
     surfaces: ["js"],
     files: { "index.ts": "export function f(text: string): string {\n  return JSON.stringify(JSON.parse(text));\n}\n" },
   },
@@ -38,14 +38,14 @@ const deferredLanes = [
   },
 ];
 
-for (const lane of deferredLanes) {
-  test(`deferred lane stays fail-closed: ${lane.capability}`, () => {
+for (const lane of unsupportedLanes) {
+  test(`unsupported lane stays fail-closed: ${lane.capability}`, () => {
     const { result } = compileRust({
       files: lane.files,
       ...(lane.surfaces === undefined ? {} : { surfaces: lane.surfaces }),
     });
-    assert.equal(result.artifacts.length, 0, "deferred lanes must not emit artifacts");
-    assert.ok(result.diagnostics.length > 0, "deferred lanes must diagnose");
+    assert.equal(result.artifacts.length, 0, "unsupported lanes must not emit artifacts");
+    assert.ok(result.diagnostics.length > 0, "unsupported lanes must diagnose");
     assert.ok(result.diagnostics.every((diagnostic) =>
       typeof diagnostic.code === "string" && diagnostic.code.startsWith("RUST_")));
   });

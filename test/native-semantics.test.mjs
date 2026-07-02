@@ -500,7 +500,7 @@ export function is_off(mode: Mode): boolean {
   assert.match(text, /mode == Mode::Off/u);
 });
 
-test("discriminated object unions fail closed pending narrowing facts", () => {
+test("discriminated object unions fail closed: they require narrowing facts", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -624,7 +624,7 @@ export async function fetch_value(): Promise<int32> {
 }
 
 export function bad(): int32 {
-  const pending = fetch_value();
+  const stored = fetch_value();
   return 0;
 }
 `,
@@ -645,7 +645,7 @@ export async function main(): Promise<void> {}
   assert.ok(asyncMain.result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_ENTRYPOINT"));
 });
 
-test("throw and try/catch fail closed pending the shared error model", () => {
+test("throw and try/catch fail closed: they require the shared error model contract", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `

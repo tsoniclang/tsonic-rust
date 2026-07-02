@@ -46,19 +46,19 @@ Provider packages: identity-keyed operation rows over virtual declarations
 metadata, async rows), cargo dependency contribution, and fail-closed
 diagnostics for unsupported members. Node.js ships as a provider package
 (`node:path`, `node:os` mapped; `node:fs`/`process`/`url`/`buffer`/
-`crypto`/`util` declared and classified as unsupported pending the shared
-error model).
+`crypto`/`util` declared and classified as unsupported: they require the
+shared error model contract).
 
 ## Explicitly unsupported (fail-closed, classified)
 
-Deferred pending shared cross-target contracts: the error model
-(throw/try-catch/Result, fallible runtime APIs such as `fs` and JSON), the
-string owned/borrowed ABI policy (strings are owned `String` today),
-discriminated object unions (narrowing facts), callback iteration (function
-pointer lanes), fixed-size `[T; N]` arrays (length facts), and RegExp
-(unclaimed until the supported subset matches the shared Node/V8 oracle
-contract). Every deferred lane diagnoses deterministically; see
-`test/capability-ledger.test.mjs`.
+Each unsupported lane requires a shared cross-target contract that does
+not exist: the error model (throw/try-catch/Result, fallible runtime APIs
+such as `fs` and JSON), the string owned/borrowed ABI policy (strings are
+owned `String`), discriminated object unions (narrowing facts), callback
+iteration (function pointer lanes), fixed-size `[T; N]` arrays (length
+facts), and RegExp (unclaimed: the supported runtime subset does not match
+the shared Node/V8 oracle contract). Every unsupported lane diagnoses
+deterministically; see `test/capability-ledger.test.mjs`.
 
 ## Build and test
 
