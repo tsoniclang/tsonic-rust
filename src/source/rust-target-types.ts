@@ -1,0 +1,86 @@
+import type { SourcePrimitiveKind, TargetTypeRef } from "@tsonic/tsts";
+
+// Rust carrier identities. Carriers are TargetTypeRefs selected by facts; the
+// backend renders them to Rust type text only at the printer boundary.
+
+export const rustStringTargetId = "rust.std.String";
+
+export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
+  return { kind: "source-primitive", name: kind };
+}
+
+export function rustStringTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustStringTargetId };
+}
+
+export function rustUnitTargetType(): TargetTypeRef {
+  return { kind: "tuple", elements: [] };
+}
+
+export function isRustStringCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && carrier.id === rustStringTargetId;
+}
+
+export function isRustUnitCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "tuple" && carrier.elements.length === 0;
+}
+
+export function isRustBoolCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "source-primitive" && carrier.name === "bool";
+}
+
+const rustNumericPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, string>>> = {
+  int8: "i8",
+  uint8: "u8",
+  int16: "i16",
+  uint16: "u16",
+  int32: "i32",
+  uint32: "u32",
+  int64: "i64",
+  uint64: "u64",
+  float32: "f32",
+  float64: "f64",
+};
+
+const rustSignedPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
+  "int8",
+  "int16",
+  "int32",
+  "int64",
+  "float32",
+  "float64",
+]);
+
+const rustIntegerPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
+  "int8",
+  "uint8",
+  "int16",
+  "uint16",
+  "int32",
+  "uint32",
+  "int64",
+  "uint64",
+]);
+
+export function rustPrimitiveTypeName(kind: SourcePrimitiveKind): string | undefined {
+  if (kind === "bool") {
+    return "bool";
+  }
+  return rustNumericPrimitiveNames[kind];
+}
+
+export function isRustNumericCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "source-primitive" && rustNumericPrimitiveNames[carrier.name] !== undefined;
+}
+
+export function isRustSignedNumericCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "source-primitive" && rustSignedPrimitiveKinds.has(carrier.name);
+}
+
+export function isRustIntegerCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "source-primitive" && rustIntegerPrimitiveKinds.has(carrier.name);
+}
+
+export function sameRustPrimitiveCarrier(left: TargetTypeRef | undefined, right: TargetTypeRef | undefined): boolean {
+  return left?.kind === "source-primitive" && right?.kind === "source-primitive" && left.name === right.name;
+}
