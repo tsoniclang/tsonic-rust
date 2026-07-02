@@ -72,7 +72,7 @@ import { rustExtensionId, rustTargetOperationFactKey } from "../rust-facts/keys.
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import { collectRustProviderOperationRows } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
-import { rustOperatorCarrierKey, selectRustBinaryOperator } from "./operator-rules.js";
+import { rustOperatorCarrierKey, selectRustBinaryOperator, selectRustCompoundAssignment } from "./operator-rules.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.target-semantics";
 
@@ -206,7 +206,8 @@ function recordStatementFacts(
     }
     if (ast.kindName(expression) === KindBinaryExpression) {
       const operatorToken = BinaryExpression_OperatorToken(expression);
-      if (operatorToken !== undefined && ast.kindName(operatorToken) === KindEqualsToken) {
+      const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
+      if (operatorKind === KindEqualsToken) {
         const left = BinaryExpression_Left(expression);
         const right = BinaryExpression_Right(expression);
         const leftCarrier = left === undefined
@@ -216,6 +217,17 @@ function recordStatementFacts(
           resolveExpressionCarrier(walk, right, sourceFile, leftCarrier);
         }
         return;
+      }
+      const left = BinaryExpression_Left(expression);
+      const right = BinaryExpression_Right(expression);
+      if (left !== undefined && right !== undefined) {
+        const leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, undefined);
+        const rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, leftCarrier);
+        const compound = selectRustCompoundAssignment(operatorKind, leftCarrier, rightCarrier);
+        if (compound !== undefined && leftCarrier !== undefined) {
+          recordOperatorFacts(walk, expression, compound, leftCarrier, rustOperatorCarrierKey(leftCarrier));
+          return;
+        }
       }
     }
     resolveExpressionCarrier(walk, expression, sourceFile, undefined);

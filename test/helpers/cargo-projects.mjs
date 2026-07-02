@@ -37,6 +37,7 @@ export function validateGeneratedProject(name, artifacts, { run = false } = {}) 
   runCargo(projectRoot, ["generate-lockfile", "--offline"]);
   runCargo(projectRoot, ["fmt", "--all", "--check"]);
   runCargo(projectRoot, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(projectRoot, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(projectRoot, ["test", "--locked", "--offline"]);
   if (run) {
     return runCargo(projectRoot, ["run", "--locked", "--offline"]);

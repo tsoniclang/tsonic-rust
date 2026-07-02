@@ -12,7 +12,7 @@ test("rust target pack registers under the rust target id", () => {
   assert.equal(pack.displayName, "Rust");
 });
 
-test("rust target pack exposes no surfaces or provider packages in slice R1", () => {
+test("rust target pack exposes no surfaces or provider packages", () => {
   const pack = createRustTargetPack();
 
   assert.equal(pack.surfaces, undefined);

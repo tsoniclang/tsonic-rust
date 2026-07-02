@@ -24,9 +24,8 @@ import { createCargoToolchain } from "../toolchain/cargo-toolchain.js";
 export const rustTargetId = "rust";
 const targetPackageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-// Slice R1: provider-only pack. The js surface (rust-js) and nodejs provider
-// package (rust-nodejs) are added by their own slices; until then selecting
-// them fails at the host because the pack does not declare them.
+// The pack declares only what is implemented; undeclared surfaces and
+// provider packages fail at the host.
 export function createRustTargetPack(): TargetPack {
   return {
     id: rustTargetId,

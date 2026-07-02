@@ -1,5 +1,5 @@
-// Structured Rust output model for the R2 static-native spine. The printer is
-// the only place this model becomes text.
+// Structured Rust output model for the static-native construct set. The
+// printer is the only place this model becomes text.
 
 export type RustType =
   | { readonly kind: "primitive"; readonly name: string }
@@ -11,6 +11,7 @@ export type RustExpr =
   | { readonly kind: "float-literal"; readonly text: string }
   | { readonly kind: "bool-literal"; readonly value: boolean }
   | { readonly kind: "string-literal"; readonly value: string }
+  | { readonly kind: "str-literal"; readonly value: string }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "unary"; readonly operator: "-" | "!"; readonly operand: RustExpr }
   | { readonly kind: "binary"; readonly operator: string; readonly left: RustExpr; readonly right: RustExpr }
@@ -23,7 +24,7 @@ export type RustExpr =
 export type RustStmt =
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init: RustExpr }
   | { readonly kind: "expr"; readonly expr: RustExpr }
-  | { readonly kind: "assign"; readonly target: string; readonly operator: "=" | "+=" | "-="; readonly value: RustExpr }
+  | { readonly kind: "assign"; readonly target: string; readonly operator: string; readonly value: RustExpr }
   | { readonly kind: "return"; readonly expr?: RustExpr }
   | { readonly kind: "tail"; readonly expr: RustExpr }
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock }

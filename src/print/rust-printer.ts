@@ -7,9 +7,9 @@ import type {
   RustType,
 } from "../backend/rust-ast/nodes.js";
 
-// Deterministic printer. Output must be `cargo fmt --check` clean for the R2
-// construct set: 4-space indent, no trailing whitespace, one blank line
-// between items, trailing newline.
+// Deterministic printer. Output must be `cargo fmt --check` clean for the
+// supported construct set: 4-space indent, no trailing whitespace, one blank
+// line between items, trailing newline.
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
   const parts: string[] = [`// ${model.headerComment}`];
@@ -177,6 +177,9 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "string-literal": {
       return `String::from("${escapeRustString(expression.value)}")`;
+    }
+    case "str-literal": {
+      return `"${escapeRustString(expression.value)}"`;
     }
     case "path": {
       return expression.path;

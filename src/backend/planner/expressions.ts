@@ -83,7 +83,7 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.expression",
-        "The Rust target does not support this expression yet.",
+        "The Rust target does not support this expression.",
       ));
       return undefined;
     }
@@ -184,7 +184,12 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     return { kind: "string-concat", parts };
   }
   if (fact.kind === "operator-token") {
-    return { kind: "binary", operator: fact.operator, left, right };
+    // Owned-String literals in comparison position lower as &str literals so
+    // generated code stays clippy-clean (cmp_owned).
+    const comparison = fact.operator === "==" || fact.operator === "!=";
+    const borrowLiteral = (side: RustExpr): RustExpr =>
+      comparison && side.kind === "string-literal" ? { kind: "str-literal", value: side.value } : side;
+    return { kind: "binary", operator: fact.operator, left: borrowLiteral(left), right: borrowLiteral(right) };
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
     diagnosticInput(context, node),

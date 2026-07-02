@@ -92,6 +92,28 @@ export function count_down(start: int32): int32 {
   ].join("\n"));
 });
 
+test("let bindings are mutable only with a proven write", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function stable(base: int32): int32 {
+  let untouched: int32 = base;
+  let bumped: int32 = 0;
+  bumped = untouched + 1;
+  return bumped;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let untouched: i32 = base;/u);
+  assert.match(text, /let mut bumped: i32 = 0;/u);
+});
+
 test("for loops lower to scoped while with declared loop variable", () => {
   const { result } = compileRust({
     files: {
@@ -113,7 +135,7 @@ export function total(limit: int32): int32 {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let mut i: i32 = 0;/u);
   assert.match(text, /while i < limit \{/u);
-  assert.match(text, /sum = sum \+ i;/u);
+  assert.match(text, /sum \+= i;/u);
   assert.match(text, /i \+= 1;/u);
 });
 
@@ -135,7 +157,7 @@ export function isEmpty(text: string): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /format!\("\{\}\{\}", String::from\("hello "\), name\)/u);
-  assert.match(text, /text == String::from\(""\)/u);
+  assert.match(text, /text == ""/u);
 });
 
 test("module imports and exports lower to crate-qualified calls", () => {

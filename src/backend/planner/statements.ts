@@ -3,6 +3,11 @@ import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
+  KindAsteriskEqualsToken,
+  KindMinusEqualsToken,
+  KindPercentEqualsToken,
+  KindPlusEqualsToken,
+  KindSlashEqualsToken,
   ForStatement_Condition,
   ForStatement_Incrementor,
   ForStatement_Initializer,
@@ -76,7 +81,7 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.statement",
-        "The Rust target does not support this statement yet.",
+        "The Rust target does not support this statement.",
       ));
       return undefined;
     }
@@ -187,7 +192,8 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
       return undefined;
     }
   }
-  const mutable = !isConstDeclarationList(declarationListOf(node) ?? node);
+  const isConst = isConstDeclarationList(declarationListOf(node) ?? node);
+  const mutable = !isConst && (context.mutatedNames?.has(name) ?? false);
   return [{
     kind: "let",
     name,
@@ -233,7 +239,15 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {
     const operatorToken = BinaryExpression_OperatorToken(expression);
-    if (operatorToken !== undefined && ast.kindName(operatorToken) === KindEqualsToken) {
+    const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
+    const compoundTokens = [
+      KindPlusEqualsToken,
+      KindMinusEqualsToken,
+      KindAsteriskEqualsToken,
+      KindSlashEqualsToken,
+      KindPercentEqualsToken,
+    ];
+    if (operatorKind === KindEqualsToken || compoundTokens.includes(operatorKind)) {
       const left = BinaryExpression_Left(expression);
       const right = BinaryExpression_Right(expression);
       if (left === undefined || right === undefined || ast.kindName(left) !== KindIdentifier) {
@@ -248,8 +262,33 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
       if (!isValidRustIdentifier(target)) {
         return undefined;
       }
+      if (operatorKind !== KindEqualsToken) {
+        const fact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+        if (fact === undefined || fact.kind !== "operator-token") {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.operator",
+            "Compound assignment requires a finalized Rust operator fact.",
+          ));
+          return undefined;
+        }
+        const value = planExpression(right, context);
+        return value === undefined ? undefined : [{ kind: "assign", target, operator: fact.operator, value }];
+      }
       const value = planExpression(right, context);
-      return value === undefined ? undefined : [{ kind: "assign", target, operator: "=", value }];
+      if (value === undefined) {
+        return undefined;
+      }
+      // Clippy assign_op_pattern: `x = x <op> rhs` lowers to `x <op>= rhs`.
+      if (
+        value.kind === "binary" &&
+        value.left.kind === "path" &&
+        value.left.path === target &&
+        ["+", "-", "*", "/", "%"].includes(value.operator)
+      ) {
+        return [{ kind: "assign", target, operator: `${value.operator}=`, value: value.right }];
+      }
+      return [{ kind: "assign", target, operator: "=", value }];
     }
   }
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
