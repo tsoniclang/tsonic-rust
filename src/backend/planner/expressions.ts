@@ -84,6 +84,18 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       if (identifierFact !== undefined && identifierFact.kind === "option-none") {
         return { kind: "path", path: "None" };
       }
+      if (identifierFact !== undefined && identifierFact.kind === "provider-operation") {
+        const planned = planProviderOperationExpression(context, identifierFact.target, undefined, []);
+        if (planned === undefined) {
+          context.diagnostics.push(unsupportedConstructDiagnostic(
+            diagnosticInput(context, node),
+            "rust.provider.value",
+            "Provider value has no runtime representation in this position.",
+          ));
+          return undefined;
+        }
+        return applyResultCast(planned, identifierFact.castResult);
+      }
       const name = rustValueName(ast.text(node));
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -348,6 +360,9 @@ function planProviderOperationExpression(
   args: readonly RustExpr[],
 ): RustExpr | undefined {
   switch (form.form) {
+    case "marker": {
+      return undefined;
+    }
     case "call": {
       registerAliasFromPath(context, form.path);
       const shaped = args.map((argument, index): RustExpr => {

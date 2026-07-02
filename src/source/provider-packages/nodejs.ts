@@ -2,7 +2,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRustProviderPackage } from "./index.js";
 import type { RustProviderModuleDefinition, RustProviderOperationRow, RustProviderPackageImplementation } from "./index.js";
-import { rustSourcePrimitiveTargetType, rustStringTargetType, rustVecTargetType } from "../rust-target-types.js";
+import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType, rustVecTargetType } from "../rust-target-types.js";
 import type { TargetTypeRef } from "@tsonic/tsts";
 
 const targetPackageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -23,6 +23,8 @@ const booleanType = { kind: "boolean" } as const;
 const voidType = { kind: "void" } as const;
 const stringArrayType = { kind: "array", elementType: stringType } as const;
 
+const nullType = { kind: "literal", value: null } as const;
+
 type ProviderTypeExpr =
   | typeof stringType
   | typeof numberType
@@ -31,6 +33,8 @@ type ProviderTypeExpr =
   | typeof stringArrayType
   | { readonly kind: "provider-ref"; readonly moduleSpecifier: string; readonly exportName: string }
   | { readonly kind: "array"; readonly elementType: ProviderTypeExpr }
+  | { readonly kind: "union"; readonly types: readonly ProviderTypeExpr[] }
+  | typeof nullType
   | { readonly kind: "any" };
 
 // Node is a provider package, not a compiler surface. Supported rows map to
@@ -172,8 +176,7 @@ function osModule(): RustProviderModuleDefinition {
       fnExport(m, "eol", [], stringType),
       fnExport(m, "hostname", [], stringType),
       fnExport(m, "tmpdir", [], stringType),
-      // Contract: empty string when the home directory is unknown.
-      fnExport(m, "homedir", [], stringType),
+      fnExport(m, "homedir", [], { kind: "union", types: [stringType, nullType] }),
     ],
   };
 }
@@ -192,7 +195,7 @@ function osRows(): readonly RustProviderOperationRow[] {
     { exportId: "node:os::eol", operationKind: "method", target: { form: "call", path: "node_os::eol", chain: ["to_string"] }, resultCarrier: stringCarrier },
     call("hostname", "node_os::hostname"),
     call("tmpdir", "node_os::tmpdir", { isFallible: true }),
-    { exportId: "node:os::homedir", operationKind: "method", target: { form: "call", path: "node_os::homedir", chain: ["unwrap_or_default"] }, resultCarrier: stringCarrier },
+    { exportId: "node:os::homedir", operationKind: "method", target: { form: "call", path: "node_os::homedir" }, resultCarrier: rustOptionTargetType(stringCarrier) },
   ];
 }
 
@@ -332,26 +335,46 @@ function fsPromisesRows(): readonly RustProviderOperationRow[] {
 
 // --- node:process ------------------------------------------------------------
 
+// node:process exposes the Node module shape: cwd() as a function and
+// platform/arch/argv/pid/ppid/env as value exports. env is an indexed
+// object whose reads preserve absence as null (Option carrier).
 function processModule(): RustProviderModuleDefinition {
   const m = "node:process";
+  const envId = "node:process::ProcessEnv";
+  const valueExport = (name: string, type: ProviderTypeExpr, documentation?: string) => ({
+    id: `${m}::${name}`,
+    name,
+    kind: "value" as const,
+    type,
+    ...(documentation === undefined ? {} : { documentation }),
+  });
   return {
     moduleSpecifier: m,
     providerModuleId: "tsonic.rust.node.process",
     exports: [
       fnExport(m, "cwd", [], stringType),
-      fnExport(m, "platform", [], stringType),
-      fnExport(m, "arch", [], stringType),
-      // Contract: empty string when the variable is unset.
-      fnExport(m, "envGet", [{ name: "name", type: stringType }], stringType),
-      fnExport(m, "envSet", [{ name: "name", type: stringType }, { name: "value", type: stringType }], voidType),
-      fnExport(m, "envDelete", [{ name: "name", type: stringType }], voidType),
-      fnExport(m, "argv", [], stringArrayType),
-      fnExport(m, "execPath", [], stringType),
-      fnExport(m, "pid", [], numberType),
-      fnExport(m, "ppid", [], numberType),
-      // Contract: zero when no exit code has been set.
-      fnExport(m, "exitCode", [], numberType),
-      fnExport(m, "setExitCode", [{ name: "code", type: numberType }], voidType),
+      {
+        id: envId,
+        name: "ProcessEnv",
+        kind: "class" as const,
+        members: [{
+          id: `${envId}.indexer`,
+          name: "indexer",
+          kind: "indexer" as const,
+          signatures: [{
+            id: `${envId}.indexer(name)`,
+            parameters: [{ name: "name", type: stringType }],
+            returnType: { kind: "union", types: [stringType, nullType] },
+          }],
+        }],
+      },
+      valueExport("env", providerRef(m, "ProcessEnv")),
+      valueExport("platform", stringType),
+      valueExport("arch", stringType),
+      valueExport("argv", stringArrayType),
+      valueExport("pid", numberType),
+      valueExport("ppid", numberType),
+      valueExport("execPath", stringType, "Unsupported: requires infallible executable-path resolution."),
       unsupportedFn(m, "exit", "a process-termination policy contract"),
     ],
   };
@@ -359,19 +382,16 @@ function processModule(): RustProviderModuleDefinition {
 
 function processRows(): readonly RustProviderOperationRow[] {
   const m = "node:process";
+  const envCarrier: TargetTypeRef = { kind: "target-named", id: "rust.node.ProcessEnv" };
   return [
     { exportId: `${m}::cwd`, operationKind: "method", target: { form: "call", path: "node_process::cwd" }, resultCarrier: stringCarrier, isFallible: true },
-    { exportId: `${m}::platform`, operationKind: "method", target: { form: "call", path: "node_process::platform" }, resultCarrier: stringCarrier },
-    { exportId: `${m}::arch`, operationKind: "method", target: { form: "call", path: "node_process::arch" }, resultCarrier: stringCarrier },
-    { exportId: `${m}::envGet`, operationKind: "method", target: { form: "call", path: "node_process::env_get", argModes: ["ref"], chain: ["unwrap_or_default"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier] },
-    { exportId: `${m}::envSet`, operationKind: "method", target: { form: "call", path: "node_process::env_set", argModes: ["ref", "ref"] }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [stringCarrier, stringCarrier] },
-    { exportId: `${m}::envDelete`, operationKind: "method", target: { form: "call", path: "node_process::env_delete", argModes: ["ref"] }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [stringCarrier] },
-    { exportId: `${m}::argv`, operationKind: "method", target: { form: "call", path: "node_process::argv" }, resultCarrier: stringVecCarrier },
-    { exportId: `${m}::execPath`, operationKind: "method", target: { form: "call", path: "node_process::exec_path" }, resultCarrier: stringCarrier, isFallible: true },
-    { exportId: `${m}::pid`, operationKind: "method", target: { form: "call", path: "node_process::pid" }, resultCarrier: int32Carrier, castResult: "i32" },
-    { exportId: `${m}::ppid`, operationKind: "method", target: { form: "call", path: "node_process::ppid" }, resultCarrier: int32Carrier, castResult: "i32" },
-    { exportId: `${m}::exitCode`, operationKind: "method", target: { form: "call", path: "node_process::exit_code", chain: ["unwrap_or_default"] }, resultCarrier: int32Carrier },
-    { exportId: `${m}::setExitCode`, operationKind: "method", target: { form: "call", path: "node_process::set_exit_code" }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [int32Carrier] },
+    { exportId: `${m}::platform`, operationKind: "property", target: { form: "call", path: "node_process::platform" }, resultCarrier: stringCarrier },
+    { exportId: `${m}::arch`, operationKind: "property", target: { form: "call", path: "node_process::arch" }, resultCarrier: stringCarrier },
+    { exportId: `${m}::argv`, operationKind: "property", target: { form: "call", path: "node_process::argv" }, resultCarrier: stringVecCarrier },
+    { exportId: `${m}::pid`, operationKind: "property", target: { form: "call", path: "node_process::pid" }, resultCarrier: int32Carrier, castResult: "i32" },
+    { exportId: `${m}::ppid`, operationKind: "property", target: { form: "call", path: "node_process::ppid" }, resultCarrier: int32Carrier, castResult: "i32" },
+    { exportId: `${m}::env`, operationKind: "property", target: { form: "marker" }, resultCarrier: envCarrier },
+    { exportId: `${m}::ProcessEnv`, receiverTypeId: "rust.node.ProcessEnv", operationKind: "indexer", target: { form: "call", path: "node_process::env_get", argModes: ["ref"] }, resultCarrier: rustOptionTargetType(stringCarrier), parameterCarriers: [stringCarrier] },
   ];
 }
 
@@ -458,8 +478,7 @@ function urlModule(): RustProviderModuleDefinition {
         kind: "class" as const,
         members: [
           constructorMember(paramsId, [{ name: "init", type: stringType }]),
-          // Contract: empty string when the parameter is absent.
-          methodMember(paramsId, "get", [{ name: "name", type: stringType }], stringType),
+          methodMember(paramsId, "get", [{ name: "name", type: stringType }], { kind: "union", types: [stringType, nullType] }),
           methodMember(paramsId, "set", [{ name: "name", type: stringType }, { name: "value", type: stringType }], voidType),
           methodMember(paramsId, "append", [{ name: "name", type: stringType }, { name: "value", type: stringType }], voidType),
           methodMember(paramsId, "has", [{ name: "name", type: stringType }], booleanType),
@@ -488,7 +507,7 @@ function urlRows(): readonly RustProviderOperationRow[] {
     { exportId: urlId, operationKind: "constructor", target: { form: "call", path: "node_url::Url::parse", argModes: ["ref"], trailingArgs: ["None"] }, resultCarrier: urlCarrier, parameterCarriers: [stringCarrier], isFallible: true },
     ...["href", "protocol", "host", "hostname", "port", "pathname", "search", "hash", "origin"].map(urlProperty),
     { exportId: paramsId, operationKind: "constructor", target: { form: "call", path: "node_url::UrlSearchParams::new_from", argModes: ["ref"] }, resultCarrier: searchParamsCarrier, parameterCarriers: [stringCarrier], isFallible: true },
-    { exportId: paramsId, memberId: `${paramsId}.get`, operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"], chain: ["unwrap_or_default"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier] },
+    { exportId: paramsId, memberId: `${paramsId}.get`, operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"] }, resultCarrier: rustOptionTargetType(stringCarrier), parameterCarriers: [stringCarrier] },
     { exportId: paramsId, memberId: `${paramsId}.set`, operationKind: "method", target: { form: "receiver-method", name: "set", argModes: ["ref", "ref"], mutatesReceiver: true }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [stringCarrier, stringCarrier] },
     { exportId: paramsId, memberId: `${paramsId}.append`, operationKind: "method", target: { form: "receiver-method", name: "append", argModes: ["ref", "ref"], mutatesReceiver: true }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [stringCarrier, stringCarrier] },
     { exportId: paramsId, memberId: `${paramsId}.has`, operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, resultCarrier: boolCarrier, parameterCarriers: [stringCarrier] },

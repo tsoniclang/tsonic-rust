@@ -12,7 +12,7 @@ test("buffer, url, crypto, process, and util lower through provider rows", () =>
 import { Buffer } from "node:buffer";
 import { URL, URLSearchParams } from "node:url";
 import { createHash } from "node:crypto";
-import { pid, envGet } from "node:process";
+import { pid, env } from "node:process";
 import type { int32 } from "@tsonic/core/types.js";
 
 export function probe(): string {
@@ -22,9 +22,9 @@ export function probe(): string {
   const params = new URLSearchParams("x=1");
   const h = createHash("sha256");
   h.update("abc");
-  const id: int32 = pid();
+  const id: int32 = pid;
   if (size > 0 && id > 0) {
-    return u.pathname + params.get("x") + h.digest("hex") + envGet("PATH");
+    return u.pathname + (params.get("x") ?? "") + h.digest("hex") + (env["PATH"] ?? "");
   }
   return "";
 }
@@ -41,7 +41,7 @@ export function probe(): string {
   assert.match(text, /h\.update_str\("abc"\)\?/u);
   assert.match(text, /h\.digest_string\("hex"\)\?/u);
   assert.match(text, /node_process::pid\(\) as i32/u);
-  assert.match(text, /node_process::env_get\("PATH"\)\.unwrap_or_default\(\)/u);
+  assert.match(text, /node_process::env_get\("PATH"\)\.unwrap_or\(/u);
 });
 
 test("generated cargo binary proves the multi-module node closure at runtime", { timeout: 300_000 }, () => {
@@ -55,7 +55,7 @@ test("generated cargo binary proves the multi-module node closure at runtime", {
 import { Buffer } from "node:buffer";
 import { URL, URLSearchParams, pathToFileURL, fileURLToPath } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
-import { cwd, pid, envGet, envSet, envDelete, platform, arch, argv, exitCode } from "node:process";
+import { cwd, pid, env, platform, arch, argv } from "node:process";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, copyFileSync, renameSync, unlinkSync, rmSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { hostname, tmpdir, homedir } from "node:os";
@@ -87,18 +87,17 @@ export function main(): void {
   rmSync(dir);
   check(!existsSync(dir));
 
-  envSet("R7_PROOF", "yes");
-  check(envGet("R7_PROOF") === "yes");
-  envDelete("R7_PROOF");
-  check(envGet("R7_PROOF") === "");
-  check(platform().length > 0);
-  check(arch().length > 0);
-  check(pid() > 0);
-  check(argv().length > 0);
-  check(exitCode() === 0);
+  const path_var = env["PATH"] ?? "";
+  check(path_var.length > 0);
+  check(env["R7_UNSET_VAR_PROOF"] === null);
+  check(platform.length > 0);
+  check(arch.length > 0);
+  check(pid > 0);
+  check(argv.length > 0);
   check(hostname().length > 0);
   check(tmpdir().length > 0);
-  check(homedir().length >= 0);
+  const home = homedir() ?? "";
+  check(home.length >= 0);
 
   const buf = Buffer.from("abc", "utf8");
   check(buf.length === 3);
@@ -123,7 +122,7 @@ export function main(): void {
   check(u.hash === "#top");
   check(u.origin === "https://user.example.com:8443");
   const params = new URLSearchParams("a=1&b=2");
-  check(params.get("a") === "1");
+  check((params.get("a") ?? "") === "1");
   check(params.has("b"));
   params.set("a", "9");
   params.append("c", "3");
@@ -193,6 +192,48 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
+test("process env writes fail closed", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packageIds: ["nodejs"],
+    files: {
+      "index.ts": `
+import { env } from "node:process";
+
+export function bad(): void {
+  env["X"] = "1";
+}
+`,
+    },
+  });
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});
+
+test("absent env and search-param reads preserve null", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packageIds: ["nodejs"],
+    files: {
+      "index.ts": `
+import { env } from "node:process";
+
+export function read(name: string): string {
+  const value = env[name];
+  if (value === null) {
+    return "";
+  }
+  return value ?? "";
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /node_process::env_get\(&name\)/u);
+  assert.match(text, /value\.is_none\(\)/u);
+});
+
 test("unsupported node APIs fail closed with deterministic diagnostics", () => {
   const cases = [
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
@@ -201,6 +242,7 @@ test("unsupported node APIs fail closed with deterministic diagnostics", () => {
     { module: "node:buffer", name: "btoa", call: "btoa(\"x\")" },
     { module: "node:url", name: "parse", call: "parse(\"http://x\")" },
     { module: "node:crypto", name: "createHmac", call: "createHmac(\"sha256\", \"k\")" },
+    { module: "node:process", name: "execPath", call: "execPath.startsWith(\"/\")" },
   ];
   for (const item of cases) {
     const { result } = compileRust({

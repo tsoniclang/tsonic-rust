@@ -10,6 +10,11 @@ export const rustExtensionId = "tsonic.rust";
 export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
 export type RustProviderOperationForm =
+  | {
+      // Value exports with no runtime representation (receiver markers).
+      // Any direct lowering fails closed.
+      readonly form: "marker";
+    }
   | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argCasts?: readonly (string | undefined)[]; readonly trailingArgs?: readonly string[]; readonly chain?: readonly string[] }
   | {
       // Free function taking all arguments as one &[&str] slice (variadic

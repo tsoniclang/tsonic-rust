@@ -55,18 +55,23 @@ provider package: `node:path` (join/resolve/normalize/dirname/basename/
 extname/isAbsolute), `node:os` (platform/arch/eol/hostname/tmpdir/homedir),
 `node:fs` (existsSync, readFileSync, writeFileSync, readdirSync, statSync
 with a Stats carrier, mkdirSync, rmSync, unlinkSync, copyFileSync,
-renameSync, realpathSync), `node:fs/promises` (async readFile, writeFile,
+renameSync, realpathSync), `node:fs/promises` (readFile, writeFile,
 readdir, stat, mkdir, rm, unlink, copyFile, rename — awaited fallible rows
-lower to `.await?`), `node:process` (cwd, platform, arch, envGet/envSet/
-envDelete, argv, execPath, pid, ppid, exitCode/setExitCode), `node:buffer`
+lower to `.await?`; the runtime backing is async signatures over
+synchronous file operations, a behavior proof rather than an I/O
+scheduler), `node:process` (cwd() plus Node-shaped value exports platform,
+arch, argv, pid, ppid, and env with index reads preserving absence as
+null Option carriers; env writes and execPath fail closed), `node:buffer`
 (Buffer from/alloc/byteLength/concat/toString/readUInt8/writeUInt8/equals/
 compare/length, isBuffer), `node:url` (URL with property rows,
 URLSearchParams, pathToFileURL, fileURLToPath), `node:crypto` (randomUUID,
 createHash with Hash update/digest), and `node:util` (closed string
-helpers). Declared members without rows (fs.watch, streams, process.exit,
-util.inspect/format, legacy url.parse/format, btoa/atob, createHmac,
-randomBytes) each diagnose deterministically and name the contract they
-require.
+helpers). Absent values are never silently defaulted: nullable reads
+(env indexing, URLSearchParams.get, os.homedir) carry Option and lower
+`??`/null checks explicitly. Declared members without rows (fs.watch,
+streams, process.exit/execPath, util.inspect/format, legacy
+url.parse/format, btoa/atob, createHmac, randomBytes) each diagnose
+deterministically and name the contract they require.
 
 ## Explicitly unsupported (fail-closed, classified)
 
