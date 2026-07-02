@@ -114,6 +114,14 @@ export type RustTargetOperationFact =
       readonly name: string;
       readonly resultCarrier: TargetTypeRef;
     }
+  | {
+      // Object literal lowering to a generated record struct: field order and
+      // carriers come from the finalized shape declaration.
+      readonly kind: "record-literal";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly fieldNames: readonly string[];
+    }
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
   | { readonly kind: "option-coalesce"; readonly operationId: string }

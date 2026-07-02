@@ -369,3 +369,58 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     variants,
   }];
 }
+
+export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+  const { ast } = context.input;
+  const nameNode = Node_Name(node);
+  const interfaceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  if (!isValidRustIdentifier(interfaceName)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record",
+      "Interface names must be valid Rust identifiers.",
+    ));
+    return undefined;
+  }
+  if (ast.extendsHeritageElements(node).length > 0) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record",
+      "Interface inheritance is not supported by the Rust target.",
+    ));
+    return undefined;
+  }
+  const fields: RustStructField[] = [];
+  for (const member of ast.members(node)) {
+    if (member === undefined) {
+      continue;
+    }
+    if (ast.kindName(member) !== "KindPropertySignature") {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, member),
+        "rust.backend.record",
+        "Record interfaces support only property signatures.",
+      ));
+      return undefined;
+    }
+    const fieldName = rustValueName(ast.text(ast.name(member) ?? member));
+    const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
+    if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, member),
+        "rust.backend.record",
+        `Record field '${fieldName}' has no supported Rust carrier fact.`,
+      ));
+      return undefined;
+    }
+    fields.push({ name: fieldName, type: fieldType });
+  }
+  const allFieldsCopy = fields.every((field) => field.type.kind === "primitive");
+  return [{
+    kind: "struct",
+    name: interfaceName,
+    pub: ast.hasModifierKind(node, "export"),
+    derives: allFieldsCopy ? ["Clone", "Copy", "Debug", "PartialEq"] : ["Clone", "Debug", "PartialEq"],
+    fields,
+  }];
+}

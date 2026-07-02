@@ -1,6 +1,7 @@
 import type { Node, TargetTypeRef } from "@tsonic/tsts";
 import {
   KindBinaryExpression,
+  Node_Initializer,
   KindCallExpression,
   KindElementAccessExpression,
   KindFalseKeyword,
@@ -87,6 +88,9 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
     }
     case "KindArrayLiteralExpression": {
       return planArrayLiteral(node, context);
+    }
+    case "KindObjectLiteralExpression": {
+      return planRecordLiteral(node, context);
     }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
@@ -575,4 +579,42 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     elements.push(planned);
   }
   return { kind: "vec-literal", elements };
+}
+
+function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const fact = rustOperationFact(node, context);
+  if (fact === undefined || fact.kind !== "record-literal") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record",
+      "Object literals require a finalized record shape fact.",
+    ));
+    return undefined;
+  }
+  const value = rustSourceTypeCarrierValue(fact.resultCarrier);
+  const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+  if (typePath === undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record",
+      "Object literal shape does not resolve to a generated Rust struct.",
+    ));
+    return undefined;
+  }
+  const { ast } = context.input;
+  const fields: { name: string; value: RustExpr }[] = [];
+  for (const property of ast.properties(node)) {
+    if (property === undefined) {
+      continue;
+    }
+    const nameNode = ast.name(property);
+    const fieldName = rustValueName(nameNode === undefined ? "" : ast.text(nameNode));
+    const initializer = Node_Initializer(property);
+    const planned = initializer === undefined ? undefined : planExpression(initializer, context);
+    if (!isValidRustIdentifier(fieldName) || planned === undefined) {
+      return undefined;
+    }
+    fields.push({ name: fieldName, value: planned });
+  }
+  return { kind: "struct-literal", path: typePath, fields };
 }

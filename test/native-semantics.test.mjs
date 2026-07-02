@@ -384,3 +384,48 @@ export function value_or_zero(value: int32 | undefined): int32 {
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.length > 0);
 });
+
+test("interfaces lower to record structs with annotated object literals", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export interface Point {
+  x: int32;
+  y: int32;
+}
+
+export function origin(): Point {
+  const p: Point = { x: 0, y: 0 };
+  return p;
+}
+
+export function shift(p: Point, dx: int32): Point {
+  return { x: p.x + dx, y: p.y };
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /#\[derive\(Clone, Copy, Debug, PartialEq\)\]\npub struct Point \{\n    pub x: i32,\n    pub y: i32,\n\}/u);
+  assert.match(text, /let p: Point = Point \{ x: 0, y: 0 \};/u);
+  assert.match(text, /Point \{ x: p\.x \+ dx, y: p\.y \}/u);
+});
+
+test("unannotated object literals fail closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function make(): void {
+  const p = { x: 1 };
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});
