@@ -25,6 +25,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrier } from "./render-types.js";
+import { rustMutatingReceiverMethods, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 
 export function planFunctionDeclaration(node: Node, context: RustPlanContext): RustItem | undefined {
   const { ast } = context.input;
@@ -95,7 +96,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     ));
     return undefined;
   }
-  const bodyContext: RustPlanContext = { ...context, mutatedNames: collectMutatedNames(ast, bodyNode) };
+  const bodyContext: RustPlanContext = { ...context, mutatedNames: collectMutatedNames(ast, bodyNode, context) };
   const body = planBlockLike(bodyNode, bodyContext);
   if (paramsFailed || body === undefined) {
     return undefined;
@@ -112,10 +113,30 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
 
 // Name-level write analysis over a function body: a binding becomes `let mut`
 // only when an assignment or increment/decrement to that name is proven.
-export function collectMutatedNames(ast: AstReader, body: Node): ReadonlySet<string> {
+export function collectMutatedNames(ast: AstReader, body: Node, context?: RustPlanContext): ReadonlySet<string> {
   const mutated = new Set<string>();
+  const addWriteTarget = (target: Node | undefined): void => {
+    if (target === undefined) {
+      return;
+    }
+    const targetKind = ast.kindName(target);
+    if (targetKind === KindIdentifier) {
+      mutated.add(ast.text(target));
+      return;
+    }
+    if (targetKind === "KindPropertyAccessExpression" || targetKind === "KindElementAccessExpression") {
+      addWriteTarget((target as { readonly Expression?: Node }).Expression);
+    }
+  };
   const visit = (node: Node): void => {
     const kind = ast.kindName(node);
+    if (kind === "KindCallExpression" && context !== undefined) {
+      const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+      if (fact !== undefined && fact.kind === "provider-operation" && fact.target.form === "receiver-method" && rustMutatingReceiverMethods.has(fact.target.name)) {
+        const callee = (node as { readonly Expression?: Node }).Expression;
+        addWriteTarget(callee === undefined ? undefined : (callee as { readonly Expression?: Node }).Expression);
+      }
+    }
     if (kind === KindBinaryExpression) {
       const operatorToken = BinaryExpression_OperatorToken(node);
       const writeTokens = [
@@ -127,10 +148,7 @@ export function collectMutatedNames(ast: AstReader, body: Node): ReadonlySet<str
         KindPercentEqualsToken,
       ];
       if (operatorToken !== undefined && writeTokens.includes(ast.kindName(operatorToken))) {
-        const left = BinaryExpression_Left(node);
-        if (left !== undefined && ast.kindName(left) === KindIdentifier) {
-          mutated.add(ast.text(left));
-        }
+        addWriteTarget(BinaryExpression_Left(node));
       }
     } else if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
       const operatorText = kind === KindPrefixUnaryExpression

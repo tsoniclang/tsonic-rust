@@ -46,6 +46,17 @@ export function createRustTargetPack(): TargetPack {
         };
       },
     },
+    surfaces: [
+      {
+        id: "js",
+        displayName: "JavaScript surface",
+        runtimeContributions(_context: TargetRuntimeContributionContext): TargetRuntimeContributions {
+          return {
+            references: [rustRuntimeCrateReference("rust-js", "tsonic_rust_js")],
+          };
+        },
+      },
+    ],
     createBackend(context: TargetBackendContext): TargetBackend {
       validateRustTargetOptions(context.target);
       return createRustBackend(context);

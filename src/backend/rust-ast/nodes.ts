@@ -4,7 +4,8 @@
 export type RustType =
   | { readonly kind: "primitive"; readonly name: string }
   | { readonly kind: "string" }
-  | { readonly kind: "unit" };
+  | { readonly kind: "unit" }
+  | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] };
 
 export type RustExpr =
   | { readonly kind: "int-literal"; readonly text: string }
@@ -19,7 +20,10 @@ export type RustExpr =
   | { readonly kind: "method-call"; readonly receiver: RustExpr; readonly method: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "field"; readonly receiver: RustExpr; readonly name: string }
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
-  | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] };
+  | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
+  | { readonly kind: "cast"; readonly expr: RustExpr; readonly to: string }
+  | { readonly kind: "reference"; readonly expr: RustExpr }
+  | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] };
 
 export type RustStmt =
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init: RustExpr }
@@ -29,6 +33,8 @@ export type RustStmt =
   | { readonly kind: "tail"; readonly expr: RustExpr }
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock }
   | { readonly kind: "while"; readonly condition: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "for"; readonly binding: string; readonly iterable: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
   | { readonly kind: "scope"; readonly body: RustBlock };
 
 export interface RustBlock {
@@ -56,7 +62,8 @@ export type RustItem =
       readonly type: RustType;
       readonly value: RustExpr;
     }
-  | { readonly kind: "mod-decl"; readonly name: string; readonly pub: boolean };
+  | { readonly kind: "mod-decl"; readonly name: string; readonly pub: boolean }
+  | { readonly kind: "use"; readonly path: string; readonly alias?: string };
 
 export interface RustSourceFileModel {
   readonly headerComment: string;

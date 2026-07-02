@@ -163,14 +163,15 @@ export function acmePlatformPackage() {
   });
 }
 
-export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], entryPoint = "index.ts" } = {}) {
+export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], surfaces = [], entryPoint = "index.ts" } = {}) {
   const pack = createRustTargetPack();
   const project = { entryPoint, targets: [target] };
+  const selectedSurfaces = (pack.surfaces ?? []).filter((surface) => surfaces.includes(surface.id));
   const providerContext = {
     project,
     target,
     targetPack: pack,
-    selectedSurfaces: [],
+    selectedSurfaces,
     selectedPackages: packages,
   };
   const fileMap = new Map(Object.entries(files).map(([name, text]) => [`/src/${name}`, text]));
@@ -211,11 +212,14 @@ export function checkRustSession(harness, fileNames) {
   return session.finalizeExtensions();
 }
 
-export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], entryPoint = "index.ts" }) {
-  const harness = createRustSession({ files, target, packages, entryPoint });
+export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], surfaces = [], entryPoint = "index.ts" }) {
+  const harness = createRustSession({ files, target, packages, surfaces, entryPoint });
   const extensionHost = checkRustSession(harness);
+  const contributionContext = harness.providerContext;
   const runtimeReferences = [
-    { kind: "cargo-path", include: rustRuntimeCratePath, attributes: { crate: "tsonic_rust_runtime" } },
+    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
+    ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
+      surface.runtimeContributions?.(contributionContext).references ?? []),
     ...packages.flatMap((providerPackage) => providerPackage.runtimeContributions?.({}).references ?? []),
   ];
   const input = createRustCompileInputFromSession({

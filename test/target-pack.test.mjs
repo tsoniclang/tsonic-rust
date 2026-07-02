@@ -12,10 +12,10 @@ test("rust target pack registers under the rust target id", () => {
   assert.equal(pack.displayName, "Rust");
 });
 
-test("rust target pack exposes no surfaces or provider packages", () => {
+test("rust target pack declares only the js surface and no provider packages", () => {
   const pack = createRustTargetPack();
 
-  assert.equal(pack.surfaces, undefined);
+  assert.deepEqual(pack.surfaces.map((surface) => surface.id), ["js"]);
   assert.equal(pack.packages, undefined);
 });
 

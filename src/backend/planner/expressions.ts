@@ -60,6 +60,9 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
       const inner = Node_Expression(node);
       return inner === undefined ? undefined : planExpression(inner, context);
     }
+    case "KindArrayLiteralExpression": {
+      return planArrayLiteral(node, context);
+    }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
       return planUnaryExpression(node, context);
@@ -157,6 +160,22 @@ function planUnaryExpression(node: Node, context: RustPlanContext): RustExpr | u
 
 function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "option-check") {
+    const { ast } = context.input;
+    const leftNode = BinaryExpression_Left(node);
+    const rightNode = BinaryExpression_Right(node);
+    const optionNode = leftNode !== undefined && context.input.facts.getRuntimeCarrierFact(leftNode) !== undefined &&
+      ast.kindName(leftNode) !== "KindIdentifier"
+      ? leftNode
+      : rightNode !== undefined && context.input.facts.getRuntimeCarrierFact(rightNode) !== undefined
+        ? rightNode
+        : leftNode;
+    const value = optionNode === undefined ? undefined : planExpression(optionNode, context);
+    if (value === undefined) {
+      return undefined;
+    }
+    return { kind: "method-call", receiver: value, method: fact.negated ? "is_some" : "is_none", args: [] };
+  }
   if (fact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -243,6 +262,40 @@ function planProviderOperationExpression(
       const index = args[0];
       return index === undefined ? undefined : { kind: "index", receiver, index };
     }
+    case "free-call": {
+      const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+      if (receiver === undefined) {
+        return undefined;
+      }
+      const receiverArg: RustExpr = form.receiverMode === "ref" ? { kind: "reference", expr: receiver } : receiver;
+      const shapedArgs = args.map((argument, index): RustExpr =>
+        (form.argModes?.[index] ?? "value") === "ref" ? { kind: "reference", expr: argument } : argument);
+      const trailing = (form.trailingArgs ?? []).map((text): RustExpr => ({ kind: "path", path: text }));
+      return { kind: "call", path: form.path, args: [receiverArg, ...shapedArgs, ...trailing] };
+    }
+    case "receiver-method": {
+      const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+      if (receiver === undefined) {
+        return undefined;
+      }
+      const shapedArgs = args.map((argument, index): RustExpr => {
+        const cast = form.argCasts?.[index];
+        const mode = form.argModes?.[index] ?? "value";
+        let shaped: RustExpr = argument;
+        if (cast !== undefined) {
+          shaped = { kind: "cast", expr: shaped, to: cast };
+        }
+        if (mode === "ref") {
+          shaped = { kind: "reference", expr: shaped };
+        }
+        return shaped;
+      });
+      let result: RustExpr = { kind: "method-call", receiver, method: form.name, args: shapedArgs };
+      for (const chained of form.chain ?? []) {
+        result = { kind: "method-call", receiver: result, method: chained, args: [] };
+      }
+      return result;
+    }
   }
 }
 
@@ -265,8 +318,9 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
         "rust.provider.call",
         "Provider call operation could not be lowered.",
       ));
+      return undefined;
     }
-    return planned;
+    return applyResultCast(planned, fact.castResult);
   }
   const sourceReference = callee === undefined
     ? undefined
@@ -336,8 +390,9 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
       "rust.provider.property",
       "Provider property operation could not be lowered.",
     ));
+    return undefined;
   }
-  return planned;
+  return applyResultCast(planned, fact.castResult);
 }
 
 function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -362,6 +417,45 @@ function planElementAccess(node: Node, context: RustPlanContext): RustExpr | und
       "rust.provider.indexer",
       "Provider indexer operation could not be lowered.",
     ));
+    return undefined;
   }
-  return planned;
+  return applyResultCast(planned, fact.castResult);
+}
+
+function applyResultCast(expression: RustExpr, castTo: string | undefined): RustExpr {
+  return castTo === undefined ? expression : { kind: "cast", expr: expression, to: castTo };
+}
+
+export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const fact = rustOperationFact(node, context);
+  if (fact === undefined || fact.kind !== "array-literal") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.array-literal",
+      "Array literals require a finalized Rust array lane fact.",
+    ));
+    return undefined;
+  }
+  if (fact.lane !== "dense") {
+    // Sparse literals lower at variable-declaration level into JsArray
+    // construction statements.
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.js.sparse-array",
+      "Sparse array literals are supported only as variable initializers.",
+    ));
+    return undefined;
+  }
+  const elements: RustExpr[] = [];
+  for (const element of context.input.ast.elements(node)) {
+    if (element === undefined) {
+      continue;
+    }
+    const planned = planExpression(element, context);
+    if (planned === undefined) {
+      return undefined;
+    }
+    elements.push(planned);
+  }
+  return { kind: "vec-literal", elements };
 }
