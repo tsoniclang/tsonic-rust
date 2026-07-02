@@ -345,7 +345,7 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
     return planUpdateStatement(expression, context);
   }
-  if (expressionKind === KindCallExpression) {
+  if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression") {
     const planned = planExpression(expression, context);
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }

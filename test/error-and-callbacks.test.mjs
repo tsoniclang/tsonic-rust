@@ -256,6 +256,6 @@ test("fallible provider rows are restricted to method operations", async () => {
       }],
       crates: [],
     }),
-    /isFallible is supported only on method operations/u,
+    /isFallible is supported only on method and constructor operations/u,
   );
 });

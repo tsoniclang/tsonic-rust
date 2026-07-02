@@ -20,6 +20,11 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustJsMapTargetId]: "js_abi::JsMap",
   [rustJsSetTargetId]: "js_abi::JsSet",
   [rustJsDateTargetId]: "js_abi::JsDate",
+  "rust.node.Stats": "node_fs::Stats",
+  "rust.node.Buffer": "node_buffer::Buffer",
+  "rust.node.Url": "node_url::Url",
+  "rust.node.UrlSearchParams": "node_url::UrlSearchParams",
+  "rust.node.Hash": "node_crypto::Hash",
 };
 
 export function rustTypeFromCarrier(

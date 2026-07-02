@@ -678,10 +678,13 @@ function resolveExpressionCarrierUncached(
       if (output === undefined) {
         return undefined;
       }
+      const operandFallible = operand !== undefined &&
+        walk.lifecycle.host.facts.get(operand, rustFallibleCallFactKey) !== undefined;
       setRustOperationFact(walk, expression, {
         kind: "await-op",
         operationId: "tsonic.rust.async.await",
         resultCarrier: output,
+        ...(operandFallible ? { fallible: true } : {}),
       });
       return setCarrierFact(walk, expression, output);
     }
@@ -724,6 +727,14 @@ function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFi
   const declaration = checker.getSymbolValueDeclaration(symbol) ?? checker.getPrimarySymbolDeclaration(symbol);
   if (declaration === undefined) {
     return undefined;
+  }
+  const providerIdentity = providerDeclarationIdentityFor(walk, identifier);
+  if (providerIdentity !== undefined) {
+    const row = matchProviderRow(walk.providerRows, providerIdentity, "property");
+    if (row !== undefined) {
+      recordProviderOperationFacts(walk, identifier, row, providerIdentity);
+      return setCarrierFact(walk, identifier, row.resultCarrier);
+    }
   }
   const declarationKind = walk.lifecycle.compiler.ast.kindName(declaration);
   if (declarationKind !== KindParameter && declarationKind !== KindVariableDeclaration) {
@@ -926,6 +937,12 @@ function resolveCallLikeCarrier(
     }
     recordProviderOperationFacts(walk, expression, row, providerIdentity);
     if (row.isAsync === true) {
+      if (row.isFallible === true) {
+        // Async fallibility surfaces at the await site: call().await?.
+        walk.lifecycle.host.facts.set(expression, rustFallibleCallFactKey, { fallible: true }, [
+          { message: "rust fallible async call" },
+        ]);
+      }
       return setCarrierFact(walk, expression, rustFutureTargetType(row.resultCarrier));
     }
     return setCarrierFact(walk, expression, row.resultCarrier);
@@ -1193,7 +1210,9 @@ function recordProviderOperationFacts(
   identity: ProviderDeclarationIdentity | undefined,
 ): void {
   const operationId = row.memberId ?? row.signatureId ?? row.exportId;
-  const targetOperationText = row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice"
+  const targetOperationText = row.target.form === "marker"
+    ? "marker"
+    : row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice"
     ? row.target.path
     : row.target.form === "index"
       ? "[]"
@@ -1207,7 +1226,8 @@ function recordProviderOperationFacts(
     operationKind: row.operationKind,
     target: row.target,
     resultCarrier: row.resultCarrier,
-    ...(row.isFallible === true ? { fallible: true } : {}),
+    ...(row.castResult === undefined ? {} : { castResult: row.castResult }),
+    ...(row.isFallible === true && row.isAsync !== true ? { fallible: true } : {}),
   });
   if (row.operationKind === "method" || row.operationKind === "constructor") {
     const member: TargetMember = {
@@ -1666,6 +1686,9 @@ function tryRecordOptionUndefinedCheck(
 ): TargetTypeRef | undefined {
   const { ast, checker, typeShape } = walk.lifecycle.compiler;
   const isUndefinedLiteral = (node: Node): boolean => {
+    if (ast.kindName(node) === "KindNullKeyword") {
+      return true;
+    }
     if (ast.kindName(node) !== KindIdentifier) {
       return false;
     }
@@ -2341,6 +2364,17 @@ function recordFallibilityFacts(walk: RustFactWalk): void {
           visit(catchBlock, insideTry);
         }
         return;
+      }
+      if (kind === KindNewExpression && !insideTry) {
+        const callee = Node_Expression(node);
+        const identity = callee === undefined ? undefined : providerDeclarationIdentityFor(walk, callee);
+        if (identity !== undefined) {
+          const row = matchProviderRow(walk.providerRows, identity, "constructor");
+          if (row?.isFallible === true) {
+            found = true;
+            return;
+          }
+        }
       }
       if (kind === KindCallExpression && !insideTry) {
         const callee = Node_Expression(node);
