@@ -50,6 +50,9 @@ export function rustTypeFromCarrier(
       ...(typeArguments.length === 0 ? {} : { typeArguments: typeArguments as RustType[] }),
     };
   }
+  if (carrier.kind === "type-parameter") {
+    return { kind: "named", path: carrier.name };
+  }
   if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };

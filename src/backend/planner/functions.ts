@@ -95,10 +95,27 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
   if (paramsFailed || body === undefined) {
     return undefined;
   }
+  const typeParams: string[] = [];
+  for (const typeParameter of ast.typeParameters(node)) {
+    if (typeParameter === undefined) {
+      continue;
+    }
+    const typeParameterName = ast.text(ast.name(typeParameter) ?? typeParameter);
+    if (!isValidRustIdentifier(typeParameterName)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, typeParameter),
+        "rust.backend.generics",
+        "Type parameter names must be valid Rust identifiers.",
+      ));
+      return undefined;
+    }
+    typeParams.push(typeParameterName);
+  }
   return {
     kind: "function",
     name,
     pub: ast.hasModifierKind(node, "export"),
+    ...(typeParams.length === 0 ? {} : { typeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: applyTailReturn(body, returnType !== undefined),

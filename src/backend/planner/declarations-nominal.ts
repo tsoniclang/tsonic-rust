@@ -94,11 +94,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       continue;
     }
     if (memberKind === "KindMethodDeclaration") {
-      if (ast.hasModifierKind(member, "static") || ast.hasModifierKind(member, "async")) {
+      if (ast.hasModifierKind(member, "async")) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, member),
           "rust.backend.class",
-          "Static and async class methods are not supported by the Rust target.",
+          "Async class methods are not supported by the Rust target.",
         ));
         failed = true;
         continue;
@@ -302,10 +302,13 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   if (body === undefined) {
     return undefined;
   }
+  const isStatic = ast.hasModifierKind(member, "static");
   return {
     name: methodName,
     pub: true,
-    selfParam: context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref",
+    ...(isStatic ? {} : {
+      selfParam: (context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref") as import("../rust-ast/nodes.js").RustSelfParam,
+    }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: applyTail(body, returnType !== undefined),

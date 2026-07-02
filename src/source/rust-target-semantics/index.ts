@@ -392,6 +392,12 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
   }
   const kind = walk.lifecycle.compiler.ast.kindName(typeNode);
   if (kind === KindTypeReference) {
+    const nameNode = TypeReferenceNode_TypeName(typeNode) ?? typeNode;
+    const declaration = projectDeclarationFor(walk, nameNode);
+    if (declaration !== undefined && walk.lifecycle.compiler.ast.kindName(declaration) === "KindTypeParameter") {
+      const parameterName = walk.lifecycle.compiler.ast.text(walk.lifecycle.compiler.ast.name(declaration) ?? declaration);
+      return setCarrierFact(walk, typeNode, { kind: "type-parameter", name: parameterName });
+    }
     const sourceType = sourceTypeCarrierForReference(walk, typeNode);
     if (sourceType !== undefined) {
       return setCarrierFact(walk, typeNode, sourceType);
@@ -754,9 +760,13 @@ function resolveBinaryCarrier(
   if (rightCarrier === undefined && leftCarrier !== undefined && ast.kindName(right) === KindNumericLiteral && isRustNumericCarrier(leftCarrier)) {
     rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, leftCarrier);
   }
-  if (leftCarrier === undefined && rightCarrier === undefined && expected !== undefined && isRustNumericCarrier(expected)) {
-    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, expected);
-    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, expected);
+  if (expected !== undefined && isRustNumericCarrier(expected)) {
+    if (leftCarrier === undefined) {
+      leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, expected);
+    }
+    if (rightCarrier === undefined) {
+      rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, expected);
+    }
   }
   if (operatorKind === "KindQuestionQuestionToken") {
     const rebindLeft = leftCarrier !== undefined && isRustOptionCarrier(leftCarrier) ? leftCarrier : undefined;
@@ -875,7 +885,29 @@ function resolveCallLikeCarrier(
       recordBindingWrite(walk, argument, "referent");
     }
   }
-  const returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  let returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  if (returnCarrier?.kind === "type-parameter") {
+    // Passthrough generic instantiation: the return carrier is the carrier of
+    // the argument bound to the same type parameter position.
+    const parameterIndex = parameters.findIndex((parameter) => {
+      const parameterCarrier = parameter === undefined
+        ? undefined
+        : walk.lifecycle.host.facts.get(parameter, runtimeCarrierFactKey)?.carrier ??
+          resolveTypeNodeCarrier(walk, Node_Type(parameter));
+      return parameterCarrier?.kind === "type-parameter" && parameterCarrier.name === (returnCarrier as { name: string }).name;
+    });
+    const boundArgument = parameterIndex >= 0 ? callArguments[parameterIndex] : undefined;
+    let argumentCarrier = boundArgument === undefined
+      ? undefined
+      : walk.lifecycle.host.facts.get(boundArgument, runtimeCarrierFactKey)?.carrier;
+    if (argumentCarrier === undefined && boundArgument !== undefined && expected !== undefined) {
+      argumentCarrier = resolveExpressionCarrier(walk, boundArgument, sourceFile, expected);
+    }
+    returnCarrier = argumentCarrier ?? returnCarrier;
+    if (returnCarrier.kind === "type-parameter") {
+      return undefined;
+    }
+  }
   return returnCarrier === undefined ? undefined : setCarrierFact(walk, expression, returnCarrier);
 }
 
@@ -1890,8 +1922,9 @@ function trySourceCallLike(
   if (methodDeclaration === undefined || ast.kindName(methodDeclaration) !== "KindMethodDeclaration") {
     return undefined;
   }
+  const isStaticMethod = ast.hasModifierKind(methodDeclaration, "static");
   const receiver = Node_Expression(callee);
-  if (receiver !== undefined) {
+  if (receiver !== undefined && !isStaticMethod) {
     resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
   }
   const parameters = ast.parameters(methodDeclaration);
@@ -1911,6 +1944,25 @@ function trySourceCallLike(
   const methodName = nameNode === undefined ? "" : ast.text(nameNode);
   if (methodName.length === 0) {
     return undefined;
+  }
+  if (isStaticMethod) {
+    const classDeclaration = ast.parent(methodDeclaration);
+    const typeCarrier = classDeclaration === undefined
+      ? undefined
+      : sourceTypeCarrierForDeclaration(walk, classDeclaration);
+    if (typeCarrier === undefined) {
+      return undefined;
+    }
+    const operationId = `tsonic.rust.source.static-method:${methodName}`;
+    recordTargetOperation(walk, expression, operationId, "method", methodName);
+    setRustOperationFact(walk, expression, {
+      kind: "source-static-method",
+      operationId,
+      name: methodName,
+      typeCarrier,
+      resultCarrier: returnCarrier,
+    });
+    return setCarrierFact(walk, expression, returnCarrier);
   }
   const mutatesSelf = methodMutatesSelf(walk, methodDeclaration);
   if (mutatesSelf) {

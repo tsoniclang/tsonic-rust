@@ -58,8 +58,9 @@ export function printRustItem(item: RustItem): string {
     }
     case "function": {
       const params = item.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`).join(", ");
+      const generics = item.typeParams === undefined || item.typeParams.length === 0 ? "" : `<${item.typeParams.join(", ")}>`;
       const returnSuffix = item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
-      const header = `${item.pub ? "pub " : ""}fn ${item.name}(${params})${returnSuffix} {`;
+      const header = `${item.pub ? "pub " : ""}fn ${item.name}${generics}(${params})${returnSuffix} {`;
       const body = printRustBlockStatements(item.body, 1);
       return body.length === 0 ? `${header}}` : `${header}\n${body}\n}`;
     }

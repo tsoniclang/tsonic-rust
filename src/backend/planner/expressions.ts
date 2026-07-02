@@ -382,6 +382,14 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     const [argument] = args;
     return argument;
   }
+  if (fact !== undefined && fact.kind === "source-static-method") {
+    const value = rustSourceTypeCarrierValue(fact.typeCarrier);
+    const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+    if (typePath === undefined) {
+      return undefined;
+    }
+    return { kind: "call", path: `${typePath}::${rustValueName(fact.name)}`, args };
+  }
   if (fact !== undefined && fact.kind === "source-method") {
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
       ? Node_Expression(callee)

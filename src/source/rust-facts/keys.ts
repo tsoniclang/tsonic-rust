@@ -102,6 +102,14 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      // Static method call on a project-source class: associated function.
+      readonly kind: "source-static-method";
+      readonly operationId: string;
+      readonly name: string;
+      readonly typeCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       // new C(...) on a project-source class: associated fn new.
       readonly kind: "source-constructor";
       readonly operationId: string;

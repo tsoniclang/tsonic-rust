@@ -518,3 +518,73 @@ export function make(): Shape {
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.length > 0);
 });
+
+test("static class methods lower to associated functions", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Counter {
+  value: int32;
+
+  constructor(value: int32) {
+    this.value = value;
+  }
+
+  static zero(): Counter {
+    return new Counter(0);
+  }
+}
+
+export function drive(): int32 {
+  const c = Counter.zero();
+  return c.value;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn zero\(\) -> Counter \{/u);
+  assert.match(text, /Counter::zero\(\)/u);
+});
+
+test("passthrough generic functions lower with type parameters", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function pass_through<T>(value: T): T {
+  return value;
+}
+
+export function drive(): int32 {
+  return pass_through(41) + 1;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn pass_through<T>\(value: T\) -> T \{/u);
+  assert.match(text, /pass_through\(41\)/u);
+});
+
+test("operations on unconstrained type parameters stay invalid TypeScript", () => {
+  assert.throws(
+    () => compileRust({
+      files: {
+        "index.ts": `
+export function double_it<T>(value: T): T {
+  return value + value;
+}
+`,
+      },
+    }),
+    /TypeScript diagnostics/u,
+  );
+});
