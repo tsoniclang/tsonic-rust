@@ -146,9 +146,9 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
       readonly fieldNames: readonly string[];
     }
-  
   | { readonly kind: "fixed-array-literal"; readonly operationId: string }
-  | { readonly kind: "fixed-index"; readonly operationId: string; readonly index: number }| {
+  | { readonly kind: "fixed-index"; readonly operationId: string; readonly index: number }
+  | {
       readonly kind: "tuple-literal";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;

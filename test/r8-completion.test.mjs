@@ -106,3 +106,27 @@ export function area(shape: Shape): int32 {
   assert.ok(result.diagnostics.length > 0);
   assert.ok(result.diagnostics.every((diagnostic) => diagnostic.code.startsWith("RUST_")));
 });
+
+test("fixed-array indexing accepts only exact in-range integer literal indexes", () => {
+  // TypeScript itself rejects fractional, negative, and out-of-range
+  // literal indexes on tuple-typed fixed arrays (TS2493); the extension
+  // guard (integer parse + range check) is the fact-level backstop.
+  for (const index of ["1.5", "-1", "2"]) {
+    assert.throws(
+      () => compileRust({
+        files: {
+          "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function f(): int32 {
+  const xs: [int32, int32] = [1, 2];
+  return xs[${index}];
+}
+`,
+        },
+      }),
+      /TypeScript diagnostics/u,
+      `index ${index} must be rejected`,
+    );
+  }
+});
