@@ -25,6 +25,7 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   "rust.node.Url": "node_url::Url",
   "rust.node.UrlSearchParams": "node_url::UrlSearchParams",
   "rust.node.Hash": "node_crypto::Hash",
+  "rust.node.Hmac": "node_crypto::Hmac",
 };
 
 export const rustStrRefType: RustType = { kind: "named", path: "&str" };

@@ -25,6 +25,8 @@ import type { RustProviderOperationForm } from "../rust-facts/keys.js";
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
   readonly providerModuleId: string;
+  // Cross-module type references (e.g. crypto returning buffer's Buffer).
+  readonly imports?: readonly { readonly moduleSpecifier: string; readonly namedImports: readonly { readonly exportedName: string }[] }[];
   readonly exports: readonly ProviderExportDeclaration[];
 }
 
@@ -171,6 +173,7 @@ export function createRustProviderPackageBindingProvider(definition: RustProvide
       return {
         moduleSpecifier: module.moduleSpecifier,
         providerModuleId: module.providerModuleId,
+        ...(module.imports === undefined ? {} : { imports: module.imports }),
         exports: module.exports,
       };
     },

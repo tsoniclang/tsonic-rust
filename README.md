@@ -71,13 +71,15 @@ and execPath fail closed), `node:buffer`
 (Buffer from/alloc/byteLength/concat/toString/readUInt8/writeUInt8/equals/
 compare/length, isBuffer), `node:url` (URL with property rows,
 URLSearchParams, pathToFileURL, fileURLToPath), `node:crypto` (randomUUID, randomBytes
-to Buffer, createHash with Hash update/digest), and `node:util` (closed
-string helpers). Absent values are never silently defaulted: nullable reads
+to Buffer, createHash and createHmac with Hash/Hmac update/digest), and
+`node:util` (closed string helpers plus system-error name/message).
+Provider modules declare cross-module type imports, so returned carriers
+(Buffer from randomBytes, Stats from fs/promises) expose their declared
+members through one identity-keyed declaration. Absent values are never silently defaulted: nullable reads
 (env indexing, URLSearchParams.get, os.homedir) carry Option and lower
 `??`/null checks explicitly. Declared members without rows (fs.watch,
-streams, process.execPath, util.inspect/format, legacy url.parse/format,
-btoa/atob, createHmac) each diagnose deterministically and name the
-contract they require.
+streams, process.execPath, util.inspect/format, legacy url.parse/format)
+each diagnose deterministically and name the contract they require.
 
 ## Explicitly unsupported (fail-closed, classified)
 
