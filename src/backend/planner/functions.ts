@@ -89,6 +89,9 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     return undefined;
   }
   const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  if (fallible) {
+    context.usedAliases?.add("rt");
+  }
   const bodyContext: RustPlanContext = {
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),

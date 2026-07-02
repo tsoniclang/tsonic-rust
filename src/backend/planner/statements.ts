@@ -589,6 +589,7 @@ function planSparseArrayLet(
     ));
     return undefined;
   }
+  context.usedAliases?.add("js_abi");
   const statements: RustStmt[] = [{
     kind: "let",
     name,
@@ -647,6 +648,9 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
   const message = messageNode === undefined
     ? { kind: "string-literal" as const, value: "" }
     : planExpression(messageNode, context);
+  if (message !== undefined) {
+    context.usedAliases?.add("rt");
+  }
   return message === undefined ? undefined : [{ kind: "throw", message }];
 }
 
@@ -725,5 +729,6 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
       binding = `_${binding}`;
     }
   }
+  context.usedAliases?.add("rt");
   return [{ kind: "try-catch", body, catchBinding: binding, catchBody }];
 }

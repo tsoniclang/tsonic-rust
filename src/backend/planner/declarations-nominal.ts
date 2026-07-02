@@ -21,9 +21,9 @@ import type {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrier } from "./render-types.js";
+import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
 import { applyFallibleShape } from "./functions.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
@@ -33,7 +33,7 @@ function carrierOf(context: RustPlanContext, node: Node | undefined) {
 }
 
 function renderType(context: RustPlanContext, node: Node | undefined) {
-  return rustTypeFromCarrier(carrierOf(context, node), (value) => sourceTypePath(context, value));
+  return rustTypeFromCarrierInContext(carrierOf(context, node), context);
 }
 
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
@@ -296,6 +296,9 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     return undefined;
   }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  if (fallible) {
+    context.usedAliases?.add("rt");
+  }
   const bodyContext: RustPlanContext = {
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),

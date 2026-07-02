@@ -87,13 +87,51 @@ export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
 
 export function rustTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
-  context: { readonly moduleName: string; readonly moduleNameByFileName: ReadonlyMap<string, string> },
+  context: {
+    readonly moduleName: string;
+    readonly moduleNameByFileName: ReadonlyMap<string, string>;
+    readonly usedAliases?: Set<string>;
+  },
 ): RustType | undefined {
-  return rustTypeFromCarrier(carrier, (value) => {
+  const rendered = rustTypeFromCarrier(carrier, (value) => {
     const moduleName = context.moduleNameByFileName.get(value.fileName);
     if (moduleName === undefined) {
       return undefined;
     }
     return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
   });
+  if (context.usedAliases !== undefined) {
+    collectAliasesFromRustType(rendered, (path) => {
+      const prefix = path.split("::")[0];
+      if (prefix !== undefined && (prefix === "js_abi" || prefix === "js_string" || prefix === "node_path" || prefix === "node_os" || prefix === "node_fs" || prefix === "rt")) {
+        context.usedAliases?.add(prefix);
+      }
+    });
+  }
+  return rendered;
+}
+
+export function collectAliasesFromRustType(
+  type: RustType | undefined,
+  register: (path: string) => void,
+): void {
+  if (type === undefined) {
+    return;
+  }
+  if (type.kind === "named") {
+    register(type.path);
+    for (const argument of type.typeArguments ?? []) {
+      collectAliasesFromRustType(argument, register);
+    }
+    return;
+  }
+  if (type.kind === "slice-ref") {
+    collectAliasesFromRustType(type.element, register);
+    return;
+  }
+  if (type.kind === "tuple") {
+    for (const element of type.elements) {
+      collectAliasesFromRustType(element, register);
+    }
+  }
 }

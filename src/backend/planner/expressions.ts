@@ -24,7 +24,7 @@ import { rustFallibleCallFactKey, rustOptionWrapFactKey, rustSourceTypeCarrierVa
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustValueName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier } from "../../source/rust-target-types.js";
@@ -334,6 +334,7 @@ function planProviderOperationExpression(
 ): RustExpr | undefined {
   switch (form.form) {
     case "call": {
+      registerAliasFromPath(context, form.path);
       const shaped = args.map((argument, index): RustExpr => {
         const mode = form.argModes?.[index] ?? "value";
         if (mode === "ref") {
@@ -356,6 +357,7 @@ function planProviderOperationExpression(
       return result;
     }
     case "call-str-slice": {
+      registerAliasFromPath(context, form.path);
       const asStr = args.map((argument): RustExpr =>
         argument.kind === "string-literal"
           ? { kind: "str-literal", value: argument.value }
@@ -367,6 +369,7 @@ function planProviderOperationExpression(
       };
     }
     case "path": {
+      registerAliasFromPath(context, form.path);
       return { kind: "path", path: form.path };
     }
     case "method": {
@@ -393,6 +396,7 @@ function planProviderOperationExpression(
       return { kind: "binary", operator: form.operator, left, right };
     }
     case "free-call": {
+      registerAliasFromPath(context, form.path);
       const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
       if (receiver === undefined) {
         return undefined;

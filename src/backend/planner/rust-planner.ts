@@ -25,7 +25,7 @@ import { planCargoManifest } from "./cargo-project.js";
 import { unsupportedConstructDiagnostic, unsupportedStatementDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planFunctionDeclaration } from "./functions.js";
-import { isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers } from "./plan-context.js";
+import { isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers, rustRuntimeAliasImports } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
@@ -40,6 +40,7 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
   }
 
   const moduleItems = new Map<string, readonly RustItem[]>();
+  const moduleAliases = new Map<string, ReadonlySet<string>>();
   for (const sourceFile of input.sourceFiles) {
     const fileName = input.ast.getFileName(sourceFile);
     const moduleName = moduleNameByFileName.get(fileName);
@@ -53,8 +54,10 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
       moduleNameByFileName,
       diagnostics,
       awaitedCalls: new WeakSet(),
+      usedAliases: new Set<string>(),
     };
     moduleItems.set(moduleName, planModuleItems(context));
+    moduleAliases.set(moduleName, context.usedAliases ?? new Set());
   }
 
   const manifestPlan = planCargoManifest(input.target, input.runtimeReferences);
@@ -85,30 +88,14 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
   for (const moduleName of sortedModuleNames) {
     const items = moduleItems.get(moduleName) ?? [];
-    const rendered = printRustSourceFile(createRustSourceFile(items));
-    const useItems: RustItem[] = [];
-    if (rendered.includes("js_abi::")) {
-      useItems.push({ kind: "use", path: "tsonic_rust_js::abi", alias: "js_abi" });
-    }
-    if (rendered.includes("js_string::")) {
-      useItems.push({ kind: "use", path: "tsonic_rust_js::string", alias: "js_string" });
-    }
-    if (rendered.includes("node_path::")) {
-      useItems.push({ kind: "use", path: "tsonic_rust_node::path", alias: "node_path" });
-    }
-    if (rendered.includes("node_os::")) {
-      useItems.push({ kind: "use", path: "tsonic_rust_node::os", alias: "node_os" });
-    }
-    if (rendered.includes("node_fs::")) {
-      useItems.push({ kind: "use", path: "tsonic_rust_node::fs", alias: "node_fs" });
-    }
-    if (rendered.includes("rt::")) {
-      useItems.push({ kind: "use", path: "tsonic_rust_runtime", alias: "rt" });
-    }
-    const finalText = useItems.length === 0
-      ? rendered
-      : printRustSourceFile(createRustSourceFile([...useItems, ...items]));
-    artifacts.push(rustSourceArtifact(`src/${moduleName}.rs`, finalText));
+    // Structured import requirements collected during planning; never
+    // inferred from rendered text.
+    const aliases = [...(moduleAliases.get(moduleName) ?? new Set<string>())].sort((left, right) => left.localeCompare(right, "en"));
+    const useItems: RustItem[] = aliases
+      .map((alias) => rustRuntimeAliasImports.get(alias))
+      .filter((entry): entry is { path: string; alias: string } => entry !== undefined)
+      .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
+    artifacts.push(rustSourceArtifact(`src/${moduleName}.rs`, printRustSourceFile(createRustSourceFile([...useItems, ...items]))));
   }
   if (outputType === "bin" && entryFunction !== undefined) {
     const crateName = readRustCrateName(input.target);

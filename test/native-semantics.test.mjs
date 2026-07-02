@@ -726,3 +726,37 @@ export function bad(xs: int32[]): boolean {
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.length > 0);
 });
+
+test("string literals mentioning runtime aliases do not create imports", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function describe(): string {
+  return "js_abi:: rt:: node_fs:: js_string:: node_path:: node_os:: are just text";
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.ok(!text.includes("use tsonic_rust_js"), "no false js import");
+  assert.ok(!text.includes("use tsonic_rust_node"), "no false node import");
+  assert.ok(!text.includes("use tsonic_rust_runtime"), "no false runtime import");
+});
+
+test("throwing code importing nothing else still gets the runtime alias", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function fail(): void {
+  throw new Error("rt:: is text here, the import comes from the throw");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /use tsonic_rust_runtime as rt;/u);
+});

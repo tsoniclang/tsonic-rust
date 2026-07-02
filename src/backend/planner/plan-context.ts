@@ -20,6 +20,25 @@ export interface RustPlanContext {
   // Inside a fallible lowering (Result-returning fn body or try closure):
   // fallible calls take `?`, throws lower to Err returns.
   readonly fallibleContext?: boolean;
+  // Structured import requirements: runtime alias prefixes used by planned
+  // operations and rendered types. Never inferred from printed text.
+  readonly usedAliases?: Set<string>;
+}
+
+export const rustRuntimeAliasImports: ReadonlyMap<string, { readonly path: string; readonly alias: string }> = new Map([
+  ["js_abi", { path: "tsonic_rust_js::abi", alias: "js_abi" }],
+  ["js_string", { path: "tsonic_rust_js::string", alias: "js_string" }],
+  ["node_path", { path: "tsonic_rust_node::path", alias: "node_path" }],
+  ["node_os", { path: "tsonic_rust_node::os", alias: "node_os" }],
+  ["node_fs", { path: "tsonic_rust_node::fs", alias: "node_fs" }],
+  ["rt", { path: "tsonic_rust_runtime", alias: "rt" }],
+]);
+
+export function registerAliasFromPath(context: RustPlanContext, path: string): void {
+  const prefix = path.split("::")[0];
+  if (prefix !== undefined && rustRuntimeAliasImports.has(prefix)) {
+    context.usedAliases?.add(prefix);
+  }
 }
 
 // Deterministic value-name policy: camelCase lowers to snake_case so
