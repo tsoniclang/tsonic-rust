@@ -3,6 +3,7 @@ import type { RustProviderOperationForm, RustTargetOperationFact } from "../rust
 import {
   isRustJsArrayCarrier,
   rustJsValueTargetType,
+  rustStringTargetId,
   isRustNumericCarrier,
   isRustStringCarrier,
   isRustVecCarrier,
@@ -155,6 +156,10 @@ interface JsLaneBindings {
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
   if (carrier !== undefined && isRustVecCarrier(carrier)) {
     return { lane: "vec", bindings: { element: carrier.element, receiver: carrier, receiverOwnership: "owned" } };
+  }
+  if (carrier?.kind === "pointer" && carrier.pointee.kind === "target-named" && carrier.pointee.id === rustStringTargetId) {
+    // Borrowed string parameters (&str) share the string lane.
+    return { lane: "string", bindings: { receiver: carrier.pointee, receiverOwnership: "borrowed" } };
   }
   if (carrier?.kind === "pointer" && carrier.pointee.kind === "array") {
     const element = carrier.pointee.element;

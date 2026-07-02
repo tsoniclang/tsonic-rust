@@ -20,7 +20,7 @@ import {
   Node_Expression,
   PrefixUnaryExpression_Operand,
 } from "../../common/source-ast.js";
-import { rustFallibleCallFactKey, rustOptionWrapFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustBorrowedArgsFactKey, rustFallibleCallFactKey, rustOptionWrapFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
@@ -353,11 +353,28 @@ function planArguments(node: Node, context: RustPlanContext): readonly RustExpr[
   return args;
 }
 
+// An expression already borrowing (&str-carried identifiers) is passed
+// bare; owned expressions take &.
+function refShape(context: RustPlanContext, argument: RustExpr, node: Node | undefined): RustExpr {
+  if (argument.kind === "string-literal") {
+    return { kind: "str-literal", value: argument.value };
+  }
+  if (argument.kind === "vec-literal") {
+    return { kind: "reference", expr: { kind: "slice-literal", elements: argument.elements } };
+  }
+  const carrier = node === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  if (carrier?.kind === "pointer") {
+    return argument;
+  }
+  return { kind: "reference", expr: argument };
+}
+
 function planProviderOperationExpression(
   context: RustPlanContext,
   form: RustProviderOperationForm,
   receiverNode: Node | undefined,
   args: readonly RustExpr[],
+  argNodes?: readonly (Node | undefined)[],
 ): RustExpr | undefined {
   switch (form.form) {
     case "marker": {
@@ -370,14 +387,7 @@ function planProviderOperationExpression(
         const casted: RustExpr = cast === undefined ? argument : { kind: "cast", expr: argument, to: cast };
         const mode = form.argModes?.[index] ?? "value";
         if (mode === "ref") {
-          // Owned literals borrow as slice/str literals directly.
-          if (casted.kind === "string-literal") {
-            return { kind: "str-literal", value: casted.value };
-          }
-          if (casted.kind === "vec-literal") {
-            return { kind: "reference", expr: { kind: "slice-literal", elements: casted.elements } };
-          }
-          return { kind: "reference", expr: casted };
+          return refShape(context, casted, argNodes?.[index]);
         }
         if (mode === "mut-ref") {
           return { kind: "reference", expr: casted, mutable: true };
@@ -436,7 +446,7 @@ function planProviderOperationExpression(
       if (receiver === undefined) {
         return undefined;
       }
-      const receiverArg: RustExpr = form.receiverMode === "ref" ? { kind: "reference", expr: receiver } : receiver;
+      const receiverArg: RustExpr = form.receiverMode === "ref" ? refShape(context, receiver, receiverNode) : receiver;
       const ordered = form.argOrder === undefined ? args : form.argOrder.map((index) => args[index]).filter((argument): argument is RustExpr => argument !== undefined);
       const shapedArgs = ordered.map((argument, index): RustExpr => {
         if ((form.argModes?.[index] ?? "value") !== "ref") {
@@ -557,7 +567,8 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
       ? Node_Expression(callee)
       : undefined;
-    const planned = planProviderOperationExpression(context, fact.target, receiverNode, args);
+    const providerArgumentNodes = [...context.input.ast.arguments(node)];
+    const planned = planProviderOperationExpression(context, fact.target, receiverNode, args, providerArgumentNodes);
     if (planned === undefined) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
@@ -629,7 +640,18 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     }
     return argument;
   });
-  const call: RustExpr = { kind: "call", path, args: shapedArgs };
+  const borrowedArgs = context.input.facts.getFact(node, rustBorrowedArgsFactKey)?.borrowed;
+  const borrowShaped = borrowedArgs === undefined
+    ? shapedArgs
+    : shapedArgs.map((argument, index): RustExpr => {
+        if (borrowedArgs[index] !== true) {
+          return argument;
+        }
+        return argument.kind === "string-literal"
+          ? { kind: "str-literal", value: argument.value }
+          : { kind: "reference", expr: argument };
+      });
+  const call: RustExpr = { kind: "call", path, args: borrowShaped };
   return fallibleCall ? { kind: "try", expr: call } : call;
 }
 

@@ -85,6 +85,7 @@ import {
   rustOptionTargetType,
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
+  isRustStringCarrier,
   rustFutureOutputCarrier,
   rustFutureTargetType,
   rustSliceElementCarrier,
@@ -100,7 +101,7 @@ import {
   rustUnitTargetType,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustAsyncFunctionFactKey, rustExtensionId, rustFallibleCallFactKey, rustFallibleFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustBorrowedArgsFactKey, rustBorrowedParamFactKey, rustExtensionId, rustFallibleCallFactKey, rustFallibleFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import { collectRustProviderOperationRows } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
@@ -251,7 +252,14 @@ function recordFunctionFacts(walk: RustFactWalk, declaration: Node, sourceFile: 
     if (parameter === undefined) {
       continue;
     }
-    const parameterCarrier = parameterLaneCarrier(walk, resolveTypeNodeCarrier(walk, Node_Type(parameter)));
+    let parameterCarrier = parameterLaneCarrier(walk, resolveTypeNodeCarrier(walk, Node_Type(parameter)));
+    if (parameterCarrier !== undefined && isRustStringCarrier(parameterCarrier) && stringParamOnlyBorrows(walk, declaration, parameter)) {
+      // String ABI: read-only-borrowing string parameters take &str.
+      parameterCarrier = { kind: "pointer", pointee: parameterCarrier, mutability: "const" };
+      walk.lifecycle.host.facts.set(parameter, rustBorrowedParamFactKey, { borrowed: true }, [
+        { message: "rust borrowed string parameter" },
+      ]);
+    }
     if (parameterCarrier !== undefined) {
       setCarrierFact(walk, parameter, parameterCarrier);
     }
@@ -264,6 +272,63 @@ function recordFunctionFacts(walk: RustFactWalk, declaration: Node, sourceFile: 
       }
     }
   }
+}
+
+// A string parameter borrows when every use is an argument to a
+// provider/js/lib call or a property-access receiver — never a return,
+// initializer, source-call argument, literal member, or assignment.
+function stringParamOnlyBorrows(walk: RustFactWalk, declaration: Node, parameter: Node): boolean {
+  const { ast, checker } = walk.lifecycle.compiler;
+  const body = ast.body(declaration);
+  const nameNode = ast.name(parameter);
+  if (body === undefined || nameNode === undefined) {
+    return false;
+  }
+  const parameterName = ast.text(nameNode);
+  let qualifies = true;
+  let sawUse = false;
+  const visit = (node: Node, parent: Node | undefined, inCallArgs: Node | undefined): void => {
+    if (!qualifies) {
+      return;
+    }
+    const kind = ast.kindName(node);
+    if (kind === KindIdentifier && ast.text(node) === parameterName) {
+      const symbol = checker.getResolvedSymbolOrNil(node) ?? checker.getSymbolAtLocation(node);
+      const target = symbol === undefined ? undefined : checker.getSymbolValueDeclaration(symbol);
+      if (target !== parameter) {
+        return;
+      }
+      sawUse = true;
+      if (parent !== undefined && ast.kindName(parent) === KindPropertyAccessExpression && Node_Expression(parent) === node) {
+        return;
+      }
+      if (inCallArgs !== undefined) {
+        const callee = Node_Expression(inCallArgs);
+        const identity = callee === undefined ? undefined : providerDeclarationIdentityFor(walk, callee);
+        const row = identity === undefined ? undefined : matchProviderRow(walk.providerRows, identity, "method");
+        if (row !== undefined) {
+          const position = walk.lifecycle.compiler.ast.arguments(inCallArgs).findIndex((argument) => argument === node);
+          const borrowsHere = row.target.form === "call-str-slice" ||
+            ((row.target.form === "call" || row.target.form === "free-call" || row.target.form === "receiver-method") &&
+              row.target.argModes?.[position] === "ref");
+          if (borrowsHere) {
+            return;
+          }
+        }
+      }
+      qualifies = false;
+      return;
+    }
+    const nextInCallArgs = kind === KindCallExpression ? node : inCallArgs;
+    ast.forEachChild(node, (child) => {
+      if (child !== undefined) {
+        visit(child, node, kind === KindCallExpression && ast.arguments(node).includes(child) ? node : (child === Node_Expression(node) && kind === KindCallExpression ? undefined : inCallArgs));
+      }
+    });
+    void nextInCallArgs;
+  };
+  visit(body, undefined, undefined);
+  return qualifies && sawUse;
 }
 
 function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
@@ -984,6 +1049,13 @@ function resolveCallLikeCarrier(
       { message: "rust fallible call" },
     ]);
   }
+  const borrowedModes = ast.parameters(declaration).map((parameter) =>
+    parameter !== undefined && walk.lifecycle.host.facts.get(parameter, rustBorrowedParamFactKey) !== undefined);
+  if (borrowedModes.some((borrowed) => borrowed)) {
+    walk.lifecycle.host.facts.set(expression, rustBorrowedArgsFactKey, { borrowed: borrowedModes }, [
+      { message: "rust borrowed string arguments" },
+    ]);
+  }
   const parameters = ast.parameters(declaration);
   for (const [index, argument] of callArguments.entries()) {
     if (argument === undefined) {
@@ -1409,7 +1481,9 @@ function applyJsSelection(
       if (argument !== undefined) {
         const expectedArgument = selection.parameterCarriers?.[index];
         const resolved = resolveExpressionCarrier(walk, argument, sourceFile, expectedArgument);
-        if (expectedArgument?.kind === "target-named" && resolved !== undefined && JSON.stringify(resolved) !== JSON.stringify(expectedArgument)) {
+        const satisfies = resolved !== undefined && (JSON.stringify(resolved) === JSON.stringify(expectedArgument) ||
+          (resolved.kind === "pointer" && JSON.stringify(resolved.pointee) === JSON.stringify(expectedArgument)));
+        if (expectedArgument?.kind === "target-named" && resolved !== undefined && !satisfies) {
           // Closed-carrier mismatch: fail closed rather than emit ill-typed Rust.
           return undefined;
         }

@@ -27,6 +27,8 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   "rust.node.Hash": "node_crypto::Hash",
 };
 
+export const rustStrRefType: RustType = { kind: "named", path: "&str" };
+
 export function rustTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
   resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
@@ -58,6 +60,9 @@ export function rustTypeFromCarrier(
   }
   if (carrier.kind === "type-parameter") {
     return { kind: "named", path: carrier.name };
+  }
+  if (carrier.kind === "pointer" && carrier.pointee.kind === "target-named" && carrier.pointee.id === rustStringTargetId && carrier.mutability === "const") {
+    return rustStrRefType;
   }
   if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
