@@ -144,7 +144,22 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         context.awaitedCalls?.add(operand);
       }
       const planned = operand === undefined ? undefined : planExpression(operand, context);
-      return planned === undefined ? undefined : { kind: "field", receiver: planned, name: "await" };
+      if (planned === undefined) {
+        return undefined;
+      }
+      const awaited: RustExpr = { kind: "field", receiver: planned, name: "await" };
+      if (awaitFact.fallible === true) {
+        if (context.fallibleContext !== true) {
+          context.diagnostics.push(unsupportedConstructDiagnostic(
+            diagnosticInput(context, node),
+            "rust.error.call",
+            "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+          ));
+          return undefined;
+        }
+        return { kind: "try", expr: awaited };
+      }
+      return awaited;
     }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
@@ -336,18 +351,23 @@ function planProviderOperationExpression(
     case "call": {
       registerAliasFromPath(context, form.path);
       const shaped = args.map((argument, index): RustExpr => {
+        const cast = form.argCasts?.[index];
+        const casted: RustExpr = cast === undefined ? argument : { kind: "cast", expr: argument, to: cast };
         const mode = form.argModes?.[index] ?? "value";
         if (mode === "ref") {
-          // Owned-string literals borrow as &str literals directly.
-          if (argument.kind === "string-literal") {
-            return { kind: "str-literal", value: argument.value };
+          // Owned literals borrow as slice/str literals directly.
+          if (casted.kind === "string-literal") {
+            return { kind: "str-literal", value: casted.value };
           }
-          return { kind: "reference", expr: argument };
+          if (casted.kind === "vec-literal") {
+            return { kind: "reference", expr: { kind: "slice-literal", elements: casted.elements } };
+          }
+          return { kind: "reference", expr: casted };
         }
         if (mode === "mut-ref") {
-          return { kind: "reference", expr: argument, mutable: true };
+          return { kind: "reference", expr: casted, mutable: true };
         }
-        return argument;
+        return casted;
       });
       const trailing = (form.trailingArgs ?? []).map((text): RustExpr => ({ kind: "path", path: text }));
       let result: RustExpr = { kind: "call", path: form.path, args: [...shaped, ...trailing] };
@@ -407,9 +427,13 @@ function planProviderOperationExpression(
         if ((form.argModes?.[index] ?? "value") !== "ref") {
           return argument;
         }
-        return argument.kind === "string-literal"
-          ? { kind: "str-literal", value: argument.value }
-          : { kind: "reference", expr: argument };
+        if (argument.kind === "string-literal") {
+          return { kind: "str-literal", value: argument.value };
+        }
+        if (argument.kind === "vec-literal") {
+          return { kind: "reference", expr: { kind: "slice-literal", elements: argument.elements } };
+        }
+        return { kind: "reference", expr: argument };
       });
       const trailing = (form.trailingArgs ?? []).map((text): RustExpr => ({ kind: "path", path: text }));
       return { kind: "call", path: form.path, args: [receiverArg, ...shapedArgs, ...trailing] };
@@ -419,7 +443,10 @@ function planProviderOperationExpression(
       if (receiver === undefined) {
         return undefined;
       }
-      const shapedArgs = args.map((argument, index): RustExpr => {
+      const orderedArgs = form.argOrder === undefined
+        ? args
+        : form.argOrder.map((position) => args[position]).filter((argument): argument is RustExpr => argument !== undefined);
+      const shapedArgs = orderedArgs.map((argument, index): RustExpr => {
         const cast = form.argCasts?.[index];
         const mode = form.argModes?.[index] ?? "value";
         let shaped: RustExpr = argument;
@@ -427,7 +454,13 @@ function planProviderOperationExpression(
           shaped = { kind: "cast", expr: shaped, to: cast };
         }
         if (mode === "ref") {
-          shaped = { kind: "reference", expr: shaped };
+          if (shaped.kind === "string-literal") {
+            shaped = { kind: "str-literal", value: shaped.value };
+          } else if (shaped.kind === "vec-literal") {
+            shaped = { kind: "reference", expr: { kind: "slice-literal", elements: shaped.elements } };
+          } else {
+            shaped = { kind: "reference", expr: shaped };
+          }
         }
         return shaped;
       });
@@ -615,6 +648,14 @@ function planNewExpression(node: Node, context: RustPlanContext): RustExpr | und
   if (args === undefined) {
     return undefined;
   }
+  if (fact.fallible === true && context.fallibleContext !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.call",
+      "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+    ));
+    return undefined;
+  }
   const planned = planProviderOperationExpression(context, fact.target, undefined, args);
   if (planned === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -622,8 +663,9 @@ function planNewExpression(node: Node, context: RustPlanContext): RustExpr | und
       "rust.provider.constructor",
       "Provider constructor operation could not be lowered.",
     ));
+    return undefined;
   }
-  return planned;
+  return fact.fallible === true ? { kind: "try", expr: planned } : planned;
 }
 
 function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {

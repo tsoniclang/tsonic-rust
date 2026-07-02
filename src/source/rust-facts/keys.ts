@@ -10,7 +10,7 @@ export const rustExtensionId = "tsonic.rust";
 export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
 export type RustProviderOperationForm =
-  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly trailingArgs?: readonly string[]; readonly chain?: readonly string[] }
+  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argCasts?: readonly (string | undefined)[]; readonly trailingArgs?: readonly string[]; readonly chain?: readonly string[] }
   | {
       // Free function taking all arguments as one &[&str] slice (variadic
       // string APIs like path join).
@@ -45,6 +45,7 @@ export type RustProviderOperationForm =
       readonly name: string;
       readonly argModes?: readonly RustArgumentMode[];
       readonly argCasts?: readonly (string | undefined)[];
+      readonly argOrder?: readonly number[];
       readonly chain?: readonly string[];
       readonly mutatesReceiver?: boolean;
     };
@@ -151,7 +152,7 @@ export type RustTargetOperationFact =
       readonly index: number;
       readonly resultCarrier: TargetTypeRef;
     }
-  | { readonly kind: "await-op"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
+  | { readonly kind: "await-op"; readonly operationId: string; readonly resultCarrier: TargetTypeRef; readonly fallible?: boolean }
   | {
       // Arrow-function argument lowering to a Rust closure. Parameter names
       // come from the arrow declaration; byRefCopy params bind as |&x|.

@@ -49,11 +49,24 @@ and `T | undefined` Option lanes.
 
 Provider packages: identity-keyed operation rows over virtual declarations
 (calls, constructors, properties, indexers, operators via std::ops
-metadata, async rows), cargo dependency contribution, and fail-closed
-diagnostics for unsupported members. Node.js ships as a provider package
-(`node:path`, `node:os`, and `node:fs` readFileSync mapped — fallible rows
-ride the error model; the remaining `node:fs`/`process`/`url`/`buffer`/
-`crypto`/`util` members are declared and classified as unsupported rows).
+metadata, async and fallible rows), cargo dependency contribution, and
+fail-closed diagnostics for unsupported members. Node.js ships as a broad
+provider package: `node:path` (join/resolve/normalize/dirname/basename/
+extname/isAbsolute), `node:os` (platform/arch/eol/hostname/tmpdir/homedir),
+`node:fs` (existsSync, readFileSync, writeFileSync, readdirSync, statSync
+with a Stats carrier, mkdirSync, rmSync, unlinkSync, copyFileSync,
+renameSync, realpathSync), `node:fs/promises` (async readFile, writeFile,
+readdir, stat, mkdir, rm, unlink, copyFile, rename — awaited fallible rows
+lower to `.await?`), `node:process` (cwd, platform, arch, envGet/envSet/
+envDelete, argv, execPath, pid, ppid, exitCode/setExitCode), `node:buffer`
+(Buffer from/alloc/byteLength/concat/toString/readUInt8/writeUInt8/equals/
+compare/length, isBuffer), `node:url` (URL with property rows,
+URLSearchParams, pathToFileURL, fileURLToPath), `node:crypto` (randomUUID,
+createHash with Hash update/digest), and `node:util` (closed string
+helpers). Declared members without rows (fs.watch, streams, process.exit,
+util.inspect/format, legacy url.parse/format, btoa/atob, createHmac,
+randomBytes) each diagnose deterministically and name the contract they
+require.
 
 ## Explicitly unsupported (fail-closed, classified)
 

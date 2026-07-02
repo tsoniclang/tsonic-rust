@@ -37,11 +37,13 @@ export interface RustProviderOperationRow {
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly TargetTypeRef[];
+  // As-cast applied to the lowered result (e.g. usize results as i32).
+  readonly castResult?: string;
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
   // Fallible operations return TsonicResult and require a fallible context.
-  // Only method operations support fallibility; package creation rejects
-  // other kinds.
+  // Method and constructor operations support fallibility; package creation
+  // rejects other kinds.
   readonly isFallible?: boolean;
 }
 
@@ -70,8 +72,8 @@ export type RustProviderPackageImplementation =
 
 export function createRustProviderPackage(definition: RustProviderPackageDefinition): RustProviderPackageImplementation {
   for (const row of definition.operations) {
-    if (row.isFallible === true && row.operationKind !== "method") {
-      throw new Error(`Provider package '${definition.id}': isFallible is supported only on method operations (row '${row.memberId ?? row.exportId}').`);
+    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor") {
+      throw new Error(`Provider package '${definition.id}': isFallible is supported only on method and constructor operations (row '${row.memberId ?? row.exportId}').`);
     }
   }
   return {
