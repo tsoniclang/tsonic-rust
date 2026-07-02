@@ -23,6 +23,7 @@ import { tsonicCoreSourceExtensionId } from "@tsonic/source-core";
 import type { TargetProviderContext } from "@tsonic/target-api";
 import {
   ArrayTypeNode_ElementType,
+  ElementAccessExpression_ArgumentExpression,
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
@@ -33,6 +34,9 @@ import {
   ForStatement_Initializer,
   IfStatement_ElseStatement,
   IfStatement_ThenStatement,
+  IterationStatement_Statement,
+  Node_Operand,
+  TypeReferenceNode_TypeName,
   KindBinaryExpression,
   KindBlock,
   KindBooleanKeyword,
@@ -289,7 +293,7 @@ function recordStatementFacts(
     if (condition !== undefined) {
       resolveExpressionCarrier(walk, condition, sourceFile, boolCarrier);
     }
-    const body = statementBody(statement);
+    const body = IterationStatement_Statement(statement);
     if (body !== undefined) {
       recordStatementFacts(walk, body, sourceFile, returnCarrier);
     }
@@ -322,7 +326,7 @@ function recordStatementFacts(
     if (incrementor !== undefined) {
       resolveExpressionCarrier(walk, incrementor, sourceFile, undefined);
     }
-    const body = statementBody(statement);
+    const body = IterationStatement_Statement(statement);
     if (body !== undefined) {
       recordStatementFacts(walk, body, sourceFile, returnCarrier);
     }
@@ -330,10 +334,7 @@ function recordStatementFacts(
   }
 }
 
-function statementBody(statement: Node): Node | undefined {
-  const value = (statement as unknown as Record<string, unknown>)["Statement"];
-  return typeof value === "object" && value !== null ? (value as Node) : undefined;
-}
+
 
 function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
   if (typeNode === undefined) {
@@ -517,7 +518,7 @@ function resolveUnaryCarrier(
   expected: TargetTypeRef | undefined,
   expressionKind: string,
 ): TargetTypeRef | undefined {
-  const operand = (expression as { readonly Operand?: Node }).Operand;
+  const operand = Node_Operand(expression);
   if (operand === undefined) {
     return undefined;
   }
@@ -751,7 +752,7 @@ function resolveProviderIndexerCarrier(
       receiverCarrier,
     });
     if (selection !== undefined) {
-      const argument = (expression as { readonly ArgumentExpression?: Node }).ArgumentExpression;
+      const argument = ElementAccessExpression_ArgumentExpression(expression);
       applyJsSelection(walk, expression, selection, sourceFile, argument === undefined ? [] : [argument]);
       return selection.resultCarrier;
     }
@@ -771,14 +772,14 @@ function resolveProviderIndexerCarrier(
         receiverCarrier,
       });
       if (selection !== undefined) {
-        const argument = (expression as { readonly ArgumentExpression?: Node }).ArgumentExpression;
+        const argument = ElementAccessExpression_ArgumentExpression(expression);
         applyJsSelection(walk, expression, selection, sourceFile, argument === undefined ? [] : [argument]);
         return selection.resultCarrier;
       }
     }
     return undefined;
   }
-  const argument = (expression as { readonly ArgumentExpression?: Node }).ArgumentExpression;
+  const argument = ElementAccessExpression_ArgumentExpression(expression);
   if (argument !== undefined) {
     resolveExpressionCarrier(walk, argument, sourceFile, row.parameterCarriers?.[0]);
   }
@@ -1237,7 +1238,7 @@ function recordJsAssignmentFacts(
     if (selection === undefined) {
       return false;
     }
-    const index = (left as { readonly ArgumentExpression?: Node }).ArgumentExpression;
+    const index = ElementAccessExpression_ArgumentExpression(left);
     if (index !== undefined) {
       resolveExpressionCarrier(walk, index, sourceFile, selection.parameterCarriers?.[0]);
     }
@@ -1321,8 +1322,7 @@ function sourceTypeCarrierForDeclaration(walk: RustFactWalk, declaration: Node):
 
 function sourceTypeCarrierForReference(walk: RustFactWalk, typeNode: Node): TargetTypeRef | undefined {
   const { ast } = walk.lifecycle.compiler;
-  const typeName = (typeNode as unknown as { readonly TypeName?: Node }).TypeName;
-  const nameNode = typeName ?? ast.name(typeNode) ?? typeNode;
+  const nameNode = TypeReferenceNode_TypeName(typeNode) ?? ast.name(typeNode) ?? typeNode;
   const declaration = projectDeclarationFor(walk, nameNode);
   return declaration === undefined ? undefined : sourceTypeCarrierForDeclaration(walk, declaration);
 }

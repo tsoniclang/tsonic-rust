@@ -32,12 +32,14 @@ export type RustProviderOperationForm =
     }
   | {
       // Method call on the receiver, with optional zero-argument chain calls
-      // and argument passing modes.
+      // and argument passing modes. mutatesReceiver marks &mut self methods;
+      // it is row metadata, never derived from method names.
       readonly form: "receiver-method";
       readonly name: string;
       readonly argModes?: readonly RustArgumentMode[];
       readonly argCasts?: readonly (string | undefined)[];
       readonly chain?: readonly string[];
+      readonly mutatesReceiver?: boolean;
     };
 
 export type RustTargetOperationFact =
@@ -149,9 +151,3 @@ export const rustTargetOperationFactKey: ExtensionFactKey<RustTargetOperationFac
   equals: rustTargetOperationFactEquals,
 });
 
-// Receiver methods with &mut self in the runtime crates. This is runtime ABI
-// metadata about Rust-side method names carried in operation facts; it is not
-// source-name mapping.
-export const rustMutatingReceiverMethods: ReadonlySet<string> = new Set([
-  "push", "pop", "shift", "unshift", "set", "set_len", "delete_at", "add", "delete", "clear",
-]);

@@ -143,6 +143,23 @@ export function ForInOrOfStatement_Statement(node: Node | undefined): Node | und
   return nodeField(node, "Statement");
 }
 
+export function IterationStatement_Statement(node: Node | undefined): Node | undefined {
+  return nodeField(node, "Statement");
+}
+
+export function TypeReferenceNode_TypeName(node: Node | undefined): Node | undefined {
+  return nodeField(node, "TypeName");
+}
+
+export function Node_Operand(node: Node | undefined): Node | undefined {
+  return nodeField(node, "Operand");
+}
+
+export function Node_Flags(node: Node | undefined): number {
+  const value = (node as unknown as { readonly Flags?: unknown } | undefined)?.Flags;
+  return typeof value === "number" ? value : 0;
+}
+
 export function VariableStatement_DeclarationList(node: Node | undefined): Node | undefined {
   return nodeField(node, "DeclarationList");
 }

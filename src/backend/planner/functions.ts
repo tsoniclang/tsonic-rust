@@ -12,6 +12,7 @@ import {
   KindIdentifier,
   KindPostfixUnaryExpression,
   KindPrefixUnaryExpression,
+  Node_Expression,
   Node_Name,
   Node_Type,
   PrefixUnaryExpression_Operand,
@@ -25,7 +26,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustMutatingReceiverMethods, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 
 export function planFunctionDeclaration(node: Node, context: RustPlanContext): RustItem | undefined {
   const { ast } = context.input;
@@ -130,7 +131,7 @@ export function collectMutatedNames(ast: AstReader, body: Node, context?: RustPl
       return;
     }
     if (targetKind === "KindPropertyAccessExpression" || targetKind === "KindElementAccessExpression") {
-      addWriteTarget((target as { readonly Expression?: Node }).Expression);
+      addWriteTarget(Node_Expression(target));
       return;
     }
     if (targetKind === "KindCallExpression" && context !== undefined) {
@@ -155,18 +156,16 @@ export function collectMutatedNames(ast: AstReader, body: Node, context?: RustPl
           }
         }
       }
-      if (fact !== undefined && fact.kind === "provider-operation" && fact.target.form === "receiver-method" && rustMutatingReceiverMethods.has(fact.target.name)) {
-        const callee = (node as { readonly Expression?: Node }).Expression;
-        addWriteTarget(callee === undefined ? undefined : (callee as { readonly Expression?: Node }).Expression);
+      if (fact !== undefined && fact.kind === "provider-operation" && fact.target.form === "receiver-method" && fact.target.mutatesReceiver === true) {
+        addWriteTarget(Node_Expression(Node_Expression(node)));
       }
       if (fact !== undefined && fact.kind === "source-method" && fact.mutatesSelf) {
-        const callee = (node as { readonly Expression?: Node }).Expression;
-        addWriteTarget(callee === undefined ? undefined : (callee as { readonly Expression?: Node }).Expression);
+        addWriteTarget(Node_Expression(Node_Expression(node)));
       }
       if (fact === undefined) {
         // Source-owned calls: arguments feeding &mut slice parameters are
         // mutable borrows at the call site.
-        const callee = (node as { readonly Expression?: Node }).Expression;
+        const callee = Node_Expression(node);
         const reference = callee === undefined
           ? undefined
           : context.input.analysis.getProjectSourceReferenceForNode(callee, { sourceFile: context.sourceFile });

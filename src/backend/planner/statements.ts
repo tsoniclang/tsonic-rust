@@ -3,6 +3,10 @@ import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
+  ElementAccessExpression_ArgumentExpression,
+  ForInOrOfStatement_Initializer,
+  ForInOrOfStatement_Statement,
+  IterationStatement_Statement,
   KindAsteriskEqualsToken,
   KindMinusEqualsToken,
   KindPercentEqualsToken,
@@ -391,7 +395,7 @@ function planWhileStatement(node: Node, context: RustPlanContext): readonly Rust
   if (planned === undefined) {
     return undefined;
   }
-  const body = planEmbeddedBlock(statementBody(node), context);
+  const body = planEmbeddedBlock(IterationStatement_Statement(node), context);
   return body === undefined ? undefined : [{ kind: "while", condition: planned, body }];
 }
 
@@ -410,7 +414,7 @@ function planForStatement(node: Node, context: RustPlanContext): readonly RustSt
   const initStatements = planVariableStatement(initializer, context);
   const conditionExpr = planCondition(condition, context, "for");
   const incrementStatements = planIncrementor(incrementor, context);
-  const body = planEmbeddedBlock(statementBody(node), context);
+  const body = planEmbeddedBlock(IterationStatement_Statement(node), context);
   if (initStatements === undefined || conditionExpr === undefined || incrementStatements === undefined || body === undefined) {
     return undefined;
   }
@@ -440,10 +444,7 @@ function planIncrementor(node: Node, context: RustPlanContext): readonly RustStm
   return undefined;
 }
 
-function statementBody(statement: Node): Node | undefined {
-  const value = (statement as unknown as Record<string, unknown>)["Statement"];
-  return typeof value === "object" && value !== null ? (value as Node) : undefined;
-}
+
 
 export function isConstLiteralInitializer(node: Node, context: RustPlanContext): boolean {
   const kind = context.input.ast.kindName(node);
@@ -461,7 +462,7 @@ function planRuntimeSetStatement(
   if (left === undefined || right === undefined) {
     return undefined;
   }
-  const receiverNode = (left as { readonly Expression?: Node }).Expression;
+  const receiverNode = Node_Expression(left);
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   const value = planExpression(right, context);
   if (receiver === undefined || value === undefined) {
@@ -469,7 +470,7 @@ function planRuntimeSetStatement(
   }
   const leftKind = ast.kindName(left);
   if (fact.target.form === "index") {
-    const indexNode = (left as { readonly ArgumentExpression?: Node }).ArgumentExpression;
+    const indexNode = ElementAccessExpression_ArgumentExpression(left);
     const index = indexNode === undefined ? undefined : planExpression(indexNode, context);
     if (index === undefined) {
       return undefined;
@@ -484,7 +485,7 @@ function planRuntimeSetStatement(
   if (fact.target.form === "receiver-method") {
     const args: RustExpr[] = [];
     if (leftKind === "KindElementAccessExpression") {
-      const indexNode = (left as { readonly ArgumentExpression?: Node }).ArgumentExpression;
+      const indexNode = ElementAccessExpression_ArgumentExpression(left);
       const index = indexNode === undefined ? undefined : planExpression(indexNode, context);
       if (index === undefined) {
         return undefined;
@@ -521,7 +522,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
     ));
     return undefined;
   }
-  const initializer = (node as unknown as { readonly Initializer?: Node }).Initializer;
+  const initializer = ForInOrOfStatement_Initializer(node);
   let binding = "";
   if (initializer !== undefined) {
     const declarations = collectVariableDeclarations(initializer, context);
@@ -541,7 +542,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
   if (iterable === undefined) {
     return undefined;
   }
-  const bodyNode = (node as unknown as { readonly Statement?: Node }).Statement;
+  const bodyNode = ForInOrOfStatement_Statement(node);
   const body = bodyNode === undefined ? { statements: [] } : planBlockLike(bodyNode, context);
   if (body === undefined) {
     return undefined;
