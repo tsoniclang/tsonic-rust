@@ -10,7 +10,13 @@ export const rustExtensionId = "tsonic.rust";
 export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
 export type RustProviderOperationForm =
-  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[] }
+  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly trailingArgs?: readonly string[]; readonly chain?: readonly string[] }
+  | {
+      // Free function taking all arguments as one &[&str] slice (variadic
+      // string APIs like path join).
+      readonly form: "call-str-slice";
+      readonly path: string;
+    }
   | { readonly form: "path"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
   | { readonly form: "field"; readonly name: string }
@@ -102,6 +108,14 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      // Static method call on a project-source class: associated function.
+      readonly kind: "source-static-method";
+      readonly operationId: string;
+      readonly name: string;
+      readonly typeCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       // new C(...) on a project-source class: associated fn new.
       readonly kind: "source-constructor";
       readonly operationId: string;
@@ -114,6 +128,26 @@ export type RustTargetOperationFact =
       readonly name: string;
       readonly resultCarrier: TargetTypeRef;
     }
+  | {
+      // Object literal lowering to a generated record struct: field order and
+      // carriers come from the finalized shape declaration.
+      readonly kind: "record-literal";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly fieldNames: readonly string[];
+    }
+  | {
+      readonly kind: "tuple-literal";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "tuple-index";
+      readonly operationId: string;
+      readonly index: number;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | { readonly kind: "await-op"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
   | { readonly kind: "option-coalesce"; readonly operationId: string }
@@ -159,4 +193,39 @@ export const rustOptionWrapFactKey: ExtensionFactKey<{ readonly wrap: boolean }>
   extensionId: rustExtensionId,
   name: "optionWrap",
   equals: (left, right) => left.wrap === right.wrap,
+});
+
+// Formal source-use facts: mutation is recorded per declaration subject at
+// semantics finalization; the backend never scans for writes.
+export const rustMutatedBindingFactKey: ExtensionFactKey<{ readonly mutated: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "mutatedBinding",
+  equals: () => true,
+});
+
+// Referent mutation: the value behind the binding is written (field/element
+// writes, &mut borrows, mutating receiver methods). Owned bindings need
+// `let mut`; reference-typed bindings do not.
+export const rustMutatedReferentFactKey: ExtensionFactKey<{ readonly mutated: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "mutatedReferent",
+  equals: () => true,
+});
+
+export const rustSelfModeFactKey: ExtensionFactKey<{ readonly mode: "ref" | "mut-ref" }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "selfMode",
+  equals: (left, right) => left.mode === right.mode,
+});
+
+export const rustUnionVariantsFactKey: ExtensionFactKey<{ readonly variants: readonly { readonly name: string; readonly literal: string }[] }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "unionVariants",
+  equals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+});
+
+export const rustAsyncFunctionFactKey: ExtensionFactKey<{ readonly isAsync: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "asyncFunction",
+  equals: () => true,
 });

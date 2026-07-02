@@ -1,6 +1,7 @@
 import type { Node, TargetTypeRef } from "@tsonic/tsts";
 import {
   KindBinaryExpression,
+  Node_Initializer,
   KindCallExpression,
   KindElementAccessExpression,
   KindFalseKeyword,
@@ -45,6 +46,15 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return planNumericLiteral(node, context);
     }
     case KindStringLiteral: {
+      const literalFact = rustOperationFact(node, context);
+      if (literalFact !== undefined && literalFact.kind === "source-enum-member") {
+        const value = rustSourceTypeCarrierValue(literalFact.resultCarrier);
+        const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+        if (typePath === undefined) {
+          return undefined;
+        }
+        return { kind: "path", path: `${typePath}::${literalFact.name}` };
+      }
       return { kind: "string-literal", value: ast.text(node) };
     }
     case KindTrueKeyword: {
@@ -70,6 +80,10 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return { kind: "path", path: "None" };
     }
     case KindIdentifier: {
+      const identifierFact = rustOperationFact(node, context);
+      if (identifierFact !== undefined && identifierFact.kind === "option-none") {
+        return { kind: "path", path: "None" };
+      }
       const name = rustValueName(ast.text(node));
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -87,6 +101,26 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
     }
     case "KindArrayLiteralExpression": {
       return planArrayLiteral(node, context);
+    }
+    case "KindObjectLiteralExpression": {
+      return planRecordLiteral(node, context);
+    }
+    case "KindAwaitExpression": {
+      const awaitFact = rustOperationFact(node, context);
+      if (awaitFact === undefined || awaitFact.kind !== "await-op") {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.async",
+          "Await expressions require a finalized future output fact.",
+        ));
+        return undefined;
+      }
+      const operand = Node_Expression(node);
+      if (operand !== undefined) {
+        context.awaitedCalls?.add(operand);
+      }
+      const planned = operand === undefined ? undefined : planExpression(operand, context);
+      return planned === undefined ? undefined : { kind: "field", receiver: planned, name: "await" };
     }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
@@ -286,7 +320,23 @@ function planProviderOperationExpression(
         }
         return argument;
       });
-      return { kind: "call", path: form.path, args: shaped };
+      const trailing = (form.trailingArgs ?? []).map((text): RustExpr => ({ kind: "path", path: text }));
+      let result: RustExpr = { kind: "call", path: form.path, args: [...shaped, ...trailing] };
+      for (const chained of form.chain ?? []) {
+        result = { kind: "method-call", receiver: result, method: chained, args: [] };
+      }
+      return result;
+    }
+    case "call-str-slice": {
+      const asStr = args.map((argument): RustExpr =>
+        argument.kind === "string-literal"
+          ? { kind: "str-literal", value: argument.value }
+          : { kind: "method-call", receiver: argument, method: "as_str", args: [] });
+      return {
+        kind: "call",
+        path: form.path,
+        args: [{ kind: "reference", expr: { kind: "slice-literal", elements: asStr } }],
+      };
     }
     case "path": {
       return { kind: "path", path: form.path };
@@ -353,6 +403,15 @@ function planProviderOperationExpression(
 
 function planCallExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const { ast } = context.input;
+  const callCarrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  if (callCarrier?.kind === "target-named" && callCarrier.id === "rust.core.Future" && context.awaitedCalls?.has(node) !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.async",
+      "Async call results must be awaited; futures cannot be stored or ignored.",
+    ));
+    return undefined;
+  }
   const callee = Node_Expression(node);
   const fact = rustOperationFact(node, context);
   const args = planArguments(node, context);
@@ -364,6 +423,14 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     // consuming position's finalized argument modes.
     const [argument] = args;
     return argument;
+  }
+  if (fact !== undefined && fact.kind === "source-static-method") {
+    const value = rustSourceTypeCarrierValue(fact.typeCarrier);
+    const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+    if (typePath === undefined) {
+      return undefined;
+    }
+    return { kind: "call", path: `${typePath}::${rustValueName(fact.name)}`, args };
   }
   if (fact !== undefined && fact.kind === "source-method") {
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
@@ -514,6 +581,11 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
 
 function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "tuple-index") {
+    const receiver = Node_Expression(node);
+    const planned = receiver === undefined ? undefined : planExpression(receiver, context);
+    return planned === undefined ? undefined : { kind: "field", receiver: planned, name: String(fact.index) };
+  }
   if (fact === undefined || fact.kind !== "provider-operation") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -545,6 +617,20 @@ function applyResultCast(expression: RustExpr, castTo: string | undefined): Rust
 
 export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "tuple-literal") {
+    const elements: RustExpr[] = [];
+    for (const element of context.input.ast.elements(node)) {
+      if (element === undefined) {
+        continue;
+      }
+      const planned = planExpression(element, context);
+      if (planned === undefined) {
+        return undefined;
+      }
+      elements.push(planned);
+    }
+    return { kind: "tuple-literal", elements };
+  }
   if (fact === undefined || fact.kind !== "array-literal") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -575,4 +661,42 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     elements.push(planned);
   }
   return { kind: "vec-literal", elements };
+}
+
+function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const fact = rustOperationFact(node, context);
+  if (fact === undefined || fact.kind !== "record-literal") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record",
+      "Object literals require a finalized record shape fact.",
+    ));
+    return undefined;
+  }
+  const value = rustSourceTypeCarrierValue(fact.resultCarrier);
+  const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+  if (typePath === undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record",
+      "Object literal shape does not resolve to a generated Rust struct.",
+    ));
+    return undefined;
+  }
+  const { ast } = context.input;
+  const fields: { name: string; value: RustExpr }[] = [];
+  for (const property of ast.properties(node)) {
+    if (property === undefined) {
+      continue;
+    }
+    const nameNode = ast.name(property);
+    const fieldName = rustValueName(nameNode === undefined ? "" : ast.text(nameNode));
+    const initializer = Node_Initializer(property);
+    const planned = initializer === undefined ? undefined : planExpression(initializer, context);
+    if (!isValidRustIdentifier(fieldName) || planned === undefined) {
+      return undefined;
+    }
+    fields.push({ name: fieldName, value: planned });
+  }
+  return { kind: "struct-literal", path: typePath, fields };
 }

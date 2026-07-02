@@ -6,7 +6,8 @@ export type RustType =
   | { readonly kind: "string" }
   | { readonly kind: "unit" }
   | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] }
-  | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean };
+  | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean }
+  | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
 
 export type RustExpr =
   | { readonly kind: "int-literal"; readonly text: string }
@@ -25,7 +26,9 @@ export type RustExpr =
   | { readonly kind: "cast"; readonly expr: RustExpr; readonly to: string }
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
-  | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] };
+  | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
+  | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
+  | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 
 export type RustStmt =
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init: RustExpr }
@@ -46,6 +49,7 @@ export interface RustBlock {
 export interface RustFunctionParam {
   readonly name: string;
   readonly type: RustType;
+  readonly mutable?: boolean;
 }
 
 export type RustSelfParam = "ref" | "mut-ref";
@@ -69,6 +73,8 @@ export type RustItem =
       readonly kind: "function";
       readonly name: string;
       readonly pub: boolean;
+      readonly isAsync?: boolean;
+      readonly typeParams?: readonly string[];
       readonly params: readonly RustFunctionParam[];
       readonly returnType?: RustType;
       readonly body: RustBlock;

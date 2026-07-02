@@ -20,11 +20,11 @@ import type {
 } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
-import { collectMutatedNames } from "./functions.js";
 import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrier } from "./render-types.js";
+import { rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
@@ -94,11 +94,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       continue;
     }
     if (memberKind === "KindMethodDeclaration") {
-      if (ast.hasModifierKind(member, "static") || ast.hasModifierKind(member, "async")) {
+      if (ast.hasModifierKind(member, "async")) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, member),
           "rust.backend.class",
-          "Static and async class methods are not supported by the Rust target.",
+          "Async class methods are not supported by the Rust target.",
         ));
         failed = true;
         continue;
@@ -165,7 +165,11 @@ function planParams(member: Node, context: RustPlanContext): readonly RustFuncti
       ));
       return undefined;
     }
-    params.push({ name: parameterName, type: parameterType });
+    params.push({
+      name: parameterName,
+      type: parameterType,
+      mutable: context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+    });
   }
   return params;
 }
@@ -292,51 +296,23 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   }
   const bodyContext: RustPlanContext = {
     ...context,
-    mutatedNames: collectMutatedNames(ast, bodyNode, context),
     emittedLocalNames: new Set(params.map((param) => param.name)),
   };
   const body = planBlockLike(bodyNode, bodyContext);
   if (body === undefined) {
     return undefined;
   }
+  const isStatic = ast.hasModifierKind(member, "static");
   return {
     name: methodName,
     pub: true,
-    selfParam: methodWritesThisField(context, bodyNode) ? "mut-ref" : "ref",
+    ...(isStatic ? {} : {
+      selfParam: (context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref") as import("../rust-ast/nodes.js").RustSelfParam,
+    }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: applyTail(body, returnType !== undefined),
   };
-}
-
-function methodWritesThisField(context: RustPlanContext, body: Node): boolean {
-  const { ast } = context.input;
-  let writes = false;
-  const visit = (node: Node): void => {
-    if (writes) {
-      return;
-    }
-    if (ast.kindName(node) === "KindBinaryExpression") {
-      const operatorToken = BinaryExpression_OperatorToken(node);
-      const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
-      if (operatorKind.endsWith("EqualsToken") && operatorKind !== "KindEqualsEqualsEqualsToken" && operatorKind !== "KindExclamationEqualsEqualsToken") {
-        const left = BinaryExpression_Left(node);
-        const receiver = left === undefined ? undefined : Node_Expression(left);
-        const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
-        if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {
-          writes = true;
-          return;
-        }
-      }
-    }
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(body);
-  return writes;
 }
 
 function applyTail(body: RustBlock, hasReturnValue: boolean): RustBlock {
@@ -394,5 +370,83 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     pub: ast.hasModifierKind(node, "export"),
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
     variants,
+  }];
+}
+
+export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+  const { ast } = context.input;
+  const nameNode = Node_Name(node);
+  const interfaceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  if (!isValidRustIdentifier(interfaceName)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record",
+      "Interface names must be valid Rust identifiers.",
+    ));
+    return undefined;
+  }
+  if (ast.extendsHeritageElements(node).length > 0) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record",
+      "Interface inheritance is not supported by the Rust target.",
+    ));
+    return undefined;
+  }
+  const fields: RustStructField[] = [];
+  for (const member of ast.members(node)) {
+    if (member === undefined) {
+      continue;
+    }
+    if (ast.kindName(member) !== "KindPropertySignature") {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, member),
+        "rust.backend.record",
+        "Record interfaces support only property signatures.",
+      ));
+      return undefined;
+    }
+    const fieldName = rustValueName(ast.text(ast.name(member) ?? member));
+    const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
+    if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, member),
+        "rust.backend.record",
+        `Record field '${fieldName}' has no supported Rust carrier fact.`,
+      ));
+      return undefined;
+    }
+    fields.push({ name: fieldName, type: fieldType });
+  }
+  const allFieldsCopy = fields.every((field) => field.type.kind === "primitive");
+  return [{
+    kind: "struct",
+    name: interfaceName,
+    pub: ast.hasModifierKind(node, "export"),
+    derives: allFieldsCopy ? ["Clone", "Copy", "Debug", "PartialEq"] : ["Clone", "Debug", "PartialEq"],
+    fields,
+  }];
+}
+
+export function planUnionAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+  const { ast } = context.input;
+  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const fact = context.input.facts.getFact(node, rustUnionVariantsFactKey);
+  const nameNode = Node_Name(node);
+  const aliasName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.union",
+      "Type aliases lower only as closed string-literal unions with finalized variant facts.",
+    ));
+    return undefined;
+  }
+  return [{
+    kind: "enum",
+    name: aliasName,
+    pub: ast.hasModifierKind(node, "export"),
+    derives: ["Clone", "Copy", "Debug", "PartialEq"],
+    variants: fact.variants.map((variant) => ({ name: variant.name })),
   }];
 }

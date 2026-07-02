@@ -50,6 +50,9 @@ export function rustTypeFromCarrier(
       ...(typeArguments.length === 0 ? {} : { typeArguments: typeArguments as RustType[] }),
     };
   }
+  if (carrier.kind === "type-parameter") {
+    return { kind: "named", path: carrier.name };
+  }
   if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
@@ -58,8 +61,15 @@ export function rustTypeFromCarrier(
     const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "named", path: "Vec", typeArguments: [element] };
   }
-  if (carrier.kind === "tuple" && carrier.elements.length === 0) {
-    return { kind: "unit" };
+  if (carrier.kind === "tuple") {
+    if (carrier.elements.length === 0) {
+      return { kind: "unit" };
+    }
+    const elements = carrier.elements.map((element) => rustTypeFromCarrier(element, resolveSourceTypePath));
+    if (elements.some((element) => element === undefined)) {
+      return undefined;
+    }
+    return { kind: "tuple", elements: elements as RustType[] };
   }
   if (resolveSourceTypePath !== undefined) {
     const value = rustSourceTypeCarrierValue(carrier);

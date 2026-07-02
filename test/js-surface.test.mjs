@@ -222,3 +222,28 @@ export function caller(): int32 {
   assert.match(text, /total \+ xs\.len\(\) as i32/u);
   assert.match(text, /sum\(&values\)/u);
 });
+
+test("undefined unions take the Option lane only under the js surface", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function value_or_zero(value: int32 | undefined): int32 {
+  return value ?? 0;
+}
+
+export function caller(): int32 {
+  return value_or_zero(undefined) + value_or_zero(7);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32/u);
+  assert.match(text, /value_or_zero\(None\)/u);
+  assert.match(text, /value_or_zero\(Some\(7\)\)/u);
+});

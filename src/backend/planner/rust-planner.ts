@@ -29,7 +29,7 @@ import { isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers } from
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
-import { planClassDeclaration, planEnumDeclaration } from "./declarations-nominal.js";
+import { planClassDeclaration, planEnumDeclaration, planInterfaceDeclaration, planUnionAliasDeclaration } from "./declarations-nominal.js";
 
 export function planRustArtifacts(input: TargetCompileInput): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [];
@@ -51,6 +51,7 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
       moduleName,
       moduleNameByFileName,
       diagnostics,
+      awaitedCalls: new WeakSet(),
     };
     moduleItems.set(moduleName, planModuleItems(context));
   }
@@ -90,6 +91,12 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
     }
     if (rendered.includes("js_string::")) {
       useItems.push({ kind: "use", path: "tsonic_rust_js::string", alias: "js_string" });
+    }
+    if (rendered.includes("node_path::")) {
+      useItems.push({ kind: "use", path: "tsonic_rust_node::path", alias: "node_path" });
+    }
+    if (rendered.includes("node_os::")) {
+      useItems.push({ kind: "use", path: "tsonic_rust_node::os", alias: "node_os" });
     }
     const finalText = useItems.length === 0
       ? rendered
@@ -206,6 +213,20 @@ function planModuleItems(context: RustPlanContext): readonly RustItem[] {
       }
       continue;
     }
+    if (kind === "KindInterfaceDeclaration") {
+      const planned = planInterfaceDeclaration(statement, context);
+      if (planned !== undefined) {
+        items.push(...planned);
+      }
+      continue;
+    }
+    if (kind === "KindTypeAliasDeclaration") {
+      const planned = planUnionAliasDeclaration(statement, context);
+      if (planned !== undefined) {
+        items.push(...planned);
+      }
+      continue;
+    }
     if (kind === "KindEnumDeclaration") {
       const planned = planEnumDeclaration(statement, context);
       if (planned !== undefined) {
@@ -313,7 +334,8 @@ function resolveBinaryEntry(
     const returnCarrier = returnTypeNode === undefined
       ? undefined
       : input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
-    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier)) {
+    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier) || input.ast.hasModifierKind(statement, "async")) {
+      // Async entry points would require an implicit executor selection.
       break;
     }
     return { moduleName, functionName: "main" };

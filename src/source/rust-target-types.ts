@@ -154,3 +154,15 @@ export function rustSliceMutRefTargetType(element: TargetTypeRef): TargetTypeRef
 export function isRustSliceMutRefCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "pointer" && carrier.mutability === "mut" && carrier.pointee.kind === "array";
 }
+
+export const rustFutureTargetId = "rust.core.Future";
+
+export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
+  return { kind: "target-named", id: rustFutureTargetId, typeArguments: [output] };
+}
+
+export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
+  return carrier?.kind === "target-named" && carrier.id === rustFutureTargetId
+    ? carrier.typeArguments?.[0]
+    : undefined;
+}

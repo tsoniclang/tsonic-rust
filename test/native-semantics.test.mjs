@@ -384,3 +384,285 @@ export function value_or_zero(value: int32 | undefined): int32 {
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.length > 0);
 });
+
+test("interfaces lower to record structs with annotated object literals", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export interface Point {
+  x: int32;
+  y: int32;
+}
+
+export function origin(): Point {
+  const p: Point = { x: 0, y: 0 };
+  return p;
+}
+
+export function shift(p: Point, dx: int32): Point {
+  return { x: p.x + dx, y: p.y };
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /#\[derive\(Clone, Copy, Debug, PartialEq\)\]\npub struct Point \{\n    pub x: i32,\n    pub y: i32,\n\}/u);
+  assert.match(text, /let p: Point = Point \{ x: 0, y: 0 \};/u);
+  assert.match(text, /Point \{ x: p\.x \+ dx, y: p\.y \}/u);
+});
+
+test("unannotated object literals fail closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function make(): void {
+  const p = { x: 1 };
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});
+
+test("tuple types lower to Rust tuples with literal construction and indexing", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function pair(a: int32, label: string): [int32, string] {
+  const entry: [int32, string] = [a, label];
+  return entry;
+}
+
+export function first(entry: [int32, string]): int32 {
+  return entry[0];
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn pair\(a: i32, label: String\) -> \(i32, String\)/u);
+  assert.match(text, /let entry: \(i32, String\) = \(a, label\);/u);
+  assert.match(text, /pub fn first\(entry: \(i32, String\)\) -> i32/u);
+  assert.match(text, /entry\.0/u);
+});
+
+test("dynamic tuple indexing fails closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function pick(entry: [int32, int32], i: int32): int32 {
+  return entry[i];
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});
+
+test("closed string-literal unions lower to unit-variant enums", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export type Mode = "off" | "read-only" | "readWrite";
+
+export function pick_mode(flag: boolean): Mode {
+  if (flag) {
+    return "readWrite";
+  }
+  return "off";
+}
+
+export function is_off(mode: Mode): boolean {
+  return mode === "off";
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub enum Mode \{\n    Off,\n    ReadOnly,\n    ReadWrite,\n\}/u);
+  assert.match(text, /return Mode::ReadWrite;/u);
+  assert.match(text, /mode == Mode::Off/u);
+});
+
+test("discriminated object unions fail closed: they require narrowing facts", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export type Shape =
+  | { kind: "circle"; radius: number }
+  | { kind: "square"; size: number };
+
+export function make(): Shape {
+  return { kind: "circle", radius: 1 };
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});
+
+test("static class methods lower to associated functions", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Counter {
+  value: int32;
+
+  constructor(value: int32) {
+    this.value = value;
+  }
+
+  static zero(): Counter {
+    return new Counter(0);
+  }
+}
+
+export function drive(): int32 {
+  const c = Counter.zero();
+  return c.value;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn zero\(\) -> Counter \{/u);
+  assert.match(text, /Counter::zero\(\)/u);
+});
+
+test("passthrough generic functions lower with type parameters", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function pass_through<T>(value: T): T {
+  return value;
+}
+
+export function drive(): int32 {
+  return pass_through(41) + 1;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn pass_through<T>\(value: T\) -> T \{/u);
+  assert.match(text, /pass_through\(41\)/u);
+});
+
+test("operations on unconstrained type parameters stay invalid TypeScript", () => {
+  assert.throws(
+    () => compileRust({
+      files: {
+        "index.ts": `
+export function double_it<T>(value: T): T {
+  return value + value;
+}
+`,
+      },
+    }),
+    /TypeScript diagnostics/u,
+  );
+});
+
+test("async functions lower to async fn with awaited call chains", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export async function fetch_value(seed: int32): Promise<int32> {
+  return seed + 1;
+}
+
+export async function drive(): Promise<int32> {
+  const value = await fetch_value(41);
+  return value;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub async fn fetch_value\(seed: i32\) -> i32 \{/u);
+  assert.match(text, /fetch_value\(41\)\.await/u);
+});
+
+test("unawaited async calls and async binary entries fail closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export async function fetch_value(): Promise<int32> {
+  return 1;
+}
+
+export function bad(): int32 {
+  const stored = fetch_value();
+  return 0;
+}
+`,
+    },
+  });
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+
+  const asyncMain = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "async_main" } },
+    files: {
+      "index.ts": `
+export async function main(): Promise<void> {}
+`,
+    },
+  });
+  assert.equal(asyncMain.result.artifacts.length, 0);
+  assert.ok(asyncMain.result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_ENTRYPOINT"));
+});
+
+test("throw and try/catch fail closed: they require the shared error model contract", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function risky(flag: boolean): void {
+  try {
+    if (flag) {
+      throw new Error("boom");
+    }
+  } catch (error) {
+  }
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.every((diagnostic) =>
+    diagnostic.code === "RUST_UNSUPPORTED_AST" || diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+  assert.ok(result.diagnostics.length > 0);
+});

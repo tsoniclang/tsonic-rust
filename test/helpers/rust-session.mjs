@@ -163,9 +163,11 @@ export function acmePlatformPackage() {
   });
 }
 
-export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], surfaces = [], entryPoint = "index.ts" } = {}) {
+export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], packageIds = [], surfaces = [], entryPoint = "index.ts" } = {}) {
   const pack = createRustTargetPack();
   const project = { entryPoint, targets: [target] };
+  const packPackages = (pack.packages ?? []).filter((candidate) => packageIds.includes(candidate.id));
+  packages = [...packages, ...packPackages];
   const selectedSurfaces = (pack.surfaces ?? []).filter((surface) => surfaces.includes(surface.id));
   const providerContext = {
     project,
@@ -212,15 +214,15 @@ export function checkRustSession(harness, fileNames) {
   return session.finalizeExtensions();
 }
 
-export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], surfaces = [], entryPoint = "index.ts" }) {
-  const harness = createRustSession({ files, target, packages, surfaces, entryPoint });
+export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], packageIds = [], surfaces = [], entryPoint = "index.ts" }) {
+  const harness = createRustSession({ files, target, packages, packageIds, surfaces, entryPoint });
   const extensionHost = checkRustSession(harness);
   const contributionContext = harness.providerContext;
   const runtimeReferences = [
     ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
     ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
       surface.runtimeContributions?.(contributionContext).references ?? []),
-    ...packages.flatMap((providerPackage) => providerPackage.runtimeContributions?.({}).references ?? []),
+    ...harness.providerContext.selectedPackages.flatMap((providerPackage) => providerPackage.runtimeContributions?.({}).references ?? []),
   ];
   const input = createRustCompileInputFromSession({
     session: harness.session,
@@ -380,5 +382,69 @@ export function acmeVectorsPackage() {
       },
     ],
     crates: [{ crateName: "acme_vectors", cargoPath: resolve(fixtureCratesRoot, "acme_vectors") }],
+  });
+}
+
+export const dbCarrier = { kind: "target-named", id: "acme.db.Db" };
+
+export function acmeDbPackage() {
+  return createRustProviderPackage({
+    id: "acme-db",
+    displayName: "Acme db",
+    version: "1.0.0",
+    modules: [{
+      moduleSpecifier: "@acme/db",
+      providerModuleId: "acme.db",
+      exports: [
+        {
+          id: "@acme/db::connect",
+          name: "connect",
+          kind: "function",
+          signatures: [{
+            id: "@acme/db::connect(path)",
+            name: "connect",
+            parameters: [{ name: "path", type: { kind: "string" } }],
+            returnType: { kind: "provider-ref", moduleSpecifier: "@acme/db", exportName: "Db" },
+          }],
+        },
+        {
+          id: "@acme/db::Db",
+          name: "Db",
+          kind: "class",
+          members: [
+            {
+              id: "@acme/db::Db.execute",
+              name: "execute",
+              kind: "method",
+              signatures: [{
+                id: "@acme/db::Db.execute(sql)",
+                parameters: [{ name: "sql", type: { kind: "string" } }],
+                returnType: { kind: "source-primitive", name: "int32" },
+              }],
+            },
+          ],
+        },
+      ],
+    }],
+    operations: [
+      {
+        exportId: "@acme/db::connect",
+        operationKind: "method",
+        target: { form: "call", path: "acme_db::connect" },
+        resultCarrier: dbCarrier,
+        parameterCarriers: [stringCarrier],
+        isAsync: true,
+      },
+      {
+        exportId: "@acme/db::Db",
+        memberId: "@acme/db::Db.execute",
+        operationKind: "method",
+        target: { form: "receiver-method", name: "execute", mutatesReceiver: true },
+        resultCarrier: int32Carrier,
+        parameterCarriers: [stringCarrier],
+        isAsync: true,
+      },
+    ],
+    crates: [{ crateName: "acme_db", cargoPath: resolve(fixtureCratesRoot, "acme_db") }],
   });
 }

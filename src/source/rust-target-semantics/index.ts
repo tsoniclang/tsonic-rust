@@ -82,6 +82,8 @@ import {
   rustOptionTargetType,
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
+  rustFutureOutputCarrier,
+  rustFutureTargetType,
   rustSliceElementCarrier,
   rustSliceMutRefTargetType,
   rustSliceRefTargetType,
@@ -95,7 +97,7 @@ import {
   rustUnitTargetType,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustExtensionId, rustOptionWrapFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustExtensionId, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import { collectRustProviderOperationRows } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
@@ -138,6 +140,9 @@ interface RustFactWalk {
   readonly resolving: Set<object>;
   readonly jsEnabled: boolean;
   currentThisCarrier?: TargetTypeRef;
+  currentMethodDeclaration?: Node;
+  readonly sourceTypeDeclarations: Map<string, Node>;
+  readonly unionAliasVariants: Map<string, readonly { readonly name: string; readonly literal: string }[]>;
 }
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
@@ -147,8 +152,31 @@ export function recordRustFactsBeforeFinalization(
   providerRows: readonly RustProviderOperationRow[],
   jsEnabled = false,
 ): void {
-  const walk: RustFactWalk = { lifecycle, providerRows, resolving: new Set(), jsEnabled };
+  const walk: RustFactWalk = { lifecycle, providerRows, resolving: new Set(), jsEnabled, sourceTypeDeclarations: new Map(), unionAliasVariants: new Map() };
   const { ast } = lifecycle.compiler;
+  // Pass 0: register every project type declaration so contextual record
+  // binding works regardless of file order.
+  for (const sourceFile of lifecycle.compiler.getSourceFiles()) {
+    if (sourceFile === undefined || ast.getFileName(sourceFile).endsWith(".d.ts")) {
+      continue;
+    }
+    for (const statement of ast.statements(sourceFile)) {
+      if (statement === undefined) {
+        continue;
+      }
+      const kind = ast.kindName(statement);
+      if (kind === "KindInterfaceDeclaration") {
+        recordInterfaceFacts(walk, statement);
+      } else if (kind === "KindClassDeclaration" || kind === "KindEnumDeclaration") {
+        const carrier = sourceTypeCarrierForDeclaration(walk, statement);
+        if (carrier !== undefined) {
+          registerSourceTypeDeclaration(walk, carrier, statement);
+        }
+      } else if (kind === "KindTypeAliasDeclaration") {
+        registerUnionAlias(walk, statement);
+      }
+    }
+  }
   for (const sourceFile of lifecycle.compiler.getSourceFiles()) {
     if (sourceFile === undefined) {
       continue;
@@ -175,9 +203,46 @@ export function recordRustFactsBeforeFinalization(
   }
 }
 
+function promiseInnerCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
+  if (typeNode === undefined) {
+    return undefined;
+  }
+  const { ast, checker } = walk.lifecycle.compiler;
+  if (ast.kindName(typeNode) !== KindTypeReference) {
+    return undefined;
+  }
+  const nameNode = TypeReferenceNode_TypeName(typeNode) ?? typeNode;
+  const symbol = checker.getSymbolAtLocation(nameNode) ?? checker.getResolvedSymbolOrNil(nameNode);
+  if (symbol === undefined || checker.getSymbolName(symbol) !== "Promise") {
+    return undefined;
+  }
+  const isLibDeclaration = checker.getSymbolDeclarations(symbol).some((declaration) =>
+    declaration !== undefined && ast.getFileName(ast.getSourceFile(declaration)).endsWith(".d.ts"));
+  if (!isLibDeclaration) {
+    return undefined;
+  }
+  const [argument] = ast.typeArguments(typeNode);
+  return argument === undefined ? undefined : resolveTypeNodeCarrier(walk, argument);
+}
+
 function recordFunctionFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.lifecycle.compiler;
-  const returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  let returnCarrier: TargetTypeRef | undefined;
+  if (ast.hasModifierKind(declaration, "async")) {
+    const inner = promiseInnerCarrier(walk, Node_Type(declaration));
+    if (inner !== undefined) {
+      returnCarrier = inner;
+      walk.lifecycle.host.facts.set(declaration, rustAsyncFunctionFactKey, { isAsync: true }, [
+        { message: "rust async function" },
+      ]);
+      const typeNode = Node_Type(declaration);
+      if (typeNode !== undefined) {
+        setCarrierFact(walk, typeNode, inner);
+      }
+    }
+  } else {
+    returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  }
   for (const parameter of ast.parameters(declaration)) {
     if (parameter === undefined) {
       continue;
@@ -249,6 +314,7 @@ function recordStatementFacts(
       if (operatorKind === KindEqualsToken) {
         const left = BinaryExpression_Left(expression);
         const right = BinaryExpression_Right(expression);
+        recordBindingWrite(walk, left);
         if (left !== undefined && right !== undefined && recordJsAssignmentFacts(walk, expression, left, right, sourceFile)) {
           return;
         }
@@ -267,6 +333,7 @@ function recordStatementFacts(
         const rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, leftCarrier);
         const compound = selectRustCompoundAssignment(operatorKind, leftCarrier, rightCarrier);
         if (compound !== undefined && leftCarrier !== undefined) {
+          recordBindingWrite(walk, left);
           recordOperatorFacts(walk, expression, compound, leftCarrier, rustOperatorCarrierKey(leftCarrier));
           return;
         }
@@ -364,6 +431,12 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
   }
   const kind = walk.lifecycle.compiler.ast.kindName(typeNode);
   if (kind === KindTypeReference) {
+    const nameNode = TypeReferenceNode_TypeName(typeNode) ?? typeNode;
+    const declaration = projectDeclarationFor(walk, nameNode);
+    if (declaration !== undefined && walk.lifecycle.compiler.ast.kindName(declaration) === "KindTypeParameter") {
+      const parameterName = walk.lifecycle.compiler.ast.text(walk.lifecycle.compiler.ast.name(declaration) ?? declaration);
+      return setCarrierFact(walk, typeNode, { kind: "type-parameter", name: parameterName });
+    }
     const sourceType = sourceTypeCarrierForReference(walk, typeNode);
     if (sourceType !== undefined) {
       return setCarrierFact(walk, typeNode, sourceType);
@@ -372,6 +445,26 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
   if (kind === KindArrayType) {
     const element = resolveTypeNodeCarrier(walk, ArrayTypeNode_ElementType(typeNode));
     return element === undefined ? undefined : setCarrierFact(walk, typeNode, rustVecTargetType(element));
+  }
+  if (kind === "KindTupleType") {
+    const elementNodes = walk.lifecycle.compiler.ast.children(typeNode)
+      .filter((child): child is Node => child !== undefined)
+      .flatMap((child) => walk.lifecycle.compiler.ast.kindName(child) === "KindSyntaxList"
+        ? walk.lifecycle.compiler.ast.children(child).filter((entry): entry is Node => entry !== undefined)
+        : [child])
+      .filter((child) => !walk.lifecycle.compiler.ast.kindName(child).endsWith("Token"));
+    if (elementNodes.length === 0) {
+      return undefined;
+    }
+    const elements: TargetTypeRef[] = [];
+    for (const elementNode of elementNodes) {
+      const element = resolveTypeNodeCarrier(walk, elementNode);
+      if (element === undefined) {
+        return undefined;
+      }
+      elements.push(element);
+    }
+    return setCarrierFact(walk, typeNode, { kind: "tuple", elements });
   }
   if (kind === "KindUnionType") {
     const childTypes = walk.lifecycle.compiler.ast.children(typeNode)
@@ -392,9 +485,14 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
         const literal = walk.lifecycle.compiler.ast.children(member)[0];
         return literal !== undefined && walk.lifecycle.compiler.ast.kindName(literal) === "KindNullKeyword";
       };
-      const nullMember = typeMembers.find(isNullMember);
-      const valueMember = typeMembers.find((member) => !isNullMember(member));
-      if (nullMember !== undefined && valueMember !== undefined) {
+      // `T | undefined` is a JS-surface concept: the Option lane for it is
+      // enabled only with the js surface or compat mode.
+      const isUndefinedMember = (member: Node): boolean =>
+        walk.lifecycle.compiler.ast.kindName(member) === "KindUndefinedKeyword";
+      const nullishMember = typeMembers.find((member) =>
+        isNullMember(member) || (walk.jsEnabled && isUndefinedMember(member)));
+      const valueMember = typeMembers.find((member) => !isNullMember(member) && !isUndefinedMember(member));
+      if (nullishMember !== undefined && valueMember !== undefined) {
         const inner = resolveTypeNodeCarrier(walk, valueMember);
         if (inner !== undefined) {
           return setCarrierFact(walk, typeNode, rustOptionTargetType(inner));
@@ -414,6 +512,9 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
   }
   if (kind === KindStringKeyword) {
     return setCarrierFact(walk, typeNode, rustStringTargetType());
+  }
+  if (kind === "KindNumberKeyword") {
+    return setCarrierFact(walk, typeNode, rustSourcePrimitiveTargetType("float64"));
   }
   if (kind === KindBooleanKeyword) {
     return setCarrierFact(walk, typeNode, boolCarrier);
@@ -466,12 +567,21 @@ function applyOptionLane(
   if (resolved !== undefined && isRustOptionCarrier(resolved)) {
     return resolved;
   }
-  const { ast } = walk.lifecycle.compiler;
+  const { ast, checker, typeShape } = walk.lifecycle.compiler;
   if (ast.kindName(expression) === "KindNullKeyword") {
     if (existing === undefined) {
       setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
     }
     return expected;
+  }
+  if (walk.jsEnabled && ast.kindName(expression) === KindIdentifier) {
+    const type = checker.getTypeAtLocation(expression);
+    if (type !== undefined && typeShape.isVoidLike(type) && ast.text(expression) === "undefined") {
+      if (existing === undefined) {
+        setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
+      }
+      return expected;
+    }
   }
   if (resolved !== undefined && JSON.stringify(resolved) === JSON.stringify(inner)) {
     if (existing === undefined || existing.kind === "operator-token" || existing.kind === "provider-operation" || existing.kind === "source-field" || existing.kind === "source-method") {
@@ -500,6 +610,23 @@ function resolveExpressionCarrierUncached(
       return undefined;
     }
     case KindStringLiteral: {
+      if (expected !== undefined) {
+        const value = rustSourceTypeCarrierValueLocal(expected);
+        if (value !== undefined && value.shape === "enum") {
+          const variants = walk.unionAliasVariants.get(`${value.fileName}::${value.typeName}`);
+          const literal = walk.lifecycle.compiler.ast.text(expression);
+          const variant = variants?.find((candidate) => candidate.literal === literal);
+          if (variant !== undefined) {
+            setRustOperationFact(walk, expression, {
+              kind: "source-enum-member",
+              operationId: `tsonic.rust.union.variant:${variant.name}`,
+              name: variant.name,
+              resultCarrier: expected,
+            });
+            return setCarrierFact(walk, expression, expected);
+          }
+        }
+      }
       return setCarrierFact(walk, expression, rustStringTargetType());
     }
     case KindTrueKeyword:
@@ -516,6 +643,25 @@ function resolveExpressionCarrierUncached(
     }
     case KindArrayLiteralExpression: {
       return resolveArrayLiteralCarrier(walk, expression, sourceFile, expected);
+    }
+    case "KindObjectLiteralExpression": {
+      return resolveRecordLiteralCarrier(walk, expression, sourceFile, expected);
+    }
+    case "KindAwaitExpression": {
+      const operand = Node_Expression(expression);
+      const operandCarrier = operand === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+      const output = rustFutureOutputCarrier(operandCarrier);
+      if (output === undefined) {
+        return undefined;
+      }
+      setRustOperationFact(walk, expression, {
+        kind: "await-op",
+        operationId: "tsonic.rust.async.await",
+        resultCarrier: output,
+      });
+      return setCarrierFact(walk, expression, output);
     }
     case KindParenthesizedExpression: {
       const inner = Node_Expression(expression);
@@ -616,6 +762,7 @@ function resolveUnaryCarrier(
   if (operatorText === "++" || operatorText === "--") {
     const operandCarrier = resolveExpressionCarrier(walk, operand, sourceFile, undefined);
     if (operandCarrier !== undefined && isRustIntegerCarrier(operandCarrier)) {
+      recordBindingWrite(walk, operand);
       const operator = operatorText === "++" ? "+=" : "-=";
       recordOperatorFacts(walk, expression, operator, operandCarrier, rustOperatorCarrierKey(operandCarrier));
       return setCarrierFact(walk, expression, operandCarrier);
@@ -649,17 +796,42 @@ function resolveBinaryCarrier(
       return optionCheck;
     }
   }
-  let leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, undefined);
-  let rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, undefined);
-  if (leftCarrier === undefined && rightCarrier !== undefined && ast.kindName(left) === KindNumericLiteral && isRustNumericCarrier(rightCarrier)) {
+  const unionPeerCarrier = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined => {
+    const value = carrier === undefined ? undefined : rustSourceTypeCarrierValueLocal(carrier);
+    return value !== undefined && value.shape === "enum" ? carrier : undefined;
+  };
+  let leftCarrier: TargetTypeRef | undefined;
+  let rightCarrier: TargetTypeRef | undefined;
+  if (equalityOperator && ast.kindName(right) === KindStringLiteral && ast.kindName(left) !== KindStringLiteral) {
+    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, undefined);
+    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, unionPeerCarrier(leftCarrier));
+  } else if (equalityOperator && ast.kindName(left) === KindStringLiteral && ast.kindName(right) !== KindStringLiteral) {
+    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, undefined);
+    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, unionPeerCarrier(rightCarrier));
+  } else {
+    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, undefined);
+    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, undefined);
+  }
+  if (leftCarrier === undefined && rightCarrier !== undefined && isRustNumericCarrier(rightCarrier)) {
     leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, rightCarrier);
   }
-  if (rightCarrier === undefined && leftCarrier !== undefined && ast.kindName(right) === KindNumericLiteral && isRustNumericCarrier(leftCarrier)) {
+  if (rightCarrier === undefined && leftCarrier !== undefined && isRustNumericCarrier(leftCarrier)) {
     rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, leftCarrier);
   }
-  if (leftCarrier === undefined && rightCarrier === undefined && expected !== undefined && isRustNumericCarrier(expected)) {
-    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, expected);
-    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, expected);
+  if (expected !== undefined && isRustNumericCarrier(expected)) {
+    if (leftCarrier === undefined) {
+      leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, expected);
+    }
+    if (rightCarrier === undefined) {
+      rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, expected);
+    }
+  }
+  if (equalityOperator && leftCarrier === undefined && rightCarrier === undefined) {
+    // Equality between context-free numeric expressions defaults to float64:
+    // TypeScript numbers are IEEE doubles.
+    const doubleCarrier = rustSourcePrimitiveTargetType("float64");
+    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, doubleCarrier);
+    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, doubleCarrier);
   }
   if (operatorKind === "KindQuestionQuestionToken") {
     const rebindLeft = leftCarrier !== undefined && isRustOptionCarrier(leftCarrier) ? leftCarrier : undefined;
@@ -722,9 +894,18 @@ function resolveCallLikeCarrier(
       if (argument !== undefined) {
         resolveExpressionCarrier(walk, argument, sourceFile, row.parameterCarriers?.[index]);
         validateFlowMarkerAgainstMode(walk, argument, rowArgumentMode(row, index));
+        if (rowArgumentMode(row, index) === "mut-ref") {
+          recordBindingWrite(walk, argument, "referent");
+        }
       }
     }
+    if (row.target.form === "receiver-method" && row.target.mutatesReceiver === true && ast.kindName(callee) === KindPropertyAccessExpression) {
+      recordBindingWrite(walk, Node_Expression(callee), "referent");
+    }
     recordProviderOperationFacts(walk, expression, row, providerIdentity);
+    if (row.isAsync === true) {
+      return setCarrierFact(walk, expression, rustFutureTargetType(row.resultCarrier));
+    }
     return setCarrierFact(walk, expression, row.resultCarrier);
   }
   const sourceCallLike = trySourceCallLike(walk, expression, callee, callArguments, sourceFile, expressionKind);
@@ -768,10 +949,47 @@ function resolveCallLikeCarrier(
     const parameter = parameters[index];
     const parameterCarrier = parameter === undefined
       ? undefined
-      : resolveTypeNodeCarrier(walk, Node_Type(parameter));
+      : walk.lifecycle.host.facts.get(parameter, runtimeCarrierFactKey)?.carrier ??
+        parameterLaneCarrier(walk, resolveTypeNodeCarrier(walk, Node_Type(parameter)));
     resolveExpressionCarrier(walk, argument, sourceFile, parameterCarrier);
+    if (parameterCarrier?.kind === "pointer" && parameterCarrier.mutability === "mut") {
+      recordBindingWrite(walk, argument, "referent");
+    }
   }
-  const returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  let returnCarrier: TargetTypeRef | undefined;
+  if (ast.hasModifierKind(declaration, "async")) {
+    const inner = walk.lifecycle.host.facts.get(declaration, rustAsyncFunctionFactKey) !== undefined
+      ? walk.lifecycle.host.facts.get(Node_Type(declaration) ?? declaration, runtimeCarrierFactKey)?.carrier
+      : promiseInnerCarrier(walk, Node_Type(declaration));
+    if (inner === undefined) {
+      return undefined;
+    }
+    returnCarrier = rustFutureTargetType(inner);
+  } else {
+    returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  }
+  if (returnCarrier?.kind === "type-parameter") {
+    // Passthrough generic instantiation: the return carrier is the carrier of
+    // the argument bound to the same type parameter position.
+    const parameterIndex = parameters.findIndex((parameter) => {
+      const parameterCarrier = parameter === undefined
+        ? undefined
+        : walk.lifecycle.host.facts.get(parameter, runtimeCarrierFactKey)?.carrier ??
+          resolveTypeNodeCarrier(walk, Node_Type(parameter));
+      return parameterCarrier?.kind === "type-parameter" && parameterCarrier.name === (returnCarrier as { name: string }).name;
+    });
+    const boundArgument = parameterIndex >= 0 ? callArguments[parameterIndex] : undefined;
+    let argumentCarrier = boundArgument === undefined
+      ? undefined
+      : walk.lifecycle.host.facts.get(boundArgument, runtimeCarrierFactKey)?.carrier;
+    if (argumentCarrier === undefined && boundArgument !== undefined && expected !== undefined) {
+      argumentCarrier = resolveExpressionCarrier(walk, boundArgument, sourceFile, expected);
+    }
+    returnCarrier = argumentCarrier ?? returnCarrier;
+    if (returnCarrier.kind === "type-parameter") {
+      return undefined;
+    }
+  }
   return returnCarrier === undefined ? undefined : setCarrierFact(walk, expression, returnCarrier);
 }
 
@@ -829,6 +1047,22 @@ function resolveProviderIndexerCarrier(
     return undefined;
   }
   const receiverCarrier = resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+  if (receiverCarrier?.kind === "tuple" && receiverCarrier.elements.length > 0) {
+    const argument = ElementAccessExpression_ArgumentExpression(expression);
+    const indexText = argument === undefined || ast.kindName(argument) !== KindNumericLiteral ? undefined : ast.text(argument);
+    const index = indexText === undefined ? undefined : Number.parseInt(indexText, 10);
+    const element = index === undefined ? undefined : receiverCarrier.elements[index];
+    if (element === undefined) {
+      return undefined;
+    }
+    setRustOperationFact(walk, expression, {
+      kind: "tuple-index",
+      operationId: `tsonic.rust.tuple.index.${index}`,
+      index: index!,
+      resultCarrier: element,
+    });
+    return setCarrierFact(walk, expression, element);
+  }
   if (receiverCarrier !== undefined && receiverCarrier.kind !== "target-named" && walk.jsEnabled) {
     const selection = selectJsSurfaceOperation({
       ownerName: "Array",
@@ -934,7 +1168,7 @@ function recordProviderOperationFacts(
   identity: ProviderDeclarationIdentity | undefined,
 ): void {
   const operationId = row.memberId ?? row.signatureId ?? row.exportId;
-  const targetOperationText = row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call"
+  const targetOperationText = row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice"
     ? row.target.path
     : row.target.form === "index"
       ? "[]"
@@ -1108,6 +1342,14 @@ function applyJsSelection(
     }
   }
   const fact = selection.fact;
+  if ((fact.kind === "provider-operation" && fact.target.form === "receiver-method" && fact.target.mutatesReceiver === true) ||
+      fact.kind === "runtime-set") {
+    // Receiver is the expression's own receiver for member ops.
+    const receiver = Node_Expression(expression) !== undefined && walk.lifecycle.compiler.ast.kindName(expression) === KindPropertyAccessExpression
+      ? Node_Expression(expression)
+      : Node_Expression(Node_Expression(expression) ?? expression) ?? Node_Expression(expression);
+    recordBindingWrite(walk, receiver, "referent");
+  }
   recordTargetOperation(
     walk,
     expression,
@@ -1191,6 +1433,17 @@ function resolveArrayLiteralCarrier(
   const hasHoles = elements.some((element) => ast.kindName(element) === KindOmittedExpression);
   const presentElements = elements.filter((element) => ast.kindName(element) !== KindOmittedExpression);
 
+  if (expected?.kind === "tuple" && expected.elements.length > 0 && !hasHoles && presentElements.length === expected.elements.length) {
+    for (const [index, element] of presentElements.entries()) {
+      resolveExpressionCarrier(walk, element, sourceFile, expected.elements[index]);
+    }
+    setRustOperationFact(walk, expression, {
+      kind: "tuple-literal",
+      operationId: "tsonic.rust.tuple.literal",
+      resultCarrier: expected,
+    });
+    return setCarrierFact(walk, expression, expected);
+  }
   let expectedElement: TargetTypeRef | undefined;
   let lane: "dense" | "sparse" = hasHoles ? "sparse" : "dense";
   if (expected !== undefined && isRustVecCarrier(expected)) {
@@ -1392,7 +1645,9 @@ function projectDeclarationFor(walk: RustFactWalk, reference: Node): Node | unde
 function sourceTypeCarrierForDeclaration(walk: RustFactWalk, declaration: Node): TargetTypeRef | undefined {
   const { ast } = walk.lifecycle.compiler;
   const kind = ast.kindName(declaration);
-  const shape = kind === "KindClassDeclaration" ? "struct" : kind === "KindEnumDeclaration" ? "enum" : undefined;
+  const shape = kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration"
+    ? "struct"
+    : kind === "KindEnumDeclaration" || kind === "KindTypeAliasDeclaration" ? "enum" : undefined;
   if (shape === undefined) {
     return undefined;
   }
@@ -1454,6 +1709,7 @@ function recordClassFacts(walk: RustFactWalk, declaration: Node, sourceFile: Sou
     return;
   }
   setCarrierFact(walk, declaration, classCarrier);
+  registerSourceTypeDeclaration(walk, classCarrier, declaration);
   const previousThis = walk.currentThisCarrier;
   walk.currentThisCarrier = classCarrier;
   for (const member of ast.members(declaration)) {
@@ -1481,6 +1737,8 @@ function recordClassFacts(walk: RustFactWalk, declaration: Node, sourceFile: Sou
       const returnCarrier = memberKind === "KindMethodDeclaration"
         ? resolveTypeNodeCarrier(walk, Node_Type(member))
         : undefined;
+      const previousMethod = walk.currentMethodDeclaration;
+      walk.currentMethodDeclaration = memberKind === "KindMethodDeclaration" ? member : undefined;
       const body = ast.body(member);
       if (body !== undefined) {
         for (const statement of ast.statements(body)) {
@@ -1489,9 +1747,144 @@ function recordClassFacts(walk: RustFactWalk, declaration: Node, sourceFile: Sou
           }
         }
       }
+      walk.currentMethodDeclaration = previousMethod;
     }
   }
   walk.currentThisCarrier = previousThis;
+}
+
+function registerSourceTypeDeclaration(walk: RustFactWalk, carrier: TargetTypeRef, declaration: Node): void {
+  const value = rustSourceTypeCarrierValueLocal(carrier);
+  if (value !== undefined) {
+    walk.sourceTypeDeclarations.set(`${value.fileName}::${value.typeName}`, declaration);
+  }
+}
+
+function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): void {
+  const { ast } = walk.lifecycle.compiler;
+  const carrier = sourceTypeCarrierForDeclaration(walk, declaration);
+  if (carrier === undefined) {
+    return;
+  }
+  setCarrierFact(walk, declaration, carrier);
+  registerSourceTypeDeclaration(walk, carrier, declaration);
+  for (const member of ast.members(declaration)) {
+    if (member === undefined || ast.kindName(member) !== "KindPropertySignature") {
+      continue;
+    }
+    const fieldCarrier = resolveTypeNodeCarrier(walk, Node_Type(member));
+    if (fieldCarrier !== undefined) {
+      setCarrierFact(walk, member, fieldCarrier);
+    }
+  }
+}
+
+function resolveRecordLiteralCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  expected: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const { ast } = walk.lifecycle.compiler;
+  const value = expected === undefined ? undefined : rustSourceTypeCarrierValueLocal(expected);
+  if (value === undefined || value.shape !== "struct" || expected === undefined) {
+    return undefined;
+  }
+  const fieldNames: string[] = [];
+  for (const property of ast.properties(expression)) {
+    if (property === undefined || ast.kindName(property) !== "KindPropertyAssignment") {
+      return undefined;
+    }
+    const nameNode = ast.name(property);
+    const fieldName = nameNode === undefined ? "" : ast.text(nameNode);
+    if (fieldName.length === 0) {
+      return undefined;
+    }
+    // Expected field carrier from the declared shape member (contextual
+    // binding against the finalized declaration model).
+    const shapeDeclaration = walk.sourceTypeDeclarations.get(`${value.fileName}::${value.typeName}`);
+    const memberDeclaration = shapeDeclaration === undefined
+      ? undefined
+      : ast.members(shapeDeclaration).find((member) =>
+          member !== undefined && ast.text(ast.name(member) ?? member) === fieldName);
+    const expectedField = memberDeclaration === undefined
+      ? undefined
+      : walk.lifecycle.host.facts.get(memberDeclaration, runtimeCarrierFactKey)?.carrier ??
+        resolveTypeNodeCarrier(walk, Node_Type(memberDeclaration));
+    const initializer = Node_Initializer(property);
+    if (initializer !== undefined) {
+      resolveExpressionCarrier(walk, initializer, sourceFile, expectedField);
+    }
+    fieldNames.push(fieldName);
+  }
+  setRustOperationFact(walk, expression, {
+    kind: "record-literal",
+    operationId: "tsonic.rust.record.literal",
+    resultCarrier: expected,
+    fieldNames,
+  });
+  return setCarrierFact(walk, expression, expected);
+}
+
+function rustSourceTypeCarrierValueLocal(carrier: TargetTypeRef): { readonly fileName: string; readonly typeName: string; readonly shape: string } | undefined {
+  if (carrier.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "source-type") {
+    return undefined;
+  }
+  return carrier.value as { readonly fileName: string; readonly typeName: string; readonly shape: string };
+}
+
+function rustVariantName(literal: string): string | undefined {
+  const cleaned = literal.replace(/[^A-Za-z0-9]+([A-Za-z0-9])/gu, (_, ch: string) => ch.toUpperCase());
+  if (cleaned.length === 0 || /^[0-9]/u.test(cleaned)) {
+    return undefined;
+  }
+  return cleaned[0]!.toUpperCase() + cleaned.slice(1);
+}
+
+function registerUnionAlias(walk: RustFactWalk, declaration: Node): void {
+  const { ast } = walk.lifecycle.compiler;
+  const aliasType = Node_Type(declaration);
+  if (aliasType === undefined || ast.kindName(aliasType) !== "KindUnionType") {
+    return;
+  }
+  const memberNodes = ast.children(aliasType)
+    .filter((child): child is Node => child !== undefined)
+    .flatMap((child) => ast.kindName(child) === "KindSyntaxList"
+      ? ast.children(child).filter((entry): entry is Node => entry !== undefined)
+      : [child])
+    .filter((child) => !ast.kindName(child).endsWith("Token"));
+  const variants: { name: string; literal: string }[] = [];
+  for (const member of memberNodes) {
+    if (ast.kindName(member) !== "KindLiteralType") {
+      return;
+    }
+    const literalNode = ast.children(member)[0];
+    if (literalNode === undefined || ast.kindName(literalNode) !== KindStringLiteral) {
+      return;
+    }
+    const literal = ast.text(literalNode);
+    const name = rustVariantName(literal);
+    if (name === undefined || variants.some((existing) => existing.name === name)) {
+      return;
+    }
+    variants.push({ name, literal });
+  }
+  if (variants.length === 0) {
+    return;
+  }
+  const carrier = sourceTypeCarrierForDeclaration(walk, declaration);
+  if (carrier === undefined) {
+    return;
+  }
+  setCarrierFact(walk, declaration, carrier);
+  registerSourceTypeDeclaration(walk, carrier, declaration);
+  const value = rustSourceTypeCarrierValueLocal(carrier);
+  if (value !== undefined) {
+    walk.unionAliasVariants.set(`${value.fileName}::${value.typeName}`, variants);
+  }
+  walk.lifecycle.host.facts.set(declaration, rustUnionVariantsFactKey, { variants }, [
+    { message: "rust union variants" },
+  ]);
 }
 
 function recordEnumFacts(walk: RustFactWalk, declaration: Node, _sourceFile: SourceFile): void {
@@ -1513,7 +1906,13 @@ function trySourceMemberAccess(
     return undefined;
   }
   const memberKind = ast.kindName(memberDeclaration);
-  if (memberKind === "KindPropertyDeclaration") {
+  if (memberKind === "KindPropertyDeclaration" || memberKind === "KindPropertySignature") {
+    if (memberKind === "KindPropertySignature") {
+      const owner = ast.parent(memberDeclaration);
+      if (owner === undefined || ast.kindName(owner) !== KindInterfaceDeclaration) {
+        return undefined;
+      }
+    }
     if (receiver !== undefined) {
       resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
     }
@@ -1605,8 +2004,9 @@ function trySourceCallLike(
   if (methodDeclaration === undefined || ast.kindName(methodDeclaration) !== "KindMethodDeclaration") {
     return undefined;
   }
+  const isStaticMethod = ast.hasModifierKind(methodDeclaration, "static");
   const receiver = Node_Expression(callee);
-  if (receiver !== undefined) {
+  if (receiver !== undefined && !isStaticMethod) {
     resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
   }
   const parameters = ast.parameters(methodDeclaration);
@@ -1627,13 +2027,36 @@ function trySourceCallLike(
   if (methodName.length === 0) {
     return undefined;
   }
+  if (isStaticMethod) {
+    const classDeclaration = ast.parent(methodDeclaration);
+    const typeCarrier = classDeclaration === undefined
+      ? undefined
+      : sourceTypeCarrierForDeclaration(walk, classDeclaration);
+    if (typeCarrier === undefined) {
+      return undefined;
+    }
+    const operationId = `tsonic.rust.source.static-method:${methodName}`;
+    recordTargetOperation(walk, expression, operationId, "method", methodName);
+    setRustOperationFact(walk, expression, {
+      kind: "source-static-method",
+      operationId,
+      name: methodName,
+      typeCarrier,
+      resultCarrier: returnCarrier,
+    });
+    return setCarrierFact(walk, expression, returnCarrier);
+  }
+  const mutatesSelf = methodMutatesSelf(walk, methodDeclaration);
+  if (mutatesSelf) {
+    recordBindingWrite(walk, receiver, "referent");
+  }
   const operationId = `tsonic.rust.source.method:${methodName}`;
   recordTargetOperation(walk, expression, operationId, "method", methodName);
   setRustOperationFact(walk, expression, {
     kind: "source-method",
     operationId,
     name: methodName,
-    mutatesSelf: methodMutatesSelf(walk, methodDeclaration),
+    mutatesSelf,
     resultCarrier: returnCarrier,
   });
   return setCarrierFact(walk, expression, returnCarrier);
@@ -1648,6 +2071,54 @@ function parameterLaneCarrier(walk: RustFactWalk, carrier: TargetTypeRef | undef
     return rustSliceMutRefTargetType(carrier.element);
   }
   return carrier;
+}
+
+// Formal source-use rule: a write records a mutation fact on the resolved
+// declaration of the written binding (or a mut-ref self mode on the enclosing
+// method for `this` field writes). Backend mutability reads facts only.
+function recordBindingWrite(walk: RustFactWalk, target: Node | undefined, writeKind: "binding" | "referent" = "binding"): void {
+  if (target === undefined) {
+    return;
+  }
+  const { ast, checker } = walk.lifecycle.compiler;
+  const kind = ast.kindName(target);
+  if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
+    const receiver = Node_Expression(target);
+    const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
+    if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {
+      if (walk.currentMethodDeclaration !== undefined) {
+        walk.lifecycle.host.facts.set(walk.currentMethodDeclaration, rustSelfModeFactKey, { mode: "mut-ref" }, [
+          { message: "rust self write" },
+        ]);
+      }
+      return;
+    }
+    recordBindingWrite(walk, receiver, "referent");
+    return;
+  }
+  if (kind === KindCallExpression) {
+    const fact = walk.lifecycle.host.facts.get(target, rustTargetOperationFactKey);
+    if (fact !== undefined && fact.kind === "flow-marker") {
+      recordBindingWrite(walk, ast.arguments(target)[0], "referent");
+    }
+    return;
+  }
+  if (kind !== KindIdentifier) {
+    return;
+  }
+  const symbol = checker.getResolvedSymbolOrNil(target) ?? checker.getSymbolAtLocation(target);
+  if (symbol === undefined) {
+    return;
+  }
+  const declaration = checker.getSymbolValueDeclaration(symbol) ??
+    checker.getPrimarySymbolDeclaration(symbol) ??
+    checker.getSymbolDeclarations(symbol)[0];
+  if (declaration !== undefined) {
+    const key = writeKind === "binding" ? rustMutatedBindingFactKey : rustMutatedReferentFactKey;
+    walk.lifecycle.host.facts.set(declaration, key, { mutated: true }, [
+      { message: `rust ${writeKind} write` },
+    ]);
+  }
 }
 
 // --- Source-core flow markers ----------------------------------------------

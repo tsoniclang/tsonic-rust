@@ -12,11 +12,11 @@ test("rust target pack registers under the rust target id", () => {
   assert.equal(pack.displayName, "Rust");
 });
 
-test("rust target pack declares only the js surface and no provider packages", () => {
+test("rust target pack declares the js surface and the nodejs provider package", () => {
   const pack = createRustTargetPack();
 
   assert.deepEqual(pack.surfaces.map((surface) => surface.id), ["js"]);
-  assert.equal(pack.packages, undefined);
+  assert.deepEqual(pack.packages.map((candidate) => candidate.id), ["nodejs"]);
 });
 
 test("rust provider creates the target semantics extension and validates options", () => {
