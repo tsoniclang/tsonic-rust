@@ -24,7 +24,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrier } from "./render-types.js";
+import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustMutatingReceiverMethods, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 
 export function planFunctionDeclaration(node: Node, context: RustPlanContext): RustItem | undefined {
@@ -55,7 +55,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     }
     const parameterName = ast.text(ast.name(parameter) ?? parameter);
     const parameterCarrier = context.input.facts.getRuntimeCarrierFact(parameter)?.carrier;
-    const parameterType = rustTypeFromCarrier(parameterCarrier);
+    const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, parameter),
@@ -78,7 +78,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
   }
   const returnCarrier = context.input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
   const isUnit = isRustUnitCarrier(returnCarrier);
-  const returnType = isUnit ? undefined : rustTypeFromCarrier(returnCarrier);
+  const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
   if (!isUnit && returnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode),
@@ -133,6 +133,10 @@ export function collectMutatedNames(ast: AstReader, body: Node, context?: RustPl
     if (kind === "KindCallExpression" && context !== undefined) {
       const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
       if (fact !== undefined && fact.kind === "provider-operation" && fact.target.form === "receiver-method" && rustMutatingReceiverMethods.has(fact.target.name)) {
+        const callee = (node as { readonly Expression?: Node }).Expression;
+        addWriteTarget(callee === undefined ? undefined : (callee as { readonly Expression?: Node }).Expression);
+      }
+      if (fact !== undefined && fact.kind === "source-method" && fact.mutatesSelf) {
         const callee = (node as { readonly Expression?: Node }).Expression;
         addWriteTarget(callee === undefined ? undefined : (callee as { readonly Expression?: Node }).Expression);
       }

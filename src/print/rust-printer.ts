@@ -270,6 +270,15 @@ export function printRustExpr(expression: RustExpr): string {
     case "vec-literal": {
       return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;
     }
+    case "struct-literal": {
+      const fields = expression.fields
+        .map((field) => {
+          const value = printRustExpr(field.value);
+          return value === field.name ? field.name : `${field.name}: ${value}`;
+        })
+        .join(", ");
+      return `${expression.path} { ${fields} }`;
+    }
 
   }
 }

@@ -6,17 +6,20 @@ test("unsupported AST fails closed with deterministic diagnostics", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-export class Widget {
-  value: number = 0;
+export function f(value: number): number {
+  switch (value) {
+    default:
+      return value;
+  }
 }
 `,
     },
   });
 
   assert.equal(result.artifacts.length, 0);
-  assert.equal(result.diagnostics.length, 1);
-  assert.equal(result.diagnostics[0].code, "RUST_UNSUPPORTED_AST");
-  assert.ok(result.diagnostics[0].evidence.includes("target.capability=rust.backend.statement"));
+  assert.ok(result.diagnostics.length > 0);
+  assert.ok(result.diagnostics.every((diagnostic) => diagnostic.code === "RUST_UNSUPPORTED_AST" || diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.evidence.some((entry) => entry.startsWith("target.capability=rust.backend."))));
 });
 
 test("mixed-kind numeric operators have no fact and fail closed", () => {

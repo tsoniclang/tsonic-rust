@@ -30,3 +30,14 @@ export function isValidRustIdentifier(name: string): boolean {
 export function diagnosticInput(context: RustPlanContext, node: Node) {
   return { ast: context.input.ast, sourceFile: context.sourceFile, node };
 }
+
+export function sourceTypePath(
+  context: RustPlanContext,
+  value: { readonly fileName: string; readonly typeName: string },
+): string | undefined {
+  const moduleName = context.moduleNameByFileName.get(value.fileName);
+  if (moduleName === undefined || !isValidRustIdentifier(value.typeName)) {
+    return undefined;
+  }
+  return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
+}

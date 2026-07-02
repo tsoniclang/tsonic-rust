@@ -24,7 +24,8 @@ export type RustExpr =
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
   | { readonly kind: "cast"; readonly expr: RustExpr; readonly to: string }
   | { readonly kind: "reference"; readonly expr: RustExpr }
-  | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] };
+  | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
+  | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] };
 
 export type RustStmt =
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init: RustExpr }

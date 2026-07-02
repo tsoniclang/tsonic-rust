@@ -27,8 +27,9 @@ import { planExpression } from "./expressions.js";
 import { planFunctionDeclaration } from "./functions.js";
 import { isValidRustIdentifier, rustReservedIdentifiers } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrier } from "./render-types.js";
+import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
+import { planClassDeclaration, planEnumDeclaration } from "./declarations-nominal.js";
 
 export function planRustArtifacts(input: TargetCompileInput): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [];
@@ -198,6 +199,20 @@ function planModuleItems(context: RustPlanContext): readonly RustItem[] {
       }
       continue;
     }
+    if (kind === "KindClassDeclaration") {
+      const planned = planClassDeclaration(statement, context);
+      if (planned !== undefined) {
+        items.push(...planned);
+      }
+      continue;
+    }
+    if (kind === "KindEnumDeclaration") {
+      const planned = planEnumDeclaration(statement, context);
+      if (planned !== undefined) {
+        items.push(...planned);
+      }
+      continue;
+    }
     context.diagnostics.push(unsupportedStatementDiagnostic(
       { ast, sourceFile: context.sourceFile, node: statement },
       "rust.backend.statement",
@@ -227,7 +242,7 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
   const initializer = declaration === undefined ? undefined : Node_Initializer(declaration);
   const typeNode = declaration === undefined ? undefined : Node_Type(declaration);
   const carrier = typeNode === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
-  const rustType = rustTypeFromCarrier(carrier);
+  const rustType = rustTypeFromCarrierInContext(carrier, context);
   if (
     declaration === undefined ||
     initializer === undefined ||

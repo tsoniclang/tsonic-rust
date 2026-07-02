@@ -19,11 +19,11 @@ import {
   Node_Expression,
   PrefixUnaryExpression_Operand,
 } from "../../common/source-ast.js";
-import { rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier } from "../../source/rust-target-types.js";
@@ -43,6 +43,10 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
     }
     case KindFalseKeyword: {
       return { kind: "bool-literal", value: false };
+    }
+    case "KindThisExpression":
+    case "KindThisKeyword": {
+      return { kind: "path", path: "self" };
     }
     case KindIdentifier: {
       const name = ast.text(node);
@@ -314,6 +318,13 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   if (args === undefined) {
     return undefined;
   }
+  if (fact !== undefined && fact.kind === "source-method") {
+    const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
+      ? Node_Expression(callee)
+      : undefined;
+    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+    return receiver === undefined ? undefined : { kind: "method-call", receiver, method: fact.name, args };
+  }
   if (fact !== undefined && fact.kind === "provider-operation") {
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
       ? Node_Expression(callee)
@@ -375,6 +386,22 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
 
 function planNewExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "source-constructor") {
+    const value = rustSourceTypeCarrierValue(fact.resultCarrier);
+    const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+    const args = planArguments(node, context);
+    if (typePath === undefined || args === undefined) {
+      if (typePath === undefined) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.class",
+          "Constructor does not resolve to a generated Rust struct path.",
+        ));
+      }
+      return undefined;
+    }
+    return { kind: "call", path: `${typePath}::new`, args };
+  }
   if (fact === undefined || fact.kind !== "provider-operation" || fact.operationKind !== "constructor") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -400,6 +427,24 @@ function planNewExpression(node: Node, context: RustPlanContext): RustExpr | und
 
 function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "source-field") {
+    const receiverNode = Node_Expression(node);
+    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+    return receiver === undefined ? undefined : { kind: "field", receiver, name: fact.name };
+  }
+  if (fact !== undefined && fact.kind === "source-enum-member") {
+    const value = rustSourceTypeCarrierValue(fact.resultCarrier);
+    const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+    if (typePath === undefined) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.enum",
+        "Enum member access does not resolve to a generated Rust enum path.",
+      ));
+      return undefined;
+    }
+    return { kind: "path", path: `${typePath}::${fact.name}` };
+  }
   if (fact === undefined || fact.kind !== "provider-operation") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),

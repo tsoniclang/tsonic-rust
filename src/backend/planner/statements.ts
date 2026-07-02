@@ -36,14 +36,14 @@ import {
   PrefixUnaryExpression_Operand,
 } from "../../common/source-ast.js";
 import { rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
-import { rustTypeFromCarrier as renderRustType } from "./render-types.js";
+import { rustTypeFromCarrierInContext as renderRustTypeInContext } from "./render-types.js";
 import { isRustBoolCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { expressionCarrier, planExpression } from "./expressions.js";
 import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrier } from "./render-types.js";
+import { rustTypeFromCarrierInContext } from "./render-types.js";
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const { ast } = context.input;
@@ -175,7 +175,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
   let rustType;
   if (typeNode !== undefined) {
-    rustType = rustTypeFromCarrier(annotatedCarrier);
+    rustType = rustTypeFromCarrierInContext(annotatedCarrier, context);
     if (rustType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, typeNode),
@@ -248,6 +248,29 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
     if (operatorKind === KindEqualsToken || compoundTokens.includes(operatorKind)) {
       const left = BinaryExpression_Left(expression);
       const right = BinaryExpression_Right(expression);
+      if (left !== undefined && right !== undefined && ast.kindName(left) === "KindPropertyAccessExpression") {
+        const leftFact = context.input.facts.getFact(left, rustTargetOperationFactKey);
+        if (leftFact !== undefined && leftFact.kind === "source-field") {
+          const target = planExpression(left, context);
+          const value = planExpression(right, context);
+          if (target === undefined || value === undefined) {
+            return undefined;
+          }
+          if (operatorKind === KindEqualsToken) {
+            return [{ kind: "assign", target, operator: "=", value }];
+          }
+          const compoundFact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+          if (compoundFact === undefined || compoundFact.kind !== "operator-token") {
+            context.diagnostics.push(missingFactDiagnostic(
+              diagnosticInput(context, expression),
+              "rust.backend.operator",
+              "Compound field assignment requires a finalized Rust operator fact.",
+            ));
+            return undefined;
+          }
+          return [{ kind: "assign", target, operator: compoundFact.operator, value }];
+        }
+      }
       if (left === undefined || right === undefined || ast.kindName(left) !== KindIdentifier) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, expression),
@@ -529,8 +552,8 @@ function planSparseArrayLet(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input;
-  const elementType = renderRustType(fact.elementCarrier);
-  const arrayType = renderRustType(fact.resultCarrier);
+  const elementType = renderRustTypeInContext(fact.elementCarrier, context);
+  const arrayType = renderRustTypeInContext(fact.resultCarrier, context);
   if (elementType === undefined || arrayType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
