@@ -531,6 +531,21 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
     return element === undefined ? undefined : setCarrierFact(walk, typeNode, rustVecTargetType(element));
   }
   if (kind === "KindTupleType") {
+    const memberNodes = walk.lifecycle.compiler.ast.children(typeNode).filter((child) =>
+      child !== undefined && walk.lifecycle.compiler.ast.kindName(child) !== "KindOpenBracketToken" &&
+      walk.lifecycle.compiler.ast.kindName(child) !== "KindCloseBracketToken" && walk.lifecycle.compiler.ast.kindName(child) !== "KindCommaToken");
+    const memberCarriers = memberNodes.map((member) => resolveTypeNodeCarrier(walk, member));
+    if (memberCarriers.length >= 2 && memberCarriers.every((carrier) =>
+      carrier !== undefined && carrier.kind === "source-primitive" && JSON.stringify(carrier) === JSON.stringify(memberCarriers[0]))) {
+      // Homogeneous primitive tuple annotations carry compile-time-proven
+      // length: [T; N].
+      return setCarrierFact(walk, typeNode, {
+        kind: "target-specific",
+        target: "rust",
+        name: "fixed-array",
+        value: { element: memberCarriers[0], length: memberCarriers.length },
+      } as TargetTypeRef);
+    }
     const elementNodes = walk.lifecycle.compiler.ast.children(typeNode)
       .filter((child): child is Node => child !== undefined)
       .flatMap((child) => walk.lifecycle.compiler.ast.kindName(child) === "KindSyntaxList"
@@ -1177,6 +1192,19 @@ function resolveProviderIndexerCarrier(
     });
     return setCarrierFact(walk, expression, element);
   }
+  if (receiverCarrier?.kind === "target-specific" && receiverCarrier.name === "fixed-array") {
+    const value = receiverCarrier.value as { element: TargetTypeRef; length: number };
+    const argument = ElementAccessExpression_ArgumentExpression(expression);
+    const indexText = argument === undefined ? "" : ast.text(argument);
+    const index = Number.parseInt(indexText, 10);
+    if (argument === undefined || ast.kindName(argument) !== KindNumericLiteral || !Number.isInteger(index) || index < 0 || index >= value.length) {
+      // Dynamic or out-of-range fixed-array indexing fails closed: Rust
+      // panics where JS yields undefined.
+      return undefined;
+    }
+    setRustOperationFact(walk, expression, { kind: "fixed-index", operationId: "tsonic.rust.fixed-array.index", index });
+    return setCarrierFact(walk, expression, value.element);
+  }
   if (receiverCarrier !== undefined && receiverCarrier.kind !== "target-named" && walk.jsEnabled) {
     const selection = selectJsSurfaceOperation({
       ownerName: "Array",
@@ -1614,6 +1642,17 @@ function resolveArrayLiteralCarrier(
   } else if (expected?.kind === "target-named" && isRustJsArrayCarrier(expected)) {
     expectedElement = expected.typeArguments?.[0];
     lane = "sparse";
+  }
+  if (expected?.kind === "target-specific" && expected.name === "fixed-array") {
+    const value = expected.value as { element: TargetTypeRef; length: number };
+    if (presentElements.length !== value.length) {
+      return undefined;
+    }
+    for (const element of presentElements) {
+      resolveExpressionCarrier(walk, element, sourceFile, value.element);
+    }
+    setRustOperationFact(walk, expression, { kind: "fixed-array-literal", operationId: "tsonic.rust.fixed-array.literal" });
+    return setCarrierFact(walk, expression, expected);
   }
   if (expectedElement === undefined) {
     for (const element of presentElements) {

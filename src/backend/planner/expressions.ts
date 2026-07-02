@@ -112,6 +112,25 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return inner === undefined ? undefined : planExpression(inner, context);
     }
     case "KindArrayLiteralExpression": {
+      const fixedFact = rustOperationFact(node, context);
+      if (fixedFact !== undefined && fixedFact.kind === "fixed-array-literal") {
+        const elements: RustExpr[] = [];
+        for (const element of context.input.ast.children(node)) {
+          if (element === undefined) {
+            continue;
+          }
+          const elementKind = ast.kindName(element);
+          if (elementKind === "KindOpenBracketToken" || elementKind === "KindCloseBracketToken" || elementKind === "KindCommaToken" || elementKind === "KindSyntaxList") {
+            continue;
+          }
+          const planned = planExpression(element, context);
+          if (planned === undefined) {
+            return undefined;
+          }
+          elements.push(planned);
+        }
+        return { kind: "slice-literal", elements };
+      }
       return planArrayLiteral(node, context);
     }
     case "KindObjectLiteralExpression": {
@@ -190,6 +209,12 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return planPropertyAccess(node, context);
     }
     case KindElementAccessExpression: {
+      const fixedIndexFact = rustOperationFact(node, context);
+      if (fixedIndexFact !== undefined && fixedIndexFact.kind === "fixed-index") {
+        const fixedReceiverNode = Node_Expression(node);
+        const fixedReceiver = fixedReceiverNode === undefined ? undefined : planExpression(fixedReceiverNode, context);
+        return fixedReceiver === undefined ? undefined : { kind: "index", receiver: fixedReceiver, index: { kind: "int-literal", text: String(fixedIndexFact.index) } };
+      }
       return planElementAccess(node, context);
     }
     default: {

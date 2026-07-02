@@ -68,6 +68,11 @@ export function rustTypeFromCarrier(
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
   }
+  if (carrier.kind === "target-specific" && carrier.name === "fixed-array") {
+    const value = carrier.value as { element: TargetTypeRef; length: number };
+    const element = rustTypeFromCarrier(value.element, resolveSourceTypePath);
+    return element === undefined ? undefined : { kind: "named", path: `[${printableTypeText(element)}; ${value.length}]` };
+  }
   if (carrier.kind === "array") {
     const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "named", path: "Vec", typeArguments: [element] };
@@ -140,4 +145,14 @@ export function collectAliasesFromRustType(
       collectAliasesFromRustType(element, register);
     }
   }
+}
+
+function printableTypeText(type: RustType): string {
+  if (type.kind === "primitive") {
+    return type.name;
+  }
+  if (type.kind === "named" && (type.typeArguments === undefined || type.typeArguments.length === 0)) {
+    return type.path;
+  }
+  return type.kind === "string" ? "String" : "()";
 }
