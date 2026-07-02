@@ -122,6 +122,17 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
       readonly fieldNames: readonly string[];
     }
+  | {
+      readonly kind: "tuple-literal";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "tuple-index";
+      readonly operationId: string;
+      readonly index: number;
+      readonly resultCarrier: TargetTypeRef;
+    }
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
   | { readonly kind: "option-coalesce"; readonly operationId: string }

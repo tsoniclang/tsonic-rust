@@ -398,6 +398,26 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
     const element = resolveTypeNodeCarrier(walk, ArrayTypeNode_ElementType(typeNode));
     return element === undefined ? undefined : setCarrierFact(walk, typeNode, rustVecTargetType(element));
   }
+  if (kind === "KindTupleType") {
+    const elementNodes = walk.lifecycle.compiler.ast.children(typeNode)
+      .filter((child): child is Node => child !== undefined)
+      .flatMap((child) => walk.lifecycle.compiler.ast.kindName(child) === "KindSyntaxList"
+        ? walk.lifecycle.compiler.ast.children(child).filter((entry): entry is Node => entry !== undefined)
+        : [child])
+      .filter((child) => !walk.lifecycle.compiler.ast.kindName(child).endsWith("Token"));
+    if (elementNodes.length === 0) {
+      return undefined;
+    }
+    const elements: TargetTypeRef[] = [];
+    for (const elementNode of elementNodes) {
+      const element = resolveTypeNodeCarrier(walk, elementNode);
+      if (element === undefined) {
+        return undefined;
+      }
+      elements.push(element);
+    }
+    return setCarrierFact(walk, typeNode, { kind: "tuple", elements });
+  }
   if (kind === "KindUnionType") {
     const childTypes = walk.lifecycle.compiler.ast.children(typeNode)
       .filter((child): child is Node => child !== undefined)
@@ -865,6 +885,22 @@ function resolveProviderIndexerCarrier(
     return undefined;
   }
   const receiverCarrier = resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+  if (receiverCarrier?.kind === "tuple" && receiverCarrier.elements.length > 0) {
+    const argument = ElementAccessExpression_ArgumentExpression(expression);
+    const indexText = argument === undefined || ast.kindName(argument) !== KindNumericLiteral ? undefined : ast.text(argument);
+    const index = indexText === undefined ? undefined : Number.parseInt(indexText, 10);
+    const element = index === undefined ? undefined : receiverCarrier.elements[index];
+    if (element === undefined) {
+      return undefined;
+    }
+    setRustOperationFact(walk, expression, {
+      kind: "tuple-index",
+      operationId: `tsonic.rust.tuple.index.${index}`,
+      index: index!,
+      resultCarrier: element,
+    });
+    return setCarrierFact(walk, expression, element);
+  }
   if (receiverCarrier !== undefined && receiverCarrier.kind !== "target-named" && walk.jsEnabled) {
     const selection = selectJsSurfaceOperation({
       ownerName: "Array",
@@ -1235,6 +1271,17 @@ function resolveArrayLiteralCarrier(
   const hasHoles = elements.some((element) => ast.kindName(element) === KindOmittedExpression);
   const presentElements = elements.filter((element) => ast.kindName(element) !== KindOmittedExpression);
 
+  if (expected?.kind === "tuple" && expected.elements.length > 0 && !hasHoles && presentElements.length === expected.elements.length) {
+    for (const [index, element] of presentElements.entries()) {
+      resolveExpressionCarrier(walk, element, sourceFile, expected.elements[index]);
+    }
+    setRustOperationFact(walk, expression, {
+      kind: "tuple-literal",
+      operationId: "tsonic.rust.tuple.literal",
+      resultCarrier: expected,
+    });
+    return setCarrierFact(walk, expression, expected);
+  }
   let expectedElement: TargetTypeRef | undefined;
   let lane: "dense" | "sparse" = hasHoles ? "sparse" : "dense";
   if (expected !== undefined && isRustVecCarrier(expected)) {

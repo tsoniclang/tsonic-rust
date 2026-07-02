@@ -429,3 +429,46 @@ export function make(): void {
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.length > 0);
 });
+
+test("tuple types lower to Rust tuples with literal construction and indexing", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function pair(a: int32, label: string): [int32, string] {
+  const entry: [int32, string] = [a, label];
+  return entry;
+}
+
+export function first(entry: [int32, string]): int32 {
+  return entry[0];
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn pair\(a: i32, label: String\) -> \(i32, String\)/u);
+  assert.match(text, /let entry: \(i32, String\) = \(a, label\);/u);
+  assert.match(text, /pub fn first\(entry: \(i32, String\)\) -> i32/u);
+  assert.match(text, /entry\.0/u);
+});
+
+test("dynamic tuple indexing fails closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function pick(entry: [int32, int32], i: int32): int32 {
+  return entry[i];
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});

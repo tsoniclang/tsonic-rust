@@ -86,6 +86,9 @@ export function printRustType(type: RustType): string {
     case "slice-ref": {
       return `${type.mutable ? "&mut " : "&"}[${printRustType(type.element)}]`;
     }
+    case "tuple": {
+      return `(${type.elements.map(printRustType).join(", ")})`;
+    }
   }
 }
 
@@ -270,6 +273,9 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "vec-literal": {
       return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;
+    }
+    case "tuple-literal": {
+      return `(${expression.elements.map(printRustExpr).join(", ")})`;
     }
     case "struct-literal": {
       const fields = expression.fields

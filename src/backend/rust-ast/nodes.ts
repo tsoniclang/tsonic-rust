@@ -6,7 +6,8 @@ export type RustType =
   | { readonly kind: "string" }
   | { readonly kind: "unit" }
   | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] }
-  | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean };
+  | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean }
+  | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
 
 export type RustExpr =
   | { readonly kind: "int-literal"; readonly text: string }
@@ -25,7 +26,8 @@ export type RustExpr =
   | { readonly kind: "cast"; readonly expr: RustExpr; readonly to: string }
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
-  | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] };
+  | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
+  | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 
 export type RustStmt =
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init: RustExpr }

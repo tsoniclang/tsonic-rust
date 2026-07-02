@@ -518,6 +518,11 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
 
 function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "tuple-index") {
+    const receiver = Node_Expression(node);
+    const planned = receiver === undefined ? undefined : planExpression(receiver, context);
+    return planned === undefined ? undefined : { kind: "field", receiver: planned, name: String(fact.index) };
+  }
   if (fact === undefined || fact.kind !== "provider-operation") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -549,6 +554,20 @@ function applyResultCast(expression: RustExpr, castTo: string | undefined): Rust
 
 export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "tuple-literal") {
+    const elements: RustExpr[] = [];
+    for (const element of context.input.ast.elements(node)) {
+      if (element === undefined) {
+        continue;
+      }
+      const planned = planExpression(element, context);
+      if (planned === undefined) {
+        return undefined;
+      }
+      elements.push(planned);
+    }
+    return { kind: "tuple-literal", elements };
+  }
   if (fact === undefined || fact.kind !== "array-literal") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
