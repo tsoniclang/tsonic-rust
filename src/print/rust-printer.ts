@@ -47,7 +47,7 @@ export function printRustItem(item: RustItem): string {
     case "impl": {
       const rendered = item.functions.map((fn) => {
         const selfPrefix = fn.selfParam === undefined ? "" : fn.selfParam === "ref" ? "&self" : "&mut self";
-        const params = fn.params.map((param) => `${param.name}: ${printRustType(param.type)}`).join(", ");
+        const params = fn.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`).join(", ");
         const allParams = selfPrefix.length === 0 ? params : params.length === 0 ? selfPrefix : `${selfPrefix}, ${params}`;
         const returnSuffix = fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const header = `    ${fn.pub ? "pub " : ""}fn ${fn.name}(${allParams})${returnSuffix} {`;
@@ -57,7 +57,7 @@ export function printRustItem(item: RustItem): string {
       return `impl ${item.name} {\n${rendered}\n}`;
     }
     case "function": {
-      const params = item.params.map((param) => `${param.name}: ${printRustType(param.type)}`).join(", ");
+      const params = item.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`).join(", ");
       const returnSuffix = item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
       const header = `${item.pub ? "pub " : ""}fn ${item.name}(${params})${returnSuffix} {`;
       const body = printRustBlockStatements(item.body, 1);

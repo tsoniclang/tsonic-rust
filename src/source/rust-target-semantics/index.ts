@@ -95,7 +95,7 @@ import {
   rustUnitTargetType,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustExtensionId, rustOptionWrapFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey } from "../rust-facts/keys.js";
+import { rustExtensionId, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey } from "../rust-facts/keys.js";
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import { collectRustProviderOperationRows } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
@@ -138,6 +138,7 @@ interface RustFactWalk {
   readonly resolving: Set<object>;
   readonly jsEnabled: boolean;
   currentThisCarrier?: TargetTypeRef;
+  currentMethodDeclaration?: Node;
 }
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
@@ -249,6 +250,7 @@ function recordStatementFacts(
       if (operatorKind === KindEqualsToken) {
         const left = BinaryExpression_Left(expression);
         const right = BinaryExpression_Right(expression);
+        recordBindingWrite(walk, left);
         if (left !== undefined && right !== undefined && recordJsAssignmentFacts(walk, expression, left, right, sourceFile)) {
           return;
         }
@@ -267,6 +269,7 @@ function recordStatementFacts(
         const rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, leftCarrier);
         const compound = selectRustCompoundAssignment(operatorKind, leftCarrier, rightCarrier);
         if (compound !== undefined && leftCarrier !== undefined) {
+          recordBindingWrite(walk, left);
           recordOperatorFacts(walk, expression, compound, leftCarrier, rustOperatorCarrierKey(leftCarrier));
           return;
         }
@@ -616,6 +619,7 @@ function resolveUnaryCarrier(
   if (operatorText === "++" || operatorText === "--") {
     const operandCarrier = resolveExpressionCarrier(walk, operand, sourceFile, undefined);
     if (operandCarrier !== undefined && isRustIntegerCarrier(operandCarrier)) {
+      recordBindingWrite(walk, operand);
       const operator = operatorText === "++" ? "+=" : "-=";
       recordOperatorFacts(walk, expression, operator, operandCarrier, rustOperatorCarrierKey(operandCarrier));
       return setCarrierFact(walk, expression, operandCarrier);
@@ -722,6 +726,9 @@ function resolveCallLikeCarrier(
       if (argument !== undefined) {
         resolveExpressionCarrier(walk, argument, sourceFile, row.parameterCarriers?.[index]);
         validateFlowMarkerAgainstMode(walk, argument, rowArgumentMode(row, index));
+        if (rowArgumentMode(row, index) === "mut-ref") {
+          recordBindingWrite(walk, argument, "referent");
+        }
       }
     }
     recordProviderOperationFacts(walk, expression, row, providerIdentity);
@@ -768,8 +775,12 @@ function resolveCallLikeCarrier(
     const parameter = parameters[index];
     const parameterCarrier = parameter === undefined
       ? undefined
-      : resolveTypeNodeCarrier(walk, Node_Type(parameter));
+      : walk.lifecycle.host.facts.get(parameter, runtimeCarrierFactKey)?.carrier ??
+        parameterLaneCarrier(walk, resolveTypeNodeCarrier(walk, Node_Type(parameter)));
     resolveExpressionCarrier(walk, argument, sourceFile, parameterCarrier);
+    if (parameterCarrier?.kind === "pointer" && parameterCarrier.mutability === "mut") {
+      recordBindingWrite(walk, argument, "referent");
+    }
   }
   const returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
   return returnCarrier === undefined ? undefined : setCarrierFact(walk, expression, returnCarrier);
@@ -1108,6 +1119,14 @@ function applyJsSelection(
     }
   }
   const fact = selection.fact;
+  if ((fact.kind === "provider-operation" && fact.target.form === "receiver-method" && fact.target.mutatesReceiver === true) ||
+      fact.kind === "runtime-set") {
+    // Receiver is the expression's own receiver for member ops.
+    const receiver = Node_Expression(expression) !== undefined && walk.lifecycle.compiler.ast.kindName(expression) === KindPropertyAccessExpression
+      ? Node_Expression(expression)
+      : Node_Expression(Node_Expression(expression) ?? expression) ?? Node_Expression(expression);
+    recordBindingWrite(walk, receiver, "referent");
+  }
   recordTargetOperation(
     walk,
     expression,
@@ -1481,6 +1500,8 @@ function recordClassFacts(walk: RustFactWalk, declaration: Node, sourceFile: Sou
       const returnCarrier = memberKind === "KindMethodDeclaration"
         ? resolveTypeNodeCarrier(walk, Node_Type(member))
         : undefined;
+      const previousMethod = walk.currentMethodDeclaration;
+      walk.currentMethodDeclaration = memberKind === "KindMethodDeclaration" ? member : undefined;
       const body = ast.body(member);
       if (body !== undefined) {
         for (const statement of ast.statements(body)) {
@@ -1489,6 +1510,7 @@ function recordClassFacts(walk: RustFactWalk, declaration: Node, sourceFile: Sou
           }
         }
       }
+      walk.currentMethodDeclaration = previousMethod;
     }
   }
   walk.currentThisCarrier = previousThis;
@@ -1627,13 +1649,17 @@ function trySourceCallLike(
   if (methodName.length === 0) {
     return undefined;
   }
+  const mutatesSelf = methodMutatesSelf(walk, methodDeclaration);
+  if (mutatesSelf) {
+    recordBindingWrite(walk, receiver, "referent");
+  }
   const operationId = `tsonic.rust.source.method:${methodName}`;
   recordTargetOperation(walk, expression, operationId, "method", methodName);
   setRustOperationFact(walk, expression, {
     kind: "source-method",
     operationId,
     name: methodName,
-    mutatesSelf: methodMutatesSelf(walk, methodDeclaration),
+    mutatesSelf,
     resultCarrier: returnCarrier,
   });
   return setCarrierFact(walk, expression, returnCarrier);
@@ -1648,6 +1674,54 @@ function parameterLaneCarrier(walk: RustFactWalk, carrier: TargetTypeRef | undef
     return rustSliceMutRefTargetType(carrier.element);
   }
   return carrier;
+}
+
+// Formal source-use rule: a write records a mutation fact on the resolved
+// declaration of the written binding (or a mut-ref self mode on the enclosing
+// method for `this` field writes). Backend mutability reads facts only.
+function recordBindingWrite(walk: RustFactWalk, target: Node | undefined, writeKind: "binding" | "referent" = "binding"): void {
+  if (target === undefined) {
+    return;
+  }
+  const { ast, checker } = walk.lifecycle.compiler;
+  const kind = ast.kindName(target);
+  if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
+    const receiver = Node_Expression(target);
+    const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
+    if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {
+      if (walk.currentMethodDeclaration !== undefined) {
+        walk.lifecycle.host.facts.set(walk.currentMethodDeclaration, rustSelfModeFactKey, { mode: "mut-ref" }, [
+          { message: "rust self write" },
+        ]);
+      }
+      return;
+    }
+    recordBindingWrite(walk, receiver, "referent");
+    return;
+  }
+  if (kind === KindCallExpression) {
+    const fact = walk.lifecycle.host.facts.get(target, rustTargetOperationFactKey);
+    if (fact !== undefined && fact.kind === "flow-marker") {
+      recordBindingWrite(walk, ast.arguments(target)[0], "referent");
+    }
+    return;
+  }
+  if (kind !== KindIdentifier) {
+    return;
+  }
+  const symbol = checker.getResolvedSymbolOrNil(target) ?? checker.getSymbolAtLocation(target);
+  if (symbol === undefined) {
+    return;
+  }
+  const declaration = checker.getSymbolValueDeclaration(symbol) ??
+    checker.getPrimarySymbolDeclaration(symbol) ??
+    checker.getSymbolDeclarations(symbol)[0];
+  if (declaration !== undefined) {
+    const key = writeKind === "binding" ? rustMutatedBindingFactKey : rustMutatedReferentFactKey;
+    walk.lifecycle.host.facts.set(declaration, key, { mutated: true }, [
+      { message: `rust ${writeKind} write` },
+    ]);
+  }
 }
 
 // --- Source-core flow markers ----------------------------------------------

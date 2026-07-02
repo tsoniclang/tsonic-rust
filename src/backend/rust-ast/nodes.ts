@@ -46,6 +46,7 @@ export interface RustBlock {
 export interface RustFunctionParam {
   readonly name: string;
   readonly type: RustType;
+  readonly mutable?: boolean;
 }
 
 export type RustSelfParam = "ref" | "mut-ref";

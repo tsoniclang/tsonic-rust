@@ -20,11 +20,11 @@ import type {
 } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
-import { collectMutatedNames } from "./functions.js";
 import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrier } from "./render-types.js";
+import { rustMutatedBindingFactKey, rustSelfModeFactKey } from "../../source/rust-facts/keys.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
@@ -165,7 +165,11 @@ function planParams(member: Node, context: RustPlanContext): readonly RustFuncti
       ));
       return undefined;
     }
-    params.push({ name: parameterName, type: parameterType });
+    params.push({
+      name: parameterName,
+      type: parameterType,
+      mutable: context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+    });
   }
   return params;
 }
@@ -292,7 +296,6 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   }
   const bodyContext: RustPlanContext = {
     ...context,
-    mutatedNames: collectMutatedNames(ast, bodyNode, context),
     emittedLocalNames: new Set(params.map((param) => param.name)),
   };
   const body = planBlockLike(bodyNode, bodyContext);
@@ -302,41 +305,11 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   return {
     name: methodName,
     pub: true,
-    selfParam: methodWritesThisField(context, bodyNode) ? "mut-ref" : "ref",
+    selfParam: context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref",
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: applyTail(body, returnType !== undefined),
   };
-}
-
-function methodWritesThisField(context: RustPlanContext, body: Node): boolean {
-  const { ast } = context.input;
-  let writes = false;
-  const visit = (node: Node): void => {
-    if (writes) {
-      return;
-    }
-    if (ast.kindName(node) === "KindBinaryExpression") {
-      const operatorToken = BinaryExpression_OperatorToken(node);
-      const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
-      if (operatorKind.endsWith("EqualsToken") && operatorKind !== "KindEqualsEqualsEqualsToken" && operatorKind !== "KindExclamationEqualsEqualsToken") {
-        const left = BinaryExpression_Left(node);
-        const receiver = left === undefined ? undefined : Node_Expression(left);
-        const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
-        if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {
-          writes = true;
-          return;
-        }
-      }
-    }
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(body);
-  return writes;
 }
 
 function applyTail(body: RustBlock, hasReturnValue: boolean): RustBlock {

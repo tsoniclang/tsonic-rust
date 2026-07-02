@@ -160,3 +160,26 @@ export const rustOptionWrapFactKey: ExtensionFactKey<{ readonly wrap: boolean }>
   name: "optionWrap",
   equals: (left, right) => left.wrap === right.wrap,
 });
+
+// Formal source-use facts: mutation is recorded per declaration subject at
+// semantics finalization; the backend never scans for writes.
+export const rustMutatedBindingFactKey: ExtensionFactKey<{ readonly mutated: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "mutatedBinding",
+  equals: () => true,
+});
+
+// Referent mutation: the value behind the binding is written (field/element
+// writes, &mut borrows, mutating receiver methods). Owned bindings need
+// `let mut`; reference-typed bindings do not.
+export const rustMutatedReferentFactKey: ExtensionFactKey<{ readonly mutated: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "mutatedReferent",
+  equals: () => true,
+});
+
+export const rustSelfModeFactKey: ExtensionFactKey<{ readonly mode: "ref" | "mut-ref" }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "selfMode",
+  equals: (left, right) => left.mode === right.mode,
+});

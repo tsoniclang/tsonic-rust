@@ -39,7 +39,7 @@ import {
   Node_Type,
   PrefixUnaryExpression_Operand,
 } from "../../common/source-ast.js";
-import { rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import { rustTypeFromCarrierInContext as renderRustTypeInContext } from "./render-types.js";
 import { isRustBoolCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
@@ -201,7 +201,10 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     }
     context.emittedLocalNames.add(name);
   }
-  const mutable = context.mutatedNames?.has(sourceName) ?? false;
+  const declarationCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  const ownedBinding = declarationCarrier === undefined || declarationCarrier.kind !== "pointer";
+  const mutable = context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
+    (ownedBinding && context.input.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined);
   return [{
     kind: "let",
     name,
