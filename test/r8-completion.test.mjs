@@ -80,8 +80,8 @@ test("RegExp stays hard-rejected across literal, constructor, and string methods
   }
 });
 
-test("discriminated union narrowing repro stays fail-closed pending narrowing facts", () => {
-  // Exact repro for the narrowing-facts blocker: checker-level narrowed
+test("discriminated union narrowing repro stays fail-closed: it requires narrowing facts", () => {
+  // Exact repro: narrowing requires finalized facts; checker-level narrowed
   // types are not exposed as finalized facts, so member access on a
   // narrowed branch cannot prove its variant.
   const { result } = compileRust({
