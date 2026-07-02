@@ -51,6 +51,7 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
       moduleName,
       moduleNameByFileName,
       diagnostics,
+      awaitedCalls: new WeakSet(),
     };
     moduleItems.set(moduleName, planModuleItems(context));
   }
@@ -327,7 +328,8 @@ function resolveBinaryEntry(
     const returnCarrier = returnTypeNode === undefined
       ? undefined
       : input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
-    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier)) {
+    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier) || input.ast.hasModifierKind(statement, "async")) {
+      // Async entry points would require an implicit executor selection.
       break;
     }
     return { moduleName, functionName: "main" };

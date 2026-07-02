@@ -11,15 +11,16 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustMutatedBindingFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustMutatedBindingFactKey } from "../../source/rust-facts/keys.js";
 
 export function planFunctionDeclaration(node: Node, context: RustPlanContext): RustItem | undefined {
   const { ast } = context.input;
-  if (ast.hasModifierKind(node, "async")) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
+  const isAsync = ast.hasModifierKind(node, "async");
+  if (isAsync && context.input.facts.getFact(node, rustAsyncFunctionFactKey) === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
-      "rust.backend.function",
-      "Async functions are not supported by the Rust target.",
+      "rust.backend.async",
+      "Async functions require a finalized Promise return carrier fact.",
     ));
     return undefined;
   }
@@ -115,6 +116,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     kind: "function",
     name,
     pub: ast.hasModifierKind(node, "export"),
+    ...(isAsync ? { isAsync: true } : {}),
     ...(typeParams.length === 0 ? {} : { typeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),

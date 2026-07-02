@@ -82,6 +82,8 @@ import {
   rustOptionTargetType,
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
+  rustFutureOutputCarrier,
+  rustFutureTargetType,
   rustSliceElementCarrier,
   rustSliceMutRefTargetType,
   rustSliceRefTargetType,
@@ -95,7 +97,7 @@ import {
   rustUnitTargetType,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustExtensionId, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustExtensionId, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import { collectRustProviderOperationRows } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
@@ -201,9 +203,46 @@ export function recordRustFactsBeforeFinalization(
   }
 }
 
+function promiseInnerCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
+  if (typeNode === undefined) {
+    return undefined;
+  }
+  const { ast, checker } = walk.lifecycle.compiler;
+  if (ast.kindName(typeNode) !== KindTypeReference) {
+    return undefined;
+  }
+  const nameNode = TypeReferenceNode_TypeName(typeNode) ?? typeNode;
+  const symbol = checker.getSymbolAtLocation(nameNode) ?? checker.getResolvedSymbolOrNil(nameNode);
+  if (symbol === undefined || checker.getSymbolName(symbol) !== "Promise") {
+    return undefined;
+  }
+  const isLibDeclaration = checker.getSymbolDeclarations(symbol).some((declaration) =>
+    declaration !== undefined && ast.getFileName(ast.getSourceFile(declaration)).endsWith(".d.ts"));
+  if (!isLibDeclaration) {
+    return undefined;
+  }
+  const [argument] = ast.typeArguments(typeNode);
+  return argument === undefined ? undefined : resolveTypeNodeCarrier(walk, argument);
+}
+
 function recordFunctionFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.lifecycle.compiler;
-  const returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  let returnCarrier: TargetTypeRef | undefined;
+  if (ast.hasModifierKind(declaration, "async")) {
+    const inner = promiseInnerCarrier(walk, Node_Type(declaration));
+    if (inner !== undefined) {
+      returnCarrier = inner;
+      walk.lifecycle.host.facts.set(declaration, rustAsyncFunctionFactKey, { isAsync: true }, [
+        { message: "rust async function" },
+      ]);
+      const typeNode = Node_Type(declaration);
+      if (typeNode !== undefined) {
+        setCarrierFact(walk, typeNode, inner);
+      }
+    }
+  } else {
+    returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  }
   for (const parameter of ast.parameters(declaration)) {
     if (parameter === undefined) {
       continue;
@@ -605,6 +644,22 @@ function resolveExpressionCarrierUncached(
     case "KindObjectLiteralExpression": {
       return resolveRecordLiteralCarrier(walk, expression, sourceFile, expected);
     }
+    case "KindAwaitExpression": {
+      const operand = Node_Expression(expression);
+      const operandCarrier = operand === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+      const output = rustFutureOutputCarrier(operandCarrier);
+      if (output === undefined) {
+        return undefined;
+      }
+      setRustOperationFact(walk, expression, {
+        kind: "await-op",
+        operationId: "tsonic.rust.async.await",
+        resultCarrier: output,
+      });
+      return setCarrierFact(walk, expression, output);
+    }
     case KindParenthesizedExpression: {
       const inner = Node_Expression(expression);
       const carrier = inner === undefined
@@ -885,7 +940,18 @@ function resolveCallLikeCarrier(
       recordBindingWrite(walk, argument, "referent");
     }
   }
-  let returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  let returnCarrier: TargetTypeRef | undefined;
+  if (ast.hasModifierKind(declaration, "async")) {
+    const inner = walk.lifecycle.host.facts.get(declaration, rustAsyncFunctionFactKey) !== undefined
+      ? walk.lifecycle.host.facts.get(Node_Type(declaration) ?? declaration, runtimeCarrierFactKey)?.carrier
+      : promiseInnerCarrier(walk, Node_Type(declaration));
+    if (inner === undefined) {
+      return undefined;
+    }
+    returnCarrier = rustFutureTargetType(inner);
+  } else {
+    returnCarrier = resolveTypeNodeCarrier(walk, Node_Type(declaration));
+  }
   if (returnCarrier?.kind === "type-parameter") {
     // Passthrough generic instantiation: the return carrier is the carrier of
     // the argument bound to the same type parameter position.

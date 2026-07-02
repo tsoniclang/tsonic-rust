@@ -588,3 +588,81 @@ export function double_it<T>(value: T): T {
     /TypeScript diagnostics/u,
   );
 });
+
+test("async functions lower to async fn with awaited call chains", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export async function fetch_value(seed: int32): Promise<int32> {
+  return seed + 1;
+}
+
+export async function drive(): Promise<int32> {
+  const value = await fetch_value(41);
+  return value;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub async fn fetch_value\(seed: i32\) -> i32 \{/u);
+  assert.match(text, /fetch_value\(41\)\.await/u);
+});
+
+test("unawaited async calls and async binary entries fail closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export async function fetch_value(): Promise<int32> {
+  return 1;
+}
+
+export function bad(): int32 {
+  const pending = fetch_value();
+  return 0;
+}
+`,
+    },
+  });
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+
+  const asyncMain = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "async_main" } },
+    files: {
+      "index.ts": `
+export async function main(): Promise<void> {}
+`,
+    },
+  });
+  assert.equal(asyncMain.result.artifacts.length, 0);
+  assert.ok(asyncMain.result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_ENTRYPOINT"));
+});
+
+test("throw and try/catch fail closed pending the shared error model", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function risky(flag: boolean): void {
+  try {
+    if (flag) {
+      throw new Error("boom");
+    }
+  } catch (error) {
+  }
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.every((diagnostic) =>
+    diagnostic.code === "RUST_UNSUPPORTED_AST" || diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+  assert.ok(result.diagnostics.length > 0);
+});

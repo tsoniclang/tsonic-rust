@@ -14,6 +14,9 @@ export interface RustPlanContext {
   // Emitted binding names in the enclosing function scope, used to detect
   // deterministic-rename collisions (TS fooBar and foo_bar both exist).
   readonly emittedLocalNames?: Set<string>;
+  // Call nodes appearing directly under an await expression; future-carrier
+  // calls anywhere else fail closed.
+  readonly awaitedCalls?: WeakSet<object>;
 }
 
 // Deterministic value-name policy: camelCase lowers to snake_case so

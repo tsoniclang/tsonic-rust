@@ -141,6 +141,7 @@ export type RustTargetOperationFact =
       readonly index: number;
       readonly resultCarrier: TargetTypeRef;
     }
+  | { readonly kind: "await-op"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
   | { readonly kind: "option-coalesce"; readonly operationId: string }
@@ -215,4 +216,10 @@ export const rustUnionVariantsFactKey: ExtensionFactKey<{ readonly variants: rea
   extensionId: rustExtensionId,
   name: "unionVariants",
   equals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+});
+
+export const rustAsyncFunctionFactKey: ExtensionFactKey<{ readonly isAsync: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "asyncFunction",
+  equals: () => true,
 });

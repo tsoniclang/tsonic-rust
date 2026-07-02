@@ -105,6 +105,23 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
     case "KindObjectLiteralExpression": {
       return planRecordLiteral(node, context);
     }
+    case "KindAwaitExpression": {
+      const awaitFact = rustOperationFact(node, context);
+      if (awaitFact === undefined || awaitFact.kind !== "await-op") {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.async",
+          "Await expressions require a finalized future output fact.",
+        ));
+        return undefined;
+      }
+      const operand = Node_Expression(node);
+      if (operand !== undefined) {
+        context.awaitedCalls?.add(operand);
+      }
+      const planned = operand === undefined ? undefined : planExpression(operand, context);
+      return planned === undefined ? undefined : { kind: "field", receiver: planned, name: "await" };
+    }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
       return planUnaryExpression(node, context);
@@ -370,6 +387,15 @@ function planProviderOperationExpression(
 
 function planCallExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const { ast } = context.input;
+  const callCarrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  if (callCarrier?.kind === "target-named" && callCarrier.id === "rust.core.Future" && context.awaitedCalls?.has(node) !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.async",
+      "Async call results must be awaited; futures cannot be stored or ignored.",
+    ));
+    return undefined;
+  }
   const callee = Node_Expression(node);
   const fact = rustOperationFact(node, context);
   const args = planArguments(node, context);

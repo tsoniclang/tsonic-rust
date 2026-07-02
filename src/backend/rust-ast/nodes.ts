@@ -72,6 +72,7 @@ export type RustItem =
       readonly kind: "function";
       readonly name: string;
       readonly pub: boolean;
+      readonly isAsync?: boolean;
       readonly typeParams?: readonly string[];
       readonly params: readonly RustFunctionParam[];
       readonly returnType?: RustType;
