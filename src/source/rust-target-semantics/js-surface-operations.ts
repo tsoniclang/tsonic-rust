@@ -1,23 +1,26 @@
 import type { TargetTypeRef } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../rust-facts/keys.js";
+import type { RustProviderOperationForm, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
-  isRustIntegerCarrier,
   isRustJsArrayCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
   isRustVecCarrier,
+  rustJsDateTargetId,
   rustJsDateTargetType,
+  rustJsMapTargetId,
   rustJsMapTargetType,
+  rustJsSetTargetId,
   rustJsSetTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../rust-target-types.js";
 
-// JS surface operation table. Rows are keyed by the identity of the selected
-// lib declaration (owner interface name + member name), never by expression
-// spelling: the owner/member names below describe the TypeScript lib
-// declaration model, and the Rust side is runtime crate metadata.
+// Declarative JS surface operation rows. Rows are matched by the identity of
+// the selected lib declaration (owner interface + member name) and the
+// receiver carrier lane; the generic matcher below contains no per-name
+// branching. Concrete owner/member spellings and Rust operation shapes exist
+// only as row data.
 
 export interface JsOperationRequest {
   readonly ownerName: string;
@@ -33,270 +36,231 @@ export interface JsOperationSelection {
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
 }
 
-const int32Carrier = rustSourcePrimitiveTargetType("int32");
-const float64Carrier = rustSourcePrimitiveTargetType("float64");
-const boolCarrier = rustSourcePrimitiveTargetType("bool");
-const stringCarrier = rustStringTargetType();
+type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date";
 
-function operationId(request: JsOperationRequest): string {
-  return `tsonic.rust.js.${request.ownerName}.${request.memberName}.${request.operationKind}`;
+type JsCarrierRef =
+  | { readonly ref: "int32" }
+  | { readonly ref: "float64" }
+  | { readonly ref: "bool" }
+  | { readonly ref: "string" }
+  | { readonly ref: "element" }
+  | { readonly ref: "option-of-element" }
+  | { readonly ref: "receiver" }
+  | { readonly ref: "map-key" }
+  | { readonly ref: "map-value" }
+  | { readonly ref: "option-of-map-value" }
+  | { readonly ref: "set-value" };
+
+// "@copy" in a chain resolves to copied/cloned from the referenced carrier.
+interface JsOperationRowData {
+  readonly owner: string;
+  readonly member: string;
+  readonly operationKind: JsOperationRequest["operationKind"];
+  readonly lane: JsLane;
+  readonly elementGuard?: "numeric";
+  readonly shape:
+    | {
+        readonly op: "operation";
+        readonly operationKind: "method" | "constructor" | "property" | "indexer";
+        readonly target: RustProviderOperationForm;
+        readonly castResult?: string;
+        readonly result: JsCarrierRef;
+        readonly params?: readonly JsCarrierRef[];
+      }
+    | {
+        readonly op: "set";
+        readonly target: RustProviderOperationForm;
+        readonly params: readonly JsCarrierRef[];
+      };
 }
 
-function vecElement(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  return carrier !== undefined && isRustVecCarrier(carrier) ? carrier.element : undefined;
+const jsOperationRows: readonly JsOperationRowData[] = [
+  // Dense Vec<T> lane.
+  { owner: "Array", member: "length", operationKind: "property", lane: "vec", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
+  { owner: "Array", member: "push", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push" }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
+  { owner: "Array", member: "includes", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_includes", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, result: { ref: "bool" }, params: [{ ref: "element" }] } },
+  { owner: "Array", member: "indexOf", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_index_of", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
+  { owner: "Array", member: "index", operationKind: "indexer", lane: "vec", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argCasts: ["usize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
+  { owner: "Array", member: "index", operationKind: "index-set", lane: "vec", shape: { op: "set", target: { form: "index" }, params: [{ ref: "int32" }, { ref: "element" }] } },
+
+  // Sparse JsArray<T> lane.
+  { owner: "Array", member: "length", operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
+  { owner: "Array", member: "length", operationKind: "property-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set_len", argCasts: ["usize"] }, params: [{ ref: "int32" }] } },
+  { owner: "Array", member: "at", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "at", argModes: ["value"], argCasts: ["isize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
+  { owner: "Array", member: "push", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push" }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
+  { owner: "Array", member: "index", operationKind: "indexer", lane: "js-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argCasts: ["usize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
+  { owner: "Array", member: "index", operationKind: "index-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set", argCasts: ["usize", undefined] }, params: [{ ref: "int32" }, { ref: "element" }] } },
+
+  // String lane (runtime string module through the js_string alias).
+  { owner: "String", member: "length", operationKind: "property", lane: "string", shape: { op: "operation", operationKind: "property", target: { form: "free-call", path: "js_string::js_len", receiverMode: "ref" }, castResult: "i32", result: { ref: "int32" } } },
+  { owner: "String", member: "includes", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::includes", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+  { owner: "String", member: "startsWith", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::starts_with", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+  { owner: "String", member: "endsWith", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::ends_with", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["None"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+  { owner: "String", member: "toUpperCase", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_upper_case", receiverMode: "ref" }, result: { ref: "string" } } },
+  { owner: "String", member: "toLowerCase", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_lower_case", receiverMode: "ref" }, result: { ref: "string" } } },
+  { owner: "String", member: "trim", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim", receiverMode: "ref" }, result: { ref: "string" } } },
+
+  // Map lane.
+  { owner: "Map", member: "set", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set" }, result: { ref: "receiver" }, params: [{ ref: "map-key" }, { ref: "map-value" }] } },
+  { owner: "Map", member: "get", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"], chain: ["@copy"] }, result: { ref: "option-of-map-value" }, params: [{ ref: "map-key" }] } },
+  { owner: "Map", member: "has", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "map-key" }] } },
+  { owner: "Map", member: "delete", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "map-key" }] } },
+  { owner: "Map", member: "size", operationKind: "property", lane: "map", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
+
+  // Set lane.
+  { owner: "Set", member: "add", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "add" }, result: { ref: "receiver" }, params: [{ ref: "set-value" }] } },
+  { owner: "Set", member: "has", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "set-value" }] } },
+  { owner: "Set", member: "delete", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "set-value" }] } },
+  { owner: "Set", member: "size", operationKind: "property", lane: "set", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
+
+  // Date lane.
+  { owner: "DateConstructor", member: "now", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::now" }, result: { ref: "float64" } } },
+  { owner: "Date", member: "getTime", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
+];
+
+interface JsLaneBindings {
+  readonly element?: TargetTypeRef;
+  readonly mapKey?: TargetTypeRef;
+  readonly mapValue?: TargetTypeRef;
+  readonly setValue?: TargetTypeRef;
+  readonly receiver?: TargetTypeRef;
 }
 
-function jsArrayElement(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  return carrier?.kind === "target-named" && isRustJsArrayCarrier(carrier)
-    ? carrier.typeArguments?.[0]
-    : undefined;
+function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
+  if (carrier !== undefined && isRustVecCarrier(carrier)) {
+    return { lane: "vec", bindings: { element: carrier.element, receiver: carrier } };
+  }
+  if (carrier?.kind === "target-named") {
+    if (isRustJsArrayCarrier(carrier)) {
+      const element = carrier.typeArguments?.[0];
+      return element === undefined ? undefined : { lane: "js-array", bindings: { element, receiver: carrier } };
+    }
+    if (carrier.id === rustJsMapTargetId) {
+      const [mapKey, mapValue] = carrier.typeArguments ?? [];
+      return mapKey === undefined || mapValue === undefined
+        ? undefined
+        : { lane: "map", bindings: { mapKey, mapValue, receiver: carrier } };
+    }
+    if (carrier.id === rustJsSetTargetId) {
+      const setValue = carrier.typeArguments?.[0];
+      return setValue === undefined ? undefined : { lane: "set", bindings: { setValue, receiver: carrier } };
+    }
+    if (carrier.id === rustJsDateTargetId) {
+      return { lane: "date", bindings: { receiver: carrier } };
+    }
+  }
+  if (isRustStringCarrier(carrier)) {
+    return { lane: "string", bindings: { receiver: carrier } };
+  }
+  // Static owners have no receiver carrier; the lane comes from the owner row.
+  if (carrier === undefined && ownerName === "DateConstructor") {
+    return { lane: "date", bindings: {} };
+  }
+  return undefined;
 }
 
-function copyStyle(element: TargetTypeRef): "copied" | "cloned" {
-  return isRustNumericCarrier(element) || element.kind === "source-primitive" ? "copied" : "cloned";
+function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): TargetTypeRef | undefined {
+  switch (reference.ref) {
+    case "int32":
+      return rustSourcePrimitiveTargetType("int32");
+    case "float64":
+      return rustSourcePrimitiveTargetType("float64");
+    case "bool":
+      return rustSourcePrimitiveTargetType("bool");
+    case "string":
+      return rustStringTargetType();
+    case "element":
+      return bindings.element;
+    case "option-of-element":
+      return bindings.element === undefined ? undefined : rustOptionTargetType(bindings.element);
+    case "receiver":
+      return bindings.receiver;
+    case "map-key":
+      return bindings.mapKey;
+    case "map-value":
+      return bindings.mapValue;
+    case "option-of-map-value":
+      return bindings.mapValue === undefined ? undefined : rustOptionTargetType(bindings.mapValue);
+    case "set-value":
+      return bindings.setValue;
+  }
 }
 
-function providerOperation(
-  request: JsOperationRequest,
-  operationKind: "method" | "constructor" | "property" | "indexer",
-  target: RustTargetOperationFact & { kind: "provider-operation" } extends never ? never : Extract<RustTargetOperationFact, { kind: "provider-operation" }>["target"],
-  resultCarrier: TargetTypeRef,
-  extras?: { readonly castResult?: string; readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[] },
-): JsOperationSelection {
+function copyStyleOf(carrier: TargetTypeRef | undefined): "copied" | "cloned" {
+  return carrier !== undefined && (carrier.kind === "source-primitive" || isRustNumericCarrier(carrier)) ? "copied" : "cloned";
+}
+
+function materializeTarget(
+  target: RustProviderOperationForm,
+  copyCarrier: TargetTypeRef | undefined,
+): RustProviderOperationForm {
+  if (target.form !== "receiver-method" || target.chain === undefined) {
+    return target;
+  }
   return {
-    fact: {
-      kind: "provider-operation",
-      operationId: operationId(request),
-      operationKind,
-      target,
-      resultCarrier,
-      ...(extras?.castResult === undefined ? {} : { castResult: extras.castResult }),
-    },
-    resultCarrier,
-    ...(extras?.parameterCarriers === undefined ? {} : { parameterCarriers: extras.parameterCarriers }),
+    ...target,
+    chain: target.chain.map((entry) => (entry === "@copy" ? copyStyleOf(copyCarrier) : entry)),
   };
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
-  const { ownerName, memberName, operationKind, receiverCarrier } = request;
-
-  // Dense Vec<T> lane (Array interface members over proven dense carriers).
-  const denseElement = vecElement(receiverCarrier);
-  if (ownerName === "Array" && denseElement !== undefined) {
-    if (operationKind === "property" && memberName === "length") {
-      return providerOperation(request, "property", { form: "receiver-method", name: "len" }, int32Carrier, { castResult: "i32" });
-    }
-    if (operationKind === "call" && memberName === "push") {
-      return providerOperation(request, "method", { form: "receiver-method", name: "push" }, int32Carrier, {
-        castResult: "i32",
-        parameterCarriers: [denseElement],
-      });
-    }
-    if (operationKind === "call" && memberName === "includes" && isRustNumericCarrier(denseElement)) {
-      return providerOperation(request, "method", {
-        form: "free-call",
-        path: "js_abi::array_dense_includes",
-        receiverMode: "ref",
-        argModes: ["ref"],
-        trailingArgs: ["0"],
-      }, boolCarrier, { parameterCarriers: [denseElement] });
-    }
-    if (operationKind === "call" && memberName === "indexOf" && isRustNumericCarrier(denseElement)) {
-      return providerOperation(request, "method", {
-        form: "free-call",
-        path: "js_abi::array_dense_index_of",
-        receiverMode: "ref",
-        argModes: ["ref"],
-        trailingArgs: ["0"],
-      }, int32Carrier, { castResult: "i32", parameterCarriers: [denseElement] });
-    }
-    if (operationKind === "indexer") {
-      return providerOperation(request, "indexer", {
-        form: "receiver-method",
-        name: "get",
-        argCasts: ["usize"],
-        argModes: ["value"],
-        chain: [copyStyle(denseElement)],
-      }, rustOptionTargetType(denseElement), { parameterCarriers: [int32Carrier] });
-    }
-    if (operationKind === "index-set") {
-      return {
-        fact: {
-          kind: "runtime-set",
-          operationId: operationId(request),
-          target: { form: "index" },
-        },
-        parameterCarriers: [int32Carrier, denseElement],
-      };
-    }
+  const laneMatch = laneOf(request.receiverCarrier, request.ownerName);
+  if (laneMatch === undefined) {
+    return undefined;
   }
-
-  // Sparse JsArray<T> lane.
-  const sparseElement = jsArrayElement(receiverCarrier);
-  if (ownerName === "Array" && sparseElement !== undefined) {
-    if (operationKind === "property" && memberName === "length") {
-      return providerOperation(request, "property", { form: "receiver-method", name: "len" }, int32Carrier, { castResult: "i32" });
-    }
-    if (operationKind === "property-set" && memberName === "length") {
-      return {
-        fact: {
-          kind: "runtime-set",
-          operationId: operationId(request),
-          target: { form: "receiver-method", name: "set_len", argCasts: ["usize"] },
-        },
-        parameterCarriers: [int32Carrier],
-      };
-    }
-    if (operationKind === "call" && memberName === "at") {
-      return providerOperation(request, "method", {
-        form: "receiver-method",
-        name: "at",
-        argModes: ["value"],
-        argCasts: ["isize"],
-        chain: [copyStyle(sparseElement)],
-      }, rustOptionTargetType(sparseElement), { parameterCarriers: [int32Carrier] });
-    }
-    if (operationKind === "call" && memberName === "push") {
-      return providerOperation(request, "method", { form: "receiver-method", name: "push" }, int32Carrier, {
-        castResult: "i32",
-        parameterCarriers: [sparseElement],
-      });
-    }
-    if (operationKind === "indexer") {
-      return providerOperation(request, "indexer", {
-        form: "receiver-method",
-        name: "get",
-        argModes: ["value"],
-        argCasts: ["usize"],
-        chain: [copyStyle(sparseElement)],
-      }, rustOptionTargetType(sparseElement), { parameterCarriers: [int32Carrier] });
-    }
-    if (operationKind === "index-set") {
-      return {
-        fact: {
-          kind: "runtime-set",
-          operationId: operationId(request),
-          target: { form: "receiver-method", name: "set", argCasts: ["usize", undefined] },
-        },
-        parameterCarriers: [int32Carrier, sparseElement],
-      };
-    }
+  const { lane, bindings } = laneMatch;
+  const row = jsOperationRows.find((candidate) =>
+    candidate.owner === request.ownerName &&
+    candidate.member === request.memberName &&
+    candidate.operationKind === request.operationKind &&
+    candidate.lane === lane &&
+    (candidate.elementGuard !== "numeric" || isRustNumericCarrier(bindings.element)));
+  if (row === undefined) {
+    return undefined;
   }
-
-  // String members (crate-root string module through the js_string alias).
-  if (ownerName === "String" && receiverCarrier !== undefined && isRustStringCarrier(receiverCarrier)) {
-    if (operationKind === "property" && memberName === "length") {
-      return providerOperation(request, "property", {
-        form: "free-call",
-        path: "js_string::js_len",
-        receiverMode: "ref",
-      }, int32Carrier, { castResult: "i32" });
-    }
-    const zeroDefault: Record<string, string> = {
-      includes: "js_string::includes",
-      startsWith: "js_string::starts_with",
+  const operationId = `tsonic.rust.js.${row.owner}.${row.member}.${row.operationKind}`;
+  const parameterCarriers = (row.shape.params ?? []).map((reference) => resolveCarrierRef(reference, bindings));
+  if (row.shape.op === "set") {
+    return {
+      fact: { kind: "runtime-set", operationId, target: row.shape.target },
+      parameterCarriers,
     };
-    const stringFn = zeroDefault[memberName];
-    if (operationKind === "call" && stringFn !== undefined) {
-      return providerOperation(request, "method", {
-        form: "free-call",
-        path: stringFn,
-        receiverMode: "ref",
-        argModes: ["ref"],
-        trailingArgs: ["0"],
-      }, boolCarrier, { parameterCarriers: [stringCarrier] });
-    }
-    if (operationKind === "call" && memberName === "endsWith") {
-      return providerOperation(request, "method", {
-        form: "free-call",
-        path: "js_string::ends_with",
-        receiverMode: "ref",
-        argModes: ["ref"],
-        trailingArgs: ["None"],
-      }, boolCarrier, { parameterCarriers: [stringCarrier] });
-    }
-    const passthrough: Record<string, string> = {
-      toUpperCase: "js_string::to_upper_case",
-      toLowerCase: "js_string::to_lower_case",
-      trim: "js_string::trim",
-    };
-    const passFn = passthrough[memberName];
-    if (operationKind === "call" && passFn !== undefined) {
-      return providerOperation(request, "method", {
-        form: "free-call",
-        path: passFn,
-        receiverMode: "ref",
-      }, stringCarrier);
-    }
   }
-
-  // Map / Set (primitive keys and values only in this lane).
-  const mapArguments = receiverCarrier?.kind === "target-named" && receiverCarrier.id === "rust.js.JsMap"
-    ? receiverCarrier.typeArguments
-    : undefined;
-  if (ownerName === "Map" && mapArguments !== undefined && mapArguments.length === 2) {
-    const [keyCarrier, valueCarrier] = mapArguments;
-    if (keyCarrier === undefined || valueCarrier === undefined) {
-      return undefined;
-    }
-    if (operationKind === "call" && memberName === "set") {
-      return providerOperation(request, "method", { form: "receiver-method", name: "set" }, receiverCarrier!, {
-        parameterCarriers: [keyCarrier, valueCarrier],
-      });
-    }
-    if (operationKind === "call" && memberName === "get") {
-      return providerOperation(request, "method", {
-        form: "receiver-method",
-        name: "get",
-        argModes: ["ref"],
-        chain: [copyStyle(valueCarrier)],
-      }, rustOptionTargetType(valueCarrier), { parameterCarriers: [keyCarrier] });
-    }
-    if (operationKind === "call" && (memberName === "has" || memberName === "delete")) {
-      return providerOperation(request, "method", {
-        form: "receiver-method",
-        name: memberName === "has" ? "has" : "delete",
-        argModes: ["ref"],
-      }, boolCarrier, { parameterCarriers: [keyCarrier] });
-    }
-    if (operationKind === "property" && memberName === "size") {
-      return providerOperation(request, "property", { form: "receiver-method", name: "len" }, int32Carrier, { castResult: "i32" });
-    }
+  const resultCarrier = resolveCarrierRef(row.shape.result, bindings);
+  if (resultCarrier === undefined) {
+    return undefined;
   }
-  const setArguments = receiverCarrier?.kind === "target-named" && receiverCarrier.id === "rust.js.JsSet"
-    ? receiverCarrier.typeArguments
-    : undefined;
-  if (ownerName === "Set" && setArguments !== undefined && setArguments.length === 1) {
-    const valueCarrier = setArguments[0];
-    if (valueCarrier === undefined) {
-      return undefined;
-    }
-    if (operationKind === "call" && memberName === "add") {
-      return providerOperation(request, "method", { form: "receiver-method", name: "add" }, receiverCarrier!, {
-        parameterCarriers: [valueCarrier],
-      });
-    }
-    if (operationKind === "call" && (memberName === "has" || memberName === "delete")) {
-      return providerOperation(request, "method", {
-        form: "receiver-method",
-        name: memberName,
-        argModes: ["ref"],
-      }, boolCarrier, { parameterCarriers: [valueCarrier] });
-    }
-    if (operationKind === "property" && memberName === "size") {
-      return providerOperation(request, "property", { form: "receiver-method", name: "len" }, int32Carrier, { castResult: "i32" });
-    }
-  }
-
-  // Date.
-  if (ownerName === "DateConstructor" && operationKind === "call" && memberName === "now") {
-    return providerOperation(request, "method", { form: "call", path: "js_abi::JsDate::now" }, float64Carrier);
-  }
-  if (ownerName === "Date" && operationKind === "call" && memberName === "getTime" && receiverCarrier?.kind === "target-named" && receiverCarrier.id === "rust.js.JsDate") {
-    return providerOperation(request, "method", { form: "receiver-method", name: "get_time" }, float64Carrier);
-  }
-  return undefined;
+  const copyReference = row.shape.result.ref === "option-of-map-value" ? bindings.mapValue : bindings.element;
+  return {
+    fact: {
+      kind: "provider-operation",
+      operationId,
+      operationKind: row.shape.operationKind,
+      target: materializeTarget(row.shape.target, copyReference),
+      resultCarrier,
+      ...(row.shape.castResult === undefined ? {} : { castResult: row.shape.castResult }),
+    },
+    resultCarrier,
+    parameterCarriers,
+  };
 }
+
+// Constructor rows: matched by lib class declaration identity plus argument
+// and type-argument shape guards.
+interface JsConstructorRowData {
+  readonly className: string;
+  readonly typeArgumentCount: number;
+  readonly argumentCount: number;
+  readonly path: string;
+  readonly result: "map" | "set" | "date";
+  readonly params?: readonly JsCarrierRef[];
+}
+
+const jsConstructorRows: readonly JsConstructorRowData[] = [
+  { className: "Map", typeArgumentCount: 2, argumentCount: 0, path: "js_abi::JsMap::new", result: "map" },
+  { className: "Set", typeArgumentCount: 1, argumentCount: 0, path: "js_abi::JsSet::new", result: "set" },
+  { className: "Date", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_millis", result: "date", params: [{ ref: "float64" }] },
+];
 
 export interface JsConstructorRequest {
   readonly className: string;
@@ -305,61 +269,43 @@ export interface JsConstructorRequest {
 }
 
 export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOperationSelection | undefined {
-  if (request.className === "Map" && request.argumentCarriers.length === 0) {
-    const [key, value] = request.typeArgumentCarriers;
-    if (key === undefined || value === undefined || !isPrimitiveLaneCarrier(key) || !isPrimitiveLaneCarrier(value)) {
-      return undefined;
-    }
-    const carrier = rustJsMapTargetType(key, value);
-    return {
-      fact: {
-        kind: "provider-operation",
-        operationId: "tsonic.rust.js.Map.constructor",
-        operationKind: "constructor",
-        target: { form: "call", path: "js_abi::JsMap::new" },
-        resultCarrier: carrier,
-      },
-      resultCarrier: carrier,
-    };
+  const row = jsConstructorRows.find((candidate) =>
+    candidate.className === request.className &&
+    candidate.typeArgumentCount === request.typeArgumentCarriers.length &&
+    candidate.argumentCount === request.argumentCarriers.length);
+  if (row === undefined) {
+    return undefined;
   }
-  if (request.className === "Set" && request.argumentCarriers.length === 0) {
-    const [value] = request.typeArgumentCarriers;
-    if (value === undefined || !isPrimitiveLaneCarrier(value)) {
-      return undefined;
-    }
-    const carrier = rustJsSetTargetType(value);
-    return {
-      fact: {
-        kind: "provider-operation",
-        operationId: "tsonic.rust.js.Set.constructor",
-        operationKind: "constructor",
-        target: { form: "call", path: "js_abi::JsSet::new" },
-        resultCarrier: carrier,
-      },
-      resultCarrier: carrier,
-    };
+  const typeArguments = request.typeArgumentCarriers;
+  if (!typeArguments.every((carrier) => carrier === undefined || isPrimitiveLaneCarrier(carrier))) {
+    return undefined;
   }
-  if (request.className === "Date" && request.argumentCarriers.length === 1) {
-    const carrier = rustJsDateTargetType();
-    return {
-      fact: {
-        kind: "provider-operation",
-        operationId: "tsonic.rust.js.Date.constructor",
-        operationKind: "constructor",
-        target: { form: "call", path: "js_abi::JsDate::from_millis" },
-        resultCarrier: carrier,
-      },
-      resultCarrier: carrier,
-      parameterCarriers: [float64Carrier],
-    };
+  let resultCarrier: TargetTypeRef | undefined;
+  if (row.result === "map") {
+    const [key, value] = typeArguments;
+    resultCarrier = key !== undefined && value !== undefined ? rustJsMapTargetType(key, value) : undefined;
+  } else if (row.result === "set") {
+    const [value] = typeArguments;
+    resultCarrier = value !== undefined ? rustJsSetTargetType(value) : undefined;
+  } else {
+    resultCarrier = rustJsDateTargetType();
   }
-  return undefined;
+  if (resultCarrier === undefined) {
+    return undefined;
+  }
+  return {
+    fact: {
+      kind: "provider-operation",
+      operationId: `tsonic.rust.js.${row.className}.constructor`,
+      operationKind: "constructor",
+      target: { form: "call", path: row.path },
+      resultCarrier,
+    },
+    resultCarrier,
+    parameterCarriers: (row.params ?? []).map((reference) => resolveCarrierRef(reference, {})),
+  };
 }
 
 function isPrimitiveLaneCarrier(carrier: TargetTypeRef): boolean {
   return carrier.kind === "source-primitive" || isRustStringCarrier(carrier);
-}
-
-export function isJsIntegerIndexCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return isRustIntegerCarrier(carrier);
 }
