@@ -1,6 +1,11 @@
 import type { TargetTypeRef } from "@tsonic/tsts";
 import {
   KindAmpersandAmpersandToken,
+  KindAsteriskEqualsToken,
+  KindMinusEqualsToken,
+  KindPercentEqualsToken,
+  KindPlusEqualsToken,
+  KindSlashEqualsToken,
   KindAsteriskToken,
   KindBarBarToken,
   KindEqualsEqualsEqualsToken,
@@ -96,6 +101,26 @@ export function selectRustBinaryOperator(
       : undefined;
   }
   return undefined;
+}
+
+const compoundAssignmentTokens: Readonly<Record<string, string>> = {
+  [KindPlusEqualsToken]: "+=",
+  [KindMinusEqualsToken]: "-=",
+  [KindAsteriskEqualsToken]: "*=",
+  [KindSlashEqualsToken]: "/=",
+  [KindPercentEqualsToken]: "%=",
+};
+
+export function selectRustCompoundAssignment(
+  operatorKindName: string,
+  left: TargetTypeRef | undefined,
+  right: TargetTypeRef | undefined,
+): string | undefined {
+  const operator = compoundAssignmentTokens[operatorKindName];
+  if (operator === undefined || left === undefined || right === undefined) {
+    return undefined;
+  }
+  return isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right) ? operator : undefined;
 }
 
 export function rustOperatorCarrierKey(carrier: TargetTypeRef): string {

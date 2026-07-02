@@ -23,7 +23,7 @@ export function unsupportedStatementDiagnostic(input: RustDiagnosticInput, capab
     code: "RUST_UNSUPPORTED_AST",
     category: "error",
     source: "tsonic-rust",
-    message: `The Rust target does not support this construct yet. Node kind: ${ast.kindName(node)}.`,
+    message: `The Rust target does not support this construct. Node kind: ${ast.kindName(node)}.`,
     ...(sourceSpan === undefined ? {} : { sourceSpan }),
     evidence,
   };

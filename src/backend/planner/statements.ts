@@ -3,6 +3,11 @@ import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
+  KindAsteriskEqualsToken,
+  KindMinusEqualsToken,
+  KindPercentEqualsToken,
+  KindPlusEqualsToken,
+  KindSlashEqualsToken,
   ForStatement_Condition,
   ForStatement_Incrementor,
   ForStatement_Initializer,
@@ -31,15 +36,14 @@ import {
   PrefixUnaryExpression_Operand,
 } from "../../common/source-ast.js";
 import { rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustTypeFromCarrier as renderRustType } from "./render-types.js";
 import { isRustBoolCarrier } from "../../source/rust-target-types.js";
-import type { RustBlock, RustStmt } from "../rust-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { expressionCarrier, planExpression } from "./expressions.js";
 import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrier } from "./render-types.js";
-
-const nodeFlagsConst = 1 << 1;
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const { ast } = context.input;
@@ -68,6 +72,9 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
     case KindForStatement: {
       return planForStatement(node, context);
     }
+    case "KindForOfStatement": {
+      return planForOfStatement(node, context);
+    }
     case KindBlock: {
       const body = planBlockLike(node, context);
       return body === undefined ? undefined : [{ kind: "scope", body }];
@@ -76,7 +83,7 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.statement",
-        "The Rust target does not support this statement yet.",
+        "The Rust target does not support this statement.",
       ));
       return undefined;
     }
@@ -120,19 +127,6 @@ function collectVariableDeclarations(node: Node, context: RustPlanContext): read
   return declarations;
 }
 
-function isConstDeclarationList(node: Node | undefined): boolean {
-  if (node === undefined) {
-    return false;
-  }
-  const flags = (node as unknown as { readonly Flags?: unknown }).Flags;
-  return typeof flags === "number" && (flags & nodeFlagsConst) !== 0;
-}
-
-function declarationListOf(statement: Node): Node | undefined {
-  const value = (statement as unknown as Record<string, unknown>)["DeclarationList"];
-  return typeof value === "object" && value !== null ? (value as Node) : undefined;
-}
-
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const { ast } = context.input;
   const declarations = collectVariableDeclarations(node, context);
@@ -167,6 +161,10 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     ));
     return undefined;
   }
+  const initializerFact = context.input.facts.getFact(initializer, rustTargetOperationFactKey);
+  if (initializerFact !== undefined && initializerFact.kind === "array-literal" && initializerFact.lane === "sparse") {
+    return planSparseArrayLet(node, declaration, name, initializer, initializerFact, context);
+  }
   const planned = planExpression(initializer, context);
   if (planned === undefined) {
     return undefined;
@@ -187,7 +185,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
       return undefined;
     }
   }
-  const mutable = !isConstDeclarationList(declarationListOf(node) ?? node);
+  const mutable = context.mutatedNames?.has(name) ?? false;
   return [{
     kind: "let",
     name,
@@ -233,7 +231,21 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {
     const operatorToken = BinaryExpression_OperatorToken(expression);
-    if (operatorToken !== undefined && ast.kindName(operatorToken) === KindEqualsToken) {
+    const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
+    const compoundTokens = [
+      KindPlusEqualsToken,
+      KindMinusEqualsToken,
+      KindAsteriskEqualsToken,
+      KindSlashEqualsToken,
+      KindPercentEqualsToken,
+    ];
+    if (operatorKind === KindEqualsToken) {
+      const runtimeSet = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+      if (runtimeSet !== undefined && runtimeSet.kind === "runtime-set") {
+        return planRuntimeSetStatement(expression, runtimeSet, context);
+      }
+    }
+    if (operatorKind === KindEqualsToken || compoundTokens.includes(operatorKind)) {
       const left = BinaryExpression_Left(expression);
       const right = BinaryExpression_Right(expression);
       if (left === undefined || right === undefined || ast.kindName(left) !== KindIdentifier) {
@@ -248,8 +260,33 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
       if (!isValidRustIdentifier(target)) {
         return undefined;
       }
+      if (operatorKind !== KindEqualsToken) {
+        const fact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+        if (fact === undefined || fact.kind !== "operator-token") {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.operator",
+            "Compound assignment requires a finalized Rust operator fact.",
+          ));
+          return undefined;
+        }
+        const value = planExpression(right, context);
+        return value === undefined ? undefined : [{ kind: "assign", target, operator: fact.operator, value }];
+      }
       const value = planExpression(right, context);
-      return value === undefined ? undefined : [{ kind: "assign", target, operator: "=", value }];
+      if (value === undefined) {
+        return undefined;
+      }
+      // Clippy assign_op_pattern: `x = x <op> rhs` lowers to `x <op>= rhs`.
+      if (
+        value.kind === "binary" &&
+        value.left.kind === "path" &&
+        value.left.path === target &&
+        ["+", "-", "*", "/", "%"].includes(value.operator)
+      ) {
+        return [{ kind: "assign", target, operator: `${value.operator}=`, value: value.right }];
+      }
+      return [{ kind: "assign", target, operator: "=", value }];
     }
   }
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
@@ -376,4 +413,162 @@ function statementBody(statement: Node): Node | undefined {
 export function isConstLiteralInitializer(node: Node, context: RustPlanContext): boolean {
   const kind = context.input.ast.kindName(node);
   return kind === KindNumericLiteral || kind === KindStringLiteral || kind === "KindTrueKeyword" || kind === "KindFalseKeyword";
+}
+
+function planRuntimeSetStatement(
+  expression: Node,
+  fact: Extract<import("../../source/rust-facts/keys.js").RustTargetOperationFact, { kind: "runtime-set" }>,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const left = BinaryExpression_Left(expression);
+  const right = BinaryExpression_Right(expression);
+  if (left === undefined || right === undefined) {
+    return undefined;
+  }
+  const receiverNode = (left as { readonly Expression?: Node }).Expression;
+  const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  const value = planExpression(right, context);
+  if (receiver === undefined || value === undefined) {
+    return undefined;
+  }
+  const leftKind = ast.kindName(left);
+  if (fact.target.form === "index") {
+    const indexNode = (left as { readonly ArgumentExpression?: Node }).ArgumentExpression;
+    const index = indexNode === undefined ? undefined : planExpression(indexNode, context);
+    if (index === undefined) {
+      return undefined;
+    }
+    return [{
+      kind: "index-assign",
+      receiver,
+      index: { kind: "cast", expr: index, to: "usize" },
+      value,
+    }];
+  }
+  if (fact.target.form === "receiver-method") {
+    const args: RustExpr[] = [];
+    if (leftKind === "KindElementAccessExpression") {
+      const indexNode = (left as { readonly ArgumentExpression?: Node }).ArgumentExpression;
+      const index = indexNode === undefined ? undefined : planExpression(indexNode, context);
+      if (index === undefined) {
+        return undefined;
+      }
+      args.push(index);
+    }
+    args.push(value);
+    const casts = fact.target.argCasts ?? [];
+    const shaped = args.map((argument, index): RustExpr => {
+      const cast = casts[index];
+      return cast === undefined ? argument : { kind: "cast", expr: argument, to: cast };
+    });
+    return [{
+      kind: "expr",
+      expr: { kind: "method-call", receiver, method: fact.target.name, args: shaped },
+    }];
+  }
+  context.diagnostics.push(unsupportedConstructDiagnostic(
+    diagnosticInput(context, expression),
+    "rust.js.assignment",
+    "Runtime set operation form is not supported.",
+  ));
+  return undefined;
+}
+
+function planForOfStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  if (fact === undefined || fact.kind !== "for-of") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.loop",
+      "for-of statements require a finalized iteration fact.",
+    ));
+    return undefined;
+  }
+  const initializer = (node as unknown as { readonly Initializer?: Node }).Initializer;
+  let binding = "";
+  if (initializer !== undefined) {
+    const declarations = collectVariableDeclarations(initializer, context);
+    const nameNode = declarations.length === 1 ? Node_Name(declarations[0]) : undefined;
+    binding = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  }
+  if (!isValidRustIdentifier(binding)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.loop",
+      "for-of bindings require a plain identifier.",
+    ));
+    return undefined;
+  }
+  const iterableNode = Node_Expression(node);
+  const iterable = iterableNode === undefined ? undefined : planExpression(iterableNode, context);
+  if (iterable === undefined) {
+    return undefined;
+  }
+  const bodyNode = (node as unknown as { readonly Statement?: Node }).Statement;
+  const body = bodyNode === undefined ? { statements: [] } : planBlockLike(bodyNode, context);
+  if (body === undefined) {
+    return undefined;
+  }
+  const iterChain: RustExpr = {
+    kind: "method-call",
+    receiver: { kind: "method-call", receiver: iterable, method: "iter", args: [] },
+    method: fact.style,
+    args: [],
+  };
+  return [{ kind: "for", binding, iterable: iterChain, body }];
+}
+
+function planSparseArrayLet(
+  statement: Node,
+  declaration: Node,
+  name: string,
+  initializer: Node,
+  fact: Extract<import("../../source/rust-facts/keys.js").RustTargetOperationFact, { kind: "array-literal" }>,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const elementType = renderRustType(fact.elementCarrier);
+  const arrayType = renderRustType(fact.resultCarrier);
+  if (elementType === undefined || arrayType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.js.sparse-array",
+      "Sparse array lane carrier cannot be rendered.",
+    ));
+    return undefined;
+  }
+  const statements: RustStmt[] = [{
+    kind: "let",
+    name,
+    mutable: true,
+    type: arrayType,
+    init: {
+      kind: "call",
+      path: "js_abi::JsArray::with_length",
+      args: [{ kind: "int-literal", text: String(fact.length) }],
+    },
+  }];
+  const elements = ast.elements(initializer);
+  for (const [index, element] of elements.entries()) {
+    if (element === undefined || ast.kindName(element) === "KindOmittedExpression") {
+      continue;
+    }
+    const planned = planExpression(element, context);
+    if (planned === undefined) {
+      return undefined;
+    }
+    statements.push({
+      kind: "expr",
+      expr: {
+        kind: "method-call",
+        receiver: { kind: "path", path: name },
+        method: "set",
+        args: [{ kind: "int-literal", text: String(index) }, planned],
+      },
+    });
+  }
+  void statement;
+  return statements;
 }

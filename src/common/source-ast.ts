@@ -15,6 +15,11 @@ export const KindFunctionDeclaration = "KindFunctionDeclaration";
 export const KindIdentifier = "KindIdentifier";
 export const KindIfStatement = "KindIfStatement";
 export const KindImportDeclaration = "KindImportDeclaration";
+export const KindArrayLiteralExpression = "KindArrayLiteralExpression";
+export const KindArrayType = "KindArrayType";
+export const KindOmittedExpression = "KindOmittedExpression";
+export const KindForOfStatement = "KindForOfStatement";
+export const KindInterfaceDeclaration = "KindInterfaceDeclaration";
 export const KindNewExpression = "KindNewExpression";
 export const KindNumericLiteral = "KindNumericLiteral";
 export const KindParameter = "KindParameter";
@@ -47,6 +52,11 @@ export const KindExclamationEqualsEqualsToken = "KindExclamationEqualsEqualsToke
 export const KindAmpersandAmpersandToken = "KindAmpersandAmpersandToken";
 export const KindBarBarToken = "KindBarBarToken";
 export const KindEqualsToken = "KindEqualsToken";
+export const KindPlusEqualsToken = "KindPlusEqualsToken";
+export const KindMinusEqualsToken = "KindMinusEqualsToken";
+export const KindAsteriskEqualsToken = "KindAsteriskEqualsToken";
+export const KindSlashEqualsToken = "KindSlashEqualsToken";
+export const KindPercentEqualsToken = "KindPercentEqualsToken";
 export const KindExclamationToken = "KindExclamationToken";
 export const KindPlusPlusToken = "KindPlusPlusToken";
 export const KindMinusMinusToken = "KindMinusMinusToken";
@@ -118,6 +128,18 @@ export function ForStatement_Incrementor(node: Node | undefined): Node | undefin
 
 export function ElementAccessExpression_ArgumentExpression(node: Node | undefined): Node | undefined {
   return nodeField(node, "ArgumentExpression");
+}
+
+export function ArrayTypeNode_ElementType(node: Node | undefined): Node | undefined {
+  return nodeField(node, "ElementType");
+}
+
+export function ForInOrOfStatement_Initializer(node: Node | undefined): Node | undefined {
+  return nodeField(node, "Initializer");
+}
+
+export function ForInOrOfStatement_Statement(node: Node | undefined): Node | undefined {
+  return nodeField(node, "Statement");
 }
 
 export function VariableStatement_DeclarationList(node: Node | undefined): Node | undefined {

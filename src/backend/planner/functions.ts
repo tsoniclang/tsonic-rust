@@ -1,8 +1,22 @@
-import type { Node } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import {
+  BinaryExpression_Left,
+  BinaryExpression_OperatorToken,
+  KindAsteriskEqualsToken,
+  KindBinaryExpression,
+  KindEqualsToken,
+  KindMinusEqualsToken,
+  KindPercentEqualsToken,
+  KindPlusEqualsToken,
+  KindSlashEqualsToken,
   KindIdentifier,
+  KindPostfixUnaryExpression,
+  KindPrefixUnaryExpression,
   Node_Name,
   Node_Type,
+  PrefixUnaryExpression_Operand,
+  getPostfixUnaryOperatorText,
+  getPrefixUnaryOperatorText,
 } from "../../common/source-ast.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
@@ -11,6 +25,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrier } from "./render-types.js";
+import { rustMutatingReceiverMethods, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 
 export function planFunctionDeclaration(node: Node, context: RustPlanContext): RustItem | undefined {
   const { ast } = context.input;
@@ -18,7 +33,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.function",
-      "Async functions are not supported by the Rust target yet.",
+      "Async functions are not supported by the Rust target.",
     ));
     return undefined;
   }
@@ -81,7 +96,8 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     ));
     return undefined;
   }
-  const body = planBlockLike(bodyNode, context);
+  const bodyContext: RustPlanContext = { ...context, mutatedNames: collectMutatedNames(ast, bodyNode, context) };
+  const body = planBlockLike(bodyNode, bodyContext);
   if (paramsFailed || body === undefined) {
     return undefined;
   }
@@ -93,6 +109,66 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     ...(returnType === undefined ? {} : { returnType }),
     body: applyTailReturn(body, returnType !== undefined),
   };
+}
+
+// Name-level write analysis over a function body: a binding becomes `let mut`
+// only when an assignment or increment/decrement to that name is proven.
+export function collectMutatedNames(ast: AstReader, body: Node, context?: RustPlanContext): ReadonlySet<string> {
+  const mutated = new Set<string>();
+  const addWriteTarget = (target: Node | undefined): void => {
+    if (target === undefined) {
+      return;
+    }
+    const targetKind = ast.kindName(target);
+    if (targetKind === KindIdentifier) {
+      mutated.add(ast.text(target));
+      return;
+    }
+    if (targetKind === "KindPropertyAccessExpression" || targetKind === "KindElementAccessExpression") {
+      addWriteTarget((target as { readonly Expression?: Node }).Expression);
+    }
+  };
+  const visit = (node: Node): void => {
+    const kind = ast.kindName(node);
+    if (kind === "KindCallExpression" && context !== undefined) {
+      const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+      if (fact !== undefined && fact.kind === "provider-operation" && fact.target.form === "receiver-method" && rustMutatingReceiverMethods.has(fact.target.name)) {
+        const callee = (node as { readonly Expression?: Node }).Expression;
+        addWriteTarget(callee === undefined ? undefined : (callee as { readonly Expression?: Node }).Expression);
+      }
+    }
+    if (kind === KindBinaryExpression) {
+      const operatorToken = BinaryExpression_OperatorToken(node);
+      const writeTokens = [
+        KindEqualsToken,
+        KindPlusEqualsToken,
+        KindMinusEqualsToken,
+        KindAsteriskEqualsToken,
+        KindSlashEqualsToken,
+        KindPercentEqualsToken,
+      ];
+      if (operatorToken !== undefined && writeTokens.includes(ast.kindName(operatorToken))) {
+        addWriteTarget(BinaryExpression_Left(node));
+      }
+    } else if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
+      const operatorText = kind === KindPrefixUnaryExpression
+        ? getPrefixUnaryOperatorText(ast, node)
+        : getPostfixUnaryOperatorText(ast, node);
+      if (operatorText === "++" || operatorText === "--") {
+        const operand = PrefixUnaryExpression_Operand(node);
+        if (operand !== undefined && ast.kindName(operand) === KindIdentifier) {
+          mutated.add(ast.text(operand));
+        }
+      }
+    }
+    ast.forEachChild(node, (child) => {
+      if (child !== undefined) {
+        visit(child);
+      }
+    });
+  };
+  visit(body);
+  return mutated;
 }
 
 function applyTailReturn(body: RustBlock, hasReturnValue: boolean): RustBlock {

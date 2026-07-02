@@ -7,6 +7,9 @@ export interface RustPlanContext {
   readonly moduleName: string;
   readonly moduleNameByFileName: ReadonlyMap<string, string>;
   readonly diagnostics: TargetDiagnostic[];
+  // Identifier names with a proven write (assignment or increment) in the
+  // enclosing function body. `let mut` is emitted only for proven writes.
+  readonly mutatedNames?: ReadonlySet<string>;
 }
 
 export const rustReservedIdentifiers: ReadonlySet<string> = new Set([

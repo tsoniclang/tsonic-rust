@@ -1,4 +1,4 @@
-// Fake TargetCompileInput pieces for backend tests. Only the members the R1
+// Fake TargetCompileInput pieces for backend tests. Only the members the
 // planner actually reads are provided; anything else throwing keeps the tests
 // honest about what the backend consumes.
 

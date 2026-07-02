@@ -82,7 +82,18 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
   for (const moduleName of sortedModuleNames) {
     const items = moduleItems.get(moduleName) ?? [];
-    artifacts.push(rustSourceArtifact(`src/${moduleName}.rs`, printRustSourceFile(createRustSourceFile(items))));
+    const rendered = printRustSourceFile(createRustSourceFile(items));
+    const useItems: RustItem[] = [];
+    if (rendered.includes("js_abi::")) {
+      useItems.push({ kind: "use", path: "tsonic_rust_js::abi", alias: "js_abi" });
+    }
+    if (rendered.includes("js_string::")) {
+      useItems.push({ kind: "use", path: "tsonic_rust_js::string", alias: "js_string" });
+    }
+    const finalText = useItems.length === 0
+      ? rendered
+      : printRustSourceFile(createRustSourceFile([...useItems, ...items]));
+    artifacts.push(rustSourceArtifact(`src/${moduleName}.rs`, finalText));
   }
   if (outputType === "bin" && entryFunction !== undefined) {
     const crateName = readRustCrateName(input.target);

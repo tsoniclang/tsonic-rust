@@ -9,7 +9,7 @@ planning/printing, Cargo project generation, and Cargo toolchain integration.
 The backend is fail-closed: constructs without finalized lowering facts
 produce deterministic diagnostics, never guessed Rust source.
 
-Current capability (slice R2): static-native spine — primitive carriers from
+Supported today: static-native spine — primitive carriers from
 source-core facts, functions, locals, constants, returns, if/else, while and
 classic for loops, fact-backed arithmetic/comparison/boolean/string-concat
 operators, module imports/exports, and fake `@acme/*` provider packages

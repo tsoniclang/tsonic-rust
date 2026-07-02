@@ -7,9 +7,9 @@ import type {
   RustType,
 } from "../backend/rust-ast/nodes.js";
 
-// Deterministic printer. Output must be `cargo fmt --check` clean for the R2
-// construct set: 4-space indent, no trailing whitespace, one blank line
-// between items, trailing newline.
+// Deterministic printer. Output must be `cargo fmt --check` clean for the
+// supported construct set: 4-space indent, no trailing whitespace, one blank
+// line between items, trailing newline.
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
   const parts: string[] = [`// ${model.headerComment}`];
@@ -24,6 +24,9 @@ export function printRustItem(item: RustItem): string {
   switch (item.kind) {
     case "mod-decl": {
       return `${item.pub ? "pub " : ""}mod ${item.name};`;
+    }
+    case "use": {
+      return item.alias === undefined ? `use ${item.path};` : `use ${item.path} as ${item.alias};`;
     }
     case "const": {
       return `${item.pub ? "pub " : ""}const ${item.name}: ${printRustType(item.type)} = ${printRustExpr(item.value)};`;
@@ -48,6 +51,12 @@ export function printRustType(type: RustType): string {
     }
     case "unit": {
       return "()";
+    }
+    case "named": {
+      const args = type.typeArguments ?? [];
+      return args.length === 0
+        ? type.path
+        : `${type.path}<${args.map(printRustType).join(", ")}>`;
     }
   }
 }
@@ -103,6 +112,12 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     case "while": {
       return printRustBlock(statement.body, depth, `while ${printRustExpr(statement.condition)}`);
     }
+    case "for": {
+      return printRustBlock(statement.body, depth, `for ${statement.binding} in ${printRustExpr(statement.iterable)}`);
+    }
+    case "index-assign": {
+      return `${indent}${printOperand(statement.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(statement.index)}] = ${printRustExpr(statement.value)};`;
+    }
     case "scope": {
       const body = printRustBlockStatements(statement.body, depth + 1);
       return body.length === 0 ? `${indent}{}` : `${indent}{\n${body}\n${indent}}`;
@@ -147,6 +162,8 @@ function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "binary":
       return operatorPrecedence(expression.operator);
     case "unary":
+    case "cast":
+    case "reference":
       return RustPrecedence.Unary;
     case "method-call":
     case "field":
@@ -178,6 +195,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "string-literal": {
       return `String::from("${escapeRustString(expression.value)}")`;
     }
+    case "str-literal": {
+      return `"${escapeRustString(expression.value)}"`;
+    }
     case "path": {
       return expression.path;
     }
@@ -207,6 +227,22 @@ export function printRustExpr(expression: RustExpr): string {
       const placeholders = expression.parts.map(() => "{}").join("");
       return `format!("${placeholders}", ${expression.parts.map(printRustExpr).join(", ")})`;
     }
+    case "cast": {
+      if (expression.expr.kind === "int-literal") {
+        return `${expression.expr.text}${expression.to}`;
+      }
+      if (expression.expr.kind === "unary" && expression.expr.operator === "-" && expression.expr.operand.kind === "int-literal") {
+        return `-${expression.expr.operand.text}${expression.to}`;
+      }
+      return `${printOperand(expression.expr, RustPrecedence.Unary, false)} as ${expression.to}`;
+    }
+    case "reference": {
+      return `&${printOperand(expression.expr, RustPrecedence.Unary, false)}`;
+    }
+    case "vec-literal": {
+      return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;
+    }
+
   }
 }
 
