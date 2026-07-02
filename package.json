@@ -1,0 +1,30 @@
+{
+  "name": "@tsonic/target-rust",
+  "version": "0.0.1",
+  "description": "Rust target pack for Tsonic",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "peerDependencies": {
+    "@tsonic/target-api": "0.0.1",
+    "@tsonic/tsts": "0.0.0"
+  },
+  "devDependencies": {
+    "@tsonic/target-api": "file:../tsonic/packages/target-api",
+    "@tsonic/tsts": "file:../tsonic/packages/tsts"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
