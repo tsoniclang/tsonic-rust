@@ -92,3 +92,16 @@ test("no fallback source emission: backend diagnostics never coexist with artifa
   const plannerText = readFileSync(join(sourceRoot, "backend/planner/rust-planner.ts"), "utf8");
   assert.match(plannerText, /if \(diagnostics\.length > 0\) \{\s*return \{ artifacts: \[\], diagnostics \};/u);
 });
+
+test("JS operation rows are unique per owner/member/kind/lane", async () => {
+  const source = readFileSync(join(sourceRoot, "source/rust-target-semantics/js-surface-operations.ts"), "utf8");
+  const rowPattern = /owner: "([^"]+)", member: "([^"]+)", operationKind: "([^"]+)", lane: "([^"]+)"/gu;
+  const seen = new Set();
+  let match;
+  while ((match = rowPattern.exec(source)) !== null) {
+    const key = match.slice(1, 5).join("|");
+    assert.ok(!seen.has(key), `duplicate JS operation row: ${key}`);
+    seen.add(key);
+  }
+  assert.ok(seen.size > 20, "row scan should see the operation table");
+});

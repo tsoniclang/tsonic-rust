@@ -142,3 +142,120 @@ export function main(): void {
   const run = validateGeneratedProject("final-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
+
+test("static fallible methods propagate with ? through type paths", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Machine {
+  state: int32;
+
+  constructor(state: int32) {
+    this.state = state;
+  }
+
+  static risky(flag: boolean): int32 {
+    if (flag) {
+      throw new Error("nope");
+    }
+    return 3;
+  }
+}
+
+export function drive(): int32 {
+  return Machine.risky(false);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /Ok\(Machine::risky\(false\)\?\)/u);
+});
+
+test("catch bodies with returns wrap Ok inside fallible functions", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function risky(): int32 {
+  throw new Error("x");
+}
+
+export function fallback(flag: boolean): int32 {
+  let value: int32 = 0;
+  try {
+    value = risky();
+  } catch (error) {
+    return 2;
+  }
+  if (flag) {
+    return risky();
+  }
+  return value + 1;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn fallback\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /return Ok\(2\);/u);
+  assert.match(text, /return Ok\(risky\(\)\?\);/u);
+});
+
+test("nested arrow returns do not trip the try escape scan", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function risky(): int32 {
+  throw new Error("x");
+}
+
+export function safe(xs: int32[]): int32 {
+  let doubled_len: int32 = 0;
+  try {
+    risky();
+    doubled_len = xs.map((x) => x * 2).length;
+  } catch (error) {
+    doubled_len = -1;
+  }
+  return doubled_len;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /js_abi::array_dense_map/u);
+});
+
+test("fallible provider rows are restricted to method operations", async () => {
+  const { createRustProviderPackage } = await import("../dist/index.js");
+  assert.throws(
+    () => createRustProviderPackage({
+      id: "bad",
+      displayName: "Bad",
+      version: "1.0.0",
+      modules: [],
+      operations: [{
+        exportId: "@bad::X",
+        operationKind: "property",
+        target: { form: "field", name: "x" },
+        resultCarrier: { kind: "source-primitive", name: "int32" },
+        isFallible: true,
+      }],
+      crates: [],
+    }),
+    /isFallible is supported only on method operations/u,
+  );
+});

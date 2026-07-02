@@ -3,7 +3,12 @@ import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
+  CatchClause_Block,
+  CatchClause_VariableDeclaration,
   ElementAccessExpression_ArgumentExpression,
+  TryStatement_CatchClause,
+  TryStatement_FinallyBlock,
+  TryStatement_TryBlock,
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   IterationStatement_Statement,
@@ -647,16 +652,11 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
 
 function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const { ast } = context.input;
-  const raw = node as unknown as {
-    readonly TryBlock?: Node;
-    readonly CatchClause?: Node;
-    readonly FinallyBlock?: Node;
-  };
-  const catchClause = raw.CatchClause as unknown as {
-    readonly VariableDeclaration?: Node;
-    readonly Block?: Node;
-  } | undefined;
-  if (raw.TryBlock === undefined || catchClause?.Block === undefined || raw.FinallyBlock !== undefined) {
+  const tryBlock = TryStatement_TryBlock(node);
+  const catchClause = TryStatement_CatchClause(node);
+  const catchBlock = CatchClause_Block(catchClause);
+  const finallyBlock = TryStatement_FinallyBlock(node);
+  if (tryBlock === undefined || catchBlock === undefined || finallyBlock !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.try",
@@ -672,6 +672,10 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
       return;
     }
     const kind = ast.kindName(candidate);
+    // Nested functions are their own control-flow boundary.
+    if (kind === "KindArrowFunction" || kind === "KindFunctionExpression" || kind === "KindFunctionDeclaration") {
+      return;
+    }
     if (kind === KindReturnStatement || kind === "KindBreakStatement" || kind === "KindContinueStatement") {
       escapes = true;
       return;
@@ -682,7 +686,7 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
       }
     });
   };
-  scan(raw.TryBlock);
+  scan(tryBlock);
   if (escapes) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -692,14 +696,12 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
     return undefined;
   }
   const tryContext: RustPlanContext = { ...context, fallibleContext: true };
-  const body = planBlockLike(raw.TryBlock, tryContext);
-  const catchBody = planBlockLike(catchClause.Block, context);
+  const body = planBlockLike(tryBlock, tryContext);
+  const catchBody = planBlockLike(catchBlock, context);
   if (body === undefined || catchBody === undefined) {
     return undefined;
   }
-  const bindingNode = catchClause.VariableDeclaration === undefined
-    ? undefined
-    : Node_Name(catchClause.VariableDeclaration);
+  const bindingNode = Node_Name(CatchClause_VariableDeclaration(catchClause));
   const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
   let binding = bindingSource.length === 0 ? "_" : rustValueName(bindingSource);
   if (binding !== "_") {
@@ -718,7 +720,7 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
         }
       });
     };
-    findUse(catchClause.Block);
+    findUse(catchBlock);
     if (!used) {
       binding = `_${binding}`;
     }

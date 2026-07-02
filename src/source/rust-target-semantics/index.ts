@@ -27,8 +27,11 @@ import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
+  CatchClause_Block,
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
+  TryStatement_CatchClause,
+  TryStatement_TryBlock,
   ForStatement_Condition,
   ForStatement_Incrementor,
   ForStatement_Initializer,
@@ -348,14 +351,11 @@ function recordStatementFacts(
     return;
   }
   if (kind === "KindTryStatement") {
-    const tryBlock = (statement as unknown as { readonly TryBlock?: Node }).TryBlock;
+    const tryBlock = TryStatement_TryBlock(statement);
     if (tryBlock !== undefined) {
       recordStatementFacts(walk, tryBlock, sourceFile, returnCarrier);
     }
-    const catchClause = (statement as unknown as { readonly CatchClause?: Node }).CatchClause;
-    const catchBlock = catchClause === undefined
-      ? undefined
-      : (catchClause as unknown as { readonly Block?: Node }).Block;
+    const catchBlock = CatchClause_Block(TryStatement_CatchClause(statement));
     if (catchBlock !== undefined) {
       recordStatementFacts(walk, catchBlock, sourceFile, returnCarrier);
     }
@@ -1193,8 +1193,6 @@ function recordProviderOperationFacts(
   identity: ProviderDeclarationIdentity | undefined,
 ): void {
   const operationId = row.memberId ?? row.signatureId ?? row.exportId;
-  const fallibleFlag = row.isFallible === true ? { fallible: true as const } : {};
-  void fallibleFlag;
   const targetOperationText = row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice"
     ? row.target.path
     : row.target.form === "index"
@@ -2114,6 +2112,7 @@ function trySourceCallLike(
       name: methodName,
       typeCarrier,
       resultCarrier: returnCarrier,
+      ...(walk.lifecycle.host.facts.get(methodDeclaration, rustFallibleFactKey) !== undefined ? { fallible: true } : {}),
     });
     return setCarrierFact(walk, expression, returnCarrier);
   }
@@ -2333,11 +2332,8 @@ function recordFallibilityFacts(walk: RustFactWalk): void {
         return;
       }
       if (kind === "KindTryStatement") {
-        const tryBlock = (node as unknown as { readonly TryBlock?: Node }).TryBlock;
-        const catchClause = (node as unknown as { readonly CatchClause?: Node }).CatchClause;
-        const catchBlock = catchClause === undefined
-          ? undefined
-          : (catchClause as unknown as { readonly Block?: Node }).Block;
+        const tryBlock = TryStatement_TryBlock(node);
+        const catchBlock = CatchClause_Block(TryStatement_CatchClause(node));
         if (tryBlock !== undefined) {
           visit(tryBlock, true);
         }

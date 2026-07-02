@@ -465,7 +465,19 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     if (typePath === undefined) {
       return undefined;
     }
-    return { kind: "call", path: `${typePath}::${rustValueName(fact.name)}`, args };
+    const staticCall: RustExpr = { kind: "call", path: `${typePath}::${rustValueName(fact.name)}`, args };
+    if (fact.fallible === true) {
+      if (context.fallibleContext !== true) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node),
+          "rust.error.call",
+          "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+        ));
+        return undefined;
+      }
+      return { kind: "try", expr: staticCall };
+    }
+    return staticCall;
   }
   if (fact !== undefined && fact.kind === "source-method") {
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression

@@ -156,6 +156,11 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
     if (statement.kind === "scope") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
+    if (statement.kind === "try-catch") {
+      // The try body is its own Result closure; catch bodies run in the
+      // enclosing fallible function.
+      return { ...statement, catchBody: { statements: statement.catchBody.statements.map(wrap) } };
+    }
     return statement;
   };
   const wrapped = body.statements.map(wrap);

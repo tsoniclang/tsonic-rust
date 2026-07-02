@@ -117,6 +117,7 @@ export type RustTargetOperationFact =
       readonly name: string;
       readonly typeCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
+      readonly fallible?: boolean;
     }
   | {
       // new C(...) on a project-source class: associated fn new.
