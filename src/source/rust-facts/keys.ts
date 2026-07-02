@@ -10,7 +10,13 @@ export const rustExtensionId = "tsonic.rust";
 export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
 export type RustProviderOperationForm =
-  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[] }
+  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly trailingArgs?: readonly string[]; readonly chain?: readonly string[] }
+  | {
+      // Free function taking all arguments as one &[&str] slice (variadic
+      // string APIs like path join).
+      readonly form: "call-str-slice";
+      readonly path: string;
+    }
   | { readonly form: "path"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
   | { readonly form: "field"; readonly name: string }

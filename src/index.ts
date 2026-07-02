@@ -76,3 +76,4 @@ export {
 } from "./source/rust-target-types.js";
 export { rustTypeFromCarrier } from "./backend/planner/render-types.js";
 export { createRustCompileInputFromSession } from "./session/compile-input.js";
+export { createRustNodejsProviderPackage } from "./source/provider-packages/nodejs.js";

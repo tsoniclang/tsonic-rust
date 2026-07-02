@@ -275,6 +275,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "vec-literal": {
       return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;
     }
+    case "slice-literal": {
+      return `[${expression.elements.map(printRustExpr).join(", ")}]`;
+    }
     case "tuple-literal": {
       return `(${expression.elements.map(printRustExpr).join(", ")})`;
     }

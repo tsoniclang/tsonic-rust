@@ -320,7 +320,23 @@ function planProviderOperationExpression(
         }
         return argument;
       });
-      return { kind: "call", path: form.path, args: shaped };
+      const trailing = (form.trailingArgs ?? []).map((text): RustExpr => ({ kind: "path", path: text }));
+      let result: RustExpr = { kind: "call", path: form.path, args: [...shaped, ...trailing] };
+      for (const chained of form.chain ?? []) {
+        result = { kind: "method-call", receiver: result, method: chained, args: [] };
+      }
+      return result;
+    }
+    case "call-str-slice": {
+      const asStr = args.map((argument): RustExpr =>
+        argument.kind === "string-literal"
+          ? { kind: "str-literal", value: argument.value }
+          : { kind: "method-call", receiver: argument, method: "as_str", args: [] });
+      return {
+        kind: "call",
+        path: form.path,
+        args: [{ kind: "reference", expr: { kind: "slice-literal", elements: asStr } }],
+      };
     }
     case "path": {
       return { kind: "path", path: form.path };

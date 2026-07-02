@@ -37,6 +37,8 @@ export interface RustProviderOperationRow {
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly TargetTypeRef[];
+  // Async provider operations produce future carriers that must be awaited.
+  readonly isAsync?: boolean;
 }
 
 export interface RustProviderCrateDefinition {

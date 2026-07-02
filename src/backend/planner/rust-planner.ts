@@ -92,6 +92,12 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
     if (rendered.includes("js_string::")) {
       useItems.push({ kind: "use", path: "tsonic_rust_js::string", alias: "js_string" });
     }
+    if (rendered.includes("node_path::")) {
+      useItems.push({ kind: "use", path: "tsonic_rust_node::path", alias: "node_path" });
+    }
+    if (rendered.includes("node_os::")) {
+      useItems.push({ kind: "use", path: "tsonic_rust_node::os", alias: "node_os" });
+    }
     const finalText = useItems.length === 0
       ? rendered
       : printRustSourceFile(createRustSourceFile([...useItems, ...items]));

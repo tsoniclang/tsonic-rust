@@ -26,6 +26,7 @@ export type RustExpr =
   | { readonly kind: "cast"; readonly expr: RustExpr; readonly to: string }
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
+  | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 

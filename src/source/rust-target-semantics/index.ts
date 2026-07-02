@@ -899,7 +899,13 @@ function resolveCallLikeCarrier(
         }
       }
     }
+    if (row.target.form === "receiver-method" && row.target.mutatesReceiver === true && ast.kindName(callee) === KindPropertyAccessExpression) {
+      recordBindingWrite(walk, Node_Expression(callee), "referent");
+    }
     recordProviderOperationFacts(walk, expression, row, providerIdentity);
+    if (row.isAsync === true) {
+      return setCarrierFact(walk, expression, rustFutureTargetType(row.resultCarrier));
+    }
     return setCarrierFact(walk, expression, row.resultCarrier);
   }
   const sourceCallLike = trySourceCallLike(walk, expression, callee, callArguments, sourceFile, expressionKind);
@@ -1162,7 +1168,7 @@ function recordProviderOperationFacts(
   identity: ProviderDeclarationIdentity | undefined,
 ): void {
   const operationId = row.memberId ?? row.signatureId ?? row.exportId;
-  const targetOperationText = row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call"
+  const targetOperationText = row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice"
     ? row.target.path
     : row.target.form === "index"
       ? "[]"
