@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "@tsonic/tsts";
+import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
 import { rustSourceTypeCarrierValue } from "../../source/rust-facts/keys.js";
 import {
@@ -100,14 +101,9 @@ export function rustTypeFromCarrierInContext(
     }
     return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
   });
-  if (context.usedAliases !== undefined) {
-    collectAliasesFromRustType(rendered, (path) => {
-      const prefix = path.split("::")[0];
-      if (prefix !== undefined && (prefix === "js_abi" || prefix === "js_string" || prefix === "node_path" || prefix === "node_os" || prefix === "node_fs" || prefix === "rt")) {
-        context.usedAliases?.add(prefix);
-      }
-    });
-  }
+  collectAliasesFromRustType(rendered, (path) => {
+    registerAliasFromPath(context, path);
+  });
   return rendered;
 }
 

@@ -34,7 +34,7 @@ export const rustRuntimeAliasImports: ReadonlyMap<string, { readonly path: strin
   ["rt", { path: "tsonic_rust_runtime", alias: "rt" }],
 ]);
 
-export function registerAliasFromPath(context: RustPlanContext, path: string): void {
+export function registerAliasFromPath(context: { readonly usedAliases?: Set<string> }, path: string): void {
   const prefix = path.split("::")[0];
   if (prefix !== undefined && rustRuntimeAliasImports.has(prefix)) {
     context.usedAliases?.add(prefix);
