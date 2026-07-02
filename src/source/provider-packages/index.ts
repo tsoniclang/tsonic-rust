@@ -39,6 +39,8 @@ export interface RustProviderOperationRow {
   readonly parameterCarriers?: readonly TargetTypeRef[];
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
+  // Fallible operations return TsonicResult and require a fallible context.
+  readonly isFallible?: boolean;
 }
 
 export interface RustProviderCrateDefinition {

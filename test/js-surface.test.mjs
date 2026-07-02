@@ -64,8 +64,8 @@ export function probe(name: string): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_string::to_upper_case\(&name\)/u);
-  assert.match(text, /js_string::starts_with\(&upper, &String::from\("A"\), 0\)/u);
-  assert.match(text, /js_string::includes\(&upper, &String::from\("B"\), 0\)/u);
+  assert.match(text, /js_string::starts_with\(&upper, "A", 0\)/u);
+  assert.match(text, /js_string::includes\(&upper, "B", 0\)/u);
   assert.match(text, /js_string::js_len\(&name\) as i32 > 0/u);
 });
 

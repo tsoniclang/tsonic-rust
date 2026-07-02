@@ -645,24 +645,84 @@ export async function main(): Promise<void> {}
   assert.ok(asyncMain.result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_ENTRYPOINT"));
 });
 
-test("throw and try/catch fail closed: they require the shared error model contract", () => {
+test("throwing functions lower to TsonicResult with Err returns and Ok wrapping", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-export function risky(flag: boolean): void {
-  try {
-    if (flag) {
-      throw new Error("boom");
-    }
-  } catch (error) {
+import type { int32 } from "@tsonic/core/types.js";
+
+export function risky(flag: boolean): int32 {
+  if (flag) {
+    throw new Error("boom");
   }
+  return 7;
+}
+
+export function caller(flag: boolean): int32 {
+  let outcome: int32 = 0;
+  try {
+    outcome = risky(flag);
+  } catch (error) {
+    outcome = -1;
+  }
+  return outcome;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::new\(/u);
+  assert.match(text, /Ok\(7\)/u);
+  assert.match(text, /let __try: rt::TsonicResult<\(\)> = \(\|\| \{/u);
+  assert.match(text, /outcome = risky\(flag\)\?;/u);
+  assert.match(text, /if let Err\(_error\) = __try \{/u);
+  assert.match(text, /use tsonic_rust_runtime as rt;/u);
+});
+
+test("fallibility propagates transitively to callers", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function risky(): int32 {
+  throw new Error("boom");
+}
+
+export function forwards(): int32 {
+  return risky();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn forwards\(\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /Ok\(risky\(\)\?\)/u);
+});
+
+test("fallible calls inside closures fail closed", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function risky(x: int32): int32 {
+  throw new Error("boom");
+}
+
+export function bad(xs: int32[]): boolean {
+  return xs.some((x) => risky(x) === 1);
 }
 `,
     },
   });
 
   assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.every((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_AST" || diagnostic.code === "RUST_MISSING_TARGET_FACT"));
   assert.ok(result.diagnostics.length > 0);
 });

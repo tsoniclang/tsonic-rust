@@ -20,7 +20,7 @@ import {
   Node_Expression,
   PrefixUnaryExpression_Operand,
 } from "../../common/source-ast.js";
-import { rustOptionWrapFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustFallibleCallFactKey, rustOptionWrapFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
@@ -104,6 +104,30 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
     }
     case "KindObjectLiteralExpression": {
       return planRecordLiteral(node, context);
+    }
+    case "KindArrowFunction": {
+      const closureFact = rustOperationFact(node, context);
+      if (closureFact === undefined || closureFact.kind !== "closure") {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.closure",
+          "Arrow functions require a finalized closure fact.",
+        ));
+        return undefined;
+      }
+      const arrowParams = context.input.ast.parameters(node);
+      const params: { name: string; byRefCopy: boolean }[] = [];
+      for (const [index, parameter] of arrowParams.entries()) {
+        const parameterName = parameter === undefined ? "" : rustValueName(ast.text(ast.name(parameter) ?? parameter));
+        if (!isValidRustIdentifier(parameterName)) {
+          return undefined;
+        }
+        params.push({ name: parameterName, byRefCopy: closureFact.byRefCopyParams[index] === true });
+      }
+      const bodyNode = context.input.ast.body(node);
+      const closureContext: RustPlanContext = { ...context, fallibleContext: false };
+      const body = bodyNode === undefined ? undefined : planExpression(bodyNode, closureContext);
+      return body === undefined ? undefined : { kind: "closure", params, body };
     }
     case "KindAwaitExpression": {
       const awaitFact = rustOperationFact(node, context);
@@ -313,6 +337,10 @@ function planProviderOperationExpression(
       const shaped = args.map((argument, index): RustExpr => {
         const mode = form.argModes?.[index] ?? "value";
         if (mode === "ref") {
+          // Owned-string literals borrow as &str literals directly.
+          if (argument.kind === "string-literal") {
+            return { kind: "str-literal", value: argument.value };
+          }
           return { kind: "reference", expr: argument };
         }
         if (mode === "mut-ref") {
@@ -370,8 +398,15 @@ function planProviderOperationExpression(
         return undefined;
       }
       const receiverArg: RustExpr = form.receiverMode === "ref" ? { kind: "reference", expr: receiver } : receiver;
-      const shapedArgs = args.map((argument, index): RustExpr =>
-        (form.argModes?.[index] ?? "value") === "ref" ? { kind: "reference", expr: argument } : argument);
+      const ordered = form.argOrder === undefined ? args : form.argOrder.map((index) => args[index]).filter((argument): argument is RustExpr => argument !== undefined);
+      const shapedArgs = ordered.map((argument, index): RustExpr => {
+        if ((form.argModes?.[index] ?? "value") !== "ref") {
+          return argument;
+        }
+        return argument.kind === "string-literal"
+          ? { kind: "str-literal", value: argument.value }
+          : { kind: "reference", expr: argument };
+      });
       const trailing = (form.trailingArgs ?? []).map((text): RustExpr => ({ kind: "path", path: text }));
       return { kind: "call", path: form.path, args: [receiverArg, ...shapedArgs, ...trailing] };
     }
@@ -437,7 +472,22 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
       ? Node_Expression(callee)
       : undefined;
     const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    return receiver === undefined ? undefined : { kind: "method-call", receiver, method: rustValueName(fact.name), args };
+    if (receiver === undefined) {
+      return undefined;
+    }
+    const methodCall: RustExpr = { kind: "method-call", receiver, method: rustValueName(fact.name), args };
+    if (fact.fallible === true) {
+      if (context.fallibleContext !== true) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node),
+          "rust.error.call",
+          "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+        ));
+        return undefined;
+      }
+      return { kind: "try", expr: methodCall };
+    }
+    return methodCall;
   }
   if (fact !== undefined && fact.kind === "provider-operation") {
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
@@ -451,6 +501,17 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
         "Provider call operation could not be lowered.",
       ));
       return undefined;
+    }
+    if (fact.fallible === true) {
+      if (context.fallibleContext !== true) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node),
+          "rust.error.call",
+          "Fallible operations require a fallible lowering context (a throwing function or a try block).",
+        ));
+        return undefined;
+      }
+      return applyResultCast({ kind: "try", expr: planned }, fact.castResult);
     }
     return applyResultCast(planned, fact.castResult);
   }
@@ -476,6 +537,15 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     ));
     return undefined;
   }
+  const fallibleCall = context.input.facts.getFact(node, rustFallibleCallFactKey) !== undefined;
+  if (fallibleCall && context.fallibleContext !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.call",
+      "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+    ));
+    return undefined;
+  }
   const path = moduleName === context.moduleName ? declarationName : `crate::${moduleName}::${declarationName}`;
   const parameters = ast.parameters(sourceReference.declaration);
   const callArgumentNodes = ast.arguments(node).filter((argument): argument is Node => argument !== undefined);
@@ -495,7 +565,8 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     }
     return argument;
   });
-  return { kind: "call", path, args: shapedArgs };
+  const call: RustExpr = { kind: "call", path, args: shapedArgs };
+  return fallibleCall ? { kind: "try", expr: call } : call;
 }
 
 function planNewExpression(node: Node, context: RustPlanContext): RustExpr | undefined {

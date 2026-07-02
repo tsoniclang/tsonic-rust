@@ -17,6 +17,9 @@ export interface RustPlanContext {
   // Call nodes appearing directly under an await expression; future-carrier
   // calls anywhere else fail closed.
   readonly awaitedCalls?: WeakSet<object>;
+  // Inside a fallible lowering (Result-returning fn body or try closure):
+  // fallible calls take `?`, throws lower to Err returns.
+  readonly fallibleContext?: boolean;
 }
 
 // Deterministic value-name policy: camelCase lowers to snake_case so

@@ -29,6 +29,7 @@ import { isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers } from
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
+import { rustFallibleFactKey } from "../../source/rust-facts/keys.js";
 import { planClassDeclaration, planEnumDeclaration, planInterfaceDeclaration, planUnionAliasDeclaration } from "./declarations-nominal.js";
 
 export function planRustArtifacts(input: TargetCompileInput): TargetCompileResult {
@@ -98,6 +99,12 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
     if (rendered.includes("node_os::")) {
       useItems.push({ kind: "use", path: "tsonic_rust_node::os", alias: "node_os" });
     }
+    if (rendered.includes("node_fs::")) {
+      useItems.push({ kind: "use", path: "tsonic_rust_node::fs", alias: "node_fs" });
+    }
+    if (rendered.includes("rt::")) {
+      useItems.push({ kind: "use", path: "tsonic_rust_runtime", alias: "rt" });
+    }
     const finalText = useItems.length === 0
       ? rendered
       : printRustSourceFile(createRustSourceFile([...useItems, ...items]));
@@ -105,14 +112,23 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
   }
   if (outputType === "bin" && entryFunction !== undefined) {
     const crateName = readRustCrateName(input.target);
-    const mainText = [
-      `// ${rustGeneratedHeaderComment}`,
-      "",
-      "fn main() {",
-      `    ${crateName}::${entryFunction.moduleName}::${entryFunction.functionName}();`,
-      "}",
-      "",
-    ].join("\n");
+    const mainText = entryFunction.fallible
+      ? [
+          `// ${rustGeneratedHeaderComment}`,
+          "",
+          "fn main() -> tsonic_rust_runtime::TsonicResult<()> {",
+          `    ${crateName}::${entryFunction.moduleName}::${entryFunction.functionName}()`,
+          "}",
+          "",
+        ].join("\n")
+      : [
+          `// ${rustGeneratedHeaderComment}`,
+          "",
+          "fn main() {",
+          `    ${crateName}::${entryFunction.moduleName}::${entryFunction.functionName}();`,
+          "}",
+          "",
+        ].join("\n");
     artifacts.push(rustSourceArtifact("src/main.rs", mainText));
   }
   return { artifacts, diagnostics: [] };
@@ -298,6 +314,7 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
 interface RustBinaryEntry {
   readonly moduleName: string;
   readonly functionName: string;
+  readonly fallible: boolean;
 }
 
 function resolveBinaryEntry(
@@ -338,7 +355,11 @@ function resolveBinaryEntry(
       // Async entry points would require an implicit executor selection.
       break;
     }
-    return { moduleName, functionName: "main" };
+    return {
+      moduleName,
+      functionName: "main",
+      fallible: input.facts.getFact(statement, rustFallibleFactKey) !== undefined,
+    };
   }
   diagnostics.push({
     code: "RUST_MISSING_ENTRYPOINT",

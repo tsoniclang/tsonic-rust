@@ -24,7 +24,8 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrier } from "./render-types.js";
-import { rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
+import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
+import { applyFallibleShape } from "./functions.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
@@ -294,9 +295,11 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   if (bodyNode === undefined) {
     return undefined;
   }
+  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const bodyContext: RustPlanContext = {
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),
+    ...(fallible ? { fallibleContext: true } : {}),
   };
   const body = planBlockLike(bodyNode, bodyContext);
   if (body === undefined) {
@@ -306,12 +309,13 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   return {
     name: methodName,
     pub: true,
+    ...(fallible ? { fallible: true } : {}),
     ...(isStatic ? {} : {
       selfParam: (context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref") as import("../rust-ast/nodes.js").RustSelfParam,
     }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyTail(body, returnType !== undefined),
+    body: applyFallibleShape(applyTail(body, returnType !== undefined), fallible, returnType !== undefined),
   };
 }
 

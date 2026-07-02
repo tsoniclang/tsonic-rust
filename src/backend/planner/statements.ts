@@ -79,6 +79,12 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
     case "KindForOfStatement": {
       return planForOfStatement(node, context);
     }
+    case "KindThrowStatement": {
+      return planThrowStatement(node, context);
+    }
+    case "KindTryStatement": {
+      return planTryStatement(node, context);
+    }
     case KindBlock: {
       const body = planBlockLike(node, context);
       return body === undefined ? undefined : [{ kind: "scope", body }];
@@ -610,4 +616,112 @@ function planSparseArrayLet(
   }
   void statement;
   return statements;
+}
+
+function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  if (fact === undefined || fact.kind !== "throw-op") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.throw",
+      "throw supports only `throw new Error(message)` with a finalized throw fact.",
+    ));
+    return undefined;
+  }
+  if (context.fallibleContext !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.throw",
+      "throw requires a fallible lowering context.",
+    ));
+    return undefined;
+  }
+  const { ast } = context.input;
+  const newExpression = Node_Expression(node);
+  const [messageNode] = newExpression === undefined ? [] : ast.arguments(newExpression);
+  const message = messageNode === undefined
+    ? { kind: "string-literal" as const, value: "" }
+    : planExpression(messageNode, context);
+  return message === undefined ? undefined : [{ kind: "throw", message }];
+}
+
+function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const raw = node as unknown as {
+    readonly TryBlock?: Node;
+    readonly CatchClause?: Node;
+    readonly FinallyBlock?: Node;
+  };
+  const catchClause = raw.CatchClause as unknown as {
+    readonly VariableDeclaration?: Node;
+    readonly Block?: Node;
+  } | undefined;
+  if (raw.TryBlock === undefined || catchClause?.Block === undefined || raw.FinallyBlock !== undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.try",
+      "try statements require a catch clause and no finally block.",
+    ));
+    return undefined;
+  }
+  // The try body lowers into a Result-returning closure; control flow that
+  // escapes the closure is unrepresentable.
+  let escapes = false;
+  const scan = (candidate: Node): void => {
+    if (escapes) {
+      return;
+    }
+    const kind = ast.kindName(candidate);
+    if (kind === KindReturnStatement || kind === "KindBreakStatement" || kind === "KindContinueStatement") {
+      escapes = true;
+      return;
+    }
+    ast.forEachChild(candidate, (child) => {
+      if (child !== undefined) {
+        scan(child);
+      }
+    });
+  };
+  scan(raw.TryBlock);
+  if (escapes) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.try",
+      "try blocks must not contain return, break, or continue.",
+    ));
+    return undefined;
+  }
+  const tryContext: RustPlanContext = { ...context, fallibleContext: true };
+  const body = planBlockLike(raw.TryBlock, tryContext);
+  const catchBody = planBlockLike(catchClause.Block, context);
+  if (body === undefined || catchBody === undefined) {
+    return undefined;
+  }
+  const bindingNode = catchClause.VariableDeclaration === undefined
+    ? undefined
+    : Node_Name(catchClause.VariableDeclaration);
+  const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
+  let binding = bindingSource.length === 0 ? "_" : rustValueName(bindingSource);
+  if (binding !== "_") {
+    let used = false;
+    const findUse = (candidate: Node): void => {
+      if (used) {
+        return;
+      }
+      if (ast.kindName(candidate) === KindIdentifier && ast.text(candidate) === bindingSource) {
+        used = true;
+        return;
+      }
+      ast.forEachChild(candidate, (child) => {
+        if (child !== undefined) {
+          findUse(child);
+        }
+      });
+    };
+    findUse(catchClause.Block);
+    if (!used) {
+      binding = `_${binding}`;
+    }
+  }
+  return [{ kind: "try-catch", body, catchBinding: binding, catchBody }];
 }

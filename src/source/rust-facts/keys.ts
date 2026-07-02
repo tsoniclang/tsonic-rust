@@ -28,6 +28,7 @@ export type RustProviderOperationForm =
       readonly receiverMode: RustArgumentMode;
       readonly argModes?: readonly RustArgumentMode[];
       readonly trailingArgs?: readonly string[];
+      readonly argOrder?: readonly number[];
     }
   | {
       // Selected source call lowers to a native Rust operator expression.
@@ -67,6 +68,7 @@ export type RustTargetOperationFact =
       readonly target: RustProviderOperationForm;
       readonly resultCarrier: TargetTypeRef;
       readonly castResult?: string;
+      readonly fallible?: boolean;
     }
   | {
       readonly kind: "array-literal";
@@ -106,6 +108,7 @@ export type RustTargetOperationFact =
       readonly name: string;
       readonly mutatesSelf: boolean;
       readonly resultCarrier: TargetTypeRef;
+      readonly fallible?: boolean;
     }
   | {
       // Static method call on a project-source class: associated function.
@@ -148,6 +151,19 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | { readonly kind: "await-op"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
+  | {
+      // Arrow-function argument lowering to a Rust closure. Parameter names
+      // come from the arrow declaration; byRefCopy params bind as |&x|.
+      readonly kind: "closure";
+      readonly operationId: string;
+      readonly byRefCopyParams: readonly boolean[];
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      // `throw new Error(message)` lowering to an Err return.
+      readonly kind: "throw-op";
+      readonly operationId: string;
+    }
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
   | { readonly kind: "option-coalesce"; readonly operationId: string }
@@ -227,5 +243,20 @@ export const rustUnionVariantsFactKey: ExtensionFactKey<{ readonly variants: rea
 export const rustAsyncFunctionFactKey: ExtensionFactKey<{ readonly isAsync: true }> = defineExtensionFactKey({
   extensionId: rustExtensionId,
   name: "asyncFunction",
+  equals: () => true,
+});
+
+// Declarations whose lowering returns TsonicResult<T>: they throw, or they
+// transitively call fallible operations outside a try boundary.
+export const rustFallibleFactKey: ExtensionFactKey<{ readonly fallible: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "fallible",
+  equals: () => true,
+});
+
+// Source-owned call sites whose callee lowering is fallible.
+export const rustFallibleCallFactKey: ExtensionFactKey<{ readonly fallible: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "fallibleCall",
   equals: () => true,
 });

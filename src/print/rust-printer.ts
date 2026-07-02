@@ -49,7 +49,9 @@ export function printRustItem(item: RustItem): string {
         const selfPrefix = fn.selfParam === undefined ? "" : fn.selfParam === "ref" ? "&self" : "&mut self";
         const params = fn.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`).join(", ");
         const allParams = selfPrefix.length === 0 ? params : params.length === 0 ? selfPrefix : `${selfPrefix}, ${params}`;
-        const returnSuffix = fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
+        const returnSuffix = fn.fallible === true
+          ? ` -> rt::TsonicResult<${fn.returnType === undefined ? "()" : printRustType(fn.returnType)}>`
+          : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const header = `    ${fn.pub ? "pub " : ""}fn ${fn.name}(${allParams})${returnSuffix} {`;
         const body = printRustBlockStatements(fn.body, 2);
         return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
@@ -59,7 +61,9 @@ export function printRustItem(item: RustItem): string {
     case "function": {
       const params = item.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`).join(", ");
       const generics = item.typeParams === undefined || item.typeParams.length === 0 ? "" : `<${item.typeParams.join(", ")}>`;
-      const returnSuffix = item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
+      const returnSuffix = item.fallible === true
+        ? ` -> rt::TsonicResult<${item.returnType === undefined ? "()" : printRustType(item.returnType)}>`
+        : item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
       const header = `${item.pub ? "pub " : ""}${item.isAsync === true ? "async " : ""}fn ${item.name}${generics}(${params})${returnSuffix} {`;
       const body = printRustBlockStatements(item.body, 1);
       return body.length === 0 ? `${header}}` : `${header}\n${body}\n}`;
@@ -153,6 +157,29 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     case "scope": {
       const body = printRustBlockStatements(statement.body, depth + 1);
       return body.length === 0 ? `${indent}{}` : `${indent}{\n${body}\n${indent}}`;
+    }
+    case "throw": {
+      return [
+        `${indent}return Err(rt::TsonicError::from(rt::JsError::new(`,
+        `${indent}    rt::JsErrorKind::Error,`,
+        `${indent}    ${printRustExpr(statement.message)},`,
+        `${indent})));`,
+      ].join("\n");
+    }
+    case "try-catch": {
+      const tryBody = printRustBlockStatements(statement.body, depth + 1);
+      const okTail = `${indentText(depth + 1)}Ok(())`;
+      const catchBody = printRustBlockStatements(statement.catchBody, depth + 1);
+      const lines = [
+        `${indent}let __try: rt::TsonicResult<()> = (|| {`,
+        ...(tryBody.length === 0 ? [] : [tryBody]),
+        okTail,
+        `${indent}})();`,
+        `${indent}if let Err(${statement.catchBinding}) = __try {`,
+        ...(catchBody.length === 0 ? [] : [catchBody]),
+        `${indent}}`,
+      ];
+      return lines.join("\n");
     }
   }
 }
@@ -277,6 +304,15 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "slice-literal": {
       return `[${expression.elements.map(printRustExpr).join(", ")}]`;
+    }
+    case "closure": {
+      const params = expression.params
+        .map((param) => (param.byRefCopy ? `&${param.name}` : param.name))
+        .join(", ");
+      return `|${params}| ${printRustExpr(expression.body)}`;
+    }
+    case "try": {
+      return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`;
     }
     case "tuple-literal": {
       return `(${expression.elements.map(printRustExpr).join(", ")})`;
