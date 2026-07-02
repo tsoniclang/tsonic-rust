@@ -5,7 +5,8 @@ export type RustType =
   | { readonly kind: "primitive"; readonly name: string }
   | { readonly kind: "string" }
   | { readonly kind: "unit" }
-  | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] };
+  | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] }
+  | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean };
 
 export type RustExpr =
   | { readonly kind: "int-literal"; readonly text: string }
@@ -22,13 +23,14 @@ export type RustExpr =
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
   | { readonly kind: "cast"; readonly expr: RustExpr; readonly to: string }
-  | { readonly kind: "reference"; readonly expr: RustExpr }
-  | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] };
+  | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
+  | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
+  | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] };
 
 export type RustStmt =
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init: RustExpr }
   | { readonly kind: "expr"; readonly expr: RustExpr }
-  | { readonly kind: "assign"; readonly target: string; readonly operator: string; readonly value: RustExpr }
+  | { readonly kind: "assign"; readonly target: RustExpr; readonly operator: string; readonly value: RustExpr }
   | { readonly kind: "return"; readonly expr?: RustExpr }
   | { readonly kind: "tail"; readonly expr: RustExpr }
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock }
@@ -44,6 +46,22 @@ export interface RustBlock {
 export interface RustFunctionParam {
   readonly name: string;
   readonly type: RustType;
+}
+
+export type RustSelfParam = "ref" | "mut-ref";
+
+export interface RustStructField {
+  readonly name: string;
+  readonly type: RustType;
+}
+
+export interface RustImplFunction {
+  readonly name: string;
+  readonly pub: boolean;
+  readonly selfParam?: RustSelfParam;
+  readonly params: readonly RustFunctionParam[];
+  readonly returnType?: RustType;
+  readonly body: RustBlock;
 }
 
 export type RustItem =
@@ -63,6 +81,9 @@ export type RustItem =
       readonly value: RustExpr;
     }
   | { readonly kind: "mod-decl"; readonly name: string; readonly pub: boolean }
+  | { readonly kind: "struct"; readonly name: string; readonly pub: boolean; readonly derives: readonly string[]; readonly fields: readonly RustStructField[] }
+  | { readonly kind: "impl"; readonly name: string; readonly functions: readonly RustImplFunction[] }
+  | { readonly kind: "enum"; readonly name: string; readonly pub: boolean; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string }[] }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string };
 
 export interface RustSourceFileModel {

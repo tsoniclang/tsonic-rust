@@ -31,6 +31,31 @@ export function printRustItem(item: RustItem): string {
     case "const": {
       return `${item.pub ? "pub " : ""}const ${item.name}: ${printRustType(item.type)} = ${printRustExpr(item.value)};`;
     }
+    case "struct": {
+      const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
+      const header = `${derives}${item.pub ? "pub " : ""}struct ${item.name} {`;
+      const fields = item.fields.map((field) => `    pub ${field.name}: ${printRustType(field.type)},`).join("\n");
+      return fields.length === 0 ? `${derives}${item.pub ? "pub " : ""}struct ${item.name};` : `${header}\n${fields}\n}`;
+    }
+    case "enum": {
+      const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
+      const variants = item.variants
+        .map((variant) => `    ${variant.name}${variant.discriminant === undefined ? "" : ` = ${variant.discriminant}`},`)
+        .join("\n");
+      return `${derives}${item.pub ? "pub " : ""}enum ${item.name} {\n${variants}\n}`;
+    }
+    case "impl": {
+      const rendered = item.functions.map((fn) => {
+        const selfPrefix = fn.selfParam === undefined ? "" : fn.selfParam === "ref" ? "&self" : "&mut self";
+        const params = fn.params.map((param) => `${param.name}: ${printRustType(param.type)}`).join(", ");
+        const allParams = selfPrefix.length === 0 ? params : params.length === 0 ? selfPrefix : `${selfPrefix}, ${params}`;
+        const returnSuffix = fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
+        const header = `    ${fn.pub ? "pub " : ""}fn ${fn.name}(${allParams})${returnSuffix} {`;
+        const body = printRustBlockStatements(fn.body, 2);
+        return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
+      }).join("\n\n");
+      return `impl ${item.name} {\n${rendered}\n}`;
+    }
     case "function": {
       const params = item.params.map((param) => `${param.name}: ${printRustType(param.type)}`).join(", ");
       const returnSuffix = item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
@@ -57,6 +82,9 @@ export function printRustType(type: RustType): string {
       return args.length === 0
         ? type.path
         : `${type.path}<${args.map(printRustType).join(", ")}>`;
+    }
+    case "slice-ref": {
+      return `${type.mutable ? "&mut " : "&"}[${printRustType(type.element)}]`;
     }
   }
 }
@@ -87,7 +115,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return `${indent}${printRustExpr(statement.expr)};`;
     }
     case "assign": {
-      return `${indent}${statement.target} ${statement.operator} ${printRustExpr(statement.value)};`;
+      return `${indent}${printRustExpr(statement.target)} ${statement.operator} ${printRustExpr(statement.value)};`;
     }
     case "return": {
       return statement.expr === undefined
@@ -237,10 +265,20 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.expr, RustPrecedence.Unary, false)} as ${expression.to}`;
     }
     case "reference": {
-      return `&${printOperand(expression.expr, RustPrecedence.Unary, false)}`;
+      const prefix = expression.mutable === true ? "&mut " : "&";
+      return `${prefix}${printOperand(expression.expr, RustPrecedence.Unary, false)}`;
     }
     case "vec-literal": {
       return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;
+    }
+    case "struct-literal": {
+      const fields = expression.fields
+        .map((field) => {
+          const value = printRustExpr(field.value);
+          return value === field.name ? field.name : `${field.name}: ${value}`;
+        })
+        .join(", ");
+      return `${expression.path} { ${fields} }`;
     }
 
   }

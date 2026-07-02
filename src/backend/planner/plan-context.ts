@@ -9,7 +9,29 @@ export interface RustPlanContext {
   readonly diagnostics: TargetDiagnostic[];
   // Identifier names with a proven write (assignment or increment) in the
   // enclosing function body. `let mut` is emitted only for proven writes.
+  // Both sets operate in source-name space; renaming happens at emission.
   readonly mutatedNames?: ReadonlySet<string>;
+  // Emitted binding names in the enclosing function scope, used to detect
+  // deterministic-rename collisions (TS fooBar and foo_bar both exist).
+  readonly emittedLocalNames?: Set<string>;
+}
+
+// Deterministic value-name policy: camelCase lowers to snake_case so
+// generated code satisfies Rust naming lints. Collisions are diagnosed, not
+// silently merged.
+export function rustValueName(name: string): string {
+  if (/^[A-Z][A-Z0-9_]*$/u.test(name)) {
+    // UPPER_SNAKE names are constant references and pass through unchanged.
+    return name;
+  }
+  return name
+    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
+    .toLowerCase();
+}
+
+export function isUpperSnakeName(name: string): boolean {
+  return /^[A-Z][A-Z0-9_]*$/u.test(name);
 }
 
 export const rustReservedIdentifiers: ReadonlySet<string> = new Set([
@@ -29,4 +51,15 @@ export function isValidRustIdentifier(name: string): boolean {
 
 export function diagnosticInput(context: RustPlanContext, node: Node) {
   return { ast: context.input.ast, sourceFile: context.sourceFile, node };
+}
+
+export function sourceTypePath(
+  context: RustPlanContext,
+  value: { readonly fileName: string; readonly typeName: string },
+): string | undefined {
+  const moduleName = context.moduleNameByFileName.get(value.fileName);
+  if (moduleName === undefined || !isValidRustIdentifier(value.typeName)) {
+    return undefined;
+  }
+  return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
 }

@@ -55,7 +55,9 @@ export function createRustCompileInputFromSession(options: RustCompileInputOptio
     }
     const declaration = checker.getSymbolValueDeclaration(aliased) ??
       checker.getSymbolValueDeclaration(symbol) ??
-      checker.getPrimarySymbolDeclaration(aliased);
+      checker.getPrimarySymbolDeclaration(aliased) ??
+      checker.getPrimarySymbolDeclaration(symbol) ??
+      checker.getSymbolDeclarations(symbol)[0];
     if (declaration === undefined) {
       return undefined;
     }
@@ -81,6 +83,13 @@ export function createRustCompileInputFromSession(options: RustCompileInputOptio
     getSymbolName: (subject: object | undefined) =>
       subject === undefined ? undefined : checker.getSymbolName(subject as never),
     getProjectSourceReferenceForNode,
+    getEnumMemberConstant: (node: Node | undefined) => {
+      if (node === undefined) {
+        return undefined;
+      }
+      const value = checker.getConstantValue(node);
+      return typeof value === "number" || typeof value === "string" ? { value } : undefined;
+    },
   };
 
   const targetFacts = {

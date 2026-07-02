@@ -58,6 +58,7 @@ interface JsOperationRowData {
   readonly operationKind: JsOperationRequest["operationKind"];
   readonly lane: JsLane;
   readonly elementGuard?: "numeric";
+  readonly requiresOwnership?: readonly ("owned" | "borrowed" | "borrowed-mut")[];
   readonly shape:
     | {
         readonly op: "operation";
@@ -77,19 +78,25 @@ interface JsOperationRowData {
 const jsOperationRows: readonly JsOperationRowData[] = [
   // Dense Vec<T> lane.
   { owner: "Array", member: "length", operationKind: "property", lane: "vec", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
-  { owner: "Array", member: "push", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push" }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
+  { owner: "Array", member: "push", operationKind: "call", lane: "vec", requiresOwnership: ["owned"], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push", mutatesReceiver: true }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "includes", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_includes", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, result: { ref: "bool" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "indexOf", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_index_of", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "index", operationKind: "indexer", lane: "vec", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argCasts: ["usize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
-  { owner: "Array", member: "index", operationKind: "index-set", lane: "vec", shape: { op: "set", target: { form: "index" }, params: [{ ref: "int32" }, { ref: "element" }] } },
+  { owner: "Array", member: "index", operationKind: "index-set", lane: "vec", requiresOwnership: ["owned", "borrowed-mut"], shape: { op: "set", target: { form: "index" }, params: [{ ref: "int32" }, { ref: "element" }] } },
+
+  // ReadonlyArray rows: read-only operations over dense/slice lanes.
+  { owner: "ReadonlyArray", member: "length", operationKind: "property", lane: "vec", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
+  { owner: "ReadonlyArray", member: "includes", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_includes", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, result: { ref: "bool" }, params: [{ ref: "element" }] } },
+  { owner: "ReadonlyArray", member: "indexOf", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_index_of", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
+  { owner: "ReadonlyArray", member: "index", operationKind: "indexer", lane: "vec", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argCasts: ["usize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
 
   // Sparse JsArray<T> lane.
   { owner: "Array", member: "length", operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
-  { owner: "Array", member: "length", operationKind: "property-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set_len", argCasts: ["usize"] }, params: [{ ref: "int32" }] } },
+  { owner: "Array", member: "length", operationKind: "property-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set_len", argCasts: ["usize"], mutatesReceiver: true }, params: [{ ref: "int32" }] } },
   { owner: "Array", member: "at", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "at", argModes: ["value"], argCasts: ["isize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
-  { owner: "Array", member: "push", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push" }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
+  { owner: "Array", member: "push", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push", mutatesReceiver: true }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "index", operationKind: "indexer", lane: "js-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argCasts: ["usize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
-  { owner: "Array", member: "index", operationKind: "index-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set", argCasts: ["usize", undefined] }, params: [{ ref: "int32" }, { ref: "element" }] } },
+  { owner: "Array", member: "index", operationKind: "index-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set", argCasts: ["usize", undefined], mutatesReceiver: true }, params: [{ ref: "int32" }, { ref: "element" }] } },
 
   // String lane (runtime string module through the js_string alias).
   { owner: "String", member: "length", operationKind: "property", lane: "string", shape: { op: "operation", operationKind: "property", target: { form: "free-call", path: "js_string::js_len", receiverMode: "ref" }, castResult: "i32", result: { ref: "int32" } } },
@@ -101,16 +108,16 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "String", member: "trim", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim", receiverMode: "ref" }, result: { ref: "string" } } },
 
   // Map lane.
-  { owner: "Map", member: "set", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set" }, result: { ref: "receiver" }, params: [{ ref: "map-key" }, { ref: "map-value" }] } },
+  { owner: "Map", member: "set", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set", mutatesReceiver: true }, result: { ref: "receiver" }, params: [{ ref: "map-key" }, { ref: "map-value" }] } },
   { owner: "Map", member: "get", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get", argModes: ["ref"], chain: ["@copy"] }, result: { ref: "option-of-map-value" }, params: [{ ref: "map-key" }] } },
   { owner: "Map", member: "has", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "map-key" }] } },
-  { owner: "Map", member: "delete", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "map-key" }] } },
+  { owner: "Map", member: "delete", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"], mutatesReceiver: true }, result: { ref: "bool" }, params: [{ ref: "map-key" }] } },
   { owner: "Map", member: "size", operationKind: "property", lane: "map", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
 
   // Set lane.
-  { owner: "Set", member: "add", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "add" }, result: { ref: "receiver" }, params: [{ ref: "set-value" }] } },
+  { owner: "Set", member: "add", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "add", mutatesReceiver: true }, result: { ref: "receiver" }, params: [{ ref: "set-value" }] } },
   { owner: "Set", member: "has", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "set-value" }] } },
-  { owner: "Set", member: "delete", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "set-value" }] } },
+  { owner: "Set", member: "delete", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"], mutatesReceiver: true }, result: { ref: "bool" }, params: [{ ref: "set-value" }] } },
   { owner: "Set", member: "size", operationKind: "property", lane: "set", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
 
   // Date lane.
@@ -124,11 +131,17 @@ interface JsLaneBindings {
   readonly mapValue?: TargetTypeRef;
   readonly setValue?: TargetTypeRef;
   readonly receiver?: TargetTypeRef;
+  readonly receiverOwnership?: "owned" | "borrowed" | "borrowed-mut";
 }
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
   if (carrier !== undefined && isRustVecCarrier(carrier)) {
-    return { lane: "vec", bindings: { element: carrier.element, receiver: carrier } };
+    return { lane: "vec", bindings: { element: carrier.element, receiver: carrier, receiverOwnership: "owned" } };
+  }
+  if (carrier?.kind === "pointer" && carrier.pointee.kind === "array") {
+    const element = carrier.pointee.element;
+    const receiverOwnership = carrier.mutability === "mut" ? "borrowed-mut" : "borrowed";
+    return { lane: "vec", bindings: { element, receiver: carrier, receiverOwnership } };
   }
   if (carrier?.kind === "target-named") {
     if (isRustJsArrayCarrier(carrier)) {
@@ -214,7 +227,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     candidate.member === request.memberName &&
     candidate.operationKind === request.operationKind &&
     candidate.lane === lane &&
-    (candidate.elementGuard !== "numeric" || isRustNumericCarrier(bindings.element)));
+    (candidate.elementGuard !== "numeric" || isRustNumericCarrier(bindings.element)) &&
+    (candidate.requiresOwnership === undefined ||
+      (bindings.receiverOwnership !== undefined && candidate.requiresOwnership.includes(bindings.receiverOwnership))));
   if (row === undefined) {
     return undefined;
   }

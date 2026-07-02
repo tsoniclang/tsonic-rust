@@ -19,16 +19,25 @@ import {
   Node_Expression,
   PrefixUnaryExpression_Operand,
 } from "../../common/source-ast.js";
-import { rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustOptionWrapFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier } from "../../source/rust-target-types.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const planned = planExpressionInner(node, context);
+  if (planned === undefined) {
+    return undefined;
+  }
+  const wrap = context.input.facts.getFact(node, rustOptionWrapFactKey);
+  return wrap?.wrap === true ? { kind: "call", path: "Some", args: [planned] } : planned;
+}
+
+function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const { ast } = context.input;
   const kind = ast.kindName(node);
   switch (kind) {
@@ -44,13 +53,29 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
     case KindFalseKeyword: {
       return { kind: "bool-literal", value: false };
     }
+    case "KindThisExpression":
+    case "KindThisKeyword": {
+      return { kind: "path", path: "self" };
+    }
+    case "KindNullKeyword": {
+      const fact = rustOperationFact(node, context);
+      if (fact === undefined || fact.kind !== "option-none") {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.nullish",
+          "null literals require a finalized Option lane fact.",
+        ));
+        return undefined;
+      }
+      return { kind: "path", path: "None" };
+    }
     case KindIdentifier: {
-      const name = ast.text(node);
+      const name = rustValueName(ast.text(node));
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.identifier",
-          `Identifier '${name}' is not a valid Rust identifier.`,
+          `Identifier '${ast.text(node)}' does not lower to a valid Rust identifier.`,
         ));
         return undefined;
       }
@@ -160,6 +185,16 @@ function planUnaryExpression(node: Node, context: RustPlanContext): RustExpr | u
 
 function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "option-coalesce") {
+    const leftNode = BinaryExpression_Left(node);
+    const rightNode = BinaryExpression_Right(node);
+    const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
+    const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
+    if (left === undefined || right === undefined) {
+      return undefined;
+    }
+    return { kind: "method-call", receiver: left, method: "unwrap_or", args: [right] };
+  }
   if (fact !== undefined && fact.kind === "option-check") {
     const { ast } = context.input;
     const leftNode = BinaryExpression_Left(node);
@@ -241,7 +276,17 @@ function planProviderOperationExpression(
 ): RustExpr | undefined {
   switch (form.form) {
     case "call": {
-      return { kind: "call", path: form.path, args };
+      const shaped = args.map((argument, index): RustExpr => {
+        const mode = form.argModes?.[index] ?? "value";
+        if (mode === "ref") {
+          return { kind: "reference", expr: argument };
+        }
+        if (mode === "mut-ref") {
+          return { kind: "reference", expr: argument, mutable: true };
+        }
+        return argument;
+      });
+      return { kind: "call", path: form.path, args: shaped };
     }
     case "path": {
       return { kind: "path", path: form.path };
@@ -261,6 +306,13 @@ function planProviderOperationExpression(
       }
       const index = args[0];
       return index === undefined ? undefined : { kind: "index", receiver, index };
+    }
+    case "binary-operator": {
+      const [left, right] = args;
+      if (left === undefined || right === undefined || args.length !== 2) {
+        return undefined;
+      }
+      return { kind: "binary", operator: form.operator, left, right };
     }
     case "free-call": {
       const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
@@ -307,6 +359,19 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   if (args === undefined) {
     return undefined;
   }
+  if (fact !== undefined && fact.kind === "flow-marker") {
+    // Flow marker calls erase to their argument; passing shape comes from the
+    // consuming position's finalized argument modes.
+    const [argument] = args;
+    return argument;
+  }
+  if (fact !== undefined && fact.kind === "source-method") {
+    const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
+      ? Node_Expression(callee)
+      : undefined;
+    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+    return receiver === undefined ? undefined : { kind: "method-call", receiver, method: rustValueName(fact.name), args };
+  }
   if (fact !== undefined && fact.kind === "provider-operation") {
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
       ? Node_Expression(callee)
@@ -335,7 +400,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   }
   const declarationFileName = ast.getFileName(sourceReference.sourceFile);
   const moduleName = context.moduleNameByFileName.get(declarationFileName);
-  const declarationName = ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration);
+  const declarationName = rustValueName(ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration));
   if (moduleName === undefined || !isValidRustIdentifier(declarationName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -345,11 +410,45 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     return undefined;
   }
   const path = moduleName === context.moduleName ? declarationName : `crate::${moduleName}::${declarationName}`;
-  return { kind: "call", path, args };
+  const parameters = ast.parameters(sourceReference.declaration);
+  const callArgumentNodes = ast.arguments(node).filter((argument): argument is Node => argument !== undefined);
+  const shapedArgs = args.map((argument, index) => {
+    const parameter = parameters[index];
+    const parameterCarrier = parameter === undefined
+      ? undefined
+      : context.input.facts.getRuntimeCarrierFact(parameter)?.carrier;
+    const argumentNode = callArgumentNodes[index];
+    const argumentCarrier = argumentNode === undefined
+      ? undefined
+      : context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
+    // Owned dense arrays borrow into slice parameters: proven by both
+    // finalized carriers, not by syntax.
+    if (parameterCarrier?.kind === "pointer" && parameterCarrier.pointee.kind === "array" && argumentCarrier?.kind === "array") {
+      return { kind: "reference" as const, expr: argument, mutable: parameterCarrier.mutability === "mut" };
+    }
+    return argument;
+  });
+  return { kind: "call", path, args: shapedArgs };
 }
 
 function planNewExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "source-constructor") {
+    const value = rustSourceTypeCarrierValue(fact.resultCarrier);
+    const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+    const args = planArguments(node, context);
+    if (typePath === undefined || args === undefined) {
+      if (typePath === undefined) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.class",
+          "Constructor does not resolve to a generated Rust struct path.",
+        ));
+      }
+      return undefined;
+    }
+    return { kind: "call", path: `${typePath}::new`, args };
+  }
   if (fact === undefined || fact.kind !== "provider-operation" || fact.operationKind !== "constructor") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -375,6 +474,24 @@ function planNewExpression(node: Node, context: RustPlanContext): RustExpr | und
 
 function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "source-field") {
+    const receiverNode = Node_Expression(node);
+    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+    return receiver === undefined ? undefined : { kind: "field", receiver, name: rustValueName(fact.name) };
+  }
+  if (fact !== undefined && fact.kind === "source-enum-member") {
+    const value = rustSourceTypeCarrierValue(fact.resultCarrier);
+    const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+    if (typePath === undefined) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.enum",
+        "Enum member access does not resolve to a generated Rust enum path.",
+      ));
+      return undefined;
+    }
+    return { kind: "path", path: `${typePath}::${fact.name}` };
+  }
   if (fact === undefined || fact.kind !== "provider-operation") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),

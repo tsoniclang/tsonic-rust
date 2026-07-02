@@ -191,3 +191,34 @@ export function probe(text: string): boolean {
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.length > 0);
 });
+
+test("readonly arrays lower to borrowed slice parameters with slice iteration", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function sum(xs: readonly int32[]): int32 {
+  let total: int32 = 0;
+  for (const x of xs) {
+    total += x;
+  }
+  return total + xs.length;
+}
+
+export function caller(): int32 {
+  const values: int32[] = [1, 2, 3];
+  return sum(values);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn sum\(xs: &\[i32\]\) -> i32 \{/u);
+  assert.match(text, /for x in xs\.iter\(\)\.copied\(\) \{/u);
+  assert.match(text, /total \+ xs\.len\(\) as i32/u);
+  assert.match(text, /sum\(&values\)/u);
+});
