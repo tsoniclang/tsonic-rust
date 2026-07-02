@@ -114,6 +114,9 @@ export type RustTargetOperationFact =
       readonly name: string;
       readonly resultCarrier: TargetTypeRef;
     }
+  | { readonly kind: "option-none"; readonly operationId: string }
+  | { readonly kind: "option-wrap"; readonly operationId: string }
+  | { readonly kind: "option-coalesce"; readonly operationId: string }
   | {
       // Source-core flow marker call (borrow/borrowMut/move): the call node
       // lowers to its argument with the marker's passing shape.
@@ -151,3 +154,9 @@ export const rustTargetOperationFactKey: ExtensionFactKey<RustTargetOperationFac
   equals: rustTargetOperationFactEquals,
 });
 
+
+export const rustOptionWrapFactKey: ExtensionFactKey<{ readonly wrap: boolean }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "optionWrap",
+  equals: (left, right) => left.wrap === right.wrap,
+});

@@ -79,6 +79,7 @@ import {
 } from "../../common/source-ast.js";
 import {
   isRustBoolCarrier,
+  rustOptionTargetType,
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
   rustSliceElementCarrier,
@@ -94,7 +95,7 @@ import {
   rustUnitTargetType,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustExtensionId, rustSourceTypeCarrier, rustTargetOperationFactKey } from "../rust-facts/keys.js";
+import { rustExtensionId, rustOptionWrapFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey } from "../rust-facts/keys.js";
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import { collectRustProviderOperationRows } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
@@ -372,6 +373,36 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
     const element = resolveTypeNodeCarrier(walk, ArrayTypeNode_ElementType(typeNode));
     return element === undefined ? undefined : setCarrierFact(walk, typeNode, rustVecTargetType(element));
   }
+  if (kind === "KindUnionType") {
+    const childTypes = walk.lifecycle.compiler.ast.children(typeNode)
+      .filter((child): child is Node => child !== undefined)
+      .flatMap((child) => walk.lifecycle.compiler.ast.kindName(child) === "KindSyntaxList"
+        ? walk.lifecycle.compiler.ast.children(child).filter((entry): entry is Node => entry !== undefined)
+        : [child]);
+    const typeMembers = childTypes.filter((child) => {
+      const childKind = walk.lifecycle.compiler.ast.kindName(child);
+      return childKind !== "KindBarToken";
+    });
+    if (typeMembers.length === 2) {
+      const isNullMember = (member: Node): boolean => {
+        const memberKind = walk.lifecycle.compiler.ast.kindName(member);
+        if (memberKind !== "KindLiteralType") {
+          return false;
+        }
+        const literal = walk.lifecycle.compiler.ast.children(member)[0];
+        return literal !== undefined && walk.lifecycle.compiler.ast.kindName(literal) === "KindNullKeyword";
+      };
+      const nullMember = typeMembers.find(isNullMember);
+      const valueMember = typeMembers.find((member) => !isNullMember(member));
+      if (nullMember !== undefined && valueMember !== undefined) {
+        const inner = resolveTypeNodeCarrier(walk, valueMember);
+        if (inner !== undefined) {
+          return setCarrierFact(walk, typeNode, rustOptionTargetType(inner));
+        }
+      }
+    }
+    return undefined;
+  }
   if (kind === "KindTypeOperator") {
     // `readonly T[]` lowers to a borrowed slice lane.
     const inner = TypeOperatorNode_Type(typeNode);
@@ -409,10 +440,46 @@ function resolveExpressionCarrier(
   }
   walk.resolving.add(expression);
   try {
-    return resolveExpressionCarrierUncached(walk, expression, sourceFile, expected);
+    const resolved = resolveExpressionCarrierUncached(walk, expression, sourceFile, expected);
+    return applyOptionLane(walk, expression, resolved, expected);
   } finally {
     walk.resolving.delete(expression);
   }
+}
+
+// Nullish lane: values flow into Option<T> positions through explicit
+// Some-wrapping facts; null literals become None.
+function applyOptionLane(
+  walk: RustFactWalk,
+  expression: Node,
+  resolved: TargetTypeRef | undefined,
+  expected: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  if (expected === undefined || !isRustOptionCarrier(expected)) {
+    return resolved;
+  }
+  const inner = expected.kind === "target-named" ? expected.typeArguments?.[0] : undefined;
+  if (inner === undefined) {
+    return resolved;
+  }
+  const existing = walk.lifecycle.host.facts.get(expression, rustTargetOperationFactKey);
+  if (resolved !== undefined && isRustOptionCarrier(resolved)) {
+    return resolved;
+  }
+  const { ast } = walk.lifecycle.compiler;
+  if (ast.kindName(expression) === "KindNullKeyword") {
+    if (existing === undefined) {
+      setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
+    }
+    return expected;
+  }
+  if (resolved !== undefined && JSON.stringify(resolved) === JSON.stringify(inner)) {
+    if (existing === undefined || existing.kind === "operator-token" || existing.kind === "provider-operation" || existing.kind === "source-field" || existing.kind === "source-method") {
+      walk.lifecycle.host.facts.set(expression, rustOptionWrapFactKey, { wrap: true }, [{ message: "rust option wrap" }]);
+    }
+    return expected;
+  }
+  return resolved;
 }
 
 function resolveExpressionCarrierUncached(
@@ -424,8 +491,11 @@ function resolveExpressionCarrierUncached(
   const kind = walk.lifecycle.compiler.ast.kindName(expression);
   switch (kind) {
     case KindNumericLiteral: {
-      if (expected !== undefined && isRustNumericCarrier(expected)) {
-        return setCarrierFact(walk, expression, expected);
+      const effectiveExpected = expected !== undefined && isRustOptionCarrier(expected) && expected.kind === "target-named"
+        ? expected.typeArguments?.[0]
+        : expected;
+      if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected)) {
+        return setCarrierFact(walk, expression, effectiveExpected);
       }
       return undefined;
     }
@@ -590,6 +660,20 @@ function resolveBinaryCarrier(
   if (leftCarrier === undefined && rightCarrier === undefined && expected !== undefined && isRustNumericCarrier(expected)) {
     leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, expected);
     rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, expected);
+  }
+  if (operatorKind === "KindQuestionQuestionToken") {
+    const rebindLeft = leftCarrier !== undefined && isRustOptionCarrier(leftCarrier) ? leftCarrier : undefined;
+    const inner = rebindLeft?.kind === "target-named" ? rebindLeft.typeArguments?.[0] : undefined;
+    if (rebindLeft === undefined || inner === undefined || right === undefined) {
+      return undefined;
+    }
+    const coalesceRight = resolveExpressionCarrier(walk, right, sourceFile, inner);
+    if (coalesceRight === undefined || JSON.stringify(coalesceRight) !== JSON.stringify(inner)) {
+      return undefined;
+    }
+    setRustOperationFact(walk, expression, { kind: "option-coalesce", operationId: "tsonic.rust.option.coalesce" });
+    recordTargetOperation(walk, expression, "tsonic.rust.option.coalesce", "operator", "unwrap_or");
+    return setCarrierFact(walk, expression, inner);
   }
   const selection = selectRustBinaryOperator(operatorKind, leftCarrier, rightCarrier);
   if (selection === undefined || leftCarrier === undefined) {

@@ -342,3 +342,45 @@ export class Marked {
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.length > 0);
 });
+
+test("null-only unions lower to Option with coalesce and Some/None lanes", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function value_or_zero(value: int32 | null): int32 {
+  return value ?? 0;
+}
+
+export function some_value(): int32 {
+  return value_or_zero(5) + value_or_zero(null);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32 \{/u);
+  assert.match(text, /value\.unwrap_or\(0\)/u);
+  assert.match(text, /value_or_zero\(Some\(5\)\)/u);
+  assert.match(text, /value_or_zero\(None\)/u);
+});
+
+test("undefined-typed unions stay fail-closed without an explicit lane", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function value_or_zero(value: int32 | undefined): int32 {
+  return value ?? 0;
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});

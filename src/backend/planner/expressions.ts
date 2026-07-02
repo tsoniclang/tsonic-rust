@@ -19,7 +19,7 @@ import {
   Node_Expression,
   PrefixUnaryExpression_Operand,
 } from "../../common/source-ast.js";
-import { rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustOptionWrapFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
@@ -29,6 +29,15 @@ import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier } from "../../source/rust-target-types.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const planned = planExpressionInner(node, context);
+  if (planned === undefined) {
+    return undefined;
+  }
+  const wrap = context.input.facts.getFact(node, rustOptionWrapFactKey);
+  return wrap?.wrap === true ? { kind: "call", path: "Some", args: [planned] } : planned;
+}
+
+function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const { ast } = context.input;
   const kind = ast.kindName(node);
   switch (kind) {
@@ -47,6 +56,18 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
     case "KindThisExpression":
     case "KindThisKeyword": {
       return { kind: "path", path: "self" };
+    }
+    case "KindNullKeyword": {
+      const fact = rustOperationFact(node, context);
+      if (fact === undefined || fact.kind !== "option-none") {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.nullish",
+          "null literals require a finalized Option lane fact.",
+        ));
+        return undefined;
+      }
+      return { kind: "path", path: "None" };
     }
     case KindIdentifier: {
       const name = rustValueName(ast.text(node));
@@ -164,6 +185,16 @@ function planUnaryExpression(node: Node, context: RustPlanContext): RustExpr | u
 
 function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "option-coalesce") {
+    const leftNode = BinaryExpression_Left(node);
+    const rightNode = BinaryExpression_Right(node);
+    const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
+    const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
+    if (left === undefined || right === undefined) {
+      return undefined;
+    }
+    return { kind: "method-call", receiver: left, method: "unwrap_or", args: [right] };
+  }
   if (fact !== undefined && fact.kind === "option-check") {
     const { ast } = context.input;
     const leftNode = BinaryExpression_Left(node);
