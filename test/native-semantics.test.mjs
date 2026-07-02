@@ -472,3 +472,49 @@ export function pick(entry: [int32, int32], i: int32): int32 {
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.length > 0);
 });
+
+test("closed string-literal unions lower to unit-variant enums", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export type Mode = "off" | "read-only" | "readWrite";
+
+export function pick_mode(flag: boolean): Mode {
+  if (flag) {
+    return "readWrite";
+  }
+  return "off";
+}
+
+export function is_off(mode: Mode): boolean {
+  return mode === "off";
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub enum Mode \{\n    Off,\n    ReadOnly,\n    ReadWrite,\n\}/u);
+  assert.match(text, /return Mode::ReadWrite;/u);
+  assert.match(text, /mode == Mode::Off/u);
+});
+
+test("discriminated object unions fail closed pending narrowing facts", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export type Shape =
+  | { kind: "circle"; radius: number }
+  | { kind: "square"; size: number };
+
+export function make(): Shape {
+  return { kind: "circle", radius: 1 };
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});

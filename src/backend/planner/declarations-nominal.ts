@@ -24,7 +24,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrier } from "./render-types.js";
-import { rustMutatedBindingFactKey, rustSelfModeFactKey } from "../../source/rust-facts/keys.js";
+import { rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
@@ -422,5 +422,28 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     pub: ast.hasModifierKind(node, "export"),
     derives: allFieldsCopy ? ["Clone", "Copy", "Debug", "PartialEq"] : ["Clone", "Debug", "PartialEq"],
     fields,
+  }];
+}
+
+export function planUnionAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+  const { ast } = context.input;
+  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const fact = context.input.facts.getFact(node, rustUnionVariantsFactKey);
+  const nameNode = Node_Name(node);
+  const aliasName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.union",
+      "Type aliases lower only as closed string-literal unions with finalized variant facts.",
+    ));
+    return undefined;
+  }
+  return [{
+    kind: "enum",
+    name: aliasName,
+    pub: ast.hasModifierKind(node, "export"),
+    derives: ["Clone", "Copy", "Debug", "PartialEq"],
+    variants: fact.variants.map((variant) => ({ name: variant.name })),
   }];
 }

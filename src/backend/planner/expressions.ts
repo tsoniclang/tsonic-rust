@@ -46,6 +46,15 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return planNumericLiteral(node, context);
     }
     case KindStringLiteral: {
+      const literalFact = rustOperationFact(node, context);
+      if (literalFact !== undefined && literalFact.kind === "source-enum-member") {
+        const value = rustSourceTypeCarrierValue(literalFact.resultCarrier);
+        const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+        if (typePath === undefined) {
+          return undefined;
+        }
+        return { kind: "path", path: `${typePath}::${literalFact.name}` };
+      }
       return { kind: "string-literal", value: ast.text(node) };
     }
     case KindTrueKeyword: {

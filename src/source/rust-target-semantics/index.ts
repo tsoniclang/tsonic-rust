@@ -95,7 +95,7 @@ import {
   rustUnitTargetType,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustExtensionId, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey } from "../rust-facts/keys.js";
+import { rustExtensionId, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import { collectRustProviderOperationRows } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
@@ -140,6 +140,7 @@ interface RustFactWalk {
   currentThisCarrier?: TargetTypeRef;
   currentMethodDeclaration?: Node;
   readonly sourceTypeDeclarations: Map<string, Node>;
+  readonly unionAliasVariants: Map<string, readonly { readonly name: string; readonly literal: string }[]>;
 }
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
@@ -149,7 +150,7 @@ export function recordRustFactsBeforeFinalization(
   providerRows: readonly RustProviderOperationRow[],
   jsEnabled = false,
 ): void {
-  const walk: RustFactWalk = { lifecycle, providerRows, resolving: new Set(), jsEnabled, sourceTypeDeclarations: new Map() };
+  const walk: RustFactWalk = { lifecycle, providerRows, resolving: new Set(), jsEnabled, sourceTypeDeclarations: new Map(), unionAliasVariants: new Map() };
   const { ast } = lifecycle.compiler;
   // Pass 0: register every project type declaration so contextual record
   // binding works regardless of file order.
@@ -169,6 +170,8 @@ export function recordRustFactsBeforeFinalization(
         if (carrier !== undefined) {
           registerSourceTypeDeclaration(walk, carrier, statement);
         }
+      } else if (kind === "KindTypeAliasDeclaration") {
+        registerUnionAlias(walk, statement);
       }
     }
   }
@@ -545,6 +548,23 @@ function resolveExpressionCarrierUncached(
       return undefined;
     }
     case KindStringLiteral: {
+      if (expected !== undefined) {
+        const value = rustSourceTypeCarrierValueLocal(expected);
+        if (value !== undefined && value.shape === "enum") {
+          const variants = walk.unionAliasVariants.get(`${value.fileName}::${value.typeName}`);
+          const literal = walk.lifecycle.compiler.ast.text(expression);
+          const variant = variants?.find((candidate) => candidate.literal === literal);
+          if (variant !== undefined) {
+            setRustOperationFact(walk, expression, {
+              kind: "source-enum-member",
+              operationId: `tsonic.rust.union.variant:${variant.name}`,
+              name: variant.name,
+              resultCarrier: expected,
+            });
+            return setCarrierFact(walk, expression, expected);
+          }
+        }
+      }
       return setCarrierFact(walk, expression, rustStringTargetType());
     }
     case KindTrueKeyword:
@@ -698,8 +718,22 @@ function resolveBinaryCarrier(
       return optionCheck;
     }
   }
-  let leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, undefined);
-  let rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, undefined);
+  const unionPeerCarrier = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined => {
+    const value = carrier === undefined ? undefined : rustSourceTypeCarrierValueLocal(carrier);
+    return value !== undefined && value.shape === "enum" ? carrier : undefined;
+  };
+  let leftCarrier: TargetTypeRef | undefined;
+  let rightCarrier: TargetTypeRef | undefined;
+  if (equalityOperator && ast.kindName(right) === KindStringLiteral && ast.kindName(left) !== KindStringLiteral) {
+    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, undefined);
+    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, unionPeerCarrier(leftCarrier));
+  } else if (equalityOperator && ast.kindName(left) === KindStringLiteral && ast.kindName(right) !== KindStringLiteral) {
+    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, undefined);
+    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, unionPeerCarrier(rightCarrier));
+  } else {
+    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, undefined);
+    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, undefined);
+  }
   if (leftCarrier === undefined && rightCarrier !== undefined && ast.kindName(left) === KindNumericLiteral && isRustNumericCarrier(rightCarrier)) {
     leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, rightCarrier);
   }
@@ -1485,7 +1519,7 @@ function sourceTypeCarrierForDeclaration(walk: RustFactWalk, declaration: Node):
   const kind = ast.kindName(declaration);
   const shape = kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration"
     ? "struct"
-    : kind === "KindEnumDeclaration" ? "enum" : undefined;
+    : kind === "KindEnumDeclaration" || kind === "KindTypeAliasDeclaration" ? "enum" : undefined;
   if (shape === undefined) {
     return undefined;
   }
@@ -1669,6 +1703,60 @@ function rustSourceTypeCarrierValueLocal(carrier: TargetTypeRef): { readonly fil
     return undefined;
   }
   return carrier.value as { readonly fileName: string; readonly typeName: string; readonly shape: string };
+}
+
+function rustVariantName(literal: string): string | undefined {
+  const cleaned = literal.replace(/[^A-Za-z0-9]+([A-Za-z0-9])/gu, (_, ch: string) => ch.toUpperCase());
+  if (cleaned.length === 0 || /^[0-9]/u.test(cleaned)) {
+    return undefined;
+  }
+  return cleaned[0]!.toUpperCase() + cleaned.slice(1);
+}
+
+function registerUnionAlias(walk: RustFactWalk, declaration: Node): void {
+  const { ast } = walk.lifecycle.compiler;
+  const aliasType = Node_Type(declaration);
+  if (aliasType === undefined || ast.kindName(aliasType) !== "KindUnionType") {
+    return;
+  }
+  const memberNodes = ast.children(aliasType)
+    .filter((child): child is Node => child !== undefined)
+    .flatMap((child) => ast.kindName(child) === "KindSyntaxList"
+      ? ast.children(child).filter((entry): entry is Node => entry !== undefined)
+      : [child])
+    .filter((child) => !ast.kindName(child).endsWith("Token"));
+  const variants: { name: string; literal: string }[] = [];
+  for (const member of memberNodes) {
+    if (ast.kindName(member) !== "KindLiteralType") {
+      return;
+    }
+    const literalNode = ast.children(member)[0];
+    if (literalNode === undefined || ast.kindName(literalNode) !== KindStringLiteral) {
+      return;
+    }
+    const literal = ast.text(literalNode);
+    const name = rustVariantName(literal);
+    if (name === undefined || variants.some((existing) => existing.name === name)) {
+      return;
+    }
+    variants.push({ name, literal });
+  }
+  if (variants.length === 0) {
+    return;
+  }
+  const carrier = sourceTypeCarrierForDeclaration(walk, declaration);
+  if (carrier === undefined) {
+    return;
+  }
+  setCarrierFact(walk, declaration, carrier);
+  registerSourceTypeDeclaration(walk, carrier, declaration);
+  const value = rustSourceTypeCarrierValueLocal(carrier);
+  if (value !== undefined) {
+    walk.unionAliasVariants.set(`${value.fileName}::${value.typeName}`, variants);
+  }
+  walk.lifecycle.host.facts.set(declaration, rustUnionVariantsFactKey, { variants }, [
+    { message: "rust union variants" },
+  ]);
 }
 
 function recordEnumFacts(walk: RustFactWalk, declaration: Node, _sourceFile: SourceFile): void {

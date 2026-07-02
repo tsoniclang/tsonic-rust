@@ -29,7 +29,7 @@ import { isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers } from
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
-import { planClassDeclaration, planEnumDeclaration, planInterfaceDeclaration } from "./declarations-nominal.js";
+import { planClassDeclaration, planEnumDeclaration, planInterfaceDeclaration, planUnionAliasDeclaration } from "./declarations-nominal.js";
 
 export function planRustArtifacts(input: TargetCompileInput): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [];
@@ -208,6 +208,13 @@ function planModuleItems(context: RustPlanContext): readonly RustItem[] {
     }
     if (kind === "KindInterfaceDeclaration") {
       const planned = planInterfaceDeclaration(statement, context);
+      if (planned !== undefined) {
+        items.push(...planned);
+      }
+      continue;
+    }
+    if (kind === "KindTypeAliasDeclaration") {
+      const planned = planUnionAliasDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
       }

@@ -202,3 +202,9 @@ export const rustSelfModeFactKey: ExtensionFactKey<{ readonly mode: "ref" | "mut
   name: "selfMode",
   equals: (left, right) => left.mode === right.mode,
 });
+
+export const rustUnionVariantsFactKey: ExtensionFactKey<{ readonly variants: readonly { readonly name: string; readonly literal: string }[] }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "unionVariants",
+  equals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+});
