@@ -253,6 +253,28 @@ export function acmeVectorsPackage() {
       providerModuleId: "acme.vectors",
       exports: [
         {
+          id: "@acme/vectors::magnitude",
+          name: "magnitude",
+          kind: "function",
+          signatures: [{
+            id: "@acme/vectors::magnitude(v)",
+            name: "magnitude",
+            parameters: [{ name: "v", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } }],
+            returnType: { kind: "source-primitive", name: "int32" },
+          }],
+        },
+        {
+          id: "@acme/vectors::consume",
+          name: "consume",
+          kind: "function",
+          signatures: [{
+            id: "@acme/vectors::consume(v)",
+            name: "consume",
+            parameters: [{ name: "v", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } }],
+            returnType: { kind: "source-primitive", name: "int32" },
+          }],
+        },
+        {
           id: "@acme/vectors::Vector",
           name: "Vector",
           kind: "class",
@@ -310,6 +332,20 @@ export function acmeVectorsPackage() {
         operationKind: "property",
         target: { form: "field", name: "y" },
         resultCarrier: int32Carrier,
+      },
+      {
+        exportId: "@acme/vectors::magnitude",
+        operationKind: "method",
+        target: { form: "call", path: "acme_vectors::magnitude", argModes: ["ref"] },
+        resultCarrier: int32Carrier,
+        parameterCarriers: [vectorCarrier],
+      },
+      {
+        exportId: "@acme/vectors::consume",
+        operationKind: "method",
+        target: { form: "call", path: "acme_vectors::consume", argModes: ["value"] },
+        resultCarrier: int32Carrier,
+        parameterCarriers: [vectorCarrier],
       },
       {
         // Source call Vector.add(a, b) lowers to the native `+` operator

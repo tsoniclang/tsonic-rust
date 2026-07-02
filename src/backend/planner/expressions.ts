@@ -245,7 +245,9 @@ function planProviderOperationExpression(
 ): RustExpr | undefined {
   switch (form.form) {
     case "call": {
-      return { kind: "call", path: form.path, args };
+      const shaped = args.map((argument, index): RustExpr =>
+        (form.argModes?.[index] ?? "value") === "ref" ? { kind: "reference", expr: argument } : argument);
+      return { kind: "call", path: form.path, args: shaped };
     }
     case "path": {
       return { kind: "path", path: form.path };
@@ -317,6 +319,12 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   const args = planArguments(node, context);
   if (args === undefined) {
     return undefined;
+  }
+  if (fact !== undefined && fact.kind === "flow-marker") {
+    // Flow marker calls erase to their argument; passing shape comes from the
+    // consuming position's finalized argument modes.
+    const [argument] = args;
+    return argument;
   }
   if (fact !== undefined && fact.kind === "source-method") {
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression

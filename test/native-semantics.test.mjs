@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, acmeVectorsPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 const counterSource = `
@@ -159,4 +159,70 @@ export class Counter {
   assert.deepEqual(result.diagnostics, []);
   const run = validateGeneratedProject("native-semantics-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
+});
+
+test("flow markers erase into finalized argument modes", () => {
+  const { result } = compileRust({
+    packages: [acmeVectorsPackage()],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { borrow, move } from "@tsonic/core/lang.js";
+import { Vector, magnitude, consume } from "@acme/vectors";
+
+export function drive(): int32 {
+  const v = new Vector(3, 4);
+  const m = magnitude(borrow(v));
+  return m + consume(move(v));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /acme_vectors::magnitude\(&v\)/u);
+  assert.match(text, /acme_vectors::consume\(v\)/u);
+});
+
+test("flow markers mismatching argument modes fail closed", () => {
+  const { result, extensionHost } = compileRust({
+    packages: [acmeVectorsPackage()],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { borrow } from "@tsonic/core/lang.js";
+import { Vector, consume } from "@acme/vectors";
+
+export function bad(): int32 {
+  const v = new Vector(1, 2);
+  return consume(borrow(v));
+}
+`,
+    },
+  });
+
+  assert.ok(extensionHost.diagnostics.all().some((diagnostic) =>
+    diagnostic.extensionCode === "RUST_FLOW_MARKER_MISMATCH"));
+});
+
+test("byref passing markers are rejected deterministically", () => {
+  const { extensionHost } = compileRust({
+    packages: [acmeVectorsPackage()],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { ref } from "@tsonic/core/lang.js";
+import { Vector, consume } from "@acme/vectors";
+
+export function bad(): int32 {
+  const v = new Vector(1, 2);
+  return consume(ref(v));
+}
+`,
+    },
+  });
+
+  assert.ok(extensionHost.diagnostics.all().some((diagnostic) =>
+    diagnostic.extensionCode === "RUST_SOURCE_MARKER_UNSUPPORTED"));
 });

@@ -1,5 +1,9 @@
 import {
   ExtensionLifecycleEvent,
+  argumentPassingFactKey,
+  flowStateFactKey,
+  functionPointerFactKey,
+  pointerFactKey,
   providerVirtualDeclarationFactKey,
   runtimeCarrierFactKey,
   selectedTargetSignatureFactKey,
@@ -339,6 +343,17 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
   if (existing !== undefined) {
     return existing.carrier;
   }
+  if (facts.get(typeNode, pointerFactKey) !== undefined || facts.get(typeNode, functionPointerFactKey) !== undefined) {
+    walk.lifecycle.host.diagnostics.append({
+      extensionId: rustTargetSemanticsExtensionId,
+      extensionCode: "RUST_SOURCE_MARKER_UNSUPPORTED",
+      numericCode: 0,
+      category: "error",
+      message: "ptr/fnptr type markers have no Rust target lane yet; they require the unsafe boundary contract.",
+      evidence: [{ message: "target.capability=rust.source.type-marker" }],
+    });
+    return undefined;
+  }
   const primitive = facts.get(typeNode, sourcePrimitiveFactKey);
   if (primitive !== undefined) {
     return setCarrierFact(walk, typeNode, rustSourcePrimitiveTargetType(primitive.kind));
@@ -445,7 +460,7 @@ function resolveExpressionCarrierUncached(
     }
     case KindCallExpression:
     case KindNewExpression: {
-      return resolveCallLikeCarrier(walk, expression, sourceFile, kind);
+      return resolveCallLikeCarrier(walk, expression, sourceFile, kind, expected);
     }
     case KindPropertyAccessExpression: {
       return resolveProviderMemberCarrier(walk, expression, sourceFile, "property");
@@ -596,14 +611,19 @@ function resolveCallLikeCarrier(
   expression: Node,
   sourceFile: SourceFile,
   expressionKind: string,
+  expected?: TargetTypeRef,
 ): TargetTypeRef | undefined {
   const { ast, checker } = walk.lifecycle.compiler;
   const callee = Node_Expression(expression);
   if (callee === undefined) {
     return undefined;
   }
-  const providerIdentity = providerDeclarationIdentityFor(walk, callee);
   const callArguments = ast.arguments(expression);
+  const flowHandled = tryFlowMarkerCall(walk, expression, callArguments, sourceFile, expected);
+  if (flowHandled !== undefined) {
+    return flowHandled.carrier;
+  }
+  const providerIdentity = providerDeclarationIdentityFor(walk, callee);
   if (providerIdentity !== undefined) {
     const operationKind = expressionKind === KindNewExpression ? "constructor" : "method";
     const row = matchProviderRow(walk.providerRows, providerIdentity, operationKind);
@@ -614,6 +634,7 @@ function resolveCallLikeCarrier(
     for (const [index, argument] of callArguments.entries()) {
       if (argument !== undefined) {
         resolveExpressionCarrier(walk, argument, sourceFile, row.parameterCarriers?.[index]);
+        validateFlowMarkerAgainstMode(walk, argument, rowArgumentMode(row, index));
       }
     }
     recordProviderOperationFacts(walk, expression, row, providerIdentity);
@@ -1530,4 +1551,92 @@ function trySourceCallLike(
     resultCarrier: returnCarrier,
   });
   return setCarrierFact(walk, expression, returnCarrier);
+}
+
+// --- Source-core flow markers ----------------------------------------------
+
+interface FlowMarkerResolution {
+  readonly carrier: TargetTypeRef | undefined;
+}
+
+// The generic source-semantics extension records flowStateFactKey on marker
+// calls (borrow/borrowMut/move) and argumentPassingFactKey on out/ref/inref
+// calls. The Rust target lowers flow markers by erasure (the consuming
+// position's finalized argument mode owns the passing shape) and rejects the
+// by-ref passing markers, which have no Rust lane.
+function tryFlowMarkerCall(
+  walk: RustFactWalk,
+  expression: Node,
+  callArguments: readonly (Node | undefined)[],
+  sourceFile: SourceFile,
+  expected: TargetTypeRef | undefined,
+): FlowMarkerResolution | undefined {
+  const facts = walk.lifecycle.host.facts;
+  const passing = facts.get(expression, argumentPassingFactKey);
+  if (passing !== undefined && passing.mode.startsWith("byref")) {
+    walk.lifecycle.host.diagnostics.append({
+      extensionId: rustTargetSemanticsExtensionId,
+      extensionCode: "RUST_SOURCE_MARKER_UNSUPPORTED",
+      numericCode: 0,
+      category: "error",
+      message: `Source passing marker mode '${passing.mode}' has no Rust target lane; use borrow/borrowMut/move markers with finalized argument modes.`,
+      evidence: [{ message: "target.capability=rust.source.passing-marker" }],
+    });
+    return { carrier: undefined };
+  }
+  const flow = facts.get(expression, flowStateFactKey);
+  if (flow === undefined) {
+    return undefined;
+  }
+  const [argument] = callArguments;
+  const argumentCarrier = argument === undefined
+    ? undefined
+    : resolveExpressionCarrier(walk, argument, sourceFile, expected);
+  if (flow.state !== "moved" && flow.state !== "borrowed-shared" && flow.state !== "borrowed-mut") {
+    return { carrier: undefined };
+  }
+  setRustOperationFact(walk, expression, {
+    kind: "flow-marker",
+    operationId: `tsonic.rust.flow.${flow.state}`,
+    state: flow.state,
+  });
+  if (argumentCarrier !== undefined) {
+    setCarrierFact(walk, expression, argumentCarrier);
+  }
+  return { carrier: argumentCarrier };
+}
+
+function rowArgumentMode(row: RustProviderOperationRow, index: number): "value" | "ref" {
+  const target = row.target;
+  if (target.form === "call" || target.form === "free-call" || target.form === "receiver-method") {
+    return target.argModes?.[index] ?? "value";
+  }
+  return "value";
+}
+
+function validateFlowMarkerAgainstMode(
+  walk: RustFactWalk,
+  argument: Node,
+  mode: "value" | "ref",
+): void {
+  const flow = walk.lifecycle.host.facts.get(argument, flowStateFactKey) ??
+    walk.lifecycle.host.facts.get(argument, flowStateFactKey);
+  const rustFact = walk.lifecycle.host.facts.get(argument, rustTargetOperationFactKey);
+  const markerState = rustFact !== undefined && rustFact.kind === "flow-marker" ? rustFact.state : flow?.state;
+  if (markerState === undefined) {
+    return;
+  }
+  const compatible =
+    (markerState === "moved" && mode === "value") ||
+    (markerState === "borrowed-shared" && mode === "ref");
+  if (!compatible) {
+    walk.lifecycle.host.diagnostics.append({
+      extensionId: rustTargetSemanticsExtensionId,
+      extensionCode: "RUST_FLOW_MARKER_MISMATCH",
+      numericCode: 0,
+      category: "error",
+      message: `Flow marker state '${markerState}' does not match the finalized argument mode '${mode}' for this position.`,
+      evidence: [{ message: "target.capability=rust.source.flow-marker" }],
+    });
+  }
 }

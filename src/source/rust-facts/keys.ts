@@ -10,7 +10,7 @@ export const rustExtensionId = "tsonic.rust";
 export type RustArgumentMode = "value" | "ref";
 
 export type RustProviderOperationForm =
-  | { readonly form: "call"; readonly path: string }
+  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[] }
   | { readonly form: "path"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
   | { readonly form: "field"; readonly name: string }

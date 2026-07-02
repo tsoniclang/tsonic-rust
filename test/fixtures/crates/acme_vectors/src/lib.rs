@@ -24,3 +24,11 @@ impl Add for Vector {
         }
     }
 }
+
+pub fn magnitude(v: &Vector) -> i32 {
+    v.x * v.x + v.y * v.y
+}
+
+pub fn consume(v: Vector) -> i32 {
+    v.x + v.y
+}
