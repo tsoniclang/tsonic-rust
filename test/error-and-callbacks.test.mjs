@@ -27,11 +27,11 @@ export function stats(xs: int32[]): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_abi::array_dense_map\(&xs, \|&x\| x \* 2\)/u);
+  assert.match(text, /js_abi::array_dense_map\(xs, \|&x\| x \* 2\)/u);
   assert.match(text, /js_abi::array_dense_filter\(&doubled, \|&x\| x % 2 == 0\)/u);
-  assert.match(text, /js_abi::array_dense_some\(&xs, \|&x\| x > 2\)/u);
-  assert.match(text, /js_abi::array_dense_every\(&xs, \|&x\| x > 0\)/u);
-  assert.match(text, /js_abi::array_dense_reduce\(&xs, 0, \|acc, &x\| acc \+ x\)/u);
+  assert.match(text, /js_abi::array_dense_some\(xs, \|&x\| x > 2\)/u);
+  assert.match(text, /js_abi::array_dense_every\(xs, \|&x\| x > 0\)/u);
+  assert.match(text, /js_abi::array_dense_reduce\(xs, 0, \|acc, &x\| acc \+ x\)/u);
 });
 
 test("JSON round-trips through fallible rows in a throwing context", () => {
@@ -71,8 +71,8 @@ export function load(path: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn load\(path: String\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /node_fs::read_file_sync_string\(&path, "utf8"\)\?/u);
+  assert.match(text, /pub fn load\(path: &str\) -> rt::TsonicResult<String> \{/u);
+  assert.match(text, /node_fs::read_file_sync_string\(path, "utf8"\)\?/u);
 });
 
 test("generated cargo binary proves callbacks, errors, JSON, and fs at runtime", { timeout: 300_000 }, () => {

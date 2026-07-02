@@ -146,6 +146,8 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
       readonly fieldNames: readonly string[];
     }
+  | { readonly kind: "fixed-array-literal"; readonly operationId: string }
+  | { readonly kind: "fixed-index"; readonly operationId: string; readonly index: number }
   | {
       readonly kind: "tuple-literal";
       readonly operationId: string;
@@ -266,4 +268,18 @@ export const rustFallibleCallFactKey: ExtensionFactKey<{ readonly fallible: true
   extensionId: rustExtensionId,
   name: "fallibleCall",
   equals: () => true,
+});
+
+// String parameters proven read-only-borrowing lower to &str.
+export const rustBorrowedParamFactKey: ExtensionFactKey<{ readonly borrowed: true }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "borrowedParam",
+  equals: () => true,
+});
+
+// Source-call argument positions whose parameters borrow (&str).
+export const rustBorrowedArgsFactKey: ExtensionFactKey<{ readonly borrowed: readonly boolean[] }> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "borrowedArgs",
+  equals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
 });

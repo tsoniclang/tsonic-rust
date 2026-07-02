@@ -186,8 +186,8 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /node_fs_promises::mkdir_async\(&dir, true\)\.await\?/u);
+  assert.match(text, /pub async fn roundtrip\(dir: &str, file: String\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /node_fs_promises::mkdir_async\(dir, true\)\.await\?/u);
   assert.match(text, /node_fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
@@ -237,7 +237,6 @@ export function read(name: string): string {
 test("unsupported node APIs fail closed with deterministic diagnostics", () => {
   const cases = [
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
-    { module: "node:process", name: "exit", call: "exit(1)" },
     { module: "node:util", name: "inspect", call: "inspect(\"x\")" },
     { module: "node:buffer", name: "btoa", call: "btoa(\"x\")" },
     { module: "node:url", name: "parse", call: "parse(\"http://x\")" },

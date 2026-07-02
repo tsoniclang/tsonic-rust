@@ -375,7 +375,7 @@ function processModule(): RustProviderModuleDefinition {
       valueExport("pid", numberType),
       valueExport("ppid", numberType),
       valueExport("execPath", stringType, "Unsupported: requires infallible executable-path resolution."),
-      unsupportedFn(m, "exit", "a process-termination policy contract"),
+      fnExport(m, "exit", [{ name: "code", type: numberType }], voidType),
     ],
   };
 }
@@ -392,6 +392,7 @@ function processRows(): readonly RustProviderOperationRow[] {
     { exportId: `${m}::ppid`, operationKind: "property", target: { form: "call", path: "node_process::ppid" }, resultCarrier: int32Carrier, castResult: "i32" },
     { exportId: `${m}::env`, operationKind: "property", target: { form: "marker" }, resultCarrier: envCarrier },
     { exportId: `${m}::ProcessEnv`, receiverTypeId: "rust.node.ProcessEnv", operationKind: "indexer", target: { form: "call", path: "node_process::env_get", argModes: ["ref"] }, resultCarrier: rustOptionTargetType(stringCarrier), parameterCarriers: [stringCarrier] },
+    { exportId: `${m}::exit`, operationKind: "method", target: { form: "call", path: "std::process::exit", argCasts: ["i32"] }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [int32Carrier] },
   ];
 }
 
@@ -538,7 +539,7 @@ function cryptoModule(): RustProviderModuleDefinition {
         ],
       },
       unsupportedFn(m, "createHmac", "a keyed-digest carrier contract"),
-      unsupportedFn(m, "randomBytes", "a byte-array carrier contract"),
+      fnExport(m, "randomBytes", [{ name: "size", type: numberType }], providerRef("node:buffer", "Buffer")),
     ],
   };
 }
@@ -550,6 +551,7 @@ function cryptoRows(): readonly RustProviderOperationRow[] {
     { exportId: "node:crypto::createHash", operationKind: "method", target: { form: "call", path: "node_crypto::create_hash", argModes: ["ref"] }, resultCarrier: hashCarrier, parameterCarriers: [stringCarrier], isFallible: true },
     { exportId: hashId, memberId: `${hashId}.update`, operationKind: "method", target: { form: "receiver-method", name: "update_str", argModes: ["ref"], mutatesReceiver: true }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [stringCarrier], isFallible: true },
     { exportId: hashId, memberId: `${hashId}.digest`, operationKind: "method", target: { form: "receiver-method", name: "digest_string", argModes: ["ref"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier], isFallible: true },
+    { exportId: "node:crypto::randomBytes", operationKind: "method", target: { form: "call", path: "node_crypto::random_bytes", argCasts: ["usize"] }, resultCarrier: bufferCarrier, parameterCarriers: [int32Carrier], isFallible: true },
   ];
 }
 

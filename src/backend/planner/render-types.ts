@@ -27,6 +27,8 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   "rust.node.Hash": "node_crypto::Hash",
 };
 
+export const rustStrRefType: RustType = { kind: "named", path: "&str" };
+
 export function rustTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
   resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
@@ -59,9 +61,17 @@ export function rustTypeFromCarrier(
   if (carrier.kind === "type-parameter") {
     return { kind: "named", path: carrier.name };
   }
+  if (carrier.kind === "pointer" && carrier.pointee.kind === "target-named" && carrier.pointee.id === rustStringTargetId && carrier.mutability === "const") {
+    return rustStrRefType;
+  }
   if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
+  }
+  if (carrier.kind === "target-specific" && carrier.name === "fixed-array") {
+    const value = carrier.value as { element: TargetTypeRef; length: number };
+    const element = rustTypeFromCarrier(value.element, resolveSourceTypePath);
+    return element === undefined ? undefined : { kind: "named", path: `[${printableTypeText(element)}; ${value.length}]` };
   }
   if (carrier.kind === "array") {
     const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath);
@@ -135,4 +145,14 @@ export function collectAliasesFromRustType(
       collectAliasesFromRustType(element, register);
     }
   }
+}
+
+function printableTypeText(type: RustType): string {
+  if (type.kind === "primitive") {
+    return type.name;
+  }
+  if (type.kind === "named" && (type.typeArguments === undefined || type.typeArguments.length === 0)) {
+    return type.path;
+  }
+  return type.kind === "string" ? "String" : "()";
 }
