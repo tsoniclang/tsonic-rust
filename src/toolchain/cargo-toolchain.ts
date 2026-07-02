@@ -1,8 +1,8 @@
 import type { TargetToolchain, TargetToolchainContext, TargetToolchainInput, TargetToolchainResult } from "@tsonic/target-api";
 
-// Source-to-source parity with the reference dotnet toolchain: report the
-// produced artifacts deterministically. Cargo invocation (fmt/check/test/clippy)
-// arrives when generated projects are expected to build.
+// Source-to-source stage: report the produced artifacts deterministically.
+// Direct cargo invocation from the toolchain arrives with host integration;
+// generated projects are already validated by the cargo proof tests.
 export function createCargoToolchain(_context: TargetToolchainContext): TargetToolchain {
   return {
     prepare(input: TargetToolchainInput): TargetToolchainResult {

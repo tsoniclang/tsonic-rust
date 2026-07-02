@@ -13,6 +13,7 @@ import type {
 } from "@tsonic/target-api";
 import type { CompilerExtension } from "@tsonic/tsts";
 import { createRustBackend } from "../backend/rust-backend.js";
+import { createRustTargetSemanticsExtension } from "../source/rust-target-semantics/index.js";
 import { cargoCrateAttributeName, cargoPathReferenceKind } from "../backend/planner/cargo-project.js";
 import {
   readRustTypescriptCompatibilityMode,
@@ -35,7 +36,7 @@ export function createRustTargetPack(): TargetPack {
       displayName: "Rust target provider",
       createExtensions(context: TargetProviderContext): readonly CompilerExtension[] {
         validateRustTargetOptions(context.target);
-        return [];
+        return [createRustTargetSemanticsExtension(context)];
       },
       runtimeContributions(context: TargetRuntimeContributionContext): TargetRuntimeContributions {
         return {

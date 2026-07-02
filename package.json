@@ -14,13 +14,15 @@
   },
   "scripts": {
     "build": "bash scripts/build.sh",
-    "test": "npm run build && node --test test/*.test.mjs"
+    "test": "npm run build && node --test test/*.test.mjs test/architecture/*.test.mjs"
   },
   "peerDependencies": {
+    "@tsonic/source-core": "0.0.1",
     "@tsonic/target-api": "0.0.1",
     "@tsonic/tsts": "0.0.0"
   },
   "devDependencies": {
+    "@tsonic/source-core": "file:../tsonic/packages/source-core",
     "@tsonic/target-api": "file:../tsonic/packages/target-api",
     "@tsonic/tsts": "file:../tsonic/packages/tsts"
   },

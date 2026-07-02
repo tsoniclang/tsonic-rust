@@ -29,6 +29,23 @@ export function unsupportedStatementDiagnostic(input: RustDiagnosticInput, capab
   };
 }
 
+export function missingFactDiagnostic(input: RustDiagnosticInput, capabilityId: string, message: string): TargetDiagnostic {
+  const base = unsupportedStatementDiagnostic(input, capabilityId);
+  return {
+    ...base,
+    code: "RUST_MISSING_TARGET_FACT",
+    message: `${message} Node kind: ${input.ast.kindName(input.node)}.`,
+  };
+}
+
+export function unsupportedConstructDiagnostic(input: RustDiagnosticInput, capabilityId: string, message: string): TargetDiagnostic {
+  const base = unsupportedStatementDiagnostic(input, capabilityId);
+  return {
+    ...base,
+    message: `${message} Node kind: ${input.ast.kindName(input.node)}.`,
+  };
+}
+
 export function missingRuntimeReferenceDiagnostic(kind: string, include: string): TargetDiagnostic {
   return {
     code: "RUST_UNSUPPORTED_RUNTIME_REFERENCE",

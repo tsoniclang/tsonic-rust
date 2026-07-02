@@ -12,12 +12,20 @@ export function fakeStatement({ pos = 0, end = 0, kindName = "ExpressionStatemen
 
 export function fakeAstReader() {
   return {
-    statements: (sourceFile) => sourceFile.statements,
+    statements: (sourceFile) => sourceFile.statements ?? [],
     kindName: (node) => node.kindName,
     pos: (node) => node.pos,
     end: (node) => node.end,
     getFileName: (sourceFile) => sourceFile.fileName,
-    getSourceText: (sourceFile) => sourceFile.text,
+    getSourceFile: (node) => node.sourceFile ?? node,
+    getSourceText: (sourceFile) => sourceFile.text ?? "",
+    forEachChild: () => {},
+    hasModifierKind: () => false,
+    name: () => undefined,
+    parameters: () => [],
+    arguments: () => [],
+    body: () => undefined,
+    text: (node) => node.text ?? "",
   };
 }
 
@@ -31,8 +39,15 @@ export function fakeCompileInput({
     ast: fakeAstReader(),
     types: {},
     sourceFiles,
-    facts: {},
-    analysis: {},
+    facts: {
+      getFact: () => undefined,
+      getRuntimeCarrierFact: () => undefined,
+      getSelectedTargetCall: () => undefined,
+    },
+    analysis: {
+      getSymbolName: () => undefined,
+      getProjectSourceReferenceForNode: () => undefined,
+    },
     targetFacts: {},
     project: { entryPoint: "src/index.ts", targets: [target] },
     target,
