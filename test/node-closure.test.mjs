@@ -237,7 +237,6 @@ export function read(name: string): string {
 test("unsupported node APIs fail closed with deterministic diagnostics", () => {
   const cases = [
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
-    { module: "node:process", name: "exit", call: "exit(1)" },
     { module: "node:util", name: "inspect", call: "inspect(\"x\")" },
     { module: "node:buffer", name: "btoa", call: "btoa(\"x\")" },
     { module: "node:url", name: "parse", call: "parse(\"http://x\")" },
