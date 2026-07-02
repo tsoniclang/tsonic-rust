@@ -36,6 +36,7 @@ import {
   IfStatement_ThenStatement,
   IterationStatement_Statement,
   Node_Operand,
+  TypeOperatorNode_Type,
   TypeReferenceNode_TypeName,
   KindBinaryExpression,
   KindBlock,
@@ -373,7 +374,7 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
   }
   if (kind === "KindTypeOperator") {
     // `readonly T[]` lowers to a borrowed slice lane.
-    const inner = (typeNode as unknown as { readonly Type?: Node }).Type;
+    const inner = TypeOperatorNode_Type(typeNode);
     if (inner !== undefined && walk.lifecycle.compiler.ast.kindName(inner) === KindArrayType) {
       const element = resolveTypeNodeCarrier(walk, ArrayTypeNode_ElementType(inner));
       return element === undefined ? undefined : setCarrierFact(walk, typeNode, rustSliceRefTargetType(element));

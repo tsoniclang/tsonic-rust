@@ -1,5 +1,6 @@
 import type { TargetTypeRef } from "@tsonic/tsts";
 import type { RustType } from "../rust-ast/nodes.js";
+import { rustSourceTypeCarrierValue } from "../../source/rust-facts/keys.js";
 import {
   rustJsArrayTargetId,
   rustJsDateTargetId,
@@ -60,10 +61,12 @@ export function rustTypeFromCarrier(
   if (carrier.kind === "tuple" && carrier.elements.length === 0) {
     return { kind: "unit" };
   }
-  if (carrier.kind === "target-specific" && carrier.target === "rust" && carrier.name === "source-type" && resolveSourceTypePath !== undefined) {
-    const value = carrier.value as { readonly fileName: string; readonly typeName: string };
-    const path = resolveSourceTypePath(value);
-    return path === undefined ? undefined : { kind: "named", path };
+  if (resolveSourceTypePath !== undefined) {
+    const value = rustSourceTypeCarrierValue(carrier);
+    if (value !== undefined) {
+      const path = resolveSourceTypePath(value);
+      return path === undefined ? undefined : { kind: "named", path };
+    }
   }
   return undefined;
 }

@@ -87,6 +87,10 @@ export function Node_Type(node: Node | undefined): Node | undefined {
   return nodeField(node, "Type");
 }
 
+export function TypeOperatorNode_Type(node: Node | undefined): Node | undefined {
+  return nodeField(node, "Type");
+}
+
 export function Node_Initializer(node: Node | undefined): Node | undefined {
   return nodeField(node, "Initializer");
 }
