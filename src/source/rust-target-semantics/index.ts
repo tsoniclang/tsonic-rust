@@ -440,9 +440,14 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
         const literal = walk.lifecycle.compiler.ast.children(member)[0];
         return literal !== undefined && walk.lifecycle.compiler.ast.kindName(literal) === "KindNullKeyword";
       };
-      const nullMember = typeMembers.find(isNullMember);
-      const valueMember = typeMembers.find((member) => !isNullMember(member));
-      if (nullMember !== undefined && valueMember !== undefined) {
+      // `T | undefined` is a JS-surface concept: the Option lane for it is
+      // enabled only with the js surface or compat mode.
+      const isUndefinedMember = (member: Node): boolean =>
+        walk.lifecycle.compiler.ast.kindName(member) === "KindUndefinedKeyword";
+      const nullishMember = typeMembers.find((member) =>
+        isNullMember(member) || (walk.jsEnabled && isUndefinedMember(member)));
+      const valueMember = typeMembers.find((member) => !isNullMember(member) && !isUndefinedMember(member));
+      if (nullishMember !== undefined && valueMember !== undefined) {
         const inner = resolveTypeNodeCarrier(walk, valueMember);
         if (inner !== undefined) {
           return setCarrierFact(walk, typeNode, rustOptionTargetType(inner));
@@ -514,12 +519,21 @@ function applyOptionLane(
   if (resolved !== undefined && isRustOptionCarrier(resolved)) {
     return resolved;
   }
-  const { ast } = walk.lifecycle.compiler;
+  const { ast, checker, typeShape } = walk.lifecycle.compiler;
   if (ast.kindName(expression) === "KindNullKeyword") {
     if (existing === undefined) {
       setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
     }
     return expected;
+  }
+  if (walk.jsEnabled && ast.kindName(expression) === KindIdentifier) {
+    const type = checker.getTypeAtLocation(expression);
+    if (type !== undefined && typeShape.isVoidLike(type) && ast.text(expression) === "undefined") {
+      if (existing === undefined) {
+        setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
+      }
+      return expected;
+    }
   }
   if (resolved !== undefined && JSON.stringify(resolved) === JSON.stringify(inner)) {
     if (existing === undefined || existing.kind === "operator-token" || existing.kind === "provider-operation" || existing.kind === "source-field" || existing.kind === "source-method") {

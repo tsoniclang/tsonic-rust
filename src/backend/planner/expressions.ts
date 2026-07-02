@@ -80,6 +80,10 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return { kind: "path", path: "None" };
     }
     case KindIdentifier: {
+      const identifierFact = rustOperationFact(node, context);
+      if (identifierFact !== undefined && identifierFact.kind === "option-none") {
+        return { kind: "path", path: "None" };
+      }
       const name = rustValueName(ast.text(node));
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
