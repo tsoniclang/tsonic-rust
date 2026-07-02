@@ -32,3 +32,8 @@ pub fn magnitude(v: &Vector) -> i32 {
 pub fn consume(v: Vector) -> i32 {
     v.x + v.y
 }
+
+pub fn scale(v: &mut Vector, factor: i32) {
+    v.x *= factor;
+    v.y *= factor;
+}

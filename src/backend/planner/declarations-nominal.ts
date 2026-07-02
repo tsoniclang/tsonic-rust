@@ -22,7 +22,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { planExpression } from "./expressions.js";
 import { collectMutatedNames } from "./functions.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrier } from "./render-types.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
@@ -75,7 +75,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         failed = true;
         continue;
       }
-      const fieldName = ast.text(ast.name(member) ?? member);
+      const fieldName = rustValueName(ast.text(ast.name(member) ?? member));
       const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
       if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -155,7 +155,7 @@ function planParams(member: Node, context: RustPlanContext): readonly RustFuncti
     if (parameter === undefined) {
       continue;
     }
-    const parameterName = ast.text(ast.name(parameter) ?? parameter);
+    const parameterName = rustValueName(ast.text(ast.name(parameter) ?? parameter));
     const parameterType = renderType(context, parameter) ?? renderType(context, Node_Type(parameter));
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -198,7 +198,7 @@ function planConstructor(
     const receiver = left === undefined ? undefined : Node_Expression(left);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
     const fieldNameNode = left === undefined ? undefined : Node_Name(left);
-    const fieldName = fieldNameNode === undefined ? "" : ast.text(fieldNameNode);
+    const fieldName = fieldNameNode === undefined ? "" : rustValueName(ast.text(fieldNameNode));
     const isFieldInit =
       expression !== undefined &&
       operatorToken !== undefined &&
@@ -261,7 +261,7 @@ function buildStructLiteral(
 
 function planMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
   const { ast } = context.input;
-  const methodName = ast.text(ast.name(member) ?? member);
+  const methodName = rustValueName(ast.text(ast.name(member) ?? member));
   if (!isValidRustIdentifier(methodName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -290,7 +290,11 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   if (bodyNode === undefined) {
     return undefined;
   }
-  const bodyContext: RustPlanContext = { ...context, mutatedNames: collectMutatedNames(ast, bodyNode, context) };
+  const bodyContext: RustPlanContext = {
+    ...context,
+    mutatedNames: collectMutatedNames(ast, bodyNode, context),
+    emittedLocalNames: new Set(params.map((param) => param.name)),
+  };
   const body = planBlockLike(bodyNode, bodyContext);
   if (body === undefined) {
     return undefined;

@@ -77,6 +77,7 @@ import {
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
   rustSliceElementCarrier,
+  rustSliceMutRefTargetType,
   rustSliceRefTargetType,
   isRustNumericCarrier,
   isRustOptionCarrier,
@@ -175,7 +176,7 @@ function recordFunctionFacts(walk: RustFactWalk, declaration: Node, sourceFile: 
     if (parameter === undefined) {
       continue;
     }
-    const parameterCarrier = resolveTypeNodeCarrier(walk, Node_Type(parameter));
+    const parameterCarrier = parameterLaneCarrier(walk, resolveTypeNodeCarrier(walk, Node_Type(parameter)));
     if (parameterCarrier !== undefined) {
       setCarrierFact(walk, parameter, parameterCarrier);
     }
@@ -1553,6 +1554,17 @@ function trySourceCallLike(
   return setCarrierFact(walk, expression, returnCarrier);
 }
 
+// Owned dense arrays never cross function boundaries by value: mutable array
+// parameters take the &mut [T] lane (TypeScript array arguments are reference
+// -visible), readonly parameters take &[T].
+function parameterLaneCarrier(walk: RustFactWalk, carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
+  void walk;
+  if (carrier !== undefined && isRustVecCarrier(carrier)) {
+    return rustSliceMutRefTargetType(carrier.element);
+  }
+  return carrier;
+}
+
 // --- Source-core flow markers ----------------------------------------------
 
 interface FlowMarkerResolution {
@@ -1606,7 +1618,7 @@ function tryFlowMarkerCall(
   return { carrier: argumentCarrier };
 }
 
-function rowArgumentMode(row: RustProviderOperationRow, index: number): "value" | "ref" {
+function rowArgumentMode(row: RustProviderOperationRow, index: number): "value" | "ref" | "mut-ref" {
   const target = row.target;
   if (target.form === "call" || target.form === "free-call" || target.form === "receiver-method") {
     return target.argModes?.[index] ?? "value";
@@ -1617,7 +1629,7 @@ function rowArgumentMode(row: RustProviderOperationRow, index: number): "value" 
 function validateFlowMarkerAgainstMode(
   walk: RustFactWalk,
   argument: Node,
-  mode: "value" | "ref",
+  mode: "value" | "ref" | "mut-ref",
 ): void {
   const flow = walk.lifecycle.host.facts.get(argument, flowStateFactKey) ??
     walk.lifecycle.host.facts.get(argument, flowStateFactKey);
@@ -1628,7 +1640,8 @@ function validateFlowMarkerAgainstMode(
   }
   const compatible =
     (markerState === "moved" && mode === "value") ||
-    (markerState === "borrowed-shared" && mode === "ref");
+    (markerState === "borrowed-shared" && mode === "ref") ||
+    (markerState === "borrowed-mut" && mode === "mut-ref");
   if (!compatible) {
     walk.lifecycle.host.diagnostics.append({
       extensionId: rustTargetSemanticsExtensionId,

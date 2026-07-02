@@ -41,7 +41,7 @@ import { isRustBoolCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { expressionCarrier, planExpression } from "./expressions.js";
-import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 
@@ -143,7 +143,8 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     return undefined;
   }
   const nameNode = Node_Name(declaration);
-  const name = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  const name = rustValueName(sourceName);
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -185,7 +186,18 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
       return undefined;
     }
   }
-  const mutable = context.mutatedNames?.has(name) ?? false;
+  if (context.emittedLocalNames !== undefined) {
+    if (context.emittedLocalNames.has(name)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.naming",
+        `Binding '${sourceName}' collides with another binding after deterministic snake_case renaming.`,
+      ));
+      return undefined;
+    }
+    context.emittedLocalNames.add(name);
+  }
+  const mutable = context.mutatedNames?.has(sourceName) ?? false;
   return [{
     kind: "let",
     name,
@@ -215,7 +227,7 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
     ));
     return undefined;
   }
-  const target = ast.text(operand);
+  const target = rustValueName(ast.text(operand));
   if (!isValidRustIdentifier(target)) {
     return undefined;
   }
@@ -279,7 +291,7 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         ));
         return undefined;
       }
-      const target = ast.text(left);
+      const target = rustValueName(ast.text(left));
       if (!isValidRustIdentifier(target)) {
         return undefined;
       }
@@ -514,7 +526,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
   if (initializer !== undefined) {
     const declarations = collectVariableDeclarations(initializer, context);
     const nameNode = declarations.length === 1 ? Node_Name(declarations[0]) : undefined;
-    binding = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+    binding = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? rustValueName(ast.text(nameNode)) : "";
   }
   if (!isValidRustIdentifier(binding)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(

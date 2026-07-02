@@ -25,7 +25,7 @@ import { planCargoManifest } from "./cargo-project.js";
 import { unsupportedConstructDiagnostic, unsupportedStatementDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planFunctionDeclaration } from "./functions.js";
-import { isValidRustIdentifier, rustReservedIdentifiers } from "./plan-context.js";
+import { isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
@@ -249,6 +249,7 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
     typeNode === undefined ||
     rustType === undefined ||
     rustType.kind === "string" ||
+    !isUpperSnakeName(name) ||
     !isValidRustIdentifier(name) ||
     !isConstLiteralInitializer(initializer, context) ||
     ast.kindName(initializer) === "KindStringLiteral"
@@ -256,7 +257,7 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
     context.diagnostics.push(unsupportedConstructDiagnostic(
       { ast, sourceFile: context.sourceFile, node: statement },
       "rust.backend.const",
-      "Top-level declarations support only annotated const bindings with numeric or boolean literals.",
+      "Top-level declarations support only UPPER_SNAKE annotated const bindings with numeric or boolean literals.",
     ));
     return undefined;
   }

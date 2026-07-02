@@ -265,7 +265,8 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.expr, RustPrecedence.Unary, false)} as ${expression.to}`;
     }
     case "reference": {
-      return `&${printOperand(expression.expr, RustPrecedence.Unary, false)}`;
+      const prefix = expression.mutable === true ? "&mut " : "&";
+      return `${prefix}${printOperand(expression.expr, RustPrecedence.Unary, false)}`;
     }
     case "vec-literal": {
       return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;

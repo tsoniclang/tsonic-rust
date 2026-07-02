@@ -226,3 +226,119 @@ export function bad(): int32 {
   assert.ok(extensionHost.diagnostics.all().some((diagnostic) =>
     diagnostic.extensionCode === "RUST_SOURCE_MARKER_UNSUPPORTED"));
 });
+
+test("mutable array parameters take the &mut [T] lane with visible writes", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function bump(xs: int32[]): void {
+  xs[0] = 42;
+}
+
+export function drive(): int32 {
+  const values: int32[] = [1, 2, 3];
+  bump(values);
+  return values.length;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn bump\(xs: &mut \[i32\]\)/u);
+  assert.match(text, /bump\(&mut values\);/u);
+});
+
+test("push on borrowed slices fails closed; owned vectors keep push", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function grow(xs: int32[]): void {
+  xs.push(4);
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+});
+
+test("camelCase identifiers rename deterministically to snake_case", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function pickMode(flagValue: boolean): int32 {
+  let chosenValue: int32 = 0;
+  if (flagValue) {
+    chosenValue = 3;
+  }
+  return chosenValue;
+}
+
+export function caller(): int32 {
+  return pickMode(true);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn pick_mode\(flag_value: bool\) -> i32/u);
+  assert.match(text, /let mut chosen_value: i32 = 0;/u);
+  assert.match(text, /pick_mode\(true\)/u);
+});
+
+test("rename collisions fail closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function collide(): int32 {
+  let fooBar: int32 = 1;
+  let foo_bar: int32 = 2;
+  return fooBar + foo_bar;
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.message.includes("collides")));
+});
+
+test("class decorators fail closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+function tag(target: unknown): void {}
+
+@tag
+export class Marked {
+  value: int32;
+
+  constructor(value: int32) {
+    this.value = value;
+  }
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.length > 0);
+});

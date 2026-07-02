@@ -22,7 +22,7 @@ import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustMutatingReceiverMethods, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
@@ -38,7 +38,8 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     return undefined;
   }
   const nameNode = Node_Name(node);
-  const name = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  const name = rustValueName(sourceName);
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -53,7 +54,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     if (parameter === undefined) {
       continue;
     }
-    const parameterName = ast.text(ast.name(parameter) ?? parameter);
+    const parameterName = rustValueName(ast.text(ast.name(parameter) ?? parameter));
     const parameterCarrier = context.input.facts.getRuntimeCarrierFact(parameter)?.carrier;
     const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
@@ -96,7 +97,11 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     ));
     return undefined;
   }
-  const bodyContext: RustPlanContext = { ...context, mutatedNames: collectMutatedNames(ast, bodyNode, context) };
+  const bodyContext: RustPlanContext = {
+    ...context,
+    mutatedNames: collectMutatedNames(ast, bodyNode, context),
+    emittedLocalNames: new Set(params.map((param) => param.name)),
+  };
   const body = planBlockLike(bodyNode, bodyContext);
   if (paramsFailed || body === undefined) {
     return undefined;
@@ -126,12 +131,30 @@ export function collectMutatedNames(ast: AstReader, body: Node, context?: RustPl
     }
     if (targetKind === "KindPropertyAccessExpression" || targetKind === "KindElementAccessExpression") {
       addWriteTarget((target as { readonly Expression?: Node }).Expression);
+      return;
+    }
+    if (targetKind === "KindCallExpression" && context !== undefined) {
+      // Flow-marker wrappers (borrowMut/move) erase to their argument.
+      const fact = context.input.facts.getFact(target, rustTargetOperationFactKey);
+      if (fact !== undefined && fact.kind === "flow-marker") {
+        const [argument] = ast.arguments(target);
+        addWriteTarget(argument);
+      }
     }
   };
   const visit = (node: Node): void => {
     const kind = ast.kindName(node);
     if (kind === "KindCallExpression" && context !== undefined) {
       const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+      if (fact !== undefined && fact.kind === "provider-operation" && (fact.target.form === "call" || fact.target.form === "free-call")) {
+        const modes = fact.target.form === "call" ? fact.target.argModes : fact.target.argModes;
+        const argumentNodes = ast.arguments(node);
+        for (const [index, argument] of argumentNodes.entries()) {
+          if ((modes?.[index] ?? "value") === "mut-ref") {
+            addWriteTarget(argument);
+          }
+        }
+      }
       if (fact !== undefined && fact.kind === "provider-operation" && fact.target.form === "receiver-method" && rustMutatingReceiverMethods.has(fact.target.name)) {
         const callee = (node as { readonly Expression?: Node }).Expression;
         addWriteTarget(callee === undefined ? undefined : (callee as { readonly Expression?: Node }).Expression);
@@ -139,6 +162,27 @@ export function collectMutatedNames(ast: AstReader, body: Node, context?: RustPl
       if (fact !== undefined && fact.kind === "source-method" && fact.mutatesSelf) {
         const callee = (node as { readonly Expression?: Node }).Expression;
         addWriteTarget(callee === undefined ? undefined : (callee as { readonly Expression?: Node }).Expression);
+      }
+      if (fact === undefined) {
+        // Source-owned calls: arguments feeding &mut slice parameters are
+        // mutable borrows at the call site.
+        const callee = (node as { readonly Expression?: Node }).Expression;
+        const reference = callee === undefined
+          ? undefined
+          : context.input.analysis.getProjectSourceReferenceForNode(callee, { sourceFile: context.sourceFile });
+        if (reference !== undefined) {
+          const parameters = ast.parameters(reference.declaration);
+          const argumentNodes = ast.arguments(node);
+          for (const [index, argument] of argumentNodes.entries()) {
+            const parameter = parameters[index];
+            const parameterCarrier = parameter === undefined
+              ? undefined
+              : context.input.facts.getRuntimeCarrierFact(parameter)?.carrier;
+            if (parameterCarrier?.kind === "pointer" && parameterCarrier.mutability === "mut") {
+              addWriteTarget(argument);
+            }
+          }
+        }
       }
     }
     if (kind === KindBinaryExpression) {

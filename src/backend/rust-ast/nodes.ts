@@ -23,7 +23,7 @@ export type RustExpr =
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
   | { readonly kind: "cast"; readonly expr: RustExpr; readonly to: string }
-  | { readonly kind: "reference"; readonly expr: RustExpr }
+  | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] };
 

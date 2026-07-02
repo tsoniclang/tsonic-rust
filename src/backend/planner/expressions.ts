@@ -23,7 +23,7 @@ import { rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../so
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustValueName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier } from "../../source/rust-target-types.js";
@@ -49,12 +49,12 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
       return { kind: "path", path: "self" };
     }
     case KindIdentifier: {
-      const name = ast.text(node);
+      const name = rustValueName(ast.text(node));
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.identifier",
-          `Identifier '${name}' is not a valid Rust identifier.`,
+          `Identifier '${ast.text(node)}' does not lower to a valid Rust identifier.`,
         ));
         return undefined;
       }
@@ -245,8 +245,16 @@ function planProviderOperationExpression(
 ): RustExpr | undefined {
   switch (form.form) {
     case "call": {
-      const shaped = args.map((argument, index): RustExpr =>
-        (form.argModes?.[index] ?? "value") === "ref" ? { kind: "reference", expr: argument } : argument);
+      const shaped = args.map((argument, index): RustExpr => {
+        const mode = form.argModes?.[index] ?? "value";
+        if (mode === "ref") {
+          return { kind: "reference", expr: argument };
+        }
+        if (mode === "mut-ref") {
+          return { kind: "reference", expr: argument, mutable: true };
+        }
+        return argument;
+      });
       return { kind: "call", path: form.path, args: shaped };
     }
     case "path": {
@@ -331,7 +339,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
       ? Node_Expression(callee)
       : undefined;
     const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    return receiver === undefined ? undefined : { kind: "method-call", receiver, method: fact.name, args };
+    return receiver === undefined ? undefined : { kind: "method-call", receiver, method: rustValueName(fact.name), args };
   }
   if (fact !== undefined && fact.kind === "provider-operation") {
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
@@ -361,7 +369,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   }
   const declarationFileName = ast.getFileName(sourceReference.sourceFile);
   const moduleName = context.moduleNameByFileName.get(declarationFileName);
-  const declarationName = ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration);
+  const declarationName = rustValueName(ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration));
   if (moduleName === undefined || !isValidRustIdentifier(declarationName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -385,7 +393,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     // Owned dense arrays borrow into slice parameters: proven by both
     // finalized carriers, not by syntax.
     if (parameterCarrier?.kind === "pointer" && parameterCarrier.pointee.kind === "array" && argumentCarrier?.kind === "array") {
-      return { kind: "reference" as const, expr: argument };
+      return { kind: "reference" as const, expr: argument, mutable: parameterCarrier.mutability === "mut" };
     }
     return argument;
   });
@@ -438,7 +446,7 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
   if (fact !== undefined && fact.kind === "source-field") {
     const receiverNode = Node_Expression(node);
     const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    return receiver === undefined ? undefined : { kind: "field", receiver, name: fact.name };
+    return receiver === undefined ? undefined : { kind: "field", receiver, name: rustValueName(fact.name) };
   }
   if (fact !== undefined && fact.kind === "source-enum-member") {
     const value = rustSourceTypeCarrierValue(fact.resultCarrier);

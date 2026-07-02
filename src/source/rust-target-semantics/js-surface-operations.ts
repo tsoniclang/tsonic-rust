@@ -2,8 +2,6 @@ import type { TargetTypeRef } from "@tsonic/tsts";
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   isRustJsArrayCarrier,
-  isRustSliceRefCarrier,
-  rustSliceElementCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
   isRustVecCarrier,
@@ -60,6 +58,7 @@ interface JsOperationRowData {
   readonly operationKind: JsOperationRequest["operationKind"];
   readonly lane: JsLane;
   readonly elementGuard?: "numeric";
+  readonly requiresOwnership?: readonly ("owned" | "borrowed" | "borrowed-mut")[];
   readonly shape:
     | {
         readonly op: "operation";
@@ -79,11 +78,11 @@ interface JsOperationRowData {
 const jsOperationRows: readonly JsOperationRowData[] = [
   // Dense Vec<T> lane.
   { owner: "Array", member: "length", operationKind: "property", lane: "vec", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
-  { owner: "Array", member: "push", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push" }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
+  { owner: "Array", member: "push", operationKind: "call", lane: "vec", requiresOwnership: ["owned"], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push" }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "includes", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_includes", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, result: { ref: "bool" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "indexOf", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_index_of", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "index", operationKind: "indexer", lane: "vec", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argCasts: ["usize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
-  { owner: "Array", member: "index", operationKind: "index-set", lane: "vec", shape: { op: "set", target: { form: "index" }, params: [{ ref: "int32" }, { ref: "element" }] } },
+  { owner: "Array", member: "index", operationKind: "index-set", lane: "vec", requiresOwnership: ["owned", "borrowed-mut"], shape: { op: "set", target: { form: "index" }, params: [{ ref: "int32" }, { ref: "element" }] } },
 
   // ReadonlyArray rows: read-only operations over dense/slice lanes.
   { owner: "ReadonlyArray", member: "length", operationKind: "property", lane: "vec", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
@@ -132,15 +131,17 @@ interface JsLaneBindings {
   readonly mapValue?: TargetTypeRef;
   readonly setValue?: TargetTypeRef;
   readonly receiver?: TargetTypeRef;
+  readonly receiverOwnership?: "owned" | "borrowed" | "borrowed-mut";
 }
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
   if (carrier !== undefined && isRustVecCarrier(carrier)) {
-    return { lane: "vec", bindings: { element: carrier.element, receiver: carrier } };
+    return { lane: "vec", bindings: { element: carrier.element, receiver: carrier, receiverOwnership: "owned" } };
   }
-  if (isRustSliceRefCarrier(carrier)) {
-    const element = rustSliceElementCarrier(carrier);
-    return element === undefined ? undefined : { lane: "vec", bindings: { element, receiver: carrier } };
+  if (carrier?.kind === "pointer" && carrier.pointee.kind === "array") {
+    const element = carrier.pointee.element;
+    const receiverOwnership = carrier.mutability === "mut" ? "borrowed-mut" : "borrowed";
+    return { lane: "vec", bindings: { element, receiver: carrier, receiverOwnership } };
   }
   if (carrier?.kind === "target-named") {
     if (isRustJsArrayCarrier(carrier)) {
@@ -226,7 +227,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     candidate.member === request.memberName &&
     candidate.operationKind === request.operationKind &&
     candidate.lane === lane &&
-    (candidate.elementGuard !== "numeric" || isRustNumericCarrier(bindings.element)));
+    (candidate.elementGuard !== "numeric" || isRustNumericCarrier(bindings.element)) &&
+    (candidate.requiresOwnership === undefined ||
+      (bindings.receiverOwnership !== undefined && candidate.requiresOwnership.includes(bindings.receiverOwnership))));
   if (row === undefined) {
     return undefined;
   }

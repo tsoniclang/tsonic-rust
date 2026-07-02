@@ -7,7 +7,7 @@ export const rustExtensionId = "tsonic.rust";
 // Rust rendering form for a mapped operation. The path/name values come from
 // metadata rows (provider packages or JS surface tables), never from source
 // spelling.
-export type RustArgumentMode = "value" | "ref";
+export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
 export type RustProviderOperationForm =
   | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[] }

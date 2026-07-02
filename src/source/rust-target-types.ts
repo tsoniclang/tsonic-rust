@@ -146,3 +146,11 @@ export function isRustSliceRefCarrier(carrier: TargetTypeRef | undefined): carri
 export function rustSliceElementCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
   return carrier?.kind === "pointer" && carrier.pointee.kind === "array" ? carrier.pointee.element : undefined;
 }
+
+export function rustSliceMutRefTargetType(element: TargetTypeRef): TargetTypeRef {
+  return { kind: "pointer", pointee: { kind: "array", element }, mutability: "mut" };
+}
+
+export function isRustSliceMutRefCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "pointer" && carrier.mutability === "mut" && carrier.pointee.kind === "array";
+}

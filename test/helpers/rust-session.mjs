@@ -275,6 +275,20 @@ export function acmeVectorsPackage() {
           }],
         },
         {
+          id: "@acme/vectors::scale",
+          name: "scale",
+          kind: "function",
+          signatures: [{
+            id: "@acme/vectors::scale(v,factor)",
+            name: "scale",
+            parameters: [
+              { name: "v", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } },
+              { name: "factor", type: { kind: "source-primitive", name: "int32" } },
+            ],
+            returnType: { kind: "void" },
+          }],
+        },
+        {
           id: "@acme/vectors::Vector",
           name: "Vector",
           kind: "class",
@@ -339,6 +353,13 @@ export function acmeVectorsPackage() {
         target: { form: "call", path: "acme_vectors::magnitude", argModes: ["ref"] },
         resultCarrier: int32Carrier,
         parameterCarriers: [vectorCarrier],
+      },
+      {
+        exportId: "@acme/vectors::scale",
+        operationKind: "method",
+        target: { form: "call", path: "acme_vectors::scale", argModes: ["mut-ref", "value"] },
+        resultCarrier: unitCarrier,
+        parameterCarriers: [vectorCarrier, int32Carrier],
       },
       {
         exportId: "@acme/vectors::consume",
