@@ -73,11 +73,7 @@ export type RustProviderPackageImplementation =
   TargetProviderPackageImplementation & RustProviderOperationContributor;
 
 export function createRustProviderPackage(definition: RustProviderPackageDefinition): RustProviderPackageImplementation {
-  for (const row of definition.operations) {
-    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor") {
-      throw new Error(`Provider package '${definition.id}': isFallible is supported only on method and constructor operations (row '${row.memberId ?? row.exportId}').`);
-    }
-  }
+  validateProviderPackageDefinition(definition);
   return {
     id: definition.id,
     displayName: definition.displayName,
@@ -185,4 +181,105 @@ export function createRustProviderPackageBindingProvider(definition: RustProvide
       return id === undefined ? undefined : { target: "rust", id };
     },
   };
+}
+
+// Creation-time validation: the declaration/identity model must be
+// internally consistent before any compilation consumes it.
+function validateProviderPackageDefinition(definition: RustProviderPackageDefinition): void {
+  const fail = (message: string): never => {
+    throw new Error(`Provider package '${definition.id}': ${message}`);
+  };
+  const moduleSpecifiers = new Set<string>();
+  const exportIds = new Set<string>();
+  const memberIds = new Set<string>();
+  const signatureIds = new Set<string>();
+  const exportNamesByModule = new Map<string, Set<string>>();
+  for (const module of definition.modules) {
+    if (moduleSpecifiers.has(module.moduleSpecifier)) {
+      fail(`duplicate module '${module.moduleSpecifier}'`);
+    }
+    moduleSpecifiers.add(module.moduleSpecifier);
+    const names = new Set<string>();
+    exportNamesByModule.set(module.moduleSpecifier, names);
+    for (const exported of module.exports) {
+      if (exportIds.has(exported.id)) {
+        fail(`duplicate export id '${exported.id}'`);
+      }
+      exportIds.add(exported.id);
+      if (names.has(exported.name)) {
+        fail(`duplicate export name '${exported.name}' in '${module.moduleSpecifier}'`);
+      }
+      names.add(exported.name);
+      const members = (exported as { readonly members?: readonly { readonly id: string; readonly signatures?: readonly { readonly id: string }[] }[] }).members ?? [];
+      for (const member of members) {
+        if (memberIds.has(member.id)) {
+          fail(`duplicate member id '${member.id}'`);
+        }
+        memberIds.add(member.id);
+        for (const signature of member.signatures ?? []) {
+          signatureIds.add(signature.id);
+        }
+      }
+      const signatures = (exported as { readonly signatures?: readonly { readonly id: string }[] }).signatures ?? [];
+      for (const signature of signatures) {
+        if (signatureIds.has(signature.id)) {
+          fail(`duplicate signature id '${signature.id}'`);
+        }
+        signatureIds.add(signature.id);
+      }
+    }
+  }
+  const providerRefIsDeclared = (reference: { readonly moduleSpecifier: string; readonly exportName: string }): boolean =>
+    exportNamesByModule.get(reference.moduleSpecifier)?.has(reference.exportName) === true;
+  const walkTypeRefs = (value: unknown, where: string): void => {
+    if (value === null || typeof value !== "object") {
+      return;
+    }
+    const record = value as { readonly kind?: unknown; readonly moduleSpecifier?: unknown; readonly exportName?: unknown };
+    if (record.kind === "provider-ref") {
+      if (typeof record.moduleSpecifier !== "string" || typeof record.exportName !== "string" ||
+        !providerRefIsDeclared({ moduleSpecifier: record.moduleSpecifier, exportName: record.exportName })) {
+        fail(`${where} references undeclared provider export '${String(record.moduleSpecifier)}::${String(record.exportName)}'`);
+      }
+      return;
+    }
+    for (const child of Object.values(value)) {
+      walkTypeRefs(child, where);
+    }
+  };
+  for (const module of definition.modules) {
+    for (const imported of module.imports ?? []) {
+      if (!moduleSpecifiers.has(imported.moduleSpecifier)) {
+        fail(`module '${module.moduleSpecifier}' imports from undeclared module '${imported.moduleSpecifier}'`);
+      }
+      for (const named of imported.namedImports) {
+        if (exportNamesByModule.get(imported.moduleSpecifier)?.has(named.exportedName) !== true) {
+          fail(`module '${module.moduleSpecifier}' imports undeclared export '${named.exportedName}' from '${imported.moduleSpecifier}'`);
+        }
+      }
+    }
+    walkTypeRefs(module.exports, `module '${module.moduleSpecifier}'`);
+  }
+  const receiverTypeIds = new Set(definition.operations
+    .map((row) => row.resultCarrier)
+    .filter((carrier): carrier is { kind: "target-named"; id: string } => (carrier as { kind?: string }).kind === "target-named")
+    .map((carrier) => carrier.id));
+  for (const row of definition.operations) {
+    const label = row.memberId ?? row.exportId;
+    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor") {
+      fail(`isFallible is supported only on method and constructor operations (row '${label}').`);
+    }
+    if (!exportIds.has(row.exportId)) {
+      fail(`row '${label}' targets undeclared exportId '${row.exportId}'`);
+    }
+    if (row.memberId !== undefined && !memberIds.has(row.memberId)) {
+      fail(`row '${label}' targets undeclared memberId '${row.memberId}'`);
+    }
+    if (row.signatureId !== undefined && !signatureIds.has(row.signatureId)) {
+      fail(`row '${label}' targets undeclared signatureId '${row.signatureId}'`);
+    }
+    if (row.receiverTypeId !== undefined && !receiverTypeIds.has(row.receiverTypeId)) {
+      fail(`row '${label}' names receiverTypeId '${row.receiverTypeId}' that no row result carrier produces`);
+    }
+  }
 }

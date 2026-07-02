@@ -51,6 +51,8 @@ export function main(): void {
     check(digest.length === 64);
     check(btoa("abc") === "YWJj");
     check(atob("YWJj") === "abc");
+    check(atob("YQ") === "a");
+    check(atob("YQ=") === "a");
     const bytes = randomBytes(8);
     check(bytes.length === 8);
     check(bytes.toString("hex").length === 16);
@@ -109,5 +111,63 @@ test("remaining blocked lanes stay classified", () => {
     });
     assert.equal(result.artifacts.length, 0, `${item.module}::${item.name}`);
     assert.ok(result.diagnostics.length > 0);
+  }
+});
+
+test("provider package creation rejects inconsistent identity models", async () => {
+  const { createRustProviderPackage } = await import("../dist/index.js");
+  const base = { id: "bad", displayName: "Bad", version: "1.0.0", crates: [] };
+  const fn = (m, name) => ({ id: `${m}::${name}`, name, kind: "function", signatures: [{ id: `${m}::${name}()`, name, parameters: [], returnType: { kind: "void" } }] });
+  const cases = [
+    {
+      label: "duplicate module",
+      modules: [
+        { moduleSpecifier: "m:a", providerModuleId: "a", exports: [] },
+        { moduleSpecifier: "m:a", providerModuleId: "a2", exports: [] },
+      ],
+      operations: [],
+      pattern: /duplicate module/u,
+    },
+    {
+      label: "duplicate export",
+      modules: [{ moduleSpecifier: "m:a", providerModuleId: "a", exports: [fn("m:a", "f"), fn("m:a", "f")] }],
+      operations: [],
+      pattern: /duplicate export/u,
+    },
+    {
+      label: "bad import",
+      modules: [{ moduleSpecifier: "m:a", providerModuleId: "a", imports: [{ moduleSpecifier: "m:missing", namedImports: [{ exportedName: "X" }] }], exports: [] }],
+      operations: [],
+      pattern: /undeclared module/u,
+    },
+    {
+      label: "undeclared provider ref",
+      modules: [{
+        moduleSpecifier: "m:a",
+        providerModuleId: "a",
+        exports: [{ id: "m:a::g", name: "g", kind: "function", signatures: [{ id: "m:a::g()", name: "g", parameters: [], returnType: { kind: "provider-ref", moduleSpecifier: "m:a", exportName: "Nope" } }] }],
+      }],
+      operations: [],
+      pattern: /undeclared provider export/u,
+    },
+    {
+      label: "bad exportId row",
+      modules: [{ moduleSpecifier: "m:a", providerModuleId: "a", exports: [fn("m:a", "f")] }],
+      operations: [{ exportId: "m:a::missing", operationKind: "method", target: { form: "call", path: "x::y" }, resultCarrier: { kind: "source-primitive", name: "int32" } }],
+      pattern: /undeclared exportId/u,
+    },
+    {
+      label: "bad receiverTypeId row",
+      modules: [{ moduleSpecifier: "m:a", providerModuleId: "a", exports: [fn("m:a", "f")] }],
+      operations: [{ exportId: "m:a::f", receiverTypeId: "rust.nope.Missing", operationKind: "indexer", target: { form: "call", path: "x::y" }, resultCarrier: { kind: "source-primitive", name: "int32" } }],
+      pattern: /receiverTypeId/u,
+    },
+  ];
+  for (const item of cases) {
+    assert.throws(
+      () => createRustProviderPackage({ ...base, modules: item.modules, operations: item.operations }),
+      item.pattern,
+      item.label,
+    );
   }
 });
