@@ -71,6 +71,8 @@ import {
   isRustBoolCarrier,
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
+  rustSliceElementCarrier,
+  rustSliceRefTargetType,
   isRustNumericCarrier,
   isRustOptionCarrier,
   isRustSignedNumericCarrier,
@@ -340,6 +342,15 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
     const element = resolveTypeNodeCarrier(walk, ArrayTypeNode_ElementType(typeNode));
     return element === undefined ? undefined : setCarrierFact(walk, typeNode, rustVecTargetType(element));
   }
+  if (kind === "KindTypeOperator") {
+    // `readonly T[]` lowers to a borrowed slice lane.
+    const inner = (typeNode as unknown as { readonly Type?: Node }).Type;
+    if (inner !== undefined && walk.lifecycle.compiler.ast.kindName(inner) === KindArrayType) {
+      const element = resolveTypeNodeCarrier(walk, ArrayTypeNode_ElementType(inner));
+      return element === undefined ? undefined : setCarrierFact(walk, typeNode, rustSliceRefTargetType(element));
+    }
+    return undefined;
+  }
   if (kind === KindStringKeyword) {
     return setCarrierFact(walk, typeNode, rustStringTargetType());
   }
@@ -608,7 +619,11 @@ function resolveCallLikeCarrier(
     return undefined;
   }
   const aliased = safeAliasedSymbol(checker, symbol) ?? symbol;
-  const declaration = checker.getSymbolValueDeclaration(aliased) ?? checker.getSymbolValueDeclaration(symbol);
+  const declaration = checker.getSymbolValueDeclaration(aliased) ??
+    checker.getSymbolValueDeclaration(symbol) ??
+    checker.getPrimarySymbolDeclaration(aliased) ??
+    checker.getPrimarySymbolDeclaration(symbol) ??
+    checker.getSymbolDeclarations(symbol)[0];
   if (declaration === undefined || ast.kindName(declaration) !== KindFunctionDeclaration) {
     return undefined;
   }
@@ -1102,8 +1117,12 @@ function recordForOfFacts(
   const iterableCarrier = iterable === undefined
     ? undefined
     : resolveExpressionCarrier(walk, iterable, sourceFile, undefined);
-  if (iterable !== undefined && iterableCarrier !== undefined && isRustVecCarrier(iterableCarrier) && isRustNumericCarrier(iterableCarrier.element)) {
-    const element = iterableCarrier.element;
+  const sliceElement = rustSliceElementCarrier(iterableCarrier);
+  const denseElementForOf = iterableCarrier !== undefined && isRustVecCarrier(iterableCarrier)
+    ? iterableCarrier.element
+    : sliceElement;
+  if (iterable !== undefined && denseElementForOf !== undefined && isRustNumericCarrier(denseElementForOf)) {
+    const element = denseElementForOf;
     setRustOperationFact(walk, statement, {
       kind: "for-of",
       operationId: "tsonic.rust.js.for-of.dense",

@@ -5,7 +5,8 @@ export type RustType =
   | { readonly kind: "primitive"; readonly name: string }
   | { readonly kind: "string" }
   | { readonly kind: "unit" }
-  | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] };
+  | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] }
+  | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean };
 
 export type RustExpr =
   | { readonly kind: "int-literal"; readonly text: string }

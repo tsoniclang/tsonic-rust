@@ -55,7 +55,9 @@ export function createRustCompileInputFromSession(options: RustCompileInputOptio
     }
     const declaration = checker.getSymbolValueDeclaration(aliased) ??
       checker.getSymbolValueDeclaration(symbol) ??
-      checker.getPrimarySymbolDeclaration(aliased);
+      checker.getPrimarySymbolDeclaration(aliased) ??
+      checker.getPrimarySymbolDeclaration(symbol) ??
+      checker.getSymbolDeclarations(symbol)[0];
     if (declaration === undefined) {
       return undefined;
     }

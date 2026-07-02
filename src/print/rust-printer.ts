@@ -58,6 +58,9 @@ export function printRustType(type: RustType): string {
         ? type.path
         : `${type.path}<${args.map(printRustType).join(", ")}>`;
     }
+    case "slice-ref": {
+      return `${type.mutable ? "&mut " : "&"}[${printRustType(type.element)}]`;
+    }
   }
 }
 

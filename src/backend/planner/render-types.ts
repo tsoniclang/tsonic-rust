@@ -46,6 +46,10 @@ export function rustTypeFromCarrier(carrier: TargetTypeRef | undefined): RustTyp
       ...(typeArguments.length === 0 ? {} : { typeArguments: typeArguments as RustType[] }),
     };
   }
+  if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
+    const element = rustTypeFromCarrier(carrier.pointee.element);
+    return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
+  }
   if (carrier.kind === "array") {
     const element = rustTypeFromCarrier(carrier.element);
     return element === undefined ? undefined : { kind: "named", path: "Vec", typeArguments: [element] };

@@ -345,7 +345,25 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     return undefined;
   }
   const path = moduleName === context.moduleName ? declarationName : `crate::${moduleName}::${declarationName}`;
-  return { kind: "call", path, args };
+  const parameters = ast.parameters(sourceReference.declaration);
+  const callArgumentNodes = ast.arguments(node).filter((argument): argument is Node => argument !== undefined);
+  const shapedArgs = args.map((argument, index) => {
+    const parameter = parameters[index];
+    const parameterCarrier = parameter === undefined
+      ? undefined
+      : context.input.facts.getRuntimeCarrierFact(parameter)?.carrier;
+    const argumentNode = callArgumentNodes[index];
+    const argumentCarrier = argumentNode === undefined
+      ? undefined
+      : context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
+    // Owned dense arrays borrow into slice parameters: proven by both
+    // finalized carriers, not by syntax.
+    if (parameterCarrier?.kind === "pointer" && parameterCarrier.pointee.kind === "array" && argumentCarrier?.kind === "array") {
+      return { kind: "reference" as const, expr: argument };
+    }
+    return argument;
+  });
+  return { kind: "call", path, args: shapedArgs };
 }
 
 function planNewExpression(node: Node, context: RustPlanContext): RustExpr | undefined {

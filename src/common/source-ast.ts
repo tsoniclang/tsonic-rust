@@ -17,6 +17,7 @@ export const KindIfStatement = "KindIfStatement";
 export const KindImportDeclaration = "KindImportDeclaration";
 export const KindArrayLiteralExpression = "KindArrayLiteralExpression";
 export const KindArrayType = "KindArrayType";
+export const KindTypeOperator = "KindTypeOperator";
 export const KindOmittedExpression = "KindOmittedExpression";
 export const KindForOfStatement = "KindForOfStatement";
 export const KindInterfaceDeclaration = "KindInterfaceDeclaration";

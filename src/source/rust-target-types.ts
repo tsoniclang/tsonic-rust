@@ -134,3 +134,15 @@ export function isRustIntegerCarrier(carrier: TargetTypeRef | undefined): boolea
 export function sameRustPrimitiveCarrier(left: TargetTypeRef | undefined, right: TargetTypeRef | undefined): boolean {
   return left?.kind === "source-primitive" && right?.kind === "source-primitive" && left.name === right.name;
 }
+
+export function rustSliceRefTargetType(element: TargetTypeRef): TargetTypeRef {
+  return { kind: "pointer", pointee: { kind: "array", element }, mutability: "const" };
+}
+
+export function isRustSliceRefCarrier(carrier: TargetTypeRef | undefined): carrier is Extract<TargetTypeRef, { kind: "pointer" }> {
+  return carrier?.kind === "pointer" && carrier.mutability === "const" && carrier.pointee.kind === "array";
+}
+
+export function rustSliceElementCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
+  return carrier?.kind === "pointer" && carrier.pointee.kind === "array" ? carrier.pointee.element : undefined;
+}
