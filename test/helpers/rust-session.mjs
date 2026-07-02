@@ -240,3 +240,88 @@ export function artifactText(result, path) {
   }
   return artifact.text;
 }
+
+export const vectorCarrier = { kind: "target-named", id: "acme.vectors.Vector" };
+
+export function acmeVectorsPackage() {
+  return createRustProviderPackage({
+    id: "acme-vectors",
+    displayName: "Acme vectors",
+    version: "1.0.0",
+    modules: [{
+      moduleSpecifier: "@acme/vectors",
+      providerModuleId: "acme.vectors",
+      exports: [
+        {
+          id: "@acme/vectors::Vector",
+          name: "Vector",
+          kind: "class",
+          members: [
+            {
+              id: "@acme/vectors::Vector.constructor",
+              name: "constructor",
+              kind: "constructor",
+              signatures: [{
+                id: "@acme/vectors::Vector.constructor(x,y)",
+                parameters: [
+                  { name: "x", type: { kind: "source-primitive", name: "int32" } },
+                  { name: "y", type: { kind: "source-primitive", name: "int32" } },
+                ],
+              }],
+            },
+            { id: "@acme/vectors::Vector.x", name: "x", kind: "property", readonly: true, type: { kind: "source-primitive", name: "int32" } },
+            { id: "@acme/vectors::Vector.y", name: "y", kind: "property", readonly: true, type: { kind: "source-primitive", name: "int32" } },
+            {
+              id: "@acme/vectors::Vector.add",
+              name: "add",
+              kind: "method",
+              static: true,
+              signatures: [{
+                id: "@acme/vectors::Vector.add(a,b)",
+                parameters: [
+                  { name: "a", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } },
+                  { name: "b", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } },
+                ],
+                returnType: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" },
+              }],
+            },
+          ],
+        },
+      ],
+    }],
+    operations: [
+      {
+        exportId: "@acme/vectors::Vector",
+        operationKind: "constructor",
+        target: { form: "call", path: "acme_vectors::Vector::new" },
+        resultCarrier: vectorCarrier,
+        parameterCarriers: [int32Carrier, int32Carrier],
+      },
+      {
+        exportId: "@acme/vectors::Vector",
+        memberId: "@acme/vectors::Vector.x",
+        operationKind: "property",
+        target: { form: "field", name: "x" },
+        resultCarrier: int32Carrier,
+      },
+      {
+        exportId: "@acme/vectors::Vector",
+        memberId: "@acme/vectors::Vector.y",
+        operationKind: "property",
+        target: { form: "field", name: "y" },
+        resultCarrier: int32Carrier,
+      },
+      {
+        // Source call Vector.add(a, b) lowers to the native `+` operator
+        // backed by the crate's std::ops::Add implementation.
+        exportId: "@acme/vectors::Vector",
+        memberId: "@acme/vectors::Vector.add",
+        operationKind: "method",
+        target: { form: "binary-operator", operator: "+", trait: "std::ops::Add" },
+        resultCarrier: vectorCarrier,
+        parameterCarriers: [vectorCarrier, vectorCarrier],
+      },
+    ],
+    crates: [{ crateName: "acme_vectors", cargoPath: resolve(fixtureCratesRoot, "acme_vectors") }],
+  });
+}

@@ -262,6 +262,13 @@ function planProviderOperationExpression(
       const index = args[0];
       return index === undefined ? undefined : { kind: "index", receiver, index };
     }
+    case "binary-operator": {
+      const [left, right] = args;
+      if (left === undefined || right === undefined || args.length !== 2) {
+        return undefined;
+      }
+      return { kind: "binary", operator: form.operator, left, right };
+    }
     case "free-call": {
       const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
       if (receiver === undefined) {

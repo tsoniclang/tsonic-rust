@@ -805,7 +805,9 @@ function recordProviderOperationFacts(
     ? row.target.path
     : row.target.form === "index"
       ? "[]"
-      : row.target.name;
+      : row.target.form === "binary-operator"
+        ? row.target.operator
+        : row.target.name;
   recordTargetOperation(walk, expression, operationId, row.operationKind, targetOperationText);
   setRustOperationFact(walk, expression, {
     kind: "provider-operation",

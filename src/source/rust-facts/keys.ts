@@ -23,6 +23,13 @@ export type RustProviderOperationForm =
       readonly trailingArgs?: readonly string[];
     }
   | {
+      // Selected source call lowers to a native Rust operator expression.
+      // Backed by std::ops trait metadata declared in provider rows.
+      readonly form: "binary-operator";
+      readonly operator: string;
+      readonly trait: string;
+    }
+  | {
       // Method call on the receiver, with optional zero-argument chain calls
       // and argument passing modes.
       readonly form: "receiver-method";
