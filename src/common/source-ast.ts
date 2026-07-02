@@ -159,6 +159,26 @@ export function Node_Operand(node: Node | undefined): Node | undefined {
   return nodeField(node, "Operand");
 }
 
+export function TryStatement_TryBlock(node: Node | undefined): Node | undefined {
+  return nodeField(node, "TryBlock");
+}
+
+export function TryStatement_CatchClause(node: Node | undefined): Node | undefined {
+  return nodeField(node, "CatchClause");
+}
+
+export function TryStatement_FinallyBlock(node: Node | undefined): Node | undefined {
+  return nodeField(node, "FinallyBlock");
+}
+
+export function CatchClause_VariableDeclaration(node: Node | undefined): Node | undefined {
+  return nodeField(node, "VariableDeclaration");
+}
+
+export function CatchClause_Block(node: Node | undefined): Node | undefined {
+  return nodeField(node, "Block");
+}
+
 export function Node_Flags(node: Node | undefined): number {
   const value = (node as unknown as { readonly Flags?: unknown } | undefined)?.Flags;
   return typeof value === "number" ? value : 0;

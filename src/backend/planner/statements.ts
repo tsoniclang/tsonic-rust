@@ -3,7 +3,12 @@ import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
+  CatchClause_Block,
+  CatchClause_VariableDeclaration,
   ElementAccessExpression_ArgumentExpression,
+  TryStatement_CatchClause,
+  TryStatement_FinallyBlock,
+  TryStatement_TryBlock,
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   IterationStatement_Statement,
@@ -78,6 +83,12 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
     }
     case "KindForOfStatement": {
       return planForOfStatement(node, context);
+    }
+    case "KindThrowStatement": {
+      return planThrowStatement(node, context);
+    }
+    case "KindTryStatement": {
+      return planTryStatement(node, context);
     }
     case KindBlock: {
       const body = planBlockLike(node, context);
@@ -578,6 +589,7 @@ function planSparseArrayLet(
     ));
     return undefined;
   }
+  context.usedAliases?.add("js_abi");
   const statements: RustStmt[] = [{
     kind: "let",
     name,
@@ -610,4 +622,113 @@ function planSparseArrayLet(
   }
   void statement;
   return statements;
+}
+
+function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  if (fact === undefined || fact.kind !== "throw-op") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.throw",
+      "throw supports only `throw new Error(message)` with a finalized throw fact.",
+    ));
+    return undefined;
+  }
+  if (context.fallibleContext !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.throw",
+      "throw requires a fallible lowering context.",
+    ));
+    return undefined;
+  }
+  const { ast } = context.input;
+  const newExpression = Node_Expression(node);
+  const [messageNode] = newExpression === undefined ? [] : ast.arguments(newExpression);
+  const message = messageNode === undefined
+    ? { kind: "string-literal" as const, value: "" }
+    : planExpression(messageNode, context);
+  if (message !== undefined) {
+    context.usedAliases?.add("rt");
+  }
+  return message === undefined ? undefined : [{ kind: "throw", message }];
+}
+
+function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const tryBlock = TryStatement_TryBlock(node);
+  const catchClause = TryStatement_CatchClause(node);
+  const catchBlock = CatchClause_Block(catchClause);
+  const finallyBlock = TryStatement_FinallyBlock(node);
+  if (tryBlock === undefined || catchBlock === undefined || finallyBlock !== undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.try",
+      "try statements require a catch clause and no finally block.",
+    ));
+    return undefined;
+  }
+  // The try body lowers into a Result-returning closure; control flow that
+  // escapes the closure is unrepresentable.
+  let escapes = false;
+  const scan = (candidate: Node): void => {
+    if (escapes) {
+      return;
+    }
+    const kind = ast.kindName(candidate);
+    // Nested functions are their own control-flow boundary.
+    if (kind === "KindArrowFunction" || kind === "KindFunctionExpression" || kind === "KindFunctionDeclaration") {
+      return;
+    }
+    if (kind === KindReturnStatement || kind === "KindBreakStatement" || kind === "KindContinueStatement") {
+      escapes = true;
+      return;
+    }
+    ast.forEachChild(candidate, (child) => {
+      if (child !== undefined) {
+        scan(child);
+      }
+    });
+  };
+  scan(tryBlock);
+  if (escapes) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.try",
+      "try blocks must not contain return, break, or continue.",
+    ));
+    return undefined;
+  }
+  const tryContext: RustPlanContext = { ...context, fallibleContext: true };
+  const body = planBlockLike(tryBlock, tryContext);
+  const catchBody = planBlockLike(catchBlock, context);
+  if (body === undefined || catchBody === undefined) {
+    return undefined;
+  }
+  const bindingNode = Node_Name(CatchClause_VariableDeclaration(catchClause));
+  const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
+  let binding = bindingSource.length === 0 ? "_" : rustValueName(bindingSource);
+  if (binding !== "_") {
+    let used = false;
+    const findUse = (candidate: Node): void => {
+      if (used) {
+        return;
+      }
+      if (ast.kindName(candidate) === KindIdentifier && ast.text(candidate) === bindingSource) {
+        used = true;
+        return;
+      }
+      ast.forEachChild(candidate, (child) => {
+        if (child !== undefined) {
+          findUse(child);
+        }
+      });
+    };
+    findUse(catchBlock);
+    if (!used) {
+      binding = `_${binding}`;
+    }
+  }
+  context.usedAliases?.add("rt");
+  return [{ kind: "try-catch", body, catchBinding: binding, catchBody }];
 }

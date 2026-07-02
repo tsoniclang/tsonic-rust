@@ -27,6 +27,8 @@ export type RustExpr =
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
+  | { readonly kind: "closure"; readonly params: readonly { readonly name: string; readonly byRefCopy: boolean }[]; readonly body: RustExpr }
+  | { readonly kind: "try"; readonly expr: RustExpr }
   | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 
@@ -40,7 +42,9 @@ export type RustStmt =
   | { readonly kind: "while"; readonly condition: RustExpr; readonly body: RustBlock }
   | { readonly kind: "for"; readonly binding: string; readonly iterable: RustExpr; readonly body: RustBlock }
   | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
-  | { readonly kind: "scope"; readonly body: RustBlock };
+  | { readonly kind: "scope"; readonly body: RustBlock }
+  | { readonly kind: "throw"; readonly message: RustExpr }
+  | { readonly kind: "try-catch"; readonly body: RustBlock; readonly catchBinding: string; readonly catchBody: RustBlock };
 
 export interface RustBlock {
   readonly statements: readonly RustStmt[];
@@ -62,6 +66,7 @@ export interface RustStructField {
 export interface RustImplFunction {
   readonly name: string;
   readonly pub: boolean;
+  readonly fallible?: boolean;
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
@@ -74,6 +79,7 @@ export type RustItem =
       readonly name: string;
       readonly pub: boolean;
       readonly isAsync?: boolean;
+      readonly fallible?: boolean;
       readonly typeParams?: readonly string[];
       readonly params: readonly RustFunctionParam[];
       readonly returnType?: RustType;

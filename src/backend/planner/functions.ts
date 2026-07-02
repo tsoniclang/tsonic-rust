@@ -11,7 +11,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustMutatedBindingFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustMutatedBindingFactKey } from "../../source/rust-facts/keys.js";
 
 export function planFunctionDeclaration(node: Node, context: RustPlanContext): RustItem | undefined {
   const { ast } = context.input;
@@ -88,9 +88,14 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     ));
     return undefined;
   }
+  const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  if (fallible) {
+    context.usedAliases?.add("rt");
+  }
   const bodyContext: RustPlanContext = {
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),
+    ...(fallible ? { fallibleContext: true } : {}),
   };
   const body = planBlockLike(bodyNode, bodyContext);
   if (paramsFailed || body === undefined) {
@@ -117,11 +122,59 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     name,
     pub: ast.hasModifierKind(node, "export"),
     ...(isAsync ? { isAsync: true } : {}),
+    ...(fallible ? { fallible: true } : {}),
     ...(typeParams.length === 0 ? {} : { typeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyTailReturn(body, returnType !== undefined),
+    body: applyFallibleShape(applyTailReturn(body, returnType !== undefined), fallible, returnType !== undefined),
   };
+}
+
+// Fallible lowering: returns wrap Ok, tails wrap Ok, and unit bodies end
+// with Ok(()).
+export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturnValue: boolean): RustBlock {
+  if (!fallible) {
+    return body;
+  }
+  const wrap = (statement: RustStmt): RustStmt => {
+    if (statement.kind === "return" && statement.expr !== undefined) {
+      return { kind: "return", expr: { kind: "call", path: "Ok", args: [statement.expr] } };
+    }
+    if (statement.kind === "return") {
+      return { kind: "return", expr: { kind: "path", path: "Ok(())" } };
+    }
+    if (statement.kind === "tail") {
+      return { kind: "tail", expr: { kind: "call", path: "Ok", args: [statement.expr] } };
+    }
+    if (statement.kind === "if") {
+      return {
+        ...statement,
+        then: { statements: statement.then.statements.map(wrap) },
+        ...(statement.else === undefined ? {} : { else: { statements: statement.else.statements.map(wrap) } }),
+      };
+    }
+    if (statement.kind === "while" || statement.kind === "for") {
+      return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
+    }
+    if (statement.kind === "scope") {
+      return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
+    }
+    if (statement.kind === "try-catch") {
+      // The try body is its own Result closure; catch bodies run in the
+      // enclosing fallible function.
+      return { ...statement, catchBody: { statements: statement.catchBody.statements.map(wrap) } };
+    }
+    return statement;
+  };
+  const wrapped = body.statements.map(wrap);
+  const last = wrapped[wrapped.length - 1];
+  const endsWithExit = last !== undefined && (last.kind === "tail" || last.kind === "return" || last.kind === "throw");
+  if (!hasReturnValue || !endsWithExit) {
+    if (!endsWithExit) {
+      wrapped.push({ kind: "tail", expr: { kind: "path", path: "Ok(())" } });
+    }
+  }
+  return { statements: wrapped };
 }
 
 function applyTailReturn(body: RustBlock, hasReturnValue: boolean): RustBlock {

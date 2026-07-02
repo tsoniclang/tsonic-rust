@@ -34,28 +34,32 @@ unit-variant enums, tuples with constant indexing, `readonly T[]` as `&[T]`
 and mutable array parameters as `&mut [T]`, null-only unions as `Option<T>`
 with `??` coalescing, passthrough generic functions, source-core
 `borrow`/`borrowMut`/`move` flow markers validated against finalized
-argument modes, async/await with await-only future discipline, and a
-deterministic snake_case naming policy with collision diagnostics.
+argument modes, async/await with await-only future discipline, a
+deterministic snake_case naming policy with collision diagnostics, and the
+error model: throwing functions lower to TsonicResult with transitive
+fallibility, `throw new Error(message)` becomes an Err return, try/catch
+lowers to a Result closure boundary, and fallible calls propagate with `?`
+(closures are fallibility boundaries).
 
 JS surface (selected surface or compat mode): dense `Vec<T>` and sparse
-`JsArray<T>` lanes, string operations, Map/Set with SameValueZero runtime
-semantics, Date (UTC carrier), and `T | undefined` Option lanes.
+`JsArray<T>` lanes with callback iteration (map/filter/reduce/some/every as
+Rust closures), string operations, Map/Set with SameValueZero runtime
+semantics, Date (UTC carrier), JSON parse/stringify through fallible rows,
+and `T | undefined` Option lanes.
 
 Provider packages: identity-keyed operation rows over virtual declarations
 (calls, constructors, properties, indexers, operators via std::ops
 metadata, async rows), cargo dependency contribution, and fail-closed
 diagnostics for unsupported members. Node.js ships as a provider package
-(`node:path`, `node:os` mapped; `node:fs`/`process`/`url`/`buffer`/
-`crypto`/`util` declared and classified as unsupported: they require the
-shared error model contract).
+(`node:path`, `node:os`, and `node:fs` readFileSync mapped — fallible rows
+ride the error model; the remaining `node:fs`/`process`/`url`/`buffer`/
+`crypto`/`util` members are declared and classified as unsupported rows).
 
 ## Explicitly unsupported (fail-closed, classified)
 
-Each unsupported lane requires a shared cross-target contract that does
-not exist: the error model (throw/try-catch/Result, fallible runtime APIs
-such as `fs` and JSON), the string owned/borrowed ABI policy (strings are
-owned `String`), discriminated object unions (narrowing facts), callback
-iteration (function pointer lanes), fixed-size `[T; N]` arrays (length
+Each unsupported lane requires a contract that does not exist: the string
+owned/borrowed ABI policy (strings are owned `String`), discriminated
+object unions (narrowing facts), fixed-size `[T; N]` arrays (length
 facts), and RegExp (unclaimed: the supported runtime subset does not match
 the shared Node/V8 oracle contract). Every unsupported lane diagnoses
 deterministically; see `test/capability-ledger.test.mjs`.

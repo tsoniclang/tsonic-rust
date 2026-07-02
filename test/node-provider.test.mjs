@@ -40,10 +40,10 @@ test("declared-but-unsupported node APIs diagnose deterministically", () => {
     packageIds: ["nodejs"],
     files: {
       "index.ts": `
-import { readFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 
-export function load(path: string): void {
-  readFileSync(path);
+export function save(path: string): void {
+  writeFileSync(path, "x");
 }
 `,
     },
@@ -51,7 +51,7 @@ export function load(path: string): void {
   const extensionHost = checkRustSession(harness);
   assert.ok(extensionHost.diagnostics.all().some((diagnostic) =>
     diagnostic.extensionCode === "RUST_PROVIDER_OPERATION_NOT_MAPPED" &&
-    diagnostic.message.includes("node:fs::readFileSync")));
+    diagnostic.message.includes("node:fs::writeFileSync")));
 });
 
 test("node package requires the js surface", () => {

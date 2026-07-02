@@ -27,8 +27,11 @@ import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
+  CatchClause_Block,
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
+  TryStatement_CatchClause,
+  TryStatement_TryBlock,
   ForStatement_Condition,
   ForStatement_Incrementor,
   ForStatement_Initializer,
@@ -97,12 +100,12 @@ import {
   rustUnitTargetType,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustAsyncFunctionFactKey, rustExtensionId, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustExtensionId, rustFallibleCallFactKey, rustFallibleFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustSelfModeFactKey, rustSourceTypeCarrier, rustTargetOperationFactKey, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import { collectRustProviderOperationRows } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
 import { rustOperatorCarrierKey, selectRustBinaryOperator, selectRustCompoundAssignment } from "./operator-rules.js";
-import { selectJsSurfaceConstructor, selectJsSurfaceOperation } from "./js-surface-operations.js";
+import { jsOperationMayBeFallible, selectJsSurfaceConstructor, selectJsSurfaceOperation } from "./js-surface-operations.js";
 import type { JsOperationSelection } from "./js-surface-operations.js";
 import { readRustTypescriptCompatibilityMode } from "../../options/rust-target-options.js";
 
@@ -177,6 +180,7 @@ export function recordRustFactsBeforeFinalization(
       }
     }
   }
+  recordFallibilityFacts(walk);
   for (const sourceFile of lifecycle.compiler.getSourceFiles()) {
     if (sourceFile === undefined) {
       continue;
@@ -340,6 +344,21 @@ function recordStatementFacts(
       }
     }
     resolveExpressionCarrier(walk, expression, sourceFile, undefined);
+    return;
+  }
+  if (kind === "KindThrowStatement") {
+    recordThrowFacts(walk, statement, sourceFile);
+    return;
+  }
+  if (kind === "KindTryStatement") {
+    const tryBlock = TryStatement_TryBlock(statement);
+    if (tryBlock !== undefined) {
+      recordStatementFacts(walk, tryBlock, sourceFile, returnCarrier);
+    }
+    const catchBlock = CatchClause_Block(TryStatement_CatchClause(statement));
+    if (catchBlock !== undefined) {
+      recordStatementFacts(walk, catchBlock, sourceFile, returnCarrier);
+    }
     return;
   }
   if (kind === KindIfStatement) {
@@ -647,6 +666,9 @@ function resolveExpressionCarrierUncached(
     case "KindObjectLiteralExpression": {
       return resolveRecordLiteralCarrier(walk, expression, sourceFile, expected);
     }
+    case "KindArrowFunction": {
+      return resolveArrowFunctionCarrier(walk, expression, sourceFile, expected);
+    }
     case "KindAwaitExpression": {
       const operand = Node_Expression(expression);
       const operandCarrier = operand === undefined
@@ -917,8 +939,7 @@ function resolveCallLikeCarrier(
       ? selectJsConstructorForNode(walk, expression, callee, callArguments, sourceFile)
       : selectJsCallForNode(walk, expression, callee, callArguments, sourceFile);
     if (jsSelection !== undefined) {
-      applyJsSelection(walk, expression, jsSelection, sourceFile, callArguments);
-      return jsSelection.resultCarrier;
+      return applyJsSelection(walk, expression, jsSelection, sourceFile, callArguments);
     }
   }
   if (expressionKind === KindNewExpression) {
@@ -940,6 +961,11 @@ function resolveCallLikeCarrier(
   const declarationFile = ast.getFileName(ast.getSourceFile(declaration));
   if (declarationFile.endsWith(".d.ts")) {
     return undefined;
+  }
+  if (walk.lifecycle.host.facts.get(declaration, rustFallibleFactKey) !== undefined) {
+    walk.lifecycle.host.facts.set(expression, rustFallibleCallFactKey, { fallible: true }, [
+      { message: "rust fallible call" },
+    ]);
   }
   const parameters = ast.parameters(declaration);
   for (const [index, argument] of callArguments.entries()) {
@@ -1020,8 +1046,7 @@ function resolveProviderMemberCarrier(
           ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
         });
         if (selection !== undefined) {
-          applyJsSelection(walk, expression, selection, sourceFile, []);
-          return selection.resultCarrier;
+          return applyJsSelection(walk, expression, selection, sourceFile, []);
         }
       }
     }
@@ -1182,6 +1207,7 @@ function recordProviderOperationFacts(
     operationKind: row.operationKind,
     target: row.target,
     resultCarrier: row.resultCarrier,
+    ...(row.isFallible === true ? { fallible: true } : {}),
   });
   if (row.operationKind === "method" || row.operationKind === "constructor") {
     const member: TargetMember = {
@@ -1335,13 +1361,55 @@ function applyJsSelection(
   selection: JsOperationSelection,
   sourceFile: SourceFile,
   argumentNodes: readonly (Node | undefined)[],
-): void {
-  for (const [index, argument] of argumentNodes.entries()) {
-    if (argument !== undefined) {
-      resolveExpressionCarrier(walk, argument, sourceFile, selection.parameterCarriers?.[index]);
+): TargetTypeRef | undefined {
+  let resolvedResultCarrier = selection.resultCarrier;
+  if (selection.callbackShape === "reduce") {
+    // Resolve the initial value first; its carrier instantiates the
+    // accumulator in the callback expectation.
+    const initial = argumentNodes[1];
+    const accumulator = initial === undefined
+      ? undefined
+      : resolveExpressionCarrier(walk, initial, sourceFile, selection.parameterCarriers?.[1]);
+    const callbackExpectation = selection.parameterCarriers?.[0];
+    const arrow = argumentNodes[0];
+    if (accumulator === undefined || callbackExpectation?.kind !== "function-pointer" || arrow === undefined) {
+      return undefined;
+    }
+    const instantiated: TargetTypeRef = {
+      kind: "function-pointer",
+      args: [accumulator, ...callbackExpectation.args.slice(1)],
+      result: accumulator,
+    };
+    if (resolveExpressionCarrier(walk, arrow, sourceFile, instantiated) === undefined) {
+      return undefined;
+    }
+    resolvedResultCarrier = accumulator;
+  } else {
+    for (const [index, argument] of argumentNodes.entries()) {
+      if (argument !== undefined) {
+        const expectedArgument = selection.parameterCarriers?.[index];
+        const resolved = resolveExpressionCarrier(walk, argument, sourceFile, expectedArgument);
+        if (expectedArgument?.kind === "target-named" && resolved !== undefined && JSON.stringify(resolved) !== JSON.stringify(expectedArgument)) {
+          // Closed-carrier mismatch: fail closed rather than emit ill-typed Rust.
+          return undefined;
+        }
+      }
+    }
+    if (selection.callbackShape === "map") {
+      const arrow = argumentNodes[0];
+      const arrowCarrier = arrow === undefined
+        ? undefined
+        : walk.lifecycle.host.facts.get(arrow, runtimeCarrierFactKey)?.carrier;
+      const bodyResult = arrowCarrier?.kind === "function-pointer" ? arrowCarrier.result : undefined;
+      if (bodyResult === undefined || (bodyResult.kind === "opaque" && bodyResult.id === "tsonic.rust.infer")) {
+        return undefined;
+      }
+      resolvedResultCarrier = rustVecTargetType(bodyResult);
     }
   }
-  const fact = selection.fact;
+  const fact = selection.callbackShape === undefined || resolvedResultCarrier === undefined || selection.fact.kind !== "provider-operation"
+    ? selection.fact
+    : { ...selection.fact, resultCarrier: resolvedResultCarrier };
   if ((fact.kind === "provider-operation" && fact.target.form === "receiver-method" && fact.target.mutatesReceiver === true) ||
       fact.kind === "runtime-set") {
     // Receiver is the expression's own receiver for member ops.
@@ -1358,9 +1426,10 @@ function applyJsSelection(
     fact.operationId,
   );
   setRustOperationFact(walk, expression, fact);
-  if (selection.resultCarrier !== undefined) {
-    setCarrierFact(walk, expression, selection.resultCarrier);
+  if (resolvedResultCarrier !== undefined) {
+    setCarrierFact(walk, expression, resolvedResultCarrier);
   }
+  return resolvedResultCarrier;
 }
 
 function selectJsCallForNode(
@@ -2043,6 +2112,7 @@ function trySourceCallLike(
       name: methodName,
       typeCarrier,
       resultCarrier: returnCarrier,
+      ...(walk.lifecycle.host.facts.get(methodDeclaration, rustFallibleFactKey) !== undefined ? { fallible: true } : {}),
     });
     return setCarrierFact(walk, expression, returnCarrier);
   }
@@ -2058,6 +2128,7 @@ function trySourceCallLike(
     name: methodName,
     mutatesSelf,
     resultCarrier: returnCarrier,
+    ...(walk.lifecycle.host.facts.get(methodDeclaration, rustFallibleFactKey) !== undefined ? { fallible: true } : {}),
   });
   return setCarrierFact(walk, expression, returnCarrier);
 }
@@ -2208,4 +2279,221 @@ function validateFlowMarkerAgainstMode(
       evidence: [{ message: "target.capability=rust.source.flow-marker" }],
     });
   }
+}
+
+// --- Error model -------------------------------------------------------------
+
+// Fallibility: a declaration lowers to TsonicResult when it throws or calls a
+// fallible operation outside a try boundary. Computed to a fixpoint over all
+// project declarations before the main fact walk.
+function recordFallibilityFacts(walk: RustFactWalk): void {
+  const { ast, checker } = walk.lifecycle.compiler;
+  const declarations: Node[] = [];
+  for (const sourceFile of walk.lifecycle.compiler.getSourceFiles()) {
+    if (sourceFile === undefined || ast.getFileName(sourceFile).endsWith(".d.ts")) {
+      continue;
+    }
+    for (const statement of ast.statements(sourceFile)) {
+      if (statement === undefined) {
+        continue;
+      }
+      const kind = ast.kindName(statement);
+      if (kind === KindFunctionDeclaration) {
+        declarations.push(statement);
+      } else if (kind === "KindClassDeclaration") {
+        for (const member of ast.members(statement)) {
+          if (member !== undefined && (ast.kindName(member) === "KindMethodDeclaration" || ast.kindName(member) === "KindConstructor")) {
+            declarations.push(member);
+          }
+        }
+      }
+    }
+  }
+  const fallible = new Set<Node>();
+  const declarationFallible = (declaration: Node): boolean => fallible.has(declaration);
+
+  const bodyIsFallible = (declaration: Node): boolean => {
+    const body = ast.body(declaration);
+    if (body === undefined) {
+      return false;
+    }
+    let found = false;
+    const visit = (node: Node, insideTry: boolean): void => {
+      if (found) {
+        return;
+      }
+      const kind = ast.kindName(node);
+      if (kind === "KindThrowStatement" && !insideTry) {
+        found = true;
+        return;
+      }
+      if (kind === "KindArrowFunction") {
+        // Closures are fallibility boundaries: errors cannot propagate out.
+        return;
+      }
+      if (kind === "KindTryStatement") {
+        const tryBlock = TryStatement_TryBlock(node);
+        const catchBlock = CatchClause_Block(TryStatement_CatchClause(node));
+        if (tryBlock !== undefined) {
+          visit(tryBlock, true);
+        }
+        if (catchBlock !== undefined) {
+          visit(catchBlock, insideTry);
+        }
+        return;
+      }
+      if (kind === KindCallExpression && !insideTry) {
+        const callee = Node_Expression(node);
+        // Provider fallible rows.
+        const identity = callee === undefined ? undefined : providerDeclarationIdentityFor(walk, callee);
+        if (identity !== undefined) {
+          const row = matchProviderRow(walk.providerRows, identity, "method");
+          if (row?.isFallible === true) {
+            found = true;
+            return;
+          }
+        } else if (callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression && walk.jsEnabled) {
+          const libIdentity = libMemberIdentityFor(walk, callee);
+          if (libIdentity !== undefined && jsOperationMayBeFallible(libIdentity.ownerName, libIdentity.memberName)) {
+            found = true;
+            return;
+          }
+          // Fall through to source-owned resolution for non-fallible members.
+          const symbol = checker.getResolvedSymbolOrNil(callee) ?? checker.getSymbolAtLocation(callee);
+          const aliased = symbol === undefined ? undefined : safeAliasedSymbol(checker, symbol);
+          const target = symbol === undefined
+            ? undefined
+            : (aliased === undefined ? undefined : checker.getSymbolValueDeclaration(aliased)) ??
+              checker.getSymbolValueDeclaration(symbol) ??
+              checker.getSymbolDeclarations(symbol)[0];
+          if (target !== undefined && declarationFallible(target)) {
+            found = true;
+            return;
+          }
+        } else if (callee !== undefined) {
+          const symbol = checker.getResolvedSymbolOrNil(callee) ?? checker.getSymbolAtLocation(callee);
+          const aliased = symbol === undefined ? undefined : safeAliasedSymbol(checker, symbol);
+          const target = symbol === undefined
+            ? undefined
+            : (aliased === undefined ? undefined : checker.getSymbolValueDeclaration(aliased)) ??
+              checker.getSymbolValueDeclaration(symbol) ??
+              (aliased === undefined ? undefined : checker.getPrimarySymbolDeclaration(aliased)) ??
+              checker.getPrimarySymbolDeclaration(symbol) ??
+              checker.getSymbolDeclarations(symbol)[0];
+          if (target !== undefined && declarationFallible(target)) {
+            found = true;
+            return;
+          }
+        }
+      }
+      ast.forEachChild(node, (child) => {
+        if (child !== undefined) {
+          visit(child, insideTry);
+        }
+      });
+    };
+    visit(body, false);
+    return found;
+  };
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const declaration of declarations) {
+      if (!fallible.has(declaration) && bodyIsFallible(declaration)) {
+        fallible.add(declaration);
+        changed = true;
+      }
+    }
+  }
+  for (const declaration of fallible) {
+    walk.lifecycle.host.facts.set(declaration, rustFallibleFactKey, { fallible: true }, [
+      { message: "rust fallible declaration" },
+    ]);
+  }
+}
+
+// `throw new Error(message)` records a throw fact; anything else stays an
+// unsupported statement for the backend.
+function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
+  const { ast, checker } = walk.lifecycle.compiler;
+  const expression = Node_Expression(statement);
+  if (expression === undefined || ast.kindName(expression) !== KindNewExpression) {
+    return;
+  }
+  const callee = Node_Expression(expression);
+  const symbol = callee === undefined
+    ? undefined
+    : checker.getResolvedSymbolOrNil(callee) ?? checker.getSymbolAtLocation(callee);
+  if (symbol === undefined || checker.getSymbolName(symbol) !== "Error") {
+    return;
+  }
+  const isLibError = checker.getSymbolDeclarations(symbol).some((declaration) =>
+    declaration !== undefined && ast.getFileName(ast.getSourceFile(declaration)).endsWith(".d.ts"));
+  if (!isLibError) {
+    return;
+  }
+  const [message] = ast.arguments(expression);
+  if (message !== undefined) {
+    resolveExpressionCarrier(walk, message, sourceFile, rustStringTargetType());
+  }
+  setRustOperationFact(walk, statement, {
+    kind: "throw-op",
+    operationId: "tsonic.rust.error.throw",
+  });
+}
+
+// Arrow-function arguments lower to Rust closures when the expectation is a
+// finalized function-pointer carrier. Expression bodies only.
+function resolveArrowFunctionCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  expected: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const { ast } = walk.lifecycle.compiler;
+  if (expected?.kind !== "function-pointer") {
+    return undefined;
+  }
+  const parameters = ast.parameters(expression);
+  if (parameters.length !== expected.args.length) {
+    return undefined;
+  }
+  const byRefCopyParams: boolean[] = [];
+  for (const [index, parameter] of parameters.entries()) {
+    if (parameter === undefined) {
+      return undefined;
+    }
+    const argCarrier = expected.args[index];
+    if (argCarrier === undefined || (argCarrier.kind === "opaque" && argCarrier.id === "tsonic.rust.infer")) {
+      return undefined;
+    }
+    setCarrierFact(walk, parameter, argCarrier);
+    // Slice-based dense helpers hand elements by reference: primitive
+    // elements bind with |&x| copy patterns; accumulators pass by value.
+    byRefCopyParams.push(index === parameters.length - 1 && argCarrier.kind === "source-primitive");
+  }
+  const body = ast.body(expression);
+  if (body === undefined || ast.kindName(body) === KindBlock) {
+    return undefined;
+  }
+  const resultExpectation = expected.result.kind === "opaque" && expected.result.id === "tsonic.rust.infer"
+    ? undefined
+    : expected.result;
+  const bodyCarrier = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
+  if (bodyCarrier === undefined) {
+    return undefined;
+  }
+  const closureCarrier: TargetTypeRef = {
+    kind: "function-pointer",
+    args: expected.args,
+    result: bodyCarrier,
+  };
+  setRustOperationFact(walk, expression, {
+    kind: "closure",
+    operationId: "tsonic.rust.closure",
+    byRefCopyParams,
+    resultCarrier: closureCarrier,
+  });
+  return setCarrierFact(walk, expression, closureCarrier);
 }

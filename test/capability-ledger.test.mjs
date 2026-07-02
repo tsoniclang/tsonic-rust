@@ -10,10 +10,6 @@ const unsupportedLanes = [
     files: { "index.ts": "export function f(x: number): number {\n  switch (x) {\n    default:\n      return x;\n  }\n}\n" },
   },
   {
-    capability: "throw/try-catch (requires the error model contract)",
-    files: { "index.ts": "export function f(flag: boolean): void {\n  try {\n    if (flag) {\n      throw new Error(\"boom\");\n    }\n  } catch (error) {\n  }\n}\n" },
-  },
-  {
     capability: "discriminated object unions (require narrowing facts)",
     files: { "index.ts": "export type Shape = { kind: \"circle\"; radius: number } | { kind: \"square\"; size: number };\nexport function make(): Shape {\n  return { kind: \"circle\", radius: 1 };\n}\n" },
   },
@@ -21,16 +17,6 @@ const unsupportedLanes = [
     capability: "RegExp (requires oracle parity)",
     surfaces: ["js"],
     files: { "index.ts": "export function f(text: string): boolean {\n  const pattern = new RegExp(\"x\");\n  return pattern.test(text);\n}\n" },
-  },
-  {
-    capability: "callback iteration (requires function pointer lanes)",
-    surfaces: ["js"],
-    files: { "index.ts": "import type { int32 } from \"@tsonic/core/types.js\";\nexport function f(xs: int32[]): int32[] {\n  return xs.map((x) => x);\n}\n" },
-  },
-  {
-    capability: "JSON (fallible; requires the error model contract)",
-    surfaces: ["js"],
-    files: { "index.ts": "export function f(text: string): string {\n  return JSON.stringify(JSON.parse(text));\n}\n" },
   },
   {
     capability: "undefined unions without js surface",

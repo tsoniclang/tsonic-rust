@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "@tsonic/tsts";
+import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
 import { rustSourceTypeCarrierValue } from "../../source/rust-facts/keys.js";
 import {
@@ -87,13 +88,46 @@ export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
 
 export function rustTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
-  context: { readonly moduleName: string; readonly moduleNameByFileName: ReadonlyMap<string, string> },
+  context: {
+    readonly moduleName: string;
+    readonly moduleNameByFileName: ReadonlyMap<string, string>;
+    readonly usedAliases?: Set<string>;
+  },
 ): RustType | undefined {
-  return rustTypeFromCarrier(carrier, (value) => {
+  const rendered = rustTypeFromCarrier(carrier, (value) => {
     const moduleName = context.moduleNameByFileName.get(value.fileName);
     if (moduleName === undefined) {
       return undefined;
     }
     return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
   });
+  collectAliasesFromRustType(rendered, (path) => {
+    registerAliasFromPath(context, path);
+  });
+  return rendered;
+}
+
+export function collectAliasesFromRustType(
+  type: RustType | undefined,
+  register: (path: string) => void,
+): void {
+  if (type === undefined) {
+    return;
+  }
+  if (type.kind === "named") {
+    register(type.path);
+    for (const argument of type.typeArguments ?? []) {
+      collectAliasesFromRustType(argument, register);
+    }
+    return;
+  }
+  if (type.kind === "slice-ref") {
+    collectAliasesFromRustType(type.element, register);
+    return;
+  }
+  if (type.kind === "tuple") {
+    for (const element of type.elements) {
+      collectAliasesFromRustType(element, register);
+    }
+  }
 }

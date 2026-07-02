@@ -2,6 +2,7 @@ import type { TargetTypeRef } from "@tsonic/tsts";
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   isRustJsArrayCarrier,
+  rustJsValueTargetType,
   isRustNumericCarrier,
   isRustStringCarrier,
   isRustVecCarrier,
@@ -34,12 +35,17 @@ export interface JsOperationSelection {
   readonly fact: RustTargetOperationFact;
   readonly resultCarrier?: TargetTypeRef;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly callbackShape?: "map" | "reduce";
 }
 
-type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date";
+type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json";
 
 type JsCarrierRef =
+  | { readonly ref: "cb-predicate" }
+  | { readonly ref: "cb-map" }
+  | { readonly ref: "cb-reduce" }
   | { readonly ref: "int32" }
+  | { readonly ref: "jsvalue" }
   | { readonly ref: "float64" }
   | { readonly ref: "bool" }
   | { readonly ref: "string" }
@@ -59,6 +65,8 @@ interface JsOperationRowData {
   readonly lane: JsLane;
   readonly elementGuard?: "numeric";
   readonly requiresOwnership?: readonly ("owned" | "borrowed" | "borrowed-mut")[];
+  readonly callback?: "map" | "reduce";
+  readonly fallible?: boolean;
   readonly shape:
     | {
         readonly op: "operation";
@@ -83,6 +91,12 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Array", member: "indexOf", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_index_of", receiverMode: "ref", argModes: ["ref"], trailingArgs: ["0"] }, castResult: "i32", result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "index", operationKind: "indexer", lane: "vec", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argCasts: ["usize"], chain: ["@copy"] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
   { owner: "Array", member: "index", operationKind: "index-set", lane: "vec", requiresOwnership: ["owned", "borrowed-mut"], shape: { op: "set", target: { form: "index" }, params: [{ ref: "int32" }, { ref: "element" }] } },
+
+  { owner: "Array", member: "filter", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_filter", receiverMode: "ref" }, result: { ref: "receiver" }, params: [{ ref: "cb-predicate" }] } },
+  { owner: "Array", member: "some", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_some", receiverMode: "ref" }, result: { ref: "bool" }, params: [{ ref: "cb-predicate" }] } },
+  { owner: "Array", member: "every", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_every", receiverMode: "ref" }, result: { ref: "bool" }, params: [{ ref: "cb-predicate" }] } },
+  { owner: "Array", member: "map", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_map", receiverMode: "ref" }, result: { ref: "receiver" }, params: [{ ref: "cb-map" }] }, callback: "map" },
+  { owner: "Array", member: "reduce", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_reduce", receiverMode: "ref", argOrder: [1, 0] }, result: { ref: "element" }, params: [{ ref: "cb-reduce" }, { ref: "element" }] }, callback: "reduce" },
 
   // ReadonlyArray rows: read-only operations over dense/slice lanes.
   { owner: "ReadonlyArray", member: "length", operationKind: "property", lane: "vec", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
@@ -119,6 +133,10 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Set", member: "has", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "set-value" }] } },
   { owner: "Set", member: "delete", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "delete", argModes: ["ref"], mutatesReceiver: true }, result: { ref: "bool" }, params: [{ ref: "set-value" }] } },
   { owner: "Set", member: "size", operationKind: "property", lane: "set", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, castResult: "i32", result: { ref: "int32" } } },
+
+  // JSON lane (static owner; fallible rows require a fallible context).
+  { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
+  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "jsvalue" }] } },
 
   // Date lane.
   { owner: "DateConstructor", member: "now", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::now" }, result: { ref: "float64" } } },
@@ -169,13 +187,32 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier === undefined && ownerName === "DateConstructor") {
     return { lane: "date", bindings: {} };
   }
+  if (carrier === undefined && ownerName === "JSON") {
+    return { lane: "json", bindings: {} };
+  }
   return undefined;
 }
 
+export const rustInferCarrier: TargetTypeRef = { kind: "opaque", id: "tsonic.rust.infer" };
+
 function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): TargetTypeRef | undefined {
   switch (reference.ref) {
+    case "cb-predicate":
+      return bindings.element === undefined
+        ? undefined
+        : { kind: "function-pointer", args: [bindings.element], result: rustSourcePrimitiveTargetType("bool") };
+    case "cb-map":
+      return bindings.element === undefined
+        ? undefined
+        : { kind: "function-pointer", args: [bindings.element], result: rustInferCarrier };
+    case "cb-reduce":
+      return bindings.element === undefined
+        ? undefined
+        : { kind: "function-pointer", args: [rustInferCarrier, bindings.element], result: rustInferCarrier };
     case "int32":
       return rustSourcePrimitiveTargetType("int32");
+    case "jsvalue":
+      return rustJsValueTargetType();
     case "float64":
       return rustSourcePrimitiveTargetType("float64");
     case "bool":
@@ -254,9 +291,11 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       target: materializeTarget(row.shape.target, copyReference),
       resultCarrier,
       ...(row.shape.castResult === undefined ? {} : { castResult: row.shape.castResult }),
+      ...(row.fallible === true ? { fallible: true } : {}),
     },
     resultCarrier,
     parameterCarriers,
+    ...(row.callback === undefined ? {} : { callbackShape: row.callback }),
   };
 }
 
@@ -323,4 +362,10 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
 
 function isPrimitiveLaneCarrier(carrier: TargetTypeRef): boolean {
   return carrier.kind === "source-primitive" || isRustStringCarrier(carrier);
+}
+
+// Fallibility pre-pass query: does any row for this lib member declare a
+// fallible operation?
+export function jsOperationMayBeFallible(ownerName: string, memberName: string): boolean {
+  return jsOperationRows.some((row) => row.owner === ownerName && row.member === memberName && row.fallible === true);
 }

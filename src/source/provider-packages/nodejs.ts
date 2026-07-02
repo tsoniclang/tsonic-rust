@@ -111,6 +111,51 @@ function pathRows(): readonly RustProviderOperationRow[] {
   ];
 }
 
+function fsModule(): RustProviderModuleDefinition {
+  return {
+    moduleSpecifier: "node:fs",
+    providerModuleId: "tsonic.rust.node.fs",
+    exports: [
+      {
+        id: "node:fs::readFileSync",
+        name: "readFileSync",
+        kind: "function",
+        signatures: [{
+          id: "node:fs::readFileSync(path,encoding)",
+          name: "readFileSync",
+          parameters: [
+            { name: "path", type: stringType },
+            { name: "encoding", type: stringType },
+          ],
+          returnType: stringType,
+        }],
+      },
+      ...["writeFileSync", "existsSync", "readdirSync", "statSync"].map((name) => ({
+        id: `node:fs::${name}`,
+        name,
+        kind: "function" as const,
+        signatures: [{
+          id: `node:fs::${name}(...)`,
+          name,
+          parameters: [{ name: "args", type: { kind: "array", elementType: { kind: "any" } as const } as const, rest: true }],
+          returnType: { kind: "any" } as const,
+        }],
+      })),
+    ],
+  };
+}
+
+function fsRows(): readonly RustProviderOperationRow[] {
+  return [{
+    exportId: "node:fs::readFileSync",
+    operationKind: "method",
+    target: { form: "call", path: "node_fs::read_file_sync_string", argModes: ["ref", "ref"] },
+    resultCarrier: stringCarrier,
+    parameterCarriers: [stringCarrier, stringCarrier],
+    isFallible: true,
+  }];
+}
+
 function osRows(): readonly RustProviderOperationRow[] {
   return ["platform", "arch", "eol"].map((name): RustProviderOperationRow => ({
     exportId: `node:os::${name}`,
@@ -134,14 +179,14 @@ export function createRustNodejsProviderPackage(): RustProviderPackageImplementa
     modules: [
       pathModule(),
       osModule(),
-      declaredOnlyModule("node:fs", "tsonic.rust.node.fs", ["readFileSync", "writeFileSync", "existsSync", "readdirSync", "statSync"]),
+      fsModule(),
       declaredOnlyModule("node:process", "tsonic.rust.node.process", ["cwd", "exit"]),
       declaredOnlyModule("node:url", "tsonic.rust.node.url", ["fileURLToPath", "pathToFileURL"]),
       declaredOnlyModule("node:buffer", "tsonic.rust.node.buffer", ["btoa", "atob"]),
       declaredOnlyModule("node:crypto", "tsonic.rust.node.crypto", ["randomUUID", "createHash"]),
       declaredOnlyModule("node:util", "tsonic.rust.node.util", ["format", "inspect"]),
     ],
-    operations: [...pathRows(), ...osRows()],
+    operations: [...pathRows(), ...osRows(), ...fsRows()],
     crates: [{
       crateName: "tsonic_rust_node",
       cargoPath: resolve(targetPackageRoot, "../rust-nodejs/crates/tsonic_rust_node"),
