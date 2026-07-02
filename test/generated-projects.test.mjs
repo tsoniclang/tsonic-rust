@@ -174,3 +174,90 @@ export function main(): void {
   const run = validateGeneratedProject("js-surface-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
+
+test("generated cargo binary proves R4b semantic lanes at runtime", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "r4b_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+export interface Point {
+  x: int32;
+  y: int32;
+}
+
+export type Mode = "off" | "on";
+
+export class Box {
+  size: int32;
+
+  constructor(size: int32) {
+    this.size = size;
+  }
+
+  static unit(): Box {
+    return new Box(1);
+  }
+}
+
+export function pass_through<T>(value: T): T {
+  return value;
+}
+
+export function value_or_zero(value: int32 | null): int32 {
+  return value ?? 0;
+}
+
+export function main(): void {
+  const p: Point = { x: 3, y: 4 };
+  const shifted: Point = { x: p.x + 1, y: p.y };
+  check(shifted.x === 4);
+  check(shifted.y === 4);
+
+  const entry: [int32, string] = [7, "seven"];
+  check(entry[0] === 7);
+
+  const mode: Mode = "on";
+  check(mode === "on");
+  check(pass_through(3) === 3);
+
+  check(value_or_zero(5) === 5);
+  check(value_or_zero(null) === 0);
+
+  const unit_box = Box.unit();
+  check(unit_box.size === 1);
+  check(pass_through(41) + 1 === 42);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("r4b-lanes-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("generated cargo library proves the async lane compiles clean", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export async function fetch_value(seed: int32): Promise<int32> {
+  return seed + 1;
+}
+
+export async function drive(): Promise<int32> {
+  const value = await fetch_value(41);
+  return value;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("r4b-async-lib", result.artifacts);
+});

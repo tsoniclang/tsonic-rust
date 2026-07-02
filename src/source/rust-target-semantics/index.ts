@@ -513,6 +513,9 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
   if (kind === KindStringKeyword) {
     return setCarrierFact(walk, typeNode, rustStringTargetType());
   }
+  if (kind === "KindNumberKeyword") {
+    return setCarrierFact(walk, typeNode, rustSourcePrimitiveTargetType("float64"));
+  }
   if (kind === KindBooleanKeyword) {
     return setCarrierFact(walk, typeNode, boolCarrier);
   }
@@ -809,10 +812,10 @@ function resolveBinaryCarrier(
     leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, undefined);
     rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, undefined);
   }
-  if (leftCarrier === undefined && rightCarrier !== undefined && ast.kindName(left) === KindNumericLiteral && isRustNumericCarrier(rightCarrier)) {
+  if (leftCarrier === undefined && rightCarrier !== undefined && isRustNumericCarrier(rightCarrier)) {
     leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, rightCarrier);
   }
-  if (rightCarrier === undefined && leftCarrier !== undefined && ast.kindName(right) === KindNumericLiteral && isRustNumericCarrier(leftCarrier)) {
+  if (rightCarrier === undefined && leftCarrier !== undefined && isRustNumericCarrier(leftCarrier)) {
     rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, leftCarrier);
   }
   if (expected !== undefined && isRustNumericCarrier(expected)) {
@@ -822,6 +825,13 @@ function resolveBinaryCarrier(
     if (rightCarrier === undefined) {
       rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, expected);
     }
+  }
+  if (equalityOperator && leftCarrier === undefined && rightCarrier === undefined) {
+    // Equality between context-free numeric expressions defaults to float64:
+    // TypeScript numbers are IEEE doubles.
+    const doubleCarrier = rustSourcePrimitiveTargetType("float64");
+    leftCarrier = resolveExpressionCarrier(walk, left, sourceFile, doubleCarrier);
+    rightCarrier = resolveExpressionCarrier(walk, right, sourceFile, doubleCarrier);
   }
   if (operatorKind === "KindQuestionQuestionToken") {
     const rebindLeft = leftCarrier !== undefined && isRustOptionCarrier(leftCarrier) ? leftCarrier : undefined;
