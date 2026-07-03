@@ -2,6 +2,7 @@
 // the Rust target extensions, then plans Rust artifacts via the backend.
 // Uses only public @tsonic packages — no @tsonic/host.
 import { fileURLToPath } from "node:url";
+import { cpSync, existsSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTsonicCoreSourceExtension } from "@tsonic/source-core";
@@ -9,10 +10,12 @@ import {
   createRustBackend,
   createRustCompileInputFromSession,
   createRustProviderPackage,
+  composeRustCapabilities,
   createRustTargetPack,
 } from "../../dist/index.js";
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
+const packageRoot = resolve(testDirectory, "../..");
 export const repositoryRoot = resolve(testDirectory, "../..");
 export const fixtureCratesRoot = resolve(repositoryRoot, "test/fixtures/crates");
 export const rustRuntimeCratePath = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
@@ -163,18 +166,20 @@ export function acmePlatformPackage() {
   });
 }
 
-export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], packageIds = [], surfaces = [], entryPoint = "index.ts" } = {}) {
+export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" } = {}) {
   const pack = createRustTargetPack();
   const project = { entryPoint, targets: [target] };
-  const packPackages = (pack.packages ?? []).filter((candidate) => packageIds.includes(candidate.id));
-  packages = [...packages, ...packPackages];
+  // Local composition proof: capability plugin objects compose exactly as
+  // the host will hand them to the target (this is not host discovery).
+  const composed = composeRustCapabilities("rust", [...packages, ...capabilities]);
+  packages = composed.capabilities;
   const selectedSurfaces = (pack.surfaces ?? []).filter((surface) => surfaces.includes(surface.id));
   const providerContext = {
     project,
     target,
     targetPack: pack,
     selectedSurfaces,
-    selectedPackages: packages,
+    selectedCapabilities: packages,
   };
   const fileMap = new Map(Object.entries(files).map(([name, text]) => [`/src/${name}`, text]));
   const session = createCompilerSessionFromFiles({
@@ -214,15 +219,30 @@ export function checkRustSession(harness, fileNames) {
   return session.finalizeExtensions();
 }
 
-export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], packageIds = [], surfaces = [], entryPoint = "index.ts" }) {
-  const harness = createRustSession({ files, target, packages, packageIds, surfaces, entryPoint });
+export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" }) {
+  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
   const extensionHost = checkRustSession(harness);
   const contributionContext = harness.providerContext;
+  const capabilityReferences = harness.providerContext.selectedCapabilities.flatMap((providerPackage) =>
+    providerPackage.runtimeContributions?.({}).references ?? []);
+  // When a capability is loaded from the simulated install, the host would
+  // have loaded the target from the same node_modules root; target-owned
+  // crate references share that root so the cargo graph has one instance
+  // of each crate.
+  const layoutMarker = resolve(packageRoot, ".temp/installed/node_modules/@tsonic");
+  const layoutActive = capabilityReferences.some((reference) => reference.include.startsWith(layoutMarker));
+  const remapTargetReference = (reference) => {
+    const repoRuntimes = resolve(packageRoot, "runtimes");
+    if (layoutActive && reference.include.startsWith(repoRuntimes)) {
+      return { ...reference, include: reference.include.replace(repoRuntimes, resolve(layoutMarker, "target-rust/runtimes")) };
+    }
+    return reference;
+  };
   const runtimeReferences = [
-    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
+    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []).map(remapTargetReference),
     ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
-      surface.runtimeContributions?.(contributionContext).references ?? []),
-    ...harness.providerContext.selectedPackages.flatMap((providerPackage) => providerPackage.runtimeContributions?.({}).references ?? []),
+      surface.runtimeContributions?.(contributionContext).references ?? []).map(remapTargetReference),
+    ...capabilityReferences,
   ];
   const input = createRustCompileInputFromSession({
     session: harness.session,
@@ -230,6 +250,7 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
     project: harness.project,
     target,
     runtimeReferences,
+    selectedCapabilities: harness.providerContext.selectedCapabilities,
   });
   const backend = createRustBackend({ project: harness.project, target });
   return { result: backend.compile(input), extensionHost, harness };
@@ -446,5 +467,76 @@ export function acmeDbPackage() {
       },
     ],
     crates: [{ crateName: "acme_db", cargoPath: resolve(fixtureCratesRoot, "acme_db") }],
+  });
+}
+
+// Installed-capability fixture: the real @tsonic/rust-nodejs plugin,
+// imported from a simulated flat node_modules install so every path
+// contribution and peer-layout crate dependency resolves exactly as it
+// would from a real npm install.
+let cachedNodeCapability;
+export async function nodejsCapability() {
+  if (cachedNodeCapability === undefined) {
+    const layout = buildInstalledLayout();
+    const { createTsonicPlugin } = await import(
+      new URL(`file://${layout}/node_modules/@tsonic/rust-nodejs/dist/index.js`).href
+    );
+    cachedNodeCapability = createTsonicPlugin();
+  }
+  return cachedNodeCapability;
+}
+
+export function buildInstalledLayout() {
+  const layoutRoot = resolve(packageRoot, ".temp/installed/node_modules/@tsonic");
+  // Idempotent across concurrent test processes: the layout is rebuilt only
+  // when absent (npm test clears .temp/installed up front via pretest).
+  if (existsSync(resolve(layoutRoot, "rust-nodejs/package.json")) && existsSync(resolve(layoutRoot, "target-rust/package.json"))) {
+    return resolve(packageRoot, ".temp/installed");
+  }
+  rmSync(resolve(packageRoot, ".temp/installed"), { recursive: true, force: true });
+  const copies = [
+    [packageRoot, "target-rust", ["package.json", "dist", "runtimes"]],
+    [resolve(packageRoot, "../rust-nodejs"), "rust-nodejs", ["package.json", "dist", "runtimes"]],
+  ];
+  for (const [sourceRoot, name, entries] of copies) {
+    for (const entry of entries) {
+      cpSync(resolve(sourceRoot, entry), resolve(layoutRoot, name, entry), { recursive: true });
+    }
+  }
+  // The copied rust-nodejs plugin resolves @tsonic/target-rust and its own
+  // transitive compiler dependencies through standard walk-up resolution.
+  return resolve(packageRoot, ".temp/installed");
+}
+
+// Non-Node capability fixture: proves the installed-capability mechanism
+// carries no Node-specific behavior.
+export function acmeSuperbunapiCapability() {
+  return createRustProviderPackage({
+    id: "@acme/rust-superbunapi",
+    displayName: "SuperBunAPI for Rust",
+    version: "1.0.0",
+    modules: [{
+      moduleSpecifier: "superbunapi",
+      providerModuleId: "acme.superbunapi",
+      exports: [{
+        id: "superbunapi::serve",
+        name: "serve",
+        kind: "function",
+        signatures: [{
+          id: "superbunapi::serve(port)",
+          name: "serve",
+          parameters: [{ name: "port", type: { kind: "number" } }],
+          returnType: { kind: "string" },
+        }],
+      }],
+    }],
+    operations: [{
+      exportId: "superbunapi::serve",
+      operationKind: "method",
+      target: { form: "call", path: "acme_superbunapi::serve" },
+      resultCarrier: stringCarrier,
+      parameterCarriers: [int32Carrier],
+    }],
+    crates: [{ crateName: "acme_superbunapi", cargoPath: resolve(fixtureCratesRoot, "acme_superbunapi") }],
   });
 }

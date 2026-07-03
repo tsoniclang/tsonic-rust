@@ -1,4 +1,5 @@
 export { createRustTargetPack, rustTargetId } from "./descriptor/rust-target-pack.js";
+import { createRustTargetPack } from "./descriptor/rust-target-pack.js";
 export {
   readRustCrateName,
   readRustEdition,
@@ -76,4 +77,18 @@ export {
 } from "./source/rust-target-types.js";
 export { rustTypeFromCarrier } from "./backend/planner/render-types.js";
 export { createRustCompileInputFromSession } from "./session/compile-input.js";
-export { createRustNodejsProviderPackage } from "./source/provider-packages/nodejs.js";
+export { composeRustCapabilities } from "./plugin/compose.js";
+export type { TsonicPlugin, TsonicTargetPlugin, TsonicTargetCapabilityPlugin, TargetCapabilityContext, TargetProviderModuleOwnership } from "./plugin/types.js";
+
+// Standard installed-plugin entrypoint: the host imports the package and
+// calls createTsonicPlugin() to register the Rust target.
+export function createTsonicPlugin(): import("@tsonic/target-api").TsonicTargetPlugin {
+  return {
+    kind: "target",
+    id: "@tsonic/target-rust",
+    targetId: "rust",
+    createTargetPack() {
+      return createRustTargetPack();
+    },
+  };
+}

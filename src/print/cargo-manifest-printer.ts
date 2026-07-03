@@ -6,11 +6,12 @@ export function printCargoManifest(manifest: CargoManifestPlan): string {
     `name = ${tomlString(manifest.packageName)}`,
     'version = "0.1.0"',
     `edition = ${tomlString(manifest.edition)}`,
-    "",
-    "[dependencies]",
   ];
-  for (const dependency of manifest.dependencies) {
-    lines.push(`${dependency.name} = { path = ${tomlString(dependency.path)} }`);
+  if (manifest.dependencies.length > 0) {
+    lines.push("", "[dependencies]");
+    for (const dependency of manifest.dependencies) {
+      lines.push(`${dependency.name} = { path = ${tomlString(dependency.path)} }`);
+    }
   }
   return `${lines.join("\n")}\n`;
 }

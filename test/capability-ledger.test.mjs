@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compileRust } from "./helpers/rust-session.mjs";
+import { compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 
 // Capability ledger: every unsupported lane must diagnose deterministically.
 // Rows name the capability, a minimal repro, and the required behavior.
@@ -25,7 +25,7 @@ const unsupportedLanes = [
 ];
 
 for (const lane of unsupportedLanes) {
-  test(`unsupported lane stays fail-closed: ${lane.capability}`, () => {
+  test(`unsupported lane stays fail-closed: ${lane.capability}`, async () => {
     const { result } = compileRust({
       files: lane.files,
       ...(lane.surfaces === undefined ? {} : { surfaces: lane.surfaces }),
@@ -37,10 +37,10 @@ for (const lane of unsupportedLanes) {
   });
 }
 
-test("capability ledger: supported lanes compile a representative program", () => {
+test("capability ledger: supported lanes compile a representative program", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";

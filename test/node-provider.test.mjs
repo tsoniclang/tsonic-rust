@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust, createRustSession, checkRustSession } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust, createRustSession, checkRustSession, nodejsCapability } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
-test("node path and os lower through provider rows to tsonic_rust_node", () => {
+test("node path and os lower through provider rows to tsonic_rust_node", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { join, dirname, basename, extname, isAbsolute } from "node:path";
@@ -31,13 +31,13 @@ export function probe(dir: string, file: string): boolean {
   assert.match(text, /node_path::basename\(&full, None\)/u);
   assert.match(text, /node_os::platform\(\)/u);
   assert.match(text, /node_os::eol\(\)\.to_string\(\)/u);
-  assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_node = \{ path = ".*rust-nodejs\/crates\/tsonic_rust_node" \}/u);
+  assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_node = \{ path = ".*rust-nodejs\/runtimes\/crates\/tsonic_rust_node" \}/u);
 });
 
-test("declared-but-unsupported node APIs diagnose deterministically", () => {
+test("declared-but-unsupported node APIs diagnose deterministically", async () => {
   const harness = createRustSession({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { watch } from "node:fs";
@@ -54,23 +54,18 @@ export function observe(path: string): void {
     diagnostic.message.includes("node:fs::watch")));
 });
 
-test("node package requires the js surface", () => {
-  const pack = compileRust;
-  // Selecting the nodejs package without the js surface is a host-level
-  // configuration error; the pack declares requiredSurfaces ["js"].
-  const { harness } = pack({
-    surfaces: ["js"],
-    packageIds: ["nodejs"],
-    files: { "index.ts": "export function noop(): void {}\n" },
-  });
-  const nodejs = harness.pack.packages.find((candidate) => candidate.id === "nodejs");
-  assert.deepEqual(nodejs.requiredSurfaces, ["js"]);
+test("node package requires the js surface", async () => {
+  const capability = await nodejsCapability();
+  assert.equal(capability.kind, "target-capability");
+  assert.equal(capability.targetId, "rust");
+  assert.deepEqual(capability.requiredSurfaces, ["js"]);
+  assert.deepEqual(capability.moduleOwnership.map((entry) => entry.specifierPrefix ?? entry.moduleSpecifier).length > 0, true);
 });
 
-test("generated cargo binary proves node provider rows at runtime", { timeout: 300_000 }, () => {
+test("generated cargo binary proves node provider rows at runtime", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "r5_node_proof" } },
     files: {

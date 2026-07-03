@@ -105,3 +105,30 @@ test("JS operation rows are unique per owner/member/kind/lane", async () => {
   }
   assert.ok(seen.size > 20, "row scan should see the operation table");
 });
+
+test("rust target product source has no NodeJS capability coupling", () => {
+  const forbidden = [/tsonic_rust_node/u, /rust\.node\./u, /createRustNodejsProviderPackage/u, /\bnodejs\b/iu, /"node:(?:fs|os|path|url|crypto|util|buffer|process)/u];
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!entry.name.endsWith(".ts")) {
+        continue;
+      }
+      // The compiler's own platform imports (from "node:path") are the
+      // build platform, not target knowledge.
+      const text = readFileSync(full, "utf8").replace(/from "node:[a-z/]+"/gu, "");
+      for (const pattern of forbidden) {
+        if (pattern.test(text)) {
+          offenders.push(`${full}: ${String(pattern)}`);
+        }
+      }
+    }
+  };
+  walk(sourceRoot);
+  assert.deepEqual(offenders, []);
+});

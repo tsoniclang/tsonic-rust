@@ -55,31 +55,18 @@ and `T | undefined` Option lanes.
 Provider packages: identity-keyed operation rows over virtual declarations
 (calls, constructors, properties, indexers, operators via std::ops
 metadata, async and fallible rows), cargo dependency contribution, and
-fail-closed diagnostics for unsupported members. Node.js ships as a broad
-provider package: `node:path` (join/resolve/normalize/dirname/basename/
-extname/isAbsolute), `node:os` (platform/arch/eol/hostname/tmpdir/homedir),
-`node:fs` (existsSync, readFileSync, writeFileSync, readdirSync, statSync
-with a Stats carrier, mkdirSync, rmSync, unlinkSync, copyFileSync,
-renameSync, realpathSync), `node:fs/promises` (readFile, writeFile,
-readdir, stat, mkdir, rm, unlink, copyFile, rename — awaited fallible rows
-lower to `.await?`; the runtime backing is async signatures over
-synchronous file operations, a behavior proof rather than an I/O
-scheduler), `node:process` (cwd() plus Node-shaped value exports platform,
-arch, argv, pid, ppid, and env with index reads preserving absence as
-null Option carriers; exit(code) maps to std::process::exit; env writes
-and execPath fail closed), `node:buffer`
-(Buffer from/alloc/byteLength/concat/toString/readUInt8/writeUInt8/equals/
-compare/length, isBuffer), `node:url` (URL with property rows,
-URLSearchParams, pathToFileURL, fileURLToPath), `node:crypto` (randomUUID, randomBytes
-to Buffer, createHash and createHmac with Hash/Hmac update/digest), and
-`node:util` (closed string helpers plus system-error name/message).
-Provider modules declare cross-module type imports, so returned carriers
-(Buffer from randomBytes, Stats from fs/promises) expose their declared
-members through one identity-keyed declaration. Absent values are never silently defaulted: nullable reads
-(env indexing, URLSearchParams.get, os.homedir) carry Option and lower
-`??`/null checks explicitly. Declared members without rows (fs.watch,
-streams, process.execPath, util.inspect/format, legacy url.parse/format)
-each diagnose deterministically and name the contract they require.
+fail-closed diagnostics for unsupported members. Node.js support is not part of this
+package: it ships as the separately installed `@tsonic/rust-nodejs`
+capability plugin, which owns `node:*` module declarations, operation
+rows, and the `tsonic_rust_node` runtime crate contribution. This target
+package exposes the standard `createTsonicPlugin()` entrypoint and the
+generic capability authoring helpers (`createRustProviderPackage` with
+creation-time identity validation, alias-import and carrier-path
+contribution, and `composeRustCapabilities` for fail-closed local
+composition). Capability crates enter the generated Cargo manifest only
+on activation: an installed but unused capability contributes no
+dependencies. The `@acme/rust-superbunapi` fixture proves the mechanism
+is name-blind — no code in this package names any capability.
 
 ## Explicitly unsupported (fail-closed, classified)
 
@@ -102,6 +89,17 @@ never builds or writes into the `tsonic` repository itself. Tests include
 generated Cargo projects under `.temp/generated/` validated with
 `cargo fmt --check`, `check --locked`, `clippy -D warnings`, `test`, and
 `run` for binaries.
+
+## Runtime artifact rule
+
+Packaged runtime crates ship inside their npm package under
+`runtimes/crates/`, with lib-only manifests (no repo-relative test
+targets), a `[workspace]` opt-out so consumer workspaces never capture
+them, and complete dependency closure: target-owned crates reference
+their in-package siblings by relative path, and capability crates
+reference target-owned crates through the flat node_modules peer layout
+(`../../../../target-rust/runtimes/crates/<crate>`). Generated Cargo
+manifests reference only installed package paths.
 
 ## Authoring provider packages
 

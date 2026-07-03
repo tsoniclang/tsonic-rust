@@ -16,6 +16,7 @@ interface RustProjectSourceReference {
 }
 
 export interface RustCompileInputOptions {
+  readonly selectedCapabilities?: readonly object[];
   readonly session: CompilerSession;
   readonly extensionHost: ExtensionHost;
   readonly project: TsonicProjectConfig;
@@ -126,5 +127,31 @@ export function createRustCompileInputFromSession(options: RustCompileInputOptio
     runtimeReferences: options.runtimeReferences ?? [],
     paths,
   };
+  const capabilityAliasImports = new Map();
+  const capabilityCarrierPaths = {};
+  for (const capability of options.selectedCapabilities ?? []) {
+    const contributor = capability as {
+      rustAliasImports?(): readonly { readonly alias: string; readonly path: string }[];
+      rustCarrierPaths?(): Readonly<Record<string, string>>;
+    };
+    for (const entry of contributor.rustAliasImports?.() ?? []) {
+      capabilityAliasImports.set(entry.alias, { path: entry.path, alias: entry.alias });
+    }
+    Object.assign(capabilityCarrierPaths, contributor.rustCarrierPaths?.() ?? {});
+  }
+  const capabilityCrateNames = new Set<string>();
+  for (const capability of options.selectedCapabilities ?? []) {
+    const contributions = (capability as { runtimeContributions?(context: object): { references?: readonly { attributes?: Record<string, string> }[] } })
+      .runtimeContributions?.({});
+    for (const reference of contributions?.references ?? []) {
+      const crateName = reference.attributes?.crate;
+      if (crateName !== undefined) {
+        capabilityCrateNames.add(crateName);
+      }
+    }
+  }
+  (input as Record<string, unknown>).capabilityAliasImports = capabilityAliasImports;
+  (input as Record<string, unknown>).capabilityCarrierPaths = capabilityCarrierPaths;
+  (input as Record<string, unknown>).capabilityCrateNames = capabilityCrateNames;
   return input as unknown as TargetCompileInput;
 }

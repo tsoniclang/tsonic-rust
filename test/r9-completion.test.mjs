@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
-test("cross-module provider-ref members resolve without duplicate declarations", () => {
+test("cross-module provider-ref members resolve without duplicate declarations", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { randomBytes } from "node:crypto";
@@ -27,10 +27,10 @@ export function probe(): int32 {
   assert.match(text, /bytes\.len\(\) as i32/u);
 });
 
-test("generated cargo binary proves hmac, base64, and cross-module members at runtime", { timeout: 300_000 }, () => {
+test("generated cargo binary proves hmac, base64, and cross-module members at runtime", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "r9_proof" } },
     files: {
@@ -76,10 +76,10 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("fs/promises stat members resolve through the imported Stats declaration", () => {
+test("fs/promises stat members resolve through the imported Stats declaration", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { stat } from "node:fs/promises";
@@ -97,7 +97,7 @@ export async function size_of(path: string): Promise<boolean> {
   assert.match(text, /info\.size as f64/u);
 });
 
-test("remaining blocked lanes stay classified", () => {
+test("remaining blocked lanes stay classified", async () => {
   const cases = [
     { module: "node:util", name: "inspect", call: "inspect(\"x\")" },
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
@@ -106,7 +106,7 @@ test("remaining blocked lanes stay classified", () => {
   for (const item of cases) {
     const { result } = compileRust({
       surfaces: ["js"],
-      packageIds: ["nodejs"],
+      capabilities: [await nodejsCapability()],
       files: { "index.ts": `import { ${item.name} } from "${item.module}";\n\nexport function bad(): void {\n  ${item.call};\n}\n` },
     });
     assert.equal(result.artifacts.length, 0, `${item.module}::${item.name}`);

@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
-test("generated cargo binary proves string ABI, fixed arrays, and new node rows", { timeout: 300_000 }, () => {
+test("generated cargo binary proves string ABI, fixed arrays, and new node rows", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "r8_proof" } },
     files: {
@@ -50,7 +50,7 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("dynamic fixed-array indexing fails closed", () => {
+test("dynamic fixed-array indexing fails closed", async () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -67,7 +67,7 @@ export function f(i: int32): int32 {
   assert.ok(result.diagnostics.length > 0);
 });
 
-test("RegExp stays hard-rejected across literal, constructor, and string methods", () => {
+test("RegExp stays hard-rejected across literal, constructor, and string methods", async () => {
   const fixtures = [
     "export function f(s: string): boolean {\n  return /ab+c/.test(s);\n}\n",
     "export function f(s: string): boolean {\n  const r = new RegExp(\"ab+c\");\n  return r.test(s);\n}\n",
@@ -80,7 +80,7 @@ test("RegExp stays hard-rejected across literal, constructor, and string methods
   }
 });
 
-test("discriminated union narrowing repro stays fail-closed: it requires narrowing facts", () => {
+test("discriminated union narrowing repro stays fail-closed: it requires narrowing facts", async () => {
   // Exact repro: narrowing requires finalized facts; checker-level narrowed
   // types are not exposed as finalized facts, so member access on a
   // narrowed branch cannot prove its variant.
@@ -107,7 +107,7 @@ export function area(shape: Shape): int32 {
   assert.ok(result.diagnostics.every((diagnostic) => diagnostic.code.startsWith("RUST_")));
 });
 
-test("fixed-array indexing accepts only exact in-range integer literal indexes", () => {
+test("fixed-array indexing accepts only exact in-range integer literal indexes", async () => {
   // TypeScript itself rejects fractional, negative, and out-of-range
   // literal indexes on tuple-typed fixed arrays (TS2493); the extension
   // guard (integer parse + range check) is the fact-level backstop.

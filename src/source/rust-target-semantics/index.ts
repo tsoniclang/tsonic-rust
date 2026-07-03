@@ -113,7 +113,7 @@ import { readRustTypescriptCompatibilityMode } from "../../options/rust-target-o
 export const rustTargetSemanticsExtensionId = "tsonic.rust.target-semantics";
 
 export function createRustTargetSemanticsExtension(context: TargetProviderContext): CompilerExtension {
-  const providerRows = collectRustProviderOperationRows(context.selectedPackages);
+  const providerRows = collectRustProviderOperationRows(context.selectedCapabilities);
   const jsEnabled = context.selectedSurfaces.some((surface) => surface.id === "js") ||
     readRustTypescriptCompatibilityMode(context.target) === "compat";
   return {

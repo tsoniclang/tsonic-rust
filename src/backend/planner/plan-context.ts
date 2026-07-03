@@ -25,26 +25,31 @@ export interface RustPlanContext {
   readonly usedAliases?: Set<string>;
 }
 
+// Target-owned runtime aliases: the shared runtime and the target's own JS
+// surface crates. Capability crates contribute their aliases as row data.
 export const rustRuntimeAliasImports: ReadonlyMap<string, { readonly path: string; readonly alias: string }> = new Map([
   ["js_abi", { path: "tsonic_rust_js::abi", alias: "js_abi" }],
   ["js_string", { path: "tsonic_rust_js::string", alias: "js_string" }],
-  ["node_path", { path: "tsonic_rust_node::path", alias: "node_path" }],
-  ["node_os", { path: "tsonic_rust_node::os", alias: "node_os" }],
-  ["node_fs", { path: "tsonic_rust_node::fs", alias: "node_fs" }],
-  ["node_fs_promises", { path: "tsonic_rust_node::fs_promises", alias: "node_fs_promises" }],
-  ["node_process", { path: "tsonic_rust_node::process", alias: "node_process" }],
-  ["node_buffer", { path: "tsonic_rust_node::buffer", alias: "node_buffer" }],
-  ["node_url", { path: "tsonic_rust_node::url", alias: "node_url" }],
-  ["node_crypto", { path: "tsonic_rust_node::crypto", alias: "node_crypto" }],
-  ["node_util", { path: "tsonic_rust_node::util", alias: "node_util" }],
   ["rt", { path: "tsonic_rust_runtime", alias: "rt" }],
 ]);
 
-export function registerAliasFromPath(context: { readonly usedAliases?: Set<string> }, path: string): void {
+export function capabilityAliasImportsOf(input: object): ReadonlyMap<string, { readonly path: string; readonly alias: string }> {
+  return (input as { capabilityAliasImports?: ReadonlyMap<string, { readonly path: string; readonly alias: string }> })
+    .capabilityAliasImports ?? new Map();
+}
+
+export function registerAliasFromPath(
+  context: { readonly usedAliases?: Set<string>; readonly input?: object },
+  path: string,
+): void {
   const prefix = path.split("::")[0];
-  if (prefix !== undefined && rustRuntimeAliasImports.has(prefix)) {
-    context.usedAliases?.add(prefix);
+  if (prefix === undefined) {
+    return;
   }
+  // Every operation path prefix is activation evidence; use-item assembly
+  // filters to declared alias tables, and manifest generation activates
+  // only crates the plan actually referenced.
+  context.usedAliases?.add(prefix);
 }
 
 // Deterministic value-name policy: camelCase lowers to snake_case so

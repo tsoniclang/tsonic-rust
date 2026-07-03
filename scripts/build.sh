@@ -36,3 +36,4 @@ cat > "$CANONICAL_TSCONFIG" <<EOF
 EOF
 
 "$TSONIC_ROOT/scripts/build/tsgo-project.sh" "$CANONICAL_TSCONFIG" --pretty false
+bash "$(dirname "$0")/package-runtimes.sh"
