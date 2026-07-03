@@ -4,6 +4,7 @@ import {
   isRustJsArrayCarrier,
   rustJsValueTargetType,
   rustStringTargetId,
+  rustVecTargetType,
   isRustNumericCarrier,
   isRustStringCarrier,
   isRustVecCarrier,
@@ -39,7 +40,7 @@ export interface JsOperationSelection {
   readonly callbackShape?: "map" | "reduce";
 }
 
-type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json" | "math";
+type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "regexp";
 
 type JsCarrierRef =
   | { readonly ref: "cb-predicate" }
@@ -49,6 +50,7 @@ type JsCarrierRef =
   | { readonly ref: "jsvalue" }
   | { readonly ref: "float64" }
   | { readonly ref: "bool" }
+  | { readonly ref: "string-vec" }
   | { readonly ref: "string" }
   | { readonly ref: "element" }
   | { readonly ref: "option-of-element" }
@@ -68,6 +70,7 @@ interface JsOperationRowData {
   readonly requiresOwnership?: readonly ("owned" | "borrowed" | "borrowed-mut")[];
   readonly callback?: "map" | "reduce";
   readonly fallible?: boolean;
+  readonly firstArgCarrierId?: string;
   readonly shape:
     | {
         readonly op: "operation";
@@ -75,8 +78,9 @@ interface JsOperationRowData {
         readonly target: RustProviderOperationForm;
         readonly castResult?: string;
         readonly result: JsCarrierRef;
-        readonly params?: readonly JsCarrierRef[];
-      }
+        readonly params?: readonly (JsCarrierRef | undefined)[];
+        readonly firstArgCarrierId?: string;
+}
     | {
         readonly op: "set";
         readonly target: RustProviderOperationForm;
@@ -138,6 +142,12 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   // JSON lane (static owner; fallible rows require a fallible context).
   { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
   { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "jsvalue" }] } },
+
+  // RegExp lane: constant, compile-validated, oracle-proven subset.
+  { owner: "RegExp", member: "test", operationKind: "call", lane: "regexp", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "test", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+  { owner: "String", member: "replace", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [undefined, { ref: "string" }] } },
+  { owner: "String", member: "search", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "search", argModes: ["ref"] }, result: { ref: "int32" }, params: [undefined] } },
+  { owner: "String", member: "split", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "split", argModes: ["ref"] }, result: { ref: "string-vec" }, params: [undefined] } },
 
   // Math lane: only operations whose Rust f64 semantics equal JS exactly
   // (NaN-sensitive min/max and half-up round need runtime helpers and stay
@@ -208,6 +218,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier === undefined && ownerName === "Math") {
     return { lane: "math", bindings: {} };
   }
+  if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExp") {
+    return { lane: "regexp", bindings: { receiver: carrier } };
+  }
   return undefined;
 }
 
@@ -231,6 +244,8 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
       return rustSourcePrimitiveTargetType("int32");
     case "jsvalue":
       return rustJsValueTargetType();
+    case "string-vec":
+      return rustVecTargetType(rustStringTargetType());
     case "float64":
       return rustSourcePrimitiveTargetType("float64");
     case "bool":
@@ -271,6 +286,11 @@ function materializeTarget(
   };
 }
 
+function firstArgumentId(request: JsOperationRequest): string | undefined {
+  const carrier = request.argumentCarriers?.[0];
+  return carrier?.kind === "target-named" ? carrier.id : undefined;
+}
+
 export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
   const laneMatch = laneOf(request.receiverCarrier, request.ownerName);
   if (laneMatch === undefined) {
@@ -283,13 +303,18 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     candidate.operationKind === request.operationKind &&
     candidate.lane === lane &&
     (candidate.elementGuard !== "numeric" || isRustNumericCarrier(bindings.element)) &&
+    (candidate.firstArgCarrierId === undefined
+      ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
+          other.owner === candidate.owner && other.member === candidate.member &&
+          other.operationKind === candidate.operationKind && other.firstArgCarrierId === firstArgumentId(request))
+      : candidate.firstArgCarrierId === firstArgumentId(request)) &&
     (candidate.requiresOwnership === undefined ||
       (bindings.receiverOwnership !== undefined && candidate.requiresOwnership.includes(bindings.receiverOwnership))));
   if (row === undefined) {
     return undefined;
   }
   const operationId = `tsonic.rust.js.${row.owner}.${row.member}.${row.operationKind}`;
-  const parameterCarriers = (row.shape.params ?? []).map((reference) => resolveCarrierRef(reference, bindings));
+  const parameterCarriers = (row.shape.params ?? []).map((reference) => reference === undefined ? undefined : resolveCarrierRef(reference, bindings));
   if (row.shape.op === "set") {
     return {
       fact: { kind: "runtime-set", operationId, target: row.shape.target },
@@ -325,7 +350,7 @@ interface JsConstructorRowData {
   readonly argumentCount: number;
   readonly path: string;
   readonly result: "map" | "set" | "date";
-  readonly params?: readonly JsCarrierRef[];
+  readonly params?: readonly (JsCarrierRef | undefined)[];
 }
 
 const jsConstructorRows: readonly JsConstructorRowData[] = [
@@ -374,7 +399,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
       resultCarrier,
     },
     resultCarrier,
-    parameterCarriers: (row.params ?? []).map((reference) => resolveCarrierRef(reference, {})),
+    parameterCarriers: (row.params ?? []).map((reference) => reference === undefined ? undefined : resolveCarrierRef(reference, {})),
   };
 }
 

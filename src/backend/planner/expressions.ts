@@ -160,6 +160,9 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       const body = bodyNode === undefined ? undefined : planExpression(bodyNode, closureContext);
       return body === undefined ? undefined : { kind: "closure", params, body };
     }
+    case "KindRegularExpressionLiteral": {
+      return planRegExpCreate(node, context);
+    }
     case "KindAwaitExpression": {
       const awaitFact = rustOperationFact(node, context);
       if (awaitFact === undefined || awaitFact.kind !== "await-op") {
@@ -405,6 +408,23 @@ function planProviderOperationExpression(
     case "marker": {
       return undefined;
     }
+    case "arg-receiver-method": {
+      const [first, ...rest] = args;
+      if (first === undefined || receiverNode === undefined) {
+        return undefined;
+      }
+      const original = planExpression(receiverNode, context);
+      if (original === undefined) {
+        return undefined;
+      }
+      const shapedRest = [original, ...rest].map((argument, index): RustExpr => {
+        if ((form.argModes?.[index] ?? "value") !== "ref") {
+          return argument;
+        }
+        return refShape(context, argument, index === 0 ? receiverNode : undefined);
+      });
+      return { kind: "method-call", receiver: first, method: form.name, args: shapedRest };
+    }
     case "arg-method": {
       const [first, ...rest] = args;
       if (first === undefined) {
@@ -533,7 +553,12 @@ function planProviderOperationExpression(
         }
         return shaped;
       });
-      let result: RustExpr = { kind: "method-call", receiver, method: form.name, args: shapedArgs };
+      // Clippy get_first: xs.get(0) reads as xs.first().
+      const isGetZero = form.name === "get" && shapedArgs.length === 1 &&
+        shapedArgs[0]?.kind === "cast" && shapedArgs[0].expr.kind === "int-literal" && shapedArgs[0].expr.text === "0";
+      let result: RustExpr = isGetZero
+        ? { kind: "method-call", receiver, method: "first", args: [] }
+        : { kind: "method-call", receiver, method: form.name, args: shapedArgs };
       for (const chained of form.chain ?? []) {
         result = { kind: "method-call", receiver: result, method: chained, args: [] };
       }
@@ -699,8 +724,43 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   return fallibleCall ? { kind: "try", expr: call } : call;
 }
 
+function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const fact = rustOperationFact(node, context);
+  if (fact === undefined || fact.kind !== "regexp-create") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.js.regexp",
+      "RegExp expressions require a finalized constant-pattern fact.",
+    ));
+    return undefined;
+  }
+  if (context.fallibleContext !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.call",
+      "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+    ));
+    return undefined;
+  }
+  registerAliasFromPath(context, "js_abi::JsRegExp::new");
+  return {
+    kind: "try",
+    expr: {
+      kind: "call",
+      path: "js_abi::JsRegExp::new",
+      args: [
+        { kind: "str-literal", value: fact.pattern },
+        { kind: "str-literal", value: fact.flags },
+      ],
+    },
+  };
+}
+
 function planNewExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "regexp-create") {
+    return planRegExpCreate(node, context);
+  }
   if (fact !== undefined && fact.kind === "source-constructor") {
     const value = rustSourceTypeCarrierValue(fact.resultCarrier);
     const typePath = value === undefined ? undefined : sourceTypePath(context, value);

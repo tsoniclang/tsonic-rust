@@ -14,9 +14,9 @@ const unsupportedLanes = [
     files: { "index.ts": "export type Shape = { kind: \"circle\"; radius: number } | { kind: \"square\"; size: number };\nexport function make(): Shape {\n  return { kind: \"circle\", radius: 1 };\n}\n" },
   },
   {
-    capability: "RegExp (requires oracle parity)",
+    capability: "RegExp constructs outside the oracle-proven subset",
     surfaces: ["js"],
-    files: { "index.ts": "export function f(text: string): boolean {\n  const pattern = new RegExp(\"x\");\n  return pattern.test(text);\n}\n" },
+    files: { "index.ts": "export function f(text: string): boolean {\n  const pattern = /x(?=y)/;\n  return pattern.test(text);\n}\n" },
   },
   {
     capability: "undefined unions without js surface",

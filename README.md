@@ -72,8 +72,13 @@ is name-blind — no code in this package names any capability.
 
 Each unsupported lane requires a contract that does not exist: discriminated
 object unions (narrowing facts — see the exact repro pinned in
-`test/r8-completion.test.mjs`), and RegExp (unclaimed: the supported runtime subset does not match
-the shared Node/V8 oracle contract). Every unsupported lane diagnoses
+`test/r8-completion.test.mjs`), and RegExp constructs outside the
+oracle-proven subset (constant patterns with classes, quantifiers,
+anchors, alternation, and groups under flags i/g/m are implemented
+against 146 committed Node oracle vectors — see rust-js
+docs/parity-delta-r11.md; lazy quantifiers, backreferences, lookaround,
+named groups, word boundaries, and dynamic patterns reject
+deterministically). Every unsupported lane diagnoses
 deterministically; see `test/capability-ledger.test.mjs`.
 
 ## Build and test

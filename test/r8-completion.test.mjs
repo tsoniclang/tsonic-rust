@@ -67,15 +67,15 @@ export function f(i: int32): int32 {
   assert.ok(result.diagnostics.length > 0);
 });
 
-test("RegExp stays hard-rejected across literal, constructor, and string methods", async () => {
+test("RegExp outside the oracle subset stays hard-rejected", async () => {
   const fixtures = [
-    "export function f(s: string): boolean {\n  return /ab+c/.test(s);\n}\n",
-    "export function f(s: string): boolean {\n  const r = new RegExp(\"ab+c\");\n  return r.test(s);\n}\n",
-    "export function f(s: string): string {\n  return s.replace(/a/, \"b\");\n}\n",
+    "export function f(s: string): boolean {\n  return /a(?<name>b)/.test(s);\n}\n",
+    "export function f(p: string, s: string): boolean {\n  const r = new RegExp(p);\n  return r.test(s);\n}\n",
+    "export function f(s: string): string {\n  return s.replace(/(a)\\1/, \"b\");\n}\n",
   ];
   for (const fixture of fixtures) {
     const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": fixture } });
-    assert.equal(result.artifacts.length, 0, "RegExp lane must not emit artifacts");
+    assert.equal(result.artifacts.length, 0, "unsupported RegExp must not emit artifacts");
     assert.ok(result.diagnostics.length > 0);
   }
 });
