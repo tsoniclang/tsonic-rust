@@ -21,11 +21,11 @@ import { createRustSourceFile, rustGeneratedHeaderComment } from "../rust-ast/no
 import type { RustItem } from "../rust-ast/nodes.js";
 import { printRustSourceFile } from "../../print/rust-printer.js";
 import { printCargoManifest } from "../../print/cargo-manifest-printer.js";
-import { planCargoManifest } from "./cargo-project.js";
+import { cargoCrateAttributeName, planCargoManifest } from "./cargo-project.js";
 import { unsupportedConstructDiagnostic, unsupportedStatementDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planFunctionDeclaration } from "./functions.js";
-import { isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers, rustRuntimeAliasImports } from "./plan-context.js";
+import { capabilityAliasImportsOf, isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers, rustRuntimeAliasImports } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
@@ -60,7 +60,28 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
     moduleAliases.set(moduleName, context.usedAliases ?? new Set());
   }
 
-  const manifestPlan = planCargoManifest(input.target, input.runtimeReferences);
+  // Activation: a runtime crate is a dependency only when planned code
+  // references it (directly or through a declared alias). Surface-selected
+  // crates without carrier/operation use stay out of the manifest.
+  const capabilityAliasTable = capabilityAliasImportsOf(input);
+  const usedCrates = new Set<string>();
+  for (const aliases of moduleAliases.values()) {
+    for (const alias of aliases) {
+      const entry = rustRuntimeAliasImports.get(alias) ?? capabilityAliasTable.get(alias);
+      const crateName = (entry?.path ?? alias).split("::")[0];
+      if (crateName !== undefined) {
+        usedCrates.add(crateName);
+      }
+    }
+  }
+  const capabilityCrateNames = (input as unknown as { capabilityCrateNames?: ReadonlySet<string> }).capabilityCrateNames ?? new Set<string>();
+  const activeReferences = input.runtimeReferences.filter((reference) => {
+    const crateName = (reference as { attributes?: Record<string, string> }).attributes?.[cargoCrateAttributeName];
+    // Only capability crates are activation-gated; target-owned runtime
+    // crates ship with the target selection itself.
+    return crateName === undefined || !capabilityCrateNames.has(crateName) || usedCrates.has(crateName);
+  });
+  const manifestPlan = planCargoManifest(input.target, activeReferences);
   if (manifestPlan.manifest === undefined) {
     return { artifacts: [], diagnostics: [...diagnostics, ...manifestPlan.diagnostics] };
   }
@@ -91,8 +112,9 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
     // Structured import requirements collected during planning; never
     // inferred from rendered text.
     const aliases = [...(moduleAliases.get(moduleName) ?? new Set<string>())].sort((left, right) => left.localeCompare(right, "en"));
+    const capabilityAliases = capabilityAliasImportsOf(input);
     const useItems: RustItem[] = aliases
-      .map((alias) => rustRuntimeAliasImports.get(alias))
+      .map((alias) => rustRuntimeAliasImports.get(alias) ?? capabilityAliases.get(alias))
       .filter((entry): entry is { path: string; alias: string } => entry !== undefined)
       .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
     artifacts.push(rustSourceArtifact(`src/${moduleName}.rs`, printRustSourceFile(createRustSourceFile([...useItems, ...items]))));

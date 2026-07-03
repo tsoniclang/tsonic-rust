@@ -9,6 +9,7 @@ import {
   createRustBackend,
   createRustCompileInputFromSession,
   createRustProviderPackage,
+  composeRustCapabilities,
   createRustTargetPack,
 } from "../../dist/index.js";
 
@@ -163,18 +164,20 @@ export function acmePlatformPackage() {
   });
 }
 
-export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], packageIds = [], surfaces = [], entryPoint = "index.ts" } = {}) {
+export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" } = {}) {
   const pack = createRustTargetPack();
   const project = { entryPoint, targets: [target] };
-  const packPackages = (pack.packages ?? []).filter((candidate) => packageIds.includes(candidate.id));
-  packages = [...packages, ...packPackages];
+  // Local composition proof: capability plugin objects compose exactly as
+  // the host will hand them to the target (this is not host discovery).
+  const composed = composeRustCapabilities("rust", [...packages, ...capabilities]);
+  packages = composed.capabilities;
   const selectedSurfaces = (pack.surfaces ?? []).filter((surface) => surfaces.includes(surface.id));
   const providerContext = {
     project,
     target,
     targetPack: pack,
     selectedSurfaces,
-    selectedPackages: packages,
+    selectedCapabilities: packages,
   };
   const fileMap = new Map(Object.entries(files).map(([name, text]) => [`/src/${name}`, text]));
   const session = createCompilerSessionFromFiles({
@@ -214,15 +217,15 @@ export function checkRustSession(harness, fileNames) {
   return session.finalizeExtensions();
 }
 
-export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], packageIds = [], surfaces = [], entryPoint = "index.ts" }) {
-  const harness = createRustSession({ files, target, packages, packageIds, surfaces, entryPoint });
+export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" }) {
+  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
   const extensionHost = checkRustSession(harness);
   const contributionContext = harness.providerContext;
   const runtimeReferences = [
     ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
     ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
       surface.runtimeContributions?.(contributionContext).references ?? []),
-    ...harness.providerContext.selectedPackages.flatMap((providerPackage) => providerPackage.runtimeContributions?.({}).references ?? []),
+    ...harness.providerContext.selectedCapabilities.flatMap((providerPackage) => providerPackage.runtimeContributions?.({}).references ?? []),
   ];
   const input = createRustCompileInputFromSession({
     session: harness.session,
@@ -230,6 +233,7 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
     project: harness.project,
     target,
     runtimeReferences,
+    selectedCapabilities: harness.providerContext.selectedCapabilities,
   });
   const backend = createRustBackend({ project: harness.project, target });
   return { result: backend.compile(input), extensionHost, harness };
@@ -446,5 +450,49 @@ export function acmeDbPackage() {
       },
     ],
     crates: [{ crateName: "acme_db", cargoPath: resolve(fixtureCratesRoot, "acme_db") }],
+  });
+}
+
+// Installed-capability fixture: the real @tsonic/rust-nodejs plugin object,
+// imported the way the host would after npm discovery.
+let cachedNodeCapability;
+export async function nodejsCapability() {
+  if (cachedNodeCapability === undefined) {
+    const { createTsonicPlugin } = await import("../../../rust-nodejs/dist/index.js");
+    cachedNodeCapability = createTsonicPlugin();
+  }
+  return cachedNodeCapability;
+}
+
+// Non-Node capability fixture: proves the installed-capability mechanism
+// carries no Node-specific behavior.
+export function acmeSuperbunapiCapability() {
+  return createRustProviderPackage({
+    id: "@acme/rust-superbunapi",
+    displayName: "SuperBunAPI for Rust",
+    version: "1.0.0",
+    modules: [{
+      moduleSpecifier: "superbunapi",
+      providerModuleId: "acme.superbunapi",
+      exports: [{
+        id: "superbunapi::serve",
+        name: "serve",
+        kind: "function",
+        signatures: [{
+          id: "superbunapi::serve(port)",
+          name: "serve",
+          parameters: [{ name: "port", type: { kind: "number" } }],
+          returnType: { kind: "string" },
+        }],
+      }],
+    }],
+    operations: [{
+      exportId: "superbunapi::serve",
+      operationKind: "method",
+      target: { form: "call", path: "acme_superbunapi::serve" },
+      resultCarrier: stringCarrier,
+      parameterCarriers: [int32Carrier],
+    }],
+    crates: [{ crateName: "acme_superbunapi", cargoPath: resolve(fixtureCratesRoot, "acme_superbunapi") }],
   });
 }

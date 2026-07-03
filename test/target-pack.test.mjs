@@ -12,11 +12,20 @@ test("rust target pack registers under the rust target id", () => {
   assert.equal(pack.displayName, "Rust");
 });
 
-test("rust target pack declares the js surface and the nodejs provider package", () => {
+test("rust target pack declares only the js surface; capabilities install separately", async () => {
   const pack = createRustTargetPack();
 
   assert.deepEqual(pack.surfaces.map((surface) => surface.id), ["js"]);
-  assert.deepEqual(pack.packages.map((candidate) => candidate.id), ["nodejs"]);
+  assert.equal(pack.packages, undefined);
+});
+
+test("createTsonicPlugin exposes the installed target plugin contract", async () => {
+  const { createTsonicPlugin } = await import("../dist/index.js");
+  const plugin = createTsonicPlugin();
+  assert.equal(plugin.kind, "target");
+  assert.equal(plugin.id, "@tsonic/target-rust");
+  assert.equal(plugin.targetId, "rust");
+  assert.equal(plugin.createTargetPack().id, "rust");
 });
 
 test("rust provider creates the target semantics extension and validates options", () => {
@@ -25,7 +34,7 @@ test("rust provider creates the target semantics extension and validates options
     project: { entryPoint: "src/index.ts", targets: [] },
     target: { id: "rust", options: {} },
     targetPack: pack,
-    selectedPackages: [],
+    selectedCapabilities: [],
     selectedSurfaces: [],
   };
 

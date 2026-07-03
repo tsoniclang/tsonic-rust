@@ -20,12 +20,6 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustJsMapTargetId]: "js_abi::JsMap",
   [rustJsSetTargetId]: "js_abi::JsSet",
   [rustJsDateTargetId]: "js_abi::JsDate",
-  "rust.node.Stats": "node_fs::Stats",
-  "rust.node.Buffer": "node_buffer::Buffer",
-  "rust.node.Url": "node_url::Url",
-  "rust.node.UrlSearchParams": "node_url::UrlSearchParams",
-  "rust.node.Hash": "node_crypto::Hash",
-  "rust.node.Hmac": "node_crypto::Hmac",
 };
 
 export const rustStrRefType: RustType = { kind: "named", path: "&str" };
@@ -33,6 +27,7 @@ export const rustStrRefType: RustType = { kind: "named", path: "&str" };
 export function rustTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
   resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
+  capabilityCarrierPaths?: Readonly<Record<string, string>>,
 ): RustType | undefined {
   if (carrier === undefined) {
     return undefined;
@@ -45,11 +40,11 @@ export function rustTypeFromCarrier(
     return { kind: "string" };
   }
   if (carrier.kind === "target-named") {
-    const path = namedCarrierPaths[carrier.id];
+    const path = namedCarrierPaths[carrier.id] ?? capabilityCarrierPaths?.[carrier.id];
     if (path === undefined) {
       return undefined;
     }
-    const typeArguments = (carrier.typeArguments ?? []).map((argument) => rustTypeFromCarrier(argument, resolveSourceTypePath));
+    const typeArguments = (carrier.typeArguments ?? []).map((argument) => rustTypeFromCarrier(argument, resolveSourceTypePath, capabilityCarrierPaths));
     if (typeArguments.some((argument) => argument === undefined)) {
       return undefined;
     }
@@ -66,23 +61,23 @@ export function rustTypeFromCarrier(
     return rustStrRefType;
   }
   if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
-    const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
+    const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath, capabilityCarrierPaths);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
   }
   if (carrier.kind === "target-specific" && carrier.name === "fixed-array") {
     const value = carrier.value as { element: TargetTypeRef; length: number };
-    const element = rustTypeFromCarrier(value.element, resolveSourceTypePath);
+    const element = rustTypeFromCarrier(value.element, resolveSourceTypePath, capabilityCarrierPaths);
     return element === undefined ? undefined : { kind: "named", path: `[${printableTypeText(element)}; ${value.length}]` };
   }
   if (carrier.kind === "array") {
-    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath);
+    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath, capabilityCarrierPaths);
     return element === undefined ? undefined : { kind: "named", path: "Vec", typeArguments: [element] };
   }
   if (carrier.kind === "tuple") {
     if (carrier.elements.length === 0) {
       return { kind: "unit" };
     }
-    const elements = carrier.elements.map((element) => rustTypeFromCarrier(element, resolveSourceTypePath));
+    const elements = carrier.elements.map((element) => rustTypeFromCarrier(element, resolveSourceTypePath, capabilityCarrierPaths));
     if (elements.some((element) => element === undefined)) {
       return undefined;
     }
@@ -110,13 +105,14 @@ export function rustTypeFromCarrierInContext(
     readonly usedAliases?: Set<string>;
   },
 ): RustType | undefined {
+  const capabilityCarrierPaths = (context as { readonly input?: { capabilityCarrierPaths?: Readonly<Record<string, string>> } }).input?.capabilityCarrierPaths;
   const rendered = rustTypeFromCarrier(carrier, (value) => {
     const moduleName = context.moduleNameByFileName.get(value.fileName);
     if (moduleName === undefined) {
       return undefined;
     }
     return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
-  });
+  }, capabilityCarrierPaths);
   collectAliasesFromRustType(rendered, (path) => {
     registerAliasFromPath(context, path);
   });

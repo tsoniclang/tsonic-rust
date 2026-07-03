@@ -10,7 +10,7 @@ import type {
   TargetTypeRef,
 } from "@tsonic/tsts";
 import type {
-  TargetProviderPackageImplementation,
+  TargetCapabilityImplementation,
   TargetRuntimeContributionContext,
   TargetRuntimeContributions,
   TargetRuntimeReference,
@@ -63,18 +63,28 @@ export interface RustProviderPackageDefinition {
   readonly operations: readonly RustProviderOperationRow[];
   readonly crates: readonly RustProviderCrateDefinition[];
   readonly targetIdentities?: Readonly<Record<string, string>>;
+  // Rust module aliases used by this capability's operation row paths
+  // (e.g. acme_db_ext -> acme_db::ext). Emitted as use items.
+  readonly aliasImports?: readonly { readonly alias: string; readonly path: string }[];
+  // Rendered Rust paths for this capability's target-named carriers
+  // (e.g. acme.db.Row -> acme_db::Row).
+  readonly carrierPaths?: Readonly<Record<string, string>>;
 }
 
 export interface RustProviderOperationContributor {
   rustProviderOperations(): readonly RustProviderOperationRow[];
+  rustAliasImports?(): readonly { readonly alias: string; readonly path: string }[];
+  rustCarrierPaths?(): Readonly<Record<string, string>>;
 }
 
 export type RustProviderPackageImplementation =
-  TargetProviderPackageImplementation & RustProviderOperationContributor;
+  TargetCapabilityImplementation & RustProviderOperationContributor;
 
 export function createRustProviderPackage(definition: RustProviderPackageDefinition): RustProviderPackageImplementation {
   validateProviderPackageDefinition(definition);
   return {
+    kind: "target-capability",
+    targetId: "rust",
     id: definition.id,
     displayName: definition.displayName,
     ...(definition.requiredSurfaces === undefined ? {} : { requiredSurfaces: definition.requiredSurfaces }),
@@ -94,6 +104,12 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
     rustProviderOperations(): readonly RustProviderOperationRow[] {
       return definition.operations;
     },
+    rustAliasImports() {
+      return definition.aliasImports ?? [];
+    },
+    rustCarrierPaths() {
+      return definition.carrierPaths ?? {};
+    },
   };
 }
 
@@ -104,10 +120,10 @@ export function isRustProviderOperationContributor(
 }
 
 export function collectRustProviderOperationRows(
-  selectedPackages: readonly object[],
+  selectedCapabilities: readonly object[],
 ): readonly RustProviderOperationRow[] {
   const rows: RustProviderOperationRow[] = [];
-  for (const selectedPackage of selectedPackages) {
+  for (const selectedPackage of selectedCapabilities) {
     if (isRustProviderOperationContributor(selectedPackage)) {
       rows.push(...selectedPackage.rustProviderOperations());
     }

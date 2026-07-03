@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
-test("array callbacks lower to Rust closures over dense helpers", () => {
+test("array callbacks lower to Rust closures over dense helpers", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -34,7 +34,7 @@ export function stats(xs: int32[]): int32 {
   assert.match(text, /js_abi::array_dense_reduce\(xs, 0, \|acc, &x\| acc \+ x\)/u);
 });
 
-test("JSON round-trips through fallible rows in a throwing context", () => {
+test("JSON round-trips through fallible rows in a throwing context", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -54,10 +54,10 @@ export function roundtrip(text: string): string {
   assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
 });
 
-test("node fs read lowers through the fallible provider row", () => {
+test("node fs read lowers through the fallible provider row", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { readFileSync } from "node:fs";
@@ -75,10 +75,10 @@ export function load(path: string): string {
   assert.match(text, /node_fs::read_file_sync_string\(path, "utf8"\)\?/u);
 });
 
-test("generated cargo binary proves callbacks, errors, JSON, and fs at runtime", { timeout: 300_000 }, () => {
+test("generated cargo binary proves callbacks, errors, JSON, and fs at runtime", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "final_proof" } },
     files: {
@@ -143,7 +143,7 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("static fallible methods propagate with ? through type paths", () => {
+test("static fallible methods propagate with ? through type paths", async () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -177,7 +177,7 @@ export function drive(): int32 {
   assert.match(text, /Ok\(Machine::risky\(false\)\?\)/u);
 });
 
-test("catch bodies with returns wrap Ok inside fallible functions", () => {
+test("catch bodies with returns wrap Ok inside fallible functions", async () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -210,7 +210,7 @@ export function fallback(flag: boolean): int32 {
   assert.match(text, /return Ok\(risky\(\)\?\);/u);
 });
 
-test("nested arrow returns do not trip the try escape scan", () => {
+test("nested arrow returns do not trip the try escape scan", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {

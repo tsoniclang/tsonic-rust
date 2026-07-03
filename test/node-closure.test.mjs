@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
-test("buffer, url, crypto, process, and util lower through provider rows", () => {
+test("buffer, url, crypto, process, and util lower through provider rows", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { Buffer } from "node:buffer";
@@ -44,10 +44,10 @@ export function probe(): string {
   assert.match(text, /node_process::env_get\("PATH"\)\.unwrap_or\(/u);
 });
 
-test("generated cargo binary proves the multi-module node closure at runtime", { timeout: 300_000 }, () => {
+test("generated cargo binary proves the multi-module node closure at runtime", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "r7_node_proof" } },
     files: {
@@ -152,10 +152,10 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("generated cargo library proves async fs/promises rows", { timeout: 300_000 }, () => {
+test("generated cargo library proves async fs/promises rows", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { readFile, writeFile, readdir, stat, mkdir, rm, copyFile, rename, unlink } from "node:fs/promises";
@@ -192,10 +192,10 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
-test("process env writes fail closed", () => {
+test("process env writes fail closed", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { env } from "node:process";
@@ -210,10 +210,10 @@ export function bad(): void {
   assert.ok(result.diagnostics.length > 0);
 });
 
-test("absent env and search-param reads preserve null", () => {
+test("absent env and search-param reads preserve null", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
-    packageIds: ["nodejs"],
+    capabilities: [await nodejsCapability()],
     files: {
       "index.ts": `
 import { env } from "node:process";
@@ -234,7 +234,7 @@ export function read(name: string): string {
   assert.match(text, /value\.is_none\(\)/u);
 });
 
-test("unsupported node APIs fail closed with deterministic diagnostics", () => {
+test("unsupported node APIs fail closed with deterministic diagnostics", async () => {
   const cases = [
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
     { module: "node:util", name: "inspect", call: "inspect(\"x\")" },
@@ -246,7 +246,7 @@ test("unsupported node APIs fail closed with deterministic diagnostics", () => {
   for (const item of cases) {
     const { result } = compileRust({
       surfaces: ["js"],
-      packageIds: ["nodejs"],
+      capabilities: [await nodejsCapability()],
       files: {
         "index.ts": `
 import { ${item.name} } from "${item.module}";
