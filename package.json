@@ -5,16 +5,20 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist",
+    "runtimes"
+  ],
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "bash scripts/build.sh",
-    "test": "npm run build && node --test test/*.test.mjs test/architecture/*.test.mjs"
+    "test": "npm run build && node --test test/*.test.mjs test/architecture/*.test.mjs",
+    "pretest": "rm -rf .temp/installed && node -e \"import('./test/helpers/rust-session.mjs').then(m => m.buildInstalledLayout())\""
   },
   "peerDependencies": {
     "@tsonic/source-core": "0.0.1",
@@ -28,5 +32,10 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "tsonic": {
+    "kind": "plugin",
+    "contractVersion": 1,
+    "entry": "."
   }
 }

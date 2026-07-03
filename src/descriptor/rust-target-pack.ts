@@ -69,9 +69,12 @@ export function createRustTargetPack(): TargetPack {
 }
 
 function rustRuntimeCrateReference(repositoryName: string, crateName: string): TargetRuntimeReference {
+  void repositoryName;
+  // Target-owned runtime crates ship inside this package; the reference
+  // resolves from the installed package root.
   return {
     kind: cargoPathReferenceKind,
-    include: resolve(targetPackageRoot, `../${repositoryName}/crates/${crateName}`),
+    include: resolve(targetPackageRoot, `runtimes/crates/${crateName}`),
     attributes: { [cargoCrateAttributeName]: crateName },
   };
 }

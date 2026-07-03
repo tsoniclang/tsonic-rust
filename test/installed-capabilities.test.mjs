@@ -66,3 +66,23 @@ test("wrong-target capabilities fail closed in local composition", async () => {
     /targets 'csharp', not selected target 'rust'/u,
   );
 });
+
+test("simulated installed layout resolves target runtime crates end to end", { timeout: 300_000 }, async () => {
+  const { cpSync, mkdirSync, rmSync, existsSync } = await import("node:fs");
+  const { resolve } = await import("node:path");
+  const layoutRoot = resolve(".temp/installed-target/node_modules/@tsonic/target-rust");
+  rmSync(resolve(".temp/installed-target"), { recursive: true, force: true });
+  mkdirSync(layoutRoot, { recursive: true });
+  for (const entry of ["package.json", "runtimes"]) {
+    cpSync(resolve(entry), resolve(layoutRoot, entry), { recursive: true });
+  }
+  // The packaged js crate's runtime dependency resolves inside the package.
+  assert.ok(existsSync(resolve(layoutRoot, "runtimes/crates/tsonic_rust_js/Cargo.toml")));
+  assert.ok(existsSync(resolve(layoutRoot, "runtimes/crates/tsonic_rust_runtime/Cargo.toml")));
+  const { execFileSync } = await import("node:child_process");
+  const metadata = execFileSync("cargo", [
+    "metadata", "--no-deps", "--format-version", "1", "--offline",
+    "--manifest-path", resolve(layoutRoot, "runtimes/crates/tsonic_rust_js/Cargo.toml"),
+  ], { encoding: "utf8" });
+  assert.ok(JSON.parse(metadata).packages.some((entry) => entry.name === "tsonic_rust_js"));
+});

@@ -57,3 +57,27 @@ test("createBackend and createToolchain validate target options", () => {
   assert.throws(() => pack.createBackend(badContext), /not supported/);
   assert.throws(() => pack.createToolchain(badContext), /not supported/);
 });
+
+test("package manifest declares the installed plugin contract", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { createRequire } = await import("node:module");
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.deepEqual(manifest.tsonic, { kind: "plugin", contractVersion: 1, entry: "." });
+  assert.equal(manifest.exports["./package.json"], "./package.json");
+  assert.equal(manifest.exports["."], "./dist/index.js");
+  // package.json resolves through package exports from a consumer.
+  const require = createRequire(new URL("../node_modules/x/index.js", import.meta.url));
+  void require;
+  const { createTsonicPlugin } = await import("../dist/index.js");
+  assert.equal(createTsonicPlugin().id, "@tsonic/target-rust");
+});
+
+test("target runtime crate references resolve inside the package", async () => {
+  const { existsSync } = await import("node:fs");
+  const pack = createRustTargetPack();
+  const references = pack.provider.runtimeContributions({ selectedSurfaces: [], target: { id: "rust", options: {} } }).references;
+  for (const reference of references) {
+    assert.ok(reference.include.includes("tsonic-rust/runtimes/crates/"), reference.include);
+    assert.ok(existsSync(reference.include), `missing packaged crate: ${reference.include}`);
+  }
+});

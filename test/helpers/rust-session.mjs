@@ -2,6 +2,7 @@
 // the Rust target extensions, then plans Rust artifacts via the backend.
 // Uses only public @tsonic packages — no @tsonic/host.
 import { fileURLToPath } from "node:url";
+import { cpSync, existsSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTsonicCoreSourceExtension } from "@tsonic/source-core";
@@ -14,6 +15,7 @@ import {
 } from "../../dist/index.js";
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
+const packageRoot = resolve(testDirectory, "../..");
 export const repositoryRoot = resolve(testDirectory, "../..");
 export const fixtureCratesRoot = resolve(repositoryRoot, "test/fixtures/crates");
 export const rustRuntimeCratePath = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
@@ -221,11 +223,26 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
   const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
   const extensionHost = checkRustSession(harness);
   const contributionContext = harness.providerContext;
+  const capabilityReferences = harness.providerContext.selectedCapabilities.flatMap((providerPackage) =>
+    providerPackage.runtimeContributions?.({}).references ?? []);
+  // When a capability is loaded from the simulated install, the host would
+  // have loaded the target from the same node_modules root; target-owned
+  // crate references share that root so the cargo graph has one instance
+  // of each crate.
+  const layoutMarker = resolve(packageRoot, ".temp/installed/node_modules/@tsonic");
+  const layoutActive = capabilityReferences.some((reference) => reference.include.startsWith(layoutMarker));
+  const remapTargetReference = (reference) => {
+    const repoRuntimes = resolve(packageRoot, "runtimes");
+    if (layoutActive && reference.include.startsWith(repoRuntimes)) {
+      return { ...reference, include: reference.include.replace(repoRuntimes, resolve(layoutMarker, "target-rust/runtimes")) };
+    }
+    return reference;
+  };
   const runtimeReferences = [
-    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
+    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []).map(remapTargetReference),
     ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
-      surface.runtimeContributions?.(contributionContext).references ?? []),
-    ...harness.providerContext.selectedCapabilities.flatMap((providerPackage) => providerPackage.runtimeContributions?.({}).references ?? []),
+      surface.runtimeContributions?.(contributionContext).references ?? []).map(remapTargetReference),
+    ...capabilityReferences,
   ];
   const input = createRustCompileInputFromSession({
     session: harness.session,
@@ -453,15 +470,42 @@ export function acmeDbPackage() {
   });
 }
 
-// Installed-capability fixture: the real @tsonic/rust-nodejs plugin object,
-// imported the way the host would after npm discovery.
+// Installed-capability fixture: the real @tsonic/rust-nodejs plugin,
+// imported from a simulated flat node_modules install so every path
+// contribution and peer-layout crate dependency resolves exactly as it
+// would from a real npm install.
 let cachedNodeCapability;
 export async function nodejsCapability() {
   if (cachedNodeCapability === undefined) {
-    const { createTsonicPlugin } = await import("../../../rust-nodejs/dist/index.js");
+    const layout = buildInstalledLayout();
+    const { createTsonicPlugin } = await import(
+      new URL(`file://${layout}/node_modules/@tsonic/rust-nodejs/dist/index.js`).href
+    );
     cachedNodeCapability = createTsonicPlugin();
   }
   return cachedNodeCapability;
+}
+
+export function buildInstalledLayout() {
+  const layoutRoot = resolve(packageRoot, ".temp/installed/node_modules/@tsonic");
+  // Idempotent across concurrent test processes: the layout is rebuilt only
+  // when absent (npm test clears .temp/installed up front via pretest).
+  if (existsSync(resolve(layoutRoot, "rust-nodejs/package.json")) && existsSync(resolve(layoutRoot, "target-rust/package.json"))) {
+    return resolve(packageRoot, ".temp/installed");
+  }
+  rmSync(resolve(packageRoot, ".temp/installed"), { recursive: true, force: true });
+  const copies = [
+    [packageRoot, "target-rust", ["package.json", "dist", "runtimes"]],
+    [resolve(packageRoot, "../rust-nodejs"), "rust-nodejs", ["package.json", "dist", "runtimes"]],
+  ];
+  for (const [sourceRoot, name, entries] of copies) {
+    for (const entry of entries) {
+      cpSync(resolve(sourceRoot, entry), resolve(layoutRoot, name, entry), { recursive: true });
+    }
+  }
+  // The copied rust-nodejs plugin resolves @tsonic/target-rust and its own
+  // transitive compiler dependencies through standard walk-up resolution.
+  return resolve(packageRoot, ".temp/installed");
 }
 
 // Non-Node capability fixture: proves the installed-capability mechanism

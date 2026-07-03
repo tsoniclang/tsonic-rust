@@ -120,7 +120,7 @@ export function timing(): boolean {
 test("js surface contributes the rust-js cargo dependency", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": denseSource } });
   const manifest = artifactText(result, "Cargo.toml");
-  assert.match(manifest, /tsonic_rust_js = \{ path = ".*rust-js\/crates\/tsonic_rust_js" \}/u);
+  assert.match(manifest, /tsonic_rust_js = \{ path = ".*tsonic-rust\/runtimes\/crates\/tsonic_rust_js" \}/u);
 });
 
 test("strict-native without js surface rejects sparse arrays with a surface diagnostic", () => {
