@@ -86,3 +86,100 @@ test("simulated installed layout resolves target runtime crates end to end", { t
   ], { encoding: "utf8" });
   assert.ok(JSON.parse(metadata).packages.some((entry) => entry.name === "tsonic_rust_js"));
 });
+
+test("telemetry capability proves async and fallible rows through a runtime binary", { timeout: 300_000 }, async () => {
+  const { acmeTelemetryCapability } = await import("./helpers/rust-session.mjs");
+  const { result } = compileRust({
+    packages: [acmeTelemetryCapability(), acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "telemetry_proof" } },
+    files: {
+      "index.ts": `
+import { createMeter } from "telemetry";
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+export function main(): void {
+  let seen: int32 = 0;
+  try {
+    const meter = createMeter("requests");
+    meter.total();
+    seen = meter.total();
+  } catch (error) {
+    seen = -1;
+  }
+  check(seen === 0);
+  let rejected = false;
+  try {
+    createMeter("");
+  } catch (error) {
+    rejected = true;
+  }
+  check(rejected);
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /acme_telemetry::create_meter\("requests"\)\?/u);
+  const run = validateGeneratedProject("telemetry-proof-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("telemetry async fallible rows lower to awaited try calls", async () => {
+  const { acmeTelemetryCapability } = await import("./helpers/rust-session.mjs");
+  const { result } = compileRust({
+    packages: [acmeTelemetryCapability()],
+    files: {
+      "index.ts": `
+import { createMeter } from "telemetry";
+import type { int32 } from "@tsonic/core/types.js";
+
+export async function run(): Promise<int32> {
+  const meter = createMeter("latency");
+  const first = await meter.record(1.5);
+  return first;
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /meter\.record\(1\.5\)\.await\?/u);
+  validateGeneratedProject("telemetry-async-lib", result.artifacts);
+});
+
+test("many capabilities compose with disjoint ownership and single-instance crates", { timeout: 300_000 }, async () => {
+  const { acmeTelemetryCapability } = await import("./helpers/rust-session.mjs");
+  const { result } = compileRust({
+    packages: [acmeSuperbunapiCapability(), acmeTelemetryCapability(), acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "multi_cap" } },
+    files: {
+      "index.ts": `
+import { serve } from "superbunapi";
+import { createMeter } from "telemetry";
+import { check } from "@acme/testing";
+
+export function main(): void {
+  check(serve(8080) === "superbunapi:8080");
+  let counted = false;
+  try {
+    const meter = createMeter("m");
+    meter.total();
+    counted = true;
+  } catch (error) {
+    counted = false;
+  }
+  check(counted);
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const manifest = artifactText(result, "Cargo.toml");
+  for (const crate of ["acme_superbunapi", "acme_telemetry", "acme_testing"]) {
+    assert.equal(manifest.split(`${crate} = `).length, 2, `${crate} appears exactly once`);
+  }
+  const run = validateGeneratedProject("multi-cap-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});

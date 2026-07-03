@@ -405,6 +405,25 @@ function planProviderOperationExpression(
     case "marker": {
       return undefined;
     }
+    case "arg-method": {
+      const [first, ...rest] = args;
+      if (first === undefined) {
+        return undefined;
+      }
+      // Bare (possibly negated) numeric literals are ambiguous method
+      // receivers ({float}).
+      const suffixLiteral = (candidate: RustExpr): RustExpr => {
+        if (candidate.kind === "float-literal" || candidate.kind === "int-literal") {
+          return { kind: "float-literal", text: `${candidate.text}f64` };
+        }
+        if (candidate.kind === "unary" && candidate.operator === "-") {
+          return { ...candidate, operand: suffixLiteral(candidate.operand) };
+        }
+        return candidate;
+      };
+      const receiver = suffixLiteral(first);
+      return { kind: "method-call", receiver, method: form.name, args: rest };
+    }
     case "call": {
       registerAliasFromPath(context, form.path);
       const shaped = args.map((argument, index): RustExpr => {

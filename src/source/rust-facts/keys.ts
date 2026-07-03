@@ -24,6 +24,12 @@ export type RustProviderOperationForm =
     }
   | { readonly form: "path"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
+  | {
+      // Static helper lowering to a method on the first argument
+      // (Math.floor(x) -> x.floor()).
+      readonly form: "arg-method";
+      readonly name: string;
+    }
   | { readonly form: "field"; readonly name: string }
   | { readonly form: "index" }
   | {

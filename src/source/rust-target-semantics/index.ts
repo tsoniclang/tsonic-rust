@@ -1310,8 +1310,8 @@ function recordProviderOperationFacts(
   identity: ProviderDeclarationIdentity | undefined,
 ): void {
   const operationId = row.memberId ?? row.signatureId ?? row.exportId;
-  const targetOperationText = row.target.form === "marker"
-    ? "marker"
+  const targetOperationText = row.target.form === "marker" || row.target.form === "arg-method"
+    ? row.target.form === "marker" ? "marker" : row.target.name
     : row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice"
     ? row.target.path
     : row.target.form === "index"
