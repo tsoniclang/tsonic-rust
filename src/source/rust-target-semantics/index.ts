@@ -1005,7 +1005,15 @@ function resolveCallLikeCarrier(
     }
     for (const [index, argument] of callArguments.entries()) {
       if (argument !== undefined) {
-        resolveExpressionCarrier(walk, argument, sourceFile, row.parameterCarriers?.[index]);
+        const expectedArgument = row.parameterCarriers?.[index];
+        const resolvedArgument = resolveExpressionCarrier(walk, argument, sourceFile, expectedArgument);
+        if (expectedArgument?.kind === "target-named" && resolvedArgument !== undefined &&
+          JSON.stringify(resolvedArgument) !== JSON.stringify(expectedArgument) &&
+          !(resolvedArgument.kind === "pointer" && JSON.stringify(resolvedArgument.pointee) === JSON.stringify(expectedArgument))) {
+          // Closed-carrier mismatch: fail closed rather than emit ill-typed
+          // Rust.
+          return undefined;
+        }
         validateFlowMarkerAgainstMode(walk, argument, rowArgumentMode(row, index));
         if (rowArgumentMode(row, index) === "mut-ref") {
           recordBindingWrite(walk, argument, "referent");

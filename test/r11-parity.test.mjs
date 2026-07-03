@@ -56,3 +56,40 @@ export function main(): void {
   const run = validateGeneratedProject("math-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
+
+test("util.inspect accepts closed JsValue and rejects other carriers", async () => {
+  const { nodejsCapability } = await import("./helpers/rust-session.mjs");
+  const capability = await nodejsCapability();
+  const good = compileRust({
+    surfaces: ["js"],
+    capabilities: [capability],
+    files: {
+      "index.ts": `
+import { inspect } from "node:util";
+
+export function f(text: string): string {
+  const value = JSON.parse(text);
+  return inspect(value);
+}
+`,
+    },
+  });
+  assert.deepEqual(good.result.diagnostics, []);
+  assert.match(artifactText(good.result, "src/index.rs"), /node_util::inspect\(&value\)/u);
+
+  const bad = compileRust({
+    surfaces: ["js"],
+    capabilities: [capability],
+    files: {
+      "index.ts": `
+import { inspect } from "node:util";
+
+export function f(name: string): string {
+  return inspect(name);
+}
+`,
+    },
+  });
+  assert.equal(bad.result.artifacts.length, 0);
+  assert.ok(bad.result.diagnostics.length > 0);
+});
