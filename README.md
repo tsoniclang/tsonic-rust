@@ -90,6 +90,17 @@ generated Cargo projects under `.temp/generated/` validated with
 `cargo fmt --check`, `check --locked`, `clippy -D warnings`, `test`, and
 `run` for binaries.
 
+## Runtime artifact rule
+
+Packaged runtime crates ship inside their npm package under
+`runtimes/crates/`, with lib-only manifests (no repo-relative test
+targets), a `[workspace]` opt-out so consumer workspaces never capture
+them, and complete dependency closure: target-owned crates reference
+their in-package siblings by relative path, and capability crates
+reference target-owned crates through the flat node_modules peer layout
+(`../../../../target-rust/runtimes/crates/<crate>`). Generated Cargo
+manifests reference only installed package paths.
+
 ## Authoring provider packages
 
 Use `createRustProviderPackage`: declare virtual modules

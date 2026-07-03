@@ -38,7 +38,7 @@ test("compat mode with a selected js surface does not duplicate the rust-js crat
   assert.deepEqual(refs.map((reference) => reference.attributes.crate), ["tsonic_rust_runtime"]);
 });
 
-test("runtime crate references resolve to absolute sibling repository paths", () => {
+test("runtime crate references resolve to installed package paths", () => {
   const refs = references({ target: { id: "rust", options: {} } });
 
   for (const reference of refs) {
