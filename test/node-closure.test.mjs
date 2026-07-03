@@ -238,9 +238,9 @@ test("unsupported node APIs fail closed with deterministic diagnostics", () => {
   const cases = [
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
     { module: "node:util", name: "inspect", call: "inspect(\"x\")" },
-    { module: "node:buffer", name: "btoa", call: "btoa(\"x\")" },
+
     { module: "node:url", name: "parse", call: "parse(\"http://x\")" },
-    { module: "node:crypto", name: "createHmac", call: "createHmac(\"sha256\", \"k\")" },
+
     { module: "node:process", name: "execPath", call: "execPath.startsWith(\"/\")" },
   ];
   for (const item of cases) {

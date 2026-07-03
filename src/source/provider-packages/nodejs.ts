@@ -16,6 +16,7 @@ const bufferCarrier: TargetTypeRef = { kind: "target-named", id: "rust.node.Buff
 const urlCarrier: TargetTypeRef = { kind: "target-named", id: "rust.node.Url" };
 const searchParamsCarrier: TargetTypeRef = { kind: "target-named", id: "rust.node.UrlSearchParams" };
 const hashCarrier: TargetTypeRef = { kind: "target-named", id: "rust.node.Hash" };
+const hmacCarrier: TargetTypeRef = { kind: "target-named", id: "rust.node.Hmac" };
 
 const stringType = { kind: "string" } as const;
 const numberType = { kind: "number" } as const;
@@ -270,25 +271,15 @@ function fsRows(): readonly RustProviderOperationRow[] {
 
 function fsPromisesModule(): RustProviderModuleDefinition {
   const m = "node:fs/promises";
-  const statsId = "node:fs/promises::Stats";
   return {
     moduleSpecifier: m,
     providerModuleId: "tsonic.rust.node.fs-promises",
+    imports: [{ moduleSpecifier: "node:fs", namedImports: [{ exportedName: "Stats" }] }],
     exports: [
-      {
-        id: statsId,
-        name: "Stats",
-        kind: "class" as const,
-        members: [
-          methodMember(statsId, "isFile", [], booleanType),
-          methodMember(statsId, "isDirectory", [], booleanType),
-          propertyMember(statsId, "size", numberType),
-        ],
-      },
       fnExport(m, "readFile", [{ name: "path", type: stringType }, { name: "encoding", type: stringType }], stringType),
       fnExport(m, "writeFile", [{ name: "path", type: stringType }, { name: "data", type: stringType }, { name: "encoding", type: stringType }], voidType),
       fnExport(m, "readdir", [{ name: "path", type: stringType }], stringArrayType),
-      fnExport(m, "stat", [{ name: "path", type: stringType }], providerRef(m, "Stats")),
+      fnExport(m, "stat", [{ name: "path", type: stringType }], providerRef("node:fs", "Stats")),
       // Contract: recursive.
       fnExport(m, "mkdir", [{ name: "path", type: stringType }], voidType),
       // Contract: recursive and force.
@@ -316,11 +307,7 @@ function fsPromisesRows(): readonly RustProviderOperationRow[] {
     isAsync: true,
   });
   const unit: TargetTypeRef = { kind: "tuple", elements: [] };
-  const statsId = "node:fs/promises::Stats";
   return [
-    { exportId: statsId, memberId: `${statsId}.isFile`, operationKind: "method", target: { form: "receiver-method", name: "is_file" }, resultCarrier: boolCarrier },
-    { exportId: statsId, memberId: `${statsId}.isDirectory`, operationKind: "method", target: { form: "receiver-method", name: "is_directory" }, resultCarrier: boolCarrier },
-    { exportId: statsId, memberId: `${statsId}.size`, operationKind: "property", target: { form: "field", name: "size" }, resultCarrier: float64Carrier, castResult: "f64" },
     row("readFile", "node_fs_promises::read_file_string_async", stringCarrier, 2),
     row("writeFile", "node_fs_promises::write_file_string_async", unit, 3),
     row("readdir", "node_fs_promises::readdir_async", stringVecCarrier, 1),
@@ -423,8 +410,9 @@ function bufferModule(): RustProviderModuleDefinition {
         ],
       },
       fnExport(m, "isBuffer", [{ name: "value", type: providerRef(m, "Buffer") }], booleanType),
-      unsupportedFn(m, "btoa", "the legacy base64 global contract"),
-      unsupportedFn(m, "atob", "the legacy base64 global contract"),
+      fnExport(m, "btoa", [{ name: "value", type: stringType }], stringType),
+      fnExport(m, "atob", [{ name: "value", type: stringType }], stringType),
+      fnExport(m, "isEncoding", [{ name: "encoding", type: stringType }], booleanType),
     ],
   };
 }
@@ -442,6 +430,9 @@ function bufferRows(): readonly RustProviderOperationRow[] {
     { exportId: bufferId, memberId: `${bufferId}.equals`, operationKind: "method", target: { form: "receiver-method", name: "equals", argModes: ["ref"] }, resultCarrier: boolCarrier, parameterCarriers: [bufferCarrier] },
     { exportId: bufferId, memberId: `${bufferId}.compare`, operationKind: "method", target: { form: "receiver-method", name: "compare", argModes: ["ref"] }, resultCarrier: int32Carrier, parameterCarriers: [bufferCarrier] },
     { exportId: bufferId, memberId: `${bufferId}.length`, operationKind: "property", target: { form: "receiver-method", name: "len" }, resultCarrier: int32Carrier, castResult: "i32" },
+    { exportId: "node:buffer::btoa", operationKind: "method", target: { form: "call", path: "node_buffer::btoa", argModes: ["ref"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier], isFallible: true },
+    { exportId: "node:buffer::atob", operationKind: "method", target: { form: "call", path: "node_buffer::atob", argModes: ["ref"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier], isFallible: true },
+    { exportId: "node:buffer::isEncoding", operationKind: "method", target: { form: "call", path: "node_buffer::is_encoding", argModes: ["ref"] }, resultCarrier: boolCarrier, parameterCarriers: [stringCarrier] },
     { exportId: "node:buffer::isBuffer", operationKind: "method", target: { form: "call", path: "node_buffer::is_buffer", argModes: ["ref"] }, resultCarrier: boolCarrier, parameterCarriers: [bufferCarrier] },
   ];
 }
@@ -488,6 +479,7 @@ function urlModule(): RustProviderModuleDefinition {
       },
       fnExport(m, "pathToFileURL", [{ name: "path", type: stringType }], providerRef(m, "URL")),
       fnExport(m, "fileURLToPath", [{ name: "url", type: providerRef(m, "URL") }], stringType),
+      fnExport(m, "canParse", [{ name: "input", type: stringType }], booleanType),
       unsupportedFn(m, "parse", "the legacy URL object shape contract"),
       unsupportedFn(m, "format", "the legacy URL object shape contract"),
     ],
@@ -514,6 +506,7 @@ function urlRows(): readonly RustProviderOperationRow[] {
     { exportId: paramsId, memberId: `${paramsId}.has`, operationKind: "method", target: { form: "receiver-method", name: "has", argModes: ["ref"] }, resultCarrier: boolCarrier, parameterCarriers: [stringCarrier] },
     { exportId: paramsId, memberId: `${paramsId}.toString`, operationKind: "method", target: { form: "receiver-method", name: "to_string" }, resultCarrier: stringCarrier },
     { exportId: "node:url::pathToFileURL", operationKind: "method", target: { form: "call", path: "node_url::path_to_file_url", argModes: ["ref"] }, resultCarrier: urlCarrier, parameterCarriers: [stringCarrier] },
+    { exportId: "node:url::canParse", operationKind: "method", target: { form: "call", path: "node_url::can_parse", argModes: ["ref"], trailingArgs: ["None"] }, resultCarrier: boolCarrier, parameterCarriers: [stringCarrier] },
     { exportId: "node:url::fileURLToPath", operationKind: "method", target: { form: "call", path: "node_url::file_url_to_path", argModes: ["ref"] }, resultCarrier: stringCarrier, parameterCarriers: [urlCarrier], isFallible: true },
   ];
 }
@@ -526,6 +519,7 @@ function cryptoModule(): RustProviderModuleDefinition {
   return {
     moduleSpecifier: m,
     providerModuleId: "tsonic.rust.node.crypto",
+    imports: [{ moduleSpecifier: "node:buffer", namedImports: [{ exportedName: "Buffer" }] }],
     exports: [
       fnExport(m, "randomUUID", [], stringType),
       fnExport(m, "createHash", [{ name: "algorithm", type: stringType }], providerRef(m, "Hash")),
@@ -538,7 +532,16 @@ function cryptoModule(): RustProviderModuleDefinition {
           methodMember(hashId, "digest", [{ name: "encoding", type: stringType }], stringType),
         ],
       },
-      unsupportedFn(m, "createHmac", "a keyed-digest carrier contract"),
+      fnExport(m, "createHmac", [{ name: "algorithm", type: stringType }, { name: "key", type: stringType }], providerRef(m, "Hmac")),
+      {
+        id: "node:crypto::Hmac",
+        name: "Hmac",
+        kind: "class" as const,
+        members: [
+          methodMember("node:crypto::Hmac", "update", [{ name: "value", type: stringType }], voidType),
+          methodMember("node:crypto::Hmac", "digest", [{ name: "encoding", type: stringType }], stringType),
+        ],
+      },
       fnExport(m, "randomBytes", [{ name: "size", type: numberType }], providerRef("node:buffer", "Buffer")),
     ],
   };
@@ -551,6 +554,9 @@ function cryptoRows(): readonly RustProviderOperationRow[] {
     { exportId: "node:crypto::createHash", operationKind: "method", target: { form: "call", path: "node_crypto::create_hash", argModes: ["ref"] }, resultCarrier: hashCarrier, parameterCarriers: [stringCarrier], isFallible: true },
     { exportId: hashId, memberId: `${hashId}.update`, operationKind: "method", target: { form: "receiver-method", name: "update_str", argModes: ["ref"], mutatesReceiver: true }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [stringCarrier], isFallible: true },
     { exportId: hashId, memberId: `${hashId}.digest`, operationKind: "method", target: { form: "receiver-method", name: "digest_string", argModes: ["ref"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier], isFallible: true },
+    { exportId: "node:crypto::createHmac", operationKind: "method", target: { form: "call", path: "node_crypto::create_hmac_str", argModes: ["ref", "ref"] }, resultCarrier: hmacCarrier, parameterCarriers: [stringCarrier, stringCarrier], isFallible: true },
+    { exportId: "node:crypto::Hmac", memberId: "node:crypto::Hmac.update", operationKind: "method", target: { form: "receiver-method", name: "update_str", argModes: ["ref"], mutatesReceiver: true }, resultCarrier: { kind: "tuple", elements: [] }, parameterCarriers: [stringCarrier], isFallible: true },
+    { exportId: "node:crypto::Hmac", memberId: "node:crypto::Hmac.digest", operationKind: "method", target: { form: "receiver-method", name: "digest_string", argModes: ["ref"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier], isFallible: true },
     { exportId: "node:crypto::randomBytes", operationKind: "method", target: { form: "call", path: "node_crypto::random_bytes", argCasts: ["usize"] }, resultCarrier: bufferCarrier, parameterCarriers: [int32Carrier], isFallible: true },
   ];
 }
@@ -567,6 +573,7 @@ function utilModule(): RustProviderModuleDefinition {
       fnExport(m, "toUSVString", [{ name: "value", type: stringType }], stringType),
       fnExport(m, "styleText", [{ name: "style", type: stringType }, { name: "text", type: stringType }], stringType),
       fnExport(m, "getSystemErrorName", [{ name: "code", type: numberType }], stringType),
+      fnExport(m, "getSystemErrorMessage", [{ name: "code", type: numberType }], stringType),
       unsupportedFn(m, "inspect", "a deterministic closed inspection subset (open reflection is out of contract)"),
       unsupportedFn(m, "format", "a deterministic closed formatting subset (open reflection is out of contract)"),
     ],
@@ -580,6 +587,7 @@ function utilRows(): readonly RustProviderOperationRow[] {
     { exportId: `${m}::toUSVString`, operationKind: "method", target: { form: "call", path: "node_util::to_usv_string", argModes: ["ref"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier] },
     { exportId: `${m}::styleText`, operationKind: "method", target: { form: "call", path: "node_util::style_text", argModes: ["ref", "ref"] }, resultCarrier: stringCarrier, parameterCarriers: [stringCarrier, stringCarrier] },
     { exportId: `${m}::getSystemErrorName`, operationKind: "method", target: { form: "call", path: "node_util::get_system_error_name", chain: ["to_string"] }, resultCarrier: stringCarrier, parameterCarriers: [int32Carrier] },
+    { exportId: `${m}::getSystemErrorMessage`, operationKind: "method", target: { form: "call", path: "node_util::get_system_error_message", chain: ["to_string"] }, resultCarrier: stringCarrier, parameterCarriers: [int32Carrier] },
   ];
 }
 
