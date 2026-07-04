@@ -2764,6 +2764,17 @@ export function rustRegExpSubsetViolation(pattern: string, flags: string): strin
     if (inClass && ch === "]") {
       inClass = false;
     }
+    const code = ch === undefined ? 0 : ch.codePointAt(0) ?? 0;
+    if (code > 0xffff) {
+      if (inClass) {
+        return "astral character in class";
+      }
+      const next = pattern[index + 2];
+      if (next === "*" || next === "+" || next === "?" || next === "{") {
+        return "quantifier on a bare astral literal";
+      }
+      index += 1;
+    }
   }
   const rejected: readonly (readonly [RegExp, string])[] = [
     [/\\[1-9]/u, "backreference"],

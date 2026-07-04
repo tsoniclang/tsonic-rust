@@ -1,18 +1,27 @@
 //! Oracle-backed backtracking RegExp engine for a closed JS subset.
 //!
-//! Supported syntax: literal chars, `.`, character classes (`[abc]`,
-//! `[a-z]`, `[^...]`), class escapes `\d \D \w \W \s \S` (inside and outside
-//! classes), identity/control/hex escapes (`\.`, `\\`, `\n`, `\t`, `\xHH`,
-//! `\uHHHH`, ...), greedy quantifiers `* + ? {n} {n,} {n,m}`, anchors `^ $`,
-//! alternation `|`, capturing `( )` and non-capturing `(?: )` groups.
-//! Supported flags: `i`, `g` (drives `replace`/`split` iteration and the
-//! stateful `exec`/`lastIndex` contract), `m`.
+//! Supported syntax: literal chars, positive character classes (`[abc]`,
+//! `[a-z]` with ranges capped at U+D7FF), class escapes `\d \w \s` (inside
+//! and outside classes), identity/control/hex escapes (`\.`, `\\`, `\n`,
+//! `\t`, `\xHH`, `\uHHHH`, ...), greedy quantifiers `* + ? {n} {n,} {n,m}`,
+//! anchors `^ $`, alternation `|`, capturing `( )` and non-capturing `(?: )`
+//! groups. Supported flags: `i`, `g` (drives `replace`/`split` iteration and
+//! the stateful `exec`/`lastIndex` contract), `m`.
 //!
 //! Everything else — lazy quantifiers, backreferences, lookaround, named
 //! groups, `\b`/`\B` assertions, property escapes, and the flags
 //! `d s u v y` — is rejected at construction with a `SyntaxError` naming the
 //! construct. Acceptance of the supported subset is proven against Node's
 //! engine by the committed oracle vectors in `tests/oracle/`.
+//!
+//! `.`, negated classes (`[^...]`, `\D \W \S`), classes reaching surrogate
+//! or astral code points, and quantifiers on a bare astral literal are
+//! rejected at construction as well: their Node non-`u` semantics are
+//! defined over UTF-16 code units, so they match *lone surrogates* (Node's
+//! `/./.exec("😀")` yields the high surrogate alone) — strings a Rust
+//! `String` cannot represent — while this engine consumes whole scalar
+//! values. Rejecting them at construction keeps the guard fail-closed and
+//! independent of the input searched.
 //!
 //! The accepted subset is exact. The one construct/input combination that
 //! cannot be represented is empty-match iteration over astral input: after an
