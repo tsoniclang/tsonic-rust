@@ -176,7 +176,7 @@ export function read(): string {
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
 });
 
-test("RegExp remains unclaimed and fails closed", () => {
+test("constant new RegExp lowers through the oracle-proven engine", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -188,9 +188,8 @@ export function probe(text: string): boolean {
 `,
     },
   });
-
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsRegExp::new\("\\\\d\+", ""\)\?/u);
 });
 
 test("readonly arrays lower to borrowed slice parameters with slice iteration", () => {

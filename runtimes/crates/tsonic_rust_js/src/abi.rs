@@ -3,7 +3,7 @@
 pub use crate::array::dense::{
     at as array_dense_at, concat as array_dense_concat, copy_within as array_dense_copy_within,
     entries as array_dense_entries, every as array_dense_every, fill as array_dense_fill,
-    filter as array_dense_filter, find as array_dense_find,
+    filter as array_dense_filter, find as array_dense_find, find_index as array_dense_find_index,
     flat_map_one as array_dense_flat_map_one, flat_one as array_dense_flat_one,
     for_each as array_dense_for_each, includes as array_dense_includes,
     index_of as array_dense_index_of, join as array_dense_join, keys as array_dense_keys,
@@ -31,6 +31,11 @@ pub use crate::map::JsMap;
 pub use crate::object::JsObject;
 pub use crate::regexp::JsRegExp;
 pub use crate::set::JsSet;
+pub use crate::string::{
+    at as js_string_at, char_at as js_string_char_at, code_point_at as js_string_code_point_at,
+    pad_end as js_string_pad_end, pad_start as js_string_pad_start, repeat as js_string_repeat,
+    trim_end as js_string_trim_end, trim_start as js_string_trim_start,
+};
 pub use crate::typed_array::{
     Float32Array, Float64Array, Int16Array, Int32Array, Int8Array, Uint16Array, Uint32Array,
     Uint8Array, Uint8ClampedArray,

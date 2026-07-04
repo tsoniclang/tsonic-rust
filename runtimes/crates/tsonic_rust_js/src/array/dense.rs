@@ -324,6 +324,18 @@ where
     array.iter().find(|item| predicate(item))
 }
 
+/// Returns the index of the first element matching the predicate, or -1.
+pub fn find_index<T, F>(array: &[T], predicate: F) -> isize
+where
+    F: FnMut(&T) -> bool,
+{
+    array
+        .iter()
+        .position(predicate)
+        .map(|index| index as isize)
+        .unwrap_or(-1)
+}
+
 pub fn for_each<T, F>(array: &[T], callback: F)
 where
     F: FnMut(&T),

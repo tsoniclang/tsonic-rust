@@ -749,6 +749,14 @@ function resolveExpressionCarrierUncached(
     case "KindArrowFunction": {
       return resolveArrowFunctionCarrier(walk, expression, sourceFile, expected);
     }
+    case "KindRegularExpressionLiteral": {
+      const literalText = walk.lifecycle.compiler.ast.text(expression);
+      const lastSlash = literalText.lastIndexOf("/");
+      if (!literalText.startsWith("/") || lastSlash <= 0) {
+        return undefined;
+      }
+      return resolveRegExpCreation(walk, expression, literalText.slice(1, lastSlash), literalText.slice(lastSlash + 1));
+    }
     case "KindAwaitExpression": {
       const operand = Node_Expression(expression);
       const operandCarrier = operand === undefined
@@ -1005,7 +1013,15 @@ function resolveCallLikeCarrier(
     }
     for (const [index, argument] of callArguments.entries()) {
       if (argument !== undefined) {
-        resolveExpressionCarrier(walk, argument, sourceFile, row.parameterCarriers?.[index]);
+        const expectedArgument = row.parameterCarriers?.[index];
+        const resolvedArgument = resolveExpressionCarrier(walk, argument, sourceFile, expectedArgument);
+        if (expectedArgument?.kind === "target-named" && resolvedArgument !== undefined &&
+          JSON.stringify(resolvedArgument) !== JSON.stringify(expectedArgument) &&
+          !(resolvedArgument.kind === "pointer" && JSON.stringify(resolvedArgument.pointee) === JSON.stringify(expectedArgument))) {
+          // Closed-carrier mismatch: fail closed rather than emit ill-typed
+          // Rust.
+          return undefined;
+        }
         validateFlowMarkerAgainstMode(walk, argument, rowArgumentMode(row, index));
         if (rowArgumentMode(row, index) === "mut-ref") {
           recordBindingWrite(walk, argument, "referent");
@@ -1026,6 +1042,25 @@ function resolveCallLikeCarrier(
       return setCarrierFact(walk, expression, rustFutureTargetType(row.resultCarrier));
     }
     return setCarrierFact(walk, expression, row.resultCarrier);
+  }
+  if (expressionKind === KindNewExpression) {
+    const { ast, checker } = walk.lifecycle.compiler;
+    const constructorSymbol = checker.getResolvedSymbolOrNil(callee) ?? checker.getSymbolAtLocation(callee);
+    const constructorName = constructorSymbol === undefined ? undefined : checker.getSymbolName(constructorSymbol);
+    const isLibRegExp = constructorName === "RegExp" && checker.getSymbolDeclarations(constructorSymbol!).some((declaration) =>
+      declaration !== undefined && ast.getFileName(ast.getSourceFile(declaration)).endsWith(".d.ts"));
+    if (isLibRegExp) {
+      const [patternNode, flagsNode] = callArguments;
+      const patternIsLiteral = patternNode !== undefined && ast.kindName(patternNode) === "KindStringLiteral";
+      const flagsAreLiteral = flagsNode === undefined || ast.kindName(flagsNode) === "KindStringLiteral";
+      if (!patternIsLiteral || !flagsAreLiteral) {
+        // Dynamic patterns cannot be proven against the oracle.
+        appendRegExpDiagnostic(walk, "dynamic pattern or flags");
+        return undefined;
+      }
+      const literal = (node: Node | undefined): string => node === undefined ? "" : ast.text(node);
+      return resolveRegExpCreation(walk, expression, literal(patternNode), literal(flagsNode));
+    }
   }
   const sourceCallLike = trySourceCallLike(walk, expression, callee, callArguments, sourceFile, expressionKind);
   if (sourceCallLike !== undefined) {
@@ -1310,8 +1345,8 @@ function recordProviderOperationFacts(
   identity: ProviderDeclarationIdentity | undefined,
 ): void {
   const operationId = row.memberId ?? row.signatureId ?? row.exportId;
-  const targetOperationText = row.target.form === "marker"
-    ? "marker"
+  const targetOperationText = row.target.form === "marker" || row.target.form === "arg-method"
+    ? row.target.form === "marker" ? "marker" : row.target.name
     : row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice"
     ? row.target.path
     : row.target.form === "index"
@@ -1558,7 +1593,7 @@ function selectJsCallForNode(
   walk: RustFactWalk,
   _expression: Node,
   callee: Node,
-  _callArguments: readonly (Node | undefined)[],
+  callArguments: readonly (Node | undefined)[],
   sourceFile: SourceFile,
 ): JsOperationSelection | undefined {
   const { ast } = walk.lifecycle.compiler;
@@ -1573,11 +1608,18 @@ function selectJsCallForNode(
   const receiverCarrier = receiver === undefined
     ? undefined
     : resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+  // Overloaded members (string replace/split/search with RegExp) select by
+  // the first argument's carrier.
+  const firstArgument = callArguments[0];
+  const firstArgumentCarrier = firstArgument === undefined
+    ? undefined
+    : resolveExpressionCarrier(walk, firstArgument, sourceFile, undefined);
   return selectJsSurfaceOperation({
     ownerName: identity.ownerName,
     memberName: identity.memberName,
     operationKind: "call",
     ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
+    ...(firstArgumentCarrier === undefined ? {} : { argumentCarriers: [firstArgumentCarrier] }),
   });
 }
 
@@ -2467,6 +2509,11 @@ function recordFallibilityFacts(walk: RustFactWalk): void {
         // Closures are fallibility boundaries: errors cannot propagate out.
         return;
       }
+      if (kind === "KindRegularExpressionLiteral" && !insideTry) {
+        // Constant RegExp construction is fallible at runtime.
+        found = true;
+        return;
+      }
       if (kind === "KindTryStatement") {
         const tryBlock = TryStatement_TryBlock(node);
         const catchBlock = CatchClause_Block(TryStatement_CatchClause(node));
@@ -2480,6 +2527,11 @@ function recordFallibilityFacts(walk: RustFactWalk): void {
       }
       if (kind === KindNewExpression && !insideTry) {
         const callee = Node_Expression(node);
+        const constructorSymbol = callee === undefined ? undefined : checker.getResolvedSymbolOrNil(callee) ?? checker.getSymbolAtLocation(callee!);
+        if (constructorSymbol !== undefined && checker.getSymbolName(constructorSymbol) === "RegExp") {
+          found = true;
+          return;
+        }
         const identity = callee === undefined ? undefined : providerDeclarationIdentityFor(walk, callee);
         if (identity !== undefined) {
           const row = matchProviderRow(walk.providerRows, identity, "constructor");
@@ -2643,4 +2695,70 @@ function resolveArrowFunctionCarrier(
     resultCarrier: closureCarrier,
   });
   return setCarrierFact(walk, expression, closureCarrier);
+}
+
+// --- RegExp constant lane ----------------------------------------------------
+
+// Compile-time validator mirroring the closed runtime subset. Conservative:
+// any construct outside the oracle-proven grammar rejects here, and the
+// runtime engine validates again on construction.
+export function rustRegExpSubsetViolation(pattern: string, flags: string): string | undefined {
+  for (const flag of flags) {
+    if (flag !== "i" && flag !== "g" && flag !== "m") {
+      return `flag '${flag}'`;
+    }
+  }
+  if (new Set(flags).size !== flags.length) {
+    return "duplicate flags";
+  }
+  const rejected: readonly (readonly [RegExp, string])[] = [
+    [/\\[1-9]/u, "backreference"],
+    [/\(\?=/u, "lookahead"],
+    [/\(\?!/u, "negative lookahead"],
+    [/\(\?</u, "lookbehind or named group"],
+    [/\\b|\\B/u, "word-boundary assertion"],
+    [/\\p|\\P|\\k|\\c/u, "unicode property, named backreference, or control escape"],
+    [/\\u\{/u, "unicode code point escape"],
+    [/[*+?}]\?/u, "lazy quantifier"],
+  ];
+  for (const [needle, label] of rejected) {
+    if (needle.test(pattern)) {
+      return label;
+    }
+  }
+  return undefined;
+}
+
+function appendRegExpDiagnostic(walk: RustFactWalk, violation: string): void {
+  walk.lifecycle.host.diagnostics.append({
+    extensionId: rustTargetSemanticsExtensionId,
+    extensionCode: "RUST_REGEXP_UNSUPPORTED",
+    numericCode: 0,
+    category: "error",
+    message: `RegExp construct outside the oracle-proven subset: ${violation}.`,
+    evidence: [{ message: "target.capability=rust.js.regexp" }],
+  });
+}
+
+export function resolveRegExpCreation(
+  walk: RustFactWalk,
+  expression: Node,
+  pattern: string,
+  flags: string,
+): TargetTypeRef | undefined {
+  if (!walk.jsEnabled) {
+    return undefined;
+  }
+  const violation = rustRegExpSubsetViolation(pattern, flags);
+  if (violation !== undefined) {
+    appendRegExpDiagnostic(walk, violation);
+    return undefined;
+  }
+  setRustOperationFact(walk, expression, {
+    kind: "regexp-create",
+    operationId: "tsonic.rust.js.regexp.create",
+    pattern,
+    flags,
+  });
+  return setCarrierFact(walk, expression, { kind: "target-named", id: "rust.js.JsRegExp" });
 }

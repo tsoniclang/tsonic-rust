@@ -540,3 +540,61 @@ export function acmeSuperbunapiCapability() {
     crates: [{ crateName: "acme_superbunapi", cargoPath: resolve(fixtureCratesRoot, "acme_superbunapi") }],
   });
 }
+
+// Second non-Node capability: async + fallible rows, a named carrier, and
+// a runtime crate contribution — proving composition scale is name-blind.
+export function acmeTelemetryCapability() {
+  const meterCarrier = { kind: "target-named", id: "acme.telemetry.Meter" };
+  return createRustProviderPackage({
+    id: "@acme/rust-telemetry",
+    displayName: "Telemetry for Rust",
+    version: "1.0.0",
+    modules: [{
+      moduleSpecifier: "telemetry",
+      providerModuleId: "acme.telemetry",
+      exports: [
+        {
+          id: "telemetry::createMeter",
+          name: "createMeter",
+          kind: "function",
+          signatures: [{
+            id: "telemetry::createMeter(name)",
+            name: "createMeter",
+            parameters: [{ name: "name", type: { kind: "string" } }],
+            returnType: { kind: "provider-ref", moduleSpecifier: "telemetry", exportName: "Meter" },
+          }],
+        },
+        {
+          id: "telemetry::Meter",
+          name: "Meter",
+          kind: "class",
+          members: [
+            {
+              id: "telemetry::Meter.record",
+              name: "record",
+              kind: "method",
+              signatures: [{
+                id: "telemetry::Meter.record(value)",
+                parameters: [{ name: "value", type: { kind: "number" } }],
+                returnType: { kind: "source-primitive", name: "int32" },
+              }],
+            },
+            {
+              id: "telemetry::Meter.total",
+              name: "total",
+              kind: "method",
+              signatures: [{ id: "telemetry::Meter.total()", parameters: [], returnType: { kind: "source-primitive", name: "int32" } }],
+            },
+          ],
+        },
+      ],
+    }],
+    operations: [
+      { exportId: "telemetry::createMeter", operationKind: "method", target: { form: "call", path: "acme_telemetry::create_meter", argModes: ["ref"] }, resultCarrier: meterCarrier, parameterCarriers: [stringCarrier], isFallible: true },
+      { exportId: "telemetry::Meter", memberId: "telemetry::Meter.record", operationKind: "method", target: { form: "receiver-method", name: "record", mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [{ kind: "source-primitive", name: "float64" }], isFallible: true, isAsync: true },
+      { exportId: "telemetry::Meter", memberId: "telemetry::Meter.total", operationKind: "method", target: { form: "receiver-method", name: "total" }, resultCarrier: int32Carrier },
+    ],
+    carrierPaths: { "acme.telemetry.Meter": "acme_telemetry::Meter" },
+    crates: [{ crateName: "acme_telemetry", cargoPath: resolve(fixtureCratesRoot, "acme_telemetry") }],
+  });
+}

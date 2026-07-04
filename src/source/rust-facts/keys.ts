@@ -24,6 +24,20 @@ export type RustProviderOperationForm =
     }
   | { readonly form: "path"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
+  | {
+      // Static helper lowering to a method on the first argument
+      // (Math.floor(x) -> x.floor()).
+      readonly form: "arg-method";
+      readonly name: string;
+    }
+  | {
+      // Receiver-swapping method: the first argument becomes the Rust
+      // receiver and the JS receiver becomes the first Rust argument
+      // (text.replace(re, r) -> re.replace(&text, r)).
+      readonly form: "arg-receiver-method";
+      readonly name: string;
+      readonly argModes?: readonly RustArgumentMode[];
+    }
   | { readonly form: "field"; readonly name: string }
   | { readonly form: "index" }
   | {
@@ -172,6 +186,14 @@ export type RustTargetOperationFact =
       // `throw new Error(message)` lowering to an Err return.
       readonly kind: "throw-op";
       readonly operationId: string;
+    }
+  | {
+      // Compile-validated constant RegExp construction (literal or
+      // new RegExp with literal arguments).
+      readonly kind: "regexp-create";
+      readonly operationId: string;
+      readonly pattern: string;
+      readonly flags: string;
     }
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
