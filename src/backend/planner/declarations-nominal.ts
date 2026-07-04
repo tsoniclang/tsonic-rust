@@ -142,7 +142,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const structItem: RustItem = {
     kind: "struct",
     name: className,
-    ...(fields.some((field) => rustPublicName(field.name).needsAllow) ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+    ...(structAttributes(className, fields) === undefined ? {} : { attrs: structAttributes(className, fields) }),
     pub: ast.hasModifierKind(node, "export"),
     derives,
     fields,
@@ -433,7 +433,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   return [{
     kind: "struct",
     name: interfaceName,
-    ...(fields.some((field) => rustPublicName(field.name).needsAllow) ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+    ...(structAttributes(interfaceName, fields) === undefined ? {} : { attrs: structAttributes(interfaceName, fields) }),
     pub: ast.hasModifierKind(node, "export"),
     derives: allFieldsCopy ? ["Clone", "Copy", "Debug", "PartialEq"] : ["Clone", "Debug", "PartialEq"],
     fields,
@@ -461,4 +461,17 @@ export function planUnionAliasDeclaration(node: Node, context: RustPlanContext):
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
     variants: fact.variants.map((variant) => ({ name: variant.name })),
   }];
+}
+
+// Scoped lint allowances for a generated struct: field names may be
+// non-snake, and the authored type name may be non-CamelCase.
+function structAttributes(typeName: string, fields: readonly { readonly name: string }[]): readonly string[] | undefined {
+  const attrs: string[] = [];
+  if (fields.some((field) => rustPublicName(field.name).needsAllow)) {
+    attrs.push("#[allow(non_snake_case)]");
+  }
+  if (!/^[A-Z][A-Za-z0-9]*$/u.test(typeName)) {
+    attrs.push("#[allow(non_camel_case_types)]");
+  }
+  return attrs.length === 0 ? undefined : attrs;
 }

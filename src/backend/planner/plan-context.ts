@@ -9,10 +9,9 @@ export interface RustPlanContext {
   readonly diagnostics: TargetDiagnostic[];
   // Identifier names with a proven write (assignment or increment) in the
   // enclosing function body. `let mut` is emitted only for proven writes.
-  // Both sets operate in source-name space; renaming happens at emission.
   readonly mutatedNames?: ReadonlySet<string>;
-  // Emitted binding names in the enclosing function scope, used to detect
-  // deterministic-rename collisions (TS fooBar and foo_bar both exist).
+  // Binding names already emitted in the enclosing function scope, used to
+  // diagnose same-scope collisions.
   readonly emittedLocalNames?: Set<string>;
   // Call nodes appearing directly under an await expression; future-carrier
   // calls anywhere else fail closed.

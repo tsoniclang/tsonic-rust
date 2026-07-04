@@ -123,7 +123,9 @@ export function rustProviderOperationsMappersOf(
 ): readonly RustProviderOperationsMapper[] {
   const mappers: RustProviderOperationsMapper[] = [];
   for (const capability of selectedCapabilities) {
-    const createMappers = (capability as { createOperationMappers?(context: object): readonly { kind: string }[] }).createOperationMappers;
+    const createMappers = (capability as {
+      createOperationMappers?(context: object): readonly TargetCapabilityOperationMapper[];
+    }).createOperationMappers;
     if (typeof createMappers !== "function") {
       continue;
     }

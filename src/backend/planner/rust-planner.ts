@@ -174,6 +174,11 @@ function planModuleNames(
   return names;
 }
 
+// Module-path policy (distinct from identifier naming): generated Rust
+// module names derive from source FILE names, which are filesystem paths,
+// not user identifiers. File stems normalize to snake_case module names so
+// module paths stay valid and predictable across platforms; user-authored
+// identifiers inside modules are never recased.
 export function rustModuleNameForFile(fileName: string): string | undefined {
   const base = fileName.split("/").pop() ?? "";
   const stem = base.replace(/\.(ts|mts|cts|tsx)$/u, "");
