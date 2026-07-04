@@ -295,7 +295,6 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
     typeNode === undefined ||
     rustType === undefined ||
     rustType.kind === "string" ||
-    !isUpperSnakeName(name) ||
     !isValidRustIdentifier(name) ||
     !isConstLiteralInitializer(initializer, context) ||
     ast.kindName(initializer) === "KindStringLiteral"
@@ -303,7 +302,7 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
     context.diagnostics.push(unsupportedConstructDiagnostic(
       { ast, sourceFile: context.sourceFile, node: statement },
       "rust.backend.const",
-      "Top-level declarations support only UPPER_SNAKE annotated const bindings with numeric or boolean literals.",
+      "Top-level declarations support only annotated const bindings with numeric or boolean literals.",
     ));
     return undefined;
   }
@@ -315,6 +314,9 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
     kind: "const",
     name,
     pub: ast.hasModifierKind(statement, "export"),
+    // Authored const names are preserved verbatim; non-UPPER names carry a
+    // scoped lint allowance.
+    ...(isUpperSnakeName(name) ? {} : { attrs: ["#[allow(non_upper_case_globals)]"] }),
     type: rustType,
     value,
   };

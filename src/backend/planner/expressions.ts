@@ -24,7 +24,7 @@ import { rustBorrowedArgsFactKey, rustFallibleCallFactKey, rustOptionWrapFactKey
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustLocalBindingName, rustPublicName, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, rustPublicName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier } from "../../source/rust-target-types.js";
@@ -96,7 +96,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         }
         return applyResultCast(planned, identifierFact.castResult);
       }
-      const name = rustLocalBindingName(ast.text(node));
+      const name = rustSourceName(context, ast.text(node));
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, node),
@@ -149,7 +149,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       const arrowParams = context.input.ast.parameters(node);
       const params: { name: string; byRefCopy: boolean }[] = [];
       for (const [index, parameter] of arrowParams.entries()) {
-        const parameterName = parameter === undefined ? "" : rustLocalBindingName(ast.text(ast.name(parameter) ?? parameter));
+        const parameterName = parameter === undefined ? "" : rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
         if (!isValidRustIdentifier(parameterName)) {
           return undefined;
         }
@@ -713,9 +713,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   const declarationFileName = ast.getFileName(sourceReference.sourceFile);
   const moduleName = context.moduleNameByFileName.get(declarationFileName);
   const authoredName = ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration);
-  const declarationName = ast.hasModifierKind(sourceReference.declaration, "export")
-    ? rustPublicName(authoredName).name
-    : rustLocalBindingName(authoredName);
+  const declarationName = authoredName;
   if (moduleName === undefined || !isValidRustIdentifier(declarationName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),

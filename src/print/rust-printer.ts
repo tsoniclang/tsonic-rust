@@ -29,7 +29,8 @@ export function printRustItem(item: RustItem): string {
       return item.alias === undefined ? `use ${item.path};` : `use ${item.path} as ${item.alias};`;
     }
     case "const": {
-      return `${item.pub ? "pub " : ""}const ${item.name}: ${printRustType(item.type)} = ${printRustExpr(item.value)};`;
+      const constAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
+      return `${constAttrs}${item.pub ? "pub " : ""}const ${item.name}: ${printRustType(item.type)} = ${printRustExpr(item.value)};`;
     }
     case "struct": {
       const structAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");

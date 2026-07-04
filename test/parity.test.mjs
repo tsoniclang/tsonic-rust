@@ -139,6 +139,9 @@ export function probe(text: string): boolean {
 
 test("RegExp constructs outside the oracle subset fail closed", async () => {
   const cases = [
+    "/a./",
+    "/[^a]/",
+    "/\\D/",
     "/a(?=b)/",
     "/(a)\\\\1/",
     "/a*?/",

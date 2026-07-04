@@ -23,6 +23,8 @@ export interface RustPlanContext {
   // Structured import requirements: runtime alias prefixes used by planned
   // operations and rendered types. Never inferred from printed text.
   readonly usedAliases?: Set<string>;
+  // Per-item flag: a non-snake_case user identifier was emitted.
+  readonly nonSnakeSeen?: { value: boolean };
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS
@@ -55,12 +57,12 @@ export function registerAliasFromPath(
 // Deterministic value-name policy: camelCase lowers to snake_case so
 // generated code satisfies Rust naming lints. Collisions are diagnosed, not
 // silently merged.
-// Naming policy: this conversion applies ONLY to user-authored local
-// bindings, parameters, functions, fields, and module-local items — the
-// Rust lint boundary for generated user code. Provider, library, and
-// capability API identity never flows through it: runtime helper names may
-// differ from source names only through explicit operation-row metadata
-// (target.name / target.path), which the backend emits verbatim.
+// Naming policy: every user-authored identifier is preserved verbatim
+// wherever Rust can represent it; items containing non-snake_case names
+// carry scoped #[allow(non_snake_case)]. This conversion exists ONLY for
+// compiler-generated temporaries with no TypeScript source identity.
+// Provider, library, and capability API identity flows exclusively through
+// operation-row metadata, which the backend emits verbatim.
 export function rustLocalBindingName(name: string): string {
   if (/^[A-Z][A-Z0-9_]*$/u.test(name)) {
     // UPPER_SNAKE names are constant references and pass through unchanged.
@@ -79,6 +81,17 @@ export function rustLocalBindingName(name: string): string {
 // helpers keep snake_case conversion (rustLocalBindingName).
 export function rustPublicName(name: string): { readonly name: string; readonly needsAllow: boolean } {
   return { name, needsAllow: name !== rustLocalBindingName(name) };
+}
+
+// Verbatim user identifier; records non-snake usage so the enclosing item
+// can carry a scoped lint allowance.
+export function rustSourceName(context: { readonly nonSnakeSeen?: { value: boolean } }, name: string): string {
+  if (name !== rustLocalBindingName(name)) {
+    if (context.nonSnakeSeen !== undefined) {
+      context.nonSnakeSeen.value = true;
+    }
+  }
+  return name;
 }
 
 export function isUpperSnakeName(name: string): boolean {

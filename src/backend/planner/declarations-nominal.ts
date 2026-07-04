@@ -21,7 +21,7 @@ import type {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
@@ -157,7 +157,7 @@ function planParams(member: Node, context: RustPlanContext): readonly RustFuncti
     if (parameter === undefined) {
       continue;
     }
-    const parameterName = rustLocalBindingName(ast.text(ast.name(parameter) ?? parameter));
+    const parameterName = rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
     const parameterType = renderType(context, parameter) ?? renderType(context, Node_Type(parameter));
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -268,6 +268,8 @@ function buildStructLiteral(
 function planMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
   const { ast } = context.input;
   const methodName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
+  const nonSnakeSeen = { value: rustPublicName(ast.text(ast.name(member) ?? member)).needsAllow };
+  context = { ...context, nonSnakeSeen };
   if (!isValidRustIdentifier(methodName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -313,7 +315,7 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   return {
     name: methodName,
     pub: true,
-    ...(rustPublicName(ast.text(ast.name(member) ?? member)).needsAllow ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+    ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(fallible ? { fallible: true } : {}),
     ...(isStatic ? {} : {
       selfParam: (context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref") as import("../rust-ast/nodes.js").RustSelfParam,

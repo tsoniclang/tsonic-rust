@@ -2734,6 +2734,37 @@ export function rustRegExpSubsetViolation(pattern: string, flags: string): strin
   if (new Set(flags).size !== flags.length) {
     return "duplicate flags";
   }
+  // Dot, negated classes, and surrogate-range classes require UTF-16
+  // code-unit matching semantics and are outside the subset.
+  let escaped = false;
+  let inClass = false;
+  for (let index = 0; index < pattern.length; index += 1) {
+    const ch = pattern[index];
+    if (escaped) {
+      if (ch === "D" || ch === "W" || ch === "S") {
+        return "negated class escape";
+      }
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (!inClass && ch === ".") {
+      return "dot";
+    }
+    if (!inClass && ch === "[") {
+      inClass = true;
+      if (pattern[index + 1] === "^") {
+        return "negated character class";
+      }
+      continue;
+    }
+    if (inClass && ch === "]") {
+      inClass = false;
+    }
+  }
   const rejected: readonly (readonly [RegExp, string])[] = [
     [/\\[1-9]/u, "backreference"],
     [/\(\?=/u, "lookahead"],

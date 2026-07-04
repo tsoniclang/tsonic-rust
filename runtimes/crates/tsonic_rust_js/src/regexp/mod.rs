@@ -133,7 +133,15 @@ impl JsRegExp {
         self.last_index
     }
 
-    /// Sets `lastIndex` (JS `regexp.lastIndex = value`).
+    /// Sets `lastIndex` (JS `regexp.lastIndex = value`), in UTF-16 code
+    /// units. Writable `lastIndex` is exact for the accepted subset even
+    /// when the value lands between the two code units of an astral char:
+    /// lone-surrogate `\uXXXX` escapes and the `u` flag are rejected at
+    /// construction, so every accepted atom matches one whole scalar value
+    /// and no match can start on a lone low surrogate. Scanning from a
+    /// mid-pair position is therefore equivalent to scanning from the next
+    /// char boundary (see `char_index_for_utf16`), which is what `exec`
+    /// does — proven against Node by the `set-lastindex` oracle vectors.
     pub fn set_last_index(&mut self, value: i32) {
         self.last_index = value;
     }
@@ -380,8 +388,15 @@ fn utf16_index(chars: &[char], at: usize) -> usize {
 }
 
 /// Char index for a UTF-16 code-unit offset; `None` when the offset lies
-/// beyond the end of `chars`. An offset inside an astral char resolves to the
-/// following char boundary (the engine cannot start mid-surrogate).
+/// beyond the end of `chars`. An offset that lands between the two code
+/// units of an astral char rounds UP to the following char boundary, never
+/// down (rounding down would re-scan input before `lastIndex`). The
+/// round-up is exact, not an approximation: within the accepted subset no
+/// atom can match a lone surrogate (lone-surrogate `\uXXXX` escapes and the
+/// `u` flag are rejected at construction; every accepted atom matches one
+/// whole scalar value), so Node scanning from the mid-pair code unit finds
+/// exactly the match — and resulting `lastIndex` — that scanning from the
+/// next boundary finds. Proven by the `set-lastindex` oracle vectors.
 fn char_index_for_utf16(chars: &[char], utf16: usize) -> Option<usize> {
     let mut units = 0_usize;
     for (index, value) in chars.iter().enumerate() {

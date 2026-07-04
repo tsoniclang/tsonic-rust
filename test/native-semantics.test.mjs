@@ -271,7 +271,7 @@ export function grow(xs: int32[]): void {
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
 });
 
-test("public names are preserved; locals and parameters snake_case", () => {
+test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -296,12 +296,12 @@ export function caller(): int32 {
   const text = artifactText(result, "src/index.rs");
   // Exported API keeps its authored name with a scoped lint allowance;
   // parameters and locals stay snake_case.
-  assert.match(text, /#\[allow\(non_snake_case\)\]\npub fn pickMode\(flag_value: bool\) -> i32/u);
-  assert.match(text, /let mut chosen_value: i32 = 0;/u);
+  assert.match(text, /#\[allow\(non_snake_case\)\]\npub fn pickMode\(flagValue: bool\) -> i32/u);
+  assert.match(text, /let mut chosenValue: i32 = 0;/u);
   assert.match(text, /pickMode\(true\)/u);
 });
 
-test("rename collisions fail closed", () => {
+test("verbatim naming keeps distinct authored identifiers distinct", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -316,9 +316,10 @@ export function collide(): int32 {
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("collides")));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let fooBar: i32 = 1;/u);
+  assert.match(text, /let foo_bar: i32 = 2;/u);
 });
 
 test("class decorators fail closed", () => {

@@ -10,6 +10,7 @@ import type {
   TargetTypeRef,
 } from "@tsonic/tsts";
 import type {
+  TargetCapabilityOperationMapper,
   TargetCapabilityImplementation,
   TargetRuntimeContributionContext,
   TargetRuntimeContributions,
@@ -76,7 +77,7 @@ export interface RustProviderPackageDefinition {
 // owns the payload schema and reads it by kind.
 export const rustProviderOperationsMapperKind = "rust-provider-operations";
 
-export interface RustProviderOperationsMapper {
+export interface RustProviderOperationsMapper extends TargetCapabilityOperationMapper {
   readonly kind: typeof rustProviderOperationsMapperKind;
   readonly operations: readonly RustProviderOperationRow[];
   readonly aliasImports: readonly { readonly alias: string; readonly path: string }[];

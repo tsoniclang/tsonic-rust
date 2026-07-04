@@ -89,6 +89,7 @@ export type RustItem =
     }
   | {
       readonly kind: "const";
+      readonly attrs?: readonly string[];
       readonly name: string;
       readonly pub: boolean;
       readonly type: RustType;
