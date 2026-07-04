@@ -50,7 +50,7 @@ import { isRustBoolCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { expressionCarrier, planExpression } from "./expressions.js";
-import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 
@@ -159,7 +159,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
   }
   const nameNode = Node_Name(declaration);
   const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const name = rustValueName(sourceName);
+  const name = rustLocalBindingName(sourceName);
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -245,7 +245,7 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
     ));
     return undefined;
   }
-  const target = rustValueName(ast.text(operand));
+  const target = rustLocalBindingName(ast.text(operand));
   if (!isValidRustIdentifier(target)) {
     return undefined;
   }
@@ -309,7 +309,7 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         ));
         return undefined;
       }
-      const target = rustValueName(ast.text(left));
+      const target = rustLocalBindingName(ast.text(left));
       if (!isValidRustIdentifier(target)) {
         return undefined;
       }
@@ -541,7 +541,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
   if (initializer !== undefined) {
     const declarations = collectVariableDeclarations(initializer, context);
     const nameNode = declarations.length === 1 ? Node_Name(declarations[0]) : undefined;
-    binding = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? rustValueName(ast.text(nameNode)) : "";
+    binding = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? rustLocalBindingName(ast.text(nameNode)) : "";
   }
   if (!isValidRustIdentifier(binding)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -707,7 +707,7 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
   }
   const bindingNode = Node_Name(CatchClause_VariableDeclaration(catchClause));
   const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
-  let binding = bindingSource.length === 0 ? "_" : rustValueName(bindingSource);
+  let binding = bindingSource.length === 0 ? "_" : rustLocalBindingName(bindingSource);
   if (binding !== "_") {
     let used = false;
     const findUse = (candidate: Node): void => {

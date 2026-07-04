@@ -55,7 +55,13 @@ export function registerAliasFromPath(
 // Deterministic value-name policy: camelCase lowers to snake_case so
 // generated code satisfies Rust naming lints. Collisions are diagnosed, not
 // silently merged.
-export function rustValueName(name: string): string {
+// Naming policy: this conversion applies ONLY to user-authored local
+// bindings, parameters, functions, fields, and module-local items — the
+// Rust lint boundary for generated user code. Provider, library, and
+// capability API identity never flows through it: runtime helper names may
+// differ from source names only through explicit operation-row metadata
+// (target.name / target.path), which the backend emits verbatim.
+export function rustLocalBindingName(name: string): string {
   if (/^[A-Z][A-Z0-9_]*$/u.test(name)) {
     // UPPER_SNAKE names are constant references and pass through unchanged.
     return name;

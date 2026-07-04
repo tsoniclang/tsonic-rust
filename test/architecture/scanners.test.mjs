@@ -132,3 +132,17 @@ test("rust target product source has no NodeJS capability coupling", () => {
   walk(sourceRoot);
   assert.deepEqual(offenders, []);
 });
+
+test("provider and library identity never flows through local-name recasing", () => {
+  const expressions = readFileSync(join(sourceRoot, "backend/planner/expressions.ts"), "utf8");
+  const providerLowering = expressions.slice(
+    expressions.indexOf("function refShape"),
+    expressions.indexOf("function planCallExpression"),
+  );
+  assert.ok(providerLowering.includes("function planProviderOperationExpression"), "slice covers provider lowering");
+  assert.ok(!providerLowering.includes("rustLocalBindingName"), "provider operation lowering must emit row metadata verbatim");
+  for (const file of ["source/rust-target-semantics/js-surface-operations.ts", "source/provider-packages/index.ts"]) {
+    const text = readFileSync(join(sourceRoot, file), "utf8");
+    assert.ok(!text.includes("rustLocalBindingName"), `${file} must not recase identities`);
+  }
+});

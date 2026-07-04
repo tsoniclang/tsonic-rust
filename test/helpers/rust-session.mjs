@@ -598,3 +598,38 @@ export function acmeTelemetryCapability() {
     crates: [{ crateName: "acme_telemetry", cargoPath: resolve(fixtureCratesRoot, "acme_telemetry") }],
   });
 }
+
+// Capability with a fallible property row and a formatter-like carrier.
+export function acmeLogsinkCapability() {
+  const sinkCarrier = { kind: "target-named", id: "acme.logsink.Sink" };
+  return createRustProviderPackage({
+    id: "@acme/rust-logsink",
+    displayName: "Log sink for Rust",
+    version: "1.0.0",
+    modules: [{
+      moduleSpecifier: "logsink",
+      providerModuleId: "acme.logsink",
+      exports: [
+        { id: "logsink::openSink", name: "openSink", kind: "function", signatures: [{ id: "logsink::openSink()", name: "openSink", parameters: [], returnType: { kind: "provider-ref", moduleSpecifier: "logsink", exportName: "Sink" } }] },
+        { id: "logsink::openSinkNamed", name: "openSinkNamed", kind: "function", signatures: [{ id: "logsink::openSinkNamed(name)", name: "openSinkNamed", parameters: [{ name: "name", type: { kind: "string" } }], returnType: { kind: "provider-ref", moduleSpecifier: "logsink", exportName: "Sink" } }] },
+        {
+          id: "logsink::Sink",
+          name: "Sink",
+          kind: "class",
+          members: [
+            { id: "logsink::Sink.path", name: "path", kind: "property", readonly: true, type: { kind: "string" } },
+            { id: "logsink::Sink.write", name: "write", kind: "method", signatures: [{ id: "logsink::Sink.write(line)", parameters: [{ name: "line", type: { kind: "string" } }], returnType: { kind: "source-primitive", name: "int32" } }] },
+          ],
+        },
+      ],
+    }],
+    operations: [
+      { exportId: "logsink::openSink", operationKind: "method", target: { form: "call", path: "acme_logsink::open_sink" }, resultCarrier: sinkCarrier },
+      { exportId: "logsink::openSinkNamed", operationKind: "method", target: { form: "call", path: "acme_logsink::openSinkNamed", argModes: ["ref"] }, resultCarrier: sinkCarrier },
+      { exportId: "logsink::Sink", memberId: "logsink::Sink.path", operationKind: "property", target: { form: "receiver-method", name: "path" }, resultCarrier: stringCarrier, isFallible: true },
+      { exportId: "logsink::Sink", memberId: "logsink::Sink.write", operationKind: "method", target: { form: "receiver-method", name: "write", argModes: ["ref"], mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [stringCarrier] },
+    ],
+    carrierPaths: { "acme.logsink.Sink": "acme_logsink::Sink" },
+    crates: [{ crateName: "acme_logsink", cargoPath: resolve(fixtureCratesRoot, "acme_logsink") }],
+  });
+}

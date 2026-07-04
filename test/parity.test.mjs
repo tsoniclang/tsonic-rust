@@ -183,6 +183,10 @@ export function main(): void {
     const digits = new RegExp("\\\\d+", "g");
     check(digits.test("a1b2"));
     check(!digits.test("abc"));
+    const pretty = JSON.stringify(JSON.parse("{\\"a\\":1}"), null, 2);
+    check(pretty.includes("\\n"));
+    check(Date.parse("2026-07-03") > 0);
+    check(Date.UTC(2026, 0, 1, 0, 0, 0, 0) > 0);
     const swapped = "john smith".replace(/(\\w+) (\\w+)/, "$2 $1");
     check(swapped === "smith john");
     ok = true;

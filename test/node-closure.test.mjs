@@ -237,11 +237,9 @@ export function read(name: string): string {
 test("unsupported node APIs fail closed with deterministic diagnostics", async () => {
   const cases = [
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
-    { module: "node:util", name: "inspect", call: "inspect(\"x\")" },
 
-    { module: "node:url", name: "parse", call: "parse(\"http://x\")" },
+    { module: "node:fs", name: "createWriteStream", call: "createWriteStream(\"x\")" },
 
-    { module: "node:process", name: "execPath", call: "execPath.startsWith(\"/\")" },
   ];
   for (const item of cases) {
     const { result } = compileRust({

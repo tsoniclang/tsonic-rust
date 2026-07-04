@@ -8,7 +8,7 @@ import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustMutatedBindingFactKey } from "../../source/rust-facts/keys.js";
@@ -26,7 +26,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
   }
   const nameNode = Node_Name(node);
   const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const name = rustValueName(sourceName);
+  const name = rustLocalBindingName(sourceName);
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -41,7 +41,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     if (parameter === undefined) {
       continue;
     }
-    const parameterName = rustValueName(ast.text(ast.name(parameter) ?? parameter));
+    const parameterName = rustLocalBindingName(ast.text(ast.name(parameter) ?? parameter));
     const parameterCarrier = context.input.facts.getRuntimeCarrierFact(parameter)?.carrier;
     const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
