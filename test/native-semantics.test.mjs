@@ -294,8 +294,8 @@ export function caller(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  // Exported API keeps its authored name with a scoped lint allowance;
-  // parameters and locals stay snake_case.
+  // Every user-authored identifier is verbatim; the item carries a scoped
+  // lint allowance because non-snake names appear in it.
   assert.match(text, /#\[allow\(non_snake_case\)\]\npub fn pickMode\(flagValue: bool\) -> i32/u);
   assert.match(text, /let mut chosenValue: i32 = 0;/u);
   assert.match(text, /pickMode\(true\)/u);

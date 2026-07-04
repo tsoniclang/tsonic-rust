@@ -2725,6 +2725,9 @@ function resolveArrowFunctionCarrier(
 // Compile-time validator mirroring the closed runtime subset. Conservative:
 // any construct outside the oracle-proven grammar rejects here, and the
 // runtime engine validates again on construction.
+// Compile-time mirror of the runtime RegExp parser contract. Every
+// construct the engine rejects at construction rejects here first; the
+// engine validates again at runtime.
 export function rustRegExpSubsetViolation(pattern: string, flags: string): string | undefined {
   for (const flag of flags) {
     if (flag !== "i" && flag !== "g" && flag !== "m") {
@@ -2734,62 +2737,161 @@ export function rustRegExpSubsetViolation(pattern: string, flags: string): strin
   if (new Set(flags).size !== flags.length) {
     return "duplicate flags";
   }
-  // Dot, negated classes, and surrogate-range classes require UTF-16
-  // code-unit matching semantics and are outside the subset.
-  let escaped = false;
-  let inClass = false;
-  for (let index = 0; index < pattern.length; index += 1) {
-    const ch = pattern[index];
-    if (escaped) {
-      if (ch === "D" || ch === "W" || ch === "S") {
-        return "negated class escape";
+  const units = [...pattern];
+  let index = 0;
+  const peek = (offset = 0): string | undefined => units[index + offset];
+
+  // Reads one escape sequence after a consumed backslash; returns the
+  // matched code point for class-range math, or a violation string.
+  const readEscape = (): number | string => {
+    const head = units[index];
+    if (head === undefined) {
+      return "trailing backslash";
+    }
+    index += 1;
+    if (head >= "1" && head <= "9") {
+      return "backreference";
+    }
+    if (head === "D" || head === "W" || head === "S") {
+      return "negated class escape";
+    }
+    if (head === "b" || head === "B") {
+      return "word-boundary assertion";
+    }
+    if (head === "p" || head === "P" || head === "k" || head === "c") {
+      return "unicode property, named backreference, or control escape";
+    }
+    if (head === "u") {
+      if (peek() === "{") {
+        return "unicode code point escape";
       }
-      escaped = false;
-      continue;
+      const hex = units.slice(index, index + 4).join("");
+      if (!/^[0-9a-fA-F]{4}$/u.test(hex)) {
+        return "malformed unicode escape";
+      }
+      index += 4;
+      const value = Number.parseInt(hex, 16);
+      if (value >= 0xd800 && value <= 0xdfff) {
+        return "lone surrogate escape";
+      }
+      return value;
     }
+    if (head === "x") {
+      const hex = units.slice(index, index + 2).join("");
+      if (!/^[0-9a-fA-F]{2}$/u.test(hex)) {
+        return "malformed hex escape";
+      }
+      index += 2;
+      return Number.parseInt(hex, 16);
+    }
+    if (head === "d" || head === "w" || head === "s" || head === "n" || head === "r" || head === "t" ||
+      head === "f" || head === "v" || head === "0") {
+      return -1;
+    }
+    return head.codePointAt(0) ?? 0;
+  };
+
+  let lastAtomBareAstral = false;
+  while (index < units.length) {
+    const ch = units[index];
+    if (ch === undefined) {
+      break;
+    }
+    const code = ch.codePointAt(0) ?? 0;
     if (ch === "\\") {
-      escaped = true;
+      index += 1;
+      const escape = readEscape();
+      if (typeof escape === "string") {
+        return escape;
+      }
+      lastAtomBareAstral = false;
       continue;
     }
-    if (!inClass && ch === ".") {
+    if (ch === ".") {
       return "dot";
     }
-    if (!inClass && ch === "[") {
-      inClass = true;
-      if (pattern[index + 1] === "^") {
-        return "negated character class";
+    if (ch === "(") {
+      index += 1;
+      if (peek() === "?") {
+        const marker = peek(1);
+        if (marker === "=" ) {
+          return "lookahead";
+        }
+        if (marker === "!") {
+          return "negative lookahead";
+        }
+        if (marker === "<") {
+          return "lookbehind or named group";
+        }
+        if (marker === ":") {
+          index += 2;
+        } else {
+          return "unsupported group modifier";
+        }
       }
+      lastAtomBareAstral = false;
       continue;
     }
-    if (inClass && ch === "]") {
-      inClass = false;
-    }
-    const code = ch === undefined ? 0 : ch.codePointAt(0) ?? 0;
-    if (code > 0xffff) {
-      if (inClass) {
-        return "astral character in class";
+    if (ch === "[") {
+      index += 1;
+      if (peek() === "^") {
+        return "negated character class";
       }
-      const next = pattern[index + 2];
-      if (next === "*" || next === "+" || next === "?" || next === "{") {
-        return "quantifier on a bare astral literal";
+      let previous: number | undefined;
+      let pendingRange = false;
+      while (index < units.length && units[index] !== "]") {
+        const member = units[index];
+        let memberCode: number;
+        if (member === "\\") {
+          index += 1;
+          const escape = readEscape();
+          if (typeof escape === "string") {
+            return escape;
+          }
+          memberCode = escape;
+        } else {
+          memberCode = member?.codePointAt(0) ?? 0;
+          index += 1;
+        }
+        if (memberCode > 0xffff) {
+          return "astral character in class";
+        }
+        if (pendingRange) {
+          if (memberCode > 0xd7ff && memberCode !== -1) {
+            return "class range above U+D7FF";
+          }
+          if (previous !== undefined && previous > 0xd7ff) {
+            return "class range above U+D7FF";
+          }
+          pendingRange = false;
+          previous = undefined;
+          continue;
+        }
+        if (units[index] === "-" && units[index + 1] !== "]" && units[index + 1] !== undefined) {
+          pendingRange = true;
+          previous = memberCode;
+          index += 1;
+        }
+      }
+      if (units[index] !== "]") {
+        return "unterminated character class";
       }
       index += 1;
+      lastAtomBareAstral = false;
+      continue;
     }
-  }
-  const rejected: readonly (readonly [RegExp, string])[] = [
-    [/\\[1-9]/u, "backreference"],
-    [/\(\?=/u, "lookahead"],
-    [/\(\?!/u, "negative lookahead"],
-    [/\(\?</u, "lookbehind or named group"],
-    [/\\b|\\B/u, "word-boundary assertion"],
-    [/\\p|\\P|\\k|\\c/u, "unicode property, named backreference, or control escape"],
-    [/\\u\{/u, "unicode code point escape"],
-    [/[*+?}]\?/u, "lazy quantifier"],
-  ];
-  for (const [needle, label] of rejected) {
-    if (needle.test(pattern)) {
-      return label;
+    if (ch === "*" || ch === "+" || ch === "?" || ch === "{") {
+      if (lastAtomBareAstral) {
+        return "quantifier on a bare astral literal";
+      }
+      if (peek(1) === "?") {
+        return "lazy quantifier";
+      }
+      index += 1;
+      continue;
     }
+    lastAtomBareAstral = code > 0xffff;
+    index += 1;
   }
   return undefined;
 }

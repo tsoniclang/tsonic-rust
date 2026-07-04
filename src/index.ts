@@ -49,6 +49,7 @@ export {
 export {
   collectRustProviderOperationRows,
   rustProviderOperationsMappersOf,
+  rustProviderOperationsMapperKind,
   createRustProviderPackage,
   createRustProviderPackageBindingProvider,
 } from "./source/provider-packages/index.js";
@@ -92,3 +93,4 @@ export function createTsonicPlugin(): import("@tsonic/target-api").TsonicTargetP
     },
   };
 }
+export type { RustProviderOperationsMapper } from "./source/provider-packages/index.js";

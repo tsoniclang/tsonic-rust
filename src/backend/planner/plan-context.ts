@@ -54,9 +54,6 @@ export function registerAliasFromPath(
   context.usedAliases?.add(prefix);
 }
 
-// Deterministic value-name policy: camelCase lowers to snake_case so
-// generated code satisfies Rust naming lints. Collisions are diagnosed, not
-// silently merged.
 // Naming policy: every user-authored identifier is preserved verbatim
 // wherever Rust can represent it; items containing non-snake_case names
 // carry scoped #[allow(non_snake_case)]. This conversion exists ONLY for
@@ -74,17 +71,14 @@ export function rustLocalBindingName(name: string): string {
     .toLowerCase();
 }
 
-// Public naming policy: user-authored exported/public API names (exported
-// functions, class methods, statics, fields, record members) are preserved
-// verbatim; generated items carry #[allow(non_snake_case)] when the
-// authored name is not snake_case. Local bindings, parameters, and private
-// helpers keep snake_case conversion (rustLocalBindingName).
+// Verbatim user-authored name plus whether the containing item needs a
+// scoped #[allow(non_snake_case)].
 export function rustPublicName(name: string): { readonly name: string; readonly needsAllow: boolean } {
   return { name, needsAllow: name !== rustLocalBindingName(name) };
 }
 
 // Verbatim user identifier; records non-snake usage so the enclosing item
-// can carry a scoped lint allowance.
+// carries a scoped lint allowance.
 export function rustSourceName(context: { readonly nonSnakeSeen?: { value: boolean } }, name: string): string {
   if (name !== rustLocalBindingName(name)) {
     if (context.nonSnakeSeen !== undefined) {

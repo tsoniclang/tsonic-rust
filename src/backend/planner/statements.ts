@@ -206,7 +206,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, declaration),
         "rust.backend.naming",
-        `Binding '${sourceName}' collides with another binding after deterministic snake_case renaming.`,
+        `Binding '${sourceName}' collides with another binding in the same scope.`,
       ));
       return undefined;
     }

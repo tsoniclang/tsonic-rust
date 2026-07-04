@@ -30,8 +30,12 @@
 //! operations (`replace` with `g`, `split`, `match_strings`, `match_all`)
 //! therefore reject deterministically with an `Unsupported` error when the
 //! pattern is nullable (can match the empty string) and the input contains
-//! astral (non-BMP) chars. Non-nullable patterns over astral input and
-//! nullable patterns over BMP input keep exact oracle-proven behavior.
+//! astral (non-BMP) chars. For the same reason `set_last_index` rejects
+//! nullable patterns outright: a manual `lastIndex` can land mid-pair,
+//! where a nullable pattern matches empty at the mid-pair position itself
+//! (exec-driven `lastIndex` values always land on char boundaries).
+//! Non-nullable patterns over astral input and nullable patterns over BMP
+//! input keep exact oracle-proven behavior.
 
 mod parser;
 mod vm;
@@ -143,16 +147,35 @@ impl JsRegExp {
     }
 
     /// Sets `lastIndex` (JS `regexp.lastIndex = value`), in UTF-16 code
-    /// units. Writable `lastIndex` is exact for the accepted subset even
+    /// units. For non-nullable patterns writable `lastIndex` is exact even
     /// when the value lands between the two code units of an astral char:
     /// lone-surrogate `\uXXXX` escapes and the `u` flag are rejected at
     /// construction, so every accepted atom matches one whole scalar value
-    /// and no match can start on a lone low surrogate. Scanning from a
-    /// mid-pair position is therefore equivalent to scanning from the next
-    /// char boundary (see `char_index_for_utf16`), which is what `exec`
-    /// does — proven against Node by the `set-lastindex` oracle vectors.
-    pub fn set_last_index(&mut self, value: i32) {
+    /// and no non-empty match can start on a lone low surrogate. Scanning
+    /// from a mid-pair position is therefore equivalent to scanning from
+    /// the next char boundary (see `char_index_for_utf16`), which is what
+    /// `exec` does — proven against Node by the `set-lastindex` oracle
+    /// vectors.
+    ///
+    /// Nullable patterns (ones that can match the empty string) reject the
+    /// write with an `Unsupported` error: Node can match empty *at* a
+    /// mid-pair `lastIndex` (e.g. `/a*/g` with `lastIndex = 1` on `"💚"`
+    /// matches `""` at UTF-16 index 1 and leaves `lastIndex` there), a
+    /// position no Rust `String` can express, so the boundary-rounding
+    /// equivalence does not hold. Rejecting at the setter keeps the guard
+    /// fail-closed: exec-driven `lastIndex` values always land on char
+    /// boundaries (matches end at whole-scalar boundaries and an empty
+    /// match leaves `lastIndex` at its own boundary start), so only a
+    /// manual write can introduce a mid-pair position.
+    pub fn set_last_index(&mut self, value: i32) -> JsResult<()> {
+        if self.nullable {
+            return Err(unsupported(
+                "manual lastIndex on nullable patterns is outside the oracle-proven subset \
+                 (empty matches at surrogate positions diverge from UTF-16 semantics)",
+            ));
+        }
         self.last_index = value;
+        Ok(())
     }
 
     /// Mirrors `RegExp.prototype.exec`. With the `g` flag the search starts
@@ -399,13 +422,20 @@ fn utf16_index(chars: &[char], at: usize) -> usize {
 /// Char index for a UTF-16 code-unit offset; `None` when the offset lies
 /// beyond the end of `chars`. An offset that lands between the two code
 /// units of an astral char rounds UP to the following char boundary, never
-/// down (rounding down would re-scan input before `lastIndex`). The
-/// round-up is exact, not an approximation: within the accepted subset no
-/// atom can match a lone surrogate (lone-surrogate `\uXXXX` escapes and the
-/// `u` flag are rejected at construction; every accepted atom matches one
-/// whole scalar value), so Node scanning from the mid-pair code unit finds
-/// exactly the match — and resulting `lastIndex` — that scanning from the
-/// next boundary finds. Proven by the `set-lastindex` oracle vectors.
+/// down (rounding down would re-scan input before `lastIndex`). For
+/// non-nullable patterns the round-up is exact, not an approximation:
+/// within the accepted subset no atom can match a lone surrogate
+/// (lone-surrogate `\uXXXX` escapes and the `u` flag are rejected at
+/// construction; every accepted atom matches one whole scalar value), so
+/// Node scanning from the mid-pair code unit finds exactly the match — and
+/// resulting `lastIndex` — that scanning from the next boundary finds.
+/// Proven by the `set-lastindex` oracle vectors. Nullable patterns could
+/// match empty *at* the mid-pair offset itself, where the round-up would
+/// diverge from Node — but they can never reach here with one:
+/// `set_last_index` rejects nullable patterns, and exec-driven `lastIndex`
+/// values always land on char boundaries (matches end at whole-scalar
+/// boundaries; an empty match leaves `lastIndex` at its own boundary
+/// start).
 fn char_index_for_utf16(chars: &[char], utf16: usize) -> Option<usize> {
     let mut units = 0_usize;
     for (index, value) in chars.iter().enumerate() {
