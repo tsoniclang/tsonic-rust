@@ -66,6 +66,7 @@ export interface RustStructField {
 export interface RustImplFunction {
   readonly name: string;
   readonly pub: boolean;
+  readonly attrs?: readonly string[];
   readonly fallible?: boolean;
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];
@@ -78,6 +79,7 @@ export type RustItem =
       readonly kind: "function";
       readonly name: string;
       readonly pub: boolean;
+      readonly attrs?: readonly string[];
       readonly isAsync?: boolean;
       readonly fallible?: boolean;
       readonly typeParams?: readonly string[];
@@ -87,13 +89,14 @@ export type RustItem =
     }
   | {
       readonly kind: "const";
+      readonly attrs?: readonly string[];
       readonly name: string;
       readonly pub: boolean;
       readonly type: RustType;
       readonly value: RustExpr;
     }
   | { readonly kind: "mod-decl"; readonly name: string; readonly pub: boolean }
-  | { readonly kind: "struct"; readonly name: string; readonly pub: boolean; readonly derives: readonly string[]; readonly fields: readonly RustStructField[] }
+  | { readonly kind: "struct"; readonly name: string; readonly pub: boolean; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly fields: readonly RustStructField[] }
   | { readonly kind: "impl"; readonly name: string; readonly functions: readonly RustImplFunction[] }
   | { readonly kind: "enum"; readonly name: string; readonly pub: boolean; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string }[] }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string };

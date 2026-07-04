@@ -101,7 +101,10 @@ test("unmapped provider operation fails closed with extension and backend diagno
   const packageWithoutRows = acmePlatformPackage();
   const strippedPackage = {
     ...packageWithoutRows,
-    rustProviderOperations: () => packageWithoutRows.rustProviderOperations().filter((row) => row.memberId !== "@acme/platform::Env.homeDir"),
+    createOperationMappers: (context) => packageWithoutRows.createOperationMappers(context).map((mapper) => ({
+      ...mapper,
+      operations: mapper.operations.filter((row) => row.memberId !== "@acme/platform::Env.homeDir"),
+    })),
   };
   const harness = createRustSession({
     packages: [strippedPackage],
@@ -126,7 +129,7 @@ test("provider property backend lowering fails closed without a mapped fact", ()
   const packageWithoutRows = acmePlatformPackage();
   const strippedPackage = {
     ...packageWithoutRows,
-    rustProviderOperations: () => [],
+    createOperationMappers: () => [],
   };
   const { result } = compileRust({
     packages: [strippedPackage],

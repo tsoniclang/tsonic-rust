@@ -35,7 +35,10 @@ and mutable array parameters as `&mut [T]`, null-only unions as `Option<T>`
 with `??` coalescing, passthrough generic functions, source-core
 `borrow`/`borrowMut`/`move` flow markers validated against finalized
 argument modes, async/await with await-only future discipline, a
-deterministic snake_case naming policy with collision diagnostics, and the
+naming policy that preserves every user-authored identifier verbatim with
+scoped lint allowances (snake_case exists only for compiler-generated
+temporaries; provider and library identity is always row metadata emitted
+verbatim), and the
 error model: throwing functions lower to TsonicResult with transitive
 fallibility, `throw new Error(message)` becomes an Err return, try/catch
 lowers to a Result closure boundary, and fallible calls propagate with `?`
@@ -74,9 +77,11 @@ Each unsupported lane requires a contract that does not exist: discriminated
 object unions (narrowing facts — see the exact repro pinned in
 `test/r8-completion.test.mjs`), and RegExp constructs outside the
 oracle-proven subset (constant patterns with classes, quantifiers,
-anchors, alternation, and groups under flags i/g/m are implemented
-against 146 committed Node oracle vectors — see the rust-js
-JS parity inventory (docs/js-parity.md); lazy quantifiers, backreferences, lookaround,
+anchors, alternation, and groups under flags i/g/m, proven against 217
+committed Node oracle vectors plus a 157-entry engine-generated
+acceptance corpus that pins compile-time validation to the runtime
+parser contract — see the rust-js JS parity inventory
+(docs/js-parity.md); lazy quantifiers, backreferences, lookaround,
 named groups, word boundaries, and dynamic patterns reject
 deterministically). Every unsupported lane diagnoses
 deterministically; see `test/capability-ledger.test.mjs`.

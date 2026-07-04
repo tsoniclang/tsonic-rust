@@ -1,11 +1,12 @@
 //! Oracle-backed backtracking RegExp engine for a closed JS subset.
 //!
-//! Supported syntax: literal chars, `.`, character classes (`[abc]`,
-//! `[a-z]`, `[^...]`), class escapes `\d \D \w \W \s \S` (inside and outside
-//! classes), identity/control/hex escapes (`\.`, `\\`, `\n`, `\t`, `\xHH`,
-//! `\uHHHH`, ...), greedy quantifiers `* + ? {n} {n,} {n,m}`, anchors `^ $`,
-//! alternation `|`, capturing `( )` and non-capturing `(?: )` groups.
-//! Supported flags: `i`, `g` (drives `replace`/`split` iteration), `m`.
+//! Supported syntax: literal chars, positive character classes (`[abc]`,
+//! `[a-z]` with ranges capped at U+D7FF), class escapes `\d \w \s` (inside
+//! and outside classes), identity/control/hex escapes (`\.`, `\\`, `\n`,
+//! `\t`, `\xHH`, `\uHHHH`, ...), greedy quantifiers `* + ? {n} {n,} {n,m}`,
+//! anchors `^ $`, alternation `|`, capturing `( )` and non-capturing `(?: )`
+//! groups. Supported flags: `i`, `g` (drives `replace`/`split` iteration and
+//! the stateful `exec`/`lastIndex` contract), `m`.
 //!
 //! Everything else — lazy quantifiers, backreferences, lookaround, named
 //! groups, `\b`/`\B` assertions, property escapes, and the flags
@@ -13,14 +14,76 @@
 //! construct. Acceptance of the supported subset is proven against Node's
 //! engine by the committed oracle vectors in `tests/oracle/`.
 //!
-//! Known deviation: `replace` (with `g`) and `split` advance by one Unicode
-//! scalar value after an empty match, where JS advances by one UTF-16 code
-//! unit; this differs only for astral-plane (non-BMP) chars.
+//! `.`, negated classes (`[^...]`, `\D \W \S`), classes reaching surrogate
+//! or astral code points, and quantifiers on a bare astral literal are
+//! rejected at construction as well: their Node non-`u` semantics are
+//! defined over UTF-16 code units, so they match *lone surrogates* (Node's
+//! `/./.exec("😀")` yields the high surrogate alone) — strings a Rust
+//! `String` cannot represent — while this engine consumes whole scalar
+//! values. Rejecting them at construction keeps the guard fail-closed and
+//! independent of the input searched.
+//!
+//! The accepted subset is exact. The one construct/input combination that
+//! cannot be represented is empty-match iteration over astral input: after an
+//! empty match JS advances by one UTF-16 code unit, which can land inside a
+//! surrogate pair — a position a Rust `String` cannot express. The iterating
+//! operations (`replace` with `g`, `split`, `match_strings`, `match_all`)
+//! therefore reject deterministically with an `Unsupported` error when the
+//! pattern is nullable (can match the empty string) and the input contains
+//! astral (non-BMP) chars. For the same reason `set_last_index` rejects
+//! nullable patterns outright: a manual `lastIndex` can land mid-pair,
+//! where a nullable pattern matches empty at the mid-pair position itself
+//! (exec-driven `lastIndex` values always land on char boundaries).
+//! Non-nullable patterns over astral input and nullable patterns over BMP
+//! input keep exact oracle-proven behavior.
 
 mod parser;
 mod vm;
 
-use crate::errors::{unsupported, JsResult};
+use crate::errors::{type_error, unsupported, JsResult};
+
+/// Match carrier mirroring the JS `RegExpMatchArray` shape: the whole match
+/// (`text`), its UTF-16 code-unit `index`, the `input` searched, and the
+/// capture groups (`group(1)`..`group(group_count())`, `group(0)` being the
+/// whole match, `None` for unmatched optional groups).
+#[derive(Debug, Clone, PartialEq)]
+pub struct JsRegExpMatch {
+    text: String,
+    index: i32,
+    input: String,
+    groups: Vec<Option<String>>,
+}
+
+impl JsRegExpMatch {
+    /// The whole matched substring (JS `m[0]`).
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    /// UTF-16 code-unit index of the match start (JS `m.index`).
+    pub fn index(&self) -> i32 {
+        self.index
+    }
+
+    /// The input string that was searched (JS `m.input`).
+    pub fn input(&self) -> String {
+        self.input.clone()
+    }
+
+    /// Capture group by 1-based index like JS `m[i]`; `group(0)` is the whole
+    /// match. Returns `None` for unmatched groups and out-of-range indexes.
+    pub fn group(&self, index: usize) -> Option<String> {
+        if index == 0 {
+            return Some(self.text.clone());
+        }
+        self.groups.get(index - 1).cloned().flatten()
+    }
+
+    /// Number of capture groups in the pattern, excluding group 0.
+    pub fn group_count(&self) -> usize {
+        self.groups.len()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct JsRegExp {
@@ -29,6 +92,8 @@ pub struct JsRegExp {
     global: bool,
     ignore_case: bool,
     multiline: bool,
+    last_index: i32,
+    nullable: bool,
     program: vm::Program,
 }
 
@@ -38,6 +103,7 @@ impl JsRegExp {
     pub fn new(pattern: &str, flags: &str) -> JsResult<Self> {
         let parsed_flags = parser::parse_flags(flags)?;
         let parsed = parser::parse_pattern(pattern)?;
+        let nullable = parser::is_nullable(&parsed.ast);
         let program = vm::compile(&parsed);
         Ok(Self {
             source: pattern.to_string(),
@@ -45,6 +111,8 @@ impl JsRegExp {
             global: parsed_flags.global,
             ignore_case: parsed_flags.ignore_case,
             multiline: parsed_flags.multiline,
+            last_index: 0,
+            nullable,
             program,
         })
     }
@@ -57,11 +125,159 @@ impl JsRegExp {
         &self.flags
     }
 
-    /// Mirrors `RegExp.prototype.test` (stateless: always searches from the
-    /// start of `input`).
-    pub fn test(&self, input: &str) -> bool {
+    /// Whether the `g` flag is set (JS `regexp.global`).
+    pub fn global(&self) -> bool {
+        self.global
+    }
+
+    /// Whether the `i` flag is set (JS `regexp.ignoreCase`).
+    pub fn ignore_case(&self) -> bool {
+        self.ignore_case
+    }
+
+    /// Whether the `m` flag is set (JS `regexp.multiline`).
+    pub fn multiline(&self) -> bool {
+        self.multiline
+    }
+
+    /// Current `lastIndex` in UTF-16 code units (only consulted by `exec`
+    /// when the `g` flag is set, per JS semantics).
+    pub fn last_index(&self) -> i32 {
+        self.last_index
+    }
+
+    /// Sets `lastIndex` (JS `regexp.lastIndex = value`), in UTF-16 code
+    /// units. For non-nullable patterns writable `lastIndex` is exact even
+    /// when the value lands between the two code units of an astral char:
+    /// lone-surrogate `\uXXXX` escapes and the `u` flag are rejected at
+    /// construction, so every accepted atom matches one whole scalar value
+    /// and no non-empty match can start on a lone low surrogate. Scanning
+    /// from a mid-pair position is therefore equivalent to scanning from
+    /// the next char boundary (see `char_index_for_utf16`), which is what
+    /// `exec` does — proven against Node by the `set-lastindex` oracle
+    /// vectors.
+    ///
+    /// Nullable patterns (ones that can match the empty string) reject the
+    /// write with an `Unsupported` error: Node can match empty *at* a
+    /// mid-pair `lastIndex` (e.g. `/a*/g` with `lastIndex = 1` on `"💚"`
+    /// matches `""` at UTF-16 index 1 and leaves `lastIndex` there), a
+    /// position no Rust `String` can express, so the boundary-rounding
+    /// equivalence does not hold. Rejecting at the setter keeps the guard
+    /// fail-closed: exec-driven `lastIndex` values always land on char
+    /// boundaries (matches end at whole-scalar boundaries and an empty
+    /// match leaves `lastIndex` at its own boundary start), so only a
+    /// manual write can introduce a mid-pair position.
+    pub fn set_last_index(&mut self, value: i32) -> JsResult<()> {
+        if self.nullable {
+            return Err(unsupported(
+                "manual lastIndex on nullable patterns is outside the oracle-proven subset \
+                 (empty matches at surrogate positions diverge from UTF-16 semantics)",
+            ));
+        }
+        self.last_index = value;
+        Ok(())
+    }
+
+    /// Mirrors `RegExp.prototype.exec`. With the `g` flag the search starts
+    /// at `lastIndex` (UTF-16 code units) and `lastIndex` advances to the
+    /// match end, or resets to 0 when no match is found; without `g` the
+    /// search always starts at 0 and `lastIndex` is untouched.
+    pub fn exec(&mut self, input: &str) -> Option<JsRegExpMatch> {
         let chars: Vec<char> = input.chars().collect();
-        self.find_from(&chars, 0).is_some()
+        let start = if self.global {
+            let last = self.last_index.max(0) as usize;
+            match char_index_for_utf16(&chars, last) {
+                Some(index) => index,
+                None => {
+                    self.last_index = 0;
+                    return None;
+                }
+            }
+        } else {
+            0
+        };
+        match self.find_from(&chars, start) {
+            Some(caps) => {
+                if self.global {
+                    self.last_index = utf16_index(&chars, match_bounds(&caps).1) as i32;
+                }
+                Some(build_match(&chars, input, &caps, self.program_groups()))
+            }
+            None => {
+                if self.global {
+                    self.last_index = 0;
+                }
+                None
+            }
+        }
+    }
+
+    /// Stateless first match (JS `String.prototype.match` without `g`,
+    /// ignoring `lastIndex`).
+    pub fn match_first(&self, input: &str) -> Option<JsRegExpMatch> {
+        let chars: Vec<char> = input.chars().collect();
+        let caps = self.find_from(&chars, 0)?;
+        Some(build_match(&chars, input, &caps, self.program_groups()))
+    }
+
+    /// Mirrors `String.prototype.match` with the `g` flag: the texts of all
+    /// matches, or `None` when there is no match (JS `null`). Stateless.
+    /// Rejects nullable patterns over astral input (see the module docs).
+    pub fn match_strings(&self, input: &str) -> JsResult<Option<Vec<String>>> {
+        self.check_empty_match_iteration(input)?;
+        let chars: Vec<char> = input.chars().collect();
+        let texts: Vec<String> = self
+            .collect_matches(&chars)
+            .iter()
+            .map(|caps| {
+                let (start, end) = match_bounds(caps);
+                chars[start..end].iter().collect()
+            })
+            .collect();
+        Ok(if texts.is_empty() { None } else { Some(texts) })
+    }
+
+    /// Mirrors `String.prototype.matchAll`: `TypeError` when the regexp lacks
+    /// the `g` flag, otherwise all matches (stateless; JS clones the regexp).
+    pub fn match_all(&self, input: &str) -> JsResult<Vec<JsRegExpMatch>> {
+        if !self.global {
+            return Err(type_error(
+                "String.prototype.matchAll called with a non-global RegExp argument",
+            ));
+        }
+        self.check_empty_match_iteration(input)?;
+        let chars: Vec<char> = input.chars().collect();
+        Ok(self
+            .collect_matches(&chars)
+            .iter()
+            .map(|caps| build_match(&chars, input, caps, self.program_groups()))
+            .collect())
+    }
+
+    /// All non-overlapping matches from the start, advancing past empty
+    /// matches by one char. Callers guard the nullable-pattern/astral-input
+    /// combination via `check_empty_match_iteration`, so advancing by one
+    /// char here is exactly JS's one UTF-16 code unit.
+    fn collect_matches(&self, chars: &[char]) -> Vec<Vec<Option<usize>>> {
+        let mut out = Vec::new();
+        let mut from = 0_usize;
+        while let Some(caps) = self.find_from(chars, from) {
+            let (start, end) = match_bounds(&caps);
+            from = if end == start { end + 1 } else { end };
+            out.push(caps);
+            if from > chars.len() {
+                break;
+            }
+        }
+        out
+    }
+
+    /// Mirrors `RegExp.prototype.test`, which delegates to `exec`: with the
+    /// `g` flag the search starts at `lastIndex`, which advances to the match
+    /// end (UTF-16 code units) on success and resets to 0 on failure; without
+    /// `g` the call is stateless and ignores `lastIndex`.
+    pub fn test(&mut self, input: &str) -> bool {
+        self.exec(input).is_some()
     }
 
     /// Byte offsets `(start, end)` of the first match in `input`.
@@ -88,8 +304,13 @@ impl JsRegExp {
 
     /// Mirrors `String.prototype.replace(regexp, replacement)` with a string
     /// replacement: first match only unless the `g` flag is set. Supports the
-    /// substitutions `$$`, `$&`, `` $` ``, `$'` and `$1`..`$99`.
-    pub fn replace(&self, input: &str, replacement: &str) -> String {
+    /// substitutions `$$`, `$&`, `` $` ``, `$'` and `$1`..`$99`. With `g` it
+    /// rejects nullable patterns over astral input (see the module docs); a
+    /// non-`g` replace never iterates empty matches and is always `Ok`.
+    pub fn replace(&self, input: &str, replacement: &str) -> JsResult<String> {
+        if self.global {
+            self.check_empty_match_iteration(input)?;
+        }
         let chars: Vec<char> = input.chars().collect();
         let mut out = String::new();
         let mut last = 0_usize;
@@ -108,7 +329,7 @@ impl JsRegExp {
             }
         }
         out.extend(&chars[last..]);
-        out
+        Ok(out)
     }
 
     /// Mirrors `String.prototype.split(regexp)` without a limit argument,
@@ -121,6 +342,7 @@ impl JsRegExp {
                 "split with capturing groups is not supported; use a non-capturing group `(?:...)`",
             ));
         }
+        self.check_empty_match_iteration(input)?;
         let chars: Vec<char> = input.chars().collect();
         let size = chars.len();
         if size == 0 {
@@ -169,12 +391,80 @@ impl JsRegExp {
         self.program.group_count
     }
 
+    /// Fail-closed guard for the iterating operations: a nullable pattern
+    /// (one that can match the empty string) over astral input would require
+    /// advancing one UTF-16 code unit past an empty match — a mid-surrogate
+    /// position no Rust `String` can express — so it is rejected up front
+    /// instead of diverging from JS.
+    fn check_empty_match_iteration(&self, input: &str) -> JsResult<()> {
+        if self.nullable && input.chars().any(|value| value > '\u{ffff}') {
+            return Err(unsupported(
+                "empty-match iteration over astral input diverges from UTF-16 semantics",
+            ));
+        }
+        Ok(())
+    }
+
     fn exec_anchored(&self, chars: &[char], at: usize) -> Option<Vec<Option<usize>>> {
         vm::exec_at(&self.program, chars, at, self.ignore_case, self.multiline)
     }
 
     fn find_from(&self, chars: &[char], start: usize) -> Option<Vec<Option<usize>>> {
         (start..=chars.len()).find_map(|at| self.exec_anchored(chars, at))
+    }
+}
+
+/// UTF-16 code-unit offset of char index `at`.
+fn utf16_index(chars: &[char], at: usize) -> usize {
+    chars[..at].iter().map(|value| value.len_utf16()).sum()
+}
+
+/// Char index for a UTF-16 code-unit offset; `None` when the offset lies
+/// beyond the end of `chars`. An offset that lands between the two code
+/// units of an astral char rounds UP to the following char boundary, never
+/// down (rounding down would re-scan input before `lastIndex`). For
+/// non-nullable patterns the round-up is exact, not an approximation:
+/// within the accepted subset no atom can match a lone surrogate
+/// (lone-surrogate `\uXXXX` escapes and the `u` flag are rejected at
+/// construction; every accepted atom matches one whole scalar value), so
+/// Node scanning from the mid-pair code unit finds exactly the match — and
+/// resulting `lastIndex` — that scanning from the next boundary finds.
+/// Proven by the `set-lastindex` oracle vectors. Nullable patterns could
+/// match empty *at* the mid-pair offset itself, where the round-up would
+/// diverge from Node — but they can never reach here with one:
+/// `set_last_index` rejects nullable patterns, and exec-driven `lastIndex`
+/// values always land on char boundaries (matches end at whole-scalar
+/// boundaries; an empty match leaves `lastIndex` at its own boundary
+/// start).
+fn char_index_for_utf16(chars: &[char], utf16: usize) -> Option<usize> {
+    let mut units = 0_usize;
+    for (index, value) in chars.iter().enumerate() {
+        if units >= utf16 {
+            return Some(index);
+        }
+        units += value.len_utf16();
+    }
+    (units >= utf16).then_some(chars.len())
+}
+
+fn build_match(
+    chars: &[char],
+    input: &str,
+    caps: &[Option<usize>],
+    group_count: usize,
+) -> JsRegExpMatch {
+    let (start, end) = match_bounds(caps);
+    let groups = (1..=group_count)
+        .map(|group| match (caps[2 * group], caps[2 * group + 1]) {
+            (Some(from), Some(to)) => Some(chars[from..to].iter().collect()),
+            _ => None,
+        })
+        .collect();
+    JsRegExpMatch {
+        text: chars[start..end].iter().collect(),
+        index: utf16_index(chars, start) as i32,
+        input: input.to_string(),
+        groups,
     }
 }
 

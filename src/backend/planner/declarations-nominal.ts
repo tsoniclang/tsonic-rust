@@ -21,7 +21,7 @@ import type {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
@@ -76,7 +76,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         failed = true;
         continue;
       }
-      const fieldName = rustValueName(ast.text(ast.name(member) ?? member));
+      const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
       const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
       if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -142,6 +142,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const structItem: RustItem = {
     kind: "struct",
     name: className,
+    ...(structAttributes(className, fields) === undefined ? {} : { attrs: structAttributes(className, fields) }),
     pub: ast.hasModifierKind(node, "export"),
     derives,
     fields,
@@ -156,7 +157,7 @@ function planParams(member: Node, context: RustPlanContext): readonly RustFuncti
     if (parameter === undefined) {
       continue;
     }
-    const parameterName = rustValueName(ast.text(ast.name(parameter) ?? parameter));
+    const parameterName = rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
     const parameterType = renderType(context, parameter) ?? renderType(context, Node_Type(parameter));
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -203,7 +204,7 @@ function planConstructor(
     const receiver = left === undefined ? undefined : Node_Expression(left);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
     const fieldNameNode = left === undefined ? undefined : Node_Name(left);
-    const fieldName = fieldNameNode === undefined ? "" : rustValueName(ast.text(fieldNameNode));
+    const fieldName = fieldNameNode === undefined ? "" : rustPublicName(ast.text(fieldNameNode)).name;
     const isFieldInit =
       expression !== undefined &&
       operatorToken !== undefined &&
@@ -266,7 +267,9 @@ function buildStructLiteral(
 
 function planMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
   const { ast } = context.input;
-  const methodName = rustValueName(ast.text(ast.name(member) ?? member));
+  const methodName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
+  const nonSnakeSeen = { value: rustPublicName(ast.text(ast.name(member) ?? member)).needsAllow };
+  context = { ...context, nonSnakeSeen };
   if (!isValidRustIdentifier(methodName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -312,6 +315,7 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   return {
     name: methodName,
     pub: true,
+    ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(fallible ? { fallible: true } : {}),
     ...(isStatic ? {} : {
       selfParam: (context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref") as import("../rust-ast/nodes.js").RustSelfParam,
@@ -413,7 +417,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    const fieldName = rustValueName(ast.text(ast.name(member) ?? member));
+    const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
     const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
     if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -429,6 +433,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   return [{
     kind: "struct",
     name: interfaceName,
+    ...(structAttributes(interfaceName, fields) === undefined ? {} : { attrs: structAttributes(interfaceName, fields) }),
     pub: ast.hasModifierKind(node, "export"),
     derives: allFieldsCopy ? ["Clone", "Copy", "Debug", "PartialEq"] : ["Clone", "Debug", "PartialEq"],
     fields,
@@ -456,4 +461,17 @@ export function planUnionAliasDeclaration(node: Node, context: RustPlanContext):
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
     variants: fact.variants.map((variant) => ({ name: variant.name })),
   }];
+}
+
+// Scoped lint allowances for a generated struct: field names may be
+// non-snake, and the authored type name may be non-CamelCase.
+function structAttributes(typeName: string, fields: readonly { readonly name: string }[]): readonly string[] | undefined {
+  const attrs: string[] = [];
+  if (fields.some((field) => rustPublicName(field.name).needsAllow)) {
+    attrs.push("#[allow(non_snake_case)]");
+  }
+  if (!/^[A-Z][A-Za-z0-9]*$/u.test(typeName)) {
+    attrs.push("#[allow(non_camel_case_types)]");
+  }
+  return attrs.length === 0 ? undefined : attrs;
 }

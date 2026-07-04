@@ -8,17 +8,17 @@ import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustValueName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustMutatedBindingFactKey } from "../../source/rust-facts/keys.js";
 
-export function planFunctionDeclaration(node: Node, context: RustPlanContext): RustItem | undefined {
-  const { ast } = context.input;
+export function planFunctionDeclaration(node: Node, outerContext: RustPlanContext): RustItem | undefined {
+  const { ast } = outerContext.input;
   const isAsync = ast.hasModifierKind(node, "async");
-  if (isAsync && context.input.facts.getFact(node, rustAsyncFunctionFactKey) === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
+  if (isAsync && outerContext.input.facts.getFact(node, rustAsyncFunctionFactKey) === undefined) {
+    outerContext.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(outerContext, node),
       "rust.backend.async",
       "Async functions require a finalized Promise return carrier fact.",
     ));
@@ -26,7 +26,13 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
   }
   const nameNode = Node_Name(node);
   const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const name = rustValueName(sourceName);
+  const isExported = ast.hasModifierKind(node, "export");
+  // Naming policy: user-authored names are preserved verbatim; items with
+  // non-snake identifiers carry a scoped lint allowance.
+  const publicName = rustPublicName(sourceName);
+  const name = publicName.name;
+  const nonSnakeSeen = { value: publicName.needsAllow };
+  const context: RustPlanContext = { ...outerContext, nonSnakeSeen };
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -41,7 +47,7 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
     if (parameter === undefined) {
       continue;
     }
-    const parameterName = rustValueName(ast.text(ast.name(parameter) ?? parameter));
+    const parameterName = rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
     const parameterCarrier = context.input.facts.getRuntimeCarrierFact(parameter)?.carrier;
     const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
@@ -120,7 +126,8 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
   return {
     kind: "function",
     name,
-    pub: ast.hasModifierKind(node, "export"),
+    pub: isExported,
+    ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(isAsync ? { isAsync: true } : {}),
     ...(fallible ? { fallible: true } : {}),
     ...(typeParams.length === 0 ? {} : { typeParams }),

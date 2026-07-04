@@ -183,3 +183,37 @@ export function main(): void {
   const run = validateGeneratedProject("multi-cap-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
+
+test("fallible property rows propagate through a capability binary", { timeout: 300_000 }, async () => {
+  const { acmeLogsinkCapability } = await import("./helpers/rust-session.mjs");
+  const { result } = compileRust({
+    packages: [acmeLogsinkCapability(), acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "logsink_proof" } },
+    files: {
+      "index.ts": `
+import { openSink, openSinkNamed } from "logsink";
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const sink = openSink();
+  sink.write("hello");
+  const named = openSinkNamed("app");
+  named.write("x");
+  let location = "";
+  try {
+    location = sink.path;
+  } catch (error) {
+    location = "?";
+  }
+  check(location === "/var/log/acme.log");
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /sink\.path\(\)\?/u);
+  // Row metadata is emitted verbatim: no recasing of capability API names.
+  assert.match(artifactText(result, "src/index.rs"), /acme_logsink::openSinkNamed\("app"\)/u);
+  const run = validateGeneratedProject("logsink-proof-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});

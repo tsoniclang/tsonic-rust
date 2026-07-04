@@ -12,7 +12,6 @@ use super::parser::{Ast, ClassItem, ClassSpec, ParsedPattern};
 #[derive(Debug, Clone)]
 enum Inst {
     Char(char),
-    Dot,
     Class(ClassSpec),
     /// Try `first`; on failure resume at `second`.
     Split {
@@ -71,7 +70,6 @@ impl Compiler {
     fn emit(&mut self, ast: &Ast) {
         match ast {
             Ast::Char(value) => self.insts.push(Inst::Char(*value)),
-            Ast::Dot => self.insts.push(Inst::Dot),
             Ast::Class(spec) => self.insts.push(Inst::Class(spec.clone())),
             Ast::AnchorStart => self.insts.push(Inst::AssertStart),
             Ast::AnchorEnd => self.insts.push(Inst::AssertEnd),
@@ -259,14 +257,6 @@ pub(crate) fn exec_at(
                     failed = true;
                 }
             }
-            Inst::Dot => {
-                if pos < chars.len() && !is_line_terminator(chars[pos]) {
-                    pos += 1;
-                    pc += 1;
-                } else {
-                    failed = true;
-                }
-            }
             Inst::Class(spec) => {
                 if pos < chars.len() && class_matches(spec, chars[pos], ignore_case) {
                     pos += 1;
@@ -388,11 +378,9 @@ fn class_matches(spec: &ClassSpec, actual: char, ignore_case: bool) -> bool {
             }
         }
     }
-    let member = spec
-        .items
+    spec.items
         .iter()
-        .any(|item| candidates.iter().any(|value| item_matches(item, *value)));
-    member != spec.negated
+        .any(|item| candidates.iter().any(|value| item_matches(item, *value)))
 }
 
 fn item_matches(item: &ClassItem, value: char) -> bool {
@@ -400,11 +388,8 @@ fn item_matches(item: &ClassItem, value: char) -> bool {
         ClassItem::Single(single) => value == *single,
         ClassItem::Range(low, high) => (*low..=*high).contains(&value),
         ClassItem::Digit => value.is_ascii_digit(),
-        ClassItem::NotDigit => !value.is_ascii_digit(),
         ClassItem::Word => is_word_char(value),
-        ClassItem::NotWord => !is_word_char(value),
         ClassItem::Space => is_js_whitespace(value),
-        ClassItem::NotSpace => !is_js_whitespace(value),
     }
 }
 

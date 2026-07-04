@@ -15,11 +15,17 @@ export type RustProviderOperationForm =
       // Any direct lowering fails closed.
       readonly form: "marker";
     }
-  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argCasts?: readonly (string | undefined)[]; readonly trailingArgs?: readonly string[]; readonly chain?: readonly string[] }
+  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argCasts?: readonly (string | undefined)[]; readonly argOrder?: readonly number[]; readonly trailingArgs?: readonly string[]; readonly chain?: readonly string[] }
   | {
       // Free function taking all arguments as one &[&str] slice (variadic
       // string APIs like path join).
       readonly form: "call-str-slice";
+      readonly path: string;
+    }
+  | {
+      // Free function taking a leading format string by reference and the
+      // remaining arguments as one &[JsValue] slice.
+      readonly form: "call-jsvalue-slice";
       readonly path: string;
     }
   | { readonly form: "path"; readonly path: string }
@@ -46,6 +52,7 @@ export type RustProviderOperationForm =
       readonly path: string;
       readonly receiverMode: RustArgumentMode;
       readonly argModes?: readonly RustArgumentMode[];
+      readonly argCasts?: readonly (string | undefined)[];
       readonly trailingArgs?: readonly string[];
       readonly argOrder?: readonly number[];
     }

@@ -271,7 +271,7 @@ export function grow(xs: int32[]): void {
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
 });
 
-test("camelCase identifiers rename deterministically to snake_case", () => {
+test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -294,12 +294,14 @@ export function caller(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn pick_mode\(flag_value: bool\) -> i32/u);
-  assert.match(text, /let mut chosen_value: i32 = 0;/u);
-  assert.match(text, /pick_mode\(true\)/u);
+  // Every user-authored identifier is verbatim; the item carries a scoped
+  // lint allowance because non-snake names appear in it.
+  assert.match(text, /#\[allow\(non_snake_case\)\]\npub fn pickMode\(flagValue: bool\) -> i32/u);
+  assert.match(text, /let mut chosenValue: i32 = 0;/u);
+  assert.match(text, /pickMode\(true\)/u);
 });
 
-test("rename collisions fail closed", () => {
+test("verbatim naming keeps distinct authored identifiers distinct", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -314,9 +316,10 @@ export function collide(): int32 {
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("collides")));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let fooBar: i32 = 1;/u);
+  assert.match(text, /let foo_bar: i32 = 2;/u);
 });
 
 test("class decorators fail closed", () => {

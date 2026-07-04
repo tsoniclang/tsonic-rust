@@ -10,6 +10,7 @@ import type {
   TargetTypeRef,
 } from "@tsonic/tsts";
 import type {
+  TargetCapabilityOperationMapper,
   TargetCapabilityImplementation,
   TargetRuntimeContributionContext,
   TargetRuntimeContributions,
@@ -44,8 +45,8 @@ export interface RustProviderOperationRow {
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
   // Fallible operations return TsonicResult and require a fallible context.
-  // Method and constructor operations support fallibility; package creation
-  // rejects other kinds.
+  // Method, constructor, and property operations support fallibility;
+  // package creation rejects other kinds.
   readonly isFallible?: boolean;
 }
 
@@ -71,14 +72,19 @@ export interface RustProviderPackageDefinition {
   readonly carrierPaths?: Readonly<Record<string, string>>;
 }
 
-export interface RustProviderOperationContributor {
-  rustProviderOperations(): readonly RustProviderOperationRow[];
-  rustAliasImports?(): readonly { readonly alias: string; readonly path: string }[];
-  rustCarrierPaths?(): Readonly<Record<string, string>>;
+// Rust payload for the standard target-capability operation-mapper hook.
+// The host owns only the generic hook (createOperationMappers); this target
+// owns the payload schema and reads it by kind.
+export const rustProviderOperationsMapperKind = "rust-provider-operations";
+
+export interface RustProviderOperationsMapper extends TargetCapabilityOperationMapper {
+  readonly kind: typeof rustProviderOperationsMapperKind;
+  readonly operations: readonly RustProviderOperationRow[];
+  readonly aliasImports: readonly { readonly alias: string; readonly path: string }[];
+  readonly carrierPaths: Readonly<Record<string, string>>;
 }
 
-export type RustProviderPackageImplementation =
-  TargetCapabilityImplementation & RustProviderOperationContributor;
+export type RustProviderPackageImplementation = TargetCapabilityImplementation;
 
 export function createRustProviderPackage(definition: RustProviderPackageDefinition): RustProviderPackageImplementation {
   validateProviderPackageDefinition(definition);
@@ -101,34 +107,41 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
         })),
       };
     },
-    rustProviderOperations(): readonly RustProviderOperationRow[] {
-      return definition.operations;
-    },
-    rustAliasImports() {
-      return definition.aliasImports ?? [];
-    },
-    rustCarrierPaths() {
-      return definition.carrierPaths ?? {};
+    createOperationMappers(): readonly RustProviderOperationsMapper[] {
+      return [{
+        kind: rustProviderOperationsMapperKind,
+        operations: definition.operations,
+        aliasImports: definition.aliasImports ?? [],
+        carrierPaths: definition.carrierPaths ?? {},
+      }];
     },
   };
 }
 
-export function isRustProviderOperationContributor(
-  value: object,
-): value is RustProviderOperationContributor {
-  return typeof (value as { rustProviderOperations?: unknown }).rustProviderOperations === "function";
+export function rustProviderOperationsMappersOf(
+  selectedCapabilities: readonly object[],
+): readonly RustProviderOperationsMapper[] {
+  const mappers: RustProviderOperationsMapper[] = [];
+  for (const capability of selectedCapabilities) {
+    const createMappers = (capability as {
+      createOperationMappers?(context: object): readonly TargetCapabilityOperationMapper[];
+    }).createOperationMappers;
+    if (typeof createMappers !== "function") {
+      continue;
+    }
+    for (const mapper of createMappers.call(capability, {})) {
+      if (mapper.kind === rustProviderOperationsMapperKind) {
+        mappers.push(mapper as RustProviderOperationsMapper);
+      }
+    }
+  }
+  return mappers;
 }
 
 export function collectRustProviderOperationRows(
   selectedCapabilities: readonly object[],
 ): readonly RustProviderOperationRow[] {
-  const rows: RustProviderOperationRow[] = [];
-  for (const selectedPackage of selectedCapabilities) {
-    if (isRustProviderOperationContributor(selectedPackage)) {
-      rows.push(...selectedPackage.rustProviderOperations());
-    }
-  }
-  return rows;
+  return rustProviderOperationsMappersOf(selectedCapabilities).flatMap((mapper) => mapper.operations);
 }
 
 function createRustProviderPackageBindingExtension(definition: RustProviderPackageDefinition): CompilerExtension {
@@ -282,7 +295,7 @@ function validateProviderPackageDefinition(definition: RustProviderPackageDefini
     .map((carrier) => carrier.id));
   for (const row of definition.operations) {
     const label = row.memberId ?? row.exportId;
-    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor") {
+    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor" && row.operationKind !== "property") {
       fail(`isFallible is supported only on method and constructor operations (row '${label}').`);
     }
     if (!exportIds.has(row.exportId)) {

@@ -99,9 +99,8 @@ export async function size_of(path: string): Promise<boolean> {
 
 test("remaining blocked lanes stay classified", async () => {
   const cases = [
-    { module: "node:util", name: "inspect", call: "inspect(\"x\")" },
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
-    { module: "node:url", name: "format", call: "format(\"x\")" },
+    { module: "node:fs", name: "createReadStream", call: "createReadStream(\"x\")" },
   ];
   for (const item of cases) {
     const { result } = compileRust({

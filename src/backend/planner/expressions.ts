@@ -24,7 +24,7 @@ import { rustBorrowedArgsFactKey, rustFallibleCallFactKey, rustOptionWrapFactKey
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustValueName, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, rustPublicName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier } from "../../source/rust-target-types.js";
@@ -96,7 +96,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         }
         return applyResultCast(planned, identifierFact.castResult);
       }
-      const name = rustValueName(ast.text(node));
+      const name = rustSourceName(context, ast.text(node));
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, node),
@@ -149,7 +149,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       const arrowParams = context.input.ast.parameters(node);
       const params: { name: string; byRefCopy: boolean }[] = [];
       for (const [index, parameter] of arrowParams.entries()) {
-        const parameterName = parameter === undefined ? "" : rustValueName(ast.text(ast.name(parameter) ?? parameter));
+        const parameterName = parameter === undefined ? "" : rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
         if (!isValidRustIdentifier(parameterName)) {
           return undefined;
         }
@@ -446,7 +446,10 @@ function planProviderOperationExpression(
     }
     case "call": {
       registerAliasFromPath(context, form.path);
-      const shaped = args.map((argument, index): RustExpr => {
+      const orderedCallArgs = form.argOrder === undefined || form.argOrder.length === args.length
+        ? args
+        : form.argOrder.map((position) => args[position]).filter((argument): argument is RustExpr => argument !== undefined);
+      const shaped = orderedCallArgs.map((argument, index): RustExpr => {
         const cast = form.argCasts?.[index];
         const casted: RustExpr = cast === undefined ? argument : { kind: "cast", expr: argument, to: cast };
         const mode = form.argModes?.[index] ?? "value";
@@ -464,6 +467,21 @@ function planProviderOperationExpression(
         result = { kind: "method-call", receiver: result, method: chained, args: [] };
       }
       return result;
+    }
+    case "call-jsvalue-slice": {
+      registerAliasFromPath(context, form.path);
+      const [head, ...values] = args;
+      if (head === undefined) {
+        return undefined;
+      }
+      return {
+        kind: "call",
+        path: form.path,
+        args: [
+          refShape(context, head, argNodes?.[0]),
+          { kind: "reference", expr: { kind: "slice-literal", elements: values } },
+        ],
+      };
     }
     case "call-str-slice": {
       registerAliasFromPath(context, form.path);
@@ -513,16 +531,18 @@ function planProviderOperationExpression(
       const receiverArg: RustExpr = form.receiverMode === "ref" ? refShape(context, receiver, receiverNode) : receiver;
       const ordered = form.argOrder === undefined ? args : form.argOrder.map((index) => args[index]).filter((argument): argument is RustExpr => argument !== undefined);
       const shapedArgs = ordered.map((argument, index): RustExpr => {
+        const cast = form.argCasts?.[index];
+        const casted: RustExpr = cast === undefined ? argument : { kind: "cast", expr: argument, to: cast };
         if ((form.argModes?.[index] ?? "value") !== "ref") {
-          return argument;
+          return casted;
         }
-        if (argument.kind === "string-literal") {
-          return { kind: "str-literal", value: argument.value };
+        if (casted.kind === "string-literal") {
+          return { kind: "str-literal", value: casted.value };
         }
-        if (argument.kind === "vec-literal") {
-          return { kind: "reference", expr: { kind: "slice-literal", elements: argument.elements } };
+        if (casted.kind === "vec-literal") {
+          return { kind: "reference", expr: { kind: "slice-literal", elements: casted.elements } };
         }
-        return { kind: "reference", expr: argument };
+        return { kind: "reference", expr: casted };
       });
       const trailing = (form.trailingArgs ?? []).map((text): RustExpr => ({ kind: "path", path: text }));
       return { kind: "call", path: form.path, args: [receiverArg, ...shapedArgs, ...trailing] };
@@ -580,7 +600,29 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   }
   const callee = Node_Expression(node);
   const fact = rustOperationFact(node, context);
-  const args = planArguments(node, context);
+  // Rows with an explicit argument order consume only the selected
+  // arguments; discarded arguments (like a null JSON replacer) are never
+  // planned.
+  const selectedIndexes = fact !== undefined && fact.kind === "provider-operation" && fact.target.form === "call" && fact.target.argOrder !== undefined
+    ? fact.target.argOrder
+    : undefined;
+  let args: readonly RustExpr[] | undefined;
+  if (selectedIndexes === undefined) {
+    args = planArguments(node, context);
+  } else {
+    const allNodes = [...context.input.ast.arguments(node)];
+    const planned: RustExpr[] = [];
+    for (const index of selectedIndexes) {
+      const argumentNode = allNodes[index];
+      const plannedArgument = argumentNode === undefined ? undefined : planExpression(argumentNode, context);
+      if (plannedArgument === undefined) {
+        args = undefined;
+        break;
+      }
+      planned.push(plannedArgument);
+    }
+    args = planned;
+  }
   if (args === undefined) {
     return undefined;
   }
@@ -596,7 +638,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     if (typePath === undefined) {
       return undefined;
     }
-    const staticCall: RustExpr = { kind: "call", path: `${typePath}::${rustValueName(fact.name)}`, args };
+    const staticCall: RustExpr = { kind: "call", path: `${typePath}::${fact.name}`, args };
     if (fact.fallible === true) {
       if (context.fallibleContext !== true) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -618,7 +660,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     if (receiver === undefined) {
       return undefined;
     }
-    const methodCall: RustExpr = { kind: "method-call", receiver, method: rustValueName(fact.name), args };
+    const methodCall: RustExpr = { kind: "method-call", receiver, method: fact.name, args };
     if (fact.fallible === true) {
       if (context.fallibleContext !== true) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -672,7 +714,8 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   }
   const declarationFileName = ast.getFileName(sourceReference.sourceFile);
   const moduleName = context.moduleNameByFileName.get(declarationFileName);
-  const declarationName = rustValueName(ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration));
+  const authoredName = ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration);
+  const declarationName = authoredName;
   if (moduleName === undefined || !isValidRustIdentifier(declarationName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -814,7 +857,7 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
   if (fact !== undefined && fact.kind === "source-field") {
     const receiverNode = Node_Expression(node);
     const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    return receiver === undefined ? undefined : { kind: "field", receiver, name: rustValueName(fact.name) };
+    return receiver === undefined ? undefined : { kind: "field", receiver, name: fact.name };
   }
   if (fact !== undefined && fact.kind === "source-enum-member") {
     const value = rustSourceTypeCarrierValue(fact.resultCarrier);
@@ -845,6 +888,17 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
       "Provider property operation could not be lowered.",
     ));
     return undefined;
+  }
+  if (fact.fallible === true) {
+    if (context.fallibleContext !== true) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, node),
+        "rust.error.call",
+        "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+      ));
+      return undefined;
+    }
+    return applyResultCast({ kind: "try", expr: planned }, fact.castResult);
   }
   return applyResultCast(planned, fact.castResult);
 }
@@ -960,7 +1014,7 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       continue;
     }
     const nameNode = ast.name(property);
-    const fieldName = rustValueName(nameNode === undefined ? "" : ast.text(nameNode));
+    const fieldName = rustPublicName(nameNode === undefined ? "" : ast.text(nameNode)).name;
     const initializer = Node_Initializer(property);
     const planned = initializer === undefined ? undefined : planExpression(initializer, context);
     if (!isValidRustIdentifier(fieldName) || planned === undefined) {

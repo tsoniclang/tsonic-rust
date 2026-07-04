@@ -239,7 +239,7 @@ export function safe(xs: int32[]): int32 {
   assert.match(artifactText(result, "src/index.rs"), /js_abi::array_dense_map/u);
 });
 
-test("fallible provider rows are restricted to method operations", async () => {
+test("fallible provider rows are restricted to method, constructor, and property operations", async () => {
   const { createRustProviderPackage } = await import("../dist/index.js");
   assert.throws(
     () => createRustProviderPackage({
@@ -249,7 +249,7 @@ test("fallible provider rows are restricted to method operations", async () => {
       modules: [],
       operations: [{
         exportId: "@bad::X",
-        operationKind: "property",
+        operationKind: "indexer",
         target: { form: "field", name: "x" },
         resultCarrier: { kind: "source-primitive", name: "int32" },
         isFallible: true,

@@ -139,10 +139,18 @@ export function probe(text: string): boolean {
 
 test("RegExp constructs outside the oracle subset fail closed", async () => {
   const cases = [
+    "/a./",
+    "/[^a]/",
+    "/\\D/",
+    "/[\\x00-\\uFFFF]/",
+    "/[\\uD800]/",
+    "/[a-\\uE000]/",
+    "/[😀]/",
+    "/a😀?b/",
     "/a(?=b)/",
-    "/(a)\\\\1/",
+    "/(a)\\1/",
     "/a*?/",
-    "/\\\\bword\\\\b/",
+    "/\\bword\\b/",
     "new RegExp(pattern)",
     "/a/y",
   ];
@@ -181,8 +189,24 @@ export function main(): void {
     check("hello world".search(/world/) === 6);
     check("hello".search(/z/) === -1);
     const digits = new RegExp("\\\\d+", "g");
+    check(digits.lastIndex === 0);
     check(digits.test("a1b2"));
-    check(!digits.test("abc"));
+    check(digits.lastIndex === 2);
+    check(digits.test("a1b2"));
+    check(digits.lastIndex === 4);
+    check(!digits.test("a1b2"));
+    check(digits.lastIndex === 0);
+    const pretty = JSON.stringify(JSON.parse("{\\"a\\":1}"), null, 2);
+    check(pretty.includes("\\n"));
+    check(Date.parse("2026-07-03") > 0);
+    check(Date.UTC(2026, 0, 1, 0, 0, 0, 0) > 0);
+    const padded = "7".padStart(3, "0");
+    check(padded === "007");
+    check("abc".charAt(1) === "b");
+    check(("abc".at(2) ?? "") === "c");
+    check("hello".indexOf("ll") === 2);
+    check("x".padEnd(2, "!") === "x!");
+    check("  y  ".trimStart().trimEnd() === "y");
     const swapped = "john smith".replace(/(\\w+) (\\w+)/, "$2 $1");
     check(swapped === "smith john");
     ok = true;

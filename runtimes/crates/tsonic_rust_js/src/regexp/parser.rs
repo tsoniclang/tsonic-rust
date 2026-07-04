@@ -9,12 +9,32 @@ use crate::errors::{syntax_error, JsResult};
 /// repeats are expanded at compile time, so the subset caps the operands.
 const MAX_QUANTIFIER_BOUND: u32 = 1000;
 
+/// Highest scalar value a class range may reach. Ranges reaching past U+D7FF
+/// could cover surrogate code points or astral scalars: Node's non-`u`
+/// matcher would test them against single UTF-16 code units (matching lone
+/// surrogates, or the halves of an astral char separately), while this
+/// engine matches whole scalar values — so such ranges are rejected at
+/// construction (see `code_unit_sensitivity_error`).
+const MAX_CLASS_RANGE_HIGH: char = '\u{d7ff}';
+
+/// The rejection for constructs whose Node non-`u` semantics are defined
+/// over UTF-16 code units rather than whole scalar values. `.`, negated
+/// classes (including `\D \W \S`), and classes reaching surrogate/astral
+/// code points all match a *lone surrogate* in Node (e.g. `/./.exec("😀")`
+/// yields the high surrogate alone) — a string this engine cannot even
+/// represent — so they are outside the accepted subset entirely, making the
+/// guard fail-closed and data-independent at construction time.
+fn code_unit_sensitivity_error(construct: &str) -> crate::errors::JsError {
+    syntax_error(format!(
+        "{construct} is not supported: dot, negated classes, and surrogate-range classes are outside the oracle-proven subset (they require UTF-16 code-unit matching semantics)"
+    ))
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum Ast {
     Alternation(Vec<Ast>),
     Concat(Vec<Ast>),
     Char(char),
-    Dot,
     Class(ClassSpec),
     Group {
         index: Option<u32>,
@@ -29,9 +49,10 @@ pub(crate) enum Ast {
     AnchorEnd,
 }
 
+/// A positive (non-negated) character class. Negated classes are rejected
+/// at construction: they match lone surrogates in Node's non-`u` mode.
 #[derive(Debug, Clone)]
 pub(crate) struct ClassSpec {
-    pub(crate) negated: bool,
     pub(crate) items: Vec<ClassItem>,
 }
 
@@ -40,11 +61,8 @@ pub(crate) enum ClassItem {
     Single(char),
     Range(char, char),
     Digit,
-    NotDigit,
     Word,
-    NotWord,
     Space,
-    NotSpace,
 }
 
 #[derive(Debug, Clone)]
@@ -79,6 +97,22 @@ pub(crate) fn parse_flags(flags: &str) -> JsResult<ParsedFlags> {
         *slot = true;
     }
     Ok(parsed)
+}
+
+/// Whether the pattern can match the empty string at some position (e.g.
+/// `a*`, `x?`, `a{0,2}`, an empty alternation branch, or a bare anchor).
+/// Anchors consume nothing, so they count as nullable. Nullable patterns are
+/// exactly the ones whose iterating callers can hit JS's advance-by-one-UTF-16
+/// -code-unit rule after an empty match.
+pub(crate) fn is_nullable(ast: &Ast) -> bool {
+    match ast {
+        Ast::Alternation(branches) => branches.iter().any(is_nullable),
+        Ast::Concat(items) => items.iter().all(is_nullable),
+        Ast::Char(_) | Ast::Class(_) => false,
+        Ast::Group { body, .. } => is_nullable(body),
+        Ast::Repeat { body, min, .. } => *min == 0 || is_nullable(body),
+        Ast::AnchorStart | Ast::AnchorEnd => true,
+    }
 }
 
 pub(crate) fn parse_pattern(pattern: &str) -> JsResult<ParsedPattern> {
@@ -171,6 +205,16 @@ impl Parser {
                 "quantifier on `^`/`$` anchor is not supported",
             ));
         }
+        // Without the `u` flag Node reads an astral literal as its two
+        // surrogate code units, so a quantifier binds to the trailing low
+        // surrogate only — code-unit semantics this engine cannot mirror.
+        // Wrap the literal in a group (`(?:💚)+`) to repeat the whole pair,
+        // which is exact.
+        if matches!(atom, Ast::Char(value) if value > '\u{ffff}') {
+            return Err(code_unit_sensitivity_error(
+                "quantifier on an astral literal",
+            ));
+        }
         Ok(Ast::Repeat {
             body: Box::new(atom),
             min,
@@ -183,7 +227,7 @@ impl Parser {
         match next {
             '^' => Ok(Ast::AnchorStart),
             '$' => Ok(Ast::AnchorEnd),
-            '.' => Ok(Ast::Dot),
+            '.' => Err(code_unit_sensitivity_error("`.`")),
             '(' => self.parse_group(),
             '[' => self.parse_class().map(Ast::Class),
             '\\' => self.parse_escape_atom(),
@@ -315,19 +359,14 @@ impl Parser {
         let Some(escaped) = self.bump() else {
             return Err(syntax_error("pattern ends with a trailing `\\`"));
         };
-        let shorthand = |item: ClassItem| {
-            Ast::Class(ClassSpec {
-                negated: false,
-                items: vec![item],
-            })
-        };
+        let shorthand = |item: ClassItem| Ast::Class(ClassSpec { items: vec![item] });
         match escaped {
             'd' => Ok(shorthand(ClassItem::Digit)),
-            'D' => Ok(shorthand(ClassItem::NotDigit)),
             'w' => Ok(shorthand(ClassItem::Word)),
-            'W' => Ok(shorthand(ClassItem::NotWord)),
             's' => Ok(shorthand(ClassItem::Space)),
-            'S' => Ok(shorthand(ClassItem::NotSpace)),
+            'D' | 'W' | 'S' => Err(code_unit_sensitivity_error(&format!(
+                "negated class escape `\\{escaped}`"
+            ))),
             'b' | 'B' => Err(syntax_error(format!(
                 "word-boundary assertion `\\{escaped}` is not supported"
             ))),
@@ -344,7 +383,9 @@ impl Parser {
     }
 
     fn parse_class(&mut self) -> JsResult<ClassSpec> {
-        let negated = self.eat('^');
+        if self.peek() == Some('^') {
+            return Err(code_unit_sensitivity_error("negated character class `[^`"));
+        }
         let mut items = Vec::new();
         loop {
             let Some(next) = self.peek() else {
@@ -367,6 +408,11 @@ impl Parser {
                         if low > high {
                             return Err(syntax_error("character class range out of order"));
                         }
+                        if high > MAX_CLASS_RANGE_HIGH {
+                            return Err(code_unit_sensitivity_error(
+                                "character class range reaching beyond U+D7FF",
+                            ));
+                        }
                         items.push(ClassItem::Range(low, high));
                     }
                     _ => {
@@ -377,12 +423,20 @@ impl Parser {
                 }
             } else {
                 items.push(match first {
+                    // An astral char in a class is a surrogate-range class in
+                    // Node's non-`u` view: it desugars to the pair's two lone
+                    // surrogates as separate class members.
+                    ClassMember::Char(single) if single > '\u{ffff}' => {
+                        return Err(code_unit_sensitivity_error(
+                            "astral character in character class",
+                        ))
+                    }
                     ClassMember::Char(single) => ClassItem::Single(single),
                     ClassMember::Item(item) => item,
                 });
             }
         }
-        Ok(ClassSpec { negated, items })
+        Ok(ClassSpec { items })
     }
 
     fn parse_class_member(&mut self) -> JsResult<ClassMember> {
@@ -395,11 +449,11 @@ impl Parser {
         };
         match escaped {
             'd' => Ok(ClassMember::Item(ClassItem::Digit)),
-            'D' => Ok(ClassMember::Item(ClassItem::NotDigit)),
             'w' => Ok(ClassMember::Item(ClassItem::Word)),
-            'W' => Ok(ClassMember::Item(ClassItem::NotWord)),
             's' => Ok(ClassMember::Item(ClassItem::Space)),
-            'S' => Ok(ClassMember::Item(ClassItem::NotSpace)),
+            'D' | 'W' | 'S' => Err(code_unit_sensitivity_error(&format!(
+                "negated class escape `\\{escaped}`"
+            ))),
             'b' => Ok(ClassMember::Char('\u{8}')),
             'p' | 'P' => Err(syntax_error(format!(
                 "unicode property escape `\\{escaped}` is not supported"

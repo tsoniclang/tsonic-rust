@@ -9,10 +9,9 @@ export interface RustPlanContext {
   readonly diagnostics: TargetDiagnostic[];
   // Identifier names with a proven write (assignment or increment) in the
   // enclosing function body. `let mut` is emitted only for proven writes.
-  // Both sets operate in source-name space; renaming happens at emission.
   readonly mutatedNames?: ReadonlySet<string>;
-  // Emitted binding names in the enclosing function scope, used to detect
-  // deterministic-rename collisions (TS fooBar and foo_bar both exist).
+  // Binding names already emitted in the enclosing function scope, used to
+  // diagnose same-scope collisions.
   readonly emittedLocalNames?: Set<string>;
   // Call nodes appearing directly under an await expression; future-carrier
   // calls anywhere else fail closed.
@@ -23,6 +22,8 @@ export interface RustPlanContext {
   // Structured import requirements: runtime alias prefixes used by planned
   // operations and rendered types. Never inferred from printed text.
   readonly usedAliases?: Set<string>;
+  // Per-item flag: a non-snake_case user identifier was emitted.
+  readonly nonSnakeSeen?: { value: boolean };
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS
@@ -52,10 +53,13 @@ export function registerAliasFromPath(
   context.usedAliases?.add(prefix);
 }
 
-// Deterministic value-name policy: camelCase lowers to snake_case so
-// generated code satisfies Rust naming lints. Collisions are diagnosed, not
-// silently merged.
-export function rustValueName(name: string): string {
+// Naming policy: every user-authored identifier is preserved verbatim
+// wherever Rust can represent it; items containing non-snake_case names
+// carry scoped #[allow(non_snake_case)]. This conversion exists ONLY for
+// compiler-generated temporaries with no TypeScript source identity.
+// Provider, library, and capability API identity flows exclusively through
+// operation-row metadata, which the backend emits verbatim.
+export function rustLocalBindingName(name: string): string {
   if (/^[A-Z][A-Z0-9_]*$/u.test(name)) {
     // UPPER_SNAKE names are constant references and pass through unchanged.
     return name;
@@ -64,6 +68,23 @@ export function rustValueName(name: string): string {
     .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
     .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
     .toLowerCase();
+}
+
+// Verbatim user-authored name plus whether the containing item needs a
+// scoped #[allow(non_snake_case)].
+export function rustPublicName(name: string): { readonly name: string; readonly needsAllow: boolean } {
+  return { name, needsAllow: name !== rustLocalBindingName(name) };
+}
+
+// Verbatim user identifier; records non-snake usage so the enclosing item
+// carries a scoped lint allowance.
+export function rustSourceName(context: { readonly nonSnakeSeen?: { value: boolean } }, name: string): string {
+  if (name !== rustLocalBindingName(name)) {
+    if (context.nonSnakeSeen !== undefined) {
+      context.nonSnakeSeen.value = true;
+    }
+  }
+  return name;
 }
 
 export function isUpperSnakeName(name: string): boolean {

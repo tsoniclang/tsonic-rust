@@ -48,9 +48,10 @@ export {
 } from "./source/rust-target-semantics/index.js";
 export {
   collectRustProviderOperationRows,
+  rustProviderOperationsMappersOf,
+  rustProviderOperationsMapperKind,
   createRustProviderPackage,
   createRustProviderPackageBindingProvider,
-  isRustProviderOperationContributor,
 } from "./source/provider-packages/index.js";
 export type {
   RustProviderCrateDefinition,
@@ -92,3 +93,4 @@ export function createTsonicPlugin(): import("@tsonic/target-api").TsonicTargetP
     },
   };
 }
+export type { RustProviderOperationsMapper } from "./source/provider-packages/index.js";
