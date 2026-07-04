@@ -317,11 +317,23 @@ where
     array.iter().all(predicate)
 }
 
-pub fn find<T, F>(array: &[T], mut predicate: F) -> Option<&T>
+/// Returns a clone of the first element matching the predicate (JS `find`;
+/// `None` maps JS `undefined`).
+pub fn find<T, F>(array: &[T], mut predicate: F) -> Option<T>
 where
+    T: Clone,
     F: FnMut(&T) -> bool,
 {
-    array.iter().find(|item| predicate(item))
+    array.iter().find(|item| predicate(item)).cloned()
+}
+
+/// Returns a clone of the last element matching the predicate (JS `findLast`).
+pub fn find_last<T, F>(array: &[T], mut predicate: F) -> Option<T>
+where
+    T: Clone,
+    F: FnMut(&T) -> bool,
+{
+    array.iter().rev().find(|item| predicate(item)).cloned()
 }
 
 /// Returns the index of the first element matching the predicate, or -1.
@@ -332,6 +344,18 @@ where
     array
         .iter()
         .position(predicate)
+        .map(|index| index as isize)
+        .unwrap_or(-1)
+}
+
+/// Returns the index of the last element matching the predicate, or -1.
+pub fn find_last_index<T, F>(array: &[T], predicate: F) -> isize
+where
+    F: FnMut(&T) -> bool,
+{
+    array
+        .iter()
+        .rposition(predicate)
         .map(|index| index as isize)
         .unwrap_or(-1)
 }

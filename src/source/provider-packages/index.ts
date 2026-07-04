@@ -44,8 +44,8 @@ export interface RustProviderOperationRow {
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
   // Fallible operations return TsonicResult and require a fallible context.
-  // Method and constructor operations support fallibility; package creation
-  // rejects other kinds.
+  // Method, constructor, and property operations support fallibility;
+  // package creation rejects other kinds.
   readonly isFallible?: boolean;
 }
 
@@ -282,7 +282,7 @@ function validateProviderPackageDefinition(definition: RustProviderPackageDefini
     .map((carrier) => carrier.id));
   for (const row of definition.operations) {
     const label = row.memberId ?? row.exportId;
-    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor") {
+    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor" && row.operationKind !== "property") {
       fail(`isFallible is supported only on method and constructor operations (row '${label}').`);
     }
     if (!exportIds.has(row.exportId)) {

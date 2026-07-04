@@ -1066,6 +1066,14 @@ function resolveCallLikeCarrier(
   if (sourceCallLike !== undefined) {
     return sourceCallLike;
   }
+  if (walk.jsEnabled && ast.kindName(callee) === KindPropertyAccessExpression) {
+    // Flag-dependent and space-formatting lib selections that rows cannot
+    // express as static data.
+    const special = tryFlagDependentJsSelection(walk, expression, callee, callArguments, sourceFile);
+    if (special !== undefined) {
+      return special;
+    }
+  }
   if (walk.jsEnabled) {
     const jsSelection = expressionKind === KindNewExpression
       ? selectJsConstructorForNode(walk, expression, callee, callArguments, sourceFile)
@@ -1347,7 +1355,7 @@ function recordProviderOperationFacts(
   const operationId = row.memberId ?? row.signatureId ?? row.exportId;
   const targetOperationText = row.target.form === "marker" || row.target.form === "arg-method"
     ? row.target.form === "marker" ? "marker" : row.target.name
-    : row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice"
+    : row.target.form === "call" || row.target.form === "path" || row.target.form === "free-call" || row.target.form === "call-str-slice" || row.target.form === "call-jsvalue-slice"
     ? row.target.path
     : row.target.form === "index"
       ? "[]"
@@ -2541,6 +2549,16 @@ function recordFallibilityFacts(walk: RustFactWalk): void {
           }
         }
       }
+      if (kind === KindPropertyAccessExpression && !insideTry) {
+        const identity = providerDeclarationIdentityFor(walk, node);
+        if (identity !== undefined) {
+          const row = matchProviderRow(walk.providerRows, identity, "property");
+          if (row?.isFallible === true) {
+            found = true;
+            return;
+          }
+        }
+      }
       if (kind === KindCallExpression && !insideTry) {
         const callee = Node_Expression(node);
         // Provider fallible rows.
@@ -2761,4 +2779,90 @@ export function resolveRegExpCreation(
     flags,
   });
   return setCarrierFact(walk, expression, { kind: "target-named", id: "rust.js.JsRegExp" });
+}
+
+// String.prototype.match result shape depends on the g flag, and
+// JSON.stringify's space argument resolves to a compile-time indent —
+// neither is expressible as a static row.
+function tryFlagDependentJsSelection(
+  walk: RustFactWalk,
+  expression: Node,
+  callee: Node,
+  callArguments: readonly (Node | undefined)[],
+  sourceFile: SourceFile,
+): TargetTypeRef | undefined {
+  const { ast } = walk.lifecycle.compiler;
+  const identity = libMemberIdentityFor(walk, callee);
+  if (identity === undefined) {
+    return undefined;
+  }
+  const facts = walk.lifecycle.host.facts;
+  if (identity.ownerName === "String" && identity.memberName === "match") {
+    const receiver = Node_Expression(callee);
+    const receiverCarrier = receiver === undefined ? undefined : resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+    const [argument] = callArguments;
+    const argumentCarrier = argument === undefined ? undefined : resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    if (!isRustStringCarrier(receiverCarrier) && receiverCarrier?.kind !== "pointer") {
+      return undefined;
+    }
+    if (argumentCarrier?.kind !== "target-named" || argumentCarrier.id !== "rust.js.JsRegExp") {
+      return undefined;
+    }
+    const creation = argument === undefined ? undefined : facts.get(argument, rustTargetOperationFactKey);
+    if (creation === undefined || creation.kind !== "regexp-create") {
+      appendRegExpDiagnostic(walk, "match requires an inline constant pattern (the result shape depends on the g flag)");
+      return undefined;
+    }
+    const global = creation.flags.includes("g");
+    const stringCarrierValue = rustStringTargetType();
+    const resultCarrier: TargetTypeRef = global
+      ? rustOptionTargetType(rustVecTargetType(stringCarrierValue))
+      : rustOptionTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
+    setRustOperationFact(walk, expression, {
+      kind: "provider-operation",
+      operationId: `tsonic.rust.js.String.match.${global ? "global" : "first"}`,
+      operationKind: "method",
+      target: { form: "arg-receiver-method", name: global ? "match_strings" : "match_first", argModes: ["ref"] },
+      resultCarrier,
+    });
+    return setCarrierFact(walk, expression, resultCarrier);
+  }
+  if (identity.ownerName === "JSON" && identity.memberName === "stringify" && callArguments.length === 3) {
+    const [valueNode, replacerNode, spaceNode] = callArguments;
+    const valueCarrier = valueNode === undefined ? undefined : resolveExpressionCarrier(walk, valueNode, sourceFile, { kind: "target-named", id: "rust.js.JsValue" });
+    if (valueCarrier?.kind !== "target-named" || valueCarrier.id !== "rust.js.JsValue") {
+      return undefined;
+    }
+    if (replacerNode === undefined || ast.kindName(replacerNode) !== "KindNullKeyword") {
+      // Replacer functions are open dynamic dispatch.
+      return undefined;
+    }
+    let indent: string | undefined;
+    if (spaceNode !== undefined && ast.kindName(spaceNode) === KindNumericLiteral) {
+      const count = Math.min(10, Math.max(0, Math.trunc(Number(ast.text(spaceNode)))));
+      indent = " ".repeat(count);
+    } else if (spaceNode !== undefined && ast.kindName(spaceNode) === "KindStringLiteral") {
+      indent = ast.text(spaceNode).slice(0, 10);
+    }
+    if (indent === undefined) {
+      return undefined;
+    }
+    const resultCarrier = rustStringTargetType();
+    setRustOperationFact(walk, expression, {
+      kind: "provider-operation",
+      operationId: "tsonic.rust.js.JSON.stringify.indent",
+      operationKind: "method",
+      target: {
+        form: "call",
+        path: "js_abi::json_stringify_with_indent",
+        argModes: ["ref"],
+        argOrder: [0],
+        trailingArgs: [JSON.stringify(indent)],
+      },
+      resultCarrier,
+      fallible: true,
+    });
+    return setCarrierFact(walk, expression, resultCarrier);
+  }
+  return undefined;
 }

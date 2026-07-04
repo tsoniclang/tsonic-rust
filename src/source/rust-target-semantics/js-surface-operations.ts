@@ -40,7 +40,7 @@ export interface JsOperationSelection {
   readonly callbackShape?: "map" | "reduce";
 }
 
-type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "regexp";
+type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "regexp" | "regexp-match";
 
 type JsCarrierRef =
   | { readonly ref: "cb-predicate" }
@@ -51,6 +51,11 @@ type JsCarrierRef =
   | { readonly ref: "float64" }
   | { readonly ref: "bool" }
   | { readonly ref: "string-vec" }
+  | { readonly ref: "regexp-match" }
+  | { readonly ref: "option-of-regexp-match" }
+  | { readonly ref: "regexp-match-vec" }
+  | { readonly ref: "option-of-string" }
+  | { readonly ref: "option-of-string-vec" }
   | { readonly ref: "string" }
   | { readonly ref: "element" }
   | { readonly ref: "option-of-element" }
@@ -98,6 +103,10 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Array", member: "index", operationKind: "index-set", lane: "vec", requiresOwnership: ["owned", "borrowed-mut"], shape: { op: "set", target: { form: "index" }, params: [{ ref: "int32" }, { ref: "element" }] } },
 
   { owner: "Array", member: "filter", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_filter", receiverMode: "ref" }, result: { ref: "receiver" }, params: [{ ref: "cb-predicate" }] } },
+  { owner: "Array", member: "find", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_find", receiverMode: "ref" }, result: { ref: "option-of-element" }, params: [{ ref: "cb-predicate" }] } },
+  { owner: "Array", member: "findIndex", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_find_index", receiverMode: "ref" }, result: { ref: "float64" }, castResult: "f64", params: [{ ref: "cb-predicate" }] } },
+  { owner: "Array", member: "findLast", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_find_last", receiverMode: "ref" }, result: { ref: "option-of-element" }, params: [{ ref: "cb-predicate" }] } },
+  { owner: "Array", member: "findLastIndex", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_find_last_index", receiverMode: "ref" }, result: { ref: "float64" }, castResult: "f64", params: [{ ref: "cb-predicate" }] } },
   { owner: "Array", member: "some", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_some", receiverMode: "ref" }, result: { ref: "bool" }, params: [{ ref: "cb-predicate" }] } },
   { owner: "Array", member: "every", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_every", receiverMode: "ref" }, result: { ref: "bool" }, params: [{ ref: "cb-predicate" }] } },
   { owner: "Array", member: "map", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_map", receiverMode: "ref" }, result: { ref: "receiver" }, params: [{ ref: "cb-map" }] }, callback: "map" },
@@ -143,11 +152,34 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
   { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "jsvalue" }] } },
 
+  // RegExp match-carrier lane.
+  { owner: "RegExpExecArray", member: "index", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "float64" }, castResult: "f64" } },
+  { owner: "RegExpExecArray", member: "input", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "input" }, result: { ref: "string" } } },
+  { owner: "RegExpExecArray", member: "length", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "group_count" }, result: { ref: "int32" }, castResult: "i32" } },
+  { owner: "RegExpExecArray", member: "index", operationKind: "indexer", lane: "regexp-match", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "group", argModes: ["value"], argCasts: ["usize"] }, result: { ref: "option-of-string" }, params: [{ ref: "int32" }] } },
+
   // RegExp lane: constant, compile-validated, oracle-proven subset.
   { owner: "RegExp", member: "test", operationKind: "call", lane: "regexp", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "test", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+  { owner: "RegExp", member: "exec", operationKind: "call", lane: "regexp", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "exec", argModes: ["ref"], mutatesReceiver: true }, result: { ref: "option-of-regexp-match" }, params: [{ ref: "string" }] } },
+  { owner: "RegExp", member: "source", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "source" }, result: { ref: "string" } } },
+  { owner: "RegExp", member: "flags", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "flags" }, result: { ref: "string" } } },
+  { owner: "RegExp", member: "global", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "global" }, result: { ref: "bool" } } },
+  { owner: "RegExp", member: "ignoreCase", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "ignore_case" }, result: { ref: "bool" } } },
+  { owner: "RegExp", member: "multiline", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "multiline" }, result: { ref: "bool" } } },
+  { owner: "RegExp", member: "lastIndex", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "last_index" }, result: { ref: "float64" }, castResult: "f64" } },
+  { owner: "String", member: "matchAll", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "match_all", argModes: ["ref"] }, result: { ref: "regexp-match-vec" }, params: [undefined] } },
   { owner: "String", member: "replace", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [undefined, { ref: "string" }] } },
   { owner: "String", member: "search", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "search", argModes: ["ref"] }, result: { ref: "int32" }, params: [undefined] } },
   { owner: "String", member: "split", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "split", argModes: ["ref"] }, result: { ref: "string-vec" }, params: [undefined] } },
+
+  // Set algebra.
+  { owner: "Set", member: "union", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "union", argModes: ["ref"] }, result: { ref: "receiver" }, params: [{ ref: "receiver" }] } },
+  { owner: "Set", member: "intersection", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "intersection", argModes: ["ref"] }, result: { ref: "receiver" }, params: [{ ref: "receiver" }] } },
+  { owner: "Set", member: "difference", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "difference", argModes: ["ref"] }, result: { ref: "receiver" }, params: [{ ref: "receiver" }] } },
+  { owner: "Set", member: "symmetricDifference", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "symmetric_difference", argModes: ["ref"] }, result: { ref: "receiver" }, params: [{ ref: "receiver" }] } },
+  { owner: "Set", member: "isSubsetOf", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "is_subset_of", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "receiver" }] } },
+  { owner: "Set", member: "isSupersetOf", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "is_superset_of", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "receiver" }] } },
+  { owner: "Set", member: "isDisjointFrom", operationKind: "call", lane: "set", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "is_disjoint_from", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "receiver" }] } },
 
   // Math lane: only operations whose Rust f64 semantics equal JS exactly
   // (NaN-sensitive min/max and half-up round need runtime helpers and stay
@@ -160,6 +192,10 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Math", member: "pow", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "powf" }, result: { ref: "float64" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
 
   // Date lane.
+  { owner: "DateConstructor", member: "parse", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::parse", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
+  { owner: "DateConstructor", member: "UTC", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::utc" }, result: { ref: "float64" }, params: [{ ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }] } },
+  { owner: "Date", member: "toJSON", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_json" }, result: { ref: "string" } } },
+  { owner: "Date", member: "valueOf", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
   { owner: "DateConstructor", member: "now", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::now" }, result: { ref: "float64" } } },
   { owner: "Date", member: "getTime", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
 ];
@@ -221,6 +257,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExp") {
     return { lane: "regexp", bindings: { receiver: carrier } };
   }
+  if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExpMatch") {
+    return { lane: "regexp-match", bindings: { receiver: carrier } };
+  }
   return undefined;
 }
 
@@ -246,6 +285,16 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
       return rustJsValueTargetType();
     case "string-vec":
       return rustVecTargetType(rustStringTargetType());
+    case "regexp-match":
+      return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
+    case "option-of-regexp-match":
+      return rustOptionTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
+    case "regexp-match-vec":
+      return rustVecTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
+    case "option-of-string":
+      return rustOptionTargetType(rustStringTargetType());
+    case "option-of-string-vec":
+      return rustOptionTargetType(rustVecTargetType(rustStringTargetType()));
     case "float64":
       return rustSourcePrimitiveTargetType("float64");
     case "bool":

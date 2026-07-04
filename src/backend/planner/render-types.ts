@@ -21,6 +21,7 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustJsSetTargetId]: "js_abi::JsSet",
   [rustJsDateTargetId]: "js_abi::JsDate",
   "rust.js.JsRegExp": "js_abi::JsRegExp",
+  "rust.js.JsRegExpMatch": "js_abi::JsRegExpMatch",
 };
 
 export const rustStrRefType: RustType = { kind: "named", path: "&str" };

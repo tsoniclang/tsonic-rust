@@ -4,6 +4,7 @@ pub use crate::array::dense::{
     at as array_dense_at, concat as array_dense_concat, copy_within as array_dense_copy_within,
     entries as array_dense_entries, every as array_dense_every, fill as array_dense_fill,
     filter as array_dense_filter, find as array_dense_find, find_index as array_dense_find_index,
+    find_last as array_dense_find_last, find_last_index as array_dense_find_last_index,
     flat_map_one as array_dense_flat_map_one, flat_one as array_dense_flat_one,
     for_each as array_dense_for_each, includes as array_dense_includes,
     index_of as array_dense_index_of, join as array_dense_join, keys as array_dense_keys,
@@ -26,10 +27,13 @@ pub use crate::console::{
 pub use crate::data_view::DataView;
 pub use crate::date::JsDate;
 pub use crate::globals::{is_finite, is_nan, to_number};
-pub use crate::json::{parse as json_parse, stringify as json_stringify};
+pub use crate::json::{
+    parse as json_parse, stringify as json_stringify,
+    stringify_with_indent as json_stringify_with_indent,
+};
 pub use crate::map::JsMap;
 pub use crate::object::JsObject;
-pub use crate::regexp::JsRegExp;
+pub use crate::regexp::{JsRegExp, JsRegExpMatch};
 pub use crate::set::JsSet;
 pub use crate::string::{
     at as js_string_at, char_at as js_string_char_at, code_point_at as js_string_code_point_at,

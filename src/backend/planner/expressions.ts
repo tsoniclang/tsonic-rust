@@ -446,7 +446,10 @@ function planProviderOperationExpression(
     }
     case "call": {
       registerAliasFromPath(context, form.path);
-      const shaped = args.map((argument, index): RustExpr => {
+      const orderedCallArgs = form.argOrder === undefined
+        ? args
+        : form.argOrder.map((position) => args[position]).filter((argument): argument is RustExpr => argument !== undefined);
+      const shaped = orderedCallArgs.map((argument, index): RustExpr => {
         const cast = form.argCasts?.[index];
         const casted: RustExpr = cast === undefined ? argument : { kind: "cast", expr: argument, to: cast };
         const mode = form.argModes?.[index] ?? "value";
@@ -464,6 +467,21 @@ function planProviderOperationExpression(
         result = { kind: "method-call", receiver: result, method: chained, args: [] };
       }
       return result;
+    }
+    case "call-jsvalue-slice": {
+      registerAliasFromPath(context, form.path);
+      const [head, ...values] = args;
+      if (head === undefined) {
+        return undefined;
+      }
+      return {
+        kind: "call",
+        path: form.path,
+        args: [
+          refShape(context, head, argNodes?.[0]),
+          { kind: "reference", expr: { kind: "slice-literal", elements: values } },
+        ],
+      };
     }
     case "call-str-slice": {
       registerAliasFromPath(context, form.path);
@@ -845,6 +863,17 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
       "Provider property operation could not be lowered.",
     ));
     return undefined;
+  }
+  if (fact.fallible === true) {
+    if (context.fallibleContext !== true) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, node),
+        "rust.error.call",
+        "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+      ));
+      return undefined;
+    }
+    return applyResultCast({ kind: "try", expr: planned }, fact.castResult);
   }
   return applyResultCast(planned, fact.castResult);
 }

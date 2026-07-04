@@ -16,44 +16,95 @@ pub fn parse(text: &str) -> JsResult<JsValue> {
 }
 
 pub fn stringify(value: &JsValue) -> JsResult<String> {
-    let Some(text) = stringify_value(value)? else {
-        return Ok(String::new());
-    };
-    Ok(text)
+    stringify_with_indent(value, "")
 }
 
 pub fn stringify_pretty(value: &JsValue) -> JsResult<String> {
     stringify(value)
 }
 
-fn stringify_value(value: &JsValue) -> JsResult<Option<String>> {
+/// Mirrors `JSON.stringify(value, null, space)` for a pre-resolved indent
+/// string (JS resolves a numeric `space` to `" ".repeat(n)` clamped to at
+/// most 10 and a string `space` to its first 10 chars before this point).
+/// An empty `indent` produces the compact `JSON.stringify(value)` output.
+pub fn stringify_with_indent(value: &JsValue, indent: &str) -> JsResult<String> {
+    let Some(text) = stringify_value(value, indent, 0)? else {
+        return Ok(String::new());
+    };
+    Ok(text)
+}
+
+fn stringify_value(value: &JsValue, indent: &str, depth: usize) -> JsResult<Option<String>> {
     match value {
         JsValue::Undefined => Ok(None),
         JsValue::Null => Ok(Some("null".to_string())),
         JsValue::Bool(value) => Ok(Some(value.to_string())),
         JsValue::Number(value) => Ok(Some(json_number(*value))),
-        JsValue::String(value) => Ok(Some(format!("{:?}", value))),
+        JsValue::String(value) => Ok(Some(quote_json_string(value))),
         JsValue::Array(values) => {
             let values = values.borrow();
             let mut parts = Vec::with_capacity(values.len());
             for value in values.values() {
                 parts.push(match value {
-                    Some(value) => stringify_value(value)?.unwrap_or_else(|| "null".to_string()),
+                    Some(value) => stringify_value(value, indent, depth + 1)?
+                        .unwrap_or_else(|| "null".to_string()),
                     None => "null".to_string(),
                 });
             }
-            Ok(Some(format!("[{}]", parts.join(","))))
+            Ok(Some(wrap_parts('[', ']', &parts, indent, depth)))
         }
         JsValue::Object(object) => {
             let mut parts = Vec::new();
+            let separator = if indent.is_empty() { ":" } else { ": " };
             for (key, value) in object.borrow().entries() {
-                if let Some(value) = stringify_value(&value)? {
-                    parts.push(format!("{:?}:{}", key, value));
+                if let Some(value) = stringify_value(&value, indent, depth + 1)? {
+                    parts.push(format!("{}{separator}{value}", quote_json_string(&key)));
                 }
             }
-            Ok(Some(format!("{{{}}}", parts.join(","))))
+            Ok(Some(wrap_parts('{', '}', &parts, indent, depth)))
         }
     }
+}
+
+/// Joins already-serialized members with the compact/pretty layout of
+/// `JSON.stringify`: compact `[a,b]` without an indent, otherwise one member
+/// per line indented by `indent.repeat(depth + 1)` with the closing bracket
+/// back at `indent.repeat(depth)`. Empty containers stay `[]`/`{}`.
+fn wrap_parts(open: char, close: char, parts: &[String], indent: &str, depth: usize) -> String {
+    if parts.is_empty() {
+        return format!("{open}{close}");
+    }
+    if indent.is_empty() {
+        return format!("{open}{}{close}", parts.join(","));
+    }
+    let outer = indent.repeat(depth);
+    let inner = indent.repeat(depth + 1);
+    let joined = parts.join(&format!(",\n{inner}"));
+    format!("{open}\n{inner}{joined}\n{outer}{close}")
+}
+
+/// Quotes a string per `QuoteJSONString`: `\" \\ \b \f \n \r \t`, other
+/// control chars as `\u00xx`; everything else (including non-ASCII) verbatim.
+fn quote_json_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for ch in value.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\u{0008}' => out.push_str("\\b"),
+            '\u{000c}' => out.push_str("\\f"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            ch if (ch as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", ch as u32));
+            }
+            ch => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
 }
 
 fn json_number(value: f64) -> String {

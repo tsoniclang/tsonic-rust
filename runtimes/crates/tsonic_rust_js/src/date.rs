@@ -22,14 +22,65 @@ impl JsDate {
         Self { millis }
     }
 
-    pub fn parse(text: &str) -> JsResult<Self> {
-        let text = text.trim();
-        if let Ok(value) = text.parse::<f64>() {
-            return Ok(Self::from_millis(value));
+    /// Mirrors `Date.parse` over the ISO 8601 subset Node accepts
+    /// deterministically: `YYYY-MM-DD` (UTC midnight) and
+    /// `YYYY-MM-DDTHH:mm:ss(.sss)?(Z|±HH:MM)`. Returns milliseconds since the
+    /// epoch, or NaN for anything else. Rejected (NaN): surrounding
+    /// whitespace, extended/negative years, missing seconds, date-times
+    /// without a timezone designator (Node treats those as local time),
+    /// out-of-range fields (including days past the month's end), and every
+    /// non-ISO legacy format.
+    pub fn parse(value: &str) -> f64 {
+        parse_timestamp(value).unwrap_or(f64::NAN)
+    }
+
+    /// Mirrors `Date.UTC(year, month, day, hours, minutes, seconds, ms)`:
+    /// arguments are truncated to integers with JS overflow carry (month 12
+    /// rolls into the next year, day 0 into the previous month, ...), years
+    /// 0..=99 map to 1900..=1999, and the result is clipped to the JS time
+    /// range (±8.64e15 ms); NaN for non-finite arguments or out-of-range
+    /// results.
+    pub fn utc(
+        year: f64,
+        month: f64,
+        day: f64,
+        hours: f64,
+        minutes: f64,
+        seconds: f64,
+        ms: f64,
+    ) -> f64 {
+        if ![year, month, day, hours, minutes, seconds, ms]
+            .iter()
+            .all(|value| value.is_finite())
+        {
+            return f64::NAN;
         }
-        parse_iso_utc(text)
-            .map(Self::from_millis)
-            .ok_or_else(|| range_error("Invalid Date"))
+        let year = year.trunc();
+        let year = if (0.0..=99.0).contains(&year) {
+            1900.0 + year
+        } else {
+            year
+        };
+        // Same year/month domain as the major engines; anything beyond is far
+        // outside the ±8.64e15 ms time range once combined with in-range
+        // day/time arguments.
+        if year.abs() > 1_000_000.0 || month.trunc().abs() > 10_000_000.0 {
+            return f64::NAN;
+        }
+        let total_months = year as i64 * 12 + month.trunc() as i64;
+        let civil_year = total_months.div_euclid(12) as i32;
+        let civil_month = total_months.rem_euclid(12) as u32 + 1;
+        let day_number = days_from_civil(civil_year, civil_month, 1) as f64;
+        let millis = (day_number + day.trunc() - 1.0) * MS_PER_DAY as f64
+            + hours.trunc() * 3_600_000.0
+            + minutes.trunc() * 60_000.0
+            + seconds.trunc() * 1_000.0
+            + ms.trunc();
+        if millis.abs() > 8.64e15 {
+            f64::NAN
+        } else {
+            millis
+        }
     }
 
     pub fn get_time(&self) -> f64 {
@@ -57,8 +108,12 @@ impl JsDate {
         ))
     }
 
-    pub fn to_json(&self) -> JsResult<String> {
+    /// Mirrors `Date.prototype.toJSON`: the `to_iso_string` text, or the
+    /// literal `"null"` for an invalid date (JSON.stringify serializes an
+    /// invalid date as `null`).
+    pub fn to_json(&self) -> String {
         self.to_iso_string()
+            .unwrap_or_else(|_| "null".to_string())
     }
 
     pub fn get_utc_full_year(&self) -> JsResult<i32> {
@@ -112,52 +167,108 @@ impl JsDate {
     }
 }
 
-fn parse_iso_utc(text: &str) -> Option<f64> {
-    if !text.ends_with('Z') {
-        return None;
-    }
-    let body = &text[..text.len() - 1];
-    let (date, time) = body.split_once('T')?;
-    let mut date_parts = date.split('-');
-    let year = date_parts.next()?.parse::<i32>().ok()?;
-    let month = date_parts.next()?.parse::<u32>().ok()?;
-    let day = date_parts.next()?.parse::<u32>().ok()?;
-    if date_parts.next().is_some() {
-        return None;
-    }
-
-    let mut time_parts = time.split(':');
-    let hour = time_parts.next()?.parse::<u32>().ok()?;
-    let minute = time_parts.next()?.parse::<u32>().ok()?;
-    let second_part = time_parts.next()?;
-    if time_parts.next().is_some() {
-        return None;
-    }
-    let (second, milli) = match second_part.split_once('.') {
-        Some((second, milli)) => {
-            let mut ms = milli.chars().take(3).collect::<String>();
-            while ms.len() < 3 {
-                ms.push('0');
-            }
-            (second.parse::<u32>().ok()?, ms.parse::<u32>().ok()?)
-        }
-        None => (second_part.parse::<u32>().ok()?, 0),
+fn parse_timestamp(text: &str) -> Option<f64> {
+    let (date, time) = match text.split_once('T') {
+        Some((date, time)) => (date, Some(time)),
+        None => (text, None),
     };
-    if !(1..=12).contains(&month)
-        || !(1..=31).contains(&day)
-        || hour > 23
-        || minute > 59
-        || second > 59
-    {
+    let (year, month, day) = parse_date_fields(date)?;
+    let time_millis = match time {
+        Some(time) => parse_time_with_offset(time)?,
+        None => 0,
+    };
+    Some((days_from_civil(year, month, day) * MS_PER_DAY + time_millis) as f64)
+}
+
+/// Strict `YYYY-MM-DD` with calendar-aware day validation.
+fn parse_date_fields(text: &str) -> Option<(i32, u32, u32)> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
         return None;
     }
-    let days = days_from_civil(year, month, day);
-    let millis = days * MS_PER_DAY
-        + i64::from(hour) * 3_600_000
-        + i64::from(minute) * 60_000
-        + i64::from(second) * 1_000
-        + i64::from(milli);
-    Some(millis as f64)
+    let year = parse_digits(&text[0..4])? as i32;
+    let month = parse_digits(&text[5..7])? as u32;
+    let day = parse_digits(&text[8..10])? as u32;
+    if !(1..=12).contains(&month) || day < 1 || day > days_in_month(year, month) {
+        return None;
+    }
+    Some((year, month, day))
+}
+
+/// Strict `HH:mm:ss(.s{1,3})?` followed by `Z` or `±HH:MM`; returns the UTC
+/// millisecond offset from midnight of the date part (negative offsets from
+/// positive timezones included).
+fn parse_time_with_offset(text: &str) -> Option<i64> {
+    let (time, offset_millis) = if let Some(time) = text.strip_suffix('Z') {
+        (time, 0_i64)
+    } else {
+        let split_at = text.len().checked_sub(6)?;
+        let offset = text.get(split_at..)?;
+        let sign = match offset.as_bytes()[0] {
+            b'+' => 1_i64,
+            b'-' => -1_i64,
+            _ => return None,
+        };
+        if offset.as_bytes()[3] != b':' {
+            return None;
+        }
+        let hours = parse_digits(&offset[1..3])? as i64;
+        let minutes = parse_digits(&offset[4..6])? as i64;
+        if hours > 23 || minutes > 59 {
+            return None;
+        }
+        (
+            &text[..split_at],
+            sign * (hours * 3_600_000 + minutes * 60_000),
+        )
+    };
+
+    let bytes = time.as_bytes();
+    if bytes.len() < 8 || bytes[2] != b':' || bytes[5] != b':' {
+        return None;
+    }
+    let hour = parse_digits(&time[0..2])? as i64;
+    let minute = parse_digits(&time[3..5])? as i64;
+    let second = parse_digits(&time[6..8])? as i64;
+    let milli = match &time[8..] {
+        "" => 0_i64,
+        fraction => {
+            let digits = fraction.strip_prefix('.')?;
+            if digits.is_empty() || digits.len() > 3 {
+                return None;
+            }
+            let mut padded = digits.to_string();
+            while padded.len() < 3 {
+                padded.push('0');
+            }
+            parse_digits(&padded)? as i64
+        }
+    };
+    if hour > 23 || minute > 59 || second > 59 {
+        return None;
+    }
+    Some(hour * 3_600_000 + minute * 60_000 + second * 1_000 + milli - offset_millis)
+}
+
+fn parse_digits(text: &str) -> Option<u64> {
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    text.parse::<u64>().ok()
+}
+
+fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        _ => {
+            if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
+                29
+            } else {
+                28
+            }
+        }
+    }
 }
 
 fn days_from_civil(year: i32, month: u32, day: u32) -> i64 {

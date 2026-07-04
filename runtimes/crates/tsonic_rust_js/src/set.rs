@@ -88,6 +88,93 @@ impl<T> JsSet<T> {
             callback(value, value, self);
         }
     }
+
+    /// JS `Set.prototype.union`: this set's values in insertion order, then
+    /// the other set's values not already present.
+    pub fn union(&self, other: &Self) -> Self
+    where
+        T: Clone + JsSameValueZero,
+    {
+        let mut out = self.clone();
+        for value in &other.values {
+            out.add(value.clone());
+        }
+        out
+    }
+
+    /// JS `Set.prototype.intersection`: this set's values (insertion order)
+    /// that are also in `other`.
+    pub fn intersection(&self, other: &Self) -> Self
+    where
+        T: Clone + JsSameValueZero,
+    {
+        let mut out = Self::new();
+        for value in &self.values {
+            if other.has(value) {
+                out.add(value.clone());
+            }
+        }
+        out
+    }
+
+    /// JS `Set.prototype.difference`: this set's values (insertion order)
+    /// that are not in `other`.
+    pub fn difference(&self, other: &Self) -> Self
+    where
+        T: Clone + JsSameValueZero,
+    {
+        let mut out = Self::new();
+        for value in &self.values {
+            if !other.has(value) {
+                out.add(value.clone());
+            }
+        }
+        out
+    }
+
+    /// JS `Set.prototype.symmetricDifference`: this set's values not in
+    /// `other` (insertion order), then `other`'s values not in this set.
+    pub fn symmetric_difference(&self, other: &Self) -> Self
+    where
+        T: Clone + JsSameValueZero,
+    {
+        let mut out = Self::new();
+        for value in &self.values {
+            if !other.has(value) {
+                out.add(value.clone());
+            }
+        }
+        for value in &other.values {
+            if !self.has(value) {
+                out.add(value.clone());
+            }
+        }
+        out
+    }
+
+    /// JS `Set.prototype.isSubsetOf`.
+    pub fn is_subset_of(&self, other: &Self) -> bool
+    where
+        T: JsSameValueZero,
+    {
+        self.values.iter().all(|value| other.has(value))
+    }
+
+    /// JS `Set.prototype.isSupersetOf`.
+    pub fn is_superset_of(&self, other: &Self) -> bool
+    where
+        T: JsSameValueZero,
+    {
+        other.is_subset_of(self)
+    }
+
+    /// JS `Set.prototype.isDisjointFrom`.
+    pub fn is_disjoint_from(&self, other: &Self) -> bool
+    where
+        T: JsSameValueZero,
+    {
+        !self.values.iter().any(|value| other.has(value))
+    }
 }
 
 impl<T> Default for JsSet<T> {
