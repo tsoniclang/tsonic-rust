@@ -531,16 +531,18 @@ function planProviderOperationExpression(
       const receiverArg: RustExpr = form.receiverMode === "ref" ? refShape(context, receiver, receiverNode) : receiver;
       const ordered = form.argOrder === undefined ? args : form.argOrder.map((index) => args[index]).filter((argument): argument is RustExpr => argument !== undefined);
       const shapedArgs = ordered.map((argument, index): RustExpr => {
+        const cast = form.argCasts?.[index];
+        const casted: RustExpr = cast === undefined ? argument : { kind: "cast", expr: argument, to: cast };
         if ((form.argModes?.[index] ?? "value") !== "ref") {
-          return argument;
+          return casted;
         }
-        if (argument.kind === "string-literal") {
-          return { kind: "str-literal", value: argument.value };
+        if (casted.kind === "string-literal") {
+          return { kind: "str-literal", value: casted.value };
         }
-        if (argument.kind === "vec-literal") {
-          return { kind: "reference", expr: { kind: "slice-literal", elements: argument.elements } };
+        if (casted.kind === "vec-literal") {
+          return { kind: "reference", expr: { kind: "slice-literal", elements: casted.elements } };
         }
-        return { kind: "reference", expr: argument };
+        return { kind: "reference", expr: casted };
       });
       const trailing = (form.trailingArgs ?? []).map((text): RustExpr => ({ kind: "path", path: text }));
       return { kind: "call", path: form.path, args: [receiverArg, ...shapedArgs, ...trailing] };

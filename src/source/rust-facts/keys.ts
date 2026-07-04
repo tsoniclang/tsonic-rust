@@ -52,6 +52,7 @@ export type RustProviderOperationForm =
       readonly path: string;
       readonly receiverMode: RustArgumentMode;
       readonly argModes?: readonly RustArgumentMode[];
+      readonly argCasts?: readonly (string | undefined)[];
       readonly trailingArgs?: readonly string[];
       readonly argOrder?: readonly number[];
     }

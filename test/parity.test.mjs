@@ -200,6 +200,13 @@ export function main(): void {
     check(pretty.includes("\\n"));
     check(Date.parse("2026-07-03") > 0);
     check(Date.UTC(2026, 0, 1, 0, 0, 0, 0) > 0);
+    const padded = "7".padStart(3, "0");
+    check(padded === "007");
+    check("abc".charAt(1) === "b");
+    check(("abc".at(2) ?? "") === "c");
+    check("hello".indexOf("ll") === 2);
+    check("x".padEnd(2, "!") === "x!");
+    check("  y  ".trimStart().trimEnd() === "y");
     const swapped = "john smith".replace(/(\\w+) (\\w+)/, "$2 $1");
     check(swapped === "smith john");
     ok = true;

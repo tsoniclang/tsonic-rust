@@ -1,19 +1,25 @@
-# C# parity inventory
+# JS/Node lane inventory relative to the C# target surface
 
-Classification of every JS/Node lane relative to the C# target. Each lane
-is exactly one of: implemented (positive runtime proof in the generated
-Cargo bank), hard-rejected (architecture; zero-artifact proof), or blocked
-by a named external contract (exact repro pinned in tests).
+Classification of JS/Node lanes reviewed against the C# target surface.
+The machine-checked list lives in docs/parity-lanes.json; every listed
+lane carries exactly one classification — implemented (positive runtime
+proof in the generated Cargo bank), hard-rejected (architecture;
+zero-artifact proof), or blocked by a named contract — and the guard test
+keeps this document and the lane list from drifting. C# lanes without
+Rust rows (Object helpers, Number helpers, console, node:assert, bare
+module aliases, Date extras, process and buffer extras) are enumerated in
+the blocked section with the contract each requires.
 
 ## Implemented
 
-- Array: literals, index/at, length, push, includes, indexOf, join, map,
+- Array: literals, index/at, length, push, includes, indexOf, map,
   filter, reduce, some, every, find, findIndex, findLast, findLastIndex;
   sparse lane via JsArray.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
-  endsWith, indexOf, slice, at, charAt, codePointAt, padStart, padEnd,
-  repeat, trim, trimStart, trimEnd, concat via +, split, replace, search,
-  match, matchAll (constant patterns).
+  endsWith, indexOf, at, charAt, padStart, padEnd, trim, trimStart,
+  trimEnd, concat via +, split, replace, search,
+  match; String.matchAll call and fallibility lowering for constant
+  patterns (consuming the returned match list is a blocked lane below).
 - RegExp: constant literals and new RegExp with literal arguments over the
   oracle-proven subset; test, replace, split, search, global match with
   null coalescing; regexp property reads.
@@ -47,15 +53,40 @@ by a named external contract (exact repro pinned in tests).
 
 ## Blocked by named external contracts
 
-- Discriminated-union narrowing: requires public TSTS narrowing facts
+- discriminated object unions (narrowing): requires public TSTS narrowing
+  facts
   (repro pinned in test/r8-completion.test.mjs).
-- Locale string operations, normalization: requires an ICU contract.
+- localeCompare, locale case conversion, normalization: requires an ICU
+  contract.
 - Local-timezone Date lanes: requires a tzdata contract.
-- Streams, fs.watch, event subscriptions: requires stream/event carrier
+- streams and fs.watch, event subscriptions: requires stream and event
+  carrier
   contracts.
 - Fixed-size arrays beyond homogeneous tuples: requires source-core
   length facts.
 - RegExp exec and non-global match result consumption (the match-result
   carrier and its member rows exist): requires optional-chaining or
   option-narrowing lanes for nullable object results.
-- String.matchAll consumption: requires iterator carrier lanes.
+- String.matchAll result consumption: requires iterator carrier lanes
+  (the call and fallibility lowering are implemented).
+- Object.keys/values/entries, Object.assign, Object.hasOwn, Object.is:
+  requires closed-shape reflection rows over the JsValue carrier.
+- Array.prototype.join: requires a separator-join row in the js runtime.
+- String.prototype.slice: requires an optional-end slice row contract.
+- String.prototype.codePointAt: requires a code-point numeric carrier row.
+- String.prototype.repeat: requires a fallible repeat row (range errors).
+- Number.isNaN, Number.isFinite, Number.isInteger, Number.isSafeInteger:
+  requires Number predicate rows in the js runtime.
+- Number.parseInt/parseFloat, isNaN/isFinite/isInteger/isSafeInteger,
+  toFixed and formatting: requires numeric parsing, predicate, and
+  formatting rows in the js runtime.
+- console.log/error/warn/info: requires a console/stdio carrier contract.
+- Date UTC setters, remaining string methods, and local-time getters and
+  setters:
+  requires date-mutation and tzdata contracts.
+- node:assert: requires an assertion-failure error-mapping contract.
+- bare module aliases (fs as an alias of node:fs): requires a
+  module-alias ownership contract.
+- process extras (argv0, hrtime, memoryUsage, stdio) and buffer extras
+  (copy, slice views, swap, typed reads): requires process-runtime and
+  byte-view carrier contracts.
