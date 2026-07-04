@@ -1058,7 +1058,7 @@ function resolveCallLikeCarrier(
         appendRegExpDiagnostic(walk, "dynamic pattern or flags");
         return undefined;
       }
-      const literal = (node: Node | undefined): string => node === undefined ? "" : JSON.parse(ast.text(node)) as string;
+      const literal = (node: Node | undefined): string => node === undefined ? "" : ast.text(node);
       return resolveRegExpCreation(walk, expression, literal(patternNode), literal(flagsNode));
     }
   }

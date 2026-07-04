@@ -121,6 +121,20 @@ export function scrub(text: string): int32 {
   assert.match(text, /\.split\(&joined\)\?/u);
   assert.match(text, /\.search\(&joined\)/u);
   assert.match(text, /spaces\.test\(&text\)/u);
+
+  const constructed = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function probe(text: string): boolean {
+  const pattern = new RegExp("\\\\d+", "g");
+  return pattern.test(text);
+}
+`,
+    },
+  });
+  assert.deepEqual(constructed.result.diagnostics, []);
+  assert.match(artifactText(constructed.result, "src/index.rs"), /js_abi::JsRegExp::new\("\\\\d\+", "g"\)\?/u);
 });
 
 test("RegExp constructs outside the oracle subset fail closed", async () => {
@@ -166,6 +180,9 @@ export function main(): void {
     check((parts[0] ?? "") === "a");
     check("hello world".search(/world/) === 6);
     check("hello".search(/z/) === -1);
+    const digits = new RegExp("\\\\d+", "g");
+    check(digits.test("a1b2"));
+    check(!digits.test("abc"));
     const swapped = "john smith".replace(/(\\w+) (\\w+)/, "$2 $1");
     check(swapped === "smith john");
     ok = true;
@@ -182,13 +199,13 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("grand proof: js surface, node, third-party, async, JSON, RegExp, multi-module", { timeout: 300_000 }, async () => {
+test("grand proof: js surface, node, third-party, async, JSON, RegExp, multi-module in one binary", { timeout: 300_000 }, async () => {
   const { nodejsCapability, acmeSuperbunapiCapability } = await import("./helpers/rust-session.mjs");
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
     packages: [acmeSuperbunapiCapability(), acmeTestingPackage()],
-    target: { id: "rust", options: { outputType: "bin", crateName: "r11_grand_proof" } },
+    target: { id: "rust", options: { outputType: "bin", crateName: "grand_proof" } },
     files: {
       "text.ts": `
 export function slug(value: string): string {
@@ -217,9 +234,9 @@ export function main(): void {
     check(slug("Grand  Proof") === "grand-proof");
     check(serve(4000) === "superbunapi:4000");
     check(platform.length > 0);
-    const value = JSON.parse("{\\"tag\\": \\"r11\\"}");
+    const value = JSON.parse("{\\"tag\\": \\"tsonic\\"}");
     const rendered = JSON.stringify(value);
-    check(rendered.includes("r11"));
+    check(rendered.includes("tsonic"));
     check(Math.floor(11.9) === 11);
     const xs: int32[] = [1, 2, 3];
     const doubled = xs.map((x) => x * 2);
@@ -234,6 +251,6 @@ export function main(): void {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  const run = validateGeneratedProject("r11-grand-proof-bin", result.artifacts, { run: true });
+  const run = validateGeneratedProject("grand-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

@@ -75,8 +75,8 @@ object unions (narrowing facts — see the exact repro pinned in
 `test/r8-completion.test.mjs`), and RegExp constructs outside the
 oracle-proven subset (constant patterns with classes, quantifiers,
 anchors, alternation, and groups under flags i/g/m are implemented
-against 146 committed Node oracle vectors — see rust-js
-docs/parity-delta-r11.md; lazy quantifiers, backreferences, lookaround,
+against 146 committed Node oracle vectors — see the rust-js
+JS parity inventory (docs/js-parity.md); lazy quantifiers, backreferences, lookaround,
 named groups, word boundaries, and dynamic patterns reject
 deterministically). Every unsupported lane diagnoses
 deterministically; see `test/capability-ledger.test.mjs`.
