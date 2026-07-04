@@ -32,10 +32,11 @@ export function printRustItem(item: RustItem): string {
       return `${item.pub ? "pub " : ""}const ${item.name}: ${printRustType(item.type)} = ${printRustExpr(item.value)};`;
     }
     case "struct": {
+      const structAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
-      const header = `${derives}${item.pub ? "pub " : ""}struct ${item.name} {`;
+      const header = `${structAttrs}${derives}${item.pub ? "pub " : ""}struct ${item.name} {`;
       const fields = item.fields.map((field) => `    pub ${field.name}: ${printRustType(field.type)},`).join("\n");
-      return fields.length === 0 ? `${derives}${item.pub ? "pub " : ""}struct ${item.name};` : `${header}\n${fields}\n}`;
+      return fields.length === 0 ? `${structAttrs}${derives}${item.pub ? "pub " : ""}struct ${item.name};` : `${header}\n${fields}\n}`;
     }
     case "enum": {
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
@@ -52,7 +53,8 @@ export function printRustItem(item: RustItem): string {
         const returnSuffix = fn.fallible === true
           ? ` -> rt::TsonicResult<${fn.returnType === undefined ? "()" : printRustType(fn.returnType)}>`
           : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
-        const header = `    ${fn.pub ? "pub " : ""}fn ${fn.name}(${allParams})${returnSuffix} {`;
+        const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
+        const header = `${fnAttrs}    ${fn.pub ? "pub " : ""}fn ${fn.name}(${allParams})${returnSuffix} {`;
         const body = printRustBlockStatements(fn.body, 2);
         return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
       }).join("\n\n");
@@ -64,7 +66,8 @@ export function printRustItem(item: RustItem): string {
       const returnSuffix = item.fallible === true
         ? ` -> rt::TsonicResult<${item.returnType === undefined ? "()" : printRustType(item.returnType)}>`
         : item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
-      const header = `${item.pub ? "pub " : ""}${item.isAsync === true ? "async " : ""}fn ${item.name}${generics}(${params})${returnSuffix} {`;
+      const attrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
+      const header = `${attrs}${item.pub ? "pub " : ""}${item.isAsync === true ? "async " : ""}fn ${item.name}${generics}(${params})${returnSuffix} {`;
       const body = printRustBlockStatements(item.body, 1);
       return body.length === 0 ? `${header}}` : `${header}\n${body}\n}`;
     }

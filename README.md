@@ -35,7 +35,9 @@ and mutable array parameters as `&mut [T]`, null-only unions as `Option<T>`
 with `??` coalescing, passthrough generic functions, source-core
 `borrow`/`borrowMut`/`move` flow markers validated against finalized
 argument modes, async/await with await-only future discipline, a
-deterministic snake_case naming policy with collision diagnostics, and the
+public naming policy that preserves authored exported names with scoped
+lint allowances (locals and parameters take snake_case; provider and
+library identity is always row metadata emitted verbatim), and the
 error model: throwing functions lower to TsonicResult with transitive
 fallibility, `throw new Error(message)` becomes an Err return, try/catch
 lowers to a Result closure boundary, and fallible calls propagate with `?`

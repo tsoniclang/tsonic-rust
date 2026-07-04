@@ -1,3 +1,4 @@
+import { rustProviderOperationsMappersOf } from "../source/provider-packages/index.js";
 import { createExtensionConsumerQueries, runtimeCarrierFactKey } from "@tsonic/tsts";
 import type { CompilerSession, ExtensionHost, Node, SourceFile } from "@tsonic/tsts";
 import type {
@@ -129,15 +130,11 @@ export function createRustCompileInputFromSession(options: RustCompileInputOptio
   };
   const capabilityAliasImports = new Map();
   const capabilityCarrierPaths = {};
-  for (const capability of options.selectedCapabilities ?? []) {
-    const contributor = capability as {
-      rustAliasImports?(): readonly { readonly alias: string; readonly path: string }[];
-      rustCarrierPaths?(): Readonly<Record<string, string>>;
-    };
-    for (const entry of contributor.rustAliasImports?.() ?? []) {
+  for (const mapper of rustProviderOperationsMappersOf(options.selectedCapabilities ?? [])) {
+    for (const entry of mapper.aliasImports) {
       capabilityAliasImports.set(entry.alias, { path: entry.path, alias: entry.alias });
     }
-    Object.assign(capabilityCarrierPaths, contributor.rustCarrierPaths?.() ?? {});
+    Object.assign(capabilityCarrierPaths, mapper.carrierPaths);
   }
   const capabilityCrateNames = new Set<string>();
   for (const capability of options.selectedCapabilities ?? []) {

@@ -8,7 +8,7 @@ import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustMutatedBindingFactKey } from "../../source/rust-facts/keys.js";
@@ -26,7 +26,11 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
   }
   const nameNode = Node_Name(node);
   const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const name = rustLocalBindingName(sourceName);
+  const isExported = ast.hasModifierKind(node, "export");
+  // Public naming policy: exported names are preserved verbatim; private
+  // helpers keep snake_case.
+  const publicName = rustPublicName(sourceName);
+  const name = isExported ? publicName.name : rustLocalBindingName(sourceName);
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -120,7 +124,8 @@ export function planFunctionDeclaration(node: Node, context: RustPlanContext): R
   return {
     kind: "function",
     name,
-    pub: ast.hasModifierKind(node, "export"),
+    pub: isExported,
+    ...(isExported && publicName.needsAllow ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(isAsync ? { isAsync: true } : {}),
     ...(fallible ? { fallible: true } : {}),
     ...(typeParams.length === 0 ? {} : { typeParams }),

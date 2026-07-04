@@ -14,10 +14,15 @@
 //! construct. Acceptance of the supported subset is proven against Node's
 //! engine by the committed oracle vectors in `tests/oracle/`.
 //!
-//! Known deviation: `replace` (with `g`), `split`, `match_strings`, and
-//! `match_all` advance by one Unicode scalar value after an empty match,
-//! where JS advances by one UTF-16 code unit; this differs only for
-//! astral-plane (non-BMP) chars.
+//! The accepted subset is exact. The one construct/input combination that
+//! cannot be represented is empty-match iteration over astral input: after an
+//! empty match JS advances by one UTF-16 code unit, which can land inside a
+//! surrogate pair — a position a Rust `String` cannot express. The iterating
+//! operations (`replace` with `g`, `split`, `match_strings`, `match_all`)
+//! therefore reject deterministically with an `Unsupported` error when the
+//! pattern is nullable (can match the empty string) and the input contains
+//! astral (non-BMP) chars. Non-nullable patterns over astral input and
+//! nullable patterns over BMP input keep exact oracle-proven behavior.
 
 mod parser;
 mod vm;
@@ -75,6 +80,7 @@ pub struct JsRegExp {
     ignore_case: bool,
     multiline: bool,
     last_index: i32,
+    nullable: bool,
     program: vm::Program,
 }
 
@@ -84,6 +90,7 @@ impl JsRegExp {
     pub fn new(pattern: &str, flags: &str) -> JsResult<Self> {
         let parsed_flags = parser::parse_flags(flags)?;
         let parsed = parser::parse_pattern(pattern)?;
+        let nullable = parser::is_nullable(&parsed.ast);
         let program = vm::compile(&parsed);
         Ok(Self {
             source: pattern.to_string(),
@@ -92,6 +99,7 @@ impl JsRegExp {
             ignore_case: parsed_flags.ignore_case,
             multiline: parsed_flags.multiline,
             last_index: 0,
+            nullable,
             program,
         })
     }
@@ -174,7 +182,9 @@ impl JsRegExp {
 
     /// Mirrors `String.prototype.match` with the `g` flag: the texts of all
     /// matches, or `None` when there is no match (JS `null`). Stateless.
-    pub fn match_strings(&self, input: &str) -> Option<Vec<String>> {
+    /// Rejects nullable patterns over astral input (see the module docs).
+    pub fn match_strings(&self, input: &str) -> JsResult<Option<Vec<String>>> {
+        self.check_empty_match_iteration(input)?;
         let chars: Vec<char> = input.chars().collect();
         let texts: Vec<String> = self
             .collect_matches(&chars)
@@ -184,11 +194,7 @@ impl JsRegExp {
                 chars[start..end].iter().collect()
             })
             .collect();
-        if texts.is_empty() {
-            None
-        } else {
-            Some(texts)
-        }
+        Ok(if texts.is_empty() { None } else { Some(texts) })
     }
 
     /// Mirrors `String.prototype.matchAll`: `TypeError` when the regexp lacks
@@ -199,6 +205,7 @@ impl JsRegExp {
                 "String.prototype.matchAll called with a non-global RegExp argument",
             ));
         }
+        self.check_empty_match_iteration(input)?;
         let chars: Vec<char> = input.chars().collect();
         Ok(self
             .collect_matches(&chars)
@@ -208,7 +215,9 @@ impl JsRegExp {
     }
 
     /// All non-overlapping matches from the start, advancing past empty
-    /// matches by one char (same astral-plane deviation as `replace`).
+    /// matches by one char. Callers guard the nullable-pattern/astral-input
+    /// combination via `check_empty_match_iteration`, so advancing by one
+    /// char here is exactly JS's one UTF-16 code unit.
     fn collect_matches(&self, chars: &[char]) -> Vec<Vec<Option<usize>>> {
         let mut out = Vec::new();
         let mut from = 0_usize;
@@ -223,11 +232,12 @@ impl JsRegExp {
         out
     }
 
-    /// Mirrors `RegExp.prototype.test` (stateless: always searches from the
-    /// start of `input`).
-    pub fn test(&self, input: &str) -> bool {
-        let chars: Vec<char> = input.chars().collect();
-        self.find_from(&chars, 0).is_some()
+    /// Mirrors `RegExp.prototype.test`, which delegates to `exec`: with the
+    /// `g` flag the search starts at `lastIndex`, which advances to the match
+    /// end (UTF-16 code units) on success and resets to 0 on failure; without
+    /// `g` the call is stateless and ignores `lastIndex`.
+    pub fn test(&mut self, input: &str) -> bool {
+        self.exec(input).is_some()
     }
 
     /// Byte offsets `(start, end)` of the first match in `input`.
@@ -254,8 +264,13 @@ impl JsRegExp {
 
     /// Mirrors `String.prototype.replace(regexp, replacement)` with a string
     /// replacement: first match only unless the `g` flag is set. Supports the
-    /// substitutions `$$`, `$&`, `` $` ``, `$'` and `$1`..`$99`.
-    pub fn replace(&self, input: &str, replacement: &str) -> String {
+    /// substitutions `$$`, `$&`, `` $` ``, `$'` and `$1`..`$99`. With `g` it
+    /// rejects nullable patterns over astral input (see the module docs); a
+    /// non-`g` replace never iterates empty matches and is always `Ok`.
+    pub fn replace(&self, input: &str, replacement: &str) -> JsResult<String> {
+        if self.global {
+            self.check_empty_match_iteration(input)?;
+        }
         let chars: Vec<char> = input.chars().collect();
         let mut out = String::new();
         let mut last = 0_usize;
@@ -274,7 +289,7 @@ impl JsRegExp {
             }
         }
         out.extend(&chars[last..]);
-        out
+        Ok(out)
     }
 
     /// Mirrors `String.prototype.split(regexp)` without a limit argument,
@@ -287,6 +302,7 @@ impl JsRegExp {
                 "split with capturing groups is not supported; use a non-capturing group `(?:...)`",
             ));
         }
+        self.check_empty_match_iteration(input)?;
         let chars: Vec<char> = input.chars().collect();
         let size = chars.len();
         if size == 0 {
@@ -333,6 +349,20 @@ impl JsRegExp {
 
     fn program_groups(&self) -> usize {
         self.program.group_count
+    }
+
+    /// Fail-closed guard for the iterating operations: a nullable pattern
+    /// (one that can match the empty string) over astral input would require
+    /// advancing one UTF-16 code unit past an empty match — a mid-surrogate
+    /// position no Rust `String` can express — so it is rejected up front
+    /// instead of diverging from JS.
+    fn check_empty_match_iteration(&self, input: &str) -> JsResult<()> {
+        if self.nullable && input.chars().any(|value| value > '\u{ffff}') {
+            return Err(unsupported(
+                "empty-match iteration over astral input diverges from UTF-16 semantics",
+            ));
+        }
+        Ok(())
     }
 
     fn exec_anchored(&self, chars: &[char], at: usize) -> Option<Vec<Option<usize>>> {

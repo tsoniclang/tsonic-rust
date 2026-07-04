@@ -159,7 +159,7 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "RegExpExecArray", member: "index", operationKind: "indexer", lane: "regexp-match", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "group", argModes: ["value"], argCasts: ["usize"] }, result: { ref: "option-of-string" }, params: [{ ref: "int32" }] } },
 
   // RegExp lane: constant, compile-validated, oracle-proven subset.
-  { owner: "RegExp", member: "test", operationKind: "call", lane: "regexp", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "test", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+  { owner: "RegExp", member: "test", operationKind: "call", lane: "regexp", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "test", argModes: ["ref"], mutatesReceiver: true }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
   { owner: "RegExp", member: "exec", operationKind: "call", lane: "regexp", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "exec", argModes: ["ref"], mutatesReceiver: true }, result: { ref: "option-of-regexp-match" }, params: [{ ref: "string" }] } },
   { owner: "RegExp", member: "source", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "source" }, result: { ref: "string" } } },
   { owner: "RegExp", member: "flags", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "flags" }, result: { ref: "string" } } },
@@ -168,7 +168,7 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "RegExp", member: "multiline", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "multiline" }, result: { ref: "bool" } } },
   { owner: "RegExp", member: "lastIndex", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "last_index" }, result: { ref: "float64" }, castResult: "f64" } },
   { owner: "String", member: "matchAll", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "match_all", argModes: ["ref"] }, result: { ref: "regexp-match-vec" }, params: [undefined] } },
-  { owner: "String", member: "replace", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [undefined, { ref: "string" }] } },
+  { owner: "String", member: "replace", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [undefined, { ref: "string" }] } },
   { owner: "String", member: "search", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "search", argModes: ["ref"] }, result: { ref: "int32" }, params: [undefined] } },
   { owner: "String", member: "split", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "split", argModes: ["ref"] }, result: { ref: "string-vec" }, params: [undefined] } },
 
@@ -458,6 +458,7 @@ function isPrimitiveLaneCarrier(carrier: TargetTypeRef): boolean {
 
 // Fallibility pre-pass query: does any row for this lib member declare a
 // fallible operation?
-export function jsOperationMayBeFallible(ownerName: string, memberName: string): boolean {
-  return jsOperationRows.some((row) => row.owner === ownerName && row.member === memberName && row.fallible === true);
+export function jsOperationMayBeFallible(ownerName: string, memberName: string, hasRegExpFirstArgument: boolean): boolean {
+  return jsOperationRows.some((row) => row.owner === ownerName && row.member === memberName && row.fallible === true &&
+    (row.firstArgCarrierId !== "rust.js.JsRegExp" || hasRegExpFirstArgument));
 }

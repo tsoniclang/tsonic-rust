@@ -21,7 +21,7 @@ import type {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
@@ -76,7 +76,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         failed = true;
         continue;
       }
-      const fieldName = rustLocalBindingName(ast.text(ast.name(member) ?? member));
+      const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
       const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
       if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -142,6 +142,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const structItem: RustItem = {
     kind: "struct",
     name: className,
+    ...(fields.some((field) => rustPublicName(field.name).needsAllow) ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     pub: ast.hasModifierKind(node, "export"),
     derives,
     fields,
@@ -203,7 +204,7 @@ function planConstructor(
     const receiver = left === undefined ? undefined : Node_Expression(left);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
     const fieldNameNode = left === undefined ? undefined : Node_Name(left);
-    const fieldName = fieldNameNode === undefined ? "" : rustLocalBindingName(ast.text(fieldNameNode));
+    const fieldName = fieldNameNode === undefined ? "" : rustPublicName(ast.text(fieldNameNode)).name;
     const isFieldInit =
       expression !== undefined &&
       operatorToken !== undefined &&
@@ -266,7 +267,7 @@ function buildStructLiteral(
 
 function planMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
   const { ast } = context.input;
-  const methodName = rustLocalBindingName(ast.text(ast.name(member) ?? member));
+  const methodName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
   if (!isValidRustIdentifier(methodName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -312,6 +313,7 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   return {
     name: methodName,
     pub: true,
+    ...(rustPublicName(ast.text(ast.name(member) ?? member)).needsAllow ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(fallible ? { fallible: true } : {}),
     ...(isStatic ? {} : {
       selfParam: (context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref") as import("../rust-ast/nodes.js").RustSelfParam,
@@ -413,7 +415,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    const fieldName = rustLocalBindingName(ast.text(ast.name(member) ?? member));
+    const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
     const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
     if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -429,6 +431,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   return [{
     kind: "struct",
     name: interfaceName,
+    ...(fields.some((field) => rustPublicName(field.name).needsAllow) ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     pub: ast.hasModifierKind(node, "export"),
     derives: allFieldsCopy ? ["Clone", "Copy", "Debug", "PartialEq"] : ["Clone", "Debug", "PartialEq"],
     fields,

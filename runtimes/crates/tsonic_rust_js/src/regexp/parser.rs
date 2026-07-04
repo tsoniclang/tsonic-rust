@@ -81,6 +81,22 @@ pub(crate) fn parse_flags(flags: &str) -> JsResult<ParsedFlags> {
     Ok(parsed)
 }
 
+/// Whether the pattern can match the empty string at some position (e.g.
+/// `a*`, `x?`, `a{0,2}`, an empty alternation branch, or a bare anchor).
+/// Anchors consume nothing, so they count as nullable. Nullable patterns are
+/// exactly the ones whose iterating callers can hit JS's advance-by-one-UTF-16
+/// -code-unit rule after an empty match.
+pub(crate) fn is_nullable(ast: &Ast) -> bool {
+    match ast {
+        Ast::Alternation(branches) => branches.iter().any(is_nullable),
+        Ast::Concat(items) => items.iter().all(is_nullable),
+        Ast::Char(_) | Ast::Dot | Ast::Class(_) => false,
+        Ast::Group { body, .. } => is_nullable(body),
+        Ast::Repeat { body, min, .. } => *min == 0 || is_nullable(body),
+        Ast::AnchorStart | Ast::AnchorEnd => true,
+    }
+}
+
 pub(crate) fn parse_pattern(pattern: &str) -> JsResult<ParsedPattern> {
     let mut parser = Parser {
         chars: pattern.chars().collect(),

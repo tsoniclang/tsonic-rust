@@ -71,14 +71,19 @@ export interface RustProviderPackageDefinition {
   readonly carrierPaths?: Readonly<Record<string, string>>;
 }
 
-export interface RustProviderOperationContributor {
-  rustProviderOperations(): readonly RustProviderOperationRow[];
-  rustAliasImports?(): readonly { readonly alias: string; readonly path: string }[];
-  rustCarrierPaths?(): Readonly<Record<string, string>>;
+// Rust payload for the standard target-capability operation-mapper hook.
+// The host owns only the generic hook (createOperationMappers); this target
+// owns the payload schema and reads it by kind.
+export const rustProviderOperationsMapperKind = "rust-provider-operations";
+
+export interface RustProviderOperationsMapper {
+  readonly kind: typeof rustProviderOperationsMapperKind;
+  readonly operations: readonly RustProviderOperationRow[];
+  readonly aliasImports: readonly { readonly alias: string; readonly path: string }[];
+  readonly carrierPaths: Readonly<Record<string, string>>;
 }
 
-export type RustProviderPackageImplementation =
-  TargetCapabilityImplementation & RustProviderOperationContributor;
+export type RustProviderPackageImplementation = TargetCapabilityImplementation;
 
 export function createRustProviderPackage(definition: RustProviderPackageDefinition): RustProviderPackageImplementation {
   validateProviderPackageDefinition(definition);
@@ -101,34 +106,39 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
         })),
       };
     },
-    rustProviderOperations(): readonly RustProviderOperationRow[] {
-      return definition.operations;
-    },
-    rustAliasImports() {
-      return definition.aliasImports ?? [];
-    },
-    rustCarrierPaths() {
-      return definition.carrierPaths ?? {};
+    createOperationMappers(): readonly RustProviderOperationsMapper[] {
+      return [{
+        kind: rustProviderOperationsMapperKind,
+        operations: definition.operations,
+        aliasImports: definition.aliasImports ?? [],
+        carrierPaths: definition.carrierPaths ?? {},
+      }];
     },
   };
 }
 
-export function isRustProviderOperationContributor(
-  value: object,
-): value is RustProviderOperationContributor {
-  return typeof (value as { rustProviderOperations?: unknown }).rustProviderOperations === "function";
+export function rustProviderOperationsMappersOf(
+  selectedCapabilities: readonly object[],
+): readonly RustProviderOperationsMapper[] {
+  const mappers: RustProviderOperationsMapper[] = [];
+  for (const capability of selectedCapabilities) {
+    const createMappers = (capability as { createOperationMappers?(context: object): readonly { kind: string }[] }).createOperationMappers;
+    if (typeof createMappers !== "function") {
+      continue;
+    }
+    for (const mapper of createMappers.call(capability, {})) {
+      if (mapper.kind === rustProviderOperationsMapperKind) {
+        mappers.push(mapper as RustProviderOperationsMapper);
+      }
+    }
+  }
+  return mappers;
 }
 
 export function collectRustProviderOperationRows(
   selectedCapabilities: readonly object[],
 ): readonly RustProviderOperationRow[] {
-  const rows: RustProviderOperationRow[] = [];
-  for (const selectedPackage of selectedCapabilities) {
-    if (isRustProviderOperationContributor(selectedPackage)) {
-      rows.push(...selectedPackage.rustProviderOperations());
-    }
-  }
-  return rows;
+  return rustProviderOperationsMappersOf(selectedCapabilities).flatMap((mapper) => mapper.operations);
 }
 
 function createRustProviderPackageBindingExtension(definition: RustProviderPackageDefinition): CompilerExtension {

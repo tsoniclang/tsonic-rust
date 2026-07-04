@@ -181,8 +181,13 @@ export function main(): void {
     check("hello world".search(/world/) === 6);
     check("hello".search(/z/) === -1);
     const digits = new RegExp("\\\\d+", "g");
+    check(digits.lastIndex === 0);
     check(digits.test("a1b2"));
-    check(!digits.test("abc"));
+    check(digits.lastIndex === 2);
+    check(digits.test("a1b2"));
+    check(digits.lastIndex === 4);
+    check(!digits.test("a1b2"));
+    check(digits.lastIndex === 0);
     const pretty = JSON.stringify(JSON.parse("{\\"a\\":1}"), null, 2);
     check(pretty.includes("\\n"));
     check(Date.parse("2026-07-03") > 0);

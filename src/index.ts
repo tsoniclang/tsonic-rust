@@ -48,9 +48,9 @@ export {
 } from "./source/rust-target-semantics/index.js";
 export {
   collectRustProviderOperationRows,
+  rustProviderOperationsMappersOf,
   createRustProviderPackage,
   createRustProviderPackageBindingProvider,
-  isRustProviderOperationContributor,
 } from "./source/provider-packages/index.js";
 export type {
   RustProviderCrateDefinition,

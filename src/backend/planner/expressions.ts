@@ -24,7 +24,7 @@ import { rustBorrowedArgsFactKey, rustFallibleCallFactKey, rustOptionWrapFactKey
 import type { RustProviderOperationForm, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustLocalBindingName, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustLocalBindingName, rustPublicName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier } from "../../source/rust-target-types.js";
@@ -636,7 +636,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     if (typePath === undefined) {
       return undefined;
     }
-    const staticCall: RustExpr = { kind: "call", path: `${typePath}::${rustLocalBindingName(fact.name)}`, args };
+    const staticCall: RustExpr = { kind: "call", path: `${typePath}::${fact.name}`, args };
     if (fact.fallible === true) {
       if (context.fallibleContext !== true) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -658,7 +658,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     if (receiver === undefined) {
       return undefined;
     }
-    const methodCall: RustExpr = { kind: "method-call", receiver, method: rustLocalBindingName(fact.name), args };
+    const methodCall: RustExpr = { kind: "method-call", receiver, method: fact.name, args };
     if (fact.fallible === true) {
       if (context.fallibleContext !== true) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -712,7 +712,10 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   }
   const declarationFileName = ast.getFileName(sourceReference.sourceFile);
   const moduleName = context.moduleNameByFileName.get(declarationFileName);
-  const declarationName = rustLocalBindingName(ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration));
+  const authoredName = ast.text(ast.name(sourceReference.declaration) ?? sourceReference.declaration);
+  const declarationName = ast.hasModifierKind(sourceReference.declaration, "export")
+    ? rustPublicName(authoredName).name
+    : rustLocalBindingName(authoredName);
   if (moduleName === undefined || !isValidRustIdentifier(declarationName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -854,7 +857,7 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
   if (fact !== undefined && fact.kind === "source-field") {
     const receiverNode = Node_Expression(node);
     const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    return receiver === undefined ? undefined : { kind: "field", receiver, name: rustLocalBindingName(fact.name) };
+    return receiver === undefined ? undefined : { kind: "field", receiver, name: fact.name };
   }
   if (fact !== undefined && fact.kind === "source-enum-member") {
     const value = rustSourceTypeCarrierValue(fact.resultCarrier);
@@ -1011,7 +1014,7 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       continue;
     }
     const nameNode = ast.name(property);
-    const fieldName = rustLocalBindingName(nameNode === undefined ? "" : ast.text(nameNode));
+    const fieldName = rustPublicName(nameNode === undefined ? "" : ast.text(nameNode)).name;
     const initializer = Node_Initializer(property);
     const planned = initializer === undefined ? undefined : planExpression(initializer, context);
     if (!isValidRustIdentifier(fieldName) || planned === undefined) {

@@ -2571,7 +2571,12 @@ function recordFallibilityFacts(walk: RustFactWalk): void {
           }
         } else if (callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression && walk.jsEnabled) {
           const libIdentity = libMemberIdentityFor(walk, callee);
-          if (libIdentity !== undefined && jsOperationMayBeFallible(libIdentity.ownerName, libIdentity.memberName)) {
+          const firstArgument = walk.lifecycle.compiler.ast.arguments(node)[0];
+          const firstArgumentKind = firstArgument === undefined ? "" : walk.lifecycle.compiler.ast.kindName(firstArgument);
+          // Variable-held regexps imply constant construction in the same
+          // function, which marks fallibility on its own.
+          const hasRegExpFirstArgument = firstArgumentKind === "KindRegularExpressionLiteral" || firstArgumentKind === KindNewExpression;
+          if (libIdentity !== undefined && jsOperationMayBeFallible(libIdentity.ownerName, libIdentity.memberName, hasRegExpFirstArgument)) {
             found = true;
             return;
           }
@@ -2824,6 +2829,7 @@ function tryFlagDependentJsSelection(
       operationKind: "method",
       target: { form: "arg-receiver-method", name: global ? "match_strings" : "match_first", argModes: ["ref"] },
       resultCarrier,
+      ...(global ? { fallible: true } : {}),
     });
     return setCarrierFact(walk, expression, resultCarrier);
   }

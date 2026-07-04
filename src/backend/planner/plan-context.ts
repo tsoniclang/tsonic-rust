@@ -72,6 +72,15 @@ export function rustLocalBindingName(name: string): string {
     .toLowerCase();
 }
 
+// Public naming policy: user-authored exported/public API names (exported
+// functions, class methods, statics, fields, record members) are preserved
+// verbatim; generated items carry #[allow(non_snake_case)] when the
+// authored name is not snake_case. Local bindings, parameters, and private
+// helpers keep snake_case conversion (rustLocalBindingName).
+export function rustPublicName(name: string): { readonly name: string; readonly needsAllow: boolean } {
+  return { name, needsAllow: name !== rustLocalBindingName(name) };
+}
+
 export function isUpperSnakeName(name: string): boolean {
   return /^[A-Z][A-Z0-9_]*$/u.test(name);
 }
