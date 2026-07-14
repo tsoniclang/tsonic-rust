@@ -1,7 +1,29 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust, createRustSession, checkRustSession, nodejsCapability } from "./helpers/rust-session.mjs";
+import {
+  acmeTestingPackage,
+  artifactText,
+  compileRust,
+  createRustSession,
+  nodejsCapability,
+  rustSourceDiagnostics,
+} from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
+
+function assertSourceSemanticRejection(options, expectedMessages) {
+  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
+  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
+    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
+    assert.ok(match, `unexpected source diagnostic: ${line}`);
+    return match[1];
+  });
+  assert.deepEqual(actualMessages, expectedMessages);
+  assert.throws(
+    () => compileRust(options),
+    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
+    "source diagnostics must block backend artifact handoff",
+  );
+}
 
 test("node path and os lower through provider rows to tsonic_rust_node", async () => {
   const { result } = compileRust({
@@ -25,17 +47,18 @@ export function probe(dir: string, file: string): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /use tsonic_rust_node::path as node_path;/u);
-  assert.match(text, /node_path::join\(&\[dir\.as_str\(\), file\.as_str\(\)\]\)/u);
-  assert.match(text, /node_path::dirname\(&full\)/u);
-  assert.match(text, /node_path::basename\(&full, None\)/u);
-  assert.match(text, /node_os::platform\(\)/u);
-  assert.match(text, /node_os::eol\(\)\.to_string\(\)/u);
-  assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_node = \{ path = ".*rust-nodejs\/runtimes\/crates\/tsonic_rust_node" \}/u);
+  assert.doesNotMatch(text, /use tsonic_rust_node::path as node_path;/u);
+  assert.match(text, /pub fn probe\(dir: &str, file: &str\)/u);
+  assert.match(text, /tsonic_rust_node::path::join\(&\[dir, file\]\)/u);
+  assert.match(text, /tsonic_rust_node::path::dirname\(&full\)/u);
+  assert.match(text, /tsonic_rust_node::path::basename\(&full, None\)/u);
+  assert.match(text, /tsonic_rust_node::os::platform\(\)/u);
+  assert.match(text, /tsonic_rust_node::os::eol\(\)\.to_string\(\)/u);
+  assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_node = \{ path = ".*rust-nodejs\/rust\/crates\/tsonic_rust_node" \}/u);
 });
 
 test("declared-but-unsupported node APIs diagnose deterministically", async () => {
-  const harness = createRustSession({
+  const options = {
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
     files: {
@@ -47,11 +70,10 @@ export function observe(path: string): void {
 }
 `,
     },
-  });
-  const extensionHost = checkRustSession(harness);
-  assert.ok(extensionHost.diagnostics.all().some((diagnostic) =>
-    diagnostic.extensionCode === "RUST_PROVIDER_OPERATION_NOT_MAPPED" &&
-    diagnostic.message.includes("node:fs::watch")));
+  };
+  assertSourceSemanticRejection(options, [
+    "No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::node:fs::watch::node:fs::watch(...)' as method.",
+  ]);
 });
 
 test("node package requires the js surface", async () => {

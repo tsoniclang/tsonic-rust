@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, acmeVectorsPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, acmeVectorsPackage, artifactText, compileRust, createRustSession, rustSourceDiagnostics } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 const counterSource = `
@@ -207,7 +207,7 @@ export function bad(): int32 {
 });
 
 test("byref passing markers are rejected deterministically", () => {
-  const { extensionHost } = compileRust({
+  const harness = createRustSession({
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
@@ -222,8 +222,10 @@ export function bad(): int32 {
 `,
     },
   });
-
-  assert.ok(extensionHost.diagnostics.all().some((diagnostic) =>
+  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
+  assert.match(diagnostics, /TSEXT0/u);
+  assert.match(diagnostics, /Rust does not support selected source marker 'ref' in this operation lane/u);
+  assert.ok(harness.session.extensionHost.diagnostics.all().some((diagnostic) =>
     diagnostic.extensionCode === "RUST_SOURCE_MARKER_UNSUPPORTED"));
 });
 
@@ -254,7 +256,7 @@ export function drive(): int32 {
 });
 
 test("push on borrowed slices fails closed; owned vectors keep push", () => {
-  const { result } = compileRust({
+  const options = {
     surfaces: ["js"],
     files: {
       "index.ts": `
@@ -265,10 +267,14 @@ export function grow(xs: int32[]): void {
 }
 `,
     },
-  });
+  };
+  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_TARGET_FACT"));
+  assert.match(diagnostics, /The selected JavaScript call 'Array\.push' has no closed Rust operation row for the selected receiver and argument carriers/u);
+  assert.throws(
+    () => compileRust(options),
+    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
+  );
 });
 
 test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
@@ -372,7 +378,7 @@ export function some_value(): int32 {
 });
 
 test("undefined-typed unions stay fail-closed without an explicit lane", () => {
-  const { result } = compileRust({
+  const harness = createRustSession({
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -383,9 +389,9 @@ export function value_or_zero(value: int32 | undefined): int32 {
 `,
     },
   });
-
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
+  assert.match(diagnostics, /TSEXT0/u);
+  assert.match(diagnostics, /Checked nullish coalescing requires an Option carrier and an exactly matching fallback carrier/u);
 });
 
 test("interfaces lower to record structs with annotated object literals", () => {
@@ -460,7 +466,7 @@ export function first(entry: [int32, string]): int32 {
 });
 
 test("dynamic tuple indexing fails closed", () => {
-  const { result } = compileRust({
+  const harness = createRustSession({
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -471,9 +477,10 @@ export function pick(entry: [int32, int32], i: int32): int32 {
 `,
     },
   });
+  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.match(diagnostics, /TSEXT0/u);
+  assert.match(diagnostics, /Fixed-array element access requires a TSTS-selected in-range fixed ordinal/u);
 });
 
 test("closed string-literal unions lower to unit-variant enums", () => {
@@ -709,7 +716,7 @@ export function forwards(): int32 {
 });
 
 test("fallible calls inside closures fail closed", () => {
-  const { result } = compileRust({
+  const options = {
     surfaces: ["js"],
     files: {
       "index.ts": `
@@ -724,10 +731,14 @@ export function bad(xs: int32[]): boolean {
 }
 `,
     },
-  });
+  };
+  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.match(diagnostics, /The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier/u);
+  assert.throws(
+    () => compileRust(options),
+    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
+  );
 });
 
 test("string literals mentioning runtime aliases do not create imports", () => {

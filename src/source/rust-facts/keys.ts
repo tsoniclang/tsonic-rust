@@ -1,13 +1,71 @@
 import { defineExtensionFactKey } from "@tsonic/tsts";
 import type { ExtensionFactKey, TargetTypeRef } from "@tsonic/tsts";
+import type {
+  RustBinaryOperator,
+  RustOperatorToken,
+} from "../../common/rust-syntax.js";
+import { closedMetadataEquals } from "../../common/closed-metadata.js";
+import type {
+  RustFinalizedOperationAbiFor,
+} from "./finalized-operation-abi.js";
+
+export type {
+  RustAssignmentOperator,
+  RustBinaryOperator,
+  RustOperatorToken,
+} from "../../common/rust-syntax.js";
 
 
 export const rustExtensionId = "tsonic.rust";
+
+export const rustPostCheckBinaryOperationId = "tsonic.rust.operator.post-check";
+export const rustPostCheckUnaryMinusOperationId = "tsonic.rust.operator.post-check.unary-minus";
+export const rustPostCheckUnaryPlusOperationId = "tsonic.rust.operator.post-check.unary-plus";
+
+export function rustPostCheckOperationKind(
+  operationId: string,
+): "binary" | "unary-minus" | "unary-plus" | undefined {
+  if (operationId === rustPostCheckBinaryOperationId) {
+    return "binary";
+  }
+  if (operationId === rustPostCheckUnaryMinusOperationId) {
+    return "unary-minus";
+  }
+  return operationId === rustPostCheckUnaryPlusOperationId ? "unary-plus" : undefined;
+}
 
 // Rust rendering form for a mapped operation. The path/name values come from
 // metadata rows (provider packages or JS surface tables), never from source
 // spelling.
 export type RustArgumentMode = "value" | "ref" | "mut-ref";
+
+export type RustProviderConstantArgument =
+  | { readonly kind: "integer"; readonly value: number }
+  | { readonly kind: "string"; readonly value: string }
+  | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "none" };
+
+export type RustProviderChainStep =
+  | { readonly kind: "method"; readonly name: string }
+  | { readonly kind: "copy-selected-carrier" };
+
+export type RustValueConversionId =
+  | "checked-i32-to-usize"
+  | "checked-i32-to-u8"
+  | "checked-usize-to-i32"
+  | "checked-isize-to-i32"
+  | "checked-u32-to-i32"
+  | "exact-u8-to-i32"
+  | "exact-i32-to-f64"
+  | "checked-f64-to-i32-trunc"
+  | "js-number-from-isize"
+  | "js-number-from-usize"
+  | "js-number-from-u64";
+
+export interface RustValueConversion {
+  readonly kind: "semantic-conversion";
+  readonly id: RustValueConversionId;
+}
 
 export type RustProviderOperationForm =
   | {
@@ -15,7 +73,7 @@ export type RustProviderOperationForm =
       // Any direct lowering fails closed.
       readonly form: "marker";
     }
-  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argCasts?: readonly (string | undefined)[]; readonly argOrder?: readonly number[]; readonly trailingArgs?: readonly string[]; readonly chain?: readonly string[] }
+  | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argConversions?: readonly (RustValueConversion | undefined)[]; readonly argOrder?: readonly number[]; readonly trailingArguments?: readonly RustProviderConstantArgument[]; readonly chain?: readonly RustProviderChainStep[] }
   | {
       // Free function taking all arguments as one &[&str] slice (variadic
       // string APIs like path join).
@@ -45,22 +103,25 @@ export type RustProviderOperationForm =
       readonly argModes?: readonly RustArgumentMode[];
     }
   | { readonly form: "field"; readonly name: string }
-  | { readonly form: "index" }
+  | {
+      readonly form: "index";
+      readonly indexConversion?: RustValueConversion;
+    }
   | {
       // Free function taking the receiver as first argument.
       readonly form: "free-call";
       readonly path: string;
       readonly receiverMode: RustArgumentMode;
       readonly argModes?: readonly RustArgumentMode[];
-      readonly argCasts?: readonly (string | undefined)[];
-      readonly trailingArgs?: readonly string[];
+      readonly argConversions?: readonly (RustValueConversion | undefined)[];
+      readonly trailingArguments?: readonly RustProviderConstantArgument[];
       readonly argOrder?: readonly number[];
     }
   | {
       // Selected source call lowers to a native Rust operator expression.
       // Backed by std::ops trait metadata declared in provider rows.
       readonly form: "binary-operator";
-      readonly operator: string;
+      readonly operator: RustBinaryOperator;
       readonly trait: string;
     }
   | {
@@ -70,17 +131,40 @@ export type RustProviderOperationForm =
       readonly form: "receiver-method";
       readonly name: string;
       readonly argModes?: readonly RustArgumentMode[];
-      readonly argCasts?: readonly (string | undefined)[];
+      readonly argConversions?: readonly (RustValueConversion | undefined)[];
       readonly argOrder?: readonly number[];
-      readonly chain?: readonly string[];
+      readonly chain?: readonly RustProviderChainStep[];
       readonly mutatesReceiver?: boolean;
     };
+
+export interface RustProviderOperationTemplate {
+  readonly kind: "provider-operation";
+  readonly operationId: string;
+  readonly operationKind: "method" | "constructor" | "property" | "indexer";
+  readonly target: RustProviderOperationForm;
+  readonly resultCarrier: TargetTypeRef;
+  readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly resultConversion?: RustValueConversion;
+  readonly compileTimeSourceArgumentIndexes?: readonly number[];
+  readonly isAsync: boolean;
+  readonly isFallible: boolean;
+}
+
+export interface RustRuntimeSetTemplate {
+  readonly kind: "runtime-set";
+  readonly operationId: string;
+  readonly target: RustProviderOperationForm;
+  readonly parameterCarriers: readonly TargetTypeRef[];
+}
+
+export type RustProviderFactOperationKind = "method" | "constructor" | "property" | "indexer";
+export type RustRuntimeSetOperationKind = "property-set" | "index-set";
 
 export type RustTargetOperationFact =
   | {
       readonly kind: "operator-token";
       readonly operationId: string;
-      readonly operator: string;
+      readonly operator: RustOperatorToken;
       readonly resultCarrier: TargetTypeRef;
     }
   | {
@@ -91,11 +175,8 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "provider-operation";
       readonly operationId: string;
-      readonly operationKind: "method" | "constructor" | "property" | "indexer";
-      readonly target: RustProviderOperationForm;
       readonly resultCarrier: TargetTypeRef;
-      readonly castResult?: string;
-      readonly fallible?: boolean;
+      readonly abi: RustFinalizedOperationAbiFor<RustProviderFactOperationKind>;
     }
   | {
       readonly kind: "array-literal";
@@ -108,7 +189,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "runtime-set";
       readonly operationId: string;
-      readonly target: RustProviderOperationForm;
+      readonly abi: RustFinalizedOperationAbiFor<RustRuntimeSetOperationKind>;
     }
   | {
       readonly kind: "for-of";
@@ -120,6 +201,7 @@ export type RustTargetOperationFact =
       readonly kind: "option-check";
       readonly operationId: string;
       readonly negated: boolean;
+      readonly optionOperand: "left" | "right";
     }
   | {
       // Member access on a project-source class instance: struct field.
@@ -129,27 +211,18 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
-      // Method call on a project-source class instance.
-      readonly kind: "source-method";
+      // Exact TSTS-selected project-source callable. The source lifecycle
+      // finalizes the target ABI before the backend consumes this fact.
+      readonly kind: "source-call";
       readonly operationId: string;
-      readonly name: string;
-      readonly mutatesSelf: boolean;
-      readonly resultCarrier: TargetTypeRef;
-      readonly fallible?: boolean;
-    }
-  | {
-      // Static method call on a project-source class: associated function.
-      readonly kind: "source-static-method";
-      readonly operationId: string;
-      readonly name: string;
-      readonly typeCarrier: TargetTypeRef;
-      readonly resultCarrier: TargetTypeRef;
-      readonly fallible?: boolean;
-    }
-  | {
-      // new C(...) on a project-source class: associated fn new.
-      readonly kind: "source-constructor";
-      readonly operationId: string;
+      readonly target:
+        | { readonly form: "function"; readonly fileName: string; readonly name: string }
+        | { readonly form: "method"; readonly name: string; readonly mutatesSelf: boolean }
+        | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef }
+        | { readonly form: "constructor"; readonly typeCarrier: TargetTypeRef };
+      readonly parameterCarriers: readonly TargetTypeRef[];
+      readonly argumentModes: readonly RustArgumentMode[];
+      readonly targetTypeArguments?: readonly TargetTypeRef[];
       readonly resultCarrier: TargetTypeRef;
     }
   | {
@@ -180,7 +253,7 @@ export type RustTargetOperationFact =
       readonly index: number;
       readonly resultCarrier: TargetTypeRef;
     }
-  | { readonly kind: "await-op"; readonly operationId: string; readonly resultCarrier: TargetTypeRef; readonly fallible?: boolean }
+  | { readonly kind: "await-op"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
   | {
       // Arrow-function argument lowering to a Rust closure. Parameter names
       // come from the arrow declaration; byRefCopy params bind as |&x|.
@@ -193,6 +266,7 @@ export type RustTargetOperationFact =
       // `throw new Error(message)` lowering to an Err return.
       readonly kind: "throw-op";
       readonly operationId: string;
+      readonly constructorOperationId: string;
     }
   | {
       // Compile-validated constant RegExp construction (literal or
@@ -205,6 +279,13 @@ export type RustTargetOperationFact =
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
   | { readonly kind: "option-coalesce"; readonly operationId: string }
+  | { readonly kind: "nullish-identity"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
+  | {
+      readonly kind: "source-conversion";
+      readonly operationId: string;
+      readonly conversion?: RustValueConversion;
+      readonly resultCarrier: TargetTypeRef;
+    }
   | {
       // Source-core flow marker call (borrow/borrowMut/move): the call node
       // lowers to its argument with the marker's passing shape.
@@ -212,6 +293,30 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly state: "borrowed-shared" | "borrowed-mut" | "moved";
     };
+
+export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact): TargetTypeRef | undefined {
+  switch (fact.kind) {
+    case "provider-operation":
+    case "operator-token":
+    case "string-concat":
+    case "array-literal":
+    case "source-field":
+    case "source-call":
+    case "source-enum-member":
+    case "record-literal":
+    case "tuple-literal":
+    case "tuple-index":
+    case "await-op":
+    case "closure":
+    case "source-conversion":
+    case "nullish-identity":
+      return fact.resultCarrier;
+    case "for-of":
+      return fact.elementCarrier;
+    default:
+      return undefined;
+  }
+}
 
 // Carrier for a project-source declared type (class or enum). The backend
 // renders it against the module map derived from the same source files.
@@ -229,11 +334,32 @@ export function rustSourceTypeCarrierValue(carrier: TargetTypeRef | undefined): 
   if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "source-type") {
     return undefined;
   }
-  return carrier.value as RustSourceTypeCarrierValue;
+  const value = carrier.value;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const keys = Object.keys(value).sort();
+  if (keys.length !== 3 || keys[0] !== "fileName" || keys[1] !== "shape" || keys[2] !== "typeName") {
+    return undefined;
+  }
+  const candidate = value as {
+    readonly fileName?: unknown;
+    readonly typeName?: unknown;
+    readonly shape?: unknown;
+  };
+  return typeof candidate.fileName === "string" && candidate.fileName.length > 0 &&
+    typeof candidate.typeName === "string" && candidate.typeName.length > 0 &&
+    (candidate.shape === "struct" || candidate.shape === "enum")
+    ? {
+        fileName: candidate.fileName,
+        typeName: candidate.typeName,
+        shape: candidate.shape,
+      }
+    : undefined;
 }
 
 function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: RustTargetOperationFact): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return closedMetadataEquals(left, right);
 }
 
 export const rustTargetOperationFactKey: ExtensionFactKey<RustTargetOperationFact> = defineExtensionFactKey({
@@ -247,6 +373,17 @@ export const rustOptionWrapFactKey: ExtensionFactKey<{ readonly wrap: boolean }>
   extensionId: rustExtensionId,
   name: "optionWrap",
   equals: (left, right) => left.wrap === right.wrap,
+});
+
+export interface RustSourceBindingFact {
+  readonly sourceName: string;
+  readonly fileName: string;
+}
+
+export const rustSourceBindingFactKey: ExtensionFactKey<RustSourceBindingFact> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "sourceBinding",
+  equals: closedMetadataEquals,
 });
 
 // Formal source-use facts: mutation is recorded per declaration subject at
@@ -275,13 +412,29 @@ export const rustSelfModeFactKey: ExtensionFactKey<{ readonly mode: "ref" | "mut
 export const rustUnionVariantsFactKey: ExtensionFactKey<{ readonly variants: readonly { readonly name: string; readonly literal: string }[] }> = defineExtensionFactKey({
   extensionId: rustExtensionId,
   name: "unionVariants",
-  equals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+  equals: closedMetadataEquals,
 });
 
-export const rustAsyncFunctionFactKey: ExtensionFactKey<{ readonly isAsync: true }> = defineExtensionFactKey({
+export interface RustAsyncFunctionFact {
+  readonly isAsync: true;
+  readonly outputCarrier: TargetTypeRef;
+}
+
+export const rustAsyncFunctionFactKey: ExtensionFactKey<RustAsyncFunctionFact> = defineExtensionFactKey({
   extensionId: rustExtensionId,
   name: "asyncFunction",
-  equals: () => true,
+  equals: closedMetadataEquals,
+});
+
+export interface RustSourceParameterAbiFact {
+  readonly parameterCarrier: TargetTypeRef;
+  readonly mode: RustArgumentMode;
+}
+
+export const rustSourceParameterAbiFactKey: ExtensionFactKey<RustSourceParameterAbiFact> = defineExtensionFactKey({
+  extensionId: rustExtensionId,
+  name: "sourceParameterAbi",
+  equals: closedMetadataEquals,
 });
 
 // Declarations whose lowering returns TsonicResult<T>: they throw, or they
@@ -292,23 +445,14 @@ export const rustFallibleFactKey: ExtensionFactKey<{ readonly fallible: true }> 
   equals: () => true,
 });
 
-// Source-owned call sites whose callee lowering is fallible.
-export const rustFallibleCallFactKey: ExtensionFactKey<{ readonly fallible: true }> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "fallibleCall",
-  equals: () => true,
-});
+export interface RustSourceCallEffectsFact {
+  readonly invocation: "infallible" | "fallible";
+  readonly awaiting: "not-applicable" | "infallible" | "fallible";
+}
 
-// String parameters proven read-only-borrowing lower to &str.
-export const rustBorrowedParamFactKey: ExtensionFactKey<{ readonly borrowed: true }> = defineExtensionFactKey({
+// Total post-fixpoint effects for an exact selected project-source call.
+export const rustSourceCallEffectsFactKey: ExtensionFactKey<RustSourceCallEffectsFact> = defineExtensionFactKey({
   extensionId: rustExtensionId,
-  name: "borrowedParam",
-  equals: () => true,
-});
-
-// Source-call argument positions whose parameters borrow (&str).
-export const rustBorrowedArgsFactKey: ExtensionFactKey<{ readonly borrowed: readonly boolean[] }> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "borrowedArgs",
-  equals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+  name: "sourceCallEffects",
+  equals: closedMetadataEquals,
 });

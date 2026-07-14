@@ -135,7 +135,8 @@ export function total(limit: int32): int32 {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let mut i: i32 = 0;/u);
   assert.match(text, /while i < limit \{/u);
-  assert.match(text, /sum \+= i;/u);
+  assert.match(text, /sum = sum \+ i;/u);
+  assert.doesNotMatch(text, /sum \+= i;/u);
   assert.match(text, /i \+= 1;/u);
 });
 

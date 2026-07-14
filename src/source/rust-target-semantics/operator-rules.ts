@@ -1,4 +1,8 @@
 import type { TargetTypeRef } from "@tsonic/tsts";
+import type {
+  RustAssignmentOperator,
+  RustBinaryOperator,
+} from "../../common/rust-syntax.js";
 import {
   KindAmpersandAmpersandToken,
   KindAsteriskEqualsToken,
@@ -8,6 +12,7 @@ import {
   KindSlashEqualsToken,
   KindAsteriskToken,
   KindBarBarToken,
+  KindEqualsToken,
   KindEqualsEqualsEqualsToken,
   KindExclamationEqualsEqualsToken,
   KindGreaterThanEqualsToken,
@@ -30,11 +35,11 @@ import { rustSourceTypeCarrierValue } from "../rust-facts/keys.js";
 
 export interface RustBinaryOperatorSelection {
   readonly kind: "operator-token" | "string-concat";
-  readonly rustOperator: string;
+  readonly rustOperator: RustBinaryOperator;
   readonly resultCarrier: TargetTypeRef;
 }
 
-const arithmeticTokens: Readonly<Record<string, string>> = {
+const arithmeticTokens: Readonly<Record<string, RustBinaryOperator>> = {
   [KindPlusToken]: "+",
   [KindMinusToken]: "-",
   [KindAsteriskToken]: "*",
@@ -42,30 +47,52 @@ const arithmeticTokens: Readonly<Record<string, string>> = {
   [KindPercentToken]: "%",
 };
 
-const comparisonTokens: Readonly<Record<string, string>> = {
+const comparisonTokens: Readonly<Record<string, RustBinaryOperator>> = {
   [KindLessThanToken]: "<",
   [KindLessThanEqualsToken]: "<=",
   [KindGreaterThanToken]: ">",
   [KindGreaterThanEqualsToken]: ">=",
 };
 
-const equalityTokens: Readonly<Record<string, string>> = {
+const equalityTokens: Readonly<Record<string, RustBinaryOperator>> = {
   [KindEqualsEqualsEqualsToken]: "==",
   [KindExclamationEqualsEqualsToken]: "!=",
 };
 
-const logicalTokens: Readonly<Record<string, string>> = {
+const logicalTokens: Readonly<Record<string, RustBinaryOperator>> = {
   [KindAmpersandAmpersandToken]: "&&",
   [KindBarBarToken]: "||",
 };
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 
+const operatorKindByText: Readonly<Record<string, string>> = {
+  "+": KindPlusToken,
+  "-": KindMinusToken,
+  "*": KindAsteriskToken,
+  "/": KindSlashToken,
+  "%": KindPercentToken,
+  "<": KindLessThanToken,
+  "<=": KindLessThanEqualsToken,
+  ">": KindGreaterThanToken,
+  ">=": KindGreaterThanEqualsToken,
+  "===": KindEqualsEqualsEqualsToken,
+  "!==": KindExclamationEqualsEqualsToken,
+  "&&": KindAmpersandAmpersandToken,
+  "||": KindBarBarToken,
+  "+=": KindPlusEqualsToken,
+  "-=": KindMinusEqualsToken,
+  "*=": KindAsteriskEqualsToken,
+  "/=": KindSlashEqualsToken,
+  "%=": KindPercentEqualsToken,
+};
+
 export function selectRustBinaryOperator(
   operatorKindName: string,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
 ): RustBinaryOperatorSelection | undefined {
+  operatorKindName = operatorKindByText[operatorKindName] ?? operatorKindName;
   if (left === undefined || right === undefined) {
     return undefined;
   }
@@ -110,7 +137,7 @@ export function selectRustBinaryOperator(
   return undefined;
 }
 
-const compoundAssignmentTokens: Readonly<Record<string, string>> = {
+const compoundAssignmentTokens: Readonly<Record<string, RustAssignmentOperator>> = {
   [KindPlusEqualsToken]: "+=",
   [KindMinusEqualsToken]: "-=",
   [KindAsteriskEqualsToken]: "*=",
@@ -118,11 +145,17 @@ const compoundAssignmentTokens: Readonly<Record<string, string>> = {
   [KindPercentEqualsToken]: "%=",
 };
 
+export function isRustAssignmentOperator(operatorKindOrText: string): boolean {
+  const operatorKind = operatorKindByText[operatorKindOrText] ?? operatorKindOrText;
+  return operatorKind === KindEqualsToken || compoundAssignmentTokens[operatorKind] !== undefined;
+}
+
 export function selectRustCompoundAssignment(
   operatorKindName: string,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
-): string | undefined {
+): RustAssignmentOperator | undefined {
+  operatorKindName = operatorKindByText[operatorKindName] ?? operatorKindName;
   const operator = compoundAssignmentTokens[operatorKindName];
   if (operator === undefined || left === undefined || right === undefined) {
     return undefined;

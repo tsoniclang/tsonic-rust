@@ -8,7 +8,27 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { rustRegExpSubsetViolation } from "../dist/source/rust-target-semantics/index.js";
-import { artifactText, compileRust } from "./helpers/rust-session.mjs";
+import {
+  artifactText,
+  compileRust,
+  createRustSession,
+  rustSourceDiagnostics,
+} from "./helpers/rust-session.mjs";
+
+function assertSourceSemanticRejection(options, expectedMessages) {
+  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
+  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
+    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
+    assert.ok(match, `unexpected source diagnostic: ${line}`);
+    return match[1];
+  });
+  assert.deepEqual(actualMessages, expectedMessages);
+  assert.throws(
+    () => compileRust(options),
+    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
+    "source diagnostics must block backend artifact handoff",
+  );
+}
 
 const corpusPath = fileURLToPath(
   new URL("../../rust-js/tests/oracle/regexp-acceptance-corpus.json", import.meta.url),
@@ -76,7 +96,7 @@ const rejectedProbes = [
 test("reviewer probes fail closed as compiled constants", () => {
   for (const probe of rejectedProbes) {
     const literal = JSON.stringify(probe);
-    const { result } = compileRust({
+    const options = {
       surfaces: ["js"],
       files: {
         "index.ts": `
@@ -90,9 +110,10 @@ export function f(s: string): boolean {
 }
 `,
       },
-    });
-    assert.equal(result.artifacts.length, 0, `new RegExp(${literal}) must fail closed`);
-    assert.ok(result.diagnostics.length > 0, `new RegExp(${literal}) must diagnose`);
+    };
+    const violation = rustRegExpSubsetViolation(probe, "");
+    assert.notEqual(violation, undefined, `new RegExp(${literal}) must violate the runtime oracle contract`);
+    assertSourceSemanticRejection(options, [violation]);
   }
 });
 

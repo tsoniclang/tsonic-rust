@@ -1,7 +1,28 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
+import {
+  acmeTestingPackage,
+  artifactText,
+  compileRust,
+  createRustSession,
+  rustSourceDiagnostics,
+} from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
+
+function assertSourceSemanticRejection(options, expectedMessages) {
+  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
+  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
+    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
+    assert.ok(match, `unexpected source diagnostic: ${line}`);
+    return match[1];
+  });
+  assert.deepEqual(actualMessages, expectedMessages);
+  assert.throws(
+    () => compileRust(options),
+    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
+    "source diagnostics must block backend artifact handoff",
+  );
+}
 
 test("Math closed subset lowers to exact f64 methods", async () => {
   const { result } = compileRust({
@@ -11,6 +32,10 @@ test("Math closed subset lowers to exact f64 methods", async () => {
 export function f(x: number, y: number): number {
   return Math.floor(x) + Math.ceil(y) + Math.trunc(x) + Math.abs(y) + Math.sqrt(x) + Math.pow(x, y);
 }
+
+export function literal(): number {
+  return Math.floor(2);
+}
 `,
     },
   });
@@ -19,16 +44,22 @@ export function f(x: number, y: number): number {
   for (const method of ["floor", "ceil", "trunc", "abs", "sqrt", "powf"]) {
     assert.ok(text.includes(`.${method}(`), method);
   }
+  assert.match(text, /2\.0f64\.floor\(\)/u);
 });
 
 test("Math members outside the exact subset fail closed", async () => {
-  for (const call of ["Math.round(x)", "Math.min(x, 1)", "Math.random()"]) {
-    const { result } = compileRust({
+  for (const { call, member } of [
+    { call: "Math.round(x)", member: "round" },
+    { call: "Math.min(x, 1)", member: "min" },
+    { call: "Math.random()", member: "random" },
+  ]) {
+    const options = {
       surfaces: ["js"],
       files: { "index.ts": `export function f(x: number): number {\n  return ${call};\n}\n` },
-    });
-    assert.equal(result.artifacts.length, 0, `${call} must fail closed`);
-    assert.ok(result.diagnostics.length > 0);
+    };
+    assertSourceSemanticRejection(options, [
+      `The selected JavaScript call 'Math.${member}' has no closed Rust operation row for the selected receiver and argument carriers.`,
+    ]);
   }
 });
 
@@ -75,9 +106,9 @@ export function f(text: string): string {
     },
   });
   assert.deepEqual(good.result.diagnostics, []);
-  assert.match(artifactText(good.result, "src/index.rs"), /node_util::inspect\(&value\)/u);
+  assert.match(artifactText(good.result, "src/index.rs"), /tsonic_rust_node::util::inspect\(&value\)/u);
 
-  const bad = compileRust({
+  const badOptions = {
     surfaces: ["js"],
     capabilities: [capability],
     files: {
@@ -89,9 +120,10 @@ export function f(name: string): string {
 }
 `,
     },
-  });
-  assert.equal(bad.result.artifacts.length, 0);
-  assert.ok(bad.result.diagnostics.length > 0);
+  };
+  assertSourceSemanticRejection(badOptions, [
+    "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
+  ]);
 });
 
 test("RegExp oracle subset lowers constants, test, replace, split, search", async () => {
@@ -117,10 +149,10 @@ export function scrub(text: string): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::JsRegExp::new\("\\\\s\+", "g"\)\?/u);
-  assert.match(text, /spaces\.replace\(&text, "-"\)/u);
+  assert.match(text, /spaces\.replace\(&text, "-"\)\?/u);
   assert.match(text, /\.split\(&joined\)\?/u);
-  assert.match(text, /\.search\(&joined\)/u);
-  assert.match(text, /spaces\.test\(&text\)/u);
+  assert.match(text, /\.search\(&joined\)\?/u);
+  assert.match(text, /spaces\.test\(&text\)\?/u);
 
   const constructed = compileRust({
     surfaces: ["js"],
@@ -139,28 +171,36 @@ export function probe(text: string): boolean {
 
 test("RegExp constructs outside the oracle subset fail closed", async () => {
   const cases = [
-    "/a./",
-    "/[^a]/",
-    "/\\D/",
-    "/[\\x00-\\uFFFF]/",
-    "/[\\uD800]/",
-    "/[a-\\uE000]/",
-    "/[😀]/",
-    "/a😀?b/",
-    "/a(?=b)/",
-    "/(a)\\1/",
-    "/a*?/",
-    "/\\bword\\b/",
-    "new RegExp(pattern)",
-    "/a/y",
+    { construct: "/a./" },
+    { construct: "/[^a]/" },
+    { construct: "/\\D/" },
+    { construct: "/[\\x00-\\uFFFF]/" },
+    { construct: "/[\\uD800]/" },
+    { construct: "/[a-\\uE000]/" },
+    { construct: "/[😀]/" },
+    { construct: "/a😀?b/" },
+    { construct: "/a(?=b)/" },
+    { construct: "/(a)\\1/" },
+    { construct: "/a*?/" },
+    { construct: "/\\bword\\b/" },
+    {
+      construct: "new RegExp(pattern)",
+      sourceMessage: "Rust RegExp construction requires TSTS-selected RegExp constructor evidence and compile-time string pattern/flags.",
+    },
+    { construct: "/a/y" },
   ];
-  for (const construct of cases) {
-    const { result } = compileRust({
+  for (const item of cases) {
+    const options = {
       surfaces: ["js"],
-      files: { "index.ts": `export function f(pattern: string, s: string): boolean {\n  const re = ${construct};\n  return re.test(s);\n}\n` },
-    });
-    assert.equal(result.artifacts.length, 0, `${construct} must fail closed`);
-    assert.ok(result.diagnostics.length > 0, construct);
+      files: { "index.ts": `export function f(pattern: string, s: string): boolean {\n  const re = ${item.construct};\n  return re.test(s);\n}\n` },
+    };
+    if (item.sourceMessage !== undefined) {
+      assertSourceSemanticRejection(options, [item.sourceMessage]);
+      continue;
+    }
+    const { result } = compileRust(options);
+    assert.equal(result.artifacts.length, 0, `${item.construct} must fail closed`);
+    assert.ok(result.diagnostics.length > 0, item.construct);
   }
 });
 
@@ -196,7 +236,7 @@ export function main(): void {
     check(digits.lastIndex === 4);
     check(!digits.test("a1b2"));
     check(digits.lastIndex === 0);
-    const pretty = JSON.stringify(JSON.parse("{\\"a\\":1}"), null, 2);
+    const pretty = JSON.stringify(JSON.parse("{\\"a\\":1}"), null, 2) ?? "";
     check(pretty.includes("\\n"));
     check(Date.parse("2026-07-03") > 0);
     check(Date.UTC(2026, 0, 1, 0, 0, 0, 0) > 0);
@@ -259,7 +299,7 @@ export function main(): void {
     check(serve(4000) === "superbunapi:4000");
     check(platform.length > 0);
     const value = JSON.parse("{\\"tag\\": \\"tsonic\\"}");
-    const rendered = JSON.stringify(value);
+    const rendered = JSON.stringify(value) ?? "";
     check(rendered.includes("tsonic"));
     check(Math.floor(11.9) === 11);
     const xs: int32[] = [1, 2, 3];

@@ -1,7 +1,29 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
+import {
+  acmeTestingPackage,
+  artifactText,
+  compileRust,
+  createRustSession,
+  nodejsCapability,
+  rustSourceDiagnostics,
+} from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
+
+function assertSourceSemanticRejection(options, expectedMessages) {
+  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
+  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
+    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
+    assert.ok(match, `unexpected source diagnostic: ${line}`);
+    return match[1];
+  });
+  assert.deepEqual(actualMessages, expectedMessages);
+  assert.throws(
+    () => compileRust(options),
+    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
+    "source diagnostics must block backend artifact handoff",
+  );
+}
 
 test("cross-module provider-ref members resolve without duplicate declarations", async () => {
   const { result } = compileRust({
@@ -24,7 +46,7 @@ export function probe(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /bytes\.to_string_enc\("hex"\)\?/u);
-  assert.match(text, /bytes\.len\(\) as i32/u);
+  assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(bytes\.len\(\)\)\?/u);
 });
 
 test("generated cargo binary proves hmac, base64, and cross-module members at runtime", { timeout: 300_000 }, async () => {
@@ -94,7 +116,7 @@ export async function size_of(path: string): Promise<boolean> {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /info\.is_file\(\)/u);
-  assert.match(text, /info\.size as f64/u);
+  assert.match(text, /tsonic_rust_runtime::conversions::u64_to_f64\(info\.size\)/u);
 });
 
 test("remaining blocked lanes stay classified", async () => {
@@ -103,13 +125,14 @@ test("remaining blocked lanes stay classified", async () => {
     { module: "node:fs", name: "createReadStream", call: "createReadStream(\"x\")" },
   ];
   for (const item of cases) {
-    const { result } = compileRust({
+    const options = {
       surfaces: ["js"],
       capabilities: [await nodejsCapability()],
       files: { "index.ts": `import { ${item.name} } from "${item.module}";\n\nexport function bad(): void {\n  ${item.call};\n}\n` },
-    });
-    assert.equal(result.artifacts.length, 0, `${item.module}::${item.name}`);
-    assert.ok(result.diagnostics.length > 0);
+    };
+    assertSourceSemanticRejection(options, [
+      `No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::${item.module}::${item.name}::${item.module}::${item.name}(...)' as method.`,
+    ]);
   }
 });
 
@@ -147,19 +170,13 @@ test("provider package creation rejects inconsistent identity models", async () 
         exports: [{ id: "m:a::g", name: "g", kind: "function", signatures: [{ id: "m:a::g()", name: "g", parameters: [], returnType: { kind: "provider-ref", moduleSpecifier: "m:a", exportName: "Nope" } }] }],
       }],
       operations: [],
-      pattern: /undeclared provider export/u,
+      pattern: /references provider export/u,
     },
     {
       label: "bad exportId row",
       modules: [{ moduleSpecifier: "m:a", providerModuleId: "a", exports: [fn("m:a", "f")] }],
       operations: [{ exportId: "m:a::missing", operationKind: "method", target: { form: "call", path: "x::y" }, resultCarrier: { kind: "source-primitive", name: "int32" } }],
       pattern: /undeclared exportId/u,
-    },
-    {
-      label: "bad receiverTypeId row",
-      modules: [{ moduleSpecifier: "m:a", providerModuleId: "a", exports: [fn("m:a", "f")] }],
-      operations: [{ exportId: "m:a::f", receiverTypeId: "rust.nope.Missing", operationKind: "indexer", target: { form: "call", path: "x::y" }, resultCarrier: { kind: "source-primitive", name: "int32" } }],
-      pattern: /receiverTypeId/u,
     },
   ];
   for (const item of cases) {

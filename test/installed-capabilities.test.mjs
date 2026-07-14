@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeSuperbunapiCapability, acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeSuperbunapiCapability, acmeTestingPackage, artifactText, buildInstalledLayout, compileRust } from "./helpers/rust-session.mjs";
 import { composeRustCapabilities } from "../dist/index.js";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
@@ -52,39 +52,99 @@ test("unused installed capability contributes no runtime crates", async () => {
 
 test("duplicate module ownership fails closed in local composition", async () => {
   const first = acmeSuperbunapiCapability();
-  const second = acmeSuperbunapiCapability();
+  const second = { ...acmeSuperbunapiCapability(), id: "acme-superbunapi-second" };
   assert.throws(
-    () => composeRustCapabilities("rust", [first, second]),
+    () => composeRustCapabilities("rust", [first, second], []),
     /Ambiguous Tsonic capability ownership/u,
   );
+});
+
+test("duplicate capability identities and overlapping ownership fail closed", () => {
+  const first = acmeSuperbunapiCapability();
+  assert.throws(
+    () => composeRustCapabilities("rust", [first, first], []),
+    /selected capability '@acme\/rust-superbunapi' more than once/u,
+  );
+  const broad = { ...first, id: "broad", moduleOwnership: [{ specifierPrefix: "node:" }] };
+  const narrow = { ...first, id: "narrow", moduleOwnership: [{ specifierPrefix: "node:fs" }] };
+  assert.throws(
+    () => composeRustCapabilities("rust", [broad, narrow], []),
+    /module prefixes 'node:' and 'node:fs'/u,
+  );
+});
+
+test("capability composition enforces required selected surfaces", () => {
+  const capability = { ...acmeSuperbunapiCapability(), requiredSurfaces: ["js"] };
+  assert.throws(
+    () => composeRustCapabilities("rust", [capability], []),
+    /requires unselected surface 'js'/u,
+  );
+  assert.doesNotThrow(() => composeRustCapabilities("rust", [capability], ["js"]));
 });
 
 test("wrong-target capabilities fail closed in local composition", async () => {
   const capability = { ...acmeSuperbunapiCapability(), targetId: "csharp" };
   assert.throws(
-    () => composeRustCapabilities("rust", [capability]),
+    () => composeRustCapabilities("rust", [capability], []),
     /targets 'csharp', not selected target 'rust'/u,
   );
 });
 
 test("simulated installed layout resolves target runtime crates end to end", { timeout: 300_000 }, async () => {
-  const { cpSync, mkdirSync, rmSync, existsSync } = await import("node:fs");
+  const { existsSync, mkdirSync, writeFileSync } = await import("node:fs");
   const { resolve } = await import("node:path");
-  const layoutRoot = resolve(".temp/installed-target/node_modules/@tsonic/target-rust");
-  rmSync(resolve(".temp/installed-target"), { recursive: true, force: true });
-  mkdirSync(layoutRoot, { recursive: true });
-  for (const entry of ["package.json", "runtimes"]) {
-    cpSync(resolve(entry), resolve(layoutRoot, entry), { recursive: true });
+  const { pathToFileURL } = await import("node:url");
+  const installedRoot = buildInstalledLayout();
+  const scopeRoot = resolve(installedRoot, "node_modules/@tsonic");
+  const jsManifest = resolve(scopeRoot, "rust-js/crates/tsonic_rust_js/Cargo.toml");
+  const runtimeManifest = resolve(scopeRoot, "rust-runtime/crates/tsonic_rust_runtime/Cargo.toml");
+  const nodeManifest = resolve(scopeRoot, "rust-nodejs/rust/crates/tsonic_rust_node/Cargo.toml");
+  for (const manifest of [jsManifest, runtimeManifest, nodeManifest]) {
+    assert.ok(existsSync(manifest), `missing installed runtime manifest ${manifest}`);
   }
-  // The packaged js crate's runtime dependency resolves inside the package.
-  assert.ok(existsSync(resolve(layoutRoot, "runtimes/crates/tsonic_rust_js/Cargo.toml")));
-  assert.ok(existsSync(resolve(layoutRoot, "runtimes/crates/tsonic_rust_runtime/Cargo.toml")));
+  const targetModule = await import(pathToFileURL(resolve(scopeRoot, "target-rust/dist/index.js")).href);
+  const nodeModule = await import(pathToFileURL(resolve(scopeRoot, "rust-nodejs/dist/index.js")).href);
+  const targetPack = targetModule.createTsonicPlugin().createTargetPack();
+  const nodeCapability = nodeModule.createTsonicPlugin();
+  const jsSurface = targetPack.surfaces.find((surface) => surface.id === "js");
+  assert.ok(jsSurface);
+  const consumerRoot = resolve(installedRoot, "consumer");
+  mkdirSync(resolve(consumerRoot, "src"), { recursive: true });
+  const context = {
+    target: { id: "rust", options: {} },
+    selectedSurfaces: [jsSurface],
+    selectedCapabilities: [nodeCapability],
+    paths: { projectRoot: consumerRoot },
+  };
+  const references = [
+    ...targetPack.provider.runtimeContributions(context).references,
+    ...jsSurface.runtimeContributions(context).references,
+    ...nodeCapability.runtimeContributions(context).references,
+  ];
+  const plan = targetModule.planCargoManifest(context.target, references);
+  assert.deepEqual(plan.diagnostics, []);
+  const generatedManifest = targetModule.printCargoManifest(plan.manifest);
+  writeFileSync(resolve(consumerRoot, "Cargo.toml"), generatedManifest);
+  writeFileSync(resolve(consumerRoot, "src/lib.rs"), "pub fn installed_layout_proof() {}\n");
+  for (const crate of ["tsonic_rust_runtime", "tsonic_rust_js", "tsonic_rust_node"]) {
+    assert.equal(generatedManifest.split("\n").filter((line) => line.startsWith(`${crate} = `)).length, 2,
+      `${crate} must have one direct dependency and one explicit registry patch`);
+  }
   const { execFileSync } = await import("node:child_process");
   const metadata = execFileSync("cargo", [
-    "metadata", "--no-deps", "--format-version", "1", "--offline",
-    "--manifest-path", resolve(layoutRoot, "runtimes/crates/tsonic_rust_js/Cargo.toml"),
+    "metadata", "--format-version", "1", "--offline",
+    "--manifest-path", resolve(consumerRoot, "Cargo.toml"),
   ], { encoding: "utf8" });
-  assert.ok(JSON.parse(metadata).packages.some((entry) => entry.name === "tsonic_rust_js"));
+  const packages = JSON.parse(metadata).packages;
+  for (const [crate, expectedManifest] of [
+    ["tsonic_rust_node", nodeManifest],
+    ["tsonic_rust_js", jsManifest],
+    ["tsonic_rust_runtime", runtimeManifest],
+  ]) {
+    const matches = packages.filter((entry) => entry.name === crate);
+    assert.equal(matches.length, 1, `${crate} must resolve exactly once`);
+    assert.equal(resolve(matches[0].manifest_path), expectedManifest);
+  }
 });
 
 test("telemetry capability proves async and fallible rows through a runtime binary", { timeout: 300_000 }, async () => {
@@ -178,7 +238,8 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const manifest = artifactText(result, "Cargo.toml");
   for (const crate of ["acme_superbunapi", "acme_telemetry", "acme_testing"]) {
-    assert.equal(manifest.split(`${crate} = `).length, 2, `${crate} appears exactly once`);
+    assert.equal(manifest.split("\n").filter((line) => line.startsWith(`${crate} = `)).length, 1,
+      `${crate} must have one direct path dependency and no inferred registry patch`);
   }
   const run = validateGeneratedProject("multi-cap-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);

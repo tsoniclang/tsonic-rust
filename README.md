@@ -102,21 +102,22 @@ generated Cargo projects under `.temp/generated/` validated with
 
 ## Runtime artifact rule
 
-Packaged runtime crates ship inside their npm package under
-`runtimes/crates/`, with lib-only manifests (no repo-relative test
-targets), a `[workspace]` opt-out so consumer workspaces never capture
-them, and complete dependency closure: target-owned crates reference
-their in-package siblings by relative path, and capability crates
-reference target-owned crates through the flat node_modules peer layout
-(`../../../../target-rust/runtimes/crates/<crate>`). Generated Cargo
-manifests reference only installed package paths.
+Each runtime npm package owns one canonical Cargo source tree:
+`@tsonic/rust-runtime/crates/tsonic_rust_runtime`,
+`@tsonic/rust-js/crates/tsonic_rust_js`, and capability-owned crate paths
+such as `@tsonic/rust-nodejs/rust/crates/tsonic_rust_node`. Target packages
+never copy runtime sources. Runtime contributions carry absolute installed
+crate paths, so npm packages may be hoisted or nested independently. A crate
+that intentionally replaces the same exact crate from crates.io declares that
+registry-source relationship explicitly; generated Cargo manifests patch only
+those declared crates and never infer replacements from package or crate names.
 
 ## Authoring provider packages
 
 Use `createRustProviderPackage`: declare virtual modules
 (`ProviderExportDeclaration` models), identity-keyed operation rows
-(`exportId`/`memberId`/`signatureId`/`receiverTypeId` plus a Rust operation
+(`exportId`/`memberId`/`signatureId` plus a Rust operation
 form), and cargo crate contributions. Concrete names live only in row data;
 the generic matcher contains no per-name branching. See
-`src/source/provider-packages/nodejs.ts` and the `@acme/*` fixtures under
+`src/source/provider-packages/index.ts` and the `@acme/*` fixtures under
 `test/helpers/rust-session.mjs`.

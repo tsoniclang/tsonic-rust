@@ -12,8 +12,11 @@ export interface RustCapabilityCompositionResult {
 export function composeRustCapabilities(
   targetId: string,
   candidates: readonly TsonicTargetCapabilityPlugin[],
+  selectedSurfaceIds: readonly string[],
 ): RustCapabilityCompositionResult {
   const owners = new Map<string, string>();
+  const capabilityIds = new Set<string>();
+  const selectedSurfaces = new Set(selectedSurfaceIds);
   const capabilities: TsonicTargetCapabilityPlugin[] = [];
   for (const capability of candidates) {
     if (capability.kind !== "target-capability") {
@@ -24,14 +27,23 @@ export function composeRustCapabilities(
         `Capability '${capability.id}' targets '${capability.targetId}', not selected target '${targetId}'.`,
       );
     }
+    if (capabilityIds.has(capability.id)) {
+      throw new Error(`Target '${targetId}' selected capability '${capability.id}' more than once.`);
+    }
+    capabilityIds.add(capability.id);
+    const missingSurfaces = (capability.requiredSurfaces ?? []).filter((surface) => !selectedSurfaces.has(surface));
+    if (missingSurfaces.length > 0) {
+      throw new Error(`Capability '${capability.id}' requires unselected surface${missingSurfaces.length === 1 ? "" : "s"} ${missingSurfaces.map((surface) => `'${surface}'`).join(", ")}.`);
+    }
     if (capability.moduleOwnership.length === 0 || capability.moduleOwnership.some((ownership) => ownership.specifierPrefix.length === 0)) {
       throw new Error(`Capability '${capability.id}' declares empty module ownership.`);
     }
     for (const ownership of capability.moduleOwnership) {
-      const existing = owners.get(ownership.specifierPrefix);
-      if (existing !== undefined) {
+      const conflict = [...owners.entries()].find(([prefix, ownerId]) =>
+        ownerId !== capability.id && ownershipPrefixesOverlap(prefix, ownership.specifierPrefix));
+      if (conflict !== undefined) {
         throw new Error(
-          `Ambiguous Tsonic capability ownership for target '${targetId}' and module prefix '${ownership.specifierPrefix}': '${existing}' and '${capability.id}'.`,
+          `Ambiguous Tsonic capability ownership for target '${targetId}' and module prefixes '${conflict[0]}' and '${ownership.specifierPrefix}': '${conflict[1]}' and '${capability.id}'.`,
         );
       }
       owners.set(ownership.specifierPrefix, capability.id);
@@ -39,4 +51,13 @@ export function composeRustCapabilities(
     capabilities.push(capability);
   }
   return { capabilities };
+}
+
+function ownershipPrefixesOverlap(left: string, right: string): boolean {
+  return moduleMatchesPrefix(left, right) || moduleMatchesPrefix(right, left);
+}
+
+function moduleMatchesPrefix(moduleSpecifier: string, prefix: string): boolean {
+  return moduleSpecifier === prefix || moduleSpecifier.startsWith(`${prefix}/`) ||
+    (/[:/]$/u.test(prefix) && moduleSpecifier.startsWith(prefix));
 }

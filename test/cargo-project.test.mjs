@@ -1,22 +1,52 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRustBackend, planCargoManifest, printCargoManifest } from "../dist/index.js";
 import { fakeCompileInput, fakeSourceFile } from "./helpers/fake-compile-input.mjs";
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const runtimeCrate = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
+const jsCrate = resolve(repositoryRoot, "../rust-js/crates/tsonic_rust_js");
+const fixtureRoot = resolve(repositoryRoot, ".temp/cargo-project-fixtures");
+
+function materializedCrate(name, identity = name) {
+  const root = resolve(fixtureRoot, identity);
+  mkdirSync(resolve(root, "src"), { recursive: true });
+  writeFileSync(resolve(root, "Cargo.toml"), [
+    "[package]",
+    `name = "${name}"`,
+    'version = "0.1.0"',
+    'edition = "2021"',
+    "",
+  ].join("\n"));
+  writeFileSync(resolve(root, "src/lib.rs"), "pub fn fixture() {}\n");
+  return root;
+}
 
 const backendContext = {
   project: { entryPoint: "src/index.ts", targets: [] },
   target: { id: "rust", options: {} },
 };
 
-function runtimeReference(crate, path) {
-  return { kind: "cargo-path", include: path, attributes: { crate } };
+function runtimeReference(crate, path, { registryPatch } = {}) {
+  return {
+    kind: "cargo-path",
+    include: path,
+    attributes: { crate, ...(registryPatch === undefined ? {} : { registryPatch }) },
+  };
 }
 
 test("empty program emits a deterministic cargo library project", () => {
   const backend = createRustBackend(backendContext);
   const result = backend.compile(fakeCompileInput({
     sourceFiles: [fakeSourceFile({ fileName: "src/empty.ts", text: "", statements: [] })],
-    runtimeReferences: [runtimeReference("tsonic_rust_runtime", "/repos/rust-runtime/crates/tsonic_rust_runtime")],
+    runtimeReferences: [runtimeReference(
+      "tsonic_rust_runtime",
+      runtimeCrate,
+      { registryPatch: "crates-io" },
+    )],
   }));
 
   assert.deepEqual(result.diagnostics, []);
@@ -32,8 +62,13 @@ test("empty program emits a deterministic cargo library project", () => {
     'version = "0.1.0"',
     'edition = "2021"',
     "",
+    "[workspace]",
+    "",
     "[dependencies]",
-    'tsonic_rust_runtime = { path = "/repos/rust-runtime/crates/tsonic_rust_runtime" }',
+    `tsonic_rust_runtime = { path = "${runtimeCrate}" }`,
+    "",
+    "[patch.crates-io]",
+    `tsonic_rust_runtime = { path = "${runtimeCrate}" }`,
     "",
   ].join("\n"));
   const librarySource = result.artifacts[1];
@@ -51,7 +86,11 @@ test("bin output without an exported entry main fails closed", () => {
   const backend = createRustBackend(backendContext);
   const result = backend.compile(fakeCompileInput({
     target: { id: "rust", options: { outputType: "bin", crateName: "my_app", edition: "2024" } },
-    runtimeReferences: [runtimeReference("tsonic_rust_runtime", "/repos/rust-runtime/crates/tsonic_rust_runtime")],
+    runtimeReferences: [runtimeReference(
+      "tsonic_rust_runtime",
+      runtimeCrate,
+      { registryPatch: "crates-io" },
+    )],
   }));
 
   assert.equal(result.artifacts.length, 0);
@@ -60,9 +99,9 @@ test("bin output without an exported entry main fails closed", () => {
 
 test("cargo dependencies are sorted and deduplicated deterministically", () => {
   const plan = planCargoManifest({ id: "rust", options: {} }, [
-    runtimeReference("tsonic_rust_runtime", "/repos/rust-runtime/crates/tsonic_rust_runtime"),
-    runtimeReference("tsonic_rust_js", "/repos/rust-js/crates/tsonic_rust_js"),
-    runtimeReference("tsonic_rust_runtime", "/repos/rust-runtime/crates/tsonic_rust_runtime"),
+    runtimeReference("tsonic_rust_runtime", runtimeCrate),
+    runtimeReference("tsonic_rust_js", jsCrate),
+    runtimeReference("tsonic_rust_runtime", runtimeCrate),
   ]);
 
   assert.deepEqual(plan.diagnostics, []);
@@ -83,10 +122,43 @@ test("unknown runtime reference kinds fail closed without artifacts", () => {
   assert.equal(result.diagnostics[0].code, "RUST_UNSUPPORTED_RUNTIME_REFERENCE");
 });
 
-test("conflicting crate paths for the same crate name fail closed", () => {
+test("only explicit registry-source replacements become Cargo patches", () => {
+  const acmeProvider = materializedCrate("acme_provider");
   const plan = planCargoManifest({ id: "rust", options: {} }, [
-    runtimeReference("tsonic_rust_runtime", "/repos/a/tsonic_rust_runtime"),
-    runtimeReference("tsonic_rust_runtime", "/repos/b/tsonic_rust_runtime"),
+    runtimeReference("acme_provider", acmeProvider),
+    runtimeReference("tsonic_rust_runtime", runtimeCrate, {
+      registryPatch: "crates-io",
+    }),
+  ]);
+  assert.deepEqual(plan.diagnostics, []);
+  const text = printCargoManifest(plan.manifest);
+
+  assert.match(text, new RegExp(`\\[dependencies\\][\\s\\S]*acme_provider = \\{ path = "${acmeProvider}" \\}`, "u"));
+  assert.match(text, new RegExp(`\\[patch\\.crates-io\\]\\ntsonic_rust_runtime = \\{ path = "${runtimeCrate}" \\}`, "u"));
+  assert.doesNotMatch(text, /\[patch\.crates-io\][\s\S]*acme_provider =/u);
+});
+
+test("unknown and conflicting registry patch contracts fail closed", () => {
+  const unknown = planCargoManifest({ id: "rust", options: {} }, [
+    runtimeReference("tsonic_rust_runtime", runtimeCrate, { registryPatch: "private-registry" }),
+  ]);
+  assert.equal(unknown.manifest, undefined);
+  assert.equal(unknown.diagnostics.length, 1);
+
+  const conflicting = planCargoManifest({ id: "rust", options: {} }, [
+    runtimeReference("tsonic_rust_runtime", runtimeCrate),
+    runtimeReference("tsonic_rust_runtime", runtimeCrate, { registryPatch: "crates-io" }),
+  ]);
+  assert.equal(conflicting.manifest, undefined);
+  assert.equal(conflicting.diagnostics.length, 1);
+});
+
+test("conflicting crate paths for the same crate name fail closed", () => {
+  const first = materializedCrate("conflicting_runtime", "conflicting-runtime-a");
+  const second = materializedCrate("conflicting_runtime", "conflicting-runtime-b");
+  const plan = planCargoManifest({ id: "rust", options: {} }, [
+    runtimeReference("conflicting_runtime", first),
+    runtimeReference("conflicting_runtime", second),
   ]);
 
   assert.equal(plan.manifest, undefined);
@@ -102,4 +174,53 @@ test("toml strings escape quotes and backslashes", () => {
   });
 
   assert.match(text, /dep = \{ path = "C:\\\\repos\\\\\\"odd\\"" \}/);
+  assert.equal(text.match(/dep = \{ path = /gu)?.length, 1);
+  assert.doesNotMatch(text, /\[patch\.crates-io\]/u);
+});
+
+test("toml strings escape every forbidden control character", () => {
+  const text = printCargoManifest({
+    packageName: "tsonic_generated",
+    edition: "2021",
+    outputType: "lib",
+    dependencies: [{ name: "dep", path: "line\ncol\ttab\rreturn\bback\fform\u0000nul\u001funit\u007fdel" }],
+  });
+
+  assert.match(text, /path = "line\\ncol\\ttab\\rreturn\\bback\\fform\\u0000nul\\u001funit\\u007fdel"/u);
+  const dependencyLine = text.split("\n").find((line) => line.startsWith("dep = "));
+  assert.ok(dependencyLine);
+  assert.doesNotMatch(dependencyLine, /[\u0000-\u001f\u007f]/u);
+});
+
+test("Cargo path references require exact materialized crate identity", () => {
+  const wrongIdentity = materializedCrate("actual_crate", "wrong-identity");
+  const missing = resolve(fixtureRoot, "missing-crate");
+  const malformed = resolve(fixtureRoot, "malformed-crate");
+  mkdirSync(malformed, { recursive: true });
+  writeFileSync(resolve(malformed, "Cargo.toml"), "[package]\nname.workspace = true\n");
+
+  for (const [reference, expectedMessage] of [
+    [runtimeReference("declared_crate", wrongIdentity), /conflicts with Cargo package 'actual_crate'/u],
+    [runtimeReference("missing_crate", missing), /crate directory cannot be read/u],
+    [runtimeReference("malformed_crate", malformed), /must declare one direct literal/u],
+    [runtimeReference("bad-name", wrongIdentity), /not a valid Rust crate identifier/u],
+    [{ ...runtimeReference("actual_crate", wrongIdentity), attributes: { crate: "actual_crate", guess: "yes" } }, /attribute 'guess'/u],
+    [runtimeReference("actual_crate", `${wrongIdentity}/../wrong-identity`), /absolute normalized path/u],
+  ]) {
+    const plan = planCargoManifest({ id: "rust", options: {} }, [reference]);
+    assert.equal(plan.manifest, undefined);
+    assert.equal(plan.diagnostics.length, 1);
+    assert.equal(plan.diagnostics[0].code, "RUST_INVALID_CARGO_REFERENCE");
+    assert.match(plan.diagnostics[0].message, expectedMessage);
+  }
+});
+
+test("sparse Cargo runtime-reference lists fail closed", () => {
+  const references = new Array(2);
+  references[1] = runtimeReference("tsonic_rust_runtime", runtimeCrate);
+  const plan = planCargoManifest({ id: "rust", options: {} }, references);
+
+  assert.equal(plan.manifest, undefined);
+  assert.equal(plan.diagnostics.length, 1);
+  assert.match(plan.diagnostics[0].message, /sparse slot at index 0/u);
 });
