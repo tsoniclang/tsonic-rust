@@ -1,18 +1,26 @@
 import type { TargetDiagnostic, TargetRuntimeReference, TargetSelection } from "@tsonic/target-api";
+import { materializeCargoCrate } from "../../common/cargo-package.js";
 import {
   readRustCrateName,
   readRustEdition,
   readRustOutputType,
 } from "../../options/rust-target-options.js";
 import type { RustEdition, RustOutputType } from "../../options/rust-target-options.js";
-import { missingRuntimeReferenceDiagnostic } from "./diagnostics.js";
+import {
+  invalidCargoRuntimeReferenceDiagnostic,
+  missingRuntimeReferenceDiagnostic,
+} from "./diagnostics.js";
+import { isValidRustIdentifier } from "./plan-context.js";
 
 export const cargoPathReferenceKind = "cargo-path";
 export const cargoCrateAttributeName = "crate";
+export const cargoRegistryPatchAttributeName = "registryPatch";
+export const cargoCratesIoRegistry = "crates-io";
 
 export interface CargoDependency {
   readonly name: string;
   readonly path: string;
+  readonly registryPatch?: typeof cargoCratesIoRegistry;
 }
 
 export interface CargoManifestPlan {
@@ -33,22 +41,90 @@ export function planCargoManifest(
 ): CargoManifestPlanResult {
   const diagnostics: TargetDiagnostic[] = [];
   const dependenciesByName = new Map<string, CargoDependency>();
-  for (const reference of runtimeReferences) {
+  for (let index = 0; index < runtimeReferences.length; index += 1) {
+    if (!(index in runtimeReferences)) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        undefined,
+        `runtime reference list contains a sparse slot at index ${index}.`,
+        [`runtime.reference.index=${index}`],
+      ));
+      continue;
+    }
+    const reference = runtimeReferences[index];
+    if (reference === undefined || typeof reference !== "object") {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference,
+        `runtime reference at index ${index} is not an object.`,
+        [`runtime.reference.index=${index}`],
+      ));
+      continue;
+    }
     if (reference.kind !== cargoPathReferenceKind) {
       diagnostics.push(missingRuntimeReferenceDiagnostic(reference.kind, reference.include));
       continue;
     }
-    const crateName = reference.attributes?.[cargoCrateAttributeName];
-    if (crateName === undefined || crateName.length === 0) {
-      diagnostics.push(missingRuntimeReferenceDiagnostic(reference.kind, reference.include));
+    if (typeof reference.include !== "string" || reference.include.length === 0) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        "include must be a non-empty absolute crate directory path.",
+      ));
       continue;
     }
+    const attributes = reference.attributes;
+    if (attributes === undefined || attributes === null || typeof attributes !== "object" || Array.isArray(attributes)) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        "attributes must be an object containing an explicit crate identity.",
+      ));
+      continue;
+    }
+    const unsupportedAttribute = Object.keys(attributes)
+      .find((key) => key !== cargoCrateAttributeName && key !== cargoRegistryPatchAttributeName);
+    if (unsupportedAttribute !== undefined) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        `attribute '${unsupportedAttribute}' is not part of the Cargo path reference contract.`,
+      ));
+      continue;
+    }
+    const crateName = attributes[cargoCrateAttributeName];
+    if (typeof crateName !== "string" || !isValidRustIdentifier(crateName)) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        `crate attribute '${String(crateName)}' is not a valid Rust crate identifier.`,
+      ));
+      continue;
+    }
+    const registryPatch = attributes[cargoRegistryPatchAttributeName];
+    if (registryPatch !== undefined && registryPatch !== cargoCratesIoRegistry) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        `registry patch '${String(registryPatch)}' is unsupported.`,
+        [`runtime.reference.crate=${crateName}`],
+      ));
+      continue;
+    }
+    const materialized = materializeCargoCrate(reference.include, crateName);
+    if ("reason" in materialized) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        materialized.reason,
+        materialized.details,
+      ));
+      continue;
+    }
+    const dependency: CargoDependency = {
+      name: crateName,
+      path: materialized.path,
+      ...(registryPatch === cargoCratesIoRegistry ? { registryPatch } : {}),
+    };
     const existing = dependenciesByName.get(crateName);
-    if (existing !== undefined && existing.path !== reference.include) {
+    if (existing !== undefined &&
+      (existing.path !== dependency.path || existing.registryPatch !== dependency.registryPatch)) {
       diagnostics.push(missingRuntimeReferenceDiagnostic(reference.kind, reference.include));
       continue;
     }
-    dependenciesByName.set(crateName, { name: crateName, path: reference.include });
+    dependenciesByName.set(crateName, dependency);
   }
   if (diagnostics.length > 0) {
     return { diagnostics };

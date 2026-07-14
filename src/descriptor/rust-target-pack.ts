@@ -1,5 +1,5 @@
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import type {
   TargetBackend,
   TargetBackendContext,
@@ -14,15 +14,24 @@ import type {
 import type { CompilerExtension } from "@tsonic/tsts";
 import { createRustBackend } from "../backend/rust-backend.js";
 import { createRustTargetSemanticsExtension } from "../source/rust-target-semantics/index.js";
-import { cargoCrateAttributeName, cargoPathReferenceKind } from "../backend/planner/cargo-project.js";
+import {
+  cargoCrateAttributeName,
+  cargoCratesIoRegistry,
+  cargoPathReferenceKind,
+  cargoRegistryPatchAttributeName,
+} from "../backend/planner/cargo-project.js";
 import {
   readRustTypescriptCompatibilityMode,
   validateRustTargetOptions,
 } from "../options/rust-target-options.js";
 import { createCargoToolchain } from "../toolchain/cargo-toolchain.js";
+import {
+  rustJsSurfaceSourceProfileContributions,
+  rustSourceProfileContributions,
+} from "../source/rust-target-semantics/source-profile-declarations.js";
 
 export const rustTargetId = "rust";
-const targetPackageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const require = createRequire(import.meta.url);
 
 // The pack declares only what is implemented; undeclared surfaces and
 // provider packages fail at the host.
@@ -33,6 +42,7 @@ export function createRustTargetPack(): TargetPack {
     provider: {
       id: "rust-provider",
       displayName: "Rust target provider",
+      sourceProfileContributions: rustSourceProfileContributions,
       createExtensions(context: TargetProviderContext): readonly CompilerExtension[] {
         validateRustTargetOptions(context.target);
         return [createRustTargetSemanticsExtension(context)];
@@ -40,7 +50,7 @@ export function createRustTargetPack(): TargetPack {
       runtimeContributions(context: TargetRuntimeContributionContext): TargetRuntimeContributions {
         return {
           references: [
-            rustRuntimeCrateReference("rust-runtime", "tsonic_rust_runtime"),
+            rustRuntimeCrateReference(context, "@tsonic/rust-runtime", "tsonic_rust_runtime"),
             ...rustTypescriptCompatibilityRuntimeReferences(context),
           ],
         };
@@ -50,9 +60,10 @@ export function createRustTargetPack(): TargetPack {
       {
         id: "js",
         displayName: "JavaScript surface",
+        sourceProfileContributions: rustJsSurfaceSourceProfileContributions,
         runtimeContributions(_context: TargetRuntimeContributionContext): TargetRuntimeContributions {
           return {
-            references: [rustRuntimeCrateReference("rust-js", "tsonic_rust_js")],
+            references: [rustRuntimeCrateReference(_context, "@tsonic/rust-js", "tsonic_rust_js")],
           };
         },
       },
@@ -68,20 +79,38 @@ export function createRustTargetPack(): TargetPack {
   };
 }
 
-function rustRuntimeCrateReference(repositoryName: string, crateName: string): TargetRuntimeReference {
-  void repositoryName;
-  // Target-owned runtime crates ship inside this package; the reference
-  // resolves from the installed package root.
+function rustRuntimeCrateReference(
+  context: TargetRuntimeContributionContext,
+  packageName: string,
+  crateName: string,
+): TargetRuntimeReference {
+  const packageRoot = resolveRuntimePackageRoot(context, packageName);
   return {
     kind: cargoPathReferenceKind,
-    include: resolve(targetPackageRoot, `runtimes/crates/${crateName}`),
-    attributes: { [cargoCrateAttributeName]: crateName },
+    include: resolve(packageRoot, `crates/${crateName}`),
+    attributes: {
+      [cargoCrateAttributeName]: crateName,
+      [cargoRegistryPatchAttributeName]: cargoCratesIoRegistry,
+    },
   };
+}
+
+function resolveRuntimePackageRoot(context: TargetRuntimeContributionContext, packageName: string): string {
+  const packageJsonSpecifier = `${packageName}/package.json`;
+  const projectRequire = createRequire(resolve(context.paths.projectRoot, "package.json"));
+  for (const resolver of [projectRequire, require]) {
+    try {
+      return dirname(resolver.resolve(packageJsonSpecifier));
+    } catch {
+      continue;
+    }
+  }
+  throw new Error(`Required Rust runtime package '${packageName}' is not installed or does not export package.json.`);
 }
 
 function rustTypescriptCompatibilityRuntimeReferences(context: TargetRuntimeContributionContext): readonly TargetRuntimeReference[] {
   if (readRustTypescriptCompatibilityMode(context.target) !== "compat" || context.selectedSurfaces.some((surface) => surface.id === "js")) {
     return [];
   }
-  return [rustRuntimeCrateReference("rust-js", "tsonic_rust_js")];
+  return [rustRuntimeCrateReference(context, "@tsonic/rust-js", "tsonic_rust_js")];
 }

@@ -1,7 +1,29 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
+import {
+  acmeTestingPackage,
+  artifactText,
+  compileRust,
+  createRustSession,
+  nodejsCapability,
+  rustSourceDiagnostics,
+} from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
+
+function assertSourceSemanticRejection(options, expectedMessages) {
+  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
+  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
+    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
+    assert.ok(match, `unexpected source diagnostic: ${line}`);
+    return match[1];
+  });
+  assert.deepEqual(actualMessages, expectedMessages);
+  assert.throws(
+    () => compileRust(options),
+    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
+    "source diagnostics must block backend artifact handoff",
+  );
+}
 
 test("buffer, url, crypto, process, and util lower through provider rows", async () => {
   const { result } = compileRust({
@@ -34,14 +56,14 @@ export function probe(): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /node_buffer::Buffer::from_string_enc\("hi", "utf8"\)\?/u);
-  assert.match(text, /buf\.len\(\) as i32/u);
-  assert.match(text, /node_url::Url::parse\("https:\/\/example\.com\/a\?b=1", None\)\?/u);
-  assert.match(text, /node_url::UrlSearchParams::new_from\("x=1"\)\?/u);
+  assert.match(text, /tsonic_rust_node::buffer::Buffer::from_string_enc\("hi", "utf8"\)\?/u);
+  assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(buf\.len\(\)\)\?/u);
+  assert.match(text, /tsonic_rust_node::url::Url::parse\("https:\/\/example\.com\/a\?b=1", None\)\?/u);
+  assert.match(text, /tsonic_rust_node::url::UrlSearchParams::new_from\("x=1"\)\?/u);
   assert.match(text, /h\.update_str\("abc"\)\?/u);
   assert.match(text, /h\.digest_string\("hex"\)\?/u);
-  assert.match(text, /node_process::pid\(\) as i32/u);
-  assert.match(text, /node_process::env_get\("PATH"\)\.unwrap_or\(/u);
+  assert.match(text, /tsonic_rust_runtime::conversions::u32_to_i32\(tsonic_rust_node::process::pid\(\)\)\?/u);
+  assert.match(text, /tsonic_rust_node::process::env_get\("PATH"\)\.unwrap_or\(/u);
 });
 
 test("generated cargo binary proves the multi-module node closure at runtime", { timeout: 300_000 }, async () => {
@@ -187,8 +209,8 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub async fn roundtrip\(dir: &str, file: String\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /node_fs_promises::mkdir_async\(dir, true\)\.await\?/u);
-  assert.match(text, /node_fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(dir, true\)\.await\?/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
@@ -206,8 +228,15 @@ export function bad(): void {
 `,
     },
   });
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), [{
+    code: "RUST_CHECKED_OPERATION_NOT_FINALIZED",
+    message: "Checked Rust operation has no finalized target fact after post-check carrier closure.",
+    evidence: [
+      "target.capability=rust.operation.post-check-finalization",
+      "source.operatorKind=KindEqualsToken",
+    ],
+  }]);
 });
 
 test("absent env and search-param reads preserve null", async () => {
@@ -230,7 +259,7 @@ export function read(name: string): string {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /node_process::env_get\(&name\)/u);
+  assert.match(text, /tsonic_rust_node::process::env_get\(&name\)/u);
   assert.match(text, /value\.is_none\(\)/u);
 });
 
@@ -242,7 +271,7 @@ test("unsupported node APIs fail closed with deterministic diagnostics", async (
 
   ];
   for (const item of cases) {
-    const { result } = compileRust({
+    const options = {
       surfaces: ["js"],
       capabilities: [await nodejsCapability()],
       files: {
@@ -254,8 +283,9 @@ export function bad(): void {
 }
 `,
       },
-    });
-    assert.equal(result.artifacts.length, 0, `${item.module}::${item.name} must not emit artifacts`);
-    assert.ok(result.diagnostics.length > 0, `${item.module}::${item.name} must diagnose`);
+    };
+    assertSourceSemanticRejection(options, [
+      `No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::${item.module}::${item.name}::${item.module}::${item.name}(...)' as method.`,
+    ]);
   }
 });

@@ -60,6 +60,24 @@ export function missingRuntimeReferenceDiagnostic(kind: string, include: string)
   };
 }
 
+export function invalidCargoRuntimeReferenceDiagnostic(
+  include: unknown,
+  reason: string,
+  details: readonly string[] = [],
+): TargetDiagnostic {
+  return {
+    code: "RUST_INVALID_CARGO_REFERENCE",
+    category: "error",
+    source: "tsonic-rust",
+    message: `The Rust target rejected a Cargo path runtime reference: ${reason}`,
+    evidence: [
+      "target.capability=rust.toolchain.runtime-reference",
+      `runtime.reference.include=${String(include)}`,
+      ...details,
+    ],
+  };
+}
+
 function sourceSpanEvidence(text: string, pos: number, end: number): readonly string[] {
   if (!isValidByteSpan(pos, end)) {
     return [];

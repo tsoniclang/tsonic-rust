@@ -11,6 +11,9 @@ import type {
 // supported construct set: 4-space indent, no trailing whitespace, one blank
 // line between items, trailing newline.
 
+const rustFormatWidth = 100;
+const rustFunctionCallWidth = 60;
+
 export function printRustSourceFile(model: RustSourceFileModel): string {
   const parts: string[] = [`// ${model.headerComment}`];
   for (const item of model.items) {
@@ -30,14 +33,15 @@ export function printRustItem(item: RustItem): string {
     }
     case "const": {
       const constAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
-      return `${constAttrs}${item.pub ? "pub " : ""}const ${item.name}: ${printRustType(item.type)} = ${printRustExpr(item.value)};`;
+      const prefix = `${constAttrs}${item.pub ? "pub " : ""}const ${item.name}: ${printRustType(item.type)} = `;
+      return `${prefix}${printRustExprFitted(item.value, 0, lastLineLength(prefix))};`;
     }
     case "struct": {
       const structAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
       const header = `${structAttrs}${derives}${item.pub ? "pub " : ""}struct ${item.name} {`;
-      const fields = item.fields.map((field) => `    pub ${field.name}: ${printRustType(field.type)},`).join("\n");
-      return fields.length === 0 ? `${structAttrs}${derives}${item.pub ? "pub " : ""}struct ${item.name};` : `${header}\n${fields}\n}`;
+      const fields = item.fields.map((field) => `    ${field.pub ? "pub " : ""}${field.name}: ${printRustType(field.type)},`).join("\n");
+      return fields.length === 0 ? `${header}}` : `${header}\n${fields}\n}`;
     }
     case "enum": {
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
@@ -83,6 +87,9 @@ export function printRustType(type: RustType): string {
     case "string": {
       return "String";
     }
+    case "str-ref": {
+      return "&str";
+    }
     case "unit": {
       return "()";
     }
@@ -92,11 +99,15 @@ export function printRustType(type: RustType): string {
         ? type.path
         : `${type.path}<${args.map(printRustType).join(", ")}>`;
     }
+    case "fixed-array": {
+      return `[${printRustType(type.element)}; ${type.length}]`;
+    }
     case "slice-ref": {
       return `${type.mutable ? "&mut " : "&"}[${printRustType(type.element)}]`;
     }
     case "tuple": {
-      return `(${type.elements.map(printRustType).join(", ")})`;
+      const elements = type.elements.map(printRustType).join(", ");
+      return `(${elements}${type.elements.length === 1 ? "," : ""})`;
     }
   }
 }
@@ -121,21 +132,24 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     case "let": {
       const mutability = statement.mutable ? "mut " : "";
       const typeSuffix = statement.type === undefined ? "" : `: ${printRustType(statement.type)}`;
-      return `${indent}let ${mutability}${statement.name}${typeSuffix} = ${printRustExpr(statement.init)};`;
+      const prefix = `${indent}let ${mutability}${statement.name}${typeSuffix} = `;
+      return `${prefix}${printRustExprFitted(statement.init, depth, prefix.length)};`;
     }
     case "expr": {
-      return `${indent}${printRustExpr(statement.expr)};`;
+      return `${indent}${printRustExprFitted(statement.expr, depth, indent.length)};`;
     }
     case "assign": {
-      return `${indent}${printRustExpr(statement.target)} ${statement.operator} ${printRustExpr(statement.value)};`;
+      const target = printRustExprFitted(statement.target, depth, indent.length);
+      const prefix = `${indent}${target} ${statement.operator} `;
+      return `${prefix}${printRustExprFitted(statement.value, depth, lastLineLength(prefix))};`;
     }
     case "return": {
       return statement.expr === undefined
         ? `${indent}return;`
-        : `${indent}return ${printRustExpr(statement.expr)};`;
+        : `${indent}return ${printRustExprFitted(statement.expr, depth, indent.length + "return ".length)};`;
     }
     case "tail": {
-      return `${indent}${printRustExpr(statement.expr)}`;
+      return `${indent}${printRustExprFitted(statement.expr, depth, indent.length)}`;
     }
     case "if": {
       const rendered = printRustBlock(statement.then, depth, `if ${printRustExpr(statement.condition)}`);
@@ -156,7 +170,10 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return printRustBlock(statement.body, depth, `for ${statement.binding} in ${printRustExpr(statement.iterable)}`);
     }
     case "index-assign": {
-      return `${indent}${printOperand(statement.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(statement.index)}] = ${printRustExpr(statement.value)};`;
+      const receiver = printOperand(statement.receiver, RustPrecedence.Postfix, false);
+      const index = printRustExprFitted(statement.index, depth, indent.length + receiver.length + 1);
+      const prefix = `${indent}${receiver}[${index}] = `;
+      return `${prefix}${printRustExprFitted(statement.value, depth, lastLineLength(prefix))};`;
     }
     case "scope": {
       const body = printRustBlockStatements(statement.body, depth + 1);
@@ -225,7 +242,6 @@ function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "binary":
       return operatorPrecedence(expression.operator);
     case "unary":
-    case "cast":
     case "reference":
       return RustPrecedence.Unary;
     case "method-call":
@@ -254,6 +270,9 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "bool-literal": {
       return expression.value ? "true" : "false";
+    }
+    case "none": {
+      return "None";
     }
     case "string-literal": {
       return `String::from("${escapeRustString(expression.value)}")`;
@@ -286,18 +305,12 @@ export function printRustExpr(expression: RustExpr): string {
     case "index": {
       return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(expression.index)}]`;
     }
+    case "evaluate-then": {
+      return `{ let _ = ${printRustExpr(expression.effect)}; ${printRustExpr(expression.value)} }`;
+    }
     case "string-concat": {
       const placeholders = expression.parts.map(() => "{}").join("");
       return `format!("${placeholders}", ${expression.parts.map(printRustExpr).join(", ")})`;
-    }
-    case "cast": {
-      if (expression.expr.kind === "int-literal") {
-        return `${expression.expr.text}${expression.to}`;
-      }
-      if (expression.expr.kind === "unary" && expression.expr.operator === "-" && expression.expr.operand.kind === "int-literal") {
-        return `-${expression.expr.operand.text}${expression.to}`;
-      }
-      return `${printOperand(expression.expr, RustPrecedence.Unary, false)} as ${expression.to}`;
     }
     case "reference": {
       const prefix = expression.mutable === true ? "&mut " : "&";
@@ -319,9 +332,13 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`;
     }
     case "tuple-literal": {
-      return `(${expression.elements.map(printRustExpr).join(", ")})`;
+      const elements = expression.elements.map(printRustExpr).join(", ");
+      return `(${elements}${expression.elements.length === 1 ? "," : ""})`;
     }
     case "struct-literal": {
+      if (expression.fields.length === 0) {
+        return `${expression.path} {}`;
+      }
       const fields = expression.fields
         .map((field) => {
           const value = printRustExpr(field.value);
@@ -332,6 +349,186 @@ export function printRustExpr(expression: RustExpr): string {
     }
 
   }
+}
+
+function printRustExprFitted(expression: RustExpr, depth: number, column: number): string {
+  const flat = printRustExpr(expression);
+  switch (expression.kind) {
+    case "call":
+      return printFittedCall(expression.path, expression.args, depth, column);
+    case "method-call": {
+      if (renderedFits(flat, column)) {
+        return flat;
+      }
+      const chain = rustMethodChain(expression);
+      if (rustMethodChainUsesVerticalLayout(chain)) {
+        return printFittedMethodChain(chain, depth, column);
+      }
+      const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
+      return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
+    }
+    case "try":
+      return appendToLastLine(printRustExprFitted(expression.expr, depth, column), "?");
+    case "reference": {
+      const prefix = expression.mutable === true ? "&mut " : "&";
+      return `${prefix}${printRustExprFitted(expression.expr, depth, column + prefix.length)}`;
+    }
+    case "unary":
+      return `${expression.operator}${printRustExprFitted(expression.operand, depth, column + 1)}`;
+    case "binary": {
+      if (renderedFits(flat, column)) {
+        return flat;
+      }
+      const left = printRustExprFitted(expression.left, depth, column);
+      const joined = appendToLastLine(
+        left,
+        ` ${expression.operator} ${printOperand(expression.right, operatorPrecedence(expression.operator), true)}`,
+      );
+      if (!rustMethodChainUsesVerticalLayout(rustMethodChain(expression.left)) && renderedFits(joined, column)) {
+        return joined;
+      }
+      const continuationIndent = indentText(depth + 1);
+      const right = printRustExprFitted(
+        expression.right,
+        depth + 1,
+        continuationIndent.length + expression.operator.length + 1,
+      );
+      const continuation = `${continuationIndent}${expression.operator} ${firstLine(right)}`;
+      return remainingLines(right).length === 0
+        ? `${left}\n${continuation}`
+        : `${left}\n${continuation}\n${remainingLines(right).join("\n")}`;
+    }
+    default:
+      return flat;
+  }
+}
+
+interface RustMethodChain {
+  readonly base: RustExpr;
+  readonly steps: readonly RustMethodChainStep[];
+}
+
+type RustMethodChainStep =
+  | { readonly kind: "method"; readonly name: string; readonly args: readonly RustExpr[] }
+  | { readonly kind: "try" };
+
+function rustMethodChain(expression: RustExpr): RustMethodChain | undefined {
+  const steps: RustMethodChainStep[] = [];
+  const base = collectRustMethodChain(expression, steps);
+  return steps.some((step) => step.kind === "method") ? { base, steps } : undefined;
+}
+
+function rustMethodChainUsesVerticalLayout(
+  chain: RustMethodChain | undefined,
+): chain is RustMethodChain {
+  return chain !== undefined &&
+    (chain.steps.filter((step) => step.kind === "method").length > 1 ||
+      chain.steps.some((step, index) => step.kind === "try" && chain.steps[index + 1]?.kind === "method"));
+}
+
+function collectRustMethodChain(expression: RustExpr, steps: RustMethodChainStep[]): RustExpr {
+  if (expression.kind === "method-call") {
+    const base = collectRustMethodChain(expression.receiver, steps);
+    steps.push({ kind: "method", name: expression.method, args: expression.args });
+    return base;
+  }
+  if (expression.kind === "try") {
+    const base = collectRustMethodChain(expression.expr, steps);
+    steps.push({ kind: "try" });
+    return base;
+  }
+  return expression;
+}
+
+function printFittedMethodChain(
+  chain: RustMethodChain,
+  depth: number,
+  column: number,
+): string {
+  const flatBase = printRustExpr(chain.base);
+  let rendered = renderedFits(flatBase, column)
+    ? flatBase
+    : printRustExprFitted(chain.base, depth, column);
+  const continuationIndent = indentText(depth + 1);
+  for (const step of chain.steps) {
+    if (step.kind === "try") {
+      rendered = appendToLastLine(rendered, "?");
+      continue;
+    }
+    const method = printFittedCall(
+      `.${step.name}`,
+      step.args,
+      depth + 1,
+      continuationIndent.length,
+    );
+    rendered = `${rendered}\n${continuationIndent}${method}`;
+  }
+  return rendered;
+}
+
+function printFittedCall(
+  callable: string,
+  arguments_: readonly RustExpr[],
+  depth: number,
+  column: number,
+): string {
+  const flat = `${callable}(${arguments_.map(printRustExpr).join(", ")})`;
+  if (arguments_.length === 0) {
+    return flat;
+  }
+  if (arguments_.length === 1) {
+    const prefix = `${callable}(`;
+    const argument = arguments_[0]!;
+    if (argument.kind === "call" || argument.kind === "method-call" || argument.kind === "try") {
+      const nested = printRustExprFitted(argument, depth, column + prefix.length);
+      const compact = appendToLastLine(`${prefix}${nested}`, ")");
+      if (renderedFits(compact, column)) {
+        return compact;
+      }
+    } else if (renderedFits(flat, column)) {
+      return flat;
+    }
+  } else if (renderedFits(flat, column)) {
+    const beginsAtCurrentIndent = column === indentText(depth).length;
+    if (beginsAtCurrentIndent || flat.length <= rustFunctionCallWidth) {
+      return flat;
+    }
+  }
+  const argumentIndent = indentText(depth + 1);
+  const renderedArguments = arguments_.map((argument) => {
+    const rendered = printRustExprFitted(argument, depth + 1, argumentIndent.length);
+    return appendToLastLine(`${argumentIndent}${rendered}`, ",");
+  });
+  return [
+    `${callable}(`,
+    ...renderedArguments,
+    `${indentText(depth)})`,
+  ].join("\n");
+}
+
+function renderedFits(rendered: string, firstColumn: number): boolean {
+  const lines = rendered.split("\n");
+  return lines.every((line, index) => (index === 0 ? firstColumn : 0) + line.length <= rustFormatWidth);
+}
+
+function appendToLastLine(rendered: string, suffix: string): string {
+  const lines = rendered.split("\n");
+  const lastIndex = lines.length - 1;
+  lines[lastIndex] = `${lines[lastIndex] ?? ""}${suffix}`;
+  return lines.join("\n");
+}
+
+function firstLine(rendered: string): string {
+  return rendered.split("\n", 1)[0] ?? "";
+}
+
+function remainingLines(rendered: string): readonly string[] {
+  return rendered.split("\n").slice(1);
+}
+
+function lastLineLength(rendered: string): number {
+  const lines = rendered.split("\n");
+  return lines[lines.length - 1]?.length ?? 0;
 }
 
 export function escapeRustString(value: string): string {

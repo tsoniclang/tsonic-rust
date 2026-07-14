@@ -75,9 +75,13 @@ test("package manifest declares the installed plugin contract", async () => {
 test("target runtime crate references resolve inside the package", async () => {
   const { existsSync } = await import("node:fs");
   const pack = createRustTargetPack();
-  const references = pack.provider.runtimeContributions({ selectedSurfaces: [], target: { id: "rust", options: {} } }).references;
+  const references = pack.provider.runtimeContributions({
+    selectedSurfaces: [],
+    target: { id: "rust", options: {} },
+    paths: { projectRoot: process.cwd() },
+  }).references;
   for (const reference of references) {
-    assert.ok(reference.include.includes("tsonic-rust/runtimes/crates/"), reference.include);
+    assert.match(reference.include, /rust-runtime\/crates\/tsonic_rust_runtime$/u);
     assert.ok(existsSync(reference.include), `missing packaged crate: ${reference.include}`);
   }
 });

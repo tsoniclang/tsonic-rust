@@ -24,8 +24,8 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
-import { applyFallibleShape } from "./functions.js";
+import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustSourceParameterAbiFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
+import { applyFallibleShape, rustBlockTerminates } from "./functions.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
@@ -63,6 +63,12 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   let failed = false;
   for (const member of ast.members(node)) {
     if (member === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.class-member",
+        "Class declaration contains an undefined member slot.",
+      ));
+      failed = true;
       continue;
     }
     const memberKind = ast.kindName(member);
@@ -87,7 +93,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         failed = true;
         continue;
       }
-      fields.push({ name: fieldName, type: fieldType });
+      fields.push({
+        name: fieldName,
+        type: fieldType,
+        pub: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"),
+      });
       continue;
     }
     if (memberKind === "KindConstructor") {
@@ -155,10 +165,16 @@ function planParams(member: Node, context: RustPlanContext): readonly RustFuncti
   const params: RustFunctionParam[] = [];
   for (const parameter of ast.parameters(member)) {
     if (parameter === undefined) {
-      continue;
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, member),
+        "rust.backend.parameter",
+        "Class callable contains an undefined parameter slot.",
+      ));
+      return undefined;
     }
     const parameterName = rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
-    const parameterType = renderType(context, parameter) ?? renderType(context, Node_Type(parameter));
+    const parameterCarrier = context.input.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier;
+    const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, parameter),
@@ -191,11 +207,24 @@ function planConstructor(
     return undefined;
   }
   const body = ast.body(member);
+  if (body === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.constructor-body",
+      "Constructor declaration has no concrete source body.",
+    ));
+    return undefined;
+  }
   const assignments = new Map<string, RustExpr>();
-  const bodyStatements = body === undefined ? [] : ast.statements(body);
+  const bodyStatements = ast.statements(body);
   for (const statement of bodyStatements) {
     if (statement === undefined) {
-      continue;
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, body),
+        "rust.backend.constructor-statement",
+        "Constructor body contains an undefined statement slot.",
+      ));
+      return undefined;
     }
     const expression = ast.kindName(statement) === "KindExpressionStatement" ? Node_Expression(statement) : undefined;
     const operatorToken = expression === undefined ? undefined : BinaryExpression_OperatorToken(expression);
@@ -243,7 +272,8 @@ function planConstructor(
   };
   return {
     name: "new",
-    pub: true,
+    pub: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"),
+    ...(params.length === 0 ? { attrs: ["#[allow(clippy::new_without_default)]"] } : {}),
     params,
     returnType: { kind: "named", path: className },
     body: { statements: [literalText] },
@@ -283,8 +313,24 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     return undefined;
   }
   const returnTypeNode = Node_Type(member);
+  if (returnTypeNode === undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.class",
+      "Methods require an explicit return type annotation.",
+    ));
+    return undefined;
+  }
   const returnCarrier = carrierOf(context, returnTypeNode);
-  const isUnit = returnCarrier === undefined || isRustUnitCarrier(returnCarrier);
+  if (returnCarrier === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, returnTypeNode),
+      "rust.backend.class",
+      "Method return type has no finalized Rust carrier fact.",
+    ));
+    return undefined;
+  }
+  const isUnit = isRustUnitCarrier(returnCarrier);
   const returnType = isUnit ? undefined : renderType(context, returnTypeNode);
   if (!isUnit && returnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -296,6 +342,11 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   }
   const bodyNode = ast.body(member);
   if (bodyNode === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.method-body",
+      "Method declaration has no concrete source body.",
+    ));
     return undefined;
   }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
@@ -311,15 +362,30 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   if (body === undefined) {
     return undefined;
   }
+  if (returnType !== undefined && !rustBlockTerminates(body)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, bodyNode),
+      "rust.backend.return-flow",
+      "Value-returning methods require finalized control flow that returns or throws on every path.",
+    ));
+    return undefined;
+  }
   const isStatic = ast.hasModifierKind(member, "static");
+  const selfMode = isStatic ? undefined : context.input.facts.getFact(member, rustSelfModeFactKey);
+  if (!isStatic && selfMode === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.self-mode",
+      "Instance method has no finalized Rust self-passing mode.",
+    ));
+    return undefined;
+  }
   return {
     name: methodName,
-    pub: true,
+    pub: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"),
     ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(fallible ? { fallible: true } : {}),
-    ...(isStatic ? {} : {
-      selfParam: (context.input.facts.getFact(member, rustSelfModeFactKey)?.mode === "mut-ref" ? "mut-ref" : "ref") as import("../rust-ast/nodes.js").RustSelfParam,
-    }),
+    ...(isStatic ? {} : { selfParam: selfMode!.mode }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: applyFallibleShape(applyTail(body, returnType !== undefined), fallible, returnType !== undefined),
@@ -350,9 +416,15 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     return undefined;
   }
   const variants: { name: string; discriminant?: string }[] = [];
+  const discriminants = new Map<number, string>();
   for (const member of ast.members(node)) {
     if (member === undefined) {
-      continue;
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.enum-member",
+        "Enum declaration contains an undefined member slot.",
+      ));
+      return undefined;
     }
     const memberName = ast.text(ast.name(member) ?? member);
     if (!isValidRustIdentifier(memberName)) {
@@ -373,6 +445,16 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       ));
       return undefined;
     }
+    const previousMember = discriminants.get(value);
+    if (previousMember !== undefined) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, member),
+        "rust.backend.enum",
+        `Enum members '${previousMember}' and '${memberName}' have the same discriminant ${value}, which Rust rejects.`,
+      ));
+      return undefined;
+    }
+    discriminants.set(value, memberName);
     variants.push({ name: memberName, discriminant: String(value) });
   }
   return [{
@@ -407,7 +489,12 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   const fields: RustStructField[] = [];
   for (const member of ast.members(node)) {
     if (member === undefined) {
-      continue;
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.record-member",
+        "Interface declaration contains an undefined member slot.",
+      ));
+      return undefined;
     }
     if (ast.kindName(member) !== "KindPropertySignature") {
       context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -427,7 +514,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    fields.push({ name: fieldName, type: fieldType });
+    fields.push({ name: fieldName, type: fieldType, pub: true });
   }
   const allFieldsCopy = fields.every((field) => field.type.kind === "primitive");
   return [{

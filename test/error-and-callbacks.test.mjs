@@ -41,7 +41,7 @@ test("JSON round-trips through fallible rows in a throwing context", async () =>
       "index.ts": `
 export function roundtrip(text: string): string {
   const value = JSON.parse(text);
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "";
 }
 `,
     },
@@ -49,8 +49,8 @@ export function roundtrip(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(text: String\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /js_abi::json_parse\(&text\)\?/u);
+  assert.match(text, /pub fn roundtrip\(text: &str\) -> rt::TsonicResult<String> \{/u);
+  assert.match(text, /js_abi::json_parse\(text\)\?/u);
   assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
 });
 
@@ -72,7 +72,89 @@ export function load(path: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn load\(path: &str\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /node_fs::read_file_sync_string\(path, "utf8"\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(path, "utf8"\)\?/u);
+});
+
+test("caught provider failures do not make project-source callers fallible", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function catches(text: string): string {
+  let result = "";
+  try {
+    const value = JSON.parse(text);
+    result = JSON.stringify(value) ?? "";
+  } catch (error) {
+    result = "invalid";
+  }
+  return result;
+}
+
+export function forwards(text: string): string {
+  return catches(text);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn catches\(text: &str\) -> String \{/u);
+  assert.match(text, /pub fn forwards\(text: &str\) -> String \{/u);
+  assert.match(text, /catches\(text\)/u);
+  assert.doesNotMatch(text, /pub fn (?:catches|forwards)[^{]+TsonicResult/u);
+  assert.doesNotMatch(text, /catches\(text\)\?/u);
+});
+
+test("provider-result arguments close after later source operations without eager conversion rejection", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function inspectJson(): boolean {
+  let ok = false;
+  try {
+    const value = JSON.parse("{\\"tag\\":\\"tsonic\\"}");
+    const rendered = JSON.stringify(value) ?? "";
+    ok = rendered.includes("tsonic");
+  } catch (error) {
+    ok = false;
+  }
+  return ok;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let value = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
+  assert.match(text, /let rendered = js_abi::json_stringify\(&value\)\?\.unwrap_or\(String::from\(""\)\);/u);
+  assert.match(text, /ok = js_string::includes\(&rendered, "tsonic", 0\);/u);
+});
+
+test("awaited fallible project-source calls apply try after await", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export async function risky(): Promise<string> {
+  throw new Error("boom");
+}
+
+export async function forwards(): Promise<string> {
+  return await risky();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub async fn risky\(\) -> rt::TsonicResult<String>/u);
+  assert.match(text, /pub async fn forwards\(\) -> rt::TsonicResult<String>/u);
+  assert.match(text, /risky\(\)\.await\?/u);
+  assert.doesNotMatch(text, /risky\(\)\?\.await/u);
 });
 
 test("generated cargo binary proves callbacks, errors, JSON, and fs at runtime", { timeout: 300_000 }, async () => {
@@ -119,7 +201,7 @@ export function main(): void {
   let json_ok = false;
   try {
     const value = JSON.parse("{\\"name\\": \\"tsonic\\", \\"count\\": 3}");
-    const text = JSON.stringify(value);
+    const text = JSON.stringify(value) ?? "";
     json_ok = text.includes("tsonic");
   } catch (error) {
     json_ok = false;
@@ -246,16 +328,37 @@ test("fallible provider rows are restricted to method, constructor, and property
       id: "bad",
       displayName: "Bad",
       version: "1.0.0",
-      modules: [],
+      modules: [{
+        moduleSpecifier: "@bad",
+        providerModuleId: "bad",
+        exports: [{
+          id: "@bad::X",
+          name: "X",
+          kind: "class",
+          members: [{
+            id: "@bad::X.indexer",
+            name: "indexer",
+            kind: "indexer",
+            signatures: [{
+              id: "@bad::X.indexer(index)",
+              parameters: [{ name: "index", type: { kind: "number" } }],
+              returnType: { kind: "source-primitive", name: "int32" },
+            }],
+          }],
+        }],
+      }],
       operations: [{
         exportId: "@bad::X",
+        memberId: "@bad::X.indexer",
+        signatureId: "@bad::X.indexer(index)",
         operationKind: "indexer",
-        target: { form: "field", name: "x" },
+        target: { form: "index" },
         resultCarrier: { kind: "source-primitive", name: "int32" },
+        parameterCarriers: [{ kind: "source-primitive", name: "float64" }],
         isFallible: true,
       }],
       crates: [],
     }),
-    /isFallible is supported only on method and constructor operations/u,
+    /isFallible is supported only on method, constructor, and property operations/u,
   );
 });

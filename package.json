@@ -8,8 +8,7 @@
   "files": [
     "LICENSE",
     "README.md",
-    "dist",
-    "runtimes"
+    "dist"
   ],
   "exports": {
     ".": "./dist/index.js",
@@ -17,18 +16,23 @@
   },
   "scripts": {
     "build": "bash scripts/build.sh",
-    "test": "npm run build && node --test test/*.test.mjs test/architecture/*.test.mjs",
-    "pretest": "rm -rf .temp/installed && node -e \"import('./test/helpers/rust-session.mjs').then(m => m.buildInstalledLayout())\""
+    "pretest": "npm run build && node -e \"import('./test/helpers/rust-session.mjs').then(m => m.buildInstalledLayout())\"",
+    "test": "node --test test/*.test.mjs test/architecture/*.test.mjs",
+    "prepack": "npm run build"
   },
   "peerDependencies": {
     "@tsonic/source-core": "0.0.1",
     "@tsonic/target-api": "0.0.1",
-    "@tsonic/tsts": "0.0.0"
+    "@tsonic/tsts": "0.0.0",
+    "@tsonic/rust-runtime": "0.0.1",
+    "@tsonic/rust-js": "0.0.1"
   },
   "devDependencies": {
     "@tsonic/source-core": "file:../tsonic/packages/source-core",
     "@tsonic/target-api": "file:../tsonic/packages/target-api",
-    "@tsonic/tsts": "file:../tsonic/packages/tsts"
+    "@tsonic/tsts": "file:../tsonic/packages/tsts",
+    "@tsonic/rust-runtime": "file:../rust-runtime",
+    "@tsonic/rust-js": "file:../rust-js"
   },
   "engines": {
     "node": ">=22.0.0"

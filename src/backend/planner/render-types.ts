@@ -8,9 +8,13 @@ import {
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsValueTargetId,
+  rustFixedArrayCarrierValue,
   rustOptionTargetId,
+  rustNamedTypeCarrierValue,
   rustPrimitiveTypeName,
   rustStringTargetId,
+  rustIsizeTargetId,
+  rustUsizeTargetId,
 } from "../../source/rust-target-types.js";
 
 const namedCarrierPaths: Readonly<Record<string, string>> = {
@@ -24,12 +28,11 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   "rust.js.JsRegExpMatch": "js_abi::JsRegExpMatch",
 };
 
-export const rustStrRefType: RustType = { kind: "named", path: "&str" };
+export const rustStrRefType: RustType = { kind: "str-ref" };
 
 export function rustTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
   resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
-  capabilityCarrierPaths?: Readonly<Record<string, string>>,
 ): RustType | undefined {
   if (carrier === undefined) {
     return undefined;
@@ -41,12 +44,18 @@ export function rustTypeFromCarrier(
   if (carrier.kind === "target-named" && carrier.id === rustStringTargetId) {
     return { kind: "string" };
   }
+  if (carrier.kind === "target-named" && carrier.id === rustUsizeTargetId) {
+    return { kind: "primitive", name: "usize" };
+  }
+  if (carrier.kind === "target-named" && carrier.id === rustIsizeTargetId) {
+    return { kind: "primitive", name: "isize" };
+  }
   if (carrier.kind === "target-named") {
-    const path = namedCarrierPaths[carrier.id] ?? capabilityCarrierPaths?.[carrier.id];
+    const path = namedCarrierPaths[carrier.id];
     if (path === undefined) {
       return undefined;
     }
-    const typeArguments = (carrier.typeArguments ?? []).map((argument) => rustTypeFromCarrier(argument, resolveSourceTypePath, capabilityCarrierPaths));
+    const typeArguments = (carrier.typeArguments ?? []).map((argument) => rustTypeFromCarrier(argument, resolveSourceTypePath));
     if (typeArguments.some((argument) => argument === undefined)) {
       return undefined;
     }
@@ -63,23 +72,35 @@ export function rustTypeFromCarrier(
     return rustStrRefType;
   }
   if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
-    const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath, capabilityCarrierPaths);
+    const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
   }
-  if (carrier.kind === "target-specific" && carrier.name === "fixed-array") {
-    const value = carrier.value as { element: TargetTypeRef; length: number };
-    const element = rustTypeFromCarrier(value.element, resolveSourceTypePath, capabilityCarrierPaths);
-    return element === undefined ? undefined : { kind: "named", path: `[${printableTypeText(element)}; ${value.length}]` };
+  const fixedArray = rustFixedArrayCarrierValue(carrier);
+  if (fixedArray !== undefined) {
+    const element = rustTypeFromCarrier(fixedArray.element, resolveSourceTypePath);
+    return element === undefined ? undefined : { kind: "fixed-array", element, length: fixedArray.length };
+  }
+  const namedType = rustNamedTypeCarrierValue(carrier);
+  if (namedType !== undefined) {
+    const typeArguments = namedType.typeArguments.map((argument) =>
+      rustTypeFromCarrier(argument, resolveSourceTypePath));
+    return typeArguments.some((argument) => argument === undefined)
+      ? undefined
+      : {
+          kind: "named",
+          path: namedType.path,
+          ...(typeArguments.length === 0 ? {} : { typeArguments: typeArguments as RustType[] }),
+        };
   }
   if (carrier.kind === "array") {
-    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath, capabilityCarrierPaths);
+    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "named", path: "Vec", typeArguments: [element] };
   }
   if (carrier.kind === "tuple") {
     if (carrier.elements.length === 0) {
       return { kind: "unit" };
     }
-    const elements = carrier.elements.map((element) => rustTypeFromCarrier(element, resolveSourceTypePath, capabilityCarrierPaths));
+    const elements = carrier.elements.map((element) => rustTypeFromCarrier(element, resolveSourceTypePath));
     if (elements.some((element) => element === undefined)) {
       return undefined;
     }
@@ -107,14 +128,13 @@ export function rustTypeFromCarrierInContext(
     readonly usedAliases?: Set<string>;
   },
 ): RustType | undefined {
-  const capabilityCarrierPaths = (context as { readonly input?: { capabilityCarrierPaths?: Readonly<Record<string, string>> } }).input?.capabilityCarrierPaths;
   const rendered = rustTypeFromCarrier(carrier, (value) => {
     const moduleName = context.moduleNameByFileName.get(value.fileName);
     if (moduleName === undefined) {
       return undefined;
     }
     return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
-  }, capabilityCarrierPaths);
+  });
   collectAliasesFromRustType(rendered, (path) => {
     registerAliasFromPath(context, path);
   });
@@ -139,19 +159,13 @@ export function collectAliasesFromRustType(
     collectAliasesFromRustType(type.element, register);
     return;
   }
+  if (type.kind === "fixed-array") {
+    collectAliasesFromRustType(type.element, register);
+    return;
+  }
   if (type.kind === "tuple") {
     for (const element of type.elements) {
       collectAliasesFromRustType(element, register);
     }
   }
-}
-
-function printableTypeText(type: RustType): string {
-  if (type.kind === "primitive") {
-    return type.name;
-  }
-  if (type.kind === "named" && (type.typeArguments === undefined || type.typeArguments.length === 0)) {
-    return type.path;
-  }
-  return type.kind === "string" ? "String" : "()";
 }

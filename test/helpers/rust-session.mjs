@@ -2,13 +2,22 @@
 // the Rust target extensions, then plans Rust artifacts via the backend.
 // Uses only public @tsonic packages — no @tsonic/host.
 import { fileURLToPath } from "node:url";
-import { cpSync, existsSync, rmSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
+import { createHash, randomUUID } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import {
+  createCompilerSessionFromFiles,
+  createExtensionConsumerQueries,
+  formatDiagnostics,
+  runtimeCarrierFactKey,
+} from "@tsonic/tsts";
 import { createTsonicCoreSourceExtension } from "@tsonic/source-core";
 import {
+  normalizeTargetSourceProfileSegment,
+  tsonicSourceProfileVirtualDirectory,
+} from "@tsonic/target-api";
+import {
   createRustBackend,
-  createRustCompileInputFromSession,
   createRustProviderPackage,
   composeRustCapabilities,
   createRustTargetPack,
@@ -88,7 +97,7 @@ export function acmeTestingPackage() {
   });
 }
 
-export function acmePlatformPackage() {
+export function acmePlatformPackage({ includeHomeDir = true } = {}) {
   return createRustProviderPackage({
     id: "acme-platform",
     displayName: "Acme platform",
@@ -109,6 +118,7 @@ export function acmePlatformPackage() {
           id: "@acme/platform::Store",
           name: "Store",
           kind: "class",
+          targetIdentity: { target: "rust", id: "acme.platform.Store" },
           members: [
             {
               id: "@acme/platform::Store.constructor",
@@ -141,6 +151,7 @@ export function acmePlatformPackage() {
       },
       {
         exportId: "@acme/platform::Store",
+        memberId: "@acme/platform::Store.constructor",
         operationKind: "constructor",
         target: { form: "call", path: "acme_platform::Store::new" },
         resultCarrier: storeCarrier,
@@ -155,13 +166,14 @@ export function acmePlatformPackage() {
       },
       {
         exportId: "@acme/platform::Store",
-        receiverTypeId: "acme.platform.Store",
+        memberId: "@acme/platform::Store.indexer",
         operationKind: "indexer",
         target: { form: "method", name: "get" },
         resultCarrier: int32Carrier,
         parameterCarriers: [int32Carrier],
       },
-    ],
+    ].filter((row) => includeHomeDir || row.memberId !== "@acme/platform::Env.homeDir"),
+    carrierPaths: { "acme.platform.Store": "acme_platform::Store" },
     crates: [{ crateName: "acme_platform", cargoPath: resolve(fixtureCratesRoot, "acme_platform") }],
   });
 }
@@ -169,11 +181,16 @@ export function acmePlatformPackage() {
 export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" } = {}) {
   const pack = createRustTargetPack();
   const project = { entryPoint, targets: [target] };
-  // Local composition proof: capability plugin objects compose exactly as
-  // the host will hand them to the target (this is not host discovery).
-  const composed = composeRustCapabilities("rust", [...packages, ...capabilities]);
-  packages = composed.capabilities;
+  const paths = {
+    projectFilePath: "tsonic.json",
+    projectRoot: ".",
+    outputRoot: "out",
+    targetOutputRoot: "out/rust",
+  };
+  const activation = collectCapabilityActivation(files, [...packages, ...capabilities], target.id);
   const selectedSurfaces = (pack.surfaces ?? []).filter((surface) => surfaces.includes(surface.id));
+  const composed = composeRustCapabilities("rust", activation.selected, selectedSurfaces.map((surface) => surface.id));
+  packages = composed.capabilities;
   const providerContext = {
     project,
     target,
@@ -181,13 +198,37 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
     selectedSurfaces,
     selectedCapabilities: packages,
   };
+  const runtimeContributionContext = {
+    project,
+    target,
+    selectedSurfaces,
+    selectedCapabilities: packages,
+    paths,
+  };
   const fileMap = new Map(Object.entries(files).map(([name, text]) => [`/src/${name}`, text]));
+  const appendSourceProfile = (ownerId, contributions) => {
+    const ownerSegment = normalizeTargetSourceProfileSegment(ownerId);
+    for (const declaration of contributions?.declarations ?? []) {
+      fileMap.set(
+        `/src/${tsonicSourceProfileVirtualDirectory}/${ownerSegment}/${declaration.fileName}`,
+        declaration.text,
+      );
+    }
+  };
+  appendSourceProfile(pack.provider.id, pack.provider.sourceProfileContributions?.(providerContext));
+  for (const surface of selectedSurfaces) {
+    appendSourceProfile(surface.id, surface.sourceProfileContributions?.({ ...providerContext, surface }));
+  }
+  for (const capability of packages) {
+    appendSourceProfile(capability.id, capability.sourceProfileContributions?.({ ...providerContext, capability }));
+  }
   const session = createCompilerSessionFromFiles({
     currentDirectory: "/src",
     files: fileMap,
     compilerOptions: {
       module: "esnext",
       moduleResolution: "bundler",
+      noLib: true,
       strictNullChecks: true,
       target: "es2022",
     },
@@ -201,47 +242,173 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
       ],
     },
   });
-  return { session, pack, project, target, providerContext };
+  return {
+    session,
+    pack,
+    project,
+    target,
+    providerContext,
+    runtimeContributionContext,
+    paths,
+    runtimeActivatedCapabilities: packages.filter((capability) => activation.runtimeIds.has(capability.id)),
+  };
+}
+
+function collectCapabilityActivation(files, candidates, targetId) {
+  if (candidates.length === 0) {
+    return { selected: [], runtimeIds: new Set() };
+  }
+  const session = createCompilerSessionFromFiles({
+    currentDirectory: "/src",
+    files: new Map(Object.entries(files).map(([name, text]) => [`/src/${name}`, text])),
+    compilerOptions: { module: "esnext", moduleResolution: "bundler", noLib: true, target: "es2022" },
+  });
+  const staticSpecifiers = new Set();
+  const valueSpecifiers = new Set();
+  for (const sourceFile of session.getSourceFiles()) {
+    if (sourceFile === undefined || !session.ast.getFileName(sourceFile).startsWith("/src/")) {
+      continue;
+    }
+    for (const statement of session.ast.statements(sourceFile)) {
+      const specifier = staticModuleSpecifier(session.ast, statement);
+      if (specifier === undefined) {
+        continue;
+      }
+      staticSpecifiers.add(specifier);
+      if (!isTypeOnlyModuleDeclaration(session.ast, statement)) {
+        valueSpecifiers.add(specifier);
+      }
+    }
+  }
+  const selected = candidates.filter((capability) => capability.targetId === targetId &&
+    capability.moduleOwnership.some((ownership) =>
+      [...staticSpecifiers].some((specifier) => moduleSpecifierMatchesOwnership(specifier, ownership.specifierPrefix))));
+  const runtimeIds = new Set(selected.filter((capability) =>
+    capability.moduleOwnership.some((ownership) =>
+      [...valueSpecifiers].some((specifier) => moduleSpecifierMatchesOwnership(specifier, ownership.specifierPrefix))))
+    .map((capability) => capability.id));
+  return { selected, runtimeIds };
+}
+
+function staticModuleSpecifier(ast, statement) {
+  const declaration = ast.is.IsImportDeclaration(statement)
+    ? ast.as.AsImportDeclaration(statement)
+    : ast.is.IsExportDeclaration(statement) ? ast.as.AsExportDeclaration(statement) : undefined;
+  const moduleSpecifier = declaration?.ModuleSpecifier;
+  if (moduleSpecifier === undefined) {
+    return undefined;
+  }
+  const text = ast.text(moduleSpecifier);
+  return text.length === 0 ? undefined : text;
+}
+
+function isTypeOnlyModuleDeclaration(ast, declaration) {
+  if (ast.isTypeOnlyImportOrExportDeclaration(declaration)) {
+    return true;
+  }
+  const importClause = ast.as.AsImportDeclaration(declaration)?.ImportClause;
+  const namedBindings = importClause === undefined ? undefined : ast.as.AsImportClause(importClause)?.NamedBindings;
+  return namedBindings !== undefined && ast.is.IsNamedImports(namedBindings) && ast.elements(namedBindings).length > 0 &&
+    ast.elements(namedBindings).every((element) => element !== undefined && ast.as.AsImportSpecifier(element)?.IsTypeOnly === true);
+}
+
+function moduleSpecifierMatchesOwnership(specifier, prefix) {
+  return specifier === prefix || specifier.startsWith(`${prefix}/`) ||
+    (/[:/]$/.test(prefix) && specifier.startsWith(prefix));
 }
 
 export function checkRustSession(harness, fileNames) {
+  const diagnostics = rustSourceDiagnostics(harness, fileNames);
+  if (diagnostics !== "") {
+    throw new Error(`TypeScript diagnostics:\n${diagnostics}`);
+  }
+  return harness.session.finalizeExtensions();
+}
+
+export function rustSourceDiagnostics(harness, fileNames) {
   const { session } = harness;
   const checked = fileNames ?? [...session.getSourceFiles()]
     .filter((sourceFile) => sourceFile !== undefined)
     .map((sourceFile) => session.ast.getFileName(sourceFile))
     .filter((fileName) => fileName.startsWith("/src/"));
-  for (const fileName of checked) {
-    const diagnostics = formatDiagnostics(session.ensureChecked(session.getSourceFile(fileName)));
-    if (diagnostics !== "") {
-      throw new Error(`TypeScript diagnostics for ${fileName}:\n${diagnostics}`);
+  return checked
+    .map((fileName) => formatDiagnostics(session.ensureChecked(session.getSourceFile(fileName))))
+    .filter((diagnostics) => diagnostics !== "")
+    .join("\n");
+}
+
+function createRustCompileInputFromSession({ session, extensionHost, project, target, runtimeReferences, paths }) {
+  const sourceFiles = session.getSourceFiles().filter((sourceFile) =>
+    sourceFile !== undefined && !session.ast.getFileName(sourceFile).endsWith(".d.ts"));
+  const facts = createExtensionConsumerQueries(extensionHost, "tsonic-rust-test-backend");
+  const resolveRuntimeCarrier = (subject) => {
+    if (subject === undefined) {
+      return { kind: "missing", reason: "No subject provided for carrier resolution.", evidence: [] };
     }
-  }
-  return session.finalizeExtensions();
+    const fact = extensionHost.facts.get(subject, runtimeCarrierFactKey) ??
+      extensionHost.factResolver.resolve(subject, runtimeCarrierFactKey);
+    return fact === undefined
+      ? { kind: "missing", reason: "No finalized Rust runtime carrier fact.", evidence: [] }
+      : { kind: "resolved", carrier: fact.carrier, evidence: [] };
+  };
+  return {
+    program: session.program,
+    ast: session.ast,
+    types: session.types,
+    sourceFiles,
+    facts,
+    analysis: {
+      getEnumMemberConstant(node) {
+        if (node === undefined) {
+          return undefined;
+        }
+        const value = session.checker.getConstantValue(node);
+        return typeof value === "number" || typeof value === "string" ? { value } : undefined;
+      },
+    },
+    targetFacts: {
+      resolveRuntimeCarrier,
+      resolveRuntimeCarrierForNode: resolveRuntimeCarrier,
+      resolveCallReturnRuntimeCarrier: resolveRuntimeCarrier,
+      resolveDeclarationReturnCarrier: resolveRuntimeCarrier,
+    },
+    project,
+    target,
+    runtimeReferences,
+    paths,
+  };
 }
 
 export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" }) {
   const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
   const extensionHost = checkRustSession(harness);
-  const contributionContext = harness.providerContext;
-  const capabilityReferences = harness.providerContext.selectedCapabilities.flatMap((providerPackage) =>
-    providerPackage.runtimeContributions?.({}).references ?? []);
-  // When a capability is loaded from the simulated install, the host would
-  // have loaded the target from the same node_modules root; target-owned
-  // crate references share that root so the cargo graph has one instance
-  // of each crate.
-  const layoutMarker = resolve(packageRoot, ".temp/installed/node_modules/@tsonic");
-  const layoutActive = capabilityReferences.some((reference) => reference.include.startsWith(layoutMarker));
-  const remapTargetReference = (reference) => {
-    const repoRuntimes = resolve(packageRoot, "runtimes");
-    if (layoutActive && reference.include.startsWith(repoRuntimes)) {
-      return { ...reference, include: reference.include.replace(repoRuntimes, resolve(layoutMarker, "target-rust/runtimes")) };
-    }
-    return reference;
-  };
+  const extensionDiagnostics = extensionHost.diagnostics.all()
+    .filter((diagnostic) => diagnostic.category === "error")
+    .map((diagnostic) => ({
+      code: diagnostic.extensionCode,
+      category: diagnostic.category,
+      source: diagnostic.extensionId,
+      message: diagnostic.message,
+      evidence: (diagnostic.evidence ?? []).map((entry) => entry.message),
+    }));
+  if (extensionDiagnostics.length > 0) {
+    return {
+      result: { artifacts: [], diagnostics: extensionDiagnostics },
+      extensionHost,
+      harness,
+    };
+  }
+  const contributionContext = harness.runtimeContributionContext;
+  const capabilityReferences = harness.runtimeActivatedCapabilities.flatMap((providerPackage) =>
+    providerPackage.runtimeContributions?.({
+      ...contributionContext,
+      targetPack: harness.pack,
+      capability: providerPackage,
+    }).references ?? []);
   const runtimeReferences = [
-    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []).map(remapTargetReference),
+    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
     ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
-      surface.runtimeContributions?.(contributionContext).references ?? []).map(remapTargetReference),
+      surface.runtimeContributions?.(contributionContext).references ?? []),
     ...capabilityReferences,
   ];
   const input = createRustCompileInputFromSession({
@@ -250,7 +417,7 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
     project: harness.project,
     target,
     runtimeReferences,
-    selectedCapabilities: harness.providerContext.selectedCapabilities,
+    paths: harness.paths,
   });
   const backend = createRustBackend({ project: harness.project, target });
   return { result: backend.compile(input), extensionHost, harness };
@@ -315,6 +482,7 @@ export function acmeVectorsPackage() {
           id: "@acme/vectors::Vector",
           name: "Vector",
           kind: "class",
+          targetIdentity: { target: "rust", id: "acme.vectors.Vector" },
           members: [
             {
               id: "@acme/vectors::Vector.constructor",
@@ -351,6 +519,7 @@ export function acmeVectorsPackage() {
     operations: [
       {
         exportId: "@acme/vectors::Vector",
+        memberId: "@acme/vectors::Vector.constructor",
         operationKind: "constructor",
         target: { form: "call", path: "acme_vectors::Vector::new" },
         resultCarrier: vectorCarrier,
@@ -402,6 +571,7 @@ export function acmeVectorsPackage() {
         parameterCarriers: [vectorCarrier, vectorCarrier],
       },
     ],
+    carrierPaths: { "acme.vectors.Vector": "acme_vectors::Vector" },
     crates: [{ crateName: "acme_vectors", cargoPath: resolve(fixtureCratesRoot, "acme_vectors") }],
   });
 }
@@ -432,6 +602,7 @@ export function acmeDbPackage() {
           id: "@acme/db::Db",
           name: "Db",
           kind: "class",
+          targetIdentity: { target: "rust", id: "acme.db.Db" },
           members: [
             {
               id: "@acme/db::Db.execute",
@@ -466,14 +637,14 @@ export function acmeDbPackage() {
         isAsync: true,
       },
     ],
+    carrierPaths: { "acme.db.Db": "acme_db::Db" },
     crates: [{ crateName: "acme_db", cargoPath: resolve(fixtureCratesRoot, "acme_db") }],
   });
 }
 
-// Installed-capability fixture: the real @tsonic/rust-nodejs plugin,
-// imported from a simulated flat node_modules install so every path
-// contribution and peer-layout crate dependency resolves exactly as it
-// would from a real npm install.
+// Installed-capability fixture: the real @tsonic/rust-nodejs plugin imported
+// from package-declared artifacts. Cargo dependencies come from runtime
+// contributions, not relative npm peer layout.
 let cachedNodeCapability;
 export async function nodejsCapability() {
   if (cachedNodeCapability === undefined) {
@@ -487,25 +658,94 @@ export async function nodejsCapability() {
 }
 
 export function buildInstalledLayout() {
-  const layoutRoot = resolve(packageRoot, ".temp/installed/node_modules/@tsonic");
-  // Idempotent across concurrent test processes: the layout is rebuilt only
-  // when absent (npm test clears .temp/installed up front via pretest).
-  if (existsSync(resolve(layoutRoot, "rust-nodejs/package.json")) && existsSync(resolve(layoutRoot, "target-rust/package.json"))) {
-    return resolve(packageRoot, ".temp/installed");
+  const nodePackageRoot = resolve(packageRoot, "../rust-nodejs");
+  const runtimePackageRoot = resolve(packageRoot, "../rust-runtime");
+  const jsPackageRoot = resolve(packageRoot, "../rust-js");
+  const packages = [
+    [packageRoot, "target-rust"],
+    [runtimePackageRoot, "rust-runtime"],
+    [jsPackageRoot, "rust-js"],
+    [nodePackageRoot, "rust-nodejs"],
+  ].map(([root, name]) => [root, name, declaredPackageArtifacts(root)]);
+  const fingerprint = installedArtifactFingerprint(packages.map(([root, , entries]) => [root, entries]));
+  const installedRoot = resolve(packageRoot, `.temp/installed/${fingerprint}`);
+  const layoutRoot = resolve(installedRoot, "node_modules/@tsonic");
+  if (packages.every(([, name]) => existsSync(resolve(layoutRoot, name, "package.json")))) {
+    return installedRoot;
   }
-  rmSync(resolve(packageRoot, ".temp/installed"), { recursive: true, force: true });
-  const copies = [
-    [packageRoot, "target-rust", ["package.json", "dist", "runtimes"]],
-    [resolve(packageRoot, "../rust-nodejs"), "rust-nodejs", ["package.json", "dist", "runtimes"]],
-  ];
-  for (const [sourceRoot, name, entries] of copies) {
-    for (const entry of entries) {
-      cpSync(resolve(sourceRoot, entry), resolve(layoutRoot, name, entry), { recursive: true });
+  const stagingRoot = resolve(packageRoot, `.temp/installed/.staging-${fingerprint}-${process.pid}-${randomUUID()}`);
+  const stagingPackages = resolve(stagingRoot, "node_modules/@tsonic");
+  mkdirSync(stagingPackages, { recursive: true });
+  try {
+    for (const [sourceRoot, name, entries] of packages) {
+      for (const entry of entries) {
+        cpSync(resolve(sourceRoot, entry), resolve(stagingPackages, name, entry), {
+          recursive: true,
+          filter: packageArtifactFilter,
+        });
+      }
+    }
+    mkdirSync(dirname(installedRoot), { recursive: true });
+    try {
+      renameSync(stagingRoot, installedRoot);
+    } catch (error) {
+      if (!packages.every(([, name]) => existsSync(resolve(layoutRoot, name, "package.json")))) {
+        throw error;
+      }
+    }
+  } finally {
+    rmSync(stagingRoot, { recursive: true, force: true });
+  }
+  return installedRoot;
+}
+
+function declaredPackageArtifacts(root) {
+  const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+  assertPackageFiles(manifest.files, root);
+  return ["package.json", ...manifest.files];
+}
+
+function assertPackageFiles(files, root) {
+  if (!Array.isArray(files) || files.length === 0 || files.some((entry) => typeof entry !== "string" || entry.length === 0)) {
+    throw new Error(`Package '${root}' must declare a non-empty files array.`);
+  }
+  for (const entry of files) {
+    if (!existsSync(resolve(root, entry))) {
+      throw new Error(`Package '${root}' declares missing artifact '${entry}'.`);
     }
   }
-  // The copied rust-nodejs plugin resolves @tsonic/target-rust and its own
-  // transitive compiler dependencies through standard walk-up resolution.
-  return resolve(packageRoot, ".temp/installed");
+}
+
+function packageArtifactFilter(path) {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return name !== "target" && name !== ".temp" && name !== "node_modules";
+}
+
+function installedArtifactFingerprint(roots) {
+  const hash = createHash("sha256");
+  for (const [root, entries] of roots) {
+    for (const entry of entries) {
+      for (const filePath of artifactFiles(resolve(root, entry))) {
+        hash.update(relative(root, filePath));
+        hash.update("\0");
+        hash.update(readFileSync(filePath));
+        hash.update("\0");
+      }
+    }
+  }
+  return hash.digest("hex");
+}
+
+function artifactFiles(path) {
+  if (!packageArtifactFilter(path)) {
+    return [];
+  }
+  if (!statSync(path).isDirectory()) {
+    return [path];
+  }
+  return readdirSync(path, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name, "en"))
+    .flatMap((entry) => artifactFiles(resolve(path, entry.name)));
 }
 
 // Non-Node capability fixture: proves the installed-capability mechanism
@@ -568,6 +808,7 @@ export function acmeTelemetryCapability() {
           id: "telemetry::Meter",
           name: "Meter",
           kind: "class",
+          targetIdentity: { target: "rust", id: "acme.telemetry.Meter" },
           members: [
             {
               id: "telemetry::Meter.record",
@@ -616,6 +857,7 @@ export function acmeLogsinkCapability() {
           id: "logsink::Sink",
           name: "Sink",
           kind: "class",
+          targetIdentity: { target: "rust", id: "acme.logsink.Sink" },
           members: [
             { id: "logsink::Sink.path", name: "path", kind: "property", readonly: true, type: { kind: "string" } },
             { id: "logsink::Sink.write", name: "write", kind: "method", signatures: [{ id: "logsink::Sink.write(line)", parameters: [{ name: "line", type: { kind: "string" } }], returnType: { kind: "source-primitive", name: "int32" } }] },
@@ -625,7 +867,7 @@ export function acmeLogsinkCapability() {
     }],
     operations: [
       { exportId: "logsink::openSink", operationKind: "method", target: { form: "call", path: "acme_logsink::open_sink" }, resultCarrier: sinkCarrier },
-      { exportId: "logsink::openSinkNamed", operationKind: "method", target: { form: "call", path: "acme_logsink::openSinkNamed", argModes: ["ref"] }, resultCarrier: sinkCarrier },
+      { exportId: "logsink::openSinkNamed", operationKind: "method", target: { form: "call", path: "acme_logsink::openSinkNamed", argModes: ["ref"] }, resultCarrier: sinkCarrier, parameterCarriers: [stringCarrier] },
       { exportId: "logsink::Sink", memberId: "logsink::Sink.path", operationKind: "property", target: { form: "receiver-method", name: "path" }, resultCarrier: stringCarrier, isFallible: true },
       { exportId: "logsink::Sink", memberId: "logsink::Sink.write", operationKind: "method", target: { form: "receiver-method", name: "write", argModes: ["ref"], mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [stringCarrier] },
     ],

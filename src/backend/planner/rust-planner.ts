@@ -17,15 +17,15 @@ import {
 } from "../../common/source-ast.js";
 import { readRustCrateName, readRustOutputType } from "../../options/rust-target-options.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
-import { createRustSourceFile, rustGeneratedHeaderComment } from "../rust-ast/nodes.js";
+import { createRustSourceFile } from "../rust-ast/nodes.js";
 import type { RustItem } from "../rust-ast/nodes.js";
 import { printRustSourceFile } from "../../print/rust-printer.js";
 import { printCargoManifest } from "../../print/cargo-manifest-printer.js";
-import { cargoCrateAttributeName, planCargoManifest } from "./cargo-project.js";
-import { unsupportedConstructDiagnostic, unsupportedStatementDiagnostic } from "./diagnostics.js";
+import { planCargoManifest } from "./cargo-project.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic, unsupportedStatementDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planFunctionDeclaration } from "./functions.js";
-import { capabilityAliasImportsOf, isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers, rustRuntimeAliasImports } from "./plan-context.js";
+import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers, rustRuntimeAliasImports } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
@@ -63,25 +63,7 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
   // Activation: a runtime crate is a dependency only when planned code
   // references it (directly or through a declared alias). Surface-selected
   // crates without carrier/operation use stay out of the manifest.
-  const capabilityAliasTable = capabilityAliasImportsOf(input);
-  const usedCrates = new Set<string>();
-  for (const aliases of moduleAliases.values()) {
-    for (const alias of aliases) {
-      const entry = rustRuntimeAliasImports.get(alias) ?? capabilityAliasTable.get(alias);
-      const crateName = (entry?.path ?? alias).split("::")[0];
-      if (crateName !== undefined) {
-        usedCrates.add(crateName);
-      }
-    }
-  }
-  const capabilityCrateNames = (input as unknown as { capabilityCrateNames?: ReadonlySet<string> }).capabilityCrateNames ?? new Set<string>();
-  const activeReferences = input.runtimeReferences.filter((reference) => {
-    const crateName = (reference as { attributes?: Record<string, string> }).attributes?.[cargoCrateAttributeName];
-    // Only capability crates are activation-gated; target-owned runtime
-    // crates ship with the target selection itself.
-    return crateName === undefined || !capabilityCrateNames.has(crateName) || usedCrates.has(crateName);
-  });
-  const manifestPlan = planCargoManifest(input.target, activeReferences);
+  const manifestPlan = planCargoManifest(input.target, input.runtimeReferences);
   if (manifestPlan.manifest === undefined) {
     return { artifacts: [], diagnostics: [...diagnostics, ...manifestPlan.diagnostics] };
   }
@@ -112,33 +94,36 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
     // Structured import requirements collected during planning; never
     // inferred from rendered text.
     const aliases = [...(moduleAliases.get(moduleName) ?? new Set<string>())].sort((left, right) => left.localeCompare(right, "en"));
-    const capabilityAliases = capabilityAliasImportsOf(input);
     const useItems: RustItem[] = aliases
-      .map((alias) => rustRuntimeAliasImports.get(alias) ?? capabilityAliases.get(alias))
+      .map((alias) => rustRuntimeAliasImports.get(alias))
       .filter((entry): entry is { path: string; alias: string } => entry !== undefined)
       .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
     artifacts.push(rustSourceArtifact(`src/${moduleName}.rs`, printRustSourceFile(createRustSourceFile([...useItems, ...items]))));
   }
   if (outputType === "bin" && entryFunction !== undefined) {
     const crateName = readRustCrateName(input.target);
-    const mainText = entryFunction.fallible
-      ? [
-          `// ${rustGeneratedHeaderComment}`,
-          "",
-          "fn main() -> tsonic_rust_runtime::TsonicResult<()> {",
-          `    ${crateName}::${entryFunction.moduleName}::${entryFunction.functionName}()`,
-          "}",
-          "",
-        ].join("\n")
-      : [
-          `// ${rustGeneratedHeaderComment}`,
-          "",
-          "fn main() {",
-          `    ${crateName}::${entryFunction.moduleName}::${entryFunction.functionName}();`,
-          "}",
-          "",
-        ].join("\n");
-    artifacts.push(rustSourceArtifact("src/main.rs", mainText));
+    const entryCall = {
+      kind: "call" as const,
+      path: `${crateName}::${entryFunction.moduleName}::${entryFunction.functionName}`,
+      args: [],
+    };
+    const mainItem: RustItem = {
+      kind: "function",
+      name: "main",
+      pub: false,
+      params: [],
+      ...(entryFunction.fallible
+        ? {
+            returnType: {
+              kind: "named" as const,
+              path: "tsonic_rust_runtime::TsonicResult",
+              typeArguments: [{ kind: "unit" as const }],
+            },
+            body: { statements: [{ kind: "tail" as const, expr: entryCall }] },
+          }
+        : { body: { statements: [{ kind: "expr" as const, expr: entryCall }] } }),
+    };
+    artifacts.push(rustSourceArtifact("src/main.rs", printRustSourceFile(createRustSourceFile([mainItem]))));
   }
   return { artifacts, diagnostics: [] };
 }
@@ -216,6 +201,11 @@ function planModuleItems(context: RustPlanContext): readonly RustItem[] {
   const items: RustItem[] = [];
   for (const statement of ast.statements(context.sourceFile)) {
     if (statement === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, context.sourceFile),
+        "rust.backend.top-level-statement",
+        "Source file contains an undefined top-level statement slot.",
+      ));
       continue;
     }
     const kind = ast.kindName(statement);
@@ -223,44 +213,62 @@ function planModuleItems(context: RustPlanContext): readonly RustItem[] {
       continue;
     }
     if (kind === KindFunctionDeclaration) {
+      const diagnosticCount = context.diagnostics.length;
       const item = planFunctionDeclaration(statement, context);
       if (item !== undefined) {
         items.push(item);
+      } else {
+        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "function");
       }
       continue;
     }
     if (kind === KindVariableStatement) {
+      const diagnosticCount = context.diagnostics.length;
       const item = planTopLevelConst(statement, context);
       if (item !== undefined) {
         items.push(item);
+      } else {
+        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "const");
       }
       continue;
     }
     if (kind === "KindClassDeclaration") {
+      const diagnosticCount = context.diagnostics.length;
       const planned = planClassDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
+      } else {
+        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "class");
       }
       continue;
     }
     if (kind === "KindInterfaceDeclaration") {
+      const diagnosticCount = context.diagnostics.length;
       const planned = planInterfaceDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
+      } else {
+        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "interface");
       }
       continue;
     }
     if (kind === "KindTypeAliasDeclaration") {
+      const diagnosticCount = context.diagnostics.length;
       const planned = planUnionAliasDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
+      } else {
+        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "type-alias");
       }
       continue;
     }
     if (kind === "KindEnumDeclaration") {
+      const diagnosticCount = context.diagnostics.length;
       const planned = planEnumDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
+      } else {
+        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "enum");
       }
       continue;
     }
@@ -270,6 +278,22 @@ function planModuleItems(context: RustPlanContext): readonly RustItem[] {
     ));
   }
   return items;
+}
+
+function ensureTopLevelPlanningDiagnostic(
+  context: RustPlanContext,
+  statement: Node,
+  diagnosticCount: number,
+  construct: string,
+): void {
+  if (context.diagnostics.length !== diagnosticCount) {
+    return;
+  }
+  context.diagnostics.push(missingFactDiagnostic(
+    { ast: context.input.ast, sourceFile: context.sourceFile, node: statement },
+    `rust.backend.${construct}-finalization`,
+    `Top-level ${construct} planning returned no Rust AST and no specific diagnostic.`,
+  ));
 }
 
 function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem | undefined {
@@ -296,6 +320,7 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
   const rustType = rustTypeFromCarrierInContext(carrier, context);
   if (
     declaration === undefined ||
+    ast.variableDeclarationKind(statement) !== "const" ||
     initializer === undefined ||
     typeNode === undefined ||
     rustType === undefined ||

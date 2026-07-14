@@ -34,11 +34,6 @@ export const rustRuntimeAliasImports: ReadonlyMap<string, { readonly path: strin
   ["rt", { path: "tsonic_rust_runtime", alias: "rt" }],
 ]);
 
-export function capabilityAliasImportsOf(input: object): ReadonlyMap<string, { readonly path: string; readonly alias: string }> {
-  return (input as { capabilityAliasImports?: ReadonlyMap<string, { readonly path: string; readonly alias: string }> })
-    .capabilityAliasImports ?? new Map();
-}
-
 export function registerAliasFromPath(
   context: { readonly usedAliases?: Set<string>; readonly input?: object },
   path: string,

@@ -12,7 +12,9 @@ export { createRustBackend } from "./backend/rust-backend.js";
 export { planRustArtifacts, rustModuleNameForFile } from "./backend/planner/rust-planner.js";
 export {
   cargoCrateAttributeName,
+  cargoCratesIoRegistry,
   cargoPathReferenceKind,
+  cargoRegistryPatchAttributeName,
   planCargoManifest,
 } from "./backend/planner/cargo-project.js";
 export type { CargoDependency, CargoManifestPlan, CargoManifestPlanResult } from "./backend/planner/cargo-project.js";
@@ -56,12 +58,37 @@ export {
 export type {
   RustProviderCrateDefinition,
   RustProviderModuleDefinition,
+  RustProviderOperationDefinition,
   RustProviderOperationRow,
   RustProviderPackageDefinition,
   RustProviderPackageImplementation,
 } from "./source/provider-packages/index.js";
 export { rustExtensionId, rustTargetOperationFactKey } from "./source/rust-facts/keys.js";
-export type { RustProviderOperationForm, RustTargetOperationFact } from "./source/rust-facts/keys.js";
+export type {
+  RustProviderChainStep,
+  RustProviderConstantArgument,
+  RustProviderOperationForm,
+  RustTargetOperationFact,
+  RustValueConversion,
+  RustValueConversionId,
+} from "./source/rust-facts/keys.js";
+export {
+  rustFloat64ToInt32ValueConversion,
+  rustInt32ToFloat64ValueConversion,
+  rustInt32ToUint8ValueConversion,
+  rustInt32ToUsizeValueConversion,
+  rustIsizeToFloat64ValueConversion,
+  rustIsizeToInt32ValueConversion,
+  rustUint32ToInt32ValueConversion,
+  rustUint64ToFloat64ValueConversion,
+  rustUint8ToInt32ValueConversion,
+  rustUsizeToInt32ValueConversion,
+  rustUsizeToFloat64ValueConversion,
+  rustValueConversionContract,
+  rustValueConversionIsFallible,
+  selectRustSourceValueConversion,
+} from "./source/rust-facts/value-conversions.js";
+export type { RustValueConversionContract } from "./source/rust-facts/value-conversions.js";
 export {
   isRustBoolCarrier,
   isRustIntegerCarrier,
@@ -74,10 +101,11 @@ export {
   rustStringTargetId,
   rustStringTargetType,
   rustUnitTargetType,
+  rustUsizeTargetId,
+  rustUsizeTargetType,
   sameRustPrimitiveCarrier,
 } from "./source/rust-target-types.js";
 export { rustTypeFromCarrier } from "./backend/planner/render-types.js";
-export { createRustCompileInputFromSession } from "./session/compile-input.js";
 export { composeRustCapabilities } from "./plugin/compose.js";
 export type { TsonicPlugin, TsonicTargetPlugin, TsonicTargetCapabilityPlugin, TargetCapabilityContext, TargetProviderModuleOwnership } from "./plugin/types.js";
 

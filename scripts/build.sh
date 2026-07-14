@@ -22,6 +22,7 @@ for output in "${required_dist_outputs[@]}"; do
 done
 
 mkdir -p "$REPO_ROOT/.temp/build"
+node "$REPO_ROOT/scripts/clean-dist.mjs"
 CANONICAL_TSCONFIG="$REPO_ROOT/.temp/build/tsconfig.canonical-tsonic.json"
 cat > "$CANONICAL_TSCONFIG" <<EOF
 {
@@ -36,4 +37,3 @@ cat > "$CANONICAL_TSCONFIG" <<EOF
 EOF
 
 "$TSONIC_ROOT/scripts/build/tsgo-project.sh" "$CANONICAL_TSCONFIG" --pretty false
-bash "$(dirname "$0")/package-runtimes.sh"
