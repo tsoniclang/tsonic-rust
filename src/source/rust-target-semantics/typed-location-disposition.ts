@@ -20,7 +20,7 @@ export type RustTypedLocationDisposition =
 
 export type RustTypedLocationOperationKind = Extract<
   SourceCallMarkerKind,
-  "address-of" | "allocate" | "load" | "store"
+  PointerOperationFact["operation"]
 >;
 
 export function selectRustTypedLocationDisposition(
@@ -50,6 +50,7 @@ function isRustTypedLocationOperation(
   switch (marker) {
     case "address-of":
     case "allocate":
+    case "equal-pointer":
     case "load":
     case "store":
       return true;

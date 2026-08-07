@@ -63,7 +63,7 @@ test("Rust converts typed-location facts into one target-owned disposition", () 
   assert.match(disposition, /kind:\s*"unsupported"/u);
   assert.doesNotMatch(
     disposition,
-    /\baddressOf\b|\ballocatePointer\b|\bloadPointer\b|\bstorePointer\b/u,
+    /\baddressOf\b|\ballocatePointer\b|\bequalPointer\b|\bloadPointer\b|\bstorePointer\b/u,
   );
 });
 
