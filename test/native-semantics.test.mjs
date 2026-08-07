@@ -167,7 +167,7 @@ test("flow markers erase into finalized argument modes", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { borrow, move } from "@tsonic/core/lang.js";
+import { borrow, move } from "@tsonic/rust/lang.js";
 import { Vector, magnitude, consume } from "@acme/vectors";
 
 export function drive(): int32 {
@@ -191,7 +191,7 @@ test("flow markers mismatching argument modes fail closed", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { borrow } from "@tsonic/core/lang.js";
+import { borrow } from "@tsonic/rust/lang.js";
 import { Vector, consume } from "@acme/vectors";
 
 export function bad(): int32 {
@@ -212,19 +212,19 @@ test("byref passing markers are rejected deterministically", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { ref } from "@tsonic/core/lang.js";
+import { readWriteRef } from "@tsonic/core/lang.js";
 import { Vector, consume } from "@acme/vectors";
 
 export function bad(): int32 {
   const v = new Vector(1, 2);
-  return consume(ref(v));
+  return consume(readWriteRef(v));
 }
 `,
     },
   });
   const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
   assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Rust does not support selected source marker 'ref' in this operation lane/u);
+  assert.match(diagnostics, /Rust does not support selected source marker 'read-write-reference' in this operation lane/u);
   assert.ok(harness.session.extensionHost.diagnostics.all().some((diagnostic) =>
     diagnostic.extensionCode === "RUST_SOURCE_MARKER_UNSUPPORTED"));
 });

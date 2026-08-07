@@ -9,6 +9,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TSONIC_ROOT="$(cd "$REPO_ROOT/../tsonic" && pwd -P)"
 
 required_dist_outputs=(
+  "packages/source-core/dist/index.d.ts"
   "packages/target-api/dist/index.d.ts"
   "packages/tsts/dist/src/index.d.ts"
 )
@@ -30,7 +31,8 @@ cat > "$CANONICAL_TSCONFIG" <<EOF
   "compilerOptions": {
     "paths": {
       "@tsonic/tsts": ["$TSONIC_ROOT/packages/tsts/dist/src/index.d.ts"],
-      "@tsonic/target-api": ["$TSONIC_ROOT/packages/target-api/dist/index.d.ts"]
+      "@tsonic/target-api": ["$TSONIC_ROOT/packages/target-api/dist/index.d.ts"],
+      "@tsonic/source-core": ["$TSONIC_ROOT/packages/source-core/dist/index.d.ts"]
     }
   }
 }

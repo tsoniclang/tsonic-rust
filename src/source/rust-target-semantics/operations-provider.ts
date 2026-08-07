@@ -35,6 +35,7 @@ import type {
   TargetOperationFact,
   TargetSemanticProvider,
   TargetTypeRef,
+  SourceCallMarkerKind,
 } from "@tsonic/tsts";
 import {
   ElementAccessExpression_ArgumentExpression,
@@ -115,13 +116,22 @@ import {
 import {
   tsonicCoreSourceSemanticsModules,
 } from "@tsonic/source-core";
+import {
+  rustSourceSemanticsModules,
+} from "../rust-source-semantics/source-modules.js";
 import type { RustSourceTypeRegistry } from "./source-type-registry.js";
 import type { RustSourceProfileRegistry } from "./source-profile-registry.js";
 import { selectedSourceLiteralIsRepresentable } from "./selected-numeric-literal.js";
 import type { RustSourceCallableAbiResolver } from "./source-callable-abi.js";
+import {
+  selectRustTypedLocationDisposition,
+} from "./typed-location-disposition.js";
 
 const sourceCallMarkerByIdentity = new Map(
-  tsonicCoreSourceSemanticsModules().flatMap((module) =>
+  [
+    ...tsonicCoreSourceSemanticsModules(),
+    ...rustSourceSemanticsModules(),
+  ].flatMap((module) =>
     module.exports
       .filter((declaration) => declaration.kind === "call-marker")
       .map((declaration) => [
@@ -708,11 +718,37 @@ function mapRustCheckedCall(
 function mapRustSourceMarkerCall(
   request: CheckedCallMappingRequest,
   provider: ProviderDeclarationIdentity,
-  markerName: "out" | "ref" | "inref" | "borrow" | "borrowMut" | "move" | "struct" | "field" | "attribute" | "defaultof",
+  markerName: SourceCallMarkerKind,
   context: ExtensionObservationContext<"operation.mapCheckedCall">,
   options: RustOperationsProviderOptions,
 ): ExtensionObservation<CheckedCallMappingResult> {
-  if (markerName !== "borrow" && markerName !== "borrowMut" && markerName !== "move") {
+  const typedLocation = selectRustTypedLocationDisposition(
+    request.call,
+    markerName,
+    (subject, key) => context.factResolver.resolve(subject, key),
+    (subject, key) => context.facts.get(subject, key),
+  );
+  if (typedLocation.kind !== "not-typed-location") {
+    if (typedLocation.kind === "evidence-missing") {
+      return rejectSelectedOperation(
+        request.call,
+        context,
+        "RUST_POINTER_OPERATION_FACT_NOT_PROVEN",
+        `Selected typed-location operation '${typedLocation.operation}' has no matching finalized TSTS operation fact.`,
+      );
+    }
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_TYPED_LOCATION_UNSUPPORTED",
+      `Rust does not yet implement finalized typed-location operation '${typedLocation.operation}'.`,
+    );
+  }
+  if (
+    markerName !== "shared-borrow" &&
+    markerName !== "mutable-borrow" &&
+    markerName !== "move"
+  ) {
     return rejectSelectedOperation(
       request.call,
       context,
@@ -722,9 +758,9 @@ function mapRustSourceMarkerCall(
   }
   const flow = context.factResolver.resolve(request.call, flowStateFactKey) ??
     context.facts.get(request.call, flowStateFactKey);
-  const expectedState = markerName === "borrow"
+  const expectedState = markerName === "shared-borrow"
     ? "borrowed-shared"
-    : markerName === "borrowMut" ? "borrowed-mut" : "moved";
+    : markerName === "mutable-borrow" ? "borrowed-mut" : "moved";
   if (flow?.state !== expectedState) {
     return rejectSelectedOperation(
       request.call,

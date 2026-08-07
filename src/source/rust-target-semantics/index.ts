@@ -523,7 +523,7 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
       extensionCode: "RUST_SOURCE_MARKER_UNSUPPORTED",
       numericCode: 0,
       category: "error",
-      message: "ptr/fnptr type markers have no Rust target lane yet; they require the unsafe boundary contract.",
+      message: "Pointer/FunctionPointer type markers have no Rust target lane yet; they require a separately approved unsafe-boundary contract.",
       evidence: [{ message: "target.capability=rust.source.type-marker" }],
     });
     return undefined;

@@ -1,4 +1,9 @@
 export { createRustTargetPack, rustTargetId } from "./descriptor/rust-target-pack.js";
+export {
+  rustLangModule,
+  rustSourceSemanticsModules,
+  rustTypesModule,
+} from "./source/rust-source-semantics/source-modules.js";
 import { createRustTargetPack } from "./descriptor/rust-target-pack.js";
 export {
   readRustCrateName,
