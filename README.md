@@ -32,8 +32,8 @@ enums with TSTS-evaluated discriminants, interfaces as record structs with
 contextual object literals, closed string-literal union aliases as
 unit-variant enums, tuples with constant indexing, `readonly T[]` as `&[T]`
 and mutable array parameters as `&mut [T]`, null-only unions as `Option<T>`
-with `??` coalescing, passthrough generic functions, source-core
-`borrow`/`borrowMut`/`move` flow markers validated against finalized
+with `??` coalescing, passthrough generic functions, Rust-flavoured
+`borrow`/`borrowMut`/`move` flow aliases validated against finalized
 argument modes, async/await with await-only future discipline, a
 naming policy that preserves every user-authored identifier verbatim with
 scoped lint allowances (snake_case exists only for compiler-generated
@@ -48,6 +48,13 @@ every use is a ref-mode provider argument or member-access receiver take
 uses keep owned `String`. Homogeneous primitive tuple annotations carry
 compile-time-proven length and lower to `[T; N]` with literal construction
 and constant in-range indexing; dynamic indexing fails closed.
+
+The aliases are owned by `@tsonic/rust/lang.js`: `borrow` selects the neutral
+shared-borrow meaning, `borrowMut` selects mutable-borrow, and `move` selects
+move. Neutral code uses `sharedBorrow` and `mutableBorrow` from
+`@tsonic/core/lang.js`. Typed-location facts are converted at one Rust-owned
+policy boundary and currently reject deterministically; the backend never
+reads the neutral pointer fact or marker spelling.
 
 JS surface (selected surface or compat mode): dense `Vec<T>` and sparse
 `JsArray<T>` lanes with callback iteration (map/filter/reduce/some/every as

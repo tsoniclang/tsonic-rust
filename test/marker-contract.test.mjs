@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFileSync(join(repositoryRoot, path), "utf8");
+
+function sourceFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory()
+      ? sourceFiles(path)
+      : entry.isFile() && path.endsWith(".ts")
+      ? [path]
+      : [];
+  });
+}
 
 test("Rust source modules expose only the approved native aliases", () => {
   const modules = source("src/source/rust-source-semantics/source-modules.ts");
@@ -54,6 +65,16 @@ test("Rust converts typed-location facts into one target-owned disposition", () 
     disposition,
     /\baddressOf\b|\ballocatePointer\b|\bloadPointer\b|\bstorePointer\b/u,
   );
+});
+
+test("Rust backend consumes only target-owned marker facts", () => {
+  const forbiddenNeutralFacts =
+    /argumentPassingFactKey|defaultValueFactKey|fieldFactKey|flowStateFactKey|functionPointerFactKey|pointerFactKey|pointerOperationFactKey|structFactKey|tsonicAttributeBuilderFactKey/u;
+  const failures = sourceFiles(join(repositoryRoot, "src/backend"))
+    .filter((path) => forbiddenNeutralFacts.test(readFileSync(path, "utf8")))
+    .map((path) => path.slice(repositoryRoot.length + 1));
+
+  assert.deepEqual(failures, []);
 });
 
 test("Rust-flavoured flow aliases are imported only from the Rust module", () => {
