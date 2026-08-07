@@ -65,7 +65,7 @@ test("generated cargo binary proves operator-trait lowering at runtime", { timeo
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { borrow, borrowMut, move } from "@tsonic/core/lang.js";
+import { borrow, borrowMut, move } from "@tsonic/rust/lang.js";
 import { Vector, magnitude, consume, scale } from "@acme/vectors";
 import { check } from "@acme/testing";
 

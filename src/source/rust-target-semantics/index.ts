@@ -523,7 +523,7 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
       extensionCode: "RUST_SOURCE_MARKER_UNSUPPORTED",
       numericCode: 0,
       category: "error",
-      message: "ptr/fnptr type markers have no Rust target lane yet; they require the unsafe boundary contract.",
+      message: "Pointer/FunctionPointer type markers have no Rust target lane yet; they require a separately approved unsafe-boundary contract.",
       evidence: [{ message: "target.capability=rust.source.type-marker" }],
     });
     return undefined;
@@ -1861,11 +1861,13 @@ interface FlowMarkerResolution {
   readonly carrier: TargetTypeRef | undefined;
 }
 
-// The generic source-semantics extension records flowStateFactKey on marker
-// calls (borrow/borrowMut/move) and argumentPassingFactKey on out/ref/inref
-// calls. The Rust target lowers flow markers by erasure (the consuming
-// position's finalized argument mode owns the passing shape) and rejects the
-// by-ref passing markers, which have no Rust lane.
+// The generic source-semantics extension records flowStateFactKey on neutral
+// sharedBorrow/mutableBorrow/move operations (including exact Rust aliases)
+// and argumentPassingFactKey on writeOnlyRef/readWriteRef/readOnlyRef calls.
+// This target converts those source facts into Rust-owned operation facts.
+// Flow operations erase at emission because the consuming position's finalized
+// Rust argument mode owns the passing shape; reference operations have no Rust
+// target lane and are rejected here.
 function tryFlowMarkerCall(
   walk: RustFactWalk,
   expression: Node,

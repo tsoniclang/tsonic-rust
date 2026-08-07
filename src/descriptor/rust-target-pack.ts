@@ -8,10 +8,10 @@ import type {
   TargetRuntimeContributionContext,
   TargetRuntimeContributions,
   TargetRuntimeReference,
+  TargetSourceCompilerContributions,
   TargetToolchain,
   TargetToolchainContext,
 } from "@tsonic/target-api";
-import type { CompilerExtension } from "@tsonic/tsts";
 import { createRustBackend } from "../backend/rust-backend.js";
 import { createRustTargetSemanticsExtension } from "../source/rust-target-semantics/index.js";
 import {
@@ -29,6 +29,12 @@ import {
   rustJsSurfaceSourceProfileContributions,
   rustSourceProfileContributions,
 } from "../source/rust-target-semantics/source-profile-declarations.js";
+import {
+  createRustSourceSemanticsExtension,
+} from "../source/rust-source-semantics/source-extension.js";
+import {
+  rustSourceSemanticsModules,
+} from "../source/rust-source-semantics/source-modules.js";
 
 export const rustTargetId = "rust";
 const require = createRequire(import.meta.url);
@@ -43,9 +49,17 @@ export function createRustTargetPack(): TargetPack {
       id: "rust-provider",
       displayName: "Rust target provider",
       sourceProfileContributions: rustSourceProfileContributions,
-      createExtensions(context: TargetProviderContext): readonly CompilerExtension[] {
+      sourceCompilerContributions(
+        context: TargetProviderContext,
+      ): TargetSourceCompilerContributions {
         validateRustTargetOptions(context.target);
-        return [createRustTargetSemanticsExtension(context)];
+        return {
+          semanticsModules: rustSourceSemanticsModules(),
+          extensions: [
+            createRustSourceSemanticsExtension(),
+            createRustTargetSemanticsExtension(context),
+          ],
+        };
       },
       runtimeContributions(context: TargetRuntimeContributionContext): TargetRuntimeContributions {
         return {

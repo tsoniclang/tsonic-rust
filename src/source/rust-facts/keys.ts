@@ -287,8 +287,8 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
-      // Source-core flow marker call (borrow/borrowMut/move): the call node
-      // lowers to its argument with the marker's passing shape.
+      // Rust-owned flow operation selected from a finalized neutral source
+      // marker fact. The call lowers to its argument with the Rust passing shape.
       readonly kind: "flow-marker";
       readonly operationId: string;
       readonly state: "borrowed-shared" | "borrowed-mut" | "moved";
