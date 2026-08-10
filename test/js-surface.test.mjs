@@ -252,6 +252,41 @@ test("array copy and stringification rows reject unproven generic element traits
   }), undefined);
 });
 
+test("Number predicates consume exact numeric carriers and reject non-numbers", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function probe(value: number, integer: int32): boolean {
+  return Number.isFinite(value) && Number.isInteger(value) &&
+    Number.isSafeInteger(value) && !Number.isNaN(value) &&
+    Number.isFinite(integer);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::number_is_finite\(value\)/u);
+  assert.match(text, /js_abi::number_is_integer\(value\)/u);
+  assert.match(text, /js_abi::number_is_safe_integer\(value\)/u);
+  assert.match(text, /js_abi::number_is_nan\(value\)/u);
+  assert.match(text, /js_abi::number_is_finite\(tsonic_rust_runtime::conversions::i32_to_f64\(integer\)\)/u);
+
+  assertRustTargetRejection({
+    surfaces: ["js"],
+    files: {
+      "index.ts": "export function probe(value: string): boolean { return Number.isFinite(value); }\n",
+    },
+  }, [{
+    code: "RUST_SELECTED_OPERATION_UNSUPPORTED",
+    message: "The selected JavaScript call 'NumberConstructor.isFinite' has no closed Rust operation row for the selected receiver and argument carriers.",
+  }]);
+});
+
 test("Map and Set lower to runtime carriers with SameValueZero semantics", () => {
   const { result } = compileRust({
     surfaces: ["js"],

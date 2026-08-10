@@ -63,7 +63,7 @@ export interface JsOperationSelection {
   readonly callbackShape?: "map" | "reduce";
 }
 
-type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "regexp" | "regexp-match";
+type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "regexp" | "regexp-match";
 
 type JsCarrierRef =
   | { readonly ref: "cb-predicate" }
@@ -124,6 +124,12 @@ interface JsOperationRowData {
 const zeroArgument = { kind: "integer", value: 0 } as const;
 const noneArgument = { kind: "none" } as const;
 const copySelectedCarrier = { kind: "copy-selected-carrier" } as const;
+const numberPredicateRows = [
+  { member: "isFinite", path: "js_abi::number_is_finite" },
+  { member: "isInteger", path: "js_abi::number_is_integer" },
+  { member: "isNaN", path: "js_abi::number_is_nan" },
+  { member: "isSafeInteger", path: "js_abi::number_is_safe_integer" },
+] as const;
 
 const jsOperationRows: readonly JsOperationRowData[] = [
   // Dense Vec<T> lane.
@@ -252,6 +258,11 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Math", member: "sqrt", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "sqrt" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "pow", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "powf" }, result: { ref: "float64" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
 
+  ...numberPredicateRows.flatMap(({ member, path }) => [
+    { owner: "NumberConstructor", member, operationKind: "call" as const, lane: "number" as const, variant: "float64", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path }, result: { ref: "bool" as const }, params: [{ ref: "float64" as const }] } },
+    { owner: "NumberConstructor", member, operationKind: "call" as const, lane: "number" as const, variant: "int32", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path, argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "bool" as const }, params: [{ ref: "int32" as const }] } },
+  ]),
+
   // Date lane.
   { owner: "DateConstructor", member: "parse", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::parse", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
   { owner: "DateConstructor", member: "UTC", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::utc" }, result: { ref: "float64" }, params: [{ ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }] } },
@@ -316,6 +327,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   }
   if (carrier === undefined && ownerName === "Math") {
     return { lane: "math", bindings: {} };
+  }
+  if (carrier === undefined && ownerName === "NumberConstructor") {
+    return { lane: "number", bindings: {} };
   }
   if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExp") {
     return { lane: "regexp", bindings: { receiver: carrier } };
