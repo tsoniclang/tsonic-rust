@@ -10,6 +10,7 @@ import {
   Node_Type,
 } from "../../common/source-ast.js";
 import type {
+  RustType,
   RustExpr,
   RustFunctionParam,
   RustImplFunction,
@@ -355,14 +356,6 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const isStatic = ast.hasModifierKind(member, "static");
-  if (generatorFact !== undefined && !isStatic) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, member),
-      "rust.backend.instance-generator-method",
-      "Instance generator methods require a lifetime-bound Rust generator carrier.",
-    ));
-    return undefined;
-  }
   if (generatorFact !== undefined && fallible) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -427,19 +420,32 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
       return undefined;
     }
     context.usedAliases?.add("rt");
+    const generatorReturnType = isStatic
+      ? returnType
+      : borrowedGeneratorType(returnType, generatorFact.kind);
+    if (generatorReturnType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, member),
+        "rust.backend.instance-generator-carrier",
+        "Instance generator method has no lifetime-bound Rust generator return carrier.",
+      ));
+      return undefined;
+    }
     return {
       name: methodName,
       pub: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"),
       ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
       ...(isStatic ? {} : { selfParam: selfMode!.mode }),
       params,
-      ...(returnType === undefined ? {} : { returnType }),
+      returnType: generatorReturnType,
       body: {
         statements: [{
           kind: "tail",
           expr: {
             kind: "call",
-            path: generatorFact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new",
+            path: generatorFact.kind === "sync"
+              ? isStatic ? "rt::Generator::new" : "rt::BorrowedGenerator::new"
+              : isStatic ? "rt::AsyncGenerator::new" : "rt::BorrowedAsyncGenerator::new",
             args: [{
               kind: "closure-block",
               params: [{ name: generatorControllerName!, mutable: false }],
@@ -462,6 +468,21 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: applyFallibleShape(applyRustTailShape(body, returnType !== undefined), fallible, returnType !== undefined),
+  };
+}
+
+function borrowedGeneratorType(
+  type: RustType | undefined,
+  kind: "sync" | "async",
+): RustType | undefined {
+  if (type?.kind !== "named" ||
+    type.path !== (kind === "sync" ? "rt::Generator" : "rt::AsyncGenerator")) {
+    return undefined;
+  }
+  return {
+    ...type,
+    path: kind === "sync" ? "rt::BorrowedGenerator" : "rt::BorrowedAsyncGenerator",
+    lifetimeArguments: ["_"],
   };
 }
 

@@ -135,10 +135,13 @@ export function printRustType(type: RustType): string {
       return "()";
     }
     case "named": {
-      const args = type.typeArguments ?? [];
+      const args = [
+        ...(type.lifetimeArguments ?? []).map((lifetime) => `'${lifetime}`),
+        ...(type.typeArguments ?? []).map(printRustType),
+      ];
       return args.length === 0
         ? type.path
-        : `${type.path}<${args.map(printRustType).join(", ")}>`;
+        : `${type.path}<${args.join(", ")}>`;
     }
     case "fixed-array": {
       return `[${printRustType(type.element)}; ${type.length}]`;

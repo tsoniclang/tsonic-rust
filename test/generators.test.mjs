@@ -294,23 +294,68 @@ export function run(): void {
   validateGeneratedProject("static-generator-method", result.artifacts);
 });
 
-test("instance generator methods fail closed until a lifetime-bound carrier exists", () => {
+test("instance generator methods retain self through a lifetime-bound carrier", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
 ${generatorTypes}
 
 class Values {
-  constructor() {}
-  *items(): Generator<int32, void, void> {
-    yield 1;
+  value: int32;
+
+  constructor(value: int32) {
+    this.value = value;
   }
+
+  *items(): Generator<int32, void, void> {
+    yield this.value;
+  }
+}
+
+export function run(): void {
+  const values = new Values(1);
+  values.items().next();
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("lifetime-bound Rust generator carrier")));
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /-> rt::BorrowedGenerator<'_, i32, \(\), \(\)>/u);
+  assert.match(source, /rt::BorrowedGenerator::new/u);
+  validateGeneratedProject("instance-generator-method", result.artifacts);
+});
+
+test("instance async generator methods retain self through a lifetime-bound carrier", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+${generatorTypes}
+
+class Values {
+  value: int32;
+
+  constructor(value: int32) {
+    this.value = value;
+  }
+
+  async *items(): AsyncGenerator<int32, void, void> {
+    yield this.value;
+  }
+}
+
+export async function run(): Promise<void> {
+  const values = new Values(1);
+  await values.items().next();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /-> rt::BorrowedAsyncGenerator<'_, i32, \(\), \(\)>/u);
+  assert.match(source, /rt::BorrowedAsyncGenerator::new/u);
+  validateGeneratedProject("instance-async-generator-method", result.artifacts);
 });

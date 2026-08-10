@@ -12,7 +12,7 @@ export type RustType =
   | { readonly kind: "string" }
   | { readonly kind: "str-ref" }
   | { readonly kind: "unit" }
-  | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] }
+  | { readonly kind: "named"; readonly path: string; readonly lifetimeArguments?: readonly string[]; readonly typeArguments?: readonly RustType[] }
   | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: number }
   | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean }
   | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
