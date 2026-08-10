@@ -1,6 +1,7 @@
 import type { AstReader, ExtensionFactSubject, Node } from "@tsonic/tsts";
 
 export const KindBinaryExpression = "KindBinaryExpression";
+export const KindBigIntLiteral = "KindBigIntLiteral";
 export const KindBlock = "KindBlock";
 export const KindBreakStatement = "KindBreakStatement";
 export const KindBooleanKeyword = "KindBooleanKeyword";

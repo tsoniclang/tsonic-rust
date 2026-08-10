@@ -206,6 +206,89 @@ export function main(): void {
   validateGeneratedProject("expression-void", result.artifacts, { run: true });
 });
 
+test("bigint literals preserve arbitrary precision, value reuse, and operators", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "bigint_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+function difference(left: bigint, right: bigint): bigint {
+  const sum = left + right;
+  return sum - left;
+}
+
+class Counter {
+  value: bigint;
+
+  constructor(value: bigint) {
+    this.value = value;
+  }
+
+  read(): bigint {
+    return this.value;
+  }
+}
+
+export function main(): void {
+  const huge = 1234567890123456789012345678901234567890n;
+  check(difference(huge, 7n) === 7n);
+  check(huge === 1234567890123456789012345678901234567890n);
+  let changed = huge;
+  changed += 2n;
+  changed--;
+  check(changed === huge + 1n);
+  check(-changed < 0n);
+  check(typeof changed === "bigint");
+  const counter = new Counter(huge);
+  check(counter.read() === huge);
+  check(counter.read() === huge);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::BigInt/u);
+  validateGeneratedProject("expression-bigint", result.artifacts, { run: true });
+});
+
+test("inexact number literals cannot masquerade as fixed-width 64-bit values", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int64 } from "@tsonic/core/types.js";
+
+export function invalid(): int64 {
+  return 9007199254740993;
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === "RUST_INTEGER_LITERAL_NOT_EXACT"));
+});
+
+test("bigint division fails closed until its catchable error ABI is selected", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function divide(left: bigint, right: bigint): bigint {
+  return left / right;
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED"));
+});
+
 test("delete lowers only an exact mutable JS Array index selection", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],

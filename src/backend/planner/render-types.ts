@@ -3,6 +3,7 @@ import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
 import { rustSourceTypeCarrierValue } from "../../source/rust-facts/keys.js";
 import {
+  rustBigIntTargetId,
   rustJsArrayTargetId,
   rustJsDateTargetId,
   rustJsMapTargetId,
@@ -23,6 +24,7 @@ import {
 } from "../../source/rust-target-types.js";
 
 const namedCarrierPaths: Readonly<Record<string, string>> = {
+  [rustBigIntTargetId]: "rt::BigInt",
   [rustOptionTargetId]: "Option",
   [rustLocationTargetId]: "rt::Location",
   [rustGeneratorTargetId]: "rt::Generator",

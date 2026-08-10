@@ -20,6 +20,7 @@ import {
   rustBinaryOperatorTraitPath,
 } from "../../common/rust-syntax.js";
 import {
+  rustBigIntTargetId,
   rustFixedArrayCarrierValue,
   rustJsArrayTargetId,
   rustJsDateTargetId,
@@ -55,6 +56,7 @@ interface SignatureRecord {
 }
 
 const builtInTargetCarrierIds = new Set([
+  rustBigIntTargetId,
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,

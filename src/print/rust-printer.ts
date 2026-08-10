@@ -13,6 +13,7 @@ import type { RustAssignmentOperator } from "../common/rust-syntax.js";
 // line between items, trailing newline.
 
 const rustFormatWidth = 100;
+const rustStructLiteralWidth = 18;
 const rustNestedCallWidth = 60;
 const rustMethodChainWidth = 60;
 const rustFormatMacroInlineArgumentLimit = 4;
@@ -985,7 +986,14 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       ].join("\n");
     }
     case "struct-literal": {
-      if (expression.fields.length <= 1 && renderedFits(flat, column)) {
+      const compactFields = expression.fields
+        .map((field) => {
+          const value = printRustExpr(field.value);
+          return value === field.name ? field.name : `${field.name}: ${value}`;
+        })
+        .join(", ");
+      if (expression.fields.length <= 1 && compactFields.length <= rustStructLiteralWidth &&
+        renderedFits(flat, column)) {
         return flat;
       }
       const fieldIndent = indentText(depth + 1);

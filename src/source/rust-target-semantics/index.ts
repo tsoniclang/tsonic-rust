@@ -61,6 +61,7 @@ import {
   KindIdentifier,
   KindIfStatement,
   KindArrayLiteralExpression,
+  KindBigIntLiteral,
   KindNewExpression,
   KindNoSubstitutionTemplateLiteral,
   KindNonNullExpression,
@@ -92,7 +93,9 @@ import {
   isRustJsArrayCarrier,
   rustFutureOutputCarrier,
   getRustGeneratorProtocol,
+  isRustBigIntCarrier,
   isRustBoolCarrier,
+  isRustIntegerCarrier,
   isRustNumericCarrier,
   isRustNullishSourceCarrier,
   isRustOptionCarrier,
@@ -102,6 +105,7 @@ import {
   isRustUndefinedCarrier,
   rustOptionElementCarrier,
   isRustVecCarrier,
+  rustBigIntTargetType,
   rustJsArrayTargetType,
   rustNullishSourceTargetType,
   rustSourcePrimitiveTargetType,
@@ -111,6 +115,7 @@ import {
   substituteRustTargetTypeParameters,
   rustVecTargetType,
 } from "../rust-target-types.js";
+import { parseSourceBigIntLiteral } from "../../common/source-literal-values.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
@@ -1145,10 +1150,53 @@ function resolveExpressionCarrierUncached(
       const effectiveExpected = expected !== undefined && isRustOptionCarrier(expected)
         ? rustOptionElementCarrier(expected)
         : expected;
-      if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected)) {
+      if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&
+        (!isRustIntegerCarrier(effectiveExpected) ||
+          selectedSourceLiteralIsRepresentable(
+            expression,
+            effectiveExpected.name,
+            walk.context.ast,
+          ))) {
         return setCarrierFact(walk, expression, effectiveExpected);
       }
+      if (effectiveExpected !== undefined && isRustIntegerCarrier(effectiveExpected)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_INTEGER_LITERAL_NOT_EXACT",
+          "Integer literal cannot be proven exact for the finalized Rust fixed-width carrier.",
+          expression,
+          [`target.carrier=${effectiveExpected.name}`],
+        );
+      }
       return undefined;
+    }
+    case KindBigIntLiteral: {
+      const value = parseSourceBigIntLiteral(walk.context.ast.text(expression));
+      if (value === undefined) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_BIGINT_LITERAL_INVALID",
+          "BigInt literal text is not one exact TypeScript integer literal.",
+          expression,
+          ["target.capability=rust.syntax.bigint"],
+        );
+        return undefined;
+      }
+      const effectiveExpected = expected !== undefined && isRustOptionCarrier(expected)
+        ? rustOptionElementCarrier(expected)
+        : expected;
+      const carrier = effectiveExpected ?? rustBigIntTargetType();
+      if (!isRustBigIntCarrier(carrier)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_BIGINT_CARRIER_UNSUPPORTED",
+          "BigInt literal requires the exact arbitrary-precision Rust BigInt carrier.",
+          expression,
+          ["target.capability=rust.syntax.bigint"],
+        );
+        return undefined;
+      }
+      return setCarrierFact(walk, expression, carrier);
     }
     case KindStringLiteral:
     case KindNoSubstitutionTemplateLiteral: {
@@ -1515,6 +1563,9 @@ function rustTypeofResult(
   if (isRustStringCarrier(carrier)) {
     return "string";
   }
+  if (isRustBigIntCarrier(carrier)) {
+    return "bigint";
+  }
   if (isRustUnitCarrier(carrier) || isRustUndefinedCarrier(carrier)) {
     return "undefined";
   }
@@ -1625,7 +1676,7 @@ function resolveBinaryOperandCarriers(
 
 function expressionUsesContextualLiteralCarrier(ast: AstReader, expression: Node): boolean {
   const kind = ast.kindName(expression);
-  return kind === KindNumericLiteral || kind === KindStringLiteral;
+  return kind === KindNumericLiteral || kind === KindBigIntLiteral || kind === KindStringLiteral;
 }
 
 function resolvePostCheckBinaryCarrier(
@@ -1798,19 +1849,25 @@ function selectEquivalentBindingAssignment(
 function resolvePostCheckUnaryCarrier(
   walk: RustFactWalk,
   expression: Node,
-  sourceFile: SourceFile,
+  _sourceFile: SourceFile,
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const pendingKind = walk.postCheckOperations.get(expression);
-  if ((pendingKind !== "unary-minus" && pendingKind !== "unary-plus") ||
-    expected?.kind !== "source-primitive" || !isRustNumericCarrier(expected) ||
-    !selectedSourceLiteralIsRepresentable(expression, expected.name, walk.context.ast)) {
-    return undefined;
-  }
   const operand = Node_Operand(walk.context.ast, expression);
-  if (operand === undefined || resolveExpressionCarrier(walk, operand, sourceFile, expected) === undefined) {
+  const fixedWidthLiteral = expected?.kind === "source-primitive" &&
+    isRustNumericCarrier(expected) &&
+    selectedSourceLiteralIsRepresentable(expression, expected.name, walk.context.ast);
+  const bigintLiteral = isRustBigIntCarrier(expected) && operand !== undefined &&
+    walk.context.ast.kindName(operand) === KindBigIntLiteral &&
+    parseSourceBigIntLiteral(walk.context.ast.text(operand)) !== undefined;
+  if ((pendingKind !== "unary-minus" && pendingKind !== "unary-plus") ||
+    expected === undefined || (!fixedWidthLiteral && !bigintLiteral)) {
     return undefined;
   }
+  if (operand === undefined) {
+    return undefined;
+  }
+  setCarrierFact(walk, operand, expected);
   const fact: RustTargetOperationFact = pendingKind === "unary-minus"
     ? {
         kind: "operator-token",

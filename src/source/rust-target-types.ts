@@ -15,6 +15,7 @@ export type { RustPrimitiveTypeName } from "../common/rust-syntax.js";
 // backend renders them to Rust type text only at the printer boundary.
 
 export const rustStringTargetId = "rust.std.String";
+export const rustBigIntTargetId = "rust.runtime.BigInt";
 export const rustOptionTargetId = "rust.std.Option";
 export const rustLocationTargetId = "rust.runtime.Location";
 export const rustGeneratorTargetId = "rust.runtime.Generator";
@@ -36,6 +37,10 @@ export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): Target
 
 export function rustStringTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustStringTargetId };
+}
+
+export function rustBigIntTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustBigIntTargetId };
 }
 
 export function rustUsizeTargetType(): TargetTypeRef {
@@ -394,6 +399,10 @@ export function isRustStringCarrier(carrier: TargetTypeRef | undefined): boolean
   return carrier?.kind === "target-named" && carrier.id === rustStringTargetId;
 }
 
+export function isRustBigIntCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && carrier.id === rustBigIntTargetId;
+}
+
 export function isRustUnitCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "tuple" && carrier.elements.length === 0;
 }
@@ -410,9 +419,13 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "source-primitive";
 }
 
+export function rustValueCarrierRequiresCloneOnRead(carrier: TargetTypeRef | undefined): boolean {
+  return isRustBigIntCarrier(carrier) || isRustLocationCarrier(carrier);
+}
+
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
-    isRustUndefinedCarrier(carrier) ||
+    isRustUndefinedCarrier(carrier) || isRustBigIntCarrier(carrier) ||
     carrier?.kind === "source-primitive";
 }
 
@@ -456,7 +469,9 @@ export function rustPrimitiveTypeName(kind: SourcePrimitiveKind): RustPrimitiveT
   return rustNumericPrimitiveNames[kind];
 }
 
-export function isRustNumericCarrier(carrier: TargetTypeRef | undefined): boolean {
+export function isRustNumericCarrier(
+  carrier: TargetTypeRef | undefined,
+): carrier is Extract<TargetTypeRef, { readonly kind: "source-primitive" }> {
   return carrier?.kind === "source-primitive" && rustNumericPrimitiveNames[carrier.name] !== undefined;
 }
 
@@ -464,7 +479,9 @@ export function isRustSignedNumericCarrier(carrier: TargetTypeRef | undefined): 
   return carrier?.kind === "source-primitive" && rustSignedPrimitiveKinds.has(carrier.name);
 }
 
-export function isRustIntegerCarrier(carrier: TargetTypeRef | undefined): boolean {
+export function isRustIntegerCarrier(
+  carrier: TargetTypeRef | undefined,
+): carrier is Extract<TargetTypeRef, { readonly kind: "source-primitive" }> {
   return carrier?.kind === "source-primitive" && rustIntegerPrimitiveKinds.has(carrier.name);
 }
 

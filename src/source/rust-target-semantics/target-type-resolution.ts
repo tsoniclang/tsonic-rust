@@ -28,6 +28,7 @@ import type {
 import { materializeProviderCarrier } from "../provider-packages/index.js";
 import {
   rustFutureTargetType,
+  rustBigIntTargetType,
   rustGeneratorTargetType,
   rustAsyncGeneratorTargetType,
   rustIteratorResultTargetType,
@@ -158,6 +159,9 @@ function resolveRustTargetTypeSyntax(
   }
   if (kind === "KindNumberKeyword") {
     return rustSourcePrimitiveTargetType("float64");
+  }
+  if (kind === "KindBigIntKeyword") {
+    return rustBigIntTargetType();
   }
   if (kind === "KindVoidKeyword") {
     return rustUnitTargetType();
@@ -402,6 +406,9 @@ function resolveRustTargetType(
     }
     if (typeShape.isNumberLike(type)) {
       return rustSourcePrimitiveTargetType("float64");
+    }
+    if (typeShape.isBigIntLike(type)) {
+      return rustBigIntTargetType();
     }
     if (typeShape.isVoidLike(type)) {
       return rustUnitTargetType();

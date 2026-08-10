@@ -71,6 +71,7 @@ import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustResourceMana
 import type { RustResourceManagementFact } from "../../source/rust-facts/keys.js";
 import { rustTypeFromCarrierInContext as renderRustTypeInContext } from "./render-types.js";
 import {
+  isRustBigIntCarrier,
   isRustBoolCarrier,
   isRustUnitCarrier,
   rustLocationTargetType,
@@ -800,17 +801,27 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
   if (!isValidRustIdentifier(target)) {
     return undefined;
   }
+  const step: RustExpr = isRustBigIntCarrier(fact.resultCarrier)
+    ? {
+        kind: "call",
+        path: "rt::BigInt::from_decimal_literal",
+        args: [{ kind: "str-literal", value: "1" }],
+      }
+    : { kind: "int-literal", text: "1" };
+  if (isRustBigIntCarrier(fact.resultCarrier)) {
+    context.usedAliases?.add("rt");
+  }
   const promoted = planRustPromotedStorageWrite(
     operand,
     fact.operator,
-    { kind: "int-literal", text: "1" },
+    step,
     context,
     planExpression,
   );
   if (promoted.handled) {
     return promoted.statement === undefined ? undefined : [promoted.statement];
   }
-  return [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value: { kind: "int-literal", text: "1" } }];
+  return [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value: step }];
 }
 
 function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {

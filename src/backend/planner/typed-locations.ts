@@ -21,7 +21,7 @@ import {
 } from "../../source/rust-facts/keys.js";
 import {
   isRustCopyCarrier,
-  isRustLocationCarrier,
+  rustValueCarrierRequiresCloneOnRead,
 } from "../../source/rust-target-types.js";
 import type { RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
@@ -123,7 +123,7 @@ export function planRustIdentifierValue(
     return { kind: "method-call", receiver: value, method: "load", args: [] };
   }
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  return isRustLocationCarrier(carrier)
+  return rustValueCarrierRequiresCloneOnRead(carrier)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : value;
 }

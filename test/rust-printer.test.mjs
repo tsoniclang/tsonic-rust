@@ -188,6 +188,51 @@ test("three-field struct literals use rustfmt-compatible vertical layout", () =>
   assert.match(source, /TodoItem \{\n        id,\n        title,\n        completed: false,\n    \}/u);
 });
 
+test("one-field struct literals honor rustfmt's compact body limit", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      pub: true,
+      name: "new_counter",
+      params: [],
+      body: {
+        statements: [
+          {
+            kind: "let",
+            name: "simple",
+            mutable: false,
+            init: {
+              kind: "struct-literal",
+              path: "Counter",
+              fields: [{ name: "value", value: { kind: "int-literal", text: "1" } }],
+            },
+          },
+          {
+            kind: "tail",
+            expr: {
+              kind: "struct-literal",
+              path: "Counter",
+              fields: [{
+                name: "value",
+                value: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "value" },
+                  method: "clone",
+                  args: [],
+                },
+              }],
+            },
+          },
+        ],
+      },
+    }],
+  });
+
+  assert.match(source, /let simple = Counter \{ value: 1 \};/u);
+  assert.match(source, /Counter \{\n        value: value\.clone\(\),\n    \}/u);
+});
+
 test("long logical chains use rustfmt-compatible operand-per-line layout", () => {
   const terms = Array.from({ length: 7 }, (_, index) => ({
     kind: "binary",

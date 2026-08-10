@@ -41,6 +41,7 @@ import type {
 } from "../../policy/types.js";
 import {
   ElementAccessExpression_ArgumentExpression,
+  KindBigIntLiteral,
   Node_Type,
   VariableDeclarationList_Declarations,
 } from "../../common/source-ast.js";
@@ -58,6 +59,7 @@ import {
   rustVecTargetType,
 } from "../rust-target-types.js";
 import {
+  isRustBigIntCarrier,
   isRustBoolCarrier,
   isRustCopyCarrier,
   getRustGeneratorProtocol,
@@ -231,7 +233,9 @@ function mapSelectedUnaryOperator(
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const operandNode = asNode(request.left, context);
   if ((request.operator === "-" || request.operator === "+") &&
-    operandNode !== undefined && context.ast.kindName(operandNode) === "KindNumericLiteral") {
+    operandNode !== undefined &&
+    (context.ast.kindName(operandNode) === "KindNumericLiteral" ||
+      context.ast.kindName(operandNode) === KindBigIntLiteral)) {
     return acceptPostCheckOperator(request);
   }
   let targetOperator: RustOperatorToken | undefined;
@@ -239,10 +243,12 @@ function mapSelectedUnaryOperator(
   if (request.operator === "!" && isRustBoolCarrier(operand)) {
     targetOperator = "!";
     resultCarrier = operand;
-  } else if (request.operator === "-" && isRustSignedNumericCarrier(operand)) {
+  } else if (request.operator === "-" &&
+    (isRustSignedNumericCarrier(operand) || isRustBigIntCarrier(operand))) {
     targetOperator = "-";
     resultCarrier = operand;
-  } else if ((request.operator === "++" || request.operator === "--") && isRustIntegerCarrier(operand)) {
+  } else if ((request.operator === "++" || request.operator === "--") &&
+    (isRustIntegerCarrier(operand) || isRustBigIntCarrier(operand))) {
     targetOperator = request.operator === "++" ? "+=" : "-=";
     resultCarrier = operand;
   } else if (request.operator === "+" && operand !== undefined && isRustNumericCarrier(operand)) {

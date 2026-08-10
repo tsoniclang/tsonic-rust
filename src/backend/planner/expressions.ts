@@ -12,6 +12,7 @@ import {
 } from "../../common/rust-syntax.js";
 import {
   KindBinaryExpression,
+  KindBigIntLiteral,
   Node_Initializer,
   KindCallExpression,
   KindConditionalExpression,
@@ -47,6 +48,10 @@ import {
   TemplateSpan_Expression,
   TemplateSpan_Literal,
 } from "../../common/source-ast.js";
+import {
+  parseSourceBigIntLiteral,
+  parseSourceIntegerLiteral,
+} from "../../common/source-literal-values.js";
 import { rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
@@ -79,7 +84,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, rustPublicName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBoolCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, rustValueCarrierRequiresCloneOnRead, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -119,6 +124,9 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
   const { ast } = context.input;
   const kind = ast.kindName(node);
   switch (kind) {
+    case KindBigIntLiteral: {
+      return planBigIntLiteral(node, context);
+    }
     case KindNumericLiteral: {
       return planNumericLiteral(node, context);
     }
@@ -837,6 +845,25 @@ export function planNumericLiteral(node: Node, context: RustPlanContext): RustEx
   return planNumericLiteralWithCarrier(node, carrier, context);
 }
 
+function planBigIntLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const carrier = expressionCarrier(node, context);
+  const value = parseSourceBigIntLiteral(context.input.ast.text(node));
+  if (!isRustBigIntCarrier(carrier) || value === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.bigint-literal",
+      "BigInt literal requires exact canonical text and a finalized arbitrary-precision Rust carrier.",
+    ));
+    return undefined;
+  }
+  context.usedAliases?.add("rt");
+  return {
+    kind: "call",
+    path: "rt::BigInt::from_decimal_literal",
+    args: [{ kind: "str-literal", value: value.toString(10) }],
+  };
+}
+
 function planNumericLiteralWithCarrier(
   node: Node,
   carrier: TargetTypeRef,
@@ -848,7 +875,8 @@ function planNumericLiteralWithCarrier(
     return { kind: "float-literal", text: floatText };
   }
   if (isRustIntegerCarrier(carrier)) {
-    if (!/^[0-9]+$/u.test(text)) {
+    const value = parseSourceIntegerLiteral(text);
+    if (value === undefined) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.literal-carrier",
@@ -856,7 +884,7 @@ function planNumericLiteralWithCarrier(
       ));
       return undefined;
     }
-    return { kind: "int-literal", text };
+    return { kind: "int-literal", text: value.toString(10) };
   }
   context.diagnostics.push(missingFactDiagnostic(
     diagnosticInput(context, node),
@@ -2196,7 +2224,13 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
     }
     const receiverNode = Node_Expression(context.input.ast, node);
     const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    return receiver === undefined ? undefined : { kind: "field", receiver, name: fact.name };
+    if (receiver === undefined) {
+      return undefined;
+    }
+    const field: RustExpr = { kind: "field", receiver, name: fact.name };
+    return rustValueCarrierRequiresCloneOnRead(fact.resultCarrier)
+      ? { kind: "method-call", receiver: field, method: "clone", args: [] }
+      : field;
   }
   if (fact !== undefined && fact.kind === "source-enum-member") {
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.enum-member-carrier")) {
