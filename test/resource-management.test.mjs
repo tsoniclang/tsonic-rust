@@ -50,6 +50,16 @@ export function loopValues(): void {
     break;
   }
 }
+
+export function doValues(): void {
+  let index: int32 = 0;
+  do {
+    using resource = new Resource();
+    index++;
+    if (index < 2) continue;
+    break;
+  } while (index < 3);
+}
 `,
     },
   });
@@ -61,6 +71,8 @@ export function loopValues(): void {
   assert.match(source, /rt::Completion::Break\(0\)/u);
   assert.match(source, /continue '__tsonic_loop/u);
   assert.match(source, /break '__tsonic_loop/u);
+  assert.equal([...source.matchAll(/rt::Completion::Continue\(0\)/gu)].length >= 4, true);
+  assert.match(source, /if index >= 3 \{/u);
   validateGeneratedProject("resource-management-control-flow", result.artifacts);
 });
 

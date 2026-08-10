@@ -210,6 +210,13 @@ function printRustStmt(statement: RustStmt, depth: number): string {
         ? `${withoutTrailing} else {}`
         : `${withoutTrailing} else {\n${elseBody}\n${indentStr}}`;
     }
+    case "loop": {
+      return printRustBlock(
+        statement.body,
+        depth,
+        `${statement.label === undefined ? "" : `'${statement.label}: `}loop`,
+      );
+    }
     case "while": {
       const rendered = printRustConditionalBlock("while", statement.condition, statement.body, depth);
       return statement.label === undefined
@@ -384,7 +391,7 @@ function rustBlockHasCompletionExit(block: RustBlock): boolean {
       return rustBlockHasCompletionExit(statement.then) ||
         (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
     }
-    if (statement.kind === "while" || statement.kind === "while-let-some" ||
+    if (statement.kind === "loop" || statement.kind === "while" || statement.kind === "while-let-some" ||
       statement.kind === "for" || statement.kind === "if-let-some" || statement.kind === "scope") {
       return rustBlockHasCompletionExit(statement.body);
     }
@@ -840,8 +847,12 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       const prefix = expression.mutable === true ? "&mut " : "&";
       return `${prefix}${printRustExprFitted(expression.expr, depth, column + prefix.length)}`;
     }
-    case "unary":
-      return `${expression.operator}${printRustExprFitted(expression.operand, depth, column + 1)}`;
+    case "unary": {
+      const operand = printRustExprFitted(expression.operand, depth, column + 1);
+      return expressionPrecedence(expression.operand) < RustPrecedence.Unary
+        ? `${expression.operator}(${operand})`
+        : `${expression.operator}${operand}`;
+    }
     case "binary": {
       if (renderedFits(flat, column)) {
         return flat;

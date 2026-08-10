@@ -9,6 +9,7 @@ import {
   BreakOrContinueStatement_Label,
   CatchClause_Block,
   CatchClause_VariableDeclaration,
+  DoStatement_Statement,
   ElementAccessExpression_ArgumentExpression,
   TryStatement_CatchClause,
   TryStatement_FinallyBlock,
@@ -31,6 +32,9 @@ import {
   KindBreakStatement,
   KindCallExpression,
   KindContinueStatement,
+  KindDebuggerStatement,
+  KindDoStatement,
+  KindEmptyStatement,
   KindEqualsToken,
   KindExpressionStatement,
   KindForStatement,
@@ -112,6 +116,10 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
     case KindContinueStatement: {
       return planLoopExitStatement(node, kind === KindBreakStatement ? "break" : "continue", context);
     }
+    case KindEmptyStatement:
+    case KindDebuggerStatement: {
+      return [];
+    }
     case KindExpressionStatement: {
       return planExpressionStatement(node, context);
     }
@@ -120,6 +128,9 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
     }
     case KindWhileStatement: {
       return planWhileStatement(node, context);
+    }
+    case KindDoStatement: {
+      return planDoStatement(node, context);
     }
     case KindForStatement: {
       return planForStatement(node, context);
@@ -982,6 +993,74 @@ function planWhileStatement(node: Node, context: RustPlanContext): readonly Rust
     { ...context, loops: [...(context.loops ?? []), target] },
   );
   return body === undefined ? undefined : [{ kind: "while", label: target.label, condition: planned, body }];
+}
+
+function planDoStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const condition = Node_Expression(context.input.ast, node);
+  const bodyNode = DoStatement_Statement(context.input.ast, node);
+  if (condition === undefined || bodyNode === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.do-while-shape",
+      "do-while requires concrete body and condition nodes.",
+    ));
+    return undefined;
+  }
+  const plannedCondition = planCondition(condition, context, "do-while");
+  const baseTarget = createRustLoopTarget(context, []);
+  if (plannedCondition === undefined || baseTarget === undefined) {
+    return undefined;
+  }
+  const conditionExit: RustStmt = {
+    kind: "if",
+    condition: negateRustCondition(plannedCondition),
+    then: { statements: [{ kind: "break", label: baseTarget.label }] },
+  };
+  const target: RustLoopTarget = {
+    ...baseTarget,
+    continuePrelude: [conditionExit],
+  };
+  const body = planEmbeddedBlock(
+    bodyNode,
+    { ...context, loops: [...(context.loops ?? []), target] },
+  );
+  if (body === undefined) {
+    return undefined;
+  }
+  return [{
+    kind: "loop",
+    label: target.label,
+    body: rustBlockDefinitelyExits(body)
+      ? body
+      : { statements: [...body.statements, conditionExit] },
+  }];
+}
+
+function negateRustCondition(condition: RustExpr): RustExpr {
+  if (condition.kind === "unary" && condition.operator === "!") {
+    return condition.operand;
+  }
+  if (condition.kind === "binary") {
+    const inverse = condition.operator === "==" ? "!="
+      : condition.operator === "!=" ? "=="
+        : condition.operator === "<" ? ">="
+          : condition.operator === "<=" ? ">"
+            : condition.operator === ">" ? "<="
+              : condition.operator === ">=" ? "<"
+                : undefined;
+    if (inverse !== undefined) {
+      return { ...condition, operator: inverse };
+    }
+    if (condition.operator === "&&" || condition.operator === "||") {
+      return {
+        kind: "binary",
+        operator: condition.operator === "&&" ? "||" : "&&",
+        left: negateRustCondition(condition.left),
+        right: negateRustCondition(condition.right),
+      };
+    }
+  }
+  return { kind: "unary", operator: "!", operand: condition };
 }
 
 function planForStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {

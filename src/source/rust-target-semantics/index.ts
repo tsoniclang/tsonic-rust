@@ -19,6 +19,7 @@ import {
   ConditionalExpression_Condition,
   ConditionalExpression_WhenFalse,
   ConditionalExpression_WhenTrue,
+  DoStatement_Statement,
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   TryStatement_CatchClause,
@@ -34,6 +35,7 @@ import {
   KindBlock,
   KindCallExpression,
   KindConditionalExpression,
+  KindDoStatement,
   KindElementAccessExpression,
   KindEqualsEqualsEqualsToken,
   KindEqualsToken,
@@ -722,12 +724,14 @@ function recordStatementFacts(
     }
     return;
   }
-  if (kind === KindWhileStatement) {
+  if (kind === KindWhileStatement || kind === KindDoStatement) {
     const condition = Node_Expression(walk.context.ast, statement);
     if (condition !== undefined) {
       resolveExpressionCarrier(walk, condition, sourceFile, boolCarrier);
     }
-    const body = IterationStatement_Statement(walk.context.ast, statement);
+    const body = kind === KindDoStatement
+      ? DoStatement_Statement(walk.context.ast, statement)
+      : IterationStatement_Statement(walk.context.ast, statement);
     if (body !== undefined) {
       recordStatementFacts(walk, body, sourceFile, returnCarrier);
     }

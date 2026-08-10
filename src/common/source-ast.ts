@@ -7,7 +7,10 @@ export const KindBooleanKeyword = "KindBooleanKeyword";
 export const KindCallExpression = "KindCallExpression";
 export const KindConditionalExpression = "KindConditionalExpression";
 export const KindContinueStatement = "KindContinueStatement";
+export const KindDebuggerStatement = "KindDebuggerStatement";
+export const KindDoStatement = "KindDoStatement";
 export const KindElementAccessExpression = "KindElementAccessExpression";
+export const KindEmptyStatement = "KindEmptyStatement";
 export const KindExpressionStatement = "KindExpressionStatement";
 export const KindExportDeclaration = "KindExportDeclaration";
 export const KindFalseKeyword = "KindFalseKeyword";
@@ -260,6 +263,12 @@ export function IfStatement_ThenStatement(ast: AstReader, node: Node | undefined
   return node === undefined || ast.kindName(node) !== KindIfStatement
     ? undefined
     : ast.as.AsIfStatement(node)?.ThenStatement;
+}
+
+export function DoStatement_Statement(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindDoStatement
+    ? undefined
+    : ast.as.AsDoStatement(node)?.Statement;
 }
 
 export function IfStatement_ElseStatement(ast: AstReader, node: Node | undefined): Node | undefined {
