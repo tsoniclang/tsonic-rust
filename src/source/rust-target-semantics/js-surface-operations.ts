@@ -1,4 +1,4 @@
-import type { TargetTypeRef } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import type {
   RustProviderOperationForm,
   RustProviderOperationTemplate,
@@ -44,6 +44,7 @@ export interface JsOperationRequest {
   readonly operationKind: "call" | "property" | "indexer" | "constructor" | "property-set" | "index-set";
   readonly receiverCarrier?: TargetTypeRef;
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly argumentCompatibility?: (
     expected: TargetTypeRef,
     actual: TargetTypeRef | undefined,
@@ -67,6 +68,8 @@ type JsCarrierRef =
   | { readonly ref: "int32" }
   | { readonly ref: "jsvalue" }
   | { readonly ref: "float64" }
+  | { readonly ref: "infer" }
+  | { readonly ref: "selected-method-type-argument"; readonly index: number }
   | { readonly ref: "bool" }
   | { readonly ref: "string-vec" }
   | { readonly ref: "regexp-match" }
@@ -92,6 +95,7 @@ interface JsOperationRowData {
   readonly elementGuard?: "numeric";
   readonly requiresOwnership?: readonly ("owned" | "borrowed" | "borrowed-mut")[];
   readonly callback?: "map" | "reduce";
+  readonly selectedMethodTypeArgumentArity?: number;
   readonly fallible?: boolean;
   readonly firstArgCarrierId?: string;
   readonly shape:
@@ -131,8 +135,9 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Array", member: "findLastIndex", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_find_last_index", receiverMode: "ref" }, result: { ref: "float64" }, resultConversion: rustIsizeToFloat64ValueConversion, params: [{ ref: "cb-predicate" }] } },
   { owner: "Array", member: "some", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_some", receiverMode: "ref" }, result: { ref: "bool" }, params: [{ ref: "cb-predicate" }] } },
   { owner: "Array", member: "every", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_every", receiverMode: "ref" }, result: { ref: "bool" }, params: [{ ref: "cb-predicate" }] } },
-  { owner: "Array", member: "map", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_map", receiverMode: "ref" }, result: { ref: "receiver" }, params: [{ ref: "cb-map" }] }, callback: "map" },
-  { owner: "Array", member: "reduce", operationKind: "call", lane: "vec", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_reduce", receiverMode: "ref", argOrder: [1, 0] }, result: { ref: "element" }, params: [{ ref: "cb-reduce" }, { ref: "element" }] }, callback: "reduce" },
+  { owner: "Array", member: "map", operationKind: "call", lane: "vec", selectedMethodTypeArgumentArity: 1, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_map", receiverMode: "ref" }, result: { ref: "receiver" }, params: [{ ref: "cb-map" }] }, callback: "map" },
+  { owner: "Array", member: "reduce", operationKind: "call", lane: "vec", variant: "receiver-element", selectedMethodTypeArgumentArity: 0, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_reduce", receiverMode: "ref", argOrder: [1, 0] }, result: { ref: "element" }, params: [{ ref: "cb-reduce" }, { ref: "element" }] }, callback: "reduce" },
+  { owner: "Array", member: "reduce", operationKind: "call", lane: "vec", variant: "selected-accumulator", selectedMethodTypeArgumentArity: 1, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_reduce", receiverMode: "ref", argOrder: [1, 0] }, result: { ref: "selected-method-type-argument", index: 0 }, params: [{ ref: "cb-reduce" }, { ref: "selected-method-type-argument", index: 0 }] }, callback: "reduce" },
 
   // ReadonlyArray rows: read-only operations over dense/slice lanes.
   { owner: "ReadonlyArray", member: "length", operationKind: "property", lane: "vec", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
@@ -243,6 +248,7 @@ interface JsLaneBindings {
   readonly setValue?: TargetTypeRef;
   readonly receiver?: TargetTypeRef;
   readonly receiverOwnership?: "owned" | "borrowed" | "borrowed-mut";
+  readonly selectedMethodTypeArguments?: readonly (TargetTypeRef | undefined)[];
 }
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
@@ -333,6 +339,10 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
       return rustOptionTargetType(rustVecTargetType(rustStringTargetType()));
     case "float64":
       return rustSourcePrimitiveTargetType("float64");
+    case "infer":
+      return rustInferCarrier;
+    case "selected-method-type-argument":
+      return bindings.selectedMethodTypeArguments?.[reference.index];
     case "bool":
       return rustSourcePrimitiveTargetType("bool");
     case "string":
@@ -352,6 +362,70 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
     case "set-value":
       return bindings.setValue;
   }
+}
+
+export function finalizeJsCallbackOperation(
+  selection: JsOperationSelection,
+  argumentCarriers: readonly TargetTypeRef[],
+): JsOperationSelection | undefined {
+  if (selection.fact.kind !== "provider-operation" || selection.callbackShape === undefined) {
+    return undefined;
+  }
+  const callback = argumentCarriers[0];
+  const callbackTemplate = selection.parameterCarriers?.[0];
+  if (callback?.kind !== "function-pointer" || callbackTemplate?.kind !== "function-pointer" ||
+    !rustCallbackCarrierMatchesTemplate(callbackTemplate, callback)) {
+    return undefined;
+  }
+  if (selection.callbackShape === "map") {
+    const resultCarrier = rustVecTargetType(callback.result);
+    const parameterCarriers = [callback, ...(selection.parameterCarriers?.slice(1) ?? [])];
+    return {
+      fact: {
+        ...selection.fact,
+        resultCarrier,
+        parameterCarriers,
+      },
+      resultCarrier,
+      parameterCarriers,
+    };
+  }
+  const accumulator = argumentCarriers[1];
+  if (accumulator === undefined || callback.args.length < 1 ||
+    !rustTargetTypeRefEquals(callback.args[0]!, accumulator) ||
+    !rustTargetTypeRefEquals(callback.result, accumulator)) {
+    return undefined;
+  }
+  const parameterCarriers = [callback, accumulator];
+  return {
+    fact: {
+      ...selection.fact,
+      resultCarrier: accumulator,
+      parameterCarriers,
+    },
+    resultCarrier: accumulator,
+    parameterCarriers,
+  };
+}
+
+function rustCallbackCarrierMatchesTemplate(
+  template: TargetTypeRef,
+  actual: TargetTypeRef,
+): boolean {
+  if (template.kind === "opaque" && template.id === "tsonic.rust.infer") {
+    return true;
+  }
+  if (template.kind !== actual.kind) {
+    return false;
+  }
+  if (template.kind !== "function-pointer" || actual.kind !== "function-pointer") {
+    return rustTargetTypeRefEquals(template, actual);
+  }
+  return template.args.length === actual.args.length &&
+    template.args.every((argument, index) =>
+      actual.args[index] !== undefined &&
+      rustCallbackCarrierMatchesTemplate(argument, actual.args[index]!)) &&
+    rustCallbackCarrierMatchesTemplate(template.result, actual.result);
 }
 
 function copyStyleOf(carrier: TargetTypeRef | undefined): { readonly kind: "method"; readonly name: "copied" | "cloned" } {
@@ -386,7 +460,11 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
   if (laneMatch === undefined) {
     return undefined;
   }
-  const { lane, bindings } = laneMatch;
+  const { lane } = laneMatch;
+  const bindings: JsLaneBindings = {
+    ...laneMatch.bindings,
+    selectedMethodTypeArguments: request.selectedMethodTypeArgumentCarriers,
+  };
   const argumentCarriers = request.argumentCarriers ?? [];
   const matches = jsOperationRows.flatMap((candidate) => {
     if (!(
@@ -394,6 +472,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       candidate.member === request.memberName &&
       candidate.operationKind === request.operationKind &&
       candidate.lane === lane &&
+      (candidate.selectedMethodTypeArgumentArity === undefined ||
+        candidate.selectedMethodTypeArgumentArity ===
+          (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
       (candidate.elementGuard !== "numeric" || isRustNumericCarrier(bindings.element)) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>

@@ -8,6 +8,7 @@ tasks_max="${TSONIC_RUST_TEST_TASKS_MAX:-256}"
 timeout_seconds="${TSONIC_RUST_TEST_TIMEOUT_SECONDS:-3600}"
 heartbeat_seconds="${TSONIC_RUST_TEST_HEARTBEAT_SECONDS:-180}"
 failure_excerpt_bytes="${TSONIC_RUST_TEST_FAILURE_EXCERPT_BYTES:-16384}"
+log_size_max_bytes="${TSONIC_RUST_TEST_LOG_SIZE_MAX_BYTES:-67108864}"
 
 if ! [[ "${test_concurrency}" =~ ^[1-9][0-9]*$ ]]; then
   printf 'TSONIC_RUST_TEST_CONCURRENCY must be a positive integer.\n' >&2
@@ -36,6 +37,11 @@ fi
 
 if ! [[ "${failure_excerpt_bytes}" =~ ^[1-9][0-9]*$ ]]; then
   printf 'TSONIC_RUST_TEST_FAILURE_EXCERPT_BYTES must be a positive integer.\n' >&2
+  exit 2
+fi
+
+if ! [[ "${log_size_max_bytes}" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'TSONIC_RUST_TEST_LOG_SIZE_MAX_BYTES must be a positive integer.\n' >&2
   exit 2
 fi
 
@@ -81,6 +87,7 @@ printf '  process-group task ceiling: %s\n' "${tasks_max}"
 printf '  hard timeout: %s seconds\n' "${timeout_seconds}"
 printf '  heartbeat: %s seconds\n' "${heartbeat_seconds}"
 printf '  live test output: log-only; failure excerpt capped at %s bytes\n' "${failure_excerpt_bytes}"
+printf '  complete-log size ceiling: %s bytes\n' "${log_size_max_bytes}"
 printf '  user-slice oom_kill before: %s\n' "${oom_kill_before}"
 
 set +e
@@ -106,9 +113,13 @@ set +e
 test_runner_pid=$!
 
 heartbeat_pid=""
+log_guard_pid=""
 stop_bounded_test_scope() {
   if [[ -n "${heartbeat_pid}" ]]; then
     kill "${heartbeat_pid}" 2>/dev/null || true
+  fi
+  if [[ -n "${log_guard_pid}" ]]; then
+    kill "${log_guard_pid}" 2>/dev/null || true
   fi
   if kill -0 "${test_runner_pid}" 2>/dev/null; then
     systemctl --user stop "${unit}" --no-block 2>/dev/null || true
@@ -134,11 +145,27 @@ trap stop_bounded_test_scope EXIT HUP INT TERM
 ) &
 heartbeat_pid=$!
 
+(
+  while kill -0 "${test_runner_pid}" 2>/dev/null; do
+    sleep 1
+    log_bytes="$(wc -c <"${log_file}")"
+    if (( log_bytes > log_size_max_bytes )); then
+      systemctl --user stop "${unit}" --no-block 2>/dev/null || true
+      kill "${test_runner_pid}" 2>/dev/null || true
+      break
+    fi
+  done
+) &
+log_guard_pid=$!
+
 wait "${test_runner_pid}"
 test_status=$?
 kill "${heartbeat_pid}" 2>/dev/null || true
 wait "${heartbeat_pid}" 2>/dev/null || true
 heartbeat_pid=""
+kill "${log_guard_pid}" 2>/dev/null || true
+wait "${log_guard_pid}" 2>/dev/null || true
+log_guard_pid=""
 trap - EXIT HUP INT TERM
 set -e
 
@@ -148,6 +175,14 @@ printf '  exit status: %s\n' "${test_status}"
 printf '  scope result: %s\n' "${scope_result:-unavailable}"
 printf '  user-slice oom_kill after: %s\n' "${oom_kill_after}"
 printf '  complete log: %s (%s bytes)\n' "${log_file}" "$(wc -c <"${log_file}")"
+
+log_size_after="$(wc -c <"${log_file}")"
+if (( log_size_after > log_size_max_bytes )); then
+  printf 'Bounded test log exceeded its %s-byte ceiling; inspect %s.\n' \
+    "${log_size_max_bytes}" \
+    "${log_file}" >&2
+  exit 153
+fi
 
 if (( test_status != 0 )); then
   printf '\nLast %s bytes of failed run (complete output remains in %s):\n' \

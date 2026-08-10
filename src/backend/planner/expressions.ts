@@ -1,4 +1,9 @@
-import type { Node, SelectedTargetSignatureFact, TargetOperationFact, TargetTypeRef } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
+import type {
+  RustSelectedTargetOperation as TargetOperationFact,
+  RustSelectedTargetSignature as SelectedTargetSignatureFact,
+  TargetTypeRef,
+} from "../../policy/types.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 import {
   isRustBinaryOperator,
@@ -167,7 +172,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       };
     }
     case KindParenthesizedExpression: {
-      const inner = Node_Expression(node);
+      const inner = Node_Expression(context.input.ast, node);
       return inner === undefined ? undefined : planExpression(inner, context);
     }
     case "KindAsExpression":
@@ -259,7 +264,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       if (!requireExpressionCarrier(node, awaitFact.resultCarrier, context, "rust.backend.await-carrier")) {
         return undefined;
       }
-      const operand = Node_Expression(node);
+      const operand = Node_Expression(context.input.ast, node);
       if (operand !== undefined) {
         context.awaitedCalls?.add(operand);
       }
@@ -364,9 +369,9 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
           ));
           return undefined;
         }
-        const fixedReceiverNode = Node_Expression(node);
+        const fixedReceiverNode = Node_Expression(context.input.ast, node);
         const fixedReceiver = fixedReceiverNode === undefined ? undefined : planExpression(fixedReceiverNode, context);
-        const indexNode = ElementAccessExpression_ArgumentExpression(node);
+        const indexNode = ElementAccessExpression_ArgumentExpression(context.input.ast, node);
         if (fixedReceiver === undefined || indexNode === undefined) {
           return undefined;
         }
@@ -492,7 +497,7 @@ function planSourceConversion(node: Node, context: RustPlanContext): RustExpr | 
     ));
     return undefined;
   }
-  const operand = Node_Expression(node);
+  const operand = Node_Expression(context.input.ast, node);
   const planned = operand === undefined ? undefined : planExpression(operand, context);
   if (planned === undefined || fact.conversion === undefined) {
     return planned;
@@ -544,7 +549,7 @@ function planNumericLiteralWithCarrier(
 
 function planUnaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
-  const operandNode = Node_Operand(node);
+  const operandNode = Node_Operand(context.input.ast, node);
   if (fact !== undefined && fact.kind === "source-conversion" && fact.conversion === undefined) {
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.operator-carrier")) {
       return undefined;
@@ -635,12 +640,12 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.nullish-carrier")) {
       return undefined;
     }
-    const leftNode = BinaryExpression_Left(node);
+    const leftNode = BinaryExpression_Left(context.input.ast, node);
     return leftNode === undefined ? undefined : planExpression(leftNode, context);
   }
   if (fact !== undefined && fact.kind === "option-coalesce") {
-    const leftNode = BinaryExpression_Left(node);
-    const rightNode = BinaryExpression_Right(node);
+    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.ast, node);
     const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
     const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
     if (left === undefined || right === undefined) {
@@ -649,8 +654,8 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     return { kind: "method-call", receiver: left, method: "unwrap_or", args: [right] };
   }
   if (fact !== undefined && fact.kind === "option-check") {
-    const leftNode = BinaryExpression_Left(node);
-    const rightNode = BinaryExpression_Right(node);
+    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.ast, node);
     const optionNode = fact.optionOperand === "left" ? leftNode : rightNode;
     const value = optionNode === undefined ? undefined : planExpression(optionNode, context);
     if (value === undefined) {
@@ -666,8 +671,8 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     ));
     return undefined;
   }
-  const leftNode = BinaryExpression_Left(node);
-  const rightNode = BinaryExpression_Right(node);
+  const leftNode = BinaryExpression_Left(context.input.ast, node);
+  const rightNode = BinaryExpression_Right(context.input.ast, node);
   const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
   const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
   if (left === undefined || right === undefined) {
@@ -1168,7 +1173,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     ));
     return undefined;
   }
-  const callee = Node_Expression(node);
+  const callee = Node_Expression(context.input.ast, node);
   if (fact !== undefined && fact.kind === "flow-marker") {
     const args = planArguments(node, context);
     if (args === undefined || args.length !== 1) {
@@ -1209,7 +1214,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
       return undefined;
     }
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
-      ? Node_Expression(callee)
+      ? Node_Expression(context.input.ast, callee)
       : undefined;
     const providerArgumentNodes = [...context.input.ast.arguments(node)];
     if (providerArgumentNodes.length !== fact.abi.sourceArguments.length) {
@@ -1421,7 +1426,7 @@ function planSelectedSourceCall(
     }
     case "method": {
       const receiverNode = callee !== undefined && context.input.ast.kindName(callee) === KindPropertyAccessExpression
-        ? Node_Expression(callee)
+        ? Node_Expression(context.input.ast, callee)
         : undefined;
       const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
       if (receiver !== undefined) {
@@ -1634,7 +1639,7 @@ function planNewExpression(node: Node, context: RustPlanContext): RustExpr | und
     const args = planArguments(node, context);
     return args === undefined
       ? undefined
-      : planSelectedSourceCall(node, Node_Expression(node), args, fact, context);
+      : planSelectedSourceCall(node, Node_Expression(context.input.ast, node), args, fact, context);
   }
   if (fact === undefined || fact.kind !== "provider-operation" || fact.abi.operationKind !== "constructor") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -1704,7 +1709,7 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
       ));
       return undefined;
     }
-    const receiverNode = Node_Expression(node);
+    const receiverNode = Node_Expression(context.input.ast, node);
     const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
     return receiver === undefined ? undefined : { kind: "field", receiver, name: fact.name };
   }
@@ -1770,7 +1775,7 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
     ));
     return undefined;
   }
-  const planned = planProviderOperationExpression(context, fact, Node_Expression(node), [], node);
+  const planned = planProviderOperationExpression(context, fact, Node_Expression(context.input.ast, node), [], node);
   if (planned === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -1785,7 +1790,7 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
 function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
   if (fact !== undefined && fact.kind === "tuple-index") {
-    const indexNode = ElementAccessExpression_ArgumentExpression(node);
+    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.ast, node);
     if (indexNode === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -1810,7 +1815,7 @@ function planElementAccess(node: Node, context: RustPlanContext): RustExpr | und
       ));
       return undefined;
     }
-    const receiver = Node_Expression(node);
+    const receiver = Node_Expression(context.input.ast, node);
     const planned = receiver === undefined ? undefined : planExpression(receiver, context);
     if (planned === undefined) {
       return undefined;
@@ -1847,7 +1852,7 @@ function planElementAccess(node: Node, context: RustPlanContext): RustExpr | und
     ));
     return undefined;
   }
-  const argumentNode = ElementAccessExpression_ArgumentExpression(node);
+  const argumentNode = ElementAccessExpression_ArgumentExpression(context.input.ast, node);
   if (fact.abi.sourceArguments.length !== 1) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -1859,7 +1864,7 @@ function planElementAccess(node: Node, context: RustPlanContext): RustExpr | und
   if (!requireProviderArgumentPassingFacts(context, fact, [argumentNode])) {
     return undefined;
   }
-  const planned = planProviderOperationExpression(context, fact, Node_Expression(node), [argumentNode], node);
+  const planned = planProviderOperationExpression(context, fact, Node_Expression(context.input.ast, node), [argumentNode], node);
   if (planned === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -1971,7 +1976,7 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     }
     const nameNode = ast.name(property);
     const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
-    const initializer = Node_Initializer(property);
+    const initializer = Node_Initializer(context.input.ast, property);
     const planned = initializer === undefined ? undefined : planExpression(initializer, context);
     if (sourceName.length === 0 || fieldsBySourceName.has(sourceName) || planned === undefined) {
       return undefined;

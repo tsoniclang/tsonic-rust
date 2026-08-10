@@ -198,7 +198,8 @@ test("source profile identity comes from the registered compiler SourceFile, nev
   }
   const registry = readFileSync(join(sourceRoot, "source/rust-target-semantics/source-profile-registry.ts"), "utf8");
   assert.doesNotMatch(registry, /\.includes\s*\(/u);
-  assert.match(registry, /files\.size === 1 && files\.has\(sourceFile\)/u);
+  assert.match(registry, /sourceFileByProfile\.get\(profile\) === sourceFile/u);
+  assert.match(registry, /ambiguousProfiles\.add\(profile\)/u);
 });
 
 test("selected source operation identity is never reconstructed through checker queries", () => {
@@ -221,15 +222,7 @@ test("selected source operation identity is never reconstructed through checker 
   }
 
   const allowed = new Set([
-    "index.ts|resolveIdentifierCarrier|getSymbolAtLocation",
-    "index.ts|resolveIdentifierCarrier|getSymbolValueDeclaration",
-    "index.ts|resolveIdentifierCarrier|getPrimarySymbolDeclaration",
-    "index.ts|recordBindingWrite|getResolvedSymbolOrNil",
-    "index.ts|recordBindingWrite|getSymbolValueDeclaration",
-    "index.ts|recordBindingWrite|getPrimarySymbolDeclaration",
-    "index.ts|recordBindingWrite|getSymbolDeclarations",
-    "source-callable-abi.ts|parameterSymbolForStructuralAnalysis|getSymbolAtLocation",
-    "target-type-resolution.ts|resolveRustTargetTypeRef|getTypeAtLocation",
+    "target-type-resolution.ts|resolveRustTargetTypeSyntax|getAuthoredTypeFactSubjects",
     "target-type-resolution.ts|resolveRustTargetTypeSyntax|getSymbolAtLocation",
     "target-type-resolution.ts|resolveRustTargetTypeSyntax|getPrimarySymbolDeclaration",
     "target-type-resolution.ts|resolveReferencedDeclarationType|getSymbolAtLocation",
@@ -240,7 +233,6 @@ test("selected source operation identity is never reconstructed through checker 
     "target-type-resolution.ts|resolveSourcePrimitive|getTypeAliasSymbol",
     "target-type-resolution.ts|resolveSourcePrimitive|getTypeSymbol",
     "target-type-resolution.ts|resolveSourcePrimitive|getSymbolDeclarations",
-    "target-type-resolution.ts|resolveProviderTypeIdentity|getSymbolDeclarations",
     "target-type-resolution.ts|resolveOwnedSourceProfileTypeName|getSymbolDeclarations",
     "target-type-resolution.ts|resolveProjectSourceCarrier|getSymbolDeclarations",
   ]);
@@ -319,13 +311,13 @@ test("optional chains fail closed before normal member selection", () => {
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/operations-provider.ts"), "utf8");
   const property = sourceSection(
     semantics,
-    "function mapRustCheckedPropertyAccess(",
-    "function mapRustCheckedElementAccess(",
+    "export function selectRustCheckedPropertyAccess(",
+    "export function selectRustCheckedElementAccess(",
   );
   const element = sourceSection(
     semantics,
-    "function mapRustCheckedElementAccess(",
-    "function mapRustCheckedIteration(",
+    "export function selectRustCheckedElementAccess(",
+    "export function selectRustCheckedIteration(",
   );
   for (const [kind, section] of [["property", property], ["element", element]]) {
     assert.match(section, /if \(request\.optionalChain === true\) \{\s*return rejectSelectedOperation\([^;]+"RUST_OPTIONAL_CHAIN_UNSUPPORTED"/su, `${kind} optional chains must reject`);
@@ -446,7 +438,7 @@ test("call-argument conversion consumes the checked expression carrier, not a se
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/operations-provider.ts"), "utf8");
   const conversion = sourceSection(
     semantics,
-    "function mapRustCheckedConversion(",
+    "export function selectRustCheckedConversion(",
     "function targetTypeContainsSelectedParameter(",
   );
   const callArgument = conversion.slice(0, conversion.indexOf("const targetCarrier = resolveRustTargetTypeRef(request.explicitTargetTypeNode"));

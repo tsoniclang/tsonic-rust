@@ -1,4 +1,5 @@
-import type { Node, TargetTypeRef } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -83,7 +84,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return planVariableStatement(node, context);
     }
     case KindReturnStatement: {
-      const expression = Node_Expression(node);
+      const expression = Node_Expression(context.input.ast, node);
       if (expression === undefined) {
         return [{ kind: "return" }];
       }
@@ -184,7 +185,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
   if (declaration === undefined) {
     return undefined;
   }
-  const nameNode = Node_Name(declaration);
+  const nameNode = Node_Name(context.input.ast, declaration);
   const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const name = rustSourceName(context, sourceName);
   if (!isValidRustIdentifier(name)) {
@@ -195,7 +196,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     ));
     return undefined;
   }
-  const initializer = Node_Initializer(declaration);
+  const initializer = Node_Initializer(context.input.ast, declaration);
   if (initializer === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -212,7 +213,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
   if (planned === undefined) {
     return undefined;
   }
-  const typeNode = Node_Type(declaration);
+  const typeNode = Node_Type(context.input.ast, declaration);
   const annotatedCarrier = typeNode === undefined
     ? undefined
     : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
@@ -279,7 +280,7 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
     ));
     return undefined;
   }
-  const operand = Node_Operand(expression);
+  const operand = Node_Operand(context.input.ast, expression);
   if (operand === undefined || ast.kindName(operand) !== KindIdentifier) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, expression),
@@ -297,13 +298,13 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
 
 function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const { ast } = context.input;
-  const expression = Node_Expression(node);
+  const expression = Node_Expression(context.input.ast, node);
   if (expression === undefined) {
     return undefined;
   }
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {
-    const operatorToken = BinaryExpression_OperatorToken(expression);
+    const operatorToken = BinaryExpression_OperatorToken(context.input.ast, expression);
     const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
     const compoundTokens = [
       KindPlusEqualsToken,
@@ -335,8 +336,8 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
       }
     }
     if (operatorKind === KindEqualsToken || compoundTokens.includes(operatorKind)) {
-      const left = BinaryExpression_Left(expression);
-      const right = BinaryExpression_Right(expression);
+      const left = BinaryExpression_Left(context.input.ast, expression);
+      const right = BinaryExpression_Right(context.input.ast, expression);
       if (left !== undefined && right !== undefined && ast.kindName(left) === "KindPropertyAccessExpression") {
         const leftFact = context.input.facts.getFact(left, rustTargetOperationFactKey);
         if (leftFact !== undefined && leftFact.kind === "source-field") {
@@ -459,7 +460,7 @@ function planEmbeddedBlock(node: Node | undefined, context: RustPlanContext): Ru
 }
 
 function planIfStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const condition = Node_Expression(node);
+  const condition = Node_Expression(context.input.ast, node);
   if (condition === undefined) {
     return undefined;
   }
@@ -467,8 +468,8 @@ function planIfStatement(node: Node, context: RustPlanContext): readonly RustStm
   if (planned === undefined) {
     return undefined;
   }
-  const thenBlock = planEmbeddedBlock(IfStatement_ThenStatement(node), context);
-  const elseStatement = IfStatement_ElseStatement(node);
+  const thenBlock = planEmbeddedBlock(IfStatement_ThenStatement(context.input.ast, node), context);
+  const elseStatement = IfStatement_ElseStatement(context.input.ast, node);
   const elseBlock = elseStatement === undefined ? undefined : planEmbeddedBlock(elseStatement, context);
   if (thenBlock === undefined || (elseStatement !== undefined && elseBlock === undefined)) {
     return undefined;
@@ -482,7 +483,7 @@ function planIfStatement(node: Node, context: RustPlanContext): readonly RustStm
 }
 
 function planWhileStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const condition = Node_Expression(node);
+  const condition = Node_Expression(context.input.ast, node);
   if (condition === undefined) {
     return undefined;
   }
@@ -490,14 +491,14 @@ function planWhileStatement(node: Node, context: RustPlanContext): readonly Rust
   if (planned === undefined) {
     return undefined;
   }
-  const body = planEmbeddedBlock(IterationStatement_Statement(node), context);
+  const body = planEmbeddedBlock(IterationStatement_Statement(context.input.ast, node), context);
   return body === undefined ? undefined : [{ kind: "while", condition: planned, body }];
 }
 
 function planForStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const initializer = ForStatement_Initializer(node);
-  const condition = ForStatement_Condition(node);
-  const incrementor = ForStatement_Incrementor(node);
+  const initializer = ForStatement_Initializer(context.input.ast, node);
+  const condition = ForStatement_Condition(context.input.ast, node);
+  const incrementor = ForStatement_Incrementor(context.input.ast, node);
   if (initializer === undefined || condition === undefined || incrementor === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -509,7 +510,7 @@ function planForStatement(node: Node, context: RustPlanContext): readonly RustSt
   const initStatements = planVariableStatement(initializer, context);
   const conditionExpr = planCondition(condition, context, "for");
   const incrementStatements = planIncrementor(incrementor, context);
-  const body = planEmbeddedBlock(IterationStatement_Statement(node), context);
+  const body = planEmbeddedBlock(IterationStatement_Statement(context.input.ast, node), context);
   if (initStatements === undefined || conditionExpr === undefined || incrementStatements === undefined || body === undefined) {
     return undefined;
   }
@@ -552,8 +553,8 @@ function planRuntimeSetStatement(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input;
-  const left = BinaryExpression_Left(expression);
-  const right = BinaryExpression_Right(expression);
+  const left = BinaryExpression_Left(context.input.ast, expression);
+  const right = BinaryExpression_Right(context.input.ast, expression);
   if (left === undefined || right === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
@@ -569,7 +570,7 @@ function planRuntimeSetStatement(
       ? "index-set"
       : undefined;
   const indexNode = leftKind === "KindElementAccessExpression"
-    ? ElementAccessExpression_ArgumentExpression(left)
+    ? ElementAccessExpression_ArgumentExpression(context.input.ast, left)
     : undefined;
   const sourceArgumentNodes = indexNode === undefined ? [right] : [indexNode, right];
   if (!validateRustFinalizedOperationAbi(fact.abi) ||
@@ -601,7 +602,7 @@ function planRuntimeSetStatement(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(left);
+  const receiverNode = Node_Expression(context.input.ast, left);
   if (receiverNode === undefined || fact.abi.targetReceiver.kind !== "input" ||
     fact.abi.targetReceiver.input.mode !== "mut-ref") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -704,11 +705,11 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
     ));
     return undefined;
   }
-  const initializer = ForInOrOfStatement_Initializer(node);
+  const initializer = ForInOrOfStatement_Initializer(context.input.ast, node);
   let binding = "";
   if (initializer !== undefined) {
     const declarations = collectVariableDeclarations(initializer, context);
-    const nameNode = declarations.length === 1 ? Node_Name(declarations[0]) : undefined;
+    const nameNode = declarations.length === 1 ? Node_Name(context.input.ast, declarations[0]) : undefined;
     binding = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? rustSourceName(context, ast.text(nameNode)) : "";
   }
   if (!isValidRustIdentifier(binding)) {
@@ -719,12 +720,12 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
     ));
     return undefined;
   }
-  const iterableNode = Node_Expression(node);
+  const iterableNode = Node_Expression(context.input.ast, node);
   const iterable = iterableNode === undefined ? undefined : planExpression(iterableNode, context);
   if (iterable === undefined) {
     return undefined;
   }
-  const bodyNode = ForInOrOfStatement_Statement(node);
+  const bodyNode = ForInOrOfStatement_Statement(context.input.ast, node);
   if (bodyNode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -819,7 +820,7 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
     return undefined;
   }
   const { ast } = context.input;
-  const newExpression = Node_Expression(node);
+  const newExpression = Node_Expression(context.input.ast, node);
   const arguments_ = newExpression === undefined ? [] : ast.arguments(newExpression);
   const [messageNode] = arguments_;
   if (newExpression === undefined || ast.kindName(newExpression) !== "KindNewExpression" ||
@@ -854,10 +855,10 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
 
 function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const { ast } = context.input;
-  const tryBlock = TryStatement_TryBlock(node);
-  const catchClause = TryStatement_CatchClause(node);
-  const catchBlock = CatchClause_Block(catchClause);
-  const finallyBlock = TryStatement_FinallyBlock(node);
+  const tryBlock = TryStatement_TryBlock(context.input.ast, node);
+  const catchClause = TryStatement_CatchClause(context.input.ast, node);
+  const catchBlock = CatchClause_Block(context.input.ast, catchClause);
+  const finallyBlock = TryStatement_FinallyBlock(context.input.ast, node);
   if (tryBlock === undefined || catchBlock === undefined || finallyBlock !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -903,7 +904,10 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
   if (body === undefined || catchBody === undefined) {
     return undefined;
   }
-  const bindingNode = Node_Name(CatchClause_VariableDeclaration(catchClause));
+  const bindingNode = Node_Name(
+    context.input.ast,
+    CatchClause_VariableDeclaration(context.input.ast, catchClause),
+  );
   const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
   let binding = bindingSource.length === 0 ? "_" : rustSourceName(context, bindingSource);
   if (binding !== "_") {

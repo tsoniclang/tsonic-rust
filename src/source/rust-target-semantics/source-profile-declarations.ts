@@ -24,6 +24,7 @@ interface IArguments {
 interface Boolean {}
 interface Number {}
 interface String {}
+interface RegExp {}
 
 interface Error {
   name: string;

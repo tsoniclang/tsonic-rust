@@ -1,4 +1,4 @@
-import type { TargetTypeRef } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
 import { rustSourceTypeCarrierValue } from "../../source/rust-facts/keys.js";

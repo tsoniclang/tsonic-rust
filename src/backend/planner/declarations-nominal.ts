@@ -38,7 +38,7 @@ function renderType(context: RustPlanContext, node: Node | undefined) {
 
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
-  const nameNode = Node_Name(node);
+  const nameNode = Node_Name(ast, node);
   const className = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (!isValidRustIdentifier(className)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -83,7 +83,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         continue;
       }
       const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
-      const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
+      const fieldType = renderType(context, member) ?? renderType(context, Node_Type(ast, member));
       if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, member),
@@ -226,13 +226,13 @@ function planConstructor(
       ));
       return undefined;
     }
-    const expression = ast.kindName(statement) === "KindExpressionStatement" ? Node_Expression(statement) : undefined;
-    const operatorToken = expression === undefined ? undefined : BinaryExpression_OperatorToken(expression);
-    const left = expression === undefined ? undefined : BinaryExpression_Left(expression);
-    const right = expression === undefined ? undefined : BinaryExpression_Right(expression);
-    const receiver = left === undefined ? undefined : Node_Expression(left);
+    const expression = ast.kindName(statement) === "KindExpressionStatement" ? Node_Expression(ast, statement) : undefined;
+    const operatorToken = expression === undefined ? undefined : BinaryExpression_OperatorToken(ast, expression);
+    const left = expression === undefined ? undefined : BinaryExpression_Left(ast, expression);
+    const right = expression === undefined ? undefined : BinaryExpression_Right(ast, expression);
+    const receiver = left === undefined ? undefined : Node_Expression(ast, left);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
-    const fieldNameNode = left === undefined ? undefined : Node_Name(left);
+    const fieldNameNode = left === undefined ? undefined : Node_Name(ast, left);
     const fieldName = fieldNameNode === undefined ? "" : rustPublicName(ast.text(fieldNameNode)).name;
     const isFieldInit =
       expression !== undefined &&
@@ -312,7 +312,7 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   if (params === undefined) {
     return undefined;
   }
-  const returnTypeNode = Node_Type(member);
+  const returnTypeNode = Node_Type(ast, member);
   if (returnTypeNode === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -405,7 +405,7 @@ function applyTail(body: RustBlock, hasReturnValue: boolean): RustBlock {
 
 export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
-  const nameNode = Node_Name(node);
+  const nameNode = Node_Name(ast, node);
   const enumName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (!isValidRustIdentifier(enumName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -435,7 +435,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       ));
       return undefined;
     }
-    const constant = context.input.analysis.getEnumMemberConstant(member, { sourceFile: context.sourceFile });
+    const constant = context.input.analysis.getEnumMemberConstant(member);
     const value = constant?.value;
     if (typeof value !== "number" || !Number.isInteger(value)) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -468,7 +468,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
 
 export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
-  const nameNode = Node_Name(node);
+  const nameNode = Node_Name(ast, node);
   const interfaceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (!isValidRustIdentifier(interfaceName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -505,7 +505,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       return undefined;
     }
     const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
-    const fieldType = renderType(context, member) ?? renderType(context, Node_Type(member));
+    const fieldType = renderType(context, member) ?? renderType(context, Node_Type(ast, member));
     if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, member),
@@ -531,7 +531,7 @@ export function planUnionAliasDeclaration(node: Node, context: RustPlanContext):
   const { ast } = context.input;
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
   const fact = context.input.facts.getFact(node, rustUnionVariantsFactKey);
-  const nameNode = Node_Name(node);
+  const nameNode = Node_Name(ast, node);
   const aliasName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(

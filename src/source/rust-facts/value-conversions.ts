@@ -1,4 +1,4 @@
-import type { TargetTypeRef } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import type {
   RustValueConversion,
   RustValueConversionId,

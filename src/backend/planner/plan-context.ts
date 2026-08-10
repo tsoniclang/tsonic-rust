@@ -1,8 +1,9 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { TargetCompileInput, TargetDiagnostic } from "@tsonic/target-api";
+import type { TargetDiagnostic } from "@tsonic/target-api";
+import type { RustTranslationContext } from "../../translate/context.js";
 
 export interface RustPlanContext {
-  readonly input: TargetCompileInput;
+  readonly input: RustTranslationContext;
   readonly sourceFile: SourceFile;
   readonly moduleName: string;
   readonly moduleNameByFileName: ReadonlyMap<string, string>;

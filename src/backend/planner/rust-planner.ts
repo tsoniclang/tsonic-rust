@@ -1,7 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type {
   TargetArtifact,
-  TargetCompileInput,
   TargetCompileResult,
   TargetDiagnostic,
   TargetSourceFile,
@@ -31,9 +30,10 @@ import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { isConstLiteralInitializer } from "./statements.js";
 import { rustFallibleFactKey } from "../../source/rust-facts/keys.js";
 import { planClassDeclaration, planEnumDeclaration, planInterfaceDeclaration, planUnionAliasDeclaration } from "./declarations-nominal.js";
+import type { RustTranslationContext } from "../../translate/context.js";
 
-export function planRustArtifacts(input: TargetCompileInput): TargetCompileResult {
-  const diagnostics: TargetDiagnostic[] = [];
+export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
+  const diagnostics: TargetDiagnostic[] = [...input.diagnostics];
   const moduleNameByFileName = planModuleNames(input, diagnostics);
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
@@ -133,7 +133,7 @@ function rustSourceArtifact(path: string, text: string): TargetSourceFile {
 }
 
 function planModuleNames(
-  input: TargetCompileInput,
+  input: RustTranslationContext,
   diagnostics: TargetDiagnostic[],
 ): ReadonlyMap<string, string> {
   const names = new Map<string, string>();
@@ -183,7 +183,7 @@ export function rustModuleNameForFile(fileName: string): string | undefined {
   return sanitized;
 }
 
-function moduleNameDiagnostic(input: TargetCompileInput, sourceFile: SourceFile, message: string): TargetDiagnostic {
+function moduleNameDiagnostic(input: RustTranslationContext, sourceFile: SourceFile, message: string): TargetDiagnostic {
   return {
     code: "RUST_MODULE_NAME",
     category: "error",
@@ -312,10 +312,10 @@ function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem 
   };
   visit(statement);
   const declaration = declarations.length === 1 ? declarations[0] : undefined;
-  const nameNode = declaration === undefined ? undefined : Node_Name(declaration);
+  const nameNode = declaration === undefined ? undefined : Node_Name(ast, declaration);
   const name = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const initializer = declaration === undefined ? undefined : Node_Initializer(declaration);
-  const typeNode = declaration === undefined ? undefined : Node_Type(declaration);
+  const initializer = declaration === undefined ? undefined : Node_Initializer(ast, declaration);
+  const typeNode = declaration === undefined ? undefined : Node_Type(ast, declaration);
   const carrier = typeNode === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
   const rustType = rustTypeFromCarrierInContext(carrier, context);
   if (
@@ -359,7 +359,7 @@ interface RustBinaryEntry {
 }
 
 function resolveBinaryEntry(
-  input: TargetCompileInput,
+  input: RustTranslationContext,
   moduleNameByFileName: ReadonlyMap<string, string>,
   diagnostics: TargetDiagnostic[],
 ): RustBinaryEntry | undefined {
@@ -384,11 +384,11 @@ function resolveBinaryEntry(
     if (statement === undefined || input.ast.kindName(statement) !== KindFunctionDeclaration) {
       continue;
     }
-    const nameNode = Node_Name(statement);
+    const nameNode = Node_Name(input.ast, statement);
     if (nameNode === undefined || input.ast.text(nameNode) !== "main") {
       continue;
     }
-    const returnTypeNode = Node_Type(statement);
+    const returnTypeNode = Node_Type(input.ast, statement);
     const returnCarrier = returnTypeNode === undefined
       ? undefined
       : input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;

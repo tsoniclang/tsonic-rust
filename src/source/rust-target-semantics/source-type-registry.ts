@@ -2,8 +2,8 @@ import type {
   AstReader,
   Node,
   SourceFile,
-  TargetTypeRef,
 } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import {
   KindStringLiteral,
   Node_Type,
@@ -100,7 +100,7 @@ function closedStringUnionVariants(
   declaration: Node,
   ast: AstReader,
 ): readonly RustSourceEnumVariant[] | undefined {
-  const aliasType = Node_Type(declaration);
+  const aliasType = Node_Type(ast, declaration);
   if (aliasType === undefined || ast.kindName(aliasType) !== "KindUnionType") {
     return undefined;
   }

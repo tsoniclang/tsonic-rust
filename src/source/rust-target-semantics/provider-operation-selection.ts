@@ -5,13 +5,20 @@ import type {
   RustProviderOperationRow,
 } from "../provider-packages/index.js";
 
+interface RustProviderOwnerIdentity {
+  readonly providerId: string;
+  readonly providerVersion: string;
+  readonly providerModuleId: string;
+  readonly moduleSpecifier: string;
+}
+
 export type RustProviderOperationSelection =
   | { readonly kind: "selected"; readonly row: RustProviderOperationRow }
   | { readonly kind: "missing" }
   | { readonly kind: "ambiguous"; readonly rows: readonly RustProviderOperationRow[] };
 
 export function rustProviderOperationOwnerMatches(
-  row: RustProviderOperationRow,
+  row: RustProviderOwnerIdentity,
   identity: ProviderDeclarationIdentity,
 ): boolean {
   return row.providerId === identity.providerId &&

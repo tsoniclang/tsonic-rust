@@ -28,7 +28,7 @@ test("createTsonicPlugin exposes the installed target plugin contract", async ()
   assert.equal(plugin.createTargetPack().id, "rust");
 });
 
-test("rust provider creates the target semantics extension and validates options", () => {
+test("rust provider contributes source semantics and validates options", () => {
   const pack = createRustTargetPack();
   const context = {
     project: { entryPoint: "src/index.ts", targets: [] },
@@ -38,11 +38,11 @@ test("rust provider creates the target semantics extension and validates options
     selectedSurfaces: [],
   };
 
-  const extensions = pack.provider.createExtensions(context);
-  assert.equal(extensions.length, 1);
-  assert.equal(extensions[0].identity.id, "tsonic.rust.target-semantics");
+  const contribution = pack.provider.sourceCompilerContributions(context);
+  assert.equal(contribution.extensions.length, 1);
+  assert.equal(contribution.extensions[0].identity.id, "tsonic.rust.source-semantics");
   assert.throws(
-    () => pack.provider.createExtensions({ ...context, target: { id: "rust", options: { unknown: true } } }),
+    () => pack.provider.sourceCompilerContributions({ ...context, target: { id: "rust", options: { unknown: true } } }),
     /Rust target option 'options\.unknown' is not supported\./,
   );
 });

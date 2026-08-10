@@ -1,45 +1,42 @@
 import {
-  TstsProviderContractVersion,
-  acceptObservation,
-  contextualTargetTypeFactKey,
-  deferObservation,
   flowStateFactKey,
-  rejectObservation,
-  runtimeCarrierFactKey,
-  selectedTargetSignatureFactKey,
-  targetOperationFactKey,
 } from "@tsonic/tsts";
 import type {
-  CheckedCallMappingRequest,
-  CheckedCallMappingResult,
-  CheckedConversionMappingRequest,
-  CheckedConversionMappingResult,
-  CheckedElementAccessMappingRequest,
-  CheckedIterationMappingRequest,
-  CheckedOperationMappingResult,
-  CheckedOperatorMappingRequest,
-  CheckedPropertyAccessMappingRequest,
-  ContextualTargetTypeRequest,
-  ContextualTargetTypeResult,
   ExtensionFactSubject,
-  ExtensionObservation,
-  ExtensionObservationContext,
   Node,
-  ParameterPassingRequest,
-  ParameterPassingResult,
   ProviderDeclarationIdentity,
-  ProviderIdentity,
-  RuntimeCarrierFactRequest,
-  RuntimeCarrierFactResult,
-  TargetMember,
-  TargetOperationFact,
-  TargetSemanticProvider,
-  TargetTypeRef,
   SourceCallMarkerKind,
 } from "@tsonic/tsts";
 import {
+  acceptRustPolicy,
+  rejectRustPolicy,
+} from "../../policy/operations/contracts.js";
+import type {
+  RustCheckedCallSelectionInput,
+  RustCheckedCallSelectionResult,
+  RustCheckedConversionSelectionInput,
+  RustCheckedConversionSelectionResult,
+  RustCheckedElementSelectionInput,
+  RustCheckedIterationSelectionInput,
+  RustCheckedOperationSelectionResult,
+  RustCheckedOperatorSelectionInput,
+  RustCheckedPropertySelectionInput,
+  RustOperationPolicyContext,
+  RustPolicySelection,
+  RustTargetOperationSelection,
+} from "../../policy/operations/contracts.js";
+import {
+  rustArgumentPassingKey,
+  rustRuntimeCarrierKey,
+  rustSelectedCallKey,
+  rustSelectedOperationKey,
+} from "../../policy/model.js";
+import type {
+  RustTargetMember,
+  TargetTypeRef,
+} from "../../policy/types.js";
+import {
   ElementAccessExpression_ArgumentExpression,
-  Node_Expression,
   Node_Type,
 } from "../../common/source-ast.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
@@ -62,14 +59,9 @@ import {
   isRustJsArrayCarrier,
   isRustNullishSourceCarrier,
   isRustNumericCarrier,
-  isRustOptionCarrier,
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
 } from "../rust-target-types.js";
-import {
-  selectRustBinaryOperator,
-  selectRustCompoundAssignment,
-} from "./operator-rules.js";
 import {
   rustSourceTypeCarrier,
   rustTargetOperationResultCarrier,
@@ -96,10 +88,10 @@ import {
   finalizeRustProviderOperationAbi,
 } from "../rust-facts/finalized-operation-abi.js";
 import {
+  finalizeJsCallbackOperation,
   selectJsSurfaceConstructorBySourceOwner,
   selectJsSurfaceOperation,
 } from "./js-surface-operations.js";
-import type { JsOperationSelection } from "./js-surface-operations.js";
 import {
   asNode,
   isProjectSourceDeclaration,
@@ -142,6 +134,7 @@ const sourceCallMarkerByIdentity = new Map(
 
 export interface RustOperationsProviderOptions {
   readonly providerRows: readonly RustProviderOperationRow[];
+  readonly providerTypes: readonly import("../provider-packages/index.js").RustProviderTypeRow[];
   readonly providerCarrierPaths: ReadonlyMap<string, string>;
   readonly jsEnabled: boolean;
   readonly regExpSubsetViolation: (pattern: string, flags: string) => string | undefined;
@@ -150,204 +143,40 @@ export interface RustOperationsProviderOptions {
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
 }
 
-export function createRustOperationsProvider(options: RustOperationsProviderOptions): TargetSemanticProvider {
-  const identity: ProviderIdentity = {
-    id: "tsonic.rust.operations",
-    version: "0.0.1",
-    target: "rust",
-    extensionContractVersion: TstsProviderContractVersion,
-    providerKind: "semantic",
-    displayName: "Tsonic Rust semantic mapper",
-  };
-  return {
-    identity,
-    mapCheckedCall(request, context) {
-      return mapRustCheckedCall(request, context, options);
-    },
-    mapCheckedPropertyAccess(request, context) {
-      return mapRustCheckedPropertyAccess(request, context, options);
-    },
-    mapCheckedElementAccess(request, context) {
-      return mapRustCheckedElementAccess(request, context, options);
-    },
-    mapCheckedOperator(request, context) {
-      return mapRustCheckedOperator(request, context, options);
-    },
-    mapCheckedIteration(request, context) {
-      return mapRustCheckedIteration(request, context, options);
-    },
-    recordContextualTargetType(request, context) {
-      return recordRustContextualTargetType(request, context);
-    },
-    mapCheckedConversion(request, context) {
-      return mapRustCheckedConversion(request, context, options);
-    },
-    resolveParameterPassing(request) {
-      return resolveRustParameterPassing(request);
-    },
-    resolveRuntimeCarrier(request, context) {
-      return resolveRustRuntimeCarrier(request, context, options);
-    },
-  };
-}
-
-function recordRustContextualTargetType(
-  request: ContextualTargetTypeRequest,
-  context: ExtensionObservationContext<"type.recordContextualTargetType">,
-): ExtensionObservation<ContextualTargetTypeResult> {
-  if (request.target !== undefined && request.target !== "rust") {
-    return deferObservation;
-  }
-  const existing = context.facts.get(request.expression, contextualTargetTypeFactKey);
-  if (existing !== undefined) {
-    return acceptObservation(existing, [
-      { message: "rust reused the TSTS-selected contextual source type" },
-    ]);
-  }
-  return acceptObservation({ type: request.context }, [
-    { message: "rust retained the TSTS-selected contextual source type for post-check target finalization" },
-  ]);
-}
-
-function mapRustCheckedOperator(
-  request: CheckedOperatorMappingRequest,
-  context: ExtensionObservationContext<"operation.mapCheckedOperator">,
+export function selectRustCheckedOperator(
+  request: RustCheckedOperatorSelectionInput,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedOperationMappingResult> {
-  for (const sourceFile of context.compiler.getSourceFiles()) {
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  for (const sourceFile of context.sourceFiles) {
     if (sourceFile !== undefined) {
-      options.sourceTypes.registerSourceFile(sourceFile, context.compiler.ast);
+      options.sourceTypes.registerSourceFile(sourceFile, context.ast);
     }
   }
   if (isDeclarationFileSubject(request.expression, context)) {
     return acceptDeclarationOperation("operator");
   }
-  let left = resolveRustTargetTypeRef(request.left, context, options);
-  let right = resolveRustTargetTypeRef(request.right, context, options);
-  left = normalizeSelectedLiteralCarrier(request.left, left, right, context, options);
-  right = normalizeSelectedLiteralCarrier(request.right, right, left, context, options);
-  if (request.operator === "=") {
+  if (request.right !== undefined) {
+    if (request.operator !== "=") {
+      return acceptPostCheckOperator(request);
+    }
+    let left = resolveRustTargetTypeRef(request.left, context, options);
+    let right = resolveRustTargetTypeRef(request.right, context, options);
+    left = normalizeSelectedLiteralCarrier(request.left, left, right, context, options);
+    right = normalizeSelectedLiteralCarrier(request.right, right, left, context, options);
     const selectedSet = mapSelectedAssignment(request, left, right, context, options);
     if (selectedSet !== undefined) {
       return selectedSet;
     }
-    if (left === undefined || right === undefined || !rustTargetTypeRefEquals(left, right)) {
-      return acceptPostCheckOperator(request);
-    }
-    return acceptRustOperation(request.expression, operatorFact("=", right), context, {
-        sourceExpression: request.expression,
-        sourceReceiver: request.left,
-        sourceResultType: request.right,
-      }, right);
-  }
-  if (request.operator === "??") {
-    const inner = rustOptionElementCarrier(left);
-    right = normalizeSelectedLiteralCarrier(request.right, right, inner, context, options);
-    if (inner !== undefined && rustTargetTypeRefEquals(inner, right)) {
-      return acceptRustOperation(request.expression, {
-        kind: "option-coalesce",
-        operationId: "tsonic.rust.option.coalesce",
-      }, context, {
-        sourceExpression: request.expression,
-        sourceReceiver: request.left,
-        sourceResultType: request.right,
-      }, inner);
-    }
-    if (left !== undefined && right !== undefined && rustTargetTypeRefEquals(left, right) &&
-      !isRustOptionCarrier(left) && !isRustNullishSourceCarrier(left)) {
-      return acceptRustOperation(request.expression, {
-        kind: "nullish-identity",
-        operationId: "tsonic.rust.nullish.identity",
-        resultCarrier: left,
-      }, context, {
-        sourceExpression: request.expression,
-        sourceReceiver: request.left,
-        sourceResultType: request.right,
-      }, left);
-    }
-    return rejectSelectedOperation(request.expression, context, "RUST_NULLISH_COALESCE_CARRIER_MISMATCH", "Checked nullish coalescing requires an Option carrier and an exactly matching fallback carrier.");
-  }
-  if (request.right === undefined) {
-    return mapSelectedUnaryOperator(request, left, context);
-  }
-  if (selectedGenericNumericLiteralCallCanRefine(request.left, context) ||
-    selectedGenericNumericLiteralCallCanRefine(request.right, context)) {
     return acceptPostCheckOperator(request);
   }
-  if ((request.operator === "===" || request.operator === "!==") &&
-    ((isRustOptionCarrier(left) && isRustNullishSourceCarrier(right)) ||
-      (isRustNullishSourceCarrier(left) && isRustOptionCarrier(right)))) {
-    return acceptRustOperation(request.expression, {
-      kind: "option-check",
-      operationId: request.operator === "!=="
-        ? "tsonic.rust.option.is-some"
-        : "tsonic.rust.option.is-none",
-      negated: request.operator === "!==",
-      optionOperand: isRustOptionCarrier(left) ? "left" : "right",
-    }, context, {
-      sourceExpression: request.expression,
-      sourceReceiver: request.left,
-      sourceResultType: request.right,
-    }, { kind: "source-primitive", name: "bool" });
-  }
-  const compound = selectRustCompoundAssignment(request.operator, left, right);
-  if (compound !== undefined && left !== undefined) {
-    return acceptRustOperation(request.expression, operatorFact(compound, left), context, {
-      sourceExpression: request.expression,
-      sourceReceiver: request.left,
-      sourceResultType: request.right,
-    });
-  }
-  const selected = selectRustBinaryOperator(request.operator, left, right);
-  if (selected === undefined) {
-    return acceptPostCheckOperator(request);
-  }
-  const fact: RustTargetOperationFact = selected.kind === "string-concat"
-    ? {
-        kind: "string-concat",
-        operationId: "tsonic.rust.operator.concat.string",
-        resultCarrier: selected.resultCarrier,
-      }
-    : operatorFact(selected.rustOperator, selected.resultCarrier);
-  return acceptRustOperation(request.expression, fact, context, {
-    sourceExpression: request.expression,
-    sourceReceiver: request.left,
-    sourceResultType: request.right,
-  });
-}
-
-function selectedGenericNumericLiteralCallCanRefine(
-  subject: ExtensionFactSubject | undefined,
-  context: ExtensionObservationContext,
-): boolean {
-  const node = asNode(subject, context);
-  if (node === undefined || context.compiler.ast.kindName(node) !== "KindCallExpression") {
-    return false;
-  }
-  const selected = context.factResolver.resolve(node, selectedTargetSignatureFactKey);
-  const sourceArguments = selected?.sourceSelectedMethodTypeArguments;
-  const targetArguments = selected?.targetTypeArguments;
-  if (selected === undefined || sourceArguments === undefined || targetArguments === undefined ||
-    sourceArguments.length !== targetArguments.length) {
-    return false;
-  }
-  const callArguments = context.compiler.ast.arguments(node);
-  return sourceArguments.some((source, typeIndex) => {
-    const target = targetArguments[typeIndex];
-    if (source.explicitTypeNode !== undefined || target === undefined || !isRustNumericCarrier(target)) {
-      return false;
-    }
-    return selected.member.parameters.some((parameter, parameterIndex) => {
-      const argument = callArguments[parameterIndex];
-      return parameter.type.kind === "type-parameter" && parameter.type.name === source.typeParameterName &&
-        argument !== undefined && context.compiler.ast.kindName(argument) === "KindNumericLiteral";
-    });
-  });
+  const operand = resolveRustTargetTypeRef(request.left, context, options);
+  return mapSelectedUnaryOperator(request, operand, context);
 }
 
 function acceptPostCheckOperator(
-  request: CheckedOperatorMappingRequest,
-): ExtensionObservation<CheckedOperationMappingResult> {
+  request: RustCheckedOperatorSelectionInput,
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const unaryOperationId = request.right === undefined
     ? request.operator === "-"
       ? rustPostCheckUnaryMinusOperationId
@@ -356,12 +185,12 @@ function acceptPostCheckOperator(
         : undefined
     : undefined;
   const operationId = unaryOperationId ?? rustPostCheckBinaryOperationId;
-  const provenance: NonNullable<TargetOperationFact["provenance"]> = {
+  const provenance: NonNullable<RustTargetOperationSelection["provenance"]> = {
     sourceExpression: request.expression,
     sourceReceiver: request.left,
     ...(request.right === undefined ? {} : { sourceResultType: request.right }),
   };
-  return acceptObservation({
+  return acceptRustPolicy({
     operation: {
       operationId,
       operationKind: "operator",
@@ -377,13 +206,13 @@ function acceptPostCheckOperator(
 }
 
 function mapSelectedUnaryOperator(
-  request: CheckedOperatorMappingRequest,
+  request: RustCheckedOperatorSelectionInput,
   operand: TargetTypeRef | undefined,
-  context: ExtensionObservationContext<"operation.mapCheckedOperator">,
-): ExtensionObservation<CheckedOperationMappingResult> {
+  context: RustOperationPolicyContext,
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const operandNode = asNode(request.left, context);
   if ((request.operator === "-" || request.operator === "+") &&
-    operandNode !== undefined && context.compiler.ast.kindName(operandNode) === "KindNumericLiteral") {
+    operandNode !== undefined && context.ast.kindName(operandNode) === "KindNumericLiteral") {
     return acceptPostCheckOperator(request);
   }
   let targetOperator: RustOperatorToken | undefined;
@@ -417,13 +246,13 @@ function mapSelectedUnaryOperator(
 }
 
 function mapSelectedAssignment(
-  request: CheckedOperatorMappingRequest,
+  request: RustCheckedOperatorSelectionInput,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
-  context: ExtensionObservationContext<"operation.mapCheckedOperator">,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedOperationMappingResult> | undefined {
-  const selectedLeft = context.factResolver.resolve(request.left, targetOperationFactKey);
+): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  const selectedLeft = context.facts.getSelectedTargetOperator(request.left);
   const selectedDeclaration = selectedLeft?.provenance?.sourceSelectedDeclaration;
   const identity = resolveSelectedJsSourceMember(context, selectedDeclaration, options.sourceProfiles);
   if (identity === undefined || !options.jsEnabled) {
@@ -441,7 +270,7 @@ function mapSelectedAssignment(
   }
   const leftNode = asNode(request.left, context);
   const indexNode = operationKind === "index-set" && leftNode !== undefined
-    ? ElementAccessExpression_ArgumentExpression(leftNode)
+    ? ElementAccessExpression_ArgumentExpression(context.ast, leftNode)
     : undefined;
   const assignmentSubjects = operationKind === "index-set"
     ? indexNode === undefined || request.right === undefined ? undefined : [indexNode, request.right]
@@ -531,33 +360,11 @@ function rustCarrierIdentity(carrier: TargetTypeRef): string {
   return carrier.kind;
 }
 
-function resolveRustRuntimeCarrier(
-  request: RuntimeCarrierFactRequest,
-  context: ExtensionObservationContext<"type.resolveRuntimeCarrier">,
+export function selectRustCheckedCall(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<RuntimeCarrierFactResult> {
-  const carrier = request.sourceTypeReference === undefined
-    ? resolveRustTargetTypeRef(request.type, context, options)
-    : resolveRustTargetTypeRef(request.sourceTypeReference, context, options) ??
-      resolveRustTargetTypeRef(request.type, context, options);
-  if (carrier === undefined || isRustNullishSourceCarrier(carrier)) {
-    return deferObservation;
-  }
-  return acceptObservation({
-    carrier,
-    provenance: {
-      sourceType: request.type,
-      ...(request.sourceTypeReference === undefined ? {} : { sourceTypeReference: request.sourceTypeReference }),
-      ...(request.sourceSymbol === undefined ? {} : { sourceSymbol: request.sourceSymbol }),
-    },
-  }, [{ message: "rust runtime carrier from selected source type evidence" }]);
-}
-
-function mapRustCheckedCall(
-  request: CheckedCallMappingRequest,
-  context: ExtensionObservationContext<"operation.mapCheckedCall">,
-  options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedCallMappingResult> {
+): RustPolicySelection<RustCheckedCallSelectionResult> {
   const providerEvidence = resolveSelectedProviderDeclaration(
     context,
     request.sourceSelectedDeclaration,
@@ -659,11 +466,17 @@ function mapRustCheckedCall(
         sourceName: selectedSourceMember.ownerName,
       });
     }
-    const callee = asNode(request.callee, context);
-    const receiver = callee === undefined ? undefined : Node_Expression(callee);
+    const receiver = request.sourceReceiver?.expression;
     const receiverCarrier = resolveRustTargetTypeRef(receiver, context, options);
     const argumentCarriers = request.arguments.map((argument) =>
       resolveRustTargetTypeRef(argument, context, options));
+    const selectedMethodTypeArgumentCarriers =
+      (request.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
+        resolveRustTargetTypeRef(
+          argument.explicitTypeNode ?? argument.selectedType,
+          context,
+          options,
+        ));
     const special = mapSelectedJsSpecialCall(
       request,
       selectedSourceMember.ownerName,
@@ -680,21 +493,24 @@ function mapRustCheckedCall(
       operationKind: "call",
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
+      selectedMethodTypeArgumentCarriers,
       argumentCompatibility: selectedArgumentCompatibility(request.arguments, context, options),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`);
     }
-    const finalizedSelection = finalizeJsCallbackSelection(
-      selection,
-      resolveRustTargetTypeRef(request.sourceReturnType, context, options),
-    );
-    if (finalizedSelection === undefined || finalizedSelection.fact.kind !== "provider-operation") {
-      return rejectSelectedOperation(request.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed callback/result carrier from TSTS-selected evidence.`);
+    if (selection.callbackShape !== undefined) {
+      return selection.fact.kind !== "provider-operation"
+        ? rejectSelectedOperation(request.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
+        : acceptRustPolicy({
+            kind: "deferred-callback",
+            callbackShape: selection.callbackShape,
+            sourceName: selectedSourceMember.memberName,
+            template: selection.fact,
+            parameterCarriers: selection.parameterCarriers ?? [],
+          });
     }
-    const parameterCarriers = (finalizedSelection.parameterCarriers ?? []).map((carrier, index) =>
-      carrier ?? argumentCarriers[index]);
-    return acceptSelectedCall(request, finalizedSelection.fact, parameterCarriers, context, options, {
+    return acceptSelectedCall(request, selection.fact, selection.parameterCarriers, context, options, {
       sourceName: selectedSourceMember.memberName,
     });
   }
@@ -712,20 +528,143 @@ function mapRustCheckedCall(
     return acceptProjectSourceCall(request, sourceDeclaration, context, options);
   }
 
-  return deferObservation;
+  return rejectSelectedOperation(
+    request.call,
+    context,
+    "RUST_SELECTED_CALL_EVIDENCE_MISSING",
+    "Checked call has no exact provider, source-profile, or project-source selection that Rust can lower.",
+  );
+}
+
+export function finalizeRustDeferredCheckedCall(
+  request: RustCheckedCallSelectionInput,
+  deferred: Extract<
+    RustCheckedCallSelectionResult,
+    { readonly kind: "deferred-callback" }
+  >,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+  resolveArgument: (
+    argument: Node,
+    expected: TargetTypeRef | undefined,
+  ) => TargetTypeRef | undefined,
+): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const arguments_ = request.arguments;
+  if (arguments_.length !== deferred.parameterCarriers.length) {
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_SELECTED_CALLBACK_ARITY_MISMATCH",
+      `Selected callback call '${deferred.sourceName}' has ${arguments_.length} source arguments but ${deferred.parameterCarriers.length} target parameters.`,
+    );
+  }
+  const actual: (TargetTypeRef | undefined)[] = new Array(arguments_.length);
+  if (deferred.callbackShape === "reduce") {
+    const accumulatorArgument = arguments_[1];
+    if (accumulatorArgument === undefined) {
+      return rejectSelectedOperation(
+        request.call,
+        context,
+        "RUST_SELECTED_CALLBACK_ACCUMULATOR_MISSING",
+        "Selected reduce call has no exact accumulator source argument.",
+      );
+    }
+    const accumulatorExpectation = deferred.parameterCarriers[1];
+    const accumulator = resolveArgument(
+      accumulatorArgument,
+      accumulatorExpectation,
+    );
+    if (accumulator === undefined) {
+      return rejectSelectedOperation(
+        request.call,
+        context,
+        "RUST_SELECTED_CALLBACK_ACCUMULATOR_CARRIER_MISSING",
+        "Selected reduce call has no closed target carrier for its exact accumulator argument.",
+      );
+    }
+    actual[1] = accumulator;
+    const callbackArgument = arguments_[0];
+    const callbackTemplate = deferred.parameterCarriers[0];
+    if (callbackArgument === undefined || callbackTemplate === undefined) {
+      return rejectSelectedOperation(
+        request.call,
+        context,
+        "RUST_SELECTED_CALLBACK_CARRIER_MISSING",
+        "Selected reduce call has no exact callback argument or callback target template.",
+      );
+    }
+    actual[0] = resolveArgument(
+      callbackArgument,
+      replaceRustInferCarrier(callbackTemplate, accumulator),
+    );
+  } else {
+    for (const [index, argument] of arguments_.entries()) {
+      actual[index] = resolveArgument(
+        argument,
+        deferred.parameterCarriers[index],
+      );
+    }
+  }
+  if (actual.some((carrier) => carrier === undefined)) {
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_SELECTED_CALLBACK_CARRIER_MISSING",
+      `Selected JavaScript call '${deferred.sourceName}' has no closed callback/result carrier from exact target analysis.`,
+    );
+  }
+  const finalized = finalizeJsCallbackOperation({
+    fact: deferred.template,
+    parameterCarriers: deferred.parameterCarriers,
+    callbackShape: deferred.callbackShape,
+  }, actual as TargetTypeRef[]);
+  if (finalized?.fact.kind !== "provider-operation") {
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_SELECTED_CALLBACK_CARRIER_CONFLICT",
+      `Selected JavaScript call '${deferred.sourceName}' has callback argument carriers incompatible with its exact target operation row.`,
+    );
+  }
+  return acceptSelectedCall(
+    request,
+    finalized.fact,
+    finalized.parameterCarriers,
+    context,
+    options,
+    { sourceName: deferred.sourceName },
+  );
+}
+
+function replaceRustInferCarrier(
+  template: TargetTypeRef,
+  replacement: TargetTypeRef,
+): TargetTypeRef {
+  if (template.kind === "opaque" && template.id === "tsonic.rust.infer") {
+    return replacement;
+  }
+  if (template.kind === "function-pointer") {
+    return {
+      ...template,
+      args: template.args.map((argument) =>
+        replaceRustInferCarrier(argument, replacement)),
+      result: replaceRustInferCarrier(template.result, replacement),
+    };
+  }
+  return template;
 }
 
 function mapRustSourceMarkerCall(
-  request: CheckedCallMappingRequest,
+  request: RustCheckedCallSelectionInput,
   provider: ProviderDeclarationIdentity,
   markerName: SourceCallMarkerKind,
-  context: ExtensionObservationContext<"operation.mapCheckedCall">,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedCallMappingResult> {
+): RustPolicySelection<RustCheckedCallSelectionResult> {
   const typedLocation = selectRustTypedLocationDisposition(
     request.call,
     markerName,
-    (subject, key) => context.factResolver.resolve(subject, key),
+    (subject, key) => context.facts.resolve(subject, key),
     (subject, key) => context.facts.get(subject, key),
   );
   if (typedLocation.kind !== "not-typed-location") {
@@ -756,7 +695,7 @@ function mapRustSourceMarkerCall(
       `Rust does not support selected source marker '${markerName}' in this operation lane.`,
     );
   }
-  const flow = context.factResolver.resolve(request.call, flowStateFactKey) ??
+  const flow = context.facts.resolve(request.call, flowStateFactKey) ??
     context.facts.get(request.call, flowStateFactKey);
   const expectedState = markerName === "shared-borrow"
     ? "borrowed-shared"
@@ -787,7 +726,7 @@ function mapRustSourceMarkerCall(
   };
   const evidence = [{ message: `rust selected flow marker ${markerName}` }];
   context.facts.set(request.call, rustTargetOperationFactKey, fact, evidence);
-  return acceptObservation({
+  return acceptRustPolicy({
     selectedSignature: {
       member: {
         id: fact.operationId,
@@ -804,17 +743,19 @@ function mapRustSourceMarkerCall(
       ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
       ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
       ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
+      sourceArgumentBindings: request.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
     },
   }, evidence);
 }
 
 function mapSelectedRegExpConstruction(
-  request: CheckedCallMappingRequest,
-  context: ExtensionObservationContext<"operation.mapCheckedCall">,
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedCallMappingResult> {
+): RustPolicySelection<RustCheckedCallSelectionResult> {
   const [patternNode, flagsNode] = request.arguments.map((argument) => asNode(argument, context));
-  const ast = context.compiler.ast;
+  const ast = context.ast;
   const pattern = patternNode !== undefined && ast.kindName(patternNode) === "KindStringLiteral"
     ? ast.text(patternNode)
     : undefined;
@@ -837,7 +778,7 @@ function mapSelectedRegExpConstruction(
   };
   const evidence = [{ message: "rust selected RegExp constructor" }];
   context.facts.set(request.call, rustTargetOperationFactKey, fact, evidence);
-  context.facts.set(request.call, targetOperationFactKey, {
+  context.facts.set(request.call, rustSelectedOperationKey, {
     operationId: fact.operationId,
     operationKind: "constructor",
     targetOperation: "js_abi::JsRegExp::new",
@@ -851,7 +792,7 @@ function mapSelectedRegExpConstruction(
       sourceResultType: request.sourceReturnType,
     },
   }, evidence);
-  return acceptObservation({
+  return acceptRustPolicy({
     selectedSignature: {
       member: {
         id: fact.operationId,
@@ -869,22 +810,24 @@ function mapSelectedRegExpConstruction(
       ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
       ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
       ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
+      sourceArgumentBindings: request.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
     },
   }, evidence);
 }
 
 function mapSelectedJsSpecialCall(
-  request: CheckedCallMappingRequest,
+  request: RustCheckedCallSelectionInput,
   ownerName: string,
   memberName: string,
-  context: ExtensionObservationContext<"operation.mapCheckedCall">,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedCallMappingResult> | undefined {
+): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   if (ownerName === "String" && memberName === "match") {
     const [argument] = request.arguments;
     const creation = argument === undefined
       ? undefined
-      : context.factResolver.resolve(argument, rustTargetOperationFactKey);
+      : context.facts.resolve(argument, rustTargetOperationFactKey);
     if (creation === undefined || creation.kind !== "regexp-create") {
       return rejectSelectedOperation(
         request.call,
@@ -918,7 +861,7 @@ function mapSelectedJsSpecialCall(
     return undefined;
   }
   const [valueNode, replacerNode, spaceNode] = request.arguments.map((argument) => asNode(argument, context));
-  const ast = context.compiler.ast;
+  const ast = context.ast;
   if (valueNode === undefined || replacerNode === undefined || spaceNode === undefined || ast.kindName(replacerNode) !== "KindNullKeyword") {
     return rejectSelectedOperation(request.call, context, "RUST_JSON_STRINGIFY_REPLACER_UNSUPPORTED", "Rust JSON.stringify supports the selected three-argument overload only with a null replacer and compile-time string/number indentation.");
   }
@@ -953,51 +896,13 @@ function mapSelectedJsSpecialCall(
   });
 }
 
-function finalizeJsCallbackSelection(
-  selection: JsOperationSelection | undefined,
-  selectedReturnCarrier: TargetTypeRef | undefined,
-): JsOperationSelection | undefined {
-  if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.callbackShape === undefined) {
-    return selection;
-  }
-  const callback = selection.parameterCarriers?.[0];
-  if (callback?.kind !== "function-pointer" || selectedReturnCarrier === undefined) {
-    return undefined;
-  }
-  if (selection.callbackShape === "map") {
-    if (selectedReturnCarrier.kind !== "array") {
-      return undefined;
-    }
-    const parameterCarriers = [
-      { ...callback, result: selectedReturnCarrier.element },
-      ...(selection.parameterCarriers?.slice(1) ?? []),
-    ];
-    return {
-      ...selection,
-      fact: { ...selection.fact, resultCarrier: selectedReturnCarrier, parameterCarriers },
-      resultCarrier: selectedReturnCarrier,
-      parameterCarriers,
-    };
-  }
-  const parameterCarriers = [
-    { ...callback, args: [selectedReturnCarrier, ...callback.args.slice(1)], result: selectedReturnCarrier },
-    selectedReturnCarrier,
-  ];
-  return {
-    ...selection,
-    fact: { ...selection.fact, resultCarrier: selectedReturnCarrier, parameterCarriers },
-    resultCarrier: selectedReturnCarrier,
-    parameterCarriers,
-  };
-}
-
 function acceptProjectSourceCall(
-  request: CheckedCallMappingRequest,
+  request: RustCheckedCallSelectionInput,
   selectedDeclaration: Node,
-  context: ExtensionObservationContext<"operation.mapCheckedCall">,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedCallMappingResult> {
-  const { ast } = context.compiler;
+): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const { ast } = context;
   const selectedKind = ast.kindName(selectedDeclaration);
   const construction = checkedCallIsConstruction(request, context);
   if (construction && selectedKind === "KindClassDeclaration") {
@@ -1053,7 +958,7 @@ function acceptProjectSourceCall(
       ? undefined
       : resolveRustTargetTypeRef(classDeclaration, context, options);
   } else {
-    const sourceReturn = Node_Type(callableDeclaration) ?? request.sourceReturnType;
+    const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.sourceReturnType;
     returnType = sourceReturn === undefined
       ? undefined
       : resolveRustTargetTypeRef(sourceReturn, context, options);
@@ -1063,15 +968,28 @@ function acceptProjectSourceCall(
   }
   const sourceName = ast.text(ast.name(callableDeclaration)) || (construction ? "constructor" : "<anonymous>");
   const fileName = ast.getFileName(ast.getSourceFile(callableDeclaration));
-  const member: TargetMember = {
+  const member: RustTargetMember = {
     id: `tsonic.rust.source.call:${fileName}:${ast.pos(callableDeclaration)}:${ast.end(callableDeclaration)}`,
     sourceName,
     targetName: sourceName,
     kind: construction ? "constructor" : "method",
-    parameters: parameters as NonNullable<TargetMember["parameters"]>,
+    parameters: parameters as NonNullable<RustTargetMember["parameters"]>,
     returnType,
   };
-  return acceptObservation({
+  const selectedSignature = {
+    member,
+    sourceDeclaration: callableDeclaration,
+    ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
+    ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
+    ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
+    ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
+    sourceArgumentBindings: request.sourceArgumentBindings,
+    sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
+    ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
+    ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
+  };
+  context.facts.set(request.call, rustSelectedCallKey, selectedSignature);
+  return acceptRustPolicy({
     selectedSignature: {
       member,
       sourceDeclaration: callableDeclaration,
@@ -1079,6 +997,8 @@ function acceptProjectSourceCall(
       ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
       ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
       ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
+      sourceArgumentBindings: request.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
       ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
     },
@@ -1086,8 +1006,8 @@ function acceptProjectSourceCall(
 }
 
 function mapSelectedTargetTypeArguments(
-  request: CheckedCallMappingRequest,
-  context: ExtensionObservationContext,
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): readonly TargetTypeRef[] | undefined {
   const sourceArguments = request.sourceSelectedMethodTypeArguments;
@@ -1102,16 +1022,16 @@ function mapSelectedTargetTypeArguments(
 }
 
 function acceptSelectedCall(
-  request: CheckedCallMappingRequest,
+  request: RustCheckedCallSelectionInput,
   template: RustProviderOperationTemplate,
   parameterCarriers: readonly (TargetTypeRef | undefined)[] | undefined,
-  context: ExtensionObservationContext<"operation.mapCheckedCall">,
+  context: RustOperationPolicyContext,
   resolutionOptions: RustOperationsProviderOptions,
   callIdentity: {
     readonly sourceName: string;
     readonly providerDeclaration?: ProviderDeclarationIdentity;
   },
-): ExtensionObservation<CheckedCallMappingResult> {
+): RustPolicySelection<RustCheckedCallSelectionResult> {
   const sourceArguments = selectedCallSourceCarriers(
     request,
     template,
@@ -1130,7 +1050,7 @@ function acceptSelectedCall(
       "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
     );
   }
-  const receiverSubject = selectedCallReceiverSubject(request, context, template.target);
+  const receiverSubject = selectedCallReceiverSubject(request, template.target);
   const sourceReceiverCarrier = receiverSubject === undefined
     ? undefined
     : resolveRustTargetTypeRef(receiverSubject, context, resolutionOptions);
@@ -1147,7 +1067,7 @@ function acceptSelectedCall(
     return rejectSelectedOperation(request.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", `Selected generic call '${callIdentity.sourceName}' has a source-selected type argument that cannot map to a closed Rust target type.`);
   }
   const resultCarrier = fact.resultCarrier;
-  const operation: TargetOperationFact = {
+  const operation: RustTargetOperationSelection = {
     operationId: fact.operationId,
     operationKind: fact.abi.operationKind,
     targetOperation: rustTargetOperationText(fact),
@@ -1163,11 +1083,32 @@ function acceptSelectedCall(
     },
   };
   const evidence = [{ message: `rust selected call ${fact.operationId}` }];
+  for (const sourceArgument of fact.abi.sourceArguments) {
+    if (sourceArgument.disposition !== "runtime") {
+      continue;
+    }
+    const argument = request.arguments[sourceArgument.sourceIndex];
+    if (argument === undefined) {
+      return rejectSelectedOperation(
+        request.call,
+        context,
+        "RUST_SELECTED_ARGUMENT_BINDING_MISSING",
+        `Selected call '${callIdentity.sourceName}' has no exact source argument ${sourceArgument.sourceIndex}.`,
+      );
+    }
+    const mode = rustArgumentPassingMode(sourceArgument.mode);
+    context.facts.set(argument, rustArgumentPassingKey, {
+      mode,
+      ...(mode === "borrow-shared" || mode === "borrow-mut"
+        ? { storageExpression: argument }
+        : {}),
+    }, [{ message: `rust selected argument ${sourceArgument.sourceIndex} passes as ${mode}` }]);
+  }
   context.facts.set(request.call, rustTargetOperationFactKey, {
     ...fact,
   }, evidence);
-  context.facts.set(request.call, targetOperationFactKey, operation, evidence);
-  const member: TargetMember = {
+  context.facts.set(request.call, rustSelectedOperationKey, operation, evidence);
+  const member: RustTargetMember = {
     id: fact.operationId,
     sourceName: callIdentity.sourceName,
     targetName: operation.targetOperation,
@@ -1180,19 +1121,21 @@ function acceptSelectedCall(
     returnType: resultCarrier,
     ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
   };
-  return acceptObservation({
-    selectedSignature: {
+  const selectedSignature = {
       member,
       ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
       ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
       ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
       ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
       ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
+      sourceArgumentBindings: request.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
       ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments: targetTypeArguments as TargetTypeRef[] }),
       ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
-    },
-  }, evidence);
+    };
+  context.facts.set(request.call, rustSelectedCallKey, selectedSignature, evidence);
+  return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
 type SelectedCallSourceCarriers =
@@ -1201,10 +1144,10 @@ type SelectedCallSourceCarriers =
   | { readonly kind: "incompatible"; readonly sourceIndex: number };
 
 function selectedCallSourceCarriers(
-  request: CheckedCallMappingRequest,
+  request: RustCheckedCallSelectionInput,
   fact: RustProviderOperationTemplate,
   declared: readonly (TargetTypeRef | undefined)[] | undefined,
-  context: ExtensionObservationContext<"operation.mapCheckedCall">,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): SelectedCallSourceCarriers {
   const compileTimeIndexes = new Set(fact.compileTimeSourceArgumentIndexes ?? []);
@@ -1212,8 +1155,17 @@ function selectedCallSourceCarriers(
     .map((_argument, index) => index)
     .filter((index) => !compileTimeIndexes.has(index));
   const declaredBySourceIndex = new Map<number, TargetTypeRef | undefined>();
-  for (const [declaredIndex, sourceIndex] of runtimeIndexes.entries()) {
-    declaredBySourceIndex.set(sourceIndex, declared?.[declaredIndex]);
+  for (const sourceIndex of runtimeIndexes) {
+    const bindings = request.sourceArgumentBindings.filter((binding) =>
+      binding.sourceArgumentIndex === sourceIndex);
+    const first = bindings[0];
+    if (first === undefined || bindings.some((binding) =>
+      binding.sourceParameterIndex !== first.sourceParameterIndex ||
+      binding.sourceForm !== first.sourceForm) ||
+      request.sourceSelectedSignatureParameters[first.sourceParameterIndex] === undefined) {
+      return { kind: "missing" };
+    }
+    declaredBySourceIndex.set(sourceIndex, declared?.[first.sourceParameterIndex]);
   }
   let incompatibleIndex: number | undefined;
   const actual = request.arguments.map((argument, index) => {
@@ -1250,17 +1202,13 @@ function selectedCallSourceCarriers(
 }
 
 function selectedCallReceiverSubject(
-  request: CheckedCallMappingRequest,
-  context: ExtensionObservationContext,
+  request: RustCheckedCallSelectionInput,
   form: RustProviderOperationForm,
 ): ExtensionFactSubject | undefined {
   if (!providerFormRequiresSourceReceiver(form)) {
     return undefined;
   }
-  const callee = asNode(request.callee, context);
-  return callee === undefined || context.compiler.ast.kindName(callee) !== "KindPropertyAccessExpression"
-    ? undefined
-    : Node_Expression(callee);
+  return request.sourceReceiver?.expression;
 }
 
 function providerFormRequiresSourceReceiver(form: RustProviderOperationForm): boolean {
@@ -1302,55 +1250,19 @@ function finalizeProviderOperationFact(
   };
 }
 
-function resolveRustParameterPassing(
-  request: ParameterPassingRequest,
-): ExtensionObservation<ParameterPassingResult> {
-  const index = request.parameterIndex;
-  const selectedParameter = index === undefined
-    ? undefined
-    : request.selectedSignature?.member.parameters[index];
-  if (index === undefined || request.targetParameter === undefined || selectedParameter === undefined || selectedParameter !== request.targetParameter) {
-    return rejectObservation({
-      extensionId: "tsonic.rust.operations",
-      extensionCode: "RUST_PARAMETER_PASSING_EVIDENCE_MISSING",
-      numericCode: 0,
-      category: "error",
-      message: "Rust parameter passing requires the exact TSTS-selected target parameter and parameter index.",
-      evidence: [{ message: "target.capability=rust.parameter-passing" }],
-    });
-  }
-  const mode = selectedParameter.passingMode;
-  if (mode !== "by-value" && mode !== "borrow-shared" && mode !== "borrow-mut" && mode !== "move") {
-    return rejectObservation({
-      extensionId: "tsonic.rust.operations",
-      extensionCode: "RUST_PARAMETER_PASSING_MODE_UNSUPPORTED",
-      numericCode: 0,
-      category: "error",
-      message: `Rust does not support selected target parameter mode '${mode}'.`,
-      evidence: [{ message: "target.capability=rust.parameter-passing" }],
-    });
-  }
-  return acceptObservation({
-    passing: {
-      mode,
-      ...(request.argument === undefined ? {} : { targetExpression: request.argument }),
-    },
-  }, [{ message: `rust selected parameter ${index} passing mode ${mode}` }]);
-}
-
 function checkedCallIsConstruction(
-  request: CheckedCallMappingRequest,
-  context: ExtensionObservationContext,
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
 ): boolean {
   const call = asNode(request.call, context);
-  return call !== undefined && context.compiler.ast.kindName(call) === "KindNewExpression";
+  return call !== undefined && context.ast.kindName(call) === "KindNewExpression";
 }
 
-function mapRustCheckedPropertyAccess(
-  request: CheckedPropertyAccessMappingRequest,
-  context: ExtensionObservationContext<"operation.mapCheckedPropertyAccess">,
+export function selectRustCheckedPropertyAccess(
+  request: RustCheckedPropertySelectionInput,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedOperationMappingResult> {
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
   if (request.optionalChain === true) {
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_UNSUPPORTED", "Optional-chain property access has no finalized Rust Option operation.");
   }
@@ -1404,15 +1316,15 @@ function mapRustCheckedPropertyAccess(
 
   if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
     const declaration = request.sourceSelectedDeclaration;
-    const memberName = context.compiler.ast.text(context.compiler.ast.name(declaration));
-    if (context.compiler.ast.kindName(declaration) === "KindEnumMember") {
-      const enumDeclaration = context.compiler.ast.parent(declaration);
+    const memberName = context.ast.text(context.ast.name(declaration));
+    if (context.ast.kindName(declaration) === "KindEnumMember") {
+      const enumDeclaration = context.ast.parent(declaration);
       const enumName = enumDeclaration === undefined
         ? ""
-        : context.compiler.ast.text(context.compiler.ast.name(enumDeclaration));
+        : context.ast.text(context.ast.name(enumDeclaration));
       const enumFileName = enumDeclaration === undefined
         ? ""
-        : context.compiler.ast.getFileName(context.compiler.ast.getSourceFile(enumDeclaration));
+        : context.ast.getFileName(context.ast.getSourceFile(enumDeclaration));
       const resultCarrier = enumName.length === 0 || enumFileName.length === 0
         ? undefined
         : rustSourceTypeCarrier(enumFileName, enumName, "enum");
@@ -1432,7 +1344,7 @@ function mapRustCheckedPropertyAccess(
         });
       }
     }
-    const resultCarrier = resolveRustTargetTypeRef(Node_Type(declaration) ?? request.sourceResultType, context, options);
+    const resultCarrier = resolveRustTargetTypeRef(Node_Type(context.ast, declaration) ?? request.sourceResultType, context, options);
     if (memberName.length > 0 && resultCarrier !== undefined) {
       const operationId = sourceOperationId(context, declaration, "field");
       return acceptRustOperation(request.expression, {
@@ -1456,11 +1368,11 @@ function mapRustCheckedPropertyAccess(
   return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_EVIDENCE_MISSING", "Checked property access has no selected provider, source-profile, or project-source declaration evidence.");
 }
 
-function mapRustCheckedElementAccess(
-  request: CheckedElementAccessMappingRequest,
-  context: ExtensionObservationContext<"operation.mapCheckedElementAccess">,
+export function selectRustCheckedElementAccess(
+  request: RustCheckedElementSelectionInput,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedOperationMappingResult> {
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
   if (request.optionalChain === true) {
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_UNSUPPORTED", "Optional-chain element access has no finalized Rust Option operation.");
   }
@@ -1564,11 +1476,11 @@ function mapRustCheckedElementAccess(
   return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_EVIDENCE_MISSING", "Checked element access has no selected provider, source-profile, tuple, or fixed-array evidence.");
 }
 
-function mapRustCheckedIteration(
-  request: CheckedIterationMappingRequest,
-  context: ExtensionObservationContext<"operation.mapCheckedIteration">,
+export function selectRustCheckedIteration(
+  request: RustCheckedIterationSelectionInput,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedOperationMappingResult> {
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
   if (request.kind !== "for-of") {
     return rejectSelectedOperation(
       request.statement,
@@ -1626,7 +1538,7 @@ function rustIterableElementCarrier(iterable: TargetTypeRef | undefined): Target
 function recordIterationInitializerCarrier(
   initializer: ExtensionFactSubject | undefined,
   carrier: TargetTypeRef,
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
 ): void {
   const root = asNode(initializer, context);
   if (root === undefined) {
@@ -1634,12 +1546,12 @@ function recordIterationInitializerCarrier(
   }
   const evidence = [{ message: "rust selected iteration binding carrier" }];
   const visit = (node: Node): void => {
-    const kind = context.compiler.ast.kindName(node);
+    const kind = context.ast.kindName(node);
     if (node === root || kind === "KindVariableDeclaration") {
-      context.facts.set(node, runtimeCarrierFactKey, { carrier }, evidence);
+      context.facts.set(node, rustRuntimeCarrierKey, { carrier }, evidence);
     }
     if (kind === "KindVariableDeclaration" || node === root) {
-      for (const child of context.compiler.ast.children(node)) {
+      for (const child of context.ast.children(node)) {
         if (child !== undefined) {
           visit(child);
         }
@@ -1649,11 +1561,11 @@ function recordIterationInitializerCarrier(
   visit(root);
 }
 
-function mapRustCheckedConversion(
-  request: CheckedConversionMappingRequest,
-  context: ExtensionObservationContext<"operation.mapCheckedConversion">,
+export function selectRustCheckedConversion(
+  request: RustCheckedConversionSelectionInput,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): ExtensionObservation<CheckedConversionMappingResult> {
+): RustPolicySelection<RustCheckedConversionSelectionResult> {
   if (request.conversionKind === "call-argument") {
     const targetCarrier = request.targetParameter.type;
     const selectedTypeParameterNames = new Set(
@@ -1661,53 +1573,53 @@ function mapRustCheckedConversion(
     );
     if (selectedTypeParameterNames.size > 0 &&
       targetTypeContainsSelectedParameter(targetCarrier, selectedTypeParameterNames)) {
-      return acceptObservation({}, [
+      return acceptRustPolicy({}, [
         { message: "rust deferred the selected generic source-call argument carrier to post-check target substitution" },
       ]);
     }
     const sourceCarrier = resolveRustTargetTypeRef(request.expression, context, options);
     if (sourceCarrier !== undefined && rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
-      return acceptObservation({ convertedType: targetCarrier }, [
+      return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected call argument already has the selected target parameter carrier" },
       ]);
     }
     const sourceNode = asNode(request.expression, context);
-    const sourceKind = sourceNode === undefined ? "" : context.compiler.ast.kindName(sourceNode);
+    const sourceKind = sourceNode === undefined ? "" : context.ast.kindName(sourceNode);
     if (targetCarrier.kind === "function-pointer" &&
       (sourceKind === "KindArrowFunction" || sourceKind === "KindFunctionExpression")) {
-      return acceptObservation({ convertedType: targetCarrier }, [
+      return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected function expression uses the selected target function-pointer carrier" },
       ]);
     }
     if (targetCarrier.kind === "source-primitive" && sourceNode !== undefined &&
       sourceLiteralIsRepresentableAsPrimitive(sourceNode, targetCarrier.name, context)) {
-      return acceptObservation({ convertedType: targetCarrier }, [
+      return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected literal is representable by the selected target primitive carrier" },
       ]);
     }
     if (targetCarrier.kind === "pointer" && sourceCarrier !== undefined &&
       rustTargetTypeRefEquals(targetCarrier.pointee, sourceCarrier)) {
-      return acceptObservation({ convertedType: targetCarrier }, [
+      return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected call argument borrows into the selected target pointer carrier" },
       ]);
     }
     const optionElement = rustOptionElementCarrier(targetCarrier);
     if (optionElement !== undefined) {
       if (isRustNullishSourceCarrier(sourceCarrier)) {
-        return acceptObservation({ convertedType: targetCarrier }, [
+        return acceptRustPolicy({ convertedType: targetCarrier }, [
           { message: "rust selected nullish argument maps to the selected Option carrier" },
         ]);
       }
       if (rustTargetTypeRefEquals(sourceCarrier, optionElement) ||
         (sourceNode !== undefined && optionElement.kind === "source-primitive" &&
           sourceLiteralIsRepresentableAsPrimitive(sourceNode, optionElement.name, context))) {
-        return acceptObservation({ convertedType: targetCarrier }, [
+        return acceptRustPolicy({ convertedType: targetCarrier }, [
           { message: "rust selected value argument maps to the selected Option element carrier" },
         ]);
       }
     }
     if (sourceCarrier === undefined) {
-      return acceptObservation({}, [
+      return acceptRustPolicy({}, [
         { message: "rust deferred unavailable source carrier to independent post-check operation-input validation" },
       ]);
     }
@@ -1747,7 +1659,7 @@ function mapRustCheckedConversion(
     ...(conversion === undefined ? {} : { conversion }),
     resultCarrier: targetCarrier,
   };
-  const operation: TargetOperationFact = {
+  const operation: RustTargetOperationSelection = {
     operationId,
     operationKind: "operator",
     targetOperation: identity ? "identity" : "runtime-conversion",
@@ -1763,7 +1675,8 @@ function mapRustCheckedConversion(
     ? "rust selected assertion identity conversion"
     : `rust selected assertion conversion '${conversion!.id}'` }];
   context.facts.set(request.expression, rustTargetOperationFactKey, fact, evidence);
-  return acceptObservation({ convertedType: targetCarrier, operation }, evidence);
+  context.facts.set(request.expression, rustSelectedOperationKey, operation, evidence);
+  return acceptRustPolicy({ convertedType: targetCarrier, operation }, evidence);
 }
 
 function targetTypeContainsSelectedParameter(
@@ -1795,11 +1708,11 @@ function mapProviderCheckedOperation(
   expression: ExtensionFactSubject,
   identity: ProviderDeclarationIdentity,
   operationKind: RustProviderOperationRow["operationKind"],
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
   sourceReceiver: ExtensionFactSubject | undefined,
   sourceArguments: readonly ExtensionFactSubject[],
-): ExtensionObservation<CheckedOperationMappingResult> {
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const selection = selectRustProviderOperation(options.providerRows, identity, operationKind);
   if (selection.kind === "missing") {
     return rejectSelectedOperation(expression, context, "RUST_PROVIDER_OPERATION_NOT_MAPPED", `No Rust operation row matches selected provider declaration '${providerIdentityText(identity)}' as ${operationKind}.`);
@@ -1822,7 +1735,7 @@ function finalizeProviderOperationFromSubjects(
   template: RustProviderOperationTemplate,
   sourceReceiver: ExtensionFactSubject | undefined,
   sourceArguments: readonly ExtensionFactSubject[],
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
   const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
@@ -1844,40 +1757,42 @@ function finalizeProviderOperationFromSubjects(
 function acceptRustOperation(
   subject: ExtensionFactSubject,
   fact: RustTargetOperationFact,
-  context: ExtensionObservationContext,
-  provenance: NonNullable<TargetOperationFact["provenance"]>,
+  context: RustOperationPolicyContext,
+  provenance: NonNullable<RustTargetOperationSelection["provenance"]>,
   resultType: TargetTypeRef | undefined = rustTargetOperationResultCarrier(fact),
-): ExtensionObservation<CheckedOperationMappingResult> {
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const evidence = [{ message: `rust selected operation ${fact.operationId}` }];
   context.facts.set(subject, rustTargetOperationFactKey, fact, evidence);
-  return acceptObservation({
-    operation: {
-      operationId: fact.operationId,
-      operationKind: genericOperationKind(fact),
-      targetOperation: rustTargetOperationText(fact),
-      ...(resultType === undefined ? {} : { resultType }),
-      provenance,
-    },
+  const operation: RustTargetOperationSelection = {
+    operationId: fact.operationId,
+    operationKind: genericOperationKind(fact),
+    targetOperation: rustTargetOperationText(fact),
+    ...(resultType === undefined ? {} : { resultType }),
+    provenance,
+  };
+  context.facts.set(subject, rustSelectedOperationKey, operation, evidence);
+  return acceptRustPolicy({
+    operation,
     ...(resultType === undefined ? {} : { resultType }),
     provenance,
   }, evidence);
 }
 
 function acceptDeclarationOperation(
-  operationKind: TargetOperationFact["operationKind"],
-): ExtensionObservation<CheckedOperationMappingResult> {
-  return acceptObservation({
+  operationKind: RustTargetOperationSelection["operationKind"],
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  return acceptRustPolicy({
     operation: genericOperation(`tsonic.rust.declaration.${operationKind}`, operationKind, "declaration-only"),
   }, [{ message: "rust declaration-only checked operation" }]);
 }
 
 function rejectSelectedOperation<T>(
   nodeOrSpan: ExtensionFactSubject,
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
   extensionCode: string,
   message: string,
-): ExtensionObservation<T> {
-  return rejectObservation({
+): RustPolicySelection<T> {
+  return rejectRustPolicy({
     extensionId: context.extensionId,
     extensionCode,
     numericCode: 0,
@@ -1915,7 +1830,7 @@ function providerOperationId(row: RustProviderOperationRow): string {
   ].map(segment).join("")}`;
 }
 
-function elementProvenance(request: CheckedElementAccessMappingRequest): NonNullable<TargetOperationFact["provenance"]> {
+function elementProvenance(request: RustCheckedElementSelectionInput): NonNullable<RustTargetOperationSelection["provenance"]> {
   return {
     sourceExpression: request.expression,
     sourceReceiver: request.receiver,
@@ -1926,29 +1841,29 @@ function elementProvenance(request: CheckedElementAccessMappingRequest): NonNull
 }
 
 function sourceOperationId(
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
   declaration: Node,
   kind: string,
 ): string {
-  const ast = context.compiler.ast;
+  const ast = context.ast;
   const fileName = ast.getFileName(ast.getSourceFile(declaration));
   return `tsonic.rust.source.${kind}:${fileName}:${ast.pos(declaration)}:${ast.end(declaration)}`;
 }
 
-function isDeclarationFileSubject(subject: ExtensionFactSubject, context: ExtensionObservationContext): boolean {
+function isDeclarationFileSubject(subject: ExtensionFactSubject, context: RustOperationPolicyContext): boolean {
   const node = asNode(subject, context);
-  return node !== undefined && context.compiler.ast.getFileName(context.compiler.ast.getSourceFile(node)).endsWith(".d.ts");
+  return node !== undefined && context.ast.getFileName(context.ast.getSourceFile(node)).endsWith(".d.ts");
 }
 
 function selectedDeclarationIsCallable(
   subject: ExtensionFactSubject | undefined,
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
 ): boolean {
   const declaration = asNode(subject, context);
   if (declaration === undefined) {
     return false;
   }
-  const kind = context.compiler.ast.kindName(declaration);
+  const kind = context.ast.kindName(declaration);
   return kind === "KindMethodDeclaration" ||
     kind === "KindMethodSignature" ||
     kind === "KindCallSignature" ||
@@ -1958,13 +1873,13 @@ function selectedDeclarationIsCallable(
 
 function genericOperation(
   operationId: string,
-  operationKind: TargetOperationFact["operationKind"],
+  operationKind: RustTargetOperationSelection["operationKind"],
   targetOperation: string,
-): TargetOperationFact {
+): RustTargetOperationSelection {
   return { operationId, operationKind, targetOperation };
 }
 
-function genericOperationKind(fact: RustTargetOperationFact): TargetOperationFact["operationKind"] {
+function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperationSelection["operationKind"] {
   switch (fact.kind) {
     case "provider-operation":
       return fact.abi.operationKind;
@@ -2017,25 +1932,25 @@ function isCopyProvenCarrier(carrier: TargetTypeRef): boolean {
 function sourceLiteralIsRepresentableAsPrimitive(
   node: Node,
   primitive: Extract<TargetTypeRef, { readonly kind: "source-primitive" }>["name"],
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
 ): boolean {
-  const selected = context.factResolver.resolve(node, targetOperationFactKey);
-  return selectedSourceLiteralIsRepresentable(node, primitive, context.compiler.ast, selected);
+  const selected = context.facts.getSelectedTargetOperator(node);
+  return selectedSourceLiteralIsRepresentable(node, primitive, context.ast, selected?.operationId);
 }
 
 function normalizeSelectedLiteralCarrier(
   subject: ExtensionFactSubject | undefined,
   actual: TargetTypeRef | undefined,
   expected: TargetTypeRef | undefined,
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const node = asNode(subject, context);
   if (node === undefined || expected === undefined) {
     return actual;
   }
-  if (context.compiler.ast.kindName(node) === "KindStringLiteral") {
-    const variant = options.sourceTypes.enumVariantForLiteral(expected, context.compiler.ast.text(node));
+  if (context.ast.kindName(node) === "KindStringLiteral") {
+    const variant = options.sourceTypes.enumVariantForLiteral(expected, context.ast.text(node));
     if (variant !== undefined) {
       const fact: RustTargetOperationFact = {
         kind: "source-enum-member",
@@ -2046,7 +1961,7 @@ function normalizeSelectedLiteralCarrier(
       context.facts.set(node, rustTargetOperationFactKey, fact, [
         { message: "rust selected source enum literal" },
       ]);
-      context.facts.set(node, runtimeCarrierFactKey, { carrier: expected }, [
+      context.facts.set(node, rustRuntimeCarrierKey, { carrier: expected }, [
         { message: "rust selected source enum literal carrier" },
       ]);
       return expected;
@@ -2058,10 +1973,10 @@ function normalizeSelectedLiteralCarrier(
   if (!sourceLiteralIsRepresentableAsPrimitive(node, expected.name, context)) {
     return actual;
   }
-  context.facts.set(node, runtimeCarrierFactKey, { carrier: expected }, [
+  context.facts.set(node, rustRuntimeCarrierKey, { carrier: expected }, [
     { message: "rust selected numeric literal carrier from checked peer/target evidence" },
   ]);
-  const selected = context.factResolver.resolve(node, targetOperationFactKey);
+  const selected = context.facts.getSelectedTargetOperator(node);
   if (selected?.operationId === rustPostCheckUnaryMinusOperationId) {
     context.facts.set(node, rustTargetOperationFactKey, {
       kind: "operator-token",
@@ -2083,7 +1998,7 @@ function normalizeSelectedArgumentCarrier(
   subject: ExtensionFactSubject | undefined,
   actual: TargetTypeRef | undefined,
   expected: TargetTypeRef | undefined,
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const literal = normalizeSelectedLiteralCarrier(subject, actual, expected, context, options);
@@ -2091,7 +2006,7 @@ function normalizeSelectedArgumentCarrier(
     return literal;
   }
   const node = asNode(subject, context);
-  const kind = node === undefined ? "" : context.compiler.ast.kindName(node);
+  const kind = node === undefined ? "" : context.ast.kindName(node);
   return kind === "KindArrowFunction" || kind === "KindFunctionExpression"
     ? expected
     : actual;
@@ -2099,7 +2014,7 @@ function normalizeSelectedArgumentCarrier(
 
 function selectedArgumentCompatibility(
   subjects: readonly ExtensionFactSubject[],
-  context: ExtensionObservationContext,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): NonNullable<Parameters<typeof selectJsSurfaceOperation>[0]["argumentCompatibility"]> {
   return (expected, actual, index) => {
@@ -2108,11 +2023,11 @@ function selectedArgumentCompatibility(
     if (node === undefined) {
       return undefined;
     }
-    if (context.compiler.ast.kindName(node) === "KindStringLiteral" &&
-      options.sourceTypes.enumVariantForLiteral(expected, context.compiler.ast.text(node)) !== undefined) {
+    if (context.ast.kindName(node) === "KindStringLiteral" &&
+      options.sourceTypes.enumVariantForLiteral(expected, context.ast.text(node)) !== undefined) {
       return 1;
     }
-    const kind = context.compiler.ast.kindName(node);
+    const kind = context.ast.kindName(node);
     if (expected.kind === "function-pointer" &&
       (kind === "KindArrowFunction" || kind === "KindFunctionExpression")) {
       return 1;

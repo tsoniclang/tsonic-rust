@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { argumentPassingFactKey, selectedTargetSignatureFactKey, targetOperationFactKey } from "@tsonic/tsts";
 import {
   acmeFilesPackage,
   acmePlatformPackage,
@@ -8,12 +7,21 @@ import {
   artifactText,
   compileRust,
   createRustSession,
-  checkRustSession,
   rustSourceDiagnostics,
 } from "./helpers/rust-session.mjs";
 import { createRustProviderPackage } from "../dist/index.js";
 import { collectRustProviderSemantics } from "../dist/source/provider-packages/index.js";
-import { Node_Expression } from "../dist/common/source-ast.js";
+
+function providerContext(selectedCapabilities) {
+  return {
+    project: { entryPoint: "src/index.ts", targets: [{ id: "rust" }] },
+    projectDirectory: "/src",
+    target: { id: "rust", options: {} },
+    targetPack: { id: "rust" },
+    selectedCapabilities,
+    selectedSurfaces: [],
+  };
+}
 
 test("provider call lowers to the mapped Rust operation with cargo dependency", () => {
   const packages = [acmeFilesPackage()];
@@ -39,7 +47,7 @@ export function load(path: string): string {
 
 test("provider call records selected signature and operation facts by identity", () => {
   const packages = [acmeFilesPackage()];
-  const harness = createRustSession({
+  const compiled = compileRust({
     packages,
     files: {
       "index.ts": `
@@ -51,9 +59,11 @@ export function load(path: string): string {
 `,
     },
   });
-  const extensionHost = checkRustSession(harness);
-  const { ast } = harness.session;
-  const sourceFile = harness.session.getSourceFile("/src/index.ts");
+  assert.deepEqual(compiled.result.diagnostics, []);
+  const { source, translationContext } = compiled;
+  const { ast } = source;
+  const sourceFile = source.sourceFiles.find((file) => ast.getFileName(file) === "/src/index.ts");
+  assert.ok(sourceFile);
   let callNode;
   const visit = (node) => {
     if (ast.kindName(node) === "KindCallExpression") {
@@ -63,17 +73,17 @@ export function load(path: string): string {
   };
   visit(sourceFile);
 
-  const selected = extensionHost.facts.get(callNode, selectedTargetSignatureFactKey);
+  const selected = translationContext.facts.getSelectedTargetCall(callNode);
   assert.equal(selected.member.id, "tsonic.rust.provider.10:acme-files47:tsonic.rust.provider-package.acme-files.binding5:1.0.010:acme.files11:@acme/files21:@acme/files::readText");
   assert.equal(selected.providerDeclaration.exportId, "@acme/files::readText");
-  const operation = extensionHost.facts.get(callNode, targetOperationFactKey);
+  const operation = translationContext.facts.getSelectedTargetOperation(callNode);
   assert.equal(operation.operationId, selected.member.id);
   assert.equal(operation.operationKind, "method");
   assert.equal(operation.targetOperation, "acme_files::read_text");
 });
 
 test("provider call argument passing facts preserve exact Rust row modes", () => {
-  const harness = createRustSession({
+  const compiled = compileRust({
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
@@ -88,23 +98,28 @@ export function modes(value: Vector, factor: int32): int32 {
 `,
     },
   });
-  const extensionHost = checkRustSession(harness);
-  const { ast } = harness.session;
-  const sourceFile = harness.session.getSourceFile("/src/index.ts");
+  assert.deepEqual(compiled.result.diagnostics, []);
+  const { source, translationContext } = compiled;
+  const { ast } = source;
+  const sourceFile = source.sourceFiles.find((file) => ast.getFileName(file) === "/src/index.ts");
+  assert.ok(sourceFile);
   const modes = new Map();
   const visit = (node) => {
     if (ast.kindName(node) === "KindCallExpression") {
-      const name = ast.text(Node_Expression(node));
-      modes.set(name, ast.arguments(node).map((argument) =>
-        argument === undefined ? undefined : extensionHost.facts.get(argument, argumentPassingFactKey)?.mode));
+      const selection = translationContext.facts.getSelectedTargetCall(node);
+      const exportId = selection?.providerDeclaration?.exportId;
+      if (exportId !== undefined) {
+        modes.set(exportId, ast.arguments(node).map((argument) =>
+          argument === undefined ? undefined : translationContext.facts.getArgumentPassingFact(argument)?.mode));
+      }
     }
     ast.forEachChild(node, (child) => child && visit(child));
   };
   visit(sourceFile);
 
-  assert.deepEqual(modes.get("magnitude"), ["borrow-shared"]);
-  assert.deepEqual(modes.get("scale"), ["borrow-mut", "by-value"]);
-  assert.deepEqual(modes.get("consume"), ["by-value"]);
+  assert.deepEqual(modes.get("@acme/vectors::magnitude"), ["borrow-shared"]);
+  assert.deepEqual(modes.get("@acme/vectors::scale"), ["borrow-mut", "by-value"]);
+  assert.deepEqual(modes.get("@acme/vectors::consume"), ["by-value"]);
 });
 
 test("provider static property, constructor, instance property, and indexer lower by identity facts", () => {
@@ -138,7 +153,7 @@ export function storeProbe(): int32 {
   assert.match(text, /store\.get\(2\)/u);
 });
 
-test("unmapped provider operation fails closed during checked source mapping", () => {
+test("source checking remains target-neutral for an unmapped Rust provider operation", () => {
   const strippedPackage = acmePlatformPackage({ includeHomeDir: false });
   const harness = createRustSession({
     packages: [strippedPackage],
@@ -153,24 +168,28 @@ export function homeDir(): string {
     },
   });
   const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /No Rust operation row matches selected provider declaration 'tsonic\.rust\.provider-package\.acme-platform\.binding::acme\.platform::@acme\/platform::Env::homeDir' as property/u);
+  assert.equal(diagnostics, "");
 });
 
 test("unmapped provider operations block backend artifact handoff", () => {
   const strippedPackage = acmePlatformPackage({ includeHomeDir: false });
-  assert.throws(() => compileRust({
-      packages: [strippedPackage],
-      files: {
-        "index.ts": `
+  const { result } = compileRust({
+    packages: [strippedPackage],
+    files: {
+      "index.ts": `
 import { Env } from "@acme/platform";
 
 export function homeDir(): string {
   return Env.homeDir;
 }
 `,
-      },
-    }), /TypeScript diagnostics:[\s\S]*No Rust operation row matches selected provider declaration 'tsonic\.rust\.provider-package\.acme-platform\.binding::acme\.platform::@acme\/platform::Env::homeDir' as property/u);
+    },
+  });
+
+  assert.deepEqual(result.artifacts, []);
+  assert.equal(result.diagnostics.length, 1);
+  assert.equal(result.diagnostics[0].code, "RUST_PROVIDER_OPERATION_NOT_MAPPED");
+  assert.match(result.diagnostics[0].message, /No Rust operation row matches selected provider declaration 'tsonic\.rust\.provider-package\.acme-platform\.binding::acme\.platform::@acme\/platform::Env::homeDir' as property/u);
 });
 
 test("provider packages contribute cargo path dependencies through runtime contributions", () => {
@@ -207,7 +226,7 @@ test("provider paths and named carriers materialize before facts reach the backe
     crates: [],
   });
 
-  const semantics = collectRustProviderSemantics([providerPackage]);
+  const semantics = collectRustProviderSemantics(providerContext([providerPackage]));
   assert.equal(semantics.operations[0].target.path, "acme_runtime::api::create");
   assert.deepEqual(semantics.operations[0].resultCarrier, {
     kind: "target-specific",
@@ -233,10 +252,10 @@ test("conflicting provider carrier paths fail before operation facts are recorde
   });
 
   assert.throws(
-    () => collectRustProviderSemantics([
+    () => collectRustProviderSemantics(providerContext([
       packageWithPath("acme-first", "@acme/first", "acme_first::Shared"),
       packageWithPath("acme-second", "@acme/second", "acme_second::Shared"),
-    ]),
+    ])),
     /conflicting target paths 'acme_first::Shared' and 'acme_second::Shared'/u,
   );
 });

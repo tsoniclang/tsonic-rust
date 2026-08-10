@@ -1,5 +1,6 @@
-import { defineExtensionFactKey } from "@tsonic/tsts";
-import type { ExtensionFactKey, TargetTypeRef } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
+import { defineRustPlanKey } from "../../policy/keys.js";
+import type { RustPlanKey } from "../../policy/keys.js";
 import type {
   RustBinaryOperator,
   RustOperatorToken,
@@ -362,88 +363,58 @@ function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: Rus
   return closedMetadataEquals(left, right);
 }
 
-export const rustTargetOperationFactKey: ExtensionFactKey<RustTargetOperationFact> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "targetOperation",
-  equals: rustTargetOperationFactEquals,
-});
+export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
+  defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
 
 
-export const rustOptionWrapFactKey: ExtensionFactKey<{ readonly wrap: boolean }> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "optionWrap",
-  equals: (left, right) => left.wrap === right.wrap,
-});
+export const rustOptionWrapFactKey: RustPlanKey<{ readonly wrap: boolean }> =
+  defineRustPlanKey("optionWrap", (left, right) => left.wrap === right.wrap);
 
 export interface RustSourceBindingFact {
   readonly sourceName: string;
   readonly fileName: string;
 }
 
-export const rustSourceBindingFactKey: ExtensionFactKey<RustSourceBindingFact> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "sourceBinding",
-  equals: closedMetadataEquals,
-});
+export const rustSourceBindingFactKey: RustPlanKey<RustSourceBindingFact> =
+  defineRustPlanKey("sourceBinding", closedMetadataEquals);
 
 // Formal source-use facts: mutation is recorded per declaration subject at
 // semantics finalization; the backend never scans for writes.
-export const rustMutatedBindingFactKey: ExtensionFactKey<{ readonly mutated: true }> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "mutatedBinding",
-  equals: () => true,
-});
+export const rustMutatedBindingFactKey: RustPlanKey<{ readonly mutated: true }> =
+  defineRustPlanKey("mutatedBinding", () => true);
 
 // Referent mutation: the value behind the binding is written (field/element
 // writes, &mut borrows, mutating receiver methods). Owned bindings need
 // `let mut`; reference-typed bindings do not.
-export const rustMutatedReferentFactKey: ExtensionFactKey<{ readonly mutated: true }> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "mutatedReferent",
-  equals: () => true,
-});
+export const rustMutatedReferentFactKey: RustPlanKey<{ readonly mutated: true }> =
+  defineRustPlanKey("mutatedReferent", () => true);
 
-export const rustSelfModeFactKey: ExtensionFactKey<{ readonly mode: "ref" | "mut-ref" }> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "selfMode",
-  equals: (left, right) => left.mode === right.mode,
-});
+export const rustSelfModeFactKey: RustPlanKey<{ readonly mode: "ref" | "mut-ref" }> =
+  defineRustPlanKey("selfMode", (left, right) => left.mode === right.mode);
 
-export const rustUnionVariantsFactKey: ExtensionFactKey<{ readonly variants: readonly { readonly name: string; readonly literal: string }[] }> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "unionVariants",
-  equals: closedMetadataEquals,
-});
+export const rustUnionVariantsFactKey: RustPlanKey<{ readonly variants: readonly { readonly name: string; readonly literal: string }[] }> =
+  defineRustPlanKey("unionVariants", closedMetadataEquals);
 
 export interface RustAsyncFunctionFact {
   readonly isAsync: true;
   readonly outputCarrier: TargetTypeRef;
 }
 
-export const rustAsyncFunctionFactKey: ExtensionFactKey<RustAsyncFunctionFact> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "asyncFunction",
-  equals: closedMetadataEquals,
-});
+export const rustAsyncFunctionFactKey: RustPlanKey<RustAsyncFunctionFact> =
+  defineRustPlanKey("asyncFunction", closedMetadataEquals);
 
 export interface RustSourceParameterAbiFact {
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
 }
 
-export const rustSourceParameterAbiFactKey: ExtensionFactKey<RustSourceParameterAbiFact> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "sourceParameterAbi",
-  equals: closedMetadataEquals,
-});
+export const rustSourceParameterAbiFactKey: RustPlanKey<RustSourceParameterAbiFact> =
+  defineRustPlanKey("sourceParameterAbi", closedMetadataEquals);
 
 // Declarations whose lowering returns TsonicResult<T>: they throw, or they
 // transitively call fallible operations outside a try boundary.
-export const rustFallibleFactKey: ExtensionFactKey<{ readonly fallible: true }> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "fallible",
-  equals: () => true,
-});
+export const rustFallibleFactKey: RustPlanKey<{ readonly fallible: true }> =
+  defineRustPlanKey("fallible", () => true);
 
 export interface RustSourceCallEffectsFact {
   readonly invocation: "infallible" | "fallible";
@@ -451,8 +422,5 @@ export interface RustSourceCallEffectsFact {
 }
 
 // Total post-fixpoint effects for an exact selected project-source call.
-export const rustSourceCallEffectsFactKey: ExtensionFactKey<RustSourceCallEffectsFact> = defineExtensionFactKey({
-  extensionId: rustExtensionId,
-  name: "sourceCallEffects",
-  equals: closedMetadataEquals,
-});
+export const rustSourceCallEffectsFactKey: RustPlanKey<RustSourceCallEffectsFact> =
+  defineRustPlanKey("sourceCallEffects", closedMetadataEquals);

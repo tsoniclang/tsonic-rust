@@ -1,5 +1,6 @@
-import type { Node, TargetOperationFact, TargetTypeRef } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import type { AstReader } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import { Node_Operand } from "../../common/source-ast.js";
 import {
   rustPostCheckUnaryMinusOperationId,
@@ -15,13 +16,13 @@ export function selectedSourceLiteralIsRepresentable(
   node: Node,
   primitive: SourcePrimitiveName,
   ast: AstReader,
-  selectedOperation: TargetOperationFact | undefined,
+  selectedOperationId: string | undefined,
 ): boolean {
   const kind = ast.kindName(node);
   if (primitive === "bool") {
     return kind === "KindTrueKeyword" || kind === "KindFalseKeyword";
   }
-  const value = selectedNumericLiteralValue(node, ast, selectedOperation);
+  const value = selectedNumericLiteralValue(node, ast, selectedOperationId);
   if (value === undefined) {
     return false;
   }
@@ -46,7 +47,7 @@ export function selectedSourceLiteralIsRepresentable(
 function selectedNumericLiteralValue(
   node: Node,
   ast: AstReader,
-  selectedOperation: TargetOperationFact | undefined,
+  selectedOperationId: string | undefined,
 ): number | undefined {
   const kind = ast.kindName(node);
   if (kind === "KindNumericLiteral") {
@@ -56,15 +57,15 @@ function selectedNumericLiteralValue(
   if (kind !== "KindPrefixUnaryExpression") {
     return undefined;
   }
-  const sign = selectedOperation?.operationId === rustPostCheckUnaryMinusOperationId
+  const sign = selectedOperationId === rustPostCheckUnaryMinusOperationId
     ? -1
-    : selectedOperation?.operationId === rustPostCheckUnaryPlusOperationId
+    : selectedOperationId === rustPostCheckUnaryPlusOperationId
       ? 1
       : undefined;
   if (sign === undefined) {
     return undefined;
   }
-  const operand = Node_Operand(node);
+  const operand = Node_Operand(ast, node);
   if (operand === undefined || ast.kindName(operand) !== "KindNumericLiteral") {
     return undefined;
   }

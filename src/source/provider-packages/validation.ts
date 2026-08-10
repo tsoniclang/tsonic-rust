@@ -5,8 +5,8 @@ import type {
   ProviderSignatureDeclaration,
   ProviderTypeExpression,
   ProviderTypeParameterDeclaration,
-  TargetTypeRef,
 } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import type { RustProviderPackageDefinition } from "./index.js";
 import type {
   RustProviderConstantArgument,
@@ -81,7 +81,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.displayName, "display name", fail);
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
-    "id", "displayName", "version", "requiredSurfaces", "modules", "operations", "crates",
+    "id", "displayName", "version", "requiredSurfaces", "modules", "types", "operations", "crates",
     "aliasImports", "carrierPaths",
   ], "package", fail);
 
@@ -140,7 +140,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   validateCrates(definition, fail);
   validateAliases(definition, fail);
   validateCarrierPaths(definition, fail);
-  validateTargetIdentities(definition, exportsById, fail);
+  validateTypeRelations(definition, exportsById, fail);
   validateOperationRows(definition, exportsById, membersById, signaturesById, fail);
 }
 
@@ -293,6 +293,13 @@ function walkType(
         fail(`${where} uses source primitive '${type.name}' with no Rust source carrier`);
       }
       return;
+    case "source-global":
+      requireExactKeys(record, ["kind", "name", "typeArguments"], where, fail);
+      requireNonEmpty(type.name, `${where}.name`, fail);
+      for (const argument of type.typeArguments ?? []) {
+        walkType(argument, moduleSpecifier, importedExports, exportNamesByModule, `${where}.typeArgument`, fail);
+      }
+      return;
     case "type-parameter":
       requireExactKeys(record, ["kind", "name"], where, fail);
       requireNonEmpty(type.name, `${where}.name`, fail);
@@ -317,15 +324,6 @@ function walkType(
       }
       return;
     }
-    case "target-named":
-      requireExactKeys(record, ["kind", "target", "id", "displayName", "typeArguments", "sourceShape"], where, fail);
-      requireNonEmpty(type.target, `${where}.target`, fail);
-      requireNonEmpty(type.id, `${where}.id`, fail);
-      for (const argument of type.typeArguments ?? []) {
-        walkType(argument, moduleSpecifier, importedExports, exportNamesByModule, `${where}.typeArgument`, fail);
-      }
-      walkType(type.sourceShape, moduleSpecifier, importedExports, exportNamesByModule, `${where}.sourceShape`, fail);
-      return;
     case "array":
       requireExactKeys(record, ["kind", "elementType"], where, fail);
       walkType(type.elementType, moduleSpecifier, importedExports, exportNamesByModule, `${where}.elementType`, fail);
@@ -344,7 +342,8 @@ function walkType(
       }
       return;
     case "function":
-      requireExactKeys(record, ["kind", "parameters", "returnType", "typeParameters"], where, fail);
+      requireExactKeys(record, ["kind", "id", "parameters", "returnType", "typeParameters"], where, fail);
+      requireNonEmpty(type.id, `${where}.id`, fail);
       walkParameters(type.parameters, moduleSpecifier, importedExports, exportNamesByModule, where, fail);
       walkType(type.returnType, moduleSpecifier, importedExports, exportNamesByModule, `${where}.returnType`, fail);
       walkTypeParameters(type.typeParameters, moduleSpecifier, importedExports, exportNamesByModule, `${where}.typeParameters`, fail);
@@ -355,20 +354,15 @@ function walkType(
         fail(`${where}.value is not a supported provider literal`);
       }
       return;
-    case "opaque":
-      requireExactKeys(record, ["kind", "id", "displayName", "sourceShape"], where, fail);
-      requireNonEmpty(type.id, `${where}.id`, fail);
-      walkType(type.sourceShape, moduleSpecifier, importedExports, exportNamesByModule, `${where}.sourceShape`, fail);
-      return;
   }
 }
 
 function validateExportDeclaration(exported: ProviderExportDeclaration, fail: Fail): void {
   requireExactKeys(asRecord(exported), [
-    "id", "name", "exportName", "exportKind", "sourceTypeFamily", "kind", "targetIdentity", "type",
+    "id", "name", "exportName", "exportKind", "sourceTypeFamily", "kind", "type",
     "typeParameters", "heritage", "members", "signatures", "documentation",
   ], `export '${String((exported as { readonly id?: unknown }).id)}'`, fail);
-  if (!["type", "value", "namespace", "function", "class", "interface", "enum", "opaque"].includes(exported.kind)) {
+  if (!["type", "value", "namespace", "function", "class", "interface", "enum"].includes(exported.kind)) {
     fail(`export '${exported.id}' has unsupported declaration kind '${String(exported.kind)}'`);
   }
   if (exported.exportKind !== undefined && exported.exportKind !== "named" && exported.exportKind !== "default") {
@@ -380,11 +374,6 @@ function validateExportDeclaration(exported: ProviderExportDeclaration, fail: Fa
     if (!Number.isSafeInteger(exported.sourceTypeFamily.typeArgumentCount) || exported.sourceTypeFamily.typeArgumentCount < 0) {
       fail(`${exported.id}.sourceTypeFamily.typeArgumentCount must be a non-negative safe integer`);
     }
-  }
-  if (exported.targetIdentity !== undefined) {
-    requireExactKeys(asRecord(exported.targetIdentity), ["target", "id", "displayName", "packageName", "packageVersion"], `${exported.id}.targetIdentity`, fail);
-    requireNonEmpty(exported.targetIdentity.target, `${exported.id}.targetIdentity.target`, fail);
-    requireNonEmpty(exported.targetIdentity.id, `${exported.id}.targetIdentity.id`, fail);
   }
   for (const heritage of exported.heritage ?? []) {
     requireExactKeys(asRecord(heritage), ["kind", "type"], `${exported.id}.heritage`, fail);
@@ -492,21 +481,25 @@ function validateCarrierPaths(definition: RustProviderPackageDefinition, fail: F
   }
 }
 
-function validateTargetIdentities(
+function validateTypeRelations(
   definition: RustProviderPackageDefinition,
   exportsById: ReadonlyMap<string, ExportRecord>,
   fail: Fail,
 ): void {
-  for (const { declaration } of exportsById.values()) {
-    const identity = declaration.targetIdentity;
-    if (identity === undefined) {
-      continue;
+  const relatedExports = new Set<string>();
+  for (const relation of definition.types ?? []) {
+    requireExactKeys(asRecord(relation), ["exportId", "targetTypeId"], "type relation", fail);
+    requireNonEmpty(relation.exportId, "type relation export id", fail);
+    requireNonEmpty(relation.targetTypeId, `target type id for '${relation.exportId}'`, fail);
+    if (!exportsById.has(relation.exportId)) {
+      fail(`type relation targets undeclared exportId '${relation.exportId}'`);
     }
-    if (identity.target !== "rust") {
-      fail(`export '${declaration.id}' target identity belongs to '${identity.target}', expected 'rust'`);
+    if (relatedExports.has(relation.exportId)) {
+      fail(`export '${relation.exportId}' has more than one Rust target type relation`);
     }
-    if (!builtInTargetCarrierIds.has(identity.id) && definition.carrierPaths?.[identity.id] === undefined) {
-      fail(`export '${declaration.id}' target identity '${identity.id}' has no closed Rust carrier path`);
+    relatedExports.add(relation.exportId);
+    if (!builtInTargetCarrierIds.has(relation.targetTypeId) && definition.carrierPaths?.[relation.targetTypeId] === undefined) {
+      fail(`export '${relation.exportId}' target type '${relation.targetTypeId}' has no closed Rust carrier path`);
     }
   }
 }

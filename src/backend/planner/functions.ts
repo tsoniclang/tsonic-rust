@@ -25,7 +25,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
-  const nameNode = Node_Name(node);
+  const nameNode = Node_Name(ast, node);
   const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const isExported = ast.hasModifierKind(node, "export");
   // Naming policy: user-authored names are preserved verbatim; items with
@@ -72,7 +72,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       mutable: context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
     });
   }
-  const returnTypeNode = Node_Type(node);
+  const returnTypeNode = Node_Type(ast, node);
   if (returnTypeNode === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),

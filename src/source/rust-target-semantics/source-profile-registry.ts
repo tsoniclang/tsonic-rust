@@ -1,7 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import {
-  normalizeTargetSourceProfileSegment,
-  tsonicSourceProfileVirtualDirectory,
+  isTsonicSourceProfileDeclarationPath,
 } from "@tsonic/target-api";
 import {
   rustJsSourceProfileOwnerId,
@@ -11,32 +10,39 @@ import {
 export type RustSourceProfileKind = "native" | "js";
 
 export interface RustSourceProfileRegistry {
-  registerSourceFile(sourceFile: SourceFile, ast: AstReader, jsEnabled: boolean): void;
   profileForNode(node: Node, ast: AstReader): RustSourceProfileKind | undefined;
 }
 
-export function createRustSourceProfileRegistry(): RustSourceProfileRegistry {
-  const candidates = new Map<RustSourceProfileKind, Set<SourceFile>>();
+export function createRustSourceProfileRegistry(
+  sourceFiles: readonly SourceFile[],
+  ast: AstReader,
+  jsEnabled: boolean,
+): RustSourceProfileRegistry {
+  const sourceFileByProfile = new Map<RustSourceProfileKind, SourceFile>();
+  const ambiguousProfiles = new Set<RustSourceProfileKind>();
+  for (const sourceFile of sourceFiles) {
+    const profile = sourceProfileForFileName(ast.getFileName(sourceFile), jsEnabled);
+    if (profile === undefined || ambiguousProfiles.has(profile)) {
+      continue;
+    }
+    const existing = sourceFileByProfile.get(profile);
+    if (existing !== undefined && existing !== sourceFile) {
+      sourceFileByProfile.delete(profile);
+      ambiguousProfiles.add(profile);
+      continue;
+    }
+    sourceFileByProfile.set(profile, sourceFile);
+  }
   return {
-    registerSourceFile(sourceFile, ast, jsEnabled) {
-      const profile = sourceProfileForFileName(ast.getFileName(sourceFile), jsEnabled);
-      if (profile !== undefined) {
-        const files = candidates.get(profile) ?? new Set<SourceFile>();
-        files.add(sourceFile);
-        candidates.set(profile, files);
-      }
-    },
-    profileForNode(node, ast) {
-      const sourceFile = ast.getSourceFile(node);
+    profileForNode(node, nodeAst) {
+      const sourceFile = nodeAst.getSourceFile(node);
       if (sourceFile === undefined) {
         return undefined;
       }
-      for (const [profile, files] of candidates) {
-        if (files.size === 1 && files.has(sourceFile)) {
-          return profile;
-        }
-      }
-      return undefined;
+      const profile = sourceProfileForFileName(nodeAst.getFileName(sourceFile), jsEnabled);
+      return profile !== undefined && sourceFileByProfile.get(profile) === sourceFile
+        ? profile
+        : undefined;
     },
   };
 }
@@ -45,15 +51,19 @@ function sourceProfileForFileName(
   fileName: string,
   jsEnabled: boolean,
 ): RustSourceProfileKind | undefined {
-  const directory = `/${tsonicSourceProfileVirtualDirectory}/`;
-  const nativeOwner = normalizeTargetSourceProfileSegment(rustSourceProfileOwnerId);
-  const jsOwner = normalizeTargetSourceProfileSegment(rustJsSourceProfileOwnerId);
-  if (!jsEnabled && fileName.endsWith(`${directory}${nativeOwner}/rust-globals.d.ts`)) {
+  const normalizedFileName = fileName.split("\\").join("/");
+  const nativeOwner = isTsonicSourceProfileDeclarationPath(
+    normalizedFileName,
+    rustSourceProfileOwnerId,
+  );
+  if (!jsEnabled && nativeOwner && normalizedFileName.endsWith("/rust-globals.d.ts")) {
     return "native";
   }
-  if (jsEnabled && (
-    fileName.endsWith(`${directory}${nativeOwner}/js-globals.d.ts`) ||
-    fileName.endsWith(`${directory}${jsOwner}/js-globals.d.ts`)
+  if (jsEnabled && normalizedFileName.endsWith("/js-globals.d.ts") && (
+    nativeOwner || isTsonicSourceProfileDeclarationPath(
+      normalizedFileName,
+      rustJsSourceProfileOwnerId,
+    )
   )) {
     return "js";
   }

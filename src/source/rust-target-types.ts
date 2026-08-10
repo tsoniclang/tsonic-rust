@@ -1,6 +1,9 @@
-import type { SourcePrimitiveKind, TargetTypeRef } from "@tsonic/tsts";
+import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type { RustPrimitiveTypeName } from "../common/rust-syntax.js";
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../common/closed-metadata.js";
+import type { TargetTypeRef } from "../policy/types.js";
+
+export type { TargetTypeRef } from "../policy/types.js";
 
 export type { RustPrimitiveTypeName } from "../common/rust-syntax.js";
 

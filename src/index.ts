@@ -49,16 +49,16 @@ export {
 export { printCargoManifest } from "./print/cargo-manifest-printer.js";
 export { createCargoToolchain } from "./toolchain/cargo-toolchain.js";
 export {
-  createRustTargetSemanticsExtension,
-  recordRustFactsBeforeFinalization,
+  analyzeRustProgram,
   rustTargetSemanticsExtensionId,
 } from "./source/rust-target-semantics/index.js";
 export {
   collectRustProviderOperationRows,
-  rustProviderOperationsMappersOf,
-  rustProviderOperationsMapperKind,
+  collectRustProviderSemantics,
+  rustProviderPolicyContributionsOf,
+  rustProviderPolicyContributionKind,
   createRustProviderPackage,
-  createRustProviderPackageBindingProvider,
+  createRustProviderPackageSourceProvider,
 } from "./source/provider-packages/index.js";
 export type {
   RustProviderCrateDefinition,
@@ -67,6 +67,9 @@ export type {
   RustProviderOperationRow,
   RustProviderPackageDefinition,
   RustProviderPackageImplementation,
+  RustProviderPolicyContribution,
+  RustProviderTypeDefinition,
+  RustProviderTypeRow,
 } from "./source/provider-packages/index.js";
 export { rustExtensionId, rustTargetOperationFactKey } from "./source/rust-facts/keys.js";
 export type {
@@ -126,4 +129,3 @@ export function createTsonicPlugin(): import("@tsonic/target-api").TsonicTargetP
     },
   };
 }
-export type { RustProviderOperationsMapper } from "./source/provider-packages/index.js";
