@@ -25,6 +25,7 @@ export function fakeAstReader(sourceFiles = []) {
     pos: (node) => node.pos,
     end: (node) => node.end,
     getFileName: (sourceFile) => sourceFile?.fileName ?? "",
+    getPath: (sourceFile) => sourceFile?.fileName ?? "",
     getSourceFile: (node) => sourceFileByNode.get(node) ?? node?.sourceFile ?? node,
     getSourceText: (sourceFile) => sourceFile.text ?? "",
     isDeclarationFile: () => false,
