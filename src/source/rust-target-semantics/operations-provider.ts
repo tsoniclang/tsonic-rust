@@ -379,9 +379,9 @@ export function selectRustCheckedCall(
     context,
     request.sourceSelectedDeclaration,
     [
-    request.sourceSelectedSignature,
-    request.sourceCalleeDeclaration,
-    request.sourceCalleeSymbol,
+      { subject: request.sourceSelectedSignature, precision: "exact" },
+      { subject: request.sourceCalleeDeclaration, precision: "declaration" },
+      { subject: request.sourceCalleeSymbol, precision: "declaration" },
     ],
   );
   if (providerEvidence.kind === "conflict") {
@@ -755,7 +755,10 @@ export function selectRustCheckedValue(
   const providerEvidence = resolveSelectedProviderDeclaration(
     context,
     request.sourceSelectedDeclaration,
-    [request.sourceSelectedSymbol, request.expression],
+    [
+      { subject: request.sourceSelectedSymbol, precision: "exact" },
+      { subject: request.expression, precision: "exact" },
+    ],
   );
   if (providerEvidence.kind === "missing") {
     return acceptRustPolicy({ kind: "source" }, [
@@ -1333,7 +1336,7 @@ export function selectRustCheckedPropertyAccess(
     context,
     request.sourceSelectedDeclaration,
     [
-    request.sourceSelectedSymbol,
+      { subject: request.sourceSelectedSymbol, precision: "exact" },
     ],
   );
   if (providerEvidence.kind === "conflict") {
@@ -1440,7 +1443,7 @@ export function selectRustCheckedElementAccess(
     context,
     request.sourceSelectedDeclaration,
     [
-    request.sourceSelectedSymbol,
+      { subject: request.sourceSelectedSymbol, precision: "exact" },
     ],
   );
   if (providerEvidence.kind === "conflict") {

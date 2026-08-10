@@ -41,6 +41,28 @@ export function probe(dir: string, file: string): boolean {
   assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_node = \{ path = ".*rust-nodejs\/rust\/crates\/tsonic_rust_node" \}/u);
 });
 
+test("node assert.ok overloads lower through exact selected signatures", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { ok } from "node:assert";
+
+export function verify(value: boolean): void {
+  ok(value);
+  ok(value, "value must be true");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /tsonic_rust_node::assert::ok\(value, None\)\?/u);
+  assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\?/u);
+});
+
 test("declared-but-unsupported node APIs diagnose deterministically", async () => {
   const options = {
     surfaces: ["js"],

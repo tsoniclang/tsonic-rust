@@ -23,10 +23,15 @@ export type RustSelectedProviderDeclarationResolution =
   | { readonly kind: "selected"; readonly identity: ProviderDeclarationIdentity }
   | { readonly kind: "conflict"; readonly identities: readonly ProviderDeclarationIdentity[] };
 
+export interface RustProviderDeclarationCorroboration {
+  readonly subject: ExtensionFactSubject | undefined;
+  readonly precision: "exact" | "declaration";
+}
+
 export function resolveSelectedProviderDeclaration(
   context: RustSourcePolicyContext,
   selectedSubject: ExtensionFactSubject | undefined,
-  corroboratingSubjects: readonly (ExtensionFactSubject | undefined)[] = [],
+  corroborations: readonly RustProviderDeclarationCorroboration[] = [],
 ): RustSelectedProviderDeclarationResolution {
   if (selectedSubject === undefined) {
     return { kind: "missing" };
@@ -40,19 +45,29 @@ export function resolveSelectedProviderDeclaration(
   }
   const identities: ProviderDeclarationIdentity[] = [selectedFact];
   let selected: ProviderDeclarationIdentity = selectedFact;
-  for (const subject of corroboratingSubjects) {
-    const fact = context.facts.get(subject, providerVirtualDeclarationFactKey);
+  for (const corroboration of corroborations) {
+    const fact = context.facts.get(corroboration.subject, providerVirtualDeclarationFactKey);
     if (fact === undefined) {
       continue;
     }
     identities.push(fact);
-    const merged = mergeProviderDeclarationIdentities(selected, fact);
+    const candidate = corroboration.precision === "declaration"
+      ? providerDeclarationIdentityWithoutSignature(fact)
+      : fact;
+    const merged = mergeProviderDeclarationIdentities(selected, candidate);
     if (merged === undefined) {
       return { kind: "conflict", identities };
     }
     selected = merged;
   }
   return { kind: "selected", identity: selected };
+}
+
+function providerDeclarationIdentityWithoutSignature(
+  identity: ProviderDeclarationIdentity,
+): ProviderDeclarationIdentity {
+  const { signatureId: _signatureId, ...declarationIdentity } = identity;
+  return declarationIdentity;
 }
 
 export function mergeProviderDeclarationIdentities(
