@@ -55,20 +55,20 @@ export function printRustItem(item: RustItem): string {
     case "impl": {
       const rendered = item.functions.map((fn) => {
         const selfPrefix = fn.selfParam === undefined ? "" : fn.selfParam === "ref" ? "&self" : "&mut self";
-        const params = fn.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`).join(", ");
-        const allParams = selfPrefix.length === 0 ? params : params.length === 0 ? selfPrefix : `${selfPrefix}, ${params}`;
+        const params = fn.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`);
+        const allParams = selfPrefix.length === 0 ? params : [selfPrefix, ...params];
         const returnSuffix = fn.fallible === true
           ? ` -> rt::TsonicResult<${fn.returnType === undefined ? "()" : printRustType(fn.returnType)}>`
           : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
-        const header = `${fnAttrs}    ${fn.pub ? "pub " : ""}fn ${fn.name}(${allParams})${returnSuffix} {`;
+        const header = `${fnAttrs}${printRustFunctionHeader(`    ${fn.pub ? "pub " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
         const body = printRustBlockStatements(fn.body, 2);
         return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
       }).join("\n\n");
       return `impl ${item.name} {\n${rendered}\n}`;
     }
     case "function": {
-      const params = item.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`).join(", ");
+      const params = item.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`);
       const generics = item.typeParams === undefined || item.typeParams.length === 0
         ? ""
         : `<${item.typeParams.map(printRustTypeParameter).join(", ")}>`;
@@ -76,11 +76,39 @@ export function printRustItem(item: RustItem): string {
         ? ` -> rt::TsonicResult<${item.returnType === undefined ? "()" : printRustType(item.returnType)}>`
         : item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
       const attrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
-      const header = `${attrs}${item.pub ? "pub " : ""}${item.isAsync === true ? "async " : ""}fn ${item.name}${generics}(${params})${returnSuffix} {`;
+      const header = `${attrs}${printRustFunctionHeader(
+        `${item.pub ? "pub " : ""}${item.isAsync === true ? "async " : ""}fn `,
+        item.name,
+        generics,
+        params,
+        returnSuffix,
+        0,
+      )}`;
       const body = printRustBlockStatements(item.body, 1);
       return body.length === 0 ? `${header}}` : `${header}\n${body}\n}`;
     }
   }
+}
+
+function printRustFunctionHeader(
+  prefix: string,
+  name: string,
+  generics: string,
+  parameters: readonly string[],
+  returnSuffix: string,
+  depth: number,
+): string {
+  const flat = `${prefix}${name}${generics}(${parameters.join(", ")})${returnSuffix} {`;
+  if (flat.length <= rustFormatWidth || parameters.length === 0) {
+    return flat;
+  }
+  const parameterIndent = indentText(depth + 1);
+  const closingIndent = indentText(depth);
+  return [
+    `${prefix}${name}${generics}(`,
+    ...parameters.map((parameter) => `${parameterIndent}${parameter},`),
+    `${closingIndent})${returnSuffix} {`,
+  ].join("\n");
 }
 
 function printRustTypeParameter(parameter: import("../backend/rust-ast/nodes.js").RustTypeParameter): string {
@@ -208,14 +236,19 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       const tryBody = printRustBlockStatements(statement.body, depth + 1);
       const okTail = `${indentText(depth + 1)}Ok(())`;
       const catchBody = printRustBlockStatements(statement.catchBody, depth + 1);
+      const catchClause = catchBody.length === 0
+        ? `${indent}let _ = __try;`
+        : [
+            `${indent}if let Err(${statement.catchBinding}) = __try {`,
+            catchBody,
+            `${indent}}`,
+          ].join("\n");
       const lines = [
         `${indent}let __try: rt::TsonicResult<()> = (|| {`,
         ...(tryBody.length === 0 ? [] : [tryBody]),
         okTail,
         `${indent}})();`,
-        `${indent}if let Err(${statement.catchBinding}) = __try {`,
-        ...(catchBody.length === 0 ? [] : [catchBody]),
-        `${indent}}`,
+        catchClause,
       ];
       return lines.join("\n");
     }

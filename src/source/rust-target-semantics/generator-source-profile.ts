@@ -12,6 +12,7 @@ export interface RustGeneratorSourceCallRequest {
   readonly memberName: string;
   readonly receiverCarrier?: TargetTypeRef;
   readonly selectedParameterCount: number;
+  readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
 }
 
 export interface RustGeneratorSourcePropertyRequest {
@@ -84,7 +85,25 @@ export function selectRustGeneratorSourceCall(
     }, [protocol.returnType]);
   }
   if (request.memberName === "throw") {
-    return rejected("Generator.throw requires a closed Rust thrown-value protocol that is not part of the current safe generator carrier.");
+    const errorCarrier = request.argumentCarriers[0];
+    if (request.selectedParameterCount !== 1 || request.argumentCarriers.length !== 1 ||
+      errorCarrier?.kind !== "target-named" || errorCarrier.id !== "rust.runtime.JsError") {
+      return rejected("Generator.throw requires one exact closed Rust JsError carrier.");
+    }
+    return resolved({
+      kind: "provider-operation",
+      operationId: `tsonic.rust.generator.throw.${protocol.kind}`,
+      operationKind: "method",
+      target: {
+        form: "receiver-method",
+        name: "throw_value",
+        mutatesReceiver: true,
+      },
+      resultCarrier,
+      parameterCarriers: [errorCarrier],
+      isAsync: protocol.kind === "async",
+      isFallible: true,
+    }, [errorCarrier]);
   }
   return rejected(`The exact selected ${request.ownerName}.${request.memberName} signature has no Rust generator operation.`);
 }

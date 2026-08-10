@@ -62,7 +62,8 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, rustPublicName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
-import { isRustBoolCarrier, isRustIntegerCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBoolCarrier, isRustIntegerCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
   planRustPromotedStorageLocation,
@@ -362,7 +363,8 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       if (generator === undefined || fact === undefined ||
         fact.generatorDeclaration !== generator.declaration ||
         !rustTargetTypeRefEquals(fact.yieldType, generator.protocol.yieldType) ||
-        !rustTargetTypeRefEquals(fact.resumeType, generator.protocol.nextType)) {
+        (fact.kind === "value" &&
+          !rustTargetTypeRefEquals(fact.resultType, generator.protocol.nextType))) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.generator-yield",
@@ -371,12 +373,37 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         return undefined;
       }
       if (fact.kind === "delegate") {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, node),
-          "rust.backend.generator-delegation",
-          "Delegated yield requires a finalized Rust generator delegation plan.",
-        ));
-        return undefined;
+        const delegated = getRustGeneratorProtocol(fact.delegatedCarrier);
+        const operand = Node_Expression(context.input.ast, node);
+        if (delegated === undefined || operand === undefined ||
+          !rustTargetTypeRefEquals(delegated.yieldType, generator.protocol.yieldType) ||
+          !rustTargetTypeRefEquals(delegated.nextType, generator.protocol.nextType) ||
+          !rustTargetTypeRefEquals(delegated.returnType, fact.resultType) ||
+          (generator.protocol.kind === "sync" && delegated.kind !== "sync")) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node),
+            "rust.backend.generator-delegation",
+            "Delegated yield requires one compatible finalized Rust generator protocol.",
+          ));
+          return undefined;
+        }
+        if (!requireRustCarrierRequirements(delegated.nextType, ["default"], node, context) ||
+          !requireRustCarrierRequirements(delegated.returnType, ["clone"], node, context)) {
+          return undefined;
+        }
+        const delegate = planExpression(operand, context);
+        if (delegate === undefined) {
+          return undefined;
+        }
+        return {
+          kind: "await",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: generator.controllerName },
+            method: delegated.kind === "sync" ? "yield_from" : "yield_from_async",
+            args: [delegate],
+          },
+        };
       }
       const operand = Node_Expression(context.input.ast, node);
       const value = operand === undefined

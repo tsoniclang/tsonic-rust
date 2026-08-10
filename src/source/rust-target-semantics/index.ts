@@ -1041,11 +1041,31 @@ function resolveExpressionCarrierUncached(
         return undefined;
       }
       const yieldType = generator.yieldType;
-      const resumeType = generator.nextType;
       const operand = source.operand?.expression;
       const delegatedCarrier = source.yieldKind === "delegate" && operand !== undefined
         ? resolveExpressionCarrier(walk, operand, sourceFile, undefined)
         : undefined;
+      const delegatedProtocol = getRustGeneratorProtocol(delegatedCarrier);
+      if (source.yieldKind === "delegate" &&
+        (delegatedProtocol === undefined ||
+          !rustTargetTypeRefEquals(delegatedProtocol.yieldType, generator.yieldType) ||
+          !rustTargetTypeRefEquals(delegatedProtocol.nextType, generator.nextType) ||
+          (generator.kind === "sync" && delegatedProtocol.kind !== "sync"))) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_GENERATOR_DELEGATION_PROTOCOL_NOT_CLOSED",
+          "The checked delegated yield has no compatible closed Rust generator protocol.",
+          expression,
+          ["target.capability=rust.generator.delegation"],
+        );
+        return undefined;
+      }
+      const resultType = source.yieldKind === "value"
+        ? generator.nextType
+        : delegatedProtocol?.returnType;
+      if (resultType === undefined) {
+        return undefined;
+      }
       if (operand !== undefined) {
         resolveExpressionCarrier(
           walk,
@@ -1058,10 +1078,10 @@ function resolveExpressionCarrierUncached(
         generatorDeclaration,
         kind: source.yieldKind,
         yieldType,
-        resumeType,
+        resultType,
         ...(delegatedCarrier === undefined ? {} : { delegatedCarrier }),
       }, [{ message: "rust checked yield" }]);
-      return setCarrierFact(walk, expression, resumeType);
+      return setCarrierFact(walk, expression, resultType);
     }
     case KindParenthesizedExpression: {
       const inner = Node_Expression(walk.context.ast, expression);

@@ -140,3 +140,87 @@ export async function read(): Promise<int32> {
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /generator\.resume\(\)\.await/u);
 });
+
+test("generic generators publish exact static obligations and pass Cargo", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function* exchange<A, B, C>(initial: A, completed: B): Generator<A, B, C> {
+  const _next: C = yield initial;
+  return completed;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /exchange<A: 'static, B: 'static, C: 'static>/u);
+  validateGeneratedProject("generic-generator", result.artifacts);
+});
+
+test("yield star forwards yields, next values, and completion", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "generator_delegation" } },
+    files: {
+      "index.ts": `
+${generatorTypes}
+import { check } from "@acme/testing";
+
+function* inner(): Generator<int32, int32, int32> {
+  const resumed: int32 = yield 3;
+  yield resumed;
+  return 9;
+}
+
+function* outer(): Generator<int32, int32, int32> {
+  return yield* inner();
+}
+
+export function main(): void {
+  const generator = outer();
+  const first = generator.next();
+  if (!first.done) check(first.value === 3);
+  const second = generator.next(7);
+  if (!second.done) check(second.value === 7);
+  const completed = generator.next(0);
+  if (completed.done) check(completed.value === 9);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /yield_from\(inner\(\)\)\.await/u);
+  const run = validateGeneratedProject("generator-delegation", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("generator throw closes through the exact Rust error lane", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+${generatorTypes}
+
+function* values(): Generator<int32, int32, int32> {
+  yield 1;
+  return 2;
+}
+
+export function close(): void {
+  const generator = values();
+  generator.next();
+  try {
+    generator.throw(new Error("stop"));
+  } catch {}
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /generator\.throw_value\(rt::JsError::error/u);
+  validateGeneratedProject("generator-throw", result.artifacts);
+});

@@ -11,7 +11,7 @@ import { unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 
-export type RustGenericRequirement = "clone" | "static";
+export type RustGenericRequirement = "clone" | "default" | "static";
 
 export interface RustGenericRequirementSet {
   readonly declared: ReadonlySet<string>;
@@ -81,6 +81,9 @@ export function applyRustGenericRequirements(
       bounds: [
         ...(required.has("clone")
           ? [{ kind: "trait" as const, path: "Clone" }]
+          : []),
+        ...(required.has("default")
+          ? [{ kind: "trait" as const, path: "Default" }]
           : []),
         ...(required.has("static")
           ? [{ kind: "lifetime" as const, name: "static" }]

@@ -448,7 +448,7 @@ export function selectRustCheckedCall(
       kind: "provider-operation",
       operationId: "tsonic.rust.error.constructor",
       operationKind: "constructor",
-      target: { form: "call", path: "rt::JsError::new", argModes: ["ref"] },
+      target: { form: "call", path: "rt::JsError::error", argModes: ["ref"] },
       parameterCarriers: [rustStringTargetType()],
       resultCarrier,
       isAsync: false,
@@ -468,6 +468,8 @@ export function selectRustCheckedCall(
       memberName: selectedSourceMember.memberName,
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       selectedParameterCount: request.sourceSelectedSignatureParameters.length,
+      argumentCarriers: request.arguments.map((argument) =>
+        resolveRustTargetTypeRef(argument, context, options)),
     });
     if (generator.kind === "rejected") {
       return rejectSelectedOperation(

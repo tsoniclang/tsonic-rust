@@ -531,7 +531,7 @@ export interface RustYieldFact {
   readonly generatorDeclaration: Node;
   readonly kind: "value" | "delegate";
   readonly yieldType: TargetTypeRef;
-  readonly resumeType: TargetTypeRef;
+  readonly resultType: TargetTypeRef;
   readonly delegatedCarrier?: TargetTypeRef;
 }
 
@@ -540,7 +540,7 @@ export const rustYieldFactKey: RustPlanKey<RustYieldFact> =
     left.generatorDeclaration === right.generatorDeclaration &&
     left.kind === right.kind &&
     rustTargetTypeRefEquals(left.yieldType, right.yieldType) &&
-    rustTargetTypeRefEquals(left.resumeType, right.resumeType) &&
+    rustTargetTypeRefEquals(left.resultType, right.resultType) &&
     (left.delegatedCarrier === undefined
       ? right.delegatedCarrier === undefined
       : right.delegatedCarrier !== undefined &&

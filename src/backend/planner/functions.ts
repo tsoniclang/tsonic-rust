@@ -17,6 +17,7 @@ import { rustLocationStorageForDeclaration } from "./typed-locations.js";
 import {
   applyRustGenericRequirements,
   createRustGenericRequirementSet,
+  requireRustCarrierRequirements,
   requireRustLocationValueCarrier,
 } from "./generic-requirements.js";
 import {
@@ -103,6 +104,11 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       paramsFailed = true;
       continue;
     }
+    if (generatorFact !== undefined && parameterCarrier !== undefined &&
+      !requireRustCarrierRequirements(parameterCarrier, ["static"], parameter, context)) {
+      paramsFailed = true;
+      continue;
+    }
     const locationStorage = rustLocationStorageForDeclaration(parameter, context);
     if (locationStorage !== undefined &&
       (parameterCarrier === undefined ||
@@ -173,6 +179,14 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     return undefined;
   }
   const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  if (generatorFact !== undefined && ![
+    generatorFact.yieldType,
+    generatorFact.returnType,
+    generatorFact.nextType,
+  ].every((carrier) =>
+    requireRustCarrierRequirements(carrier, ["static"], node, context))) {
+    return undefined;
+  }
   if (generatorFact !== undefined && fallible) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
