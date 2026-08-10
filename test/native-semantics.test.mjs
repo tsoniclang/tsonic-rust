@@ -193,7 +193,7 @@ export function drive(): int32 {
 });
 
 test("flow markers mismatching argument modes fail closed", () => {
-  const { result, extensionHost } = compileRust({
+  assertRustTargetRejection({
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
@@ -207,10 +207,10 @@ export function bad(): int32 {
 }
 `,
     },
-  });
-
-  assert.ok(extensionHost.diagnostics.all().some((diagnostic) =>
-    diagnostic.extensionCode === "RUST_FLOW_MARKER_MISMATCH"));
+  }, [{
+    code: "RUST_FLOW_MARKER_MISMATCH",
+    message: "Flow marker state 'borrowed-shared' does not match the finalized argument mode 'value' for this position.",
+  }]);
 });
 
 test("byref passing markers are rejected deterministically", () => {
@@ -717,7 +717,8 @@ export function forwards(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn forwards\(\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /Ok\(risky\(\)\?\)/u);
+  assert.match(text, /pub fn forwards\(\) -> rt::TsonicResult<i32> \{\n    risky\(\)\n\}/u);
+  assert.doesNotMatch(text, /Ok\(risky\(\)\?\)/u);
 });
 
 test("fallible calls inside closures fail closed", () => {

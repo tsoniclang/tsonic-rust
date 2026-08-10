@@ -109,6 +109,7 @@ import {
   selectRustCheckedIteration,
   selectRustCheckedOperator,
   selectRustCheckedPropertyAccess,
+  selectRustCheckedValue,
 } from "./operations-provider.js";
 import type { RustOperationsProviderOptions } from "./operations-provider.js";
 import { resolveRustTargetTypeRef } from "./target-type-resolution.js";
@@ -247,6 +248,16 @@ function selectExpressionOperation(
   const semantics = walk.context.semantics(sourceFile);
   const context = rustOperationContext(walk, expression);
   const kind = ast.kindName(expression);
+  if (kind === KindIdentifier) {
+    const reference = walk.context.source.navigation.sourceReferenceFor(expression);
+    recordPolicySelection(walk, expression, selectRustCheckedValue({
+      target: "rust",
+      expression,
+      ...(reference?.symbol === undefined ? {} : { sourceSelectedSymbol: reference.symbol }),
+      ...(reference?.declaration === undefined ? {} : { sourceSelectedDeclaration: reference.declaration }),
+    }, context, walk.operationOptions));
+    return;
+  }
   if (kind === "KindRegularExpressionLiteral") {
     const literalText = ast.text(expression);
     const lastSlash = literalText.lastIndexOf("/");
@@ -444,6 +455,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     }
   }
   const operationOptions: RustOperationsProviderOptions = {
+    providerExports: providerSemantics.exports,
     providerRows,
     providerTypes: providerSemantics.types,
     providerCarrierPaths: providerSemantics.carrierPaths,
@@ -1188,6 +1200,36 @@ function resolvePostCheckBinaryCarrier(
     }
   }
   if (fact === undefined) {
+    walk.postCheckOperations.delete(expression);
+    if (operatorKind === KindEqualsToken && selectedLeftOperation !== undefined &&
+      !rustTargetOperationIsDirectLocation(selectedLeftFact)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED",
+        "Checked assignment target has no finalized Rust write operation.",
+        expression,
+        [
+          "target.capability=rust.operation.assignment",
+          `source.operatorKind=${operatorKind}`,
+        ],
+      );
+    } else if (left !== undefined && right !== undefined) {
+      const assignment = operatorKind === KindEqualsToken;
+      appendRustDiagnostic(
+        walk,
+        assignment
+          ? "RUST_ASSIGNMENT_CARRIER_UNSUPPORTED"
+          : "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED",
+        assignment
+          ? "Checked assignment has no closed Rust operation for the finalized value carriers."
+          : `Checked binary operator '${operatorKind}' has no closed Rust operation for the finalized operand carriers.`,
+        expression,
+        [
+          `target.capability=rust.operation.${assignment ? "assignment" : "binary"}`,
+          `source.operatorKind=${operatorKind}`,
+        ],
+      );
+    }
     return undefined;
   }
   const resultCarrier = fact.kind === "option-coalesce"
@@ -1240,14 +1282,7 @@ function resolvePostCheckUnaryCarrier(
   const pendingKind = walk.postCheckOperations.get(expression);
   if ((pendingKind !== "unary-minus" && pendingKind !== "unary-plus") ||
     expected?.kind !== "source-primitive" || !isRustNumericCarrier(expected) ||
-    !selectedSourceLiteralIsRepresentable(
-      expression,
-      expected.name,
-      walk.context.ast,
-      pendingKind === "unary-minus"
-        ? rustPostCheckUnaryMinusOperationId
-        : rustPostCheckUnaryPlusOperationId,
-    )) {
+    !selectedSourceLiteralIsRepresentable(expression, expected.name, walk.context.ast)) {
     return undefined;
   }
   const operand = Node_Operand(walk.context.ast, expression);
@@ -1666,9 +1701,7 @@ function projectSourceTypeArgumentHasLiteralProof(
     if (argument === undefined) {
       return false;
     }
-    const selected = walk.context.facts.get(argument, rustSelectedOperationKey) ??
-      walk.context.facts.resolve(argument, rustSelectedOperationKey);
-    if (!selectedSourceLiteralIsRepresentable(argument, target.name, walk.context.ast, selected?.operationId)) {
+    if (!selectedSourceLiteralIsRepresentable(argument, target.name, walk.context.ast)) {
       return false;
     }
     proven = true;

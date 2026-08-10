@@ -1,6 +1,7 @@
 import { TstsSourceProviderContractVersion } from "@tsonic/tsts";
 import type {
   CompilerExtension,
+  ProviderDeclarationKind,
   ProviderDeclarationModel,
   ProviderExportDeclaration,
   ProviderModuleResolution,
@@ -76,6 +77,16 @@ export interface RustProviderTypeRow extends RustProviderTypeDefinition {
 }
 
 export interface RustProviderOperationRow extends RustProviderOperationDefinition {
+  readonly providerPackageId: string;
+  readonly providerId: string;
+  readonly providerVersion: string;
+  readonly providerModuleId: string;
+  readonly moduleSpecifier: string;
+}
+
+export interface RustProviderExportRow {
+  readonly exportId: string;
+  readonly declarationKind: ProviderDeclarationKind;
   readonly providerPackageId: string;
   readonly providerId: string;
   readonly providerVersion: string;
@@ -199,6 +210,7 @@ export function collectRustProviderOperationRows(
 }
 
 export interface RustProviderSemantics {
+  readonly exports: readonly RustProviderExportRow[];
   readonly operations: readonly RustProviderOperationRow[];
   readonly carrierPaths: ReadonlyMap<string, string>;
   readonly types: readonly RustProviderTypeRow[];
@@ -207,6 +219,7 @@ export interface RustProviderSemantics {
 export function collectRustProviderSemantics(
   context: TargetProviderContext,
 ): RustProviderSemantics {
+  const exports: RustProviderExportRow[] = [];
   const operations: RustProviderOperationRow[] = [];
   const carrierPaths = new Map<string, string>();
   const types: RustProviderTypeRow[] = [];
@@ -215,6 +228,19 @@ export function collectRustProviderSemantics(
     const providerId = rustProviderBindingProviderId(definition.id);
     const moduleByExportId = new Map(definition.modules.flatMap((module) =>
       module.exports.map((exported) => [exported.id, module] as const)));
+    for (const module of definition.modules) {
+      for (const exported of module.exports) {
+        exports.push(Object.freeze({
+          exportId: exported.id,
+          declarationKind: exported.kind,
+          providerPackageId: definition.id,
+          providerId,
+          providerVersion: definition.version,
+          providerModuleId: module.providerModuleId,
+          moduleSpecifier: module.moduleSpecifier,
+        }));
+      }
+    }
     const carrierPathRows = definition.carrierPaths ?? {};
     for (const [carrierId, path] of Object.entries(carrierPathRows)) {
       const existing = carrierPaths.get(carrierId);
@@ -253,6 +279,7 @@ export function collectRustProviderSemantics(
     }));
   }
   return {
+    exports: Object.freeze(exports),
     operations: Object.freeze(operations),
     carrierPaths,
     types: Object.freeze(types),

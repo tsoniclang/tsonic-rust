@@ -1,7 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import type { AstReader } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../policy/types.js";
-import { Node_Operand } from "../../common/source-ast.js";
+import {
+  KindMinusToken,
+  KindPlusToken,
+  Node_Operand,
+} from "../../common/source-ast.js";
 import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
@@ -16,13 +20,12 @@ export function selectedSourceLiteralIsRepresentable(
   node: Node,
   primitive: SourcePrimitiveName,
   ast: AstReader,
-  selectedOperationId: string | undefined,
 ): boolean {
   const kind = ast.kindName(node);
   if (primitive === "bool") {
     return kind === "KindTrueKeyword" || kind === "KindFalseKeyword";
   }
-  const value = selectedNumericLiteralValue(node, ast, selectedOperationId);
+  const value = selectedNumericLiteralValue(node, ast);
   if (value === undefined) {
     return false;
   }
@@ -44,10 +47,24 @@ export function selectedSourceLiteralIsRepresentable(
   return range !== undefined && value >= range[0] && value <= range[1];
 }
 
+export function selectedSourceNumericLiteralOperationId(
+  node: Node,
+  ast: AstReader,
+): string | undefined {
+  if (ast.kindName(node) !== "KindPrefixUnaryExpression") {
+    return undefined;
+  }
+  const operatorKind = ast.operatorKindName(node);
+  return operatorKind === KindMinusToken
+    ? rustPostCheckUnaryMinusOperationId
+    : operatorKind === KindPlusToken
+      ? rustPostCheckUnaryPlusOperationId
+      : undefined;
+}
+
 function selectedNumericLiteralValue(
   node: Node,
   ast: AstReader,
-  selectedOperationId: string | undefined,
 ): number | undefined {
   const kind = ast.kindName(node);
   if (kind === "KindNumericLiteral") {
@@ -57,9 +74,10 @@ function selectedNumericLiteralValue(
   if (kind !== "KindPrefixUnaryExpression") {
     return undefined;
   }
-  const sign = selectedOperationId === rustPostCheckUnaryMinusOperationId
+  const operationId = selectedSourceNumericLiteralOperationId(node, ast);
+  const sign = operationId === rustPostCheckUnaryMinusOperationId
     ? -1
-    : selectedOperationId === rustPostCheckUnaryPlusOperationId
+    : operationId === rustPostCheckUnaryPlusOperationId
       ? 1
       : undefined;
   if (sign === undefined) {

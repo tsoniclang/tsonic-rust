@@ -36,10 +36,10 @@ export function mix(a: int32, b: float64): float64 {
   });
   assert.deepEqual(result.artifacts, []);
   assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), [{
-    code: "RUST_CHECKED_OPERATION_NOT_FINALIZED",
-    message: "Checked Rust operation has no finalized target fact after post-check carrier closure.",
+    code: "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED",
+    message: "Checked binary operator 'KindPlusToken' has no closed Rust operation for the finalized operand carriers.",
     evidence: [
-      "target.capability=rust.operation.post-check-finalization",
+      "target.capability=rust.operation.binary",
       "source.operatorKind=KindPlusToken",
     ],
   }]);

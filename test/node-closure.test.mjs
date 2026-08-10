@@ -192,8 +192,8 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn roundtrip\(dir: &str, file: String\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(dir, true\)\.await\?/u);
+  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir, true\)\.await\?/u);
   assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
@@ -214,10 +214,10 @@ export function bad(): void {
   });
   assert.deepEqual(result.artifacts, []);
   assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), [{
-    code: "RUST_CHECKED_OPERATION_NOT_FINALIZED",
-    message: "Checked Rust operation has no finalized target fact after post-check carrier closure.",
+    code: "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED",
+    message: "Checked assignment target has no finalized Rust write operation.",
     evidence: [
-      "target.capability=rust.operation.post-check-finalization",
+      "target.capability=rust.operation.assignment",
       "source.operatorKind=KindEqualsToken",
     ],
   }]);

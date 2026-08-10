@@ -32,8 +32,8 @@ export function probe(dir: string, file: string): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.doesNotMatch(text, /use tsonic_rust_node::path as node_path;/u);
-  assert.match(text, /pub fn probe\(dir: &str, file: &str\)/u);
-  assert.match(text, /tsonic_rust_node::path::join\(&\[dir, file\]\)/u);
+  assert.match(text, /pub fn probe\(dir: String, file: String\)/u);
+  assert.match(text, /tsonic_rust_node::path::join\(&\[dir\.as_str\(\), file\.as_str\(\)\]\)/u);
   assert.match(text, /tsonic_rust_node::path::dirname\(&full\)/u);
   assert.match(text, /tsonic_rust_node::path::basename\(&full, None\)/u);
   assert.match(text, /tsonic_rust_node::os::platform\(\)/u);

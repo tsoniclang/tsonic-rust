@@ -79,3 +79,42 @@ test("fitted multi-argument calls stay horizontal inside assignments", () => {
 
   assert.match(text, /manifest = tsonic_rust_node::fs::read_file_sync_string\("Cargo.toml", "utf8"\)\?;/u);
 });
+
+test("a fitted outer call stays attached to its multiline nested call", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "call",
+                path: "tsonic_rust_js::string::js_len",
+                args: [{
+                  kind: "reference",
+                  expr: {
+                    kind: "call",
+                    path: "tsonic_rust_node::os::platform_with_a_deliberately_long_name",
+                    args: [],
+                  },
+                }],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /usize_to_i32\(tsonic_rust_js::string::js_len\(\n        &tsonic_rust_node/u);
+  assert.doesNotMatch(text, /usize_to_i32\(\n        tsonic_rust_js/u);
+});

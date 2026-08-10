@@ -22,6 +22,8 @@ import type {
   RustCheckedOperationSelectionResult,
   RustCheckedOperatorSelectionInput,
   RustCheckedPropertySelectionInput,
+  RustCheckedValueSelectionInput,
+  RustCheckedValueSelectionResult,
   RustOperationPolicyContext,
   RustPolicySelection,
   RustTargetOperationSelection,
@@ -102,6 +104,7 @@ import {
   resolveSelectedSourceProfileMember,
 } from "./selected-evidence.js";
 import {
+  selectRustProviderExport,
   selectRustProviderOperation,
 } from "./provider-operation-selection.js";
 import {
@@ -115,7 +118,10 @@ import {
 } from "../rust-source-semantics/source-modules.js";
 import type { RustSourceTypeRegistry } from "./source-type-registry.js";
 import type { RustSourceProfileRegistry } from "./source-profile-registry.js";
-import { selectedSourceLiteralIsRepresentable } from "./selected-numeric-literal.js";
+import {
+  selectedSourceLiteralIsRepresentable,
+  selectedSourceNumericLiteralOperationId,
+} from "./selected-numeric-literal.js";
 import type { RustSourceCallableAbiResolver } from "./source-callable-abi.js";
 import {
   selectRustTypedLocationDisposition,
@@ -135,6 +141,7 @@ const sourceCallMarkerByIdentity = new Map(
 );
 
 export interface RustOperationsProviderOptions {
+  readonly providerExports: readonly import("../provider-packages/index.js").RustProviderExportRow[];
   readonly providerRows: readonly RustProviderOperationRow[];
   readonly providerTypes: readonly import("../provider-packages/index.js").RustProviderTypeRow[];
   readonly providerCarrierPaths: ReadonlyMap<string, string>;
@@ -749,6 +756,65 @@ function mapRustSourceMarkerCall(
       sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
     },
   }, evidence);
+}
+
+export function selectRustCheckedValue(
+  request: RustCheckedValueSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedValueSelectionResult> {
+  const providerEvidence = resolveSelectedProviderDeclaration(
+    context,
+    request.sourceSelectedDeclaration,
+    [request.sourceSelectedSymbol, request.expression],
+  );
+  if (providerEvidence.kind === "missing") {
+    return acceptRustPolicy({ kind: "source" }, [
+      { message: "rust source value has no selected provider declaration" },
+    ]);
+  }
+  if (providerEvidence.kind === "conflict") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT",
+      "Checked value carries conflicting selected provider declaration identities.",
+    );
+  }
+  const providerExport = selectRustProviderExport(
+    options.providerExports,
+    providerEvidence.identity,
+  );
+  if (providerExport.kind === "missing") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_SELECTED_PROVIDER_EXPORT_MISSING",
+      "Checked provider value evidence has no matching Rust provider export declaration.",
+    );
+  }
+  if (providerExport.kind === "ambiguous") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_SELECTED_PROVIDER_EXPORT_AMBIGUOUS",
+      "Checked provider value evidence matches more than one Rust provider export declaration.",
+    );
+  }
+  if (providerExport.row.declarationKind !== "value") {
+    return acceptRustPolicy({ kind: "source" }, [
+      { message: `rust selected provider export is ${providerExport.row.declarationKind}, not a direct value` },
+    ]);
+  }
+  return mapProviderCheckedOperation(
+    request.expression,
+    providerEvidence.identity,
+    "property",
+    context,
+    options,
+    undefined,
+    [],
+  );
 }
 
 function mapSelectedRegExpConstruction(
@@ -1909,8 +1975,7 @@ function sourceLiteralIsRepresentableAsPrimitive(
   primitive: Extract<TargetTypeRef, { readonly kind: "source-primitive" }>["name"],
   context: RustOperationPolicyContext,
 ): boolean {
-  const selected = context.facts.getSelectedTargetOperator(node);
-  return selectedSourceLiteralIsRepresentable(node, primitive, context.ast, selected?.operationId);
+  return selectedSourceLiteralIsRepresentable(node, primitive, context.ast);
 }
 
 function normalizeSelectedLiteralCarrier(
@@ -1951,20 +2016,40 @@ function normalizeSelectedLiteralCarrier(
   context.facts.set(node, rustRuntimeCarrierKey, { carrier: expected }, [
     { message: "rust selected numeric literal carrier from checked peer/target evidence" },
   ]);
-  const selected = context.facts.getSelectedTargetOperator(node);
-  if (selected?.operationId === rustPostCheckUnaryMinusOperationId) {
-    context.facts.set(node, rustTargetOperationFactKey, {
+  const numericOperationId = selectedSourceNumericLiteralOperationId(node, context.ast);
+  if (numericOperationId === rustPostCheckUnaryMinusOperationId) {
+    const fact: RustTargetOperationFact = {
       kind: "operator-token",
       operationId: rustPostCheckUnaryMinusOperationId,
       operator: "-",
       resultCarrier: expected,
-    }, [{ message: "rust finalized selected unary-minus literal carrier" }]);
-  } else if (selected?.operationId === rustPostCheckUnaryPlusOperationId) {
-    context.facts.set(node, rustTargetOperationFactKey, {
+    };
+    context.facts.set(node, rustTargetOperationFactKey, fact, [
+      { message: "rust finalized selected unary-minus literal carrier" },
+    ]);
+    context.facts.set(node, rustSelectedOperationKey, {
+      operationId: fact.operationId,
+      operationKind: "operator",
+      targetOperation: rustTargetOperationText(fact),
+      resultType: expected,
+      provenance: { sourceExpression: node },
+    });
+  } else if (numericOperationId === rustPostCheckUnaryPlusOperationId) {
+    const fact: RustTargetOperationFact = {
       kind: "source-conversion",
       operationId: rustPostCheckUnaryPlusOperationId,
       resultCarrier: expected,
-    }, [{ message: "rust finalized selected unary-plus literal carrier" }]);
+    };
+    context.facts.set(node, rustTargetOperationFactKey, fact, [
+      { message: "rust finalized selected unary-plus literal carrier" },
+    ]);
+    context.facts.set(node, rustSelectedOperationKey, {
+      operationId: fact.operationId,
+      operationKind: "operator",
+      targetOperation: rustTargetOperationText(fact),
+      resultType: expected,
+      provenance: { sourceExpression: node },
+    });
   }
   return expected;
 }

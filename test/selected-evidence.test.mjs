@@ -30,6 +30,24 @@ const providerValuePackage = createRustProviderPackage({
   crates: [],
 });
 
+const unsupportedProviderValuePackage = createRustProviderPackage({
+  id: "acme-unsupported-environment",
+  displayName: "Acme unsupported environment",
+  version: "1.0.0",
+  modules: [{
+    moduleSpecifier: "@acme/unsupported-environment",
+    providerModuleId: "acme.unsupported-environment",
+    exports: [{
+      id: "@acme/unsupported-environment::platform",
+      name: "platform",
+      kind: "value",
+      type: { kind: "string" },
+    }],
+  }],
+  operations: [],
+  crates: [],
+});
+
 test("assertion conversions use explicit TSTS evidence and checked runtime helpers", () => {
   const { result } = compileRust({
     files: {
@@ -115,7 +133,8 @@ test("ambiguous tuple indexes do not fall back to source spelling", () => {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 
-export function pick(pair: [int32, int32], index: 0 | 1): int32 {
+export function pick(pair: [int32, int32], flag: boolean): int32 {
+  const index: 0 | 1 = flag ? 0 : 1;
   return pair[index];
 }
 `,
@@ -170,7 +189,7 @@ export function length(value: string | null): number | undefined {
   }]);
 });
 
-test("provider value identifiers fail closed without TSTS-selected value evidence", () => {
+test("provider value identifiers lower only from exact provider declaration evidence", () => {
   const { result } = compileRust({
     packages: [providerValuePackage],
     files: {
@@ -184,11 +203,11 @@ export function currentPlatform(): string {
     },
   });
 
-  assert.deepEqual(result.artifacts, []);
-  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
-    code: "RUST_MISSING_TARGET_FACT",
-    message: "Identifier expression has no finalized project-source binding or selected target value operation. Node kind: KindIdentifier.",
-  }]);
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /pub fn currentPlatform\(\) -> String \{\n    acme_environment::platform\(\)\n\}/u,
+  );
 });
 
 test("a project binding that shadows a provider value remains a proven local", () => {
@@ -207,4 +226,25 @@ export function currentPlatform(platform: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /pub fn currentPlatform\(platform: String\) -> String \{\n    platform\n\}/u);
+});
+
+test("a selected provider value without a target relation fails closed", () => {
+  const { result } = compileRust({
+    packages: [unsupportedProviderValuePackage],
+    files: {
+      "index.ts": `
+import { platform } from "@acme/unsupported-environment";
+
+export function currentPlatform(): string {
+  return platform;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
+    code: "RUST_PROVIDER_OPERATION_NOT_MAPPED",
+    message: "No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.acme-unsupported-environment.binding::acme.unsupported-environment::@acme/unsupported-environment::platform' as property.",
+  }]);
 });

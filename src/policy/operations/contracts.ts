@@ -105,6 +105,17 @@ export interface RustCheckedCallSelectionInput {
   readonly sourceSelectedMethodTypeArguments?: RustSourceSelectedMethodTypeArguments;
 }
 
+export interface RustCheckedValueSelectionInput {
+  readonly target?: "rust";
+  readonly expression: Node;
+  readonly sourceSelectedSymbol?: Symbol;
+  readonly sourceSelectedDeclaration?: Node;
+}
+
+export type RustCheckedValueSelectionResult =
+  | { readonly kind: "source"; readonly operation?: undefined }
+  | RustCheckedOperationSelectionResult;
+
 export type RustCheckedCallSelectionResult =
   | { readonly kind: "source" }
   | {

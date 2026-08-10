@@ -227,6 +227,15 @@ test("provider paths and named carriers materialize before facts reach the backe
   });
 
   const semantics = collectRustProviderSemantics(providerContext([providerPackage]));
+  assert.deepEqual(semantics.exports, [{
+    exportId: "acme.materialized::create",
+    declarationKind: "function",
+    providerPackageId: "acme-materialized",
+    providerId: "tsonic.rust.provider-package.acme-materialized.binding",
+    providerVersion: "1.0.0",
+    providerModuleId: "acme.materialized",
+    moduleSpecifier: "@acme/materialized",
+  }]);
   assert.equal(semantics.operations[0].target.path, "acme_runtime::api::create");
   assert.deepEqual(semantics.operations[0].resultCarrier, {
     kind: "target-specific",

@@ -535,6 +535,14 @@ function validateOperationRows(
       (row.memberId !== undefined && signature.memberId !== row.memberId))) {
       fail(`row '${label}' targets signatureId '${row.signatureId}' outside its selected declaration`);
     }
+    if (row.memberId === undefined && row.operationKind === "property" &&
+      exported?.declaration.kind !== "value") {
+      fail(`row '${label}' declares a provider value operation for non-value export kind '${String(exported?.declaration.kind)}'`);
+    }
+    if (row.memberId === undefined && exported?.declaration.kind === "value" &&
+      row.operationKind !== "property") {
+      fail(`row '${label}' must represent provider value export '${row.exportId}' as a property operation`);
+    }
     const rowKey = [row.exportId, row.memberId ?? "", row.signatureId ?? "", row.operationKind].join("\u0000");
     if (rowKeys.has(rowKey)) {
       fail(`duplicate operation selector row '${label}' for '${row.operationKind}'`);

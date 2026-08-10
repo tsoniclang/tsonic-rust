@@ -2,6 +2,7 @@ import type {
   ProviderDeclarationIdentity,
 } from "@tsonic/tsts";
 import type {
+  RustProviderExportRow,
   RustProviderOperationRow,
 } from "../provider-packages/index.js";
 
@@ -16,6 +17,11 @@ export type RustProviderOperationSelection =
   | { readonly kind: "selected"; readonly row: RustProviderOperationRow }
   | { readonly kind: "missing" }
   | { readonly kind: "ambiguous"; readonly rows: readonly RustProviderOperationRow[] };
+
+export type RustProviderExportSelection =
+  | { readonly kind: "selected"; readonly row: RustProviderExportRow }
+  | { readonly kind: "missing" }
+  | { readonly kind: "ambiguous"; readonly rows: readonly RustProviderExportRow[] };
 
 export function rustProviderOperationOwnerMatches(
   row: RustProviderOwnerIdentity,
@@ -50,6 +56,25 @@ export function selectRustProviderOperation(
 
   const groupCandidates = identityCandidates.filter((row) => row.signatureId === undefined);
   return uniqueSelection(groupCandidates);
+}
+
+export function selectRustProviderExport(
+  rows: readonly RustProviderExportRow[],
+  identity: ProviderDeclarationIdentity,
+): RustProviderExportSelection {
+  if (identity.exportId === undefined) {
+    return { kind: "missing" };
+  }
+  const candidates = rows.filter((row) =>
+    rustProviderOperationOwnerMatches(row, identity) &&
+    row.exportId === identity.exportId);
+  if (candidates.length === 0) {
+    return { kind: "missing" };
+  }
+  if (candidates.length === 1) {
+    return { kind: "selected", row: candidates[0]! };
+  }
+  return { kind: "ambiguous", rows: candidates };
 }
 
 function uniqueSelection(rows: readonly RustProviderOperationRow[]): RustProviderOperationSelection {

@@ -345,7 +345,7 @@ export function caller(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn sum\(xs: &\[i32\]\) -> i32 \{/u);
+  assert.match(text, /pub fn sum\(xs: &\[i32\]\) -> rt::TsonicResult<i32> \{/u);
   assert.match(text, /for x in xs\.iter\(\)\.copied\(\) \{/u);
   assert.match(text, /total \+ tsonic_rust_runtime::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
   assert.match(text, /sum\(&values\)/u);
