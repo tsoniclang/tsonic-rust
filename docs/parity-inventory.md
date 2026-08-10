@@ -25,6 +25,9 @@ the blocked section with the contract each requires.
   oracle-proven subset; test, replace, split, search, global match with
   null coalescing; regexp property reads.
 - Math: floor, ceil, trunc, abs, sqrt, pow (exact f64 semantics).
+- Number.isNaN, Number.isFinite, Number.isInteger and Number.isSafeInteger
+  over exact numeric carriers; non-number unknown values fail closed without
+  coercion.
 - JSON: parse, stringify, stringify with null replacer and closed numeric
   or string space, over the closed JsValue carrier.
 - Map, Set: constructors, get/set/has/delete/add, size, SameValueZero.
@@ -72,11 +75,8 @@ the blocked section with the contract each requires.
   (the call and fallibility lowering are implemented).
 - Object.keys/values/entries, Object.assign, Object.hasOwn, Object.is:
   requires closed-shape reflection rows over the JsValue carrier.
-- Number.isNaN, Number.isFinite, Number.isInteger, Number.isSafeInteger:
-  requires Number predicate rows in the js runtime.
-- Number.parseInt/parseFloat, isNaN/isFinite/isInteger/isSafeInteger,
-  toFixed and formatting: requires numeric parsing, predicate, and
-  formatting rows in the js runtime.
+- Number.parseInt/parseFloat, toFixed and formatting: requires exact numeric
+  parsing and formatting rows in the js runtime.
 - console.log/error/warn/info: requires a console/stdio carrier contract.
 - Date UTC setters, remaining string methods, and local-time getters and
   setters:

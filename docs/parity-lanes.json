@@ -483,8 +483,7 @@
   {
     "area": "Number",
     "lane": "Number.isNaN / isFinite / isInteger / isSafeInteger",
-    "classification": "blocked",
-    "contract": "requires Number predicate rows in the js runtime"
+    "classification": "implemented"
   },
   {
     "area": "Number",
