@@ -235,7 +235,7 @@ test("selected source operation identity is never reconstructed through checker 
   const allowed = new Set([
     "target-type-resolution.ts|resolveRustTargetTypeSyntax|getAuthoredTypeFactSubjects",
     "target-type-resolution.ts|resolveRustTargetTypeSyntax|getSymbolAtLocation",
-    "target-type-resolution.ts|resolveRustTargetTypeSyntax|getPrimarySymbolDeclaration",
+    "target-type-resolution.ts|resolveSourceTypeParameter|getPrimarySymbolDeclaration",
     "target-type-resolution.ts|resolveReferencedDeclarationType|getSymbolAtLocation",
     "target-type-resolution.ts|resolveReferencedDeclarationType|getSymbolDeclarations",
     "target-type-resolution.ts|sourceParameterTypeIsReadonlyArray|getSymbolAtLocation",

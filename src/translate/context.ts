@@ -14,12 +14,19 @@ import {
 } from "../policy/model.js";
 import { isDenseDataArray } from "../common/closed-metadata.js";
 import { analyzeRustProgram } from "../source/rust-target-semantics/index.js";
+import {
+  createRustTranslationArtifactGraph,
+} from "./artifacts/index.js";
+import type {
+  RustTranslationArtifactGraph,
+} from "./artifacts/index.js";
 
 export interface RustTranslationContext extends TargetCompileInput {
   readonly backend: TargetBackendContext;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustSemanticModel;
+  readonly artifacts: RustTranslationArtifactGraph;
   readonly diagnostics: TargetDiagnostic[];
   readonly analysis: {
     getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
@@ -41,6 +48,7 @@ export function createRustTranslationContext(
       : [],
   );
   const facts = new RustSemanticModel(input.source.sourceFacts);
+  const artifacts = createRustTranslationArtifactGraph(ast);
   const diagnostics: TargetDiagnostic[] = [];
   const context: RustTranslationContext = {
     ...input,
@@ -48,6 +56,7 @@ export function createRustTranslationContext(
     ast,
     sourceFiles,
     facts,
+    artifacts,
     diagnostics,
     analysis: Object.freeze({
       getEnumMemberConstant(node: Node) {

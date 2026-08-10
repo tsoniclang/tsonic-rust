@@ -19,6 +19,9 @@ import {
   createRustGenericRequirementSet,
   requireRustLocationValueCarrier,
 } from "./generic-requirements.js";
+import {
+  publishRustSourceCallableContract,
+} from "./source-callable-contracts.js";
 
 export function planFunctionDeclaration(node: Node, outerContext: RustPlanContext): RustItem | undefined {
   const { ast } = outerContext.input;
@@ -196,7 +199,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     typeParams,
     genericRequirements,
   );
-  return {
+  const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
     pub: isExported,
@@ -210,6 +213,9 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ...(returnType === undefined ? {} : { returnType }),
     body: applyFallibleShape(applyTailReturn(body, returnType !== undefined), fallible, returnType !== undefined),
   };
+  return publishRustSourceCallableContract(node, item, context)
+    ? item
+    : undefined;
 }
 
 // Fallible lowering: returns wrap Ok, tails wrap Ok, and unit bodies end

@@ -148,6 +148,52 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("typed-location requirements propagate through transitive source calls", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "storage.ts": `
+import { allocatePointer } from "@tsonic/core/lang.js";
+import type { Pointer } from "@tsonic/core/types.js";
+
+export function allocateValue<T>(value: T): Pointer<T> {
+  return allocatePointer(value);
+}
+`,
+      "middle.ts": `
+import type { Pointer } from "@tsonic/core/types.js";
+import { allocateValue } from "./storage.js";
+
+export function forwardValue<U>(value: U): Pointer<U> {
+  return allocateValue(value);
+}
+`,
+      "index.ts": `
+import type { Pointer } from "@tsonic/core/types.js";
+import { forwardValue } from "./middle.js";
+
+export function publicValue<V>(value: V): Pointer<V> {
+  return forwardValue(value);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/storage.rs"),
+    /pub fn allocateValue<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u,
+  );
+  assert.match(
+    artifactText(result, "src/middle.rs"),
+    /pub fn forwardValue<U: Clone \+ 'static>\(value: U\) -> rt::Location<U>/u,
+  );
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /pub fn publicValue<V: Clone \+ 'static>\(value: V\) -> rt::Location<V>/u,
+  );
+  validateGeneratedProject("typed-location-transitive-contract-lib", result.artifacts);
+});
+
 test("promoted storage preserves selected mutating provider receivers", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

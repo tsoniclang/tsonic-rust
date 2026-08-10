@@ -32,13 +32,28 @@ export function requireRustLocationValueCarrier(
   node: Node,
   context: RustPlanContext,
 ): boolean {
+  return requireRustCarrierRequirements(
+    carrier,
+    ["clone", "static"],
+    node,
+    context,
+  );
+}
+
+export function requireRustCarrierRequirements(
+  carrier: TargetTypeRef,
+  required: readonly RustGenericRequirement[],
+  node: Node,
+  context: RustPlanContext,
+): boolean {
   const requirements = context.genericRequirements;
-  if (requirements === undefined || requirements.declared.size === 0) {
+  if (requirements === undefined || requirements.declared.size === 0 ||
+    required.length === 0) {
     return true;
   }
   const result = requireCarrier(
     carrier,
-    new Set(["clone", "static"]),
+    new Set(required),
     requirements,
   );
   if (result) {
@@ -47,7 +62,7 @@ export function requireRustLocationValueCarrier(
   context.diagnostics.push(unsupportedConstructDiagnostic(
     diagnosticInput(context, node),
     "rust.backend.typed-location-generic-requirement",
-    "Typed-location storage contains a function type parameter behind a Rust carrier whose Clone and 'static obligations are not declared by the carrier contract.",
+    "A generated Rust operation contains a function type parameter behind a carrier whose exact target obligations are not declared by the carrier contract.",
   ));
   return false;
 }

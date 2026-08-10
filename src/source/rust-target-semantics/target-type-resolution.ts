@@ -257,10 +257,9 @@ function resolveRustTargetTypeSyntax(
   if (sourceType !== undefined) {
     return sourceType;
   }
-  const declaration = symbol === undefined ? undefined : checker.getPrimarySymbolDeclaration(symbol);
-  if (declaration !== undefined && ast.kindName(declaration) === "KindTypeParameter") {
-    const name = ast.text(ast.name(declaration));
-    return name.length === 0 ? undefined : { kind: "type-parameter", name };
+  const typeParameter = resolveSourceTypeParameter(symbol, context);
+  if (typeParameter !== undefined) {
+    return typeParameter;
   }
   return undefined;
 }
@@ -384,6 +383,11 @@ function resolveRustTargetType(
       return sourceType;
     }
 
+    const typeParameter = resolveSourceTypeParameter(symbol, context);
+    if (typeParameter !== undefined) {
+      return typeParameter;
+    }
+
     if (typeShape.isNullish(type)) {
       return rustNullishSourceTargetType();
     }
@@ -419,6 +423,21 @@ function resolveRustTargetType(
   } finally {
     resolving.delete(type);
   }
+}
+
+function resolveSourceTypeParameter(
+  symbol: Symbol | undefined,
+  context: RustTargetTypeResolutionContext,
+): TargetTypeRef | undefined {
+  if (symbol === undefined) {
+    return undefined;
+  }
+  const declaration = context.checker.getPrimarySymbolDeclaration(symbol);
+  if (declaration === undefined || context.ast.kindName(declaration) !== "KindTypeParameter") {
+    return undefined;
+  }
+  const name = context.ast.text(context.ast.name(declaration));
+  return name.length === 0 ? undefined : { kind: "type-parameter", name };
 }
 
 function resolveSourcePrimitive(

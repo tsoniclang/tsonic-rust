@@ -75,6 +75,9 @@ import {
 import type {
   RustFinalizedInputPlanOverrides,
 } from "./provider-location-scope.js";
+import {
+  applyRustSourceCallableRequirements,
+} from "./source-callable-contracts.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -1370,6 +1373,9 @@ function planSelectedSourceCall(
       "rust.backend.source-call-selected-signature",
       "Selected project-source call fact conflicts with the TSTS-selected target member ABI.",
     ));
+    return undefined;
+  }
+  if (!applyRustSourceCallableRequirements(node, selected, fact, context)) {
     return undefined;
   }
   if (fact.parameterCarriers.length !== fact.argumentModes.length || args.length !== fact.parameterCarriers.length) {
