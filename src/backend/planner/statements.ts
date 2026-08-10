@@ -46,6 +46,7 @@ import {
   KindEqualsToken,
   KindExpressionStatement,
   KindForStatement,
+  KindForInStatement,
   KindIdentifier,
   KindIfStatement,
   KindLabeledStatement,
@@ -150,6 +151,9 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
     }
     case KindForStatement: {
       return planForStatement(node, context);
+    }
+    case KindForInStatement: {
+      return planForInStatement(node, context);
     }
     case "KindForOfStatement": {
       return planForOfStatement(node, context);
@@ -1022,6 +1026,8 @@ function planLabeledStatement(
       return planDoStatement(bodyNode, context, sourceLabel);
     case KindForStatement:
       return planForStatement(bodyNode, context, sourceLabel);
+    case KindForInStatement:
+      return planForInStatement(bodyNode, context, sourceLabel);
     case "KindForOfStatement":
       return planForOfStatement(bodyNode, context, sourceLabel);
     default: {
@@ -1598,7 +1604,7 @@ function planForOfStatement(
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input;
   const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
-  if (fact === undefined || fact.kind !== "iteration") {
+  if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind === "for-in") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.loop",
@@ -1740,6 +1746,213 @@ function planForOfStatement(
     iterable: targetIterable,
     body,
   }];
+}
+
+type PlannedForInBinding =
+  | { readonly kind: "declaration"; readonly name: string; readonly mutable: boolean }
+  | { readonly kind: "assignment"; readonly name: string };
+
+function planForInStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind !== "for-in" ||
+    (fact.lowering.kind !== "dense-index-keys" && fact.lowering.kind !== "sparse-index-keys" &&
+      fact.lowering.kind !== "static-keys")) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.for-in",
+      "for-in statements require one finalized property-key iteration policy.",
+    ));
+    return undefined;
+  }
+  const selectedIteration = context.input.facts.getSelectedTargetIteration(node);
+  if (selectedIteration === undefined || selectedIteration.operationKind !== "iteration" ||
+    selectedIteration.operationId !== fact.operationId || selectedIteration.resultType === undefined ||
+    !rustTargetTypeRefEquals(selectedIteration.resultType, fact.elementCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.for-in-selected-key",
+      "Finalized Rust property-key iteration conflicts with the TSTS-selected key carrier.",
+    ));
+    return undefined;
+  }
+  const initializer = ForInOrOfStatement_Initializer(ast, node);
+  if (initializer === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.for-in-binding",
+      "for-in requires one exact binding initializer.",
+    ));
+    return undefined;
+  }
+  const binding = planForInBinding(initializer, fact.elementCarrier, context);
+  if (binding === undefined) {
+    return undefined;
+  }
+  const expressionNode = Node_Expression(ast, node);
+  const expression = expressionNode === undefined ? undefined : planExpression(expressionNode, context);
+  const bodyNode = ForInOrOfStatement_Statement(ast, node);
+  if (expression === undefined || bodyNode === undefined || context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.for-in-shape",
+      "for-in requires exact receiver, body, and hygienic-name evidence.",
+    ));
+    return undefined;
+  }
+  const target = createRustLoopTarget(context, [], sourceLabel);
+  if (target === undefined) {
+    return undefined;
+  }
+  const body = planBlockLike(bodyNode, withRustControlTarget(context, target));
+  if (body === undefined) {
+    return undefined;
+  }
+  if (fact.lowering.kind === "dense-index-keys") {
+    const lengthName = allocateRustSyntheticName(context.syntheticNames, "for_in_length");
+    const indexName = allocateRustSyntheticName(context.syntheticNames, "for_in_index");
+    const activation = activateForInBinding(binding, {
+      kind: "method-call",
+      receiver: { kind: "path", path: indexName },
+      method: "to_string",
+      args: [],
+    });
+    return [{
+      kind: "scope",
+      body: {
+        statements: [
+          {
+            kind: "let",
+            name: lengthName,
+            mutable: false,
+            init: {
+              kind: "method-call",
+              receiver: expression,
+              method: "len",
+              args: [],
+            },
+          },
+          {
+            kind: "for",
+            ...(target.used.value ? { label: target.label } : {}),
+            binding: indexName,
+            iterable: {
+              kind: "range",
+              start: { kind: "int-literal", text: "0" },
+              end: { kind: "path", path: lengthName },
+            },
+            body: { statements: [...activation, ...body.statements] },
+          },
+        ],
+      },
+    }];
+  }
+  const keyName = binding.kind === "declaration"
+    ? binding.name
+    : allocateRustSyntheticName(context.syntheticNames, "for_in_key");
+  const activation = binding.kind === "assignment"
+    ? activateForInBinding(binding, { kind: "path", path: keyName })
+    : [];
+  const iterable: RustExpr = fact.lowering.kind === "sparse-index-keys"
+    ? {
+        kind: "method-call",
+        receiver: expression,
+        method: "enumerable_own_keys",
+        args: [],
+      }
+    : {
+        kind: "slice-literal",
+        elements: fact.lowering.keys.map((key) => ({ kind: "string-literal", value: key })),
+      };
+  return [{
+    kind: "scope",
+    body: {
+      statements: [
+        ...(fact.lowering.kind === "static-keys"
+          ? [{ kind: "let" as const, name: "_", mutable: false, init: { kind: "reference" as const, expr: expression } }]
+          : []),
+        {
+          kind: "for",
+          ...(target.used.value ? { label: target.label } : {}),
+          binding: keyName,
+          ...(binding.kind === "declaration" && binding.mutable ? { bindingMutable: true } : {}),
+          iterable,
+          body: { statements: [...activation, ...body.statements] },
+        },
+      ],
+    },
+  }];
+}
+
+function planForInBinding(
+  initializer: Node,
+  elementCarrier: TargetTypeRef,
+  context: RustPlanContext,
+): PlannedForInBinding | undefined {
+  const declarations = collectVariableDeclarations(initializer, context);
+  if (declarations.length === 1) {
+    const declaration = declarations[0]!;
+    const nameNode = Node_Name(context.input.ast, declaration);
+    const sourceName = nameNode === undefined || context.input.ast.kindName(nameNode) !== KindIdentifier
+      ? ""
+      : context.input.ast.text(nameNode);
+    const directName = rustSourceName(context, sourceName);
+    const carrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+    const declarationKind = context.input.ast.variableDeclarationKind(declaration);
+    if (!isValidRustIdentifier(directName) || carrier === undefined ||
+      !rustTargetTypeRefEquals(carrier, elementCarrier) ||
+      declarationKind === "using" || declarationKind === "await using") {
+      return rejectForInBinding(declaration, context, "for-in declarations require one plain non-resource binding with the finalized String key carrier.");
+    }
+    return {
+      kind: "declaration",
+      name: directName,
+      mutable: context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined,
+    };
+  }
+  if (context.input.ast.kindName(initializer) !== KindIdentifier) {
+    return rejectForInBinding(initializer, context, "for-in assignment targets require one exact identifier location.");
+  }
+  const sourceName = context.input.ast.text(initializer);
+  const assignmentName = rustSourceName(context, sourceName);
+  const carrier = context.input.facts.getRuntimeCarrierFact(initializer)?.carrier;
+  if (!isValidRustIdentifier(assignmentName) || carrier === undefined ||
+    !rustTargetTypeRefEquals(carrier, elementCarrier)) {
+    return rejectForInBinding(initializer, context, "for-in assignment targets require one mutable String binding with exact source identity.");
+  }
+  return { kind: "assignment", name: assignmentName };
+}
+
+function activateForInBinding(
+  binding: PlannedForInBinding,
+  value: RustExpr,
+): readonly RustStmt[] {
+  if (binding.kind === "declaration") {
+    return [{ kind: "let", name: binding.name, mutable: binding.mutable, init: value }];
+  }
+  return [{
+    kind: "assign",
+    target: { kind: "path", path: binding.name },
+    operator: "=",
+    value,
+  }];
+}
+
+function rejectForInBinding(
+  node: Node,
+  context: RustPlanContext,
+  message: string,
+): undefined {
+  context.diagnostics.push(unsupportedConstructDiagnostic(
+    diagnosticInput(context, node),
+    "rust.backend.for-in-binding",
+    message,
+  ));
+  return undefined;
 }
 
 function planSparseArrayLet(

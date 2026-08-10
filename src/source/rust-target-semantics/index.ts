@@ -50,6 +50,7 @@ import {
   KindExclamationEqualsEqualsToken,
   KindExpressionStatement,
   KindFalseKeyword,
+  KindForInStatement,
   KindForOfStatement,
   KindForStatement,
   KindFunctionDeclaration,
@@ -758,7 +759,7 @@ function recordStatementFacts(
     }
     return;
   }
-  if (kind === KindForOfStatement) {
+  if (kind === KindForOfStatement || kind === KindForInStatement) {
     recordForOfFacts(walk, statement, sourceFile, returnCarrier);
     return;
   }
@@ -2374,6 +2375,14 @@ function recordForOfFacts(
   if (selected?.kind === "iteration") {
     const initializer = ForInOrOfStatement_Initializer(walk.context.ast, statement);
     if (initializer !== undefined) {
+      if (walk.context.ast.kindName(initializer) === KindIdentifier) {
+        const declaration = walk.context.source.navigation.sourceReferenceFor(initializer)?.declaration;
+        if (declaration !== undefined) {
+          walk.context.facts.set(declaration, rustMutatedBindingFactKey, { mutated: true }, [
+            { message: "rust selected iteration assignment writes the existing binding" },
+          ]);
+        }
+      }
       for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
         setCarrierFact(walk, declaration, selected.elementCarrier);
       }

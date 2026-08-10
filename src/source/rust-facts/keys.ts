@@ -226,6 +226,16 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "iteration";
       readonly operationId: string;
+      readonly iterationKind: "for-in";
+      readonly elementCarrier: TargetTypeRef;
+      readonly lowering:
+        | { readonly kind: "dense-index-keys" }
+        | { readonly kind: "sparse-index-keys" }
+        | { readonly kind: "static-keys"; readonly keys: readonly string[] };
+    }
+  | {
+      readonly kind: "iteration";
+      readonly operationId: string;
       readonly iterationKind: "for-of" | "for-await-of";
       readonly elementCarrier: TargetTypeRef;
       readonly lowering:

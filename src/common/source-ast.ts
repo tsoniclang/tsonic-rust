@@ -17,6 +17,7 @@ export const KindExpressionStatement = "KindExpressionStatement";
 export const KindExportDeclaration = "KindExportDeclaration";
 export const KindFalseKeyword = "KindFalseKeyword";
 export const KindForStatement = "KindForStatement";
+export const KindForInStatement = "KindForInStatement";
 export const KindFunctionDeclaration = "KindFunctionDeclaration";
 export const KindIdentifier = "KindIdentifier";
 export const KindIfStatement = "KindIfStatement";
@@ -106,7 +107,7 @@ export function Node_Expression(ast: AstReader, node: Node | undefined): Node | 
     case "KindDoStatement":
       return ast.as.AsDoStatement(node)?.Expression;
     case KindForOfStatement:
-    case "KindForInStatement":
+    case KindForInStatement:
       return ast.as.AsForInOrOfStatement(node)?.Expression;
     case KindPropertyAccessExpression:
       return ast.as.AsPropertyAccessExpression(node)?.Expression;
@@ -366,7 +367,7 @@ export function ArrayTypeNode_ElementType(ast: AstReader, node: Node | undefined
 
 function isForInOrOf(ast: AstReader, node: Node | undefined): node is Node {
   const kind = node === undefined ? undefined : ast.kindName(node);
-  return kind === KindForOfStatement || kind === "KindForInStatement";
+  return kind === KindForOfStatement || kind === KindForInStatement;
 }
 
 export function ForInOrOfStatement_Initializer(ast: AstReader, node: Node | undefined): Node | undefined {
@@ -389,7 +390,7 @@ export function IterationStatement_Statement(ast: AstReader, node: Node | undefi
     case "KindDoStatement":
       return ast.as.AsDoStatement(node)?.Statement;
     case KindForOfStatement:
-    case "KindForInStatement":
+    case KindForInStatement:
       return ast.as.AsForInOrOfStatement(node)?.Statement;
     default:
       return undefined;

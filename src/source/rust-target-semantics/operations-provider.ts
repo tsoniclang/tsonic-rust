@@ -64,6 +64,7 @@ import {
   isRustJsArrayCarrier,
   isRustNullishSourceCarrier,
   isRustNumericCarrier,
+  isRustStringCarrier,
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
 } from "../rust-target-types.js";
@@ -1642,12 +1643,37 @@ export function selectRustCheckedIteration(
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const source = request.source;
   if (source.iterationKind === "for-in") {
-    return rejectSelectedOperation(
-      request.statement,
-      context,
-      "RUST_ITERATION_KIND_UNSUPPORTED",
-      "Rust target property-key iteration is not implemented.",
-    );
+    const iterable = resolveRustTargetTypeRef(request.expression, context, options);
+    const elementCarrier = resolveRustTargetTypeRef(source.sourceElementType, context, options);
+    if (elementCarrier === undefined || !isRustStringCarrier(elementCarrier)) {
+      return rejectSelectedOperation(
+        request.statement,
+        context,
+        "RUST_ITERATION_KEY_CARRIER_UNSUPPORTED",
+        "Rust property-key iteration requires the exact checked source key to map to String.",
+      );
+    }
+    const lowering = rustPropertyKeyIterationLowering(iterable, context.ast, options);
+    if (lowering === undefined) {
+      return rejectSelectedOperation(
+        request.statement,
+        context,
+        "RUST_ITERATION_CARRIER_UNSUPPORTED",
+        "The selected Rust receiver carrier has no closed property-key iteration policy.",
+      );
+    }
+    const fact: RustTargetOperationFact = {
+      kind: "iteration",
+      operationId: `tsonic.rust.iteration.for-in.${lowering.kind}`,
+      iterationKind: "for-in",
+      elementCarrier,
+      lowering,
+    };
+    recordIterationInitializerCarrier(request.initializer, elementCarrier, context);
+    return acceptRustOperation(request.statement, fact, context, {
+      sourceExpression: request.expression,
+      sourceResultType: source.sourceElementType,
+    }, elementCarrier);
   }
   const iterable = resolveRustTargetTypeRef(request.expression, context, options);
   const targetIteration = rustIterableTargetPolicy(iterable);
@@ -1682,6 +1708,30 @@ export function selectRustCheckedIteration(
   }, targetIteration.elementCarrier);
 }
 
+type RustPropertyKeyIterationLowering = Extract<
+  RustTargetOperationFact,
+  { readonly kind: "iteration"; readonly iterationKind: "for-in" }
+>["lowering"];
+
+function rustPropertyKeyIterationLowering(
+  iterable: TargetTypeRef | undefined,
+  ast: import("@tsonic/tsts").AstReader,
+  options: RustOperationsProviderOptions,
+): RustPropertyKeyIterationLowering | undefined {
+  if (iterable?.kind === "array" ||
+    (iterable?.kind === "pointer" && iterable.pointee.kind === "array") ||
+    rustFixedArrayCarrierValue(iterable) !== undefined) {
+    return { kind: "dense-index-keys" };
+  }
+  if (isRustJsArrayCarrier(iterable)) {
+    return { kind: "sparse-index-keys" };
+  }
+  const keys = iterable === undefined
+    ? undefined
+    : options.sourceTypes.propertyKeysForCarrier(iterable, ast);
+  return keys === undefined ? undefined : { kind: "static-keys", keys };
+}
+
 interface RustIterableTargetPolicy {
   readonly kind: "borrowed" | "sync-generator" | "async-generator";
   readonly elementCarrier: TargetTypeRef;
@@ -1714,7 +1764,10 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
 function selectRustIterationLowering(
   source: Exclude<import("@tsonic/tsts").ResolvedSourceIterationInfo, { readonly iterationKind: "for-in" }>,
   target: RustIterableTargetPolicy,
-): Extract<RustTargetOperationFact, { readonly kind: "iteration" }>["lowering"] | undefined {
+): Extract<
+  RustTargetOperationFact,
+  { readonly kind: "iteration"; readonly iterationKind: "for-of" | "for-await-of" }
+>["lowering"] | undefined {
   if (source.mechanism.kind === "union" || source.mechanism.kind === "untyped-dynamic-iteration") {
     return undefined;
   }

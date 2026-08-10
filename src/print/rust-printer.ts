@@ -599,6 +599,8 @@ function expressionPrecedence(expression: RustExpr): RustPrecedence {
   switch (expression.kind) {
     case "assignment":
       return RustPrecedence.Assignment;
+    case "range":
+      return RustPrecedence.Or;
     case "binary":
       return operatorPrecedence(expression.operator);
     case "unary":
@@ -652,6 +654,9 @@ export function printRustExpr(expression: RustExpr): string {
       const left = printOperand(expression.left, precedence, false);
       const right = printOperand(expression.right, precedence, true);
       return `${left} ${expression.operator} ${right}`;
+    }
+    case "range": {
+      return `${printOperand(expression.start, RustPrecedence.Or, false)}..${printOperand(expression.end, RustPrecedence.Or, true)}`;
     }
     case "conditional": {
       return `if ${printRustExpr(expression.condition)} { ${printRustExpr(expression.whenTrue)} } else { ${printRustExpr(expression.whenFalse)} }`;
@@ -908,7 +913,7 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       ].join("\n");
     }
     case "struct-literal": {
-      if (expression.fields.length <= 2 && renderedFits(flat, column)) {
+      if (expression.fields.length <= 1 && renderedFits(flat, column)) {
         return flat;
       }
       const fieldIndent = indentText(depth + 1);

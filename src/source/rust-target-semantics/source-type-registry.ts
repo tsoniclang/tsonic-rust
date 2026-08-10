@@ -23,6 +23,7 @@ export interface RustSourceTypeRegistry {
   registerSourceFile(sourceFile: SourceFile, ast: AstReader): void;
   carrierForDeclaration(declaration: Node, ast: AstReader): TargetTypeRef | undefined;
   declarationForCarrier(carrier: TargetTypeRef): Node | undefined;
+  propertyKeysForCarrier(carrier: TargetTypeRef, ast: AstReader): readonly string[] | undefined;
   enumVariantsForDeclaration(declaration: Node): readonly RustSourceEnumVariant[] | undefined;
   enumVariantForLiteral(carrier: TargetTypeRef, literal: string): RustSourceEnumVariant | undefined;
 }
@@ -83,6 +84,47 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
     declarationForCarrier(carrier) {
       const key = keyForCarrier(carrier);
       return key === undefined ? undefined : declarations.get(key);
+    },
+    propertyKeysForCarrier(carrier, ast) {
+      const key = keyForCarrier(carrier);
+      const declaration = key === undefined ? undefined : declarations.get(key);
+      if (declaration === undefined ||
+        (ast.kindName(declaration) !== "KindInterfaceDeclaration" &&
+          ast.kindName(declaration) !== "KindClassDeclaration") ||
+        ast.extendsHeritageElements(declaration).length !== 0) {
+        return undefined;
+      }
+      const declarationKind = ast.kindName(declaration);
+      const members = denseNodes(ast.members(declaration));
+      if (members === undefined) {
+        return undefined;
+      }
+      const keys: string[] = [];
+      const seen = new Set<string>();
+      for (const member of members) {
+        const kind = ast.kindName(member);
+        if ((declarationKind === "KindInterfaceDeclaration" && kind === "KindPropertySignature") ||
+          (declarationKind === "KindClassDeclaration" && kind === "KindPropertyDeclaration")) {
+          if (ast.hasModifierKind(member, "static")) {
+            continue;
+          }
+          const nameNode = ast.name(member);
+          const name = nameNode === undefined ? "" : ast.text(nameNode);
+          if (name.length === 0 || seen.has(name)) {
+            return undefined;
+          }
+          seen.add(name);
+          keys.push(name);
+          continue;
+        }
+        if (declarationKind === "KindClassDeclaration" &&
+          (kind === "KindConstructor" || kind === "KindMethodDeclaration" ||
+            kind === "KindGetAccessor" || kind === "KindSetAccessor")) {
+          continue;
+        }
+        return undefined;
+      }
+      return Object.freeze(keys);
     },
     enumVariantsForDeclaration(declaration) {
       return variantsByDeclaration.get(declaration);
