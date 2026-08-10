@@ -559,6 +559,30 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
         ? `${left}\n${continuation}`
         : `${left}\n${continuation}\n${remainingLines(right).join("\n")}`;
     }
+    case "struct-literal": {
+      if (expression.fields.length <= 2 && renderedFits(flat, column)) {
+        return flat;
+      }
+      const fieldIndent = indentText(depth + 1);
+      const fields = expression.fields.map((field) => {
+        const flatValue = printRustExpr(field.value);
+        if (flatValue === field.name) {
+          return `${fieldIndent}${field.name},`;
+        }
+        const prefix = `${fieldIndent}${field.name}: `;
+        const value = printRustExprFitted(
+          field.value,
+          depth + 1,
+          prefix.length,
+        );
+        return appendToLastLine(`${prefix}${value}`, ",");
+      });
+      return [
+        `${expression.path} {`,
+        ...fields,
+        `${indentText(depth)}}`,
+      ].join("\n");
+    }
     default:
       return flat;
   }

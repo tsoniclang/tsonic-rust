@@ -160,6 +160,34 @@ test("a single block argument stays attached to its outer call", () => {
   assert.match(source, /\n    \}\);/);
 });
 
+test("three-field struct literals use rustfmt-compatible vertical layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      pub: true,
+      name: "new_item",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "struct-literal",
+            path: "TodoItem",
+            fields: [
+              { name: "id", value: { kind: "path", path: "id" } },
+              { name: "title", value: { kind: "path", path: "title" } },
+              { name: "completed", value: { kind: "bool-literal", value: false } },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /TodoItem \{\n        id,\n        title,\n        completed: false,\n    \}/u);
+});
+
 test("long logical chains use rustfmt-compatible operand-per-line layout", () => {
   const terms = Array.from({ length: 7 }, (_, index) => ({
     kind: "binary",

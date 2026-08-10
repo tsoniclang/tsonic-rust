@@ -6,6 +6,7 @@ export const KindBooleanKeyword = "KindBooleanKeyword";
 export const KindCallExpression = "KindCallExpression";
 export const KindElementAccessExpression = "KindElementAccessExpression";
 export const KindExpressionStatement = "KindExpressionStatement";
+export const KindExportDeclaration = "KindExportDeclaration";
 export const KindFalseKeyword = "KindFalseKeyword";
 export const KindForStatement = "KindForStatement";
 export const KindFunctionDeclaration = "KindFunctionDeclaration";

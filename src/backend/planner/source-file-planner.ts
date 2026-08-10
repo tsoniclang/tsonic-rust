@@ -4,6 +4,7 @@ import {
   KindFunctionDeclaration,
   KindIdentifier,
   KindImportDeclaration,
+  KindExportDeclaration,
   KindVariableStatement,
   Node_Initializer,
   Node_Name,
@@ -91,7 +92,8 @@ function planModuleItems(context: RustPlanContext): readonly RustItem[] {
       continue;
     }
     const kind = ast.kindName(statement);
-    if (kind === KindImportDeclaration || kind === "KindEndOfFile") {
+    if (kind === KindImportDeclaration || kind === KindExportDeclaration ||
+      kind === "KindEndOfFile") {
       continue;
     }
     if (kind === KindFunctionDeclaration) {
