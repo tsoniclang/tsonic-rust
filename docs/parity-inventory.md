@@ -14,10 +14,11 @@ the blocked section with the contract each requires.
 
 - Array: literals, index/at, length, push, includes, indexOf, map,
   filter, reduce, some, every, find, findIndex, findLast, findLastIndex;
+  slice over closed Clone carriers and join over exact stringifiable carriers;
   sparse lane via JsArray.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
-  endsWith, indexOf, at, charAt, padStart, padEnd, trim, trimStart,
-  trimEnd, concat via +, split, replace, search,
+  endsWith, indexOf, slice, at, charAt, codePointAt, repeat, padStart,
+  padEnd, trim, trimStart, trimEnd, concat via +, split, replace, search,
   match; String.matchAll call and fallibility lowering for constant
   patterns (consuming the returned match list is a blocked lane below).
 - RegExp: constant literals and new RegExp with literal arguments over the
@@ -71,10 +72,6 @@ the blocked section with the contract each requires.
   (the call and fallibility lowering are implemented).
 - Object.keys/values/entries, Object.assign, Object.hasOwn, Object.is:
   requires closed-shape reflection rows over the JsValue carrier.
-- Array.prototype.join: requires a separator-join row in the js runtime.
-- String.prototype.slice: requires an optional-end slice row contract.
-- String.prototype.codePointAt: requires a code-point numeric carrier row.
-- String.prototype.repeat: requires a fallible repeat row (range errors).
 - Number.isNaN, Number.isFinite, Number.isInteger, Number.isSafeInteger:
   requires Number predicate rows in the js runtime.
 - Number.parseInt/parseFloat, isNaN/isFinite/isInteger/isSafeInteger,

@@ -20,8 +20,14 @@
   {
     "area": "Array",
     "lane": "Array.prototype.join",
-    "classification": "blocked",
-    "contract": "requires a separator-join row in the js runtime"
+    "classification": "implemented",
+    "rowMember": "join"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.slice",
+    "classification": "implemented",
+    "rowMember": "slice"
   },
   {
     "area": "Array",
@@ -122,8 +128,8 @@
   {
     "area": "String",
     "lane": "String.prototype.slice",
-    "classification": "blocked",
-    "contract": "requires an optional-end slice row contract"
+    "classification": "implemented",
+    "rowMember": "slice"
   },
   {
     "area": "String",
@@ -140,8 +146,8 @@
   {
     "area": "String",
     "lane": "String.prototype.codePointAt",
-    "classification": "blocked",
-    "contract": "requires a code-point numeric carrier row"
+    "classification": "implemented",
+    "rowMember": "codePointAt"
   },
   {
     "area": "String",
@@ -158,8 +164,8 @@
   {
     "area": "String",
     "lane": "String.prototype.repeat",
-    "classification": "blocked",
-    "contract": "requires a fallible repeat row (range errors)"
+    "classification": "implemented",
+    "rowMember": "repeat"
   },
   {
     "area": "String",
