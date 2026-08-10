@@ -19,6 +19,7 @@ export const KindFalseKeyword = "KindFalseKeyword";
 export const KindForStatement = "KindForStatement";
 export const KindForInStatement = "KindForInStatement";
 export const KindFunctionDeclaration = "KindFunctionDeclaration";
+export const KindFunctionExpression = "KindFunctionExpression";
 export const KindIdentifier = "KindIdentifier";
 export const KindIfStatement = "KindIfStatement";
 export const KindImportDeclaration = "KindImportDeclaration";
@@ -169,6 +170,10 @@ export function Node_Type(ast: AstReader, node: Node | undefined): Node | undefi
       return ast.as.AsParameterDeclaration(node)?.Type;
     case KindFunctionDeclaration:
       return ast.as.AsFunctionDeclaration(node)?.Type;
+    case "KindArrowFunction":
+      return ast.as.AsArrowFunction(node)?.Type;
+    case KindFunctionExpression:
+      return ast.as.AsFunctionExpression(node)?.Type;
     case "KindMethodDeclaration":
       return ast.as.AsMethodDeclaration(node)?.Type;
     case "KindMethodSignature":

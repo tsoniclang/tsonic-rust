@@ -17,6 +17,7 @@ import {
   KindConditionalExpression,
   KindElementAccessExpression,
   KindFalseKeyword,
+  KindFunctionExpression,
   KindIdentifier,
   KindNewExpression,
   KindNoSubstitutionTemplateLiteral,
@@ -38,7 +39,7 @@ import {
   Node_Expression,
   Node_Operand,
 } from "../../common/source-ast.js";
-import { rustFutureValueFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustProviderConstantArgument,
@@ -69,8 +70,8 @@ import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, rustPublicName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { isFloatCarrier } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBoolCarrier, isRustIntegerCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
+import { getRustGeneratorProtocol, isRustBoolCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -87,6 +88,7 @@ import type {
 import {
   applyRustSourceCallableRequirements,
 } from "./source-callable-contracts.js";
+import { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -277,35 +279,36 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
     case "KindObjectLiteralExpression": {
       return planRecordLiteral(node, context);
     }
-    case "KindArrowFunction": {
+    case "KindArrowFunction":
+    case KindFunctionExpression: {
       const closureFact = rustOperationFact(node, context);
       if (closureFact === undefined || closureFact.kind !== "closure") {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.closure",
-          "Arrow functions require a finalized closure fact.",
+          "Callable expressions require a finalized closure fact.",
         ));
         return undefined;
       }
       if (!requireExpressionCarrier(node, closureFact.resultCarrier, context, "rust.backend.closure-carrier")) {
         return undefined;
       }
-      const arrowParams = context.input.ast.parameters(node);
-      if (closureFact.byRefCopyParams.length !== arrowParams.length) {
+      const sourceParams = context.input.ast.parameters(node);
+      if (closureFact.byRefCopyParams.length !== sourceParams.length) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.closure-abi",
-          "Arrow function parameter count does not match its finalized Rust closure ABI.",
+          "Callable-expression parameter count does not match its finalized Rust closure ABI.",
         ));
         return undefined;
       }
       const params: { name: string; byRefCopy: boolean }[] = [];
-      for (const [index, parameter] of arrowParams.entries()) {
+      for (const [index, parameter] of sourceParams.entries()) {
         if (parameter === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, node),
             "rust.backend.closure-parameter",
-            "Arrow function contains an undefined parameter slot.",
+            "Callable expression contains an undefined parameter slot.",
           ));
           return undefined;
         }
@@ -316,9 +319,74 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         params.push({ name: parameterName, byRefCopy: closureFact.byRefCopyParams[index] === true });
       }
       const bodyNode = context.input.ast.body(node);
-      const closureContext: RustPlanContext = { ...context, fallibleContext: false };
-      const body = bodyNode === undefined ? undefined : planExpression(bodyNode, closureContext);
-      return body === undefined ? undefined : { kind: "closure", params, body };
+      if (bodyNode === undefined) {
+        return undefined;
+      }
+      const closureContext: RustPlanContext = {
+        ...context,
+        emittedLocalNames: new Set(params.map((parameter) => parameter.name)),
+        controlFlow: { nextLoopId: 0 },
+        controlTargets: undefined,
+        completionBoundary: undefined,
+        fallibleContext: false,
+        asyncContext: false,
+        generator: undefined,
+      };
+      if (context.input.ast.kindName(bodyNode) !== "KindBlock") {
+        const body = planExpression(bodyNode, closureContext);
+        return body === undefined ? undefined : { kind: "closure", params, body };
+      }
+      const resultCarrier = closureFact.resultCarrier.kind === "function-pointer"
+        ? closureFact.resultCarrier.result
+        : undefined;
+      const resultType = rustTypeFromCarrierInContext(resultCarrier, context);
+      if (resultCarrier === undefined || resultType === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.closure-result",
+          "Block-bodied callable expressions require one finalized renderable result carrier.",
+        ));
+        return undefined;
+      }
+      const block = context.planBlock(bodyNode, {
+        ...closureContext,
+        functionReturnType: resultType,
+      });
+      if (block === undefined) {
+        return undefined;
+      }
+      if (!isRustUnitCarrier(resultCarrier) && !rustBlockTerminates(block)) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, bodyNode),
+          "rust.backend.closure-return-flow",
+          "Value-returning callable expressions require finalized control flow that returns on every path.",
+        ));
+        return undefined;
+      }
+      const blockParams = params.map((parameter, index) => ({
+        name: parameter.name,
+        mutable: sourceParams[index] !== undefined &&
+          context.input.facts.getFact(sourceParams[index]!, rustMutatedBindingFactKey) !== undefined,
+        byRefCopy: parameter.byRefCopy,
+      }));
+      const finalizedBlock = applyRustTailShape(block, !isRustUnitCarrier(resultCarrier));
+      const onlyStatement = finalizedBlock.statements.length === 1
+        ? finalizedBlock.statements[0]
+        : undefined;
+      if (onlyStatement?.kind === "tail" && blockParams.every((parameter) => !parameter.mutable)) {
+        return {
+          kind: "closure",
+          params,
+          body: onlyStatement.expr,
+        };
+      }
+      return {
+        kind: "closure-block",
+        params: blockParams,
+        move: false,
+        async: false,
+        body: finalizedBlock,
+      };
     }
     case "KindRegularExpressionLiteral": {
       return planRegExpCreate(node, context);

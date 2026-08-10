@@ -521,7 +521,7 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
   const declarations = readFileSync(join(sourceRoot, "backend/planner/declarations-nominal.ts"), "utf8");
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/index.ts"), "utf8");
   assert.match(expressions, /Fixed-array literal contains a missing or omitted element slot/u);
-  assert.match(expressions, /Arrow function contains an undefined parameter slot/u);
+  assert.match(expressions, /Callable expression contains an undefined parameter slot/u);
   assert.match(declarations, /Constructor body contains an undefined statement slot/u);
   assert.match(declarations, /Enum declaration contains an undefined member slot/u);
   assert.match(declarations, /Interface declaration contains an undefined member slot/u);

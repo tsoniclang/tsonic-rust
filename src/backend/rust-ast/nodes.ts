@@ -48,7 +48,7 @@ export type RustExpr =
   | { readonly kind: "closure"; readonly params: readonly { readonly name: string; readonly byRefCopy: boolean }[]; readonly body: RustExpr }
   | {
       readonly kind: "closure-block";
-      readonly params: readonly { readonly name: string; readonly mutable: boolean }[];
+      readonly params: readonly { readonly name: string; readonly mutable: boolean; readonly byRefCopy?: boolean }[];
       readonly move: boolean;
       readonly async: boolean;
       readonly body: RustBlock;

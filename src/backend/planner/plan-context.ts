@@ -4,7 +4,7 @@ import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustGenericRequirementSet } from "./generic-requirements.js";
 import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
-import type { RustType } from "../rust-ast/nodes.js";
+import type { RustBlock, RustType } from "../rust-ast/nodes.js";
 
 interface RustControlTargetBase {
   readonly id: number;
@@ -42,6 +42,7 @@ export interface RustPlanContext {
   readonly moduleName: string;
   readonly moduleNameByFileName: ReadonlyMap<string, string>;
   readonly diagnostics: TargetDiagnostic[];
+  readonly planBlock: (node: Node, context: RustPlanContext) => RustBlock | undefined;
   // Identifier names with a proven write (assignment or increment) in the
   // enclosing function body. `let mut` is emitted only for proven writes.
   readonly mutatedNames?: ReadonlySet<string>;

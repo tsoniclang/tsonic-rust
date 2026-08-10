@@ -33,7 +33,7 @@ import {
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { isConstLiteralInitializer } from "./statements.js";
+import { isConstLiteralInitializer, planBlockLike } from "./statements.js";
 import {
   planClassDeclaration,
   planEnumDeclaration,
@@ -62,6 +62,7 @@ export function planRustSourceFile(
     moduleNameByFileName,
     diagnostics,
     usedAliases,
+    planBlock: planBlockLike,
   };
   const items = planModuleItems(context);
   const aliases = Object.freeze(new Set(usedAliases));

@@ -301,8 +301,8 @@ export type RustTargetOperationFact =
     }
   | { readonly kind: "await-op"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
   | {
-      // Arrow-function argument lowering to a Rust closure. Parameter names
-      // come from the arrow declaration; byRefCopy params bind as |&x|.
+      // Function-expression argument lowering to a Rust closure. Parameter
+      // names come from the selected expression; byRefCopy params bind as |&x|.
       readonly kind: "closure";
       readonly operationId: string;
       readonly byRefCopyParams: readonly boolean[];

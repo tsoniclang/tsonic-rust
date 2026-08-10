@@ -54,6 +54,7 @@ import {
   KindForOfStatement,
   KindForStatement,
   KindFunctionDeclaration,
+  KindFunctionExpression,
   KindIdentifier,
   KindIfStatement,
   KindArrayLiteralExpression,
@@ -1127,8 +1128,9 @@ function resolveExpressionCarrierUncached(
     case "KindObjectLiteralExpression": {
       return resolveRecordLiteralCarrier(walk, expression, sourceFile, expected);
     }
-    case "KindArrowFunction": {
-      return resolveArrowFunctionCarrier(walk, expression, sourceFile, expected);
+    case "KindArrowFunction":
+    case KindFunctionExpression: {
+      return resolveFunctionExpressionCarrier(walk, expression, sourceFile, expected);
     }
     case "KindRegularExpressionLiteral": {
       return undefined;
@@ -3017,7 +3019,7 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
         found = true;
         return;
       }
-      if (kind === "KindArrowFunction") {
+      if (kind === "KindArrowFunction" || kind === KindFunctionExpression) {
         // Closures are fallibility boundaries: errors cannot propagate out.
         return;
       }
@@ -3121,7 +3123,7 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
   for (const sourceFile of projectSourceFiles) {
     const visit = (node: Node): void => {
       const kind = ast.kindName(node);
-      if (kind === "KindArrowFunction") {
+      if (kind === "KindArrowFunction" || kind === KindFunctionExpression) {
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const body = ast.body(node);
@@ -3310,9 +3312,9 @@ function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile: Sourc
   });
 }
 
-// Arrow-function arguments lower to Rust closures when the expectation is a
-// finalized function-pointer carrier. Expression bodies only.
-function resolveArrowFunctionCarrier(
+// Callable expressions lower to Rust closures only when the selected target
+// callback supplies one finalized function-pointer carrier.
+function resolveFunctionExpressionCarrier(
   walk: RustFactWalk,
   expression: Node,
   sourceFile: SourceFile,
@@ -3320,6 +3322,13 @@ function resolveArrowFunctionCarrier(
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   if (expected?.kind !== "function-pointer") {
+    return undefined;
+  }
+  if (ast.hasModifierKind(expression, "async") ||
+    walk.context.semanticsFor(expression).getResolvedGeneratorInfo(expression) !== undefined) {
+    return undefined;
+  }
+  if (ast.kindName(expression) === KindFunctionExpression && ast.name(expression) !== undefined) {
     return undefined;
   }
   const parameters = ast.parameters(expression);
@@ -3341,15 +3350,35 @@ function resolveArrowFunctionCarrier(
     byRefCopyParams.push(index === parameters.length - 1 && argCarrier.kind === "source-primitive");
   }
   const body = ast.body(expression);
-  if (body === undefined || ast.kindName(body) === KindBlock) {
+  if (body === undefined) {
     return undefined;
   }
   const resultExpectation = expected.result.kind === "opaque" && expected.result.id === "tsonic.rust.infer"
-    ? undefined
+    ? resolveTypeNodeCarrier(walk, Node_Type(ast, expression))
     : expected.result;
-  const bodyCarrier = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
-  if (bodyCarrier === undefined) {
-    return undefined;
+  let bodyCarrier = resultExpectation;
+  if (ast.kindName(body) === KindBlock) {
+    if (bodyCarrier === undefined) {
+      return undefined;
+    }
+    const statements = requireDenseSourceNodes(walk, ast.statements(body), "Callable-expression body contains an undefined or non-data statement slot.");
+    if (statements === undefined) {
+      return undefined;
+    }
+    const previousCallable = walk.currentCallableDeclaration;
+    const previousGenerator = walk.currentGeneratorDeclaration;
+    walk.currentCallableDeclaration = expression;
+    walk.currentGeneratorDeclaration = undefined;
+    for (const statement of statements) {
+      recordStatementFacts(walk, statement, sourceFile, bodyCarrier);
+    }
+    walk.currentCallableDeclaration = previousCallable;
+    walk.currentGeneratorDeclaration = previousGenerator;
+  } else {
+    bodyCarrier = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
+    if (bodyCarrier === undefined) {
+      return undefined;
+    }
   }
   const closureCarrier: TargetTypeRef = {
     kind: "function-pointer",

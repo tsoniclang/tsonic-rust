@@ -704,17 +704,13 @@ export function printRustExpr(expression: RustExpr): string {
       return `[${expression.elements.map(printRustExpr).join(", ")}]`;
     }
     case "closure": {
-      const params = expression.params
-        .map((param) => (param.byRefCopy ? `&${param.name}` : param.name))
-        .join(", ");
+      const params = printRustClosureParams(expression.params);
       return expression.body.kind === "assignment"
         ? `|${params}| { ${printRustExpr(expression.body)} }`
         : `|${params}| ${printRustExpr(expression.body)}`;
     }
     case "closure-block": {
-      const params = expression.params
-        .map((param) => `${param.mutable ? "mut " : ""}${param.name}`)
-        .join(", ");
+      const params = printRustClosureParams(expression.params);
       const prefix = `${expression.move ? "move " : ""}|${params}| ${expression.async ? "async move " : ""}{`;
       const body = printRustBlockStatements(expression.body, 1);
       return body.length === 0 ? `${prefix}}` : `${prefix}\n${body}\n}`;
@@ -832,9 +828,7 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       if (renderedFits(flat, column)) {
         return flat;
       }
-      const params = expression.params
-        .map((param) => (param.byRefCopy ? `&${param.name}` : param.name))
-        .join(", ");
+      const params = printRustClosureParams(expression.params);
       const indent = indentText(depth + 1);
       const body = printRustExprFitted(
         expression.body,
@@ -844,9 +838,7 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       return [`|${params}| {`, `${indent}${body}`, `${indentText(depth)}}`].join("\n");
     }
     case "closure-block": {
-      const params = expression.params
-        .map((param) => `${param.mutable ? "mut " : ""}${param.name}`)
-        .join(", ");
+      const params = printRustClosureParams(expression.params);
       const prefix = `${expression.move ? "move " : ""}|${params}| ${expression.async ? "async move " : ""}{`;
       const body = printRustBlockStatements(expression.body, depth + 1);
       return body.length === 0
@@ -1070,6 +1062,21 @@ function printFittedCall(
   if (arguments_.length === 0) {
     return flat;
   }
+  const trailingClosure = arguments_[arguments_.length - 1];
+  if (!forceExpanded && trailingClosure?.kind === "closure-block") {
+    const preceding = arguments_.slice(0, -1).map(printRustExpr);
+    if (preceding.every((argument) => !argument.includes("\n"))) {
+      const prefix = `${callable}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
+      const renderedClosure = printRustExprFitted(
+        trailingClosure,
+        depth,
+        column + prefix.length,
+      );
+      if (firstLine(renderedClosure).length + column + prefix.length <= rustFormatWidth) {
+        return appendToLastLine(`${prefix}${renderedClosure}`, ")");
+      }
+    }
+  }
   if (arguments_.length === 1 && arguments_[0]?.kind === "block") {
     const prefix = `${callable}(`;
     return appendToLastLine(
@@ -1152,7 +1159,7 @@ function printFittedCall(
     } else if (renderedFits(flat, column)) {
       return flat;
     }
-  } else if (!forceExpanded && renderedFits(flat, column)) {
+  } else if (!forceExpanded && !flat.includes("\n") && renderedFits(flat, column)) {
     return flat;
   }
   const argumentIndent = indentText(depth + 1);
@@ -1175,6 +1182,16 @@ function printFittedCall(
     ...renderedArguments,
     `${indentText(depth)})`,
   ].join("\n");
+}
+
+function printRustClosureParams(
+  params: readonly { readonly name: string; readonly mutable?: boolean; readonly byRefCopy?: boolean }[],
+): string {
+  return params
+    .map((param) => param.byRefCopy === true
+      ? param.mutable === true ? `&(mut ${param.name})` : `&${param.name}`
+      : `${param.mutable === true ? "mut " : ""}${param.name}`)
+    .join(", ");
 }
 
 function printNestedCallArgument(

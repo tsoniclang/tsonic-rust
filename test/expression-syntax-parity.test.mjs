@@ -75,3 +75,57 @@ export function require(value: string | null): string {
     diagnostic.message.includes("identity operation") ||
     diagnostic.message.includes("Expression planning returned no Rust AST")));
 });
+
+test("arrow and function-expression callbacks share one exact block-body contract", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function transform(values: int32[]): int32[] {
+  const mapped = values.map(function (value: int32): int32 {
+    const next: int32 = value + 1;
+    return next;
+  });
+  const filtered = mapped.filter((value: int32): boolean => {
+    return value > 1;
+  });
+  return filtered.map((value: int32): int32 => {
+    value += 1;
+    return value;
+  });
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /array_dense_map\(values, \|&value\| \{/u);
+  assert.match(source, /array_dense_filter\(&mapped, \|&value\| value > 1\)/u);
+  assert.match(source, /array_dense_map\(&filtered, \|&\(mut value\)\| \{/u);
+  validateGeneratedProject("expression-callable-blocks", result.artifacts);
+});
+
+test("named callable expressions fail closed instead of inventing recursive closure identity", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function transform(values: int32[]): int32[] {
+  return values.map(function recurse(value: int32): int32 {
+    return value;
+  });
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.message.includes("closure") || diagnostic.message.includes("callable") ||
+    diagnostic.message.includes("callback")));
+});
