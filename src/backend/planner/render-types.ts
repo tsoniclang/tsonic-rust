@@ -8,6 +8,7 @@ import {
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsValueTargetId,
+  rustLocationTargetId,
   rustFixedArrayCarrierValue,
   rustOptionTargetId,
   rustNamedTypeCarrierValue,
@@ -19,6 +20,7 @@ import {
 
 const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustOptionTargetId]: "Option",
+  [rustLocationTargetId]: "rt::Location",
   [rustJsValueTargetId]: "js_abi::JsValue",
   [rustJsArrayTargetId]: "js_abi::JsArray",
   [rustJsMapTargetId]: "js_abi::JsMap",

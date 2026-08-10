@@ -1,17 +1,24 @@
 import type { Node } from "@tsonic/tsts";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import {
   KindIdentifier,
   Node_Name,
   Node_Type,
 } from "../../common/source-ast.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
-import type { RustBlock, RustExpr, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
+import type { RustBlock, RustExpr, RustFunctionParam, RustItem, RustStmt, RustTypeParameter } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustMutatedBindingFactKey, rustSourceParameterAbiFactKey } from "../../source/rust-facts/keys.js";
+import { rustLocationStorageForDeclaration } from "./typed-locations.js";
+import {
+  applyRustGenericRequirements,
+  createRustGenericRequirementSet,
+  requireRustLocationValueCarrier,
+} from "./generic-requirements.js";
 
 export function planFunctionDeclaration(node: Node, outerContext: RustPlanContext): RustItem | undefined {
   const { ast } = outerContext.input;
@@ -33,7 +40,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const publicName = rustPublicName(sourceName);
   const name = publicName.name;
   const nonSnakeSeen = { value: publicName.needsAllow };
-  const context: RustPlanContext = { ...outerContext, nonSnakeSeen };
+  let context: RustPlanContext = { ...outerContext, nonSnakeSeen };
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -42,7 +49,33 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
+  const typeParams: RustTypeParameter[] = [];
+  for (const typeParameter of ast.typeParameters(node)) {
+    if (typeParameter === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.type-parameter",
+        "Function declaration contains an undefined type-parameter slot.",
+      ));
+      return undefined;
+    }
+    const typeParameterName = ast.text(ast.name(typeParameter) ?? typeParameter);
+    if (!isValidRustIdentifier(typeParameterName)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, typeParameter),
+        "rust.backend.generics",
+        "Type parameter names must be valid Rust identifiers.",
+      ));
+      return undefined;
+    }
+    typeParams.push({ name: typeParameterName, bounds: [] });
+  }
+  const genericRequirements = createRustGenericRequirementSet(
+    typeParams.map((parameter) => parameter.name),
+  );
+  context = { ...context, genericRequirements };
   const params: RustFunctionParam[] = [];
+  const locationParameterStatements: RustStmt[] = [];
   let paramsFailed = false;
   for (const parameter of ast.parameters(node)) {
     if (parameter === undefined) {
@@ -66,11 +99,45 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       paramsFailed = true;
       continue;
     }
+    const locationStorage = rustLocationStorageForDeclaration(parameter, context);
+    if (locationStorage !== undefined &&
+      (parameterCarrier === undefined ||
+        !rustTargetTypeRefEquals(parameterCarrier, locationStorage.valueCarrier))) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, parameter),
+        "rust.backend.typed-location-parameter-carrier",
+        `Promoted parameter '${parameterName}' conflicts with its finalized parameter carrier.`,
+      ));
+      paramsFailed = true;
+      continue;
+    }
     params.push({
       name: parameterName,
       type: parameterType,
-      mutable: context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+      mutable: locationStorage === undefined &&
+        context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
     });
+    if (locationStorage !== undefined) {
+      if (!requireRustLocationValueCarrier(
+        locationStorage.valueCarrier,
+        parameter,
+        context,
+      )) {
+        paramsFailed = true;
+        continue;
+      }
+      context.usedAliases?.add("rt");
+      locationParameterStatements.push({
+        kind: "let",
+        name: parameterName,
+        mutable: false,
+        init: {
+          kind: "call",
+          path: "rt::Location::allocate",
+          args: [{ kind: "path", path: parameterName }],
+        },
+      });
+    }
   }
   const returnTypeNode = Node_Type(ast, node);
   if (returnTypeNode === undefined) {
@@ -110,10 +177,13 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     emittedLocalNames: new Set(params.map((param) => param.name)),
     ...(fallible ? { fallibleContext: true } : {}),
   };
-  const body = planBlockLike(bodyNode, bodyContext);
-  if (paramsFailed || body === undefined) {
+  const plannedBody = planBlockLike(bodyNode, bodyContext);
+  if (paramsFailed || plannedBody === undefined) {
     return undefined;
   }
+  const body: RustBlock = {
+    statements: [...locationParameterStatements, ...plannedBody.statements],
+  };
   if (returnType !== undefined && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
@@ -122,27 +192,10 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
-  const typeParams: string[] = [];
-  for (const typeParameter of ast.typeParameters(node)) {
-    if (typeParameter === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.type-parameter",
-        "Function declaration contains an undefined type-parameter slot.",
-      ));
-      return undefined;
-    }
-    const typeParameterName = ast.text(ast.name(typeParameter) ?? typeParameter);
-    if (!isValidRustIdentifier(typeParameterName)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, typeParameter),
-        "rust.backend.generics",
-        "Type parameter names must be valid Rust identifiers.",
-      ));
-      return undefined;
-    }
-    typeParams.push(typeParameterName);
-  }
+  const finalizedTypeParams = applyRustGenericRequirements(
+    typeParams,
+    genericRequirements,
+  );
   return {
     kind: "function",
     name,
@@ -150,7 +203,9 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(isAsync ? { isAsync: true } : {}),
     ...(fallible ? { fallible: true } : {}),
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    ...(finalizedTypeParams.length === 0
+      ? {}
+      : { typeParams: finalizedTypeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: applyFallibleShape(applyTailReturn(body, returnType !== undefined), fallible, returnType !== undefined),

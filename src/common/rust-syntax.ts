@@ -37,6 +37,13 @@ export function isRustBinaryOperator(value: RustOperatorToken): value is RustBin
     value === "!=" || value === "&&" || value === "||";
 }
 
+export function isRustAssignmentOperator(
+  value: RustOperatorToken,
+): value is RustAssignmentOperator {
+  return value === "=" || value === "+=" || value === "-=" ||
+    value === "*=" || value === "/=" || value === "%=";
+}
+
 export function rustBinaryOperatorTraitPath(operator: RustBinaryOperator): string | undefined {
   switch (operator) {
     case "+":

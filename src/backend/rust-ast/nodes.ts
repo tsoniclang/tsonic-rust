@@ -27,10 +27,17 @@ export type RustExpr =
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "unary"; readonly operator: "-" | "!"; readonly operand: RustExpr }
   | { readonly kind: "binary"; readonly operator: RustBinaryOperator; readonly left: RustExpr; readonly right: RustExpr }
+  | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
   | { readonly kind: "call"; readonly path: string; readonly args: readonly RustExpr[] }
+  | { readonly kind: "associated-call"; readonly owner: RustType; readonly method: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "method-call"; readonly receiver: RustExpr; readonly method: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "field"; readonly receiver: RustExpr; readonly name: string }
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
+  | {
+      readonly kind: "block";
+      readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+      readonly value: RustExpr;
+    }
   | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly value: RustExpr }
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
@@ -65,6 +72,15 @@ export interface RustFunctionParam {
   readonly mutable?: boolean;
 }
 
+export type RustTypeBound =
+  | { readonly kind: "trait"; readonly path: string }
+  | { readonly kind: "lifetime"; readonly name: string };
+
+export interface RustTypeParameter {
+  readonly name: string;
+  readonly bounds: readonly RustTypeBound[];
+}
+
 export type RustSelfParam = "ref" | "mut-ref";
 
 export interface RustStructField {
@@ -92,7 +108,7 @@ export type RustItem =
       readonly attrs?: readonly string[];
       readonly isAsync?: boolean;
       readonly fallible?: boolean;
-      readonly typeParams?: readonly string[];
+      readonly typeParams?: readonly RustTypeParameter[];
       readonly params: readonly RustFunctionParam[];
       readonly returnType?: RustType;
       readonly body: RustBlock;

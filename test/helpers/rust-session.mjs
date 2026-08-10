@@ -479,6 +479,20 @@ export function acmeVectorsPackage() {
           }],
         },
         {
+          id: "@acme/vectors::mutateBoth",
+          name: "mutateBoth",
+          kind: "function",
+          signatures: [{
+            id: "@acme/vectors::mutateBoth(left,right)",
+            name: "mutateBoth",
+            parameters: [
+              { name: "left", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } },
+              { name: "right", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } },
+            ],
+            returnType: { kind: "void" },
+          }],
+        },
+        {
           id: "@acme/vectors::Vector",
           name: "Vector",
           kind: "class",
@@ -552,6 +566,13 @@ export function acmeVectorsPackage() {
         target: { form: "call", path: "acme_vectors::scale", argModes: ["mut-ref", "value"] },
         resultCarrier: unitCarrier,
         parameterCarriers: [vectorCarrier, int32Carrier],
+      },
+      {
+        exportId: "@acme/vectors::mutateBoth",
+        operationKind: "method",
+        target: { form: "call", path: "acme_vectors::mutate_both", argModes: ["mut-ref", "mut-ref"] },
+        resultCarrier: unitCarrier,
+        parameterCarriers: [vectorCarrier, vectorCarrier],
       },
       {
         exportId: "@acme/vectors::consume",

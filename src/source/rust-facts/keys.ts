@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../../policy/types.js";
+import type { Node } from "@tsonic/tsts";
 import { defineRustPlanKey } from "../../policy/keys.js";
 import type { RustPlanKey } from "../../policy/keys.js";
 import type {
@@ -6,6 +7,7 @@ import type {
   RustOperatorToken,
 } from "../../common/rust-syntax.js";
 import { closedMetadataEquals } from "../../common/closed-metadata.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type {
   RustFinalizedOperationAbiFor,
 } from "./finalized-operation-abi.js";
@@ -293,7 +295,59 @@ export type RustTargetOperationFact =
       readonly kind: "flow-marker";
       readonly operationId: string;
       readonly state: "borrowed-shared" | "borrowed-mut" | "moved";
+    }
+  | {
+      readonly kind: "typed-location";
+      readonly operationId: string;
+      readonly operation: RustTypedLocationOperationKind;
+      readonly pointeeCarrier: TargetTypeRef;
+      readonly locationCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
     };
+
+export type RustTypedLocationOperationKind =
+  | "address-of"
+  | "allocate"
+  | "load"
+  | "store"
+  | "equal-pointer";
+
+interface RustTypedLocationPlanBase {
+  readonly call: Node;
+  readonly operation: RustTypedLocationOperationKind;
+  readonly pointeeCarrier: TargetTypeRef;
+  readonly locationCarrier: TargetTypeRef;
+}
+
+export type RustTypedLocationPlan = RustTypedLocationPlanBase & (
+  | {
+      readonly operation: "address-of";
+      readonly storageExpression: Node;
+      readonly storageDeclaration: Node;
+      readonly rootExpression: Node;
+      readonly rootDeclaration: Node;
+      readonly locationIdentity: Node;
+    }
+  | {
+      readonly operation: "allocate";
+      readonly initialExpression: Node;
+      readonly locationIdentity: Node;
+    }
+  | {
+      readonly operation: "load";
+      readonly pointerExpression: Node;
+    }
+  | {
+      readonly operation: "store";
+      readonly pointerExpression: Node;
+      readonly valueExpression: Node;
+    }
+  | {
+      readonly operation: "equal-pointer";
+      readonly leftExpression: Node;
+      readonly rightExpression: Node;
+    }
+);
 
 export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact): TargetTypeRef | undefined {
   switch (fact.kind) {
@@ -311,6 +365,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "closure":
     case "source-conversion":
     case "nullish-identity":
+    case "typed-location":
       return fact.resultCarrier;
     case "for-of":
       return fact.elementCarrier;
@@ -365,6 +420,51 @@ function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: Rus
 
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
   defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
+
+export const rustTypedLocationPlanKey: RustPlanKey<RustTypedLocationPlan> =
+  defineRustPlanKey("typedLocationPlan", rustTypedLocationPlanEquals);
+
+export const rustLocationStorageFactKey: RustPlanKey<{
+  readonly valueCarrier: TargetTypeRef;
+}> = defineRustPlanKey(
+  "locationStorage",
+  (left, right) => rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
+);
+
+function rustTypedLocationPlanEquals(
+  left: RustTypedLocationPlan,
+  right: RustTypedLocationPlan,
+): boolean {
+  if (left.operation !== right.operation || left.call !== right.call ||
+    !rustTargetTypeRefEquals(left.pointeeCarrier, right.pointeeCarrier) ||
+    !rustTargetTypeRefEquals(left.locationCarrier, right.locationCarrier)) {
+    return false;
+  }
+  switch (left.operation) {
+    case "address-of":
+      return right.operation === "address-of" &&
+        left.storageExpression === right.storageExpression &&
+        left.storageDeclaration === right.storageDeclaration &&
+        left.rootExpression === right.rootExpression &&
+        left.rootDeclaration === right.rootDeclaration &&
+        left.locationIdentity === right.locationIdentity;
+    case "allocate":
+      return right.operation === "allocate" &&
+        left.initialExpression === right.initialExpression &&
+        left.locationIdentity === right.locationIdentity;
+    case "load":
+      return right.operation === "load" &&
+        left.pointerExpression === right.pointerExpression;
+    case "store":
+      return right.operation === "store" &&
+        left.pointerExpression === right.pointerExpression &&
+        left.valueExpression === right.valueExpression;
+    case "equal-pointer":
+      return right.operation === "equal-pointer" &&
+        left.leftExpression === right.leftExpression &&
+        left.rightExpression === right.rightExpression;
+  }
+}
 
 
 export const rustOptionWrapFactKey: RustPlanKey<{ readonly wrap: boolean }> =

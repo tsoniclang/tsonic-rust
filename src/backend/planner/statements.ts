@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
+import { isRustAssignmentOperator } from "../../common/rust-syntax.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -48,7 +49,11 @@ import {
 } from "../../common/source-ast.js";
 import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import { rustTypeFromCarrierInContext as renderRustTypeInContext } from "./render-types.js";
-import { isRustBoolCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
+import {
+  isRustBoolCarrier,
+  isRustUnitCarrier,
+  rustLocationTargetType,
+} from "../../source/rust-target-types.js";
 import { validateRustFinalizedOperationAbi } from "../../source/rust-facts/finalized-operation-abi.js";
 import { rustTargetOperationIsDirectLocation } from "../../source/rust-facts/target-operation.js";
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
@@ -64,6 +69,11 @@ import {
 import { diagnosticInput, isValidRustIdentifier, rustSourceName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
+import {
+  planRustPromotedStorageWrite,
+  rustLocationStorageForDeclaration,
+} from "./typed-locations.js";
+import { requireRustLocationValueCarrier } from "./generic-requirements.js";
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -208,7 +218,16 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     return undefined;
   }
   const initializerFact = context.input.facts.getFact(initializer, rustTargetOperationFactKey);
+  const locationStorage = rustLocationStorageForDeclaration(declaration, context);
   if (initializerFact !== undefined && initializerFact.kind === "array-literal" && initializerFact.lane === "sparse") {
+    if (locationStorage !== undefined) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.typed-location-storage",
+        "Sparse JavaScript array storage cannot be promoted to a Rust typed location.",
+      ));
+      return undefined;
+    }
     return planSparseArrayLet(node, declaration, name, initializer, initializerFact, context);
   }
   const planned = planExpression(initializer, context);
@@ -221,7 +240,10 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
   let rustType;
   if (typeNode !== undefined) {
-    rustType = rustTypeFromCarrierInContext(annotatedCarrier, context);
+    const renderedCarrier = locationStorage === undefined
+      ? annotatedCarrier
+      : rustLocationTargetType(locationStorage.valueCarrier);
+    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
     if (rustType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, typeNode),
@@ -251,15 +273,43 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     ));
     return undefined;
   }
+  if (locationStorage !== undefined &&
+    (!rustTargetTypeRefEquals(declarationCarrier, locationStorage.valueCarrier) ||
+      (annotatedCarrier !== undefined &&
+        !rustTargetTypeRefEquals(annotatedCarrier, locationStorage.valueCarrier)))) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.typed-location-storage-carrier",
+      "Promoted Rust storage conflicts with its finalized declaration carrier.",
+    ));
+    return undefined;
+  }
   const ownedBinding = declarationCarrier.kind !== "pointer";
-  const mutable = context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
-    (ownedBinding && context.input.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined);
+  const mutable = locationStorage === undefined &&
+    (context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
+      (ownedBinding && context.input.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined));
+  const init = locationStorage === undefined
+    ? planned
+    : (() => {
+        if (!requireRustLocationValueCarrier(
+          locationStorage.valueCarrier,
+          declaration,
+          context,
+        )) {
+          return undefined;
+        }
+        context.usedAliases?.add("rt");
+        return { kind: "call", path: "rt::Location::allocate", args: [planned] } as const;
+      })();
+  if (init === undefined) {
+    return undefined;
+  }
   return [{
     kind: "let",
     name,
     mutable,
     ...(rustType === undefined ? {} : { type: rustType }),
-    init: planned,
+    init,
   }];
 }
 
@@ -294,6 +344,16 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
   const target = rustSourceName(context, ast.text(operand));
   if (!isValidRustIdentifier(target)) {
     return undefined;
+  }
+  const promoted = planRustPromotedStorageWrite(
+    operand,
+    fact.operator,
+    { kind: "int-literal", text: "1" },
+    context,
+    planExpression,
+  );
+  if (promoted.handled) {
+    return promoted.statement === undefined ? undefined : [promoted.statement];
   }
   return [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value: { kind: "int-literal", text: "1" } }];
 }
@@ -386,6 +446,14 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         return undefined;
       }
       const operator = fact.operator;
+      if (!isRustAssignmentOperator(operator)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, expression),
+          "rust.backend.assignment-operator",
+          "Finalized assignment fact does not contain a Rust assignment operator.",
+        ));
+        return undefined;
+      }
       const valueNode = operatorKind === KindEqualsToken && operator !== "="
         ? BinaryExpression_Right(context.input.ast, right)
         : right;
@@ -400,6 +468,16 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
       const value = planExpression(valueNode, context);
       if (value === undefined) {
         return undefined;
+      }
+      const promoted = planRustPromotedStorageWrite(
+        left,
+        operator,
+        value,
+        context,
+        planExpression,
+      );
+      if (promoted.handled) {
+        return promoted.statement === undefined ? undefined : [promoted.statement];
       }
       return operator === "+=" || operator === "-=" || operator === "*=" || operator === "/=" || operator === "%="
         ? [{ kind: "assign", target, operator, value }]

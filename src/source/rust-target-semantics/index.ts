@@ -1,7 +1,6 @@
 import {
   flowStateFactKey,
   functionPointerFactKey,
-  pointerFactKey,
 } from "@tsonic/tsts";
 import type {
   AstReader,
@@ -724,11 +723,11 @@ function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined):
   if (existing !== undefined) {
     return existing.carrier;
   }
-  if (facts.get(typeNode, pointerFactKey) !== undefined || facts.get(typeNode, functionPointerFactKey) !== undefined) {
+  if (facts.get(typeNode, functionPointerFactKey) !== undefined) {
     appendRustDiagnostic(
       walk,
       "RUST_SOURCE_MARKER_UNSUPPORTED",
-      "Pointer/FunctionPointer type markers have no Rust target lane yet; they require a separately approved unsafe-boundary contract.",
+      "FunctionPointer type markers have no Rust target lane yet; they require a separately approved callable ABI contract.",
       typeNode,
       ["target.capability=rust.source.type-marker"],
     );
@@ -882,7 +881,9 @@ function applyOptionLane(
     return expected;
   }
   if (resolved !== undefined && rustTargetTypeRefEquals(resolved, inner)) {
-    if (existing === undefined || existing.kind === "operator-token" || existing.kind === "provider-operation" || existing.kind === "source-field" || existing.kind === "source-call") {
+    if (existing === undefined || existing.kind === "operator-token" ||
+      existing.kind === "provider-operation" || existing.kind === "source-field" ||
+      existing.kind === "source-call" || existing.kind === "typed-location") {
       walk.context.facts.set(expression, rustOptionWrapFactKey, { wrap: true }, [{ message: "rust option wrap" }]);
     }
     walk.context.facts.set(expression, rustConversionKey, { convertedType: expected }, [
@@ -1648,22 +1649,41 @@ function finalizeProjectSourceTargetTypeArguments(
   if (sourceArguments.length !== selectedTargets.length) {
     return undefined;
   }
-  if (sourceArguments.length === 0 || expected === undefined || selected.member.returnType === undefined) {
+  if (sourceArguments.length === 0) {
     return selectedTargets;
   }
   const parameterNames = new Set(sourceArguments.map((argument) => argument.typeParameterName));
+  const finalized = [...selectedTargets];
+  const inferred = reconcileProjectSourceArgumentTypeParameters(
+    walk,
+    selected,
+    callArguments,
+    parameterNames,
+  );
+  if (inferred === undefined) {
+    return undefined;
+  }
+  for (let index = 0; index < sourceArguments.length; index += 1) {
+    const source = sourceArguments[index]!;
+    const target = inferred.get(source.typeParameterName);
+    if (target !== undefined && source.explicitTypeNode === undefined) {
+      finalized[index] = target;
+    }
+  }
+  if (expected === undefined || selected.member.returnType === undefined) {
+    return finalized;
+  }
   const contextual = inferRustTargetTypeParameterBindings(
     selected.member.returnType,
     expected,
     parameterNames,
   );
   if (contextual === undefined || contextual.size === 0) {
-    return selectedTargets;
+    return finalized;
   }
-  const finalized = [...selectedTargets];
   for (let index = 0; index < sourceArguments.length; index += 1) {
     const source = sourceArguments[index]!;
-    const selectedTarget = selectedTargets[index]!;
+    const selectedTarget = finalized[index]!;
     const contextualTarget = contextual.get(source.typeParameterName);
     if (contextualTarget === undefined || rustTargetTypeRefEquals(selectedTarget, contextualTarget)) {
       continue;
@@ -1682,6 +1702,53 @@ function finalizeProjectSourceTargetTypeArguments(
     finalized[index] = contextualTarget;
   }
   return finalized;
+}
+
+function reconcileProjectSourceArgumentTypeParameters(
+  walk: RustFactWalk,
+  selected: RustSelectedTargetSignature,
+  callArguments: readonly Node[],
+  parameterNames: ReadonlySet<string>,
+): ReadonlyMap<string, TargetTypeRef> | undefined {
+  const reconciled = new Map<string, TargetTypeRef>();
+  const bindings = selected.sourceArgumentBindings;
+  if (bindings === undefined) {
+    return reconciled;
+  }
+  for (const [argumentIndex, argument] of callArguments.entries()) {
+    if (walk.context.ast.kindName(argument) === "KindNumericLiteral") {
+      continue;
+    }
+    const matches = bindings.filter((binding) =>
+      binding.sourceArgumentIndex === argumentIndex);
+    const first = matches[0];
+    if (first === undefined || matches.some((binding) =>
+      binding.sourceParameterIndex !== first.sourceParameterIndex ||
+      binding.sourceForm !== first.sourceForm)) {
+      return undefined;
+    }
+    const parameter = selected.member.parameters[first.sourceParameterIndex];
+    const actual = walk.context.facts.getRuntimeCarrierFact(argument)?.carrier;
+    if (parameter === undefined || actual === undefined) {
+      continue;
+    }
+    const candidate = inferRustTargetTypeParameterBindings(
+      parameter.type,
+      actual,
+      parameterNames,
+    );
+    if (candidate === undefined) {
+      continue;
+    }
+    for (const [name, carrier] of candidate) {
+      const existing = reconciled.get(name);
+      if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
+        return undefined;
+      }
+      reconciled.set(name, carrier);
+    }
+  }
+  return reconciled;
 }
 
 function projectSourceTypeArgumentHasLiteralProof(
@@ -1826,6 +1893,7 @@ function recordSelectedOperationInputs(
       }
     }
     const callArguments = ast.arguments(expression);
+    const selectedCall = walk.context.facts.getSelectedTargetCall(expression);
     for (const [index, argument] of callArguments.entries()) {
       if (argument === undefined) {
         continue;
@@ -1834,7 +1902,10 @@ function recordSelectedOperationInputs(
         walk,
         argument,
         sourceFile,
-        fact?.kind === "provider-operation" ? fact.abi.sourceArguments[index]?.carrier : undefined,
+        selectedCall?.member.parameters[index]?.type ??
+          (fact?.kind === "provider-operation"
+            ? fact.abi.sourceArguments[index]?.carrier
+            : undefined),
       );
       if (fact?.kind !== "provider-operation") {
         continue;

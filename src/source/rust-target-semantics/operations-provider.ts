@@ -58,6 +58,7 @@ import {
 } from "../rust-target-types.js";
 import {
   isRustBoolCarrier,
+  isRustCopyCarrier,
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
   isRustNullishSourceCarrier,
@@ -124,8 +125,8 @@ import {
 } from "./selected-numeric-literal.js";
 import type { RustSourceCallableAbiResolver } from "./source-callable-abi.js";
 import {
-  selectRustTypedLocationDisposition,
-} from "./typed-location-disposition.js";
+  selectRustTypedLocationCall,
+} from "./typed-location-operations.js";
 
 const sourceCallMarkerByIdentity = new Map(
   [
@@ -670,27 +671,15 @@ function mapRustSourceMarkerCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  const typedLocation = selectRustTypedLocationDisposition(
-    request.call,
+  const typedLocation = selectRustTypedLocationCall(
+    request,
+    provider,
     markerName,
-    (subject, key) => context.facts.resolve(subject, key),
-    (subject, key) => context.facts.get(subject, key),
+    context,
+    options,
   );
-  if (typedLocation.kind !== "not-typed-location") {
-    if (typedLocation.kind === "evidence-missing") {
-      return rejectSelectedOperation(
-        request.call,
-        context,
-        "RUST_POINTER_OPERATION_FACT_NOT_PROVEN",
-        `Selected typed-location operation '${typedLocation.operation}' has no matching finalized TSTS operation fact.`,
-      );
-    }
-    return rejectSelectedOperation(
-      request.call,
-      context,
-      "RUST_TYPED_LOCATION_UNSUPPORTED",
-      `Rust does not yet implement finalized typed-location operation '${typedLocation.operation}'.`,
-    );
+  if (typedLocation !== undefined) {
+    return typedLocation;
   }
   if (
     markerName !== "shared-borrow" &&
@@ -1497,7 +1486,7 @@ export function selectRustCheckedElementAccess(
   if (sourceProfileIdentity?.profile === "native" &&
     (sourceProfileIdentity.ownerName === "Array" || sourceProfileIdentity.ownerName === "ReadonlyArray") &&
     sourceProfileIdentity.memberName === "index" &&
-    nativeArrayReceiver !== undefined && isCopyProvenCarrier(nativeArrayReceiver.element)) {
+    nativeArrayReceiver !== undefined && isRustCopyCarrier(nativeArrayReceiver.element)) {
     const template: RustProviderOperationTemplate = {
       kind: "provider-operation",
       operationId: `tsonic.rust.native.${sourceProfileIdentity.ownerName}.index`,
@@ -1580,7 +1569,7 @@ export function selectRustCheckedIteration(
     kind: "for-of",
     operationId: "tsonic.rust.iteration.for-of.sync",
     elementCarrier,
-    style: isCopyProvenCarrier(elementCarrier) ? "copied" : "cloned",
+    style: isRustCopyCarrier(elementCarrier) ? "copied" : "cloned",
   };
   recordIterationInitializerCarrier(request.initializer, elementCarrier, context);
   return acceptRustOperation(request.statement, fact, context, {
@@ -1964,10 +1953,6 @@ function providerIdentityText(identity: ProviderDeclarationIdentity): string {
   return [identity.providerId, identity.providerModuleId, identity.moduleSpecifier, identity.exportName, identity.memberName, identity.signatureId]
     .filter((part) => part !== undefined)
     .join("::");
-}
-
-function isCopyProvenCarrier(carrier: TargetTypeRef): boolean {
-  return carrier.kind === "source-primitive";
 }
 
 function sourceLiteralIsRepresentableAsPrimitive(

@@ -7,36 +7,70 @@ import type {
   SourceCallMarkerKind,
 } from "@tsonic/tsts";
 
-export type RustTypedLocationDisposition =
+export type RustTypedLocationSourceSelection =
   | { readonly kind: "not-typed-location" }
   | {
       readonly kind: "evidence-missing";
       readonly operation: RustTypedLocationOperationKind;
     }
   | {
-      readonly kind: "unsupported";
+      readonly kind: "selected";
       readonly operation: RustTypedLocationOperationKind;
+      readonly sourceOperation: RustTypedLocationSourceFact;
     };
 
 export type RustTypedLocationOperationKind = Extract<
   SourceCallMarkerKind,
-  PointerOperationFact["operation"]
+  | "address-of"
+  | "allocate"
+  | "bind-pointer"
+  | "equal-pointer"
+  | "hash-pointer"
+  | "load"
+  | "project-pointer"
+  | "store"
 >;
 
-export function selectRustTypedLocationDisposition(
+export type RustTypedLocationSourceFact = Extract<
+  PointerOperationFact,
+  { readonly operation: RustTypedLocationOperationKind }
+>;
+
+export type RustSafeTypedLocationSourceFact = Extract<
+  RustTypedLocationSourceFact,
+  {
+    readonly operation:
+      | "address-of"
+      | "allocate"
+      | "equal-pointer"
+      | "load"
+      | "store";
+  }
+>;
+
+export function selectRustTypedLocationSourceOperation(
   subject: ExtensionFactSubject,
   marker: SourceCallMarkerKind,
   resolveFact: RustTypedLocationFactLookup,
   getFact: RustTypedLocationFactLookup,
-): RustTypedLocationDisposition {
+): RustTypedLocationSourceSelection {
   if (!isRustTypedLocationOperation(marker)) {
     return { kind: "not-typed-location" };
   }
   const sourceOperation = resolveFact(subject, pointerOperationFactKey) ??
     getFact(subject, pointerOperationFactKey);
-  return sourceOperation?.operation === marker
-    ? { kind: "unsupported", operation: marker }
+  return sourceOperation !== undefined &&
+      isRustTypedLocationSourceFact(sourceOperation) &&
+      sourceOperation.operation === marker &&
+      sourceOperation.call === subject
+    ? { kind: "selected", operation: marker, sourceOperation }
     : { kind: "evidence-missing", operation: marker };
+}
+
+function isRustTypedLocationSourceFact(
+  fact: PointerOperationFact,
+): fact is RustTypedLocationSourceFact {
+  return isRustTypedLocationOperation(fact.operation);
 }
 
 type RustTypedLocationFactLookup = (
@@ -50,8 +84,11 @@ function isRustTypedLocationOperation(
   switch (marker) {
     case "address-of":
     case "allocate":
+    case "bind-pointer":
     case "equal-pointer":
+    case "hash-pointer":
     case "load":
+    case "project-pointer":
     case "store":
       return true;
     default:

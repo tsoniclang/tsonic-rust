@@ -37,3 +37,8 @@ pub fn scale(v: &mut Vector, factor: i32) {
     v.x *= factor;
     v.y *= factor;
 }
+
+pub fn mutate_both(left: &mut Vector, right: &mut Vector) {
+    left.x += 1;
+    right.y += 1;
+}

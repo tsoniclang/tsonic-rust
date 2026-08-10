@@ -16,6 +16,7 @@ export type { RustPrimitiveTypeName } from "../common/rust-syntax.js";
 
 export const rustStringTargetId = "rust.std.String";
 export const rustOptionTargetId = "rust.std.Option";
+export const rustLocationTargetId = "rust.runtime.Location";
 export const rustJsValueTargetId = "rust.js.JsValue";
 export const rustJsArrayTargetId = "rust.js.JsArray";
 export const rustJsMapTargetId = "rust.js.JsMap";
@@ -232,6 +233,33 @@ export function rustOptionTargetType(value: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustOptionTargetId, typeArguments: [value] };
 }
 
+export function rustLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
+  return { kind: "target-named", id: rustLocationTargetId, typeArguments: [pointee] };
+}
+
+export function rustLocationPointeeCarrier(
+  carrier: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  return carrier?.kind === "target-named" &&
+      carrier.id === rustLocationTargetId &&
+      carrier.typeArguments?.length === 1
+    ? carrier.typeArguments[0]
+    : undefined;
+}
+
+export function rustOptionalLocationPointeeCarrier(
+  carrier: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const optionalValue = rustOptionElementCarrier(carrier);
+  return rustLocationPointeeCarrier(optionalValue ?? carrier);
+}
+
+export function isRustLocationCarrier(
+  carrier: TargetTypeRef | undefined,
+): boolean {
+  return rustLocationPointeeCarrier(carrier) !== undefined;
+}
+
 export function rustJsValueTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsValueTargetId };
 }
@@ -290,6 +318,10 @@ export function isRustUnitCarrier(carrier: TargetTypeRef | undefined): boolean {
 
 export function isRustBoolCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "source-primitive" && carrier.name === "bool";
+}
+
+export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "source-primitive";
 }
 
 const rustNumericPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {

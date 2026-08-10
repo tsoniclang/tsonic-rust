@@ -1,4 +1,5 @@
 import {
+  pointerFactKey,
   providerVirtualDeclarationFactKey,
   sourcePrimitiveFactKey,
 } from "@tsonic/tsts";
@@ -27,11 +28,13 @@ import type {
 import { materializeProviderCarrier } from "../provider-packages/index.js";
 import {
   rustFutureTargetType,
+  isRustLocationCarrier,
   isRustOptionCarrier,
   rustJsArrayTargetType,
   rustJsDateTargetType,
   rustJsMapTargetType,
   rustJsSetTargetType,
+  rustLocationTargetType,
   rustNullishSourceTargetType,
   rustOptionTargetType,
   rustSliceMutRefTargetType,
@@ -73,6 +76,12 @@ export function resolveRustTargetTypeRef(
 ): TargetTypeRef | undefined {
   if (subject === undefined) {
     return undefined;
+  }
+  const pointer = context.facts.resolve(subject, pointerFactKey) ??
+    context.facts.get(subject, pointerFactKey);
+  if (pointer !== undefined) {
+    const pointee = resolveRustTargetTypeRef(pointer.pointee, context, options);
+    return pointee === undefined ? undefined : rustLocationTargetType(pointee);
   }
   const node = asNode(subject, context);
   const existing = context.facts.getRuntimeCarrierFact(node)?.carrier;
@@ -123,6 +132,12 @@ function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const pointer = context.facts.resolve(node, pointerFactKey) ??
+    context.facts.get(node, pointerFactKey);
+  if (pointer !== undefined) {
+    const pointee = resolveRustTargetTypeRef(pointer.pointee, context, options);
+    return pointee === undefined ? undefined : rustLocationTargetType(pointee);
+  }
   const primitive = resolveSourcePrimitive(node, context);
   if (primitive !== undefined) {
     return primitive;
@@ -189,7 +204,7 @@ function resolveRustTargetTypeSyntax(
       const nullish = semanticMembers.find((member) => {
         const memberKind = ast.kindName(member);
         if (memberKind === "KindUndefinedKeyword") {
-          return options.jsEnabled;
+          return true;
         }
         if (memberKind !== "KindLiteralType") {
           return false;
@@ -201,7 +216,10 @@ function resolveRustTargetTypeSyntax(
       const valueCarrier = nullish === undefined || value === undefined
         ? undefined
         : resolveRustTargetTypeSyntax(value, context, options, resolving);
-      if (valueCarrier !== undefined) {
+      const undefinedUnion = nullish !== undefined &&
+        ast.kindName(nullish) === "KindUndefinedKeyword";
+      if (valueCarrier !== undefined &&
+        (!undefinedUnion || options.jsEnabled || isRustLocationCarrier(valueCarrier))) {
         return rustOptionTargetType(valueCarrier);
       }
     }
@@ -446,9 +464,12 @@ function resolveUnion(
   }
   const valueMembers = members.filter((member) => !context.typeShape.isNullish(member));
   const nullishMembers = members.filter((member) => context.typeShape.isNullish(member));
-  if (options.jsEnabled && valueMembers.length === 1 && nullishMembers.length > 0) {
+  if (valueMembers.length === 1 && nullishMembers.length > 0) {
     const value = resolveRustTargetType(valueMembers[0], context, options, resolving);
-    return value === undefined ? undefined : rustOptionTargetType(value);
+    return value !== undefined &&
+      (options.jsEnabled || isRustLocationCarrier(value))
+      ? rustOptionTargetType(value)
+      : undefined;
   }
   if (members.length > 0 && members.every((member) => context.typeShape.isStringLike(member))) {
     return rustStringTargetType();

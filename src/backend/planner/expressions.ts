@@ -63,6 +63,18 @@ import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSour
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
 import { isRustIntegerCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import {
+  planRustIdentifierValue,
+  planRustPromotedStorageLocation,
+  planRustTypedLocationCall,
+} from "./typed-locations.js";
+import {
+  applyRustProviderLocationScope,
+  planRustProviderLocationScope,
+} from "./provider-location-scope.js";
+import type {
+  RustFinalizedInputPlanOverrides,
+} from "./provider-location-scope.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -169,12 +181,13 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         return undefined;
       }
       const declarationModule = context.moduleNameByFileName.get(binding.fileName);
-      return {
-        kind: "path",
-        path: declarationModule !== undefined && declarationModule !== context.moduleName
+      return planRustIdentifierValue(
+        node,
+        declarationModule !== undefined && declarationModule !== context.moduleName
           ? `crate::${declarationModule}::${name}`
           : name,
-      };
+        context,
+      );
     }
     case KindParenthesizedExpression: {
       const inner = Node_Expression(context.input.ast, node);
@@ -866,21 +879,53 @@ function planProviderOperationExpression(
     ));
     return undefined;
   }
+  const locationScope = planRustProviderLocationScope(
+    context,
+    fact,
+    receiverNode,
+    argumentNodes,
+    planExpression,
+  );
+  if (locationScope.kind === "failed") {
+    return undefined;
+  }
+  const overrides = locationScope.kind === "selected"
+    ? locationScope.overrides
+    : undefined;
   const receiver = fact.abi.targetReceiver.kind === "input"
-    ? planFinalizedSourceInput(context, fact.abi.targetReceiver.input, receiverNode, argumentNodes, operationNode, "target-receiver")
+    ? planFinalizedSourceInput(
+        context,
+        fact.abi.targetReceiver.input,
+        receiverNode,
+        argumentNodes,
+        operationNode,
+        "target-receiver",
+        overrides,
+      )
     : undefined;
   if (fact.abi.targetReceiver.kind === "input" && receiver === undefined) {
     return undefined;
   }
   const args: RustExpr[] = [];
   for (const input of fact.abi.targetArguments) {
-    const planned = planFinalizedTargetInput(context, input, receiverNode, argumentNodes, operationNode);
+    const planned = planFinalizedTargetInput(
+      context,
+      input,
+      receiverNode,
+      argumentNodes,
+      operationNode,
+      overrides,
+    );
     if (planned === undefined) {
       return undefined;
     }
     args.push(planned);
   }
   const form = fact.abi.target;
+  const scoped = (expression: RustExpr | undefined): RustExpr | undefined =>
+    expression === undefined || locationScope.kind !== "selected"
+      ? expression
+      : applyRustProviderLocationScope(expression, locationScope);
   switch (form.form) {
     case "marker":
       return undefined;
@@ -900,41 +945,47 @@ function planProviderOperationExpression(
         ));
         return undefined;
       }
-      return { kind: "method-call", receiver: typedReceiver, method: form.name, args };
+      return scoped({ kind: "method-call", receiver: typedReceiver, method: form.name, args });
     }
     case "call": {
       registerAliasFromPath(context, form.path);
-      return applyProviderOperationChain({ kind: "call", path: form.path, args }, form.chain);
+      return scoped(applyProviderOperationChain({ kind: "call", path: form.path, args }, form.chain));
     }
     case "call-jsvalue-slice":
     case "call-str-slice":
     case "free-call": {
       registerAliasFromPath(context, form.path);
-      return { kind: "call", path: form.path, args };
+      return scoped({ kind: "call", path: form.path, args });
     }
     case "path": {
       registerAliasFromPath(context, form.path);
-      return args.length === 0 ? { kind: "path", path: form.path } : undefined;
+      return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
     }
     case "method":
     case "arg-receiver-method":
-      return receiver === undefined ? undefined : { kind: "method-call", receiver, method: form.name, args };
+      return scoped(receiver === undefined
+        ? undefined
+        : { kind: "method-call", receiver, method: form.name, args });
     case "receiver-method":
       return receiver === undefined
         ? undefined
-        : applyProviderOperationChain(
+        : scoped(applyProviderOperationChain(
             { kind: "method-call", receiver, method: form.name, args },
             form.chain,
-          );
+          ));
     case "field": {
-      return receiver === undefined || args.length !== 0 ? undefined : { kind: "field", receiver, name: form.name };
+      return scoped(receiver === undefined || args.length !== 0
+        ? undefined
+        : { kind: "field", receiver, name: form.name });
     }
     case "index": {
       if (receiver === undefined || args.length !== 1) {
         return undefined;
       }
       const index = args[0];
-      return index === undefined ? undefined : { kind: "index", receiver, index };
+      return scoped(index === undefined
+        ? undefined
+        : { kind: "index", receiver, index });
     }
     case "binary-operator": {
       const [left, right] = args;
@@ -949,7 +1000,7 @@ function planProviderOperationExpression(
         ));
         return undefined;
       }
-      return { kind: "binary", operator: form.operator, left, right };
+      return scoped({ kind: "binary", operator: form.operator, left, right });
     }
   }
 }
@@ -1017,6 +1068,7 @@ export function planFinalizedTargetInput(
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
   operationNode: Node,
+  overrides?: RustFinalizedInputPlanOverrides,
 ): RustExpr | undefined {
   if (isRustFinalizedConstantInput(input)) {
     return providerConstantExpression(input.source.value);
@@ -1024,7 +1076,15 @@ export function planFinalizedTargetInput(
   if (isRustFinalizedSliceInput(input)) {
     const elements: RustExpr[] = [];
     for (const element of input.elements) {
-      const planned = planFinalizedSourceInput(context, element, receiverNode, argumentNodes, operationNode);
+      const planned = planFinalizedSourceInput(
+        context,
+        element,
+        receiverNode,
+        argumentNodes,
+        operationNode,
+        "target-argument",
+        overrides,
+      );
       if (planned === undefined) {
         return undefined;
       }
@@ -1041,7 +1101,15 @@ export function planFinalizedTargetInput(
     }
     return { kind: "reference", expr: { kind: "slice-literal", elements } };
   }
-  return planFinalizedSourceInput(context, input, receiverNode, argumentNodes, operationNode);
+  return planFinalizedSourceInput(
+    context,
+    input,
+    receiverNode,
+    argumentNodes,
+    operationNode,
+    "target-argument",
+    overrides,
+  );
 }
 
 export function planFinalizedSourceInput(
@@ -1051,6 +1119,7 @@ export function planFinalizedSourceInput(
   argumentNodes: readonly (Node | undefined)[],
   operationNode: Node,
   position: "target-argument" | "target-receiver" = "target-argument",
+  overrides?: RustFinalizedInputPlanOverrides,
 ): RustExpr | undefined {
   const sourceNode = input.source.kind === "receiver"
     ? receiverNode
@@ -1081,7 +1150,12 @@ export function planFinalizedSourceInput(
     ));
     return undefined;
   }
-  const expression = planExpression(sourceNode, context);
+  const inputOverride = overrides?.inputs.get(input);
+  if (inputOverride !== undefined) {
+    return inputOverride;
+  }
+  const expression = overrides?.sourceValues.get(sourceNode) ??
+    planExpression(sourceNode, context);
   if (expression === undefined) {
     return undefined;
   }
@@ -1143,7 +1217,8 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
   const { ast } = context.input;
   const fact = rustOperationFact(node, context);
   const callCarrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  const selectedResultCarrier = fact?.kind === "source-call" || fact?.kind === "provider-operation"
+  const selectedResultCarrier = fact?.kind === "source-call" ||
+      fact?.kind === "provider-operation" || fact?.kind === "typed-location"
     ? fact.resultCarrier
     : undefined;
   if (selectedResultCarrier !== undefined &&
@@ -1180,6 +1255,9 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     return undefined;
   }
   const callee = Node_Expression(context.input.ast, node);
+  if (fact?.kind === "typed-location") {
+    return planRustTypedLocationCall(node, fact, context, planExpression);
+  }
   if (fact !== undefined && fact.kind === "flow-marker") {
     const args = planArguments(node, context);
     if (args === undefined || args.length !== 1) {
@@ -1234,6 +1312,7 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
     if (!requireProviderArgumentPassingFacts(context, fact, providerArgumentNodes)) {
       return undefined;
     }
+    const diagnosticCount = context.diagnostics.length;
     const planned = planProviderOperationExpression(
       context,
       fact,
@@ -1241,12 +1320,14 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
       providerArgumentNodes,
       node,
     );
-    if (planned === undefined) {
+    if (planned === undefined && context.diagnostics.length === diagnosticCount) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
         "rust.provider.call",
         "Provider call operation could not be lowered.",
       ));
+    }
+    if (planned === undefined) {
       return undefined;
     }
     return finishProviderOperationExpression(context, fact, planned, node);
@@ -1433,9 +1514,35 @@ function planSelectedSourceCall(
       const receiverNode = callee !== undefined && context.input.ast.kindName(callee) === KindPropertyAccessExpression
         ? Node_Expression(context.input.ast, callee)
         : undefined;
-      const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+      const promoted = receiverNode === undefined || !fact.target.mutatesSelf
+        ? { kind: "not-promoted" as const }
+        : planRustPromotedStorageLocation(
+            receiverNode,
+            context,
+            planExpression,
+            shaped.length > 0,
+          );
+      if (promoted.kind === "promoted") {
+        if (promoted.expression === undefined) {
+          break;
+        }
+        planned = planPromotedSourceMethodCall(
+          promoted.expression,
+          fact.target.name,
+          shaped,
+        );
+        break;
+      }
+      const receiver = receiverNode === undefined
+        ? undefined
+        : planExpression(receiverNode, context);
       if (receiver !== undefined) {
-        planned = { kind: "method-call", receiver, method: fact.target.name, args: shaped };
+        planned = {
+          kind: "method-call",
+          receiver,
+          method: fact.target.name,
+          args: shaped,
+        };
       }
       break;
     }
@@ -1485,6 +1592,48 @@ function planSelectedSourceCall(
     return undefined;
   }
   return { kind: "try", expr: planned };
+}
+
+function planPromotedSourceMethodCall(
+  location: RustExpr,
+  method: string,
+  arguments_: readonly RustExpr[],
+): RustExpr {
+  const locationName = "__tsonic_location";
+  const ownerName = "__tsonic_location_value";
+  const argumentBindings = arguments_.map((value, index) => ({
+    name: `__tsonic_location_argument_${index}`,
+    value,
+  }));
+  const locationReceiver: RustExpr = arguments_.length === 0
+    ? location
+    : { kind: "path", path: locationName };
+  const call: RustExpr = {
+    kind: "method-call",
+    receiver: { kind: "path", path: ownerName },
+    method,
+    args: argumentBindings.map((binding) => ({
+      kind: "path",
+      path: binding.name,
+    })),
+  };
+  const mutation: RustExpr = {
+    kind: "method-call",
+    receiver: locationReceiver,
+    method: "with_mut",
+    args: [{
+      kind: "closure",
+      params: [{ name: ownerName, byRefCopy: false }],
+      body: call,
+    }],
+  };
+  return arguments_.length === 0
+    ? mutation
+    : {
+        kind: "block",
+        bindings: [{ name: locationName, value: location }, ...argumentBindings],
+        value: mutation,
+      };
 }
 
 export function sourceCallSelectedMemberMatches(
@@ -1676,6 +1825,7 @@ function planNewExpression(node: Node, context: RustPlanContext): RustExpr | und
   if (!requireProviderArgumentPassingFacts(context, fact, argumentNodes)) {
     return undefined;
   }
+  const diagnosticCount = context.diagnostics.length;
   const planned = planProviderOperationExpression(
     context,
     fact,
@@ -1683,12 +1833,14 @@ function planNewExpression(node: Node, context: RustPlanContext): RustExpr | und
     argumentNodes,
     node,
   );
-  if (planned === undefined) {
+  if (planned === undefined && context.diagnostics.length === diagnosticCount) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.provider.constructor",
       "Provider constructor operation could not be lowered.",
     ));
+  }
+  if (planned === undefined) {
     return undefined;
   }
   return finishProviderOperationExpression(context, fact, planned, node);
@@ -1779,13 +1931,16 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
     ));
     return undefined;
   }
+  const diagnosticCount = context.diagnostics.length;
   const planned = planProviderOperationExpression(context, fact, Node_Expression(context.input.ast, node), [], node);
-  if (planned === undefined) {
+  if (planned === undefined && context.diagnostics.length === diagnosticCount) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.provider.property",
       "Provider property operation could not be lowered.",
     ));
+  }
+  if (planned === undefined) {
     return undefined;
   }
   return finishProviderOperationExpression(context, fact, planned, node);
@@ -1868,13 +2023,16 @@ function planElementAccess(node: Node, context: RustPlanContext): RustExpr | und
   if (!requireProviderArgumentPassingFacts(context, fact, [argumentNode])) {
     return undefined;
   }
+  const diagnosticCount = context.diagnostics.length;
   const planned = planProviderOperationExpression(context, fact, Node_Expression(context.input.ast, node), [argumentNode], node);
-  if (planned === undefined) {
+  if (planned === undefined && context.diagnostics.length === diagnosticCount) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.provider.indexer",
       "Provider indexer operation could not be lowered.",
     ));
+  }
+  if (planned === undefined) {
     return undefined;
   }
   return finishProviderOperationExpression(context, fact, planned, node);

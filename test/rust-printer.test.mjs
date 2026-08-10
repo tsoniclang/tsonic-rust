@@ -119,6 +119,47 @@ test("a fitted outer call stays attached to its multiline nested call", () => {
   assert.doesNotMatch(text, /usize_to_i32\(\n        tsonic_rust_js/u);
 });
 
+test("a single block argument stays attached to its outer call", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      pub: true,
+      name: "run",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+          kind: "call",
+          path: "conversion_with_an_intentionally_long_name",
+          args: [{
+            kind: "block",
+            bindings: [{
+              name: "location",
+              value: { kind: "call", path: "load_location", args: [] },
+            }],
+            value: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "location" },
+              method: "with_mut",
+              args: [{
+                kind: "closure",
+                params: [{ name: "value", byRefCopy: false }],
+                body: { kind: "path", path: "value" },
+              }],
+            },
+          }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /conversion_with_an_intentionally_long_name\(\{\n/);
+  assert.match(source, /\n    \}\);/);
+});
+
 test("long logical chains use rustfmt-compatible operand-per-line layout", () => {
   const terms = Array.from({ length: 7 }, (_, index) => ({
     kind: "binary",

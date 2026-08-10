@@ -1,6 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
+import type { RustGenericRequirementSet } from "./generic-requirements.js";
 
 export interface RustPlanContext {
   readonly input: RustTranslationContext;
@@ -25,6 +26,10 @@ export interface RustPlanContext {
   readonly usedAliases?: Set<string>;
   // Per-item flag: a non-snake_case user identifier was emitted.
   readonly nonSnakeSeen?: { value: boolean };
+  // Rust-native obligations discovered while planning one generic function.
+  // The finalized signature is rendered only after the complete body has been
+  // planned, so late requirements cannot produce an invalid partial contract.
+  readonly genericRequirements?: RustGenericRequirementSet;
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS
