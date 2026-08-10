@@ -9,7 +9,12 @@ import {
   BreakOrContinueStatement_Label,
   CatchClause_Block,
   CatchClause_VariableDeclaration,
+  CaseBlock_Clauses,
+  CaseOrDefaultClause_Expression,
+  CaseOrDefaultClause_Statements,
   DoStatement_Statement,
+  LabeledStatement_Label,
+  LabeledStatement_Statement,
   ElementAccessExpression_ArgumentExpression,
   TryStatement_CatchClause,
   TryStatement_FinallyBlock,
@@ -17,6 +22,8 @@ import {
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   IterationStatement_Statement,
+  SwitchStatement_CaseBlock,
+  SwitchStatement_Expression,
   KindAsteriskEqualsToken,
   KindMinusEqualsToken,
   KindPercentEqualsToken,
@@ -31,6 +38,7 @@ import {
   KindBlock,
   KindBreakStatement,
   KindCallExpression,
+  KindCaseClause,
   KindContinueStatement,
   KindDebuggerStatement,
   KindDoStatement,
@@ -40,11 +48,13 @@ import {
   KindForStatement,
   KindIdentifier,
   KindIfStatement,
+  KindLabeledStatement,
   KindNumericLiteral,
   KindPostfixUnaryExpression,
   KindPrefixUnaryExpression,
   KindReturnStatement,
   KindStringLiteral,
+  KindSwitchStatement,
   KindVariableDeclaration,
   KindVariableStatement,
   KindWhileStatement,
@@ -75,7 +85,7 @@ import {
   requireProviderArgumentPassingFacts,
 } from "./expressions.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName } from "./plan-context.js";
-import type { RustCompletionBoundary, RustLoopTarget, RustPlanContext } from "./plan-context.js";
+import type { RustCompletionBoundary, RustControlTarget, RustLoopTarget, RustPlanContext } from "./plan-context.js";
 import { allocateRustSyntheticName } from "./synthetic-names.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
@@ -119,6 +129,12 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
     case KindEmptyStatement:
     case KindDebuggerStatement: {
       return [];
+    }
+    case KindLabeledStatement: {
+      return planLabeledStatement(node, context);
+    }
+    case KindSwitchStatement: {
+      return planSwitchStatement(node, context);
     }
     case KindExpressionStatement: {
       return planExpressionStatement(node, context);
@@ -346,7 +362,7 @@ function planResourceManagedBody(
     fallible: context.fallibleContext === true,
     asynchronous: context.asyncContext === true,
     dispatchReturn: { value: false },
-    dispatchLoops: new Map(),
+    dispatchTargets: new Map(),
   };
   const body = planBody({ ...context, completionBoundary: boundary });
   const cleanupResourceName = allocateRustSyntheticName(
@@ -376,12 +392,13 @@ function planResourceManagedBody(
     cleanup,
     propagate: boundary.parent !== undefined,
     dispatchReturn: boundary.dispatchReturn.value,
-    dispatchLoops: [...boundary.dispatchLoops.values()]
+    dispatchTargets: [...boundary.dispatchTargets.values()]
       .sort((left, right) => left.id - right.id)
       .map((target) => ({
+        kind: target.kind,
         id: target.id,
         label: target.label,
-        continuePrelude: target.continuePrelude,
+        ...(target.kind === "loop" ? { continuePrelude: target.continuePrelude } : {}),
       })),
     terminates,
   };
@@ -520,8 +537,13 @@ function planLoopExitStatement(
   const sourceLabel = sourceLabelNode === undefined
     ? undefined
     : context.input.ast.text(sourceLabelNode);
-  const target = [...(context.loops ?? [])].reverse().find((candidate) =>
-    sourceLabel === undefined || candidate.sourceLabel === sourceLabel);
+  const target = [...(context.controlTargets ?? [])].reverse().find((candidate) =>
+    completion === "continue"
+      ? candidate.kind === "loop" &&
+        (sourceLabel === undefined || candidate.sourceLabel === sourceLabel)
+      : sourceLabel === undefined
+        ? candidate.kind !== "label"
+        : candidate.sourceLabel === sourceLabel);
   if (target === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -532,15 +554,16 @@ function planLoopExitStatement(
     ));
     return undefined;
   }
+  target.used.value = true;
   if (context.completionBoundary === target.resourceBoundary) {
     return completion === "continue"
-      ? [...target.continuePrelude, { kind: "continue", label: target.label }]
+      ? [...(target.kind === "loop" ? target.continuePrelude : []), { kind: "continue", label: target.label }]
       : [{ kind: "break", label: target.label }];
   }
   let boundary = context.completionBoundary;
   while (boundary !== undefined && boundary !== target.resourceBoundary) {
     if (boundary.parent === target.resourceBoundary) {
-      boundary.dispatchLoops.set(target.id, target);
+      boundary.dispatchTargets.set(target.id, target);
     }
     boundary = boundary.parent;
   }
@@ -567,6 +590,7 @@ function rustBlockDefinitelyExits(block: RustBlock): boolean {
     return false;
   }
   if (last.kind === "return" || last.kind === "tail" || last.kind === "throw" ||
+    last.kind === "break" || last.kind === "continue" ||
     last.kind === "completion-exit") {
     return true;
   }
@@ -975,7 +999,198 @@ function planIfStatement(node: Node, context: RustPlanContext): readonly RustStm
   }];
 }
 
-function planWhileStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+function planLabeledStatement(
+  node: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const labelNode = LabeledStatement_Label(ast, node);
+  const bodyNode = LabeledStatement_Statement(ast, node);
+  const sourceLabel = labelNode === undefined ? "" : ast.text(labelNode);
+  if (bodyNode === undefined || sourceLabel.length === 0) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.labeled-statement-shape",
+      "Labeled statements require exact label and body nodes.",
+    ));
+    return undefined;
+  }
+  switch (ast.kindName(bodyNode)) {
+    case KindWhileStatement:
+      return planWhileStatement(bodyNode, context, sourceLabel);
+    case KindDoStatement:
+      return planDoStatement(bodyNode, context, sourceLabel);
+    case KindForStatement:
+      return planForStatement(bodyNode, context, sourceLabel);
+    case "KindForOfStatement":
+      return planForOfStatement(bodyNode, context, sourceLabel);
+    default: {
+      const target = createRustBreakTarget(context, "label", sourceLabel);
+      if (target === undefined) {
+        return undefined;
+      }
+      const body = planEmbeddedBlock(bodyNode, withRustControlTarget(context, target));
+      return body === undefined
+        ? undefined
+        : [{ kind: "scope", ...(target.used.value ? { label: target.label } : {}), body }];
+    }
+  }
+}
+
+function planSwitchStatement(
+  node: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const discriminantNode = SwitchStatement_Expression(ast, node);
+  const clauseNodes = CaseBlock_Clauses(ast, SwitchStatement_CaseBlock(ast, node));
+  if (fact?.kind !== "switch" || discriminantNode === undefined || clauseNodes === undefined ||
+    clauseNodes.some((clause) => clause === undefined) || fact.clauses.length !== clauseNodes.length ||
+    fact.clauses.some((clause, index) => clause.clause !== clauseNodes[index])) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.switch-selection",
+      "Switch lowering requires one exact finalized discriminant and clause selection fact.",
+    ));
+    return undefined;
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.switch-names",
+      "Switch lowering requires finalized hygienic-name state.",
+    ));
+    return undefined;
+  }
+  const discriminant = planExpression(discriminantNode, context);
+  const target = createRustBreakTarget(context, "switch");
+  if (discriminant === undefined || target === undefined) {
+    return undefined;
+  }
+  const switchContext = withRustControlTarget(context, target);
+  const sections: { readonly expression?: RustExpr; readonly body: RustBlock }[] = [];
+  for (let index = 0; index < clauseNodes.length; index += 1) {
+    const clause = clauseNodes[index]!;
+    const selected = fact.clauses[index]!;
+    const sourceExpression = CaseOrDefaultClause_Expression(ast, clause);
+    const statements = CaseOrDefaultClause_Statements(ast, clause);
+    if (statements === undefined || statements.some((statement) => statement === undefined) ||
+      (ast.kindName(clause) === KindCaseClause &&
+        (sourceExpression === undefined || selected.expression !== sourceExpression ||
+          selected.carrier === undefined ||
+          !rustTargetTypeRefEquals(selected.carrier, fact.discriminantCarrier)))) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, clause),
+        "rust.backend.switch-clause",
+        "Switch clause conflicts with its finalized source selection fact.",
+      ));
+      return undefined;
+    }
+    if (statements.some((statement) =>
+      statement !== undefined && directResourceDeclaration(statement, context) !== undefined)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, clause),
+        "rust.backend.switch-resource-scope",
+        "A switch-clause resource declaration requires an explicit block so its lexical disposal boundary is exact.",
+      ));
+      return undefined;
+    }
+    const expression = sourceExpression === undefined
+      ? undefined
+      : planExpression(sourceExpression, context);
+    if (sourceExpression !== undefined && expression === undefined) {
+      return undefined;
+    }
+    const body = planStatementSequence(
+      statements,
+      clause,
+      switchContext,
+    );
+    if (body === undefined) {
+      return undefined;
+    }
+    sections.push({
+      ...(expression === undefined
+        ? {}
+        : { expression: switchCaseComparisonExpression(expression) }),
+      body,
+    });
+  }
+
+  const fallthroughBody = (start: number): RustBlock => {
+    const statements: RustStmt[] = [];
+    for (let index = start; index < sections.length; index += 1) {
+      const section = sections[index]!;
+      statements.push(...section.body.statements);
+      if (rustBlockDefinitelyExits(section.body)) {
+        break;
+      }
+    }
+    return { statements };
+  };
+  const defaultIndex = sections.findIndex((section) => section.expression === undefined);
+  let selection: RustBlock = defaultIndex < 0
+    ? { statements: [] }
+    : fallthroughBody(defaultIndex);
+  const discriminantName = allocateRustSyntheticName(context.syntheticNames, "switch_value");
+  for (let index = sections.length - 1; index >= 0; index -= 1) {
+    const section = sections[index]!;
+    if (section.expression === undefined) {
+      continue;
+    }
+    selection = {
+      statements: [{
+        kind: "if",
+        condition: switchGuardCondition(discriminantName, section.expression),
+        then: fallthroughBody(index),
+        else: selection,
+      }],
+    };
+  }
+  if (sections.every((section) => section.expression === undefined)) {
+    const body = target.used.value
+      ? [{ kind: "scope" as const, label: target.label, body: selection }]
+      : selection.statements;
+    return [
+      { kind: "let", name: "_", mutable: false, init: discriminant },
+      ...body,
+    ];
+  }
+  return [
+    { kind: "let", name: discriminantName, mutable: false, init: discriminant },
+    {
+      kind: "scope",
+      ...(target.used.value ? { label: target.label } : {}),
+      body: selection,
+    },
+  ];
+}
+
+function switchCaseComparisonExpression(expression: RustExpr): RustExpr {
+  return expression.kind === "string-literal"
+    ? { kind: "str-literal", value: expression.value }
+    : expression;
+}
+
+function switchGuardCondition(discriminantName: string, expression: RustExpr): RustExpr {
+  const discriminant: RustExpr = { kind: "path", path: discriminantName };
+  if (expression.kind === "bool-literal") {
+    return expression.value ? discriminant : negateRustCondition(discriminant);
+  }
+  return {
+    kind: "binary",
+    operator: "==",
+    left: discriminant,
+    right: expression,
+  };
+}
+
+function planWhileStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
   const condition = Node_Expression(context.input.ast, node);
   if (condition === undefined) {
     return undefined;
@@ -984,18 +1199,27 @@ function planWhileStatement(node: Node, context: RustPlanContext): readonly Rust
   if (planned === undefined) {
     return undefined;
   }
-  const target = createRustLoopTarget(context, []);
+  const target = createRustLoopTarget(context, [], sourceLabel);
   if (target === undefined) {
     return undefined;
   }
   const body = planEmbeddedBlock(
     IterationStatement_Statement(context.input.ast, node),
-    { ...context, loops: [...(context.loops ?? []), target] },
+    withRustControlTarget(context, target),
   );
-  return body === undefined ? undefined : [{ kind: "while", label: target.label, condition: planned, body }];
+  return body === undefined ? undefined : [{
+    kind: "while",
+    ...(target.used.value ? { label: target.label } : {}),
+    condition: planned,
+    body,
+  }];
 }
 
-function planDoStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+function planDoStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
   const condition = Node_Expression(context.input.ast, node);
   const bodyNode = DoStatement_Statement(context.input.ast, node);
   if (condition === undefined || bodyNode === undefined) {
@@ -1007,14 +1231,14 @@ function planDoStatement(node: Node, context: RustPlanContext): readonly RustStm
     return undefined;
   }
   const plannedCondition = planCondition(condition, context, "do-while");
-  const baseTarget = createRustLoopTarget(context, []);
+  const baseTarget = createRustLoopTarget(context, [], sourceLabel);
   if (plannedCondition === undefined || baseTarget === undefined) {
     return undefined;
   }
   const conditionExit: RustStmt = {
     kind: "if",
     condition: negateRustCondition(plannedCondition),
-    then: { statements: [{ kind: "break", label: baseTarget.label }] },
+    then: { statements: [{ kind: "break" }] },
   };
   const target: RustLoopTarget = {
     ...baseTarget,
@@ -1022,14 +1246,14 @@ function planDoStatement(node: Node, context: RustPlanContext): readonly RustStm
   };
   const body = planEmbeddedBlock(
     bodyNode,
-    { ...context, loops: [...(context.loops ?? []), target] },
+    withRustControlTarget(context, target),
   );
   if (body === undefined) {
     return undefined;
   }
   return [{
     kind: "loop",
-    label: target.label,
+    ...(target.used.value ? { label: target.label } : {}),
     body: rustBlockDefinitelyExits(body)
       ? body
       : { statements: [...body.statements, conditionExit] },
@@ -1063,7 +1287,11 @@ function negateRustCondition(condition: RustExpr): RustExpr {
   return { kind: "unary", operator: "!", operand: condition };
 }
 
-function planForStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+function planForStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
   const initializer = ForStatement_Initializer(context.input.ast, node);
   const condition = ForStatement_Condition(context.input.ast, node);
   const incrementor = ForStatement_Incrementor(context.input.ast, node);
@@ -1077,13 +1305,13 @@ function planForStatement(node: Node, context: RustPlanContext): readonly RustSt
     if (conditionExpr === undefined || incrementStatements === undefined) {
       return undefined;
     }
-    const target = createRustLoopTarget(loopContext, incrementStatements);
+    const target = createRustLoopTarget(loopContext, incrementStatements, sourceLabel);
     if (target === undefined) {
       return undefined;
     }
     const body = planEmbeddedBlock(
       IterationStatement_Statement(loopContext.input.ast, node),
-      { ...loopContext, loops: [...(loopContext.loops ?? []), target] },
+      withRustControlTarget(loopContext, target),
     );
     if (body === undefined) {
       return undefined;
@@ -1094,7 +1322,7 @@ function planForStatement(node: Node, context: RustPlanContext): readonly RustSt
     return {
       statements: [{
         kind: "while",
-        label: target.label,
+        ...(target.used.value ? { label: target.label } : {}),
         condition: conditionExpr,
         body: loopBody,
       }],
@@ -1155,16 +1383,55 @@ function createRustLoopTarget(
     return undefined;
   }
   const target: RustLoopTarget = {
+    kind: "loop",
     id: context.controlFlow.nextLoopId,
     label: allocateRustSyntheticName(context.syntheticNames, "loop"),
     ...(sourceLabel === undefined ? {} : { sourceLabel }),
     ...(context.completionBoundary === undefined
       ? {}
       : { resourceBoundary: context.completionBoundary }),
+    used: { value: false },
     continuePrelude,
   };
   context.controlFlow.nextLoopId += 1;
   return target;
+}
+
+function createRustBreakTarget(
+  context: RustPlanContext,
+  kind: "switch" | "label",
+  sourceLabel?: string,
+): RustControlTarget | undefined {
+  if (context.syntheticNames === undefined || context.controlFlow === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, context.sourceFile),
+      "rust.backend.control-target",
+      "Labeled control flow requires finalized hygienic names and control-flow state.",
+    ));
+    return undefined;
+  }
+  const target: RustControlTarget = {
+    kind,
+    id: context.controlFlow.nextLoopId,
+    label: allocateRustSyntheticName(context.syntheticNames, kind),
+    ...(sourceLabel === undefined ? {} : { sourceLabel }),
+    ...(context.completionBoundary === undefined
+      ? {}
+      : { resourceBoundary: context.completionBoundary }),
+    used: { value: false },
+  };
+  context.controlFlow.nextLoopId += 1;
+  return target;
+}
+
+function withRustControlTarget(
+  context: RustPlanContext,
+  target: RustControlTarget,
+): RustPlanContext {
+  return {
+    ...context,
+    controlTargets: [...(context.controlTargets ?? []), target],
+  };
 }
 
 function planIncrementor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -1324,7 +1591,11 @@ function selectedOperatorIdentityMatches(
     selected.resultType !== undefined && rustTargetTypeRefEquals(selected.resultType, resultCarrier);
 }
 
-function planForOfStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+function planForOfStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
   const { ast } = context.input;
   const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
   if (fact === undefined || fact.kind !== "iteration") {
@@ -1378,7 +1649,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
     ));
     return undefined;
   }
-  const target = createRustLoopTarget(context, []);
+  const target = createRustLoopTarget(context, [], sourceLabel);
   if (target === undefined) {
     return undefined;
   }
@@ -1395,7 +1666,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
   const body = resourceFact === undefined || bindingDeclaration === undefined
     ? planBlockLike(
         bodyNode,
-        { ...context, loops: [...(context.loops ?? []), target] },
+        withRustControlTarget(context, target),
       )
     : (() => {
         const resourceScope = planResourceManagedBody(
@@ -1405,7 +1676,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
           context,
           (bodyContext) => planBlockLike(
             bodyNode,
-            { ...bodyContext, loops: [...(bodyContext.loops ?? []), target] },
+            withRustControlTarget(bodyContext, target),
           ),
         );
         return resourceScope === undefined
@@ -1443,7 +1714,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
           { kind: "let", name: iteratorName, mutable: false, init: iterable },
           {
             kind: "while-let-some",
-            label: target.label,
+            ...(target.used.value ? { label: target.label } : {}),
             binding,
             ...(bindingMutable ? { bindingMutable: true } : {}),
             expression: next,
@@ -1463,7 +1734,7 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
     : iterable;
   return [{
     kind: "for",
-    label: target.label,
+    ...(target.used.value ? { label: target.label } : {}),
     binding,
     ...(bindingMutable ? { bindingMutable: true } : {}),
     iterable: targetIterable,

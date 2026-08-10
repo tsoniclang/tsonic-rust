@@ -195,6 +195,16 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "switch";
+      readonly operationId: string;
+      readonly discriminantCarrier: TargetTypeRef;
+      readonly clauses: readonly {
+        readonly clause: Node;
+        readonly expression?: Node;
+        readonly carrier?: TargetTypeRef;
+      }[];
+    }
+  | {
       readonly kind: "provider-operation";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;

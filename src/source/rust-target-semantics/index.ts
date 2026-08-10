@@ -16,10 +16,14 @@ import {
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
   CatchClause_Block,
+  CaseBlock_Clauses,
+  CaseOrDefaultClause_Expression,
+  CaseOrDefaultClause_Statements,
   ConditionalExpression_Condition,
   ConditionalExpression_WhenFalse,
   ConditionalExpression_WhenTrue,
   DoStatement_Statement,
+  LabeledStatement_Statement,
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   TryStatement_CatchClause,
@@ -30,12 +34,16 @@ import {
   IfStatement_ElseStatement,
   IfStatement_ThenStatement,
   IterationStatement_Statement,
+  SwitchStatement_CaseBlock,
+  SwitchStatement_Expression,
   Node_Operand,
   KindBinaryExpression,
   KindBlock,
   KindCallExpression,
+  KindCaseClause,
   KindConditionalExpression,
   KindDoStatement,
+  KindLabeledStatement,
   KindElementAccessExpression,
   KindEqualsEqualsEqualsToken,
   KindEqualsToken,
@@ -62,6 +70,7 @@ import {
   KindReturnStatement,
   KindStringLiteral,
   KindSatisfiesExpression,
+  KindSwitchStatement,
   KindTrueKeyword,
   KindVariableDeclaration,
   KindVariableStatement,
@@ -79,6 +88,7 @@ import {
   isRustNumericCarrier,
   isRustNullishSourceCarrier,
   isRustOptionCarrier,
+  isRustStringCarrier,
   rustOptionElementCarrier,
   isRustVecCarrier,
   rustJsArrayTargetType,
@@ -671,6 +681,17 @@ function recordStatementFacts(
     recordVariableStatementFacts(walk, statement, sourceFile);
     return;
   }
+  if (kind === KindLabeledStatement) {
+    const body = LabeledStatement_Statement(walk.context.ast, statement);
+    if (body !== undefined) {
+      recordStatementFacts(walk, body, sourceFile, returnCarrier);
+    }
+    return;
+  }
+  if (kind === KindSwitchStatement) {
+    recordSwitchFacts(walk, statement, sourceFile, returnCarrier);
+    return;
+  }
   if (kind === KindReturnStatement) {
     const expression = Node_Expression(walk.context.ast, statement);
     if (expression !== undefined) {
@@ -770,6 +791,78 @@ function recordStatementFacts(
     }
     return;
   }
+}
+
+function recordSwitchFacts(
+  walk: RustFactWalk,
+  statement: Node,
+  sourceFile: SourceFile,
+  returnCarrier: TargetTypeRef | undefined,
+): void {
+  const { ast } = walk.context;
+  const discriminant = SwitchStatement_Expression(ast, statement);
+  const clauses = CaseBlock_Clauses(ast, SwitchStatement_CaseBlock(ast, statement));
+  if (discriminant === undefined || clauses === undefined || clauses.some((clause) => clause === undefined)) {
+    return;
+  }
+  const discriminantCarrier = resolveExpressionCarrier(walk, discriminant, sourceFile, undefined);
+  if (discriminantCarrier === undefined || !rustSwitchCarrierSupportsEquality(discriminantCarrier)) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_SWITCH_DISCRIMINANT_NOT_CLOSED",
+      "Switch discrimination requires an exact closed Rust equality carrier.",
+      statement,
+      ["target.capability=rust.switch"],
+    );
+    return;
+  }
+  const finalizedClauses: Extract<RustTargetOperationFact, { readonly kind: "switch" }>["clauses"][number][] = [];
+  let failed = false;
+  for (const clause of clauses as readonly Node[]) {
+    const expression = CaseOrDefaultClause_Expression(ast, clause);
+    if (ast.kindName(clause) === KindCaseClause) {
+      const carrier = expression === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, expression, sourceFile, discriminantCarrier);
+      if (expression === undefined || carrier === undefined ||
+        !rustTargetTypeRefEquals(carrier, discriminantCarrier)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_SWITCH_CASE_NOT_CLOSED",
+          "Switch case selection requires the exact discriminant carrier.",
+          clause,
+          ["target.capability=rust.switch"],
+        );
+        failed = true;
+      } else {
+        finalizedClauses.push({ clause, expression, carrier });
+      }
+    } else {
+      finalizedClauses.push({ clause });
+    }
+    const statements = CaseOrDefaultClause_Statements(ast, clause);
+    if (statements === undefined || statements.some((child) => child === undefined)) {
+      failed = true;
+      continue;
+    }
+    for (const child of statements as readonly Node[]) {
+      recordStatementFacts(walk, child, sourceFile, returnCarrier);
+    }
+  }
+  if (!failed && finalizedClauses.length === clauses.length) {
+    setRustOperationFact(walk, statement, {
+      kind: "switch",
+      operationId: "tsonic.rust.control.switch.strict-equality",
+      discriminantCarrier,
+      clauses: finalizedClauses,
+    });
+  }
+}
+
+function rustSwitchCarrierSupportsEquality(carrier: TargetTypeRef): boolean {
+  const sourceType = rustSourceTypeCarrierValue(carrier);
+  return isRustNumericCarrier(carrier) || isRustBoolCarrier(carrier) ||
+    isRustStringCarrier(carrier) || sourceType?.shape === "enum";
 }
 
 

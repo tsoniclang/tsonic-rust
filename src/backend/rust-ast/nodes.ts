@@ -90,15 +90,16 @@ export type RustStmt =
       readonly cleanup: RustBlock;
       readonly propagate: boolean;
       readonly dispatchReturn: boolean;
-      readonly dispatchLoops: readonly {
+      readonly dispatchTargets: readonly {
+        readonly kind: "loop" | "switch" | "label";
         readonly id: number;
         readonly label: string;
-        readonly continuePrelude: readonly RustStmt[];
+        readonly continuePrelude?: readonly RustStmt[];
       }[];
       readonly terminates: boolean;
     }
   | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
-  | { readonly kind: "scope"; readonly body: RustBlock }
+  | { readonly kind: "scope"; readonly label?: string; readonly body: RustBlock }
   | { readonly kind: "throw"; readonly message: RustExpr; readonly tail?: true }
   | { readonly kind: "try-catch"; readonly body: RustBlock; readonly catchBinding: string; readonly catchBody: RustBlock };
 

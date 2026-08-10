@@ -5,9 +5,11 @@ export const KindBlock = "KindBlock";
 export const KindBreakStatement = "KindBreakStatement";
 export const KindBooleanKeyword = "KindBooleanKeyword";
 export const KindCallExpression = "KindCallExpression";
+export const KindCaseClause = "KindCaseClause";
 export const KindConditionalExpression = "KindConditionalExpression";
 export const KindContinueStatement = "KindContinueStatement";
 export const KindDebuggerStatement = "KindDebuggerStatement";
+export const KindDefaultClause = "KindDefaultClause";
 export const KindDoStatement = "KindDoStatement";
 export const KindElementAccessExpression = "KindElementAccessExpression";
 export const KindEmptyStatement = "KindEmptyStatement";
@@ -25,6 +27,7 @@ export const KindTypeOperator = "KindTypeOperator";
 export const KindOmittedExpression = "KindOmittedExpression";
 export const KindForOfStatement = "KindForOfStatement";
 export const KindInterfaceDeclaration = "KindInterfaceDeclaration";
+export const KindLabeledStatement = "KindLabeledStatement";
 export const KindNewExpression = "KindNewExpression";
 export const KindNoSubstitutionTemplateLiteral = "KindNoSubstitutionTemplateLiteral";
 export const KindNonNullExpression = "KindNonNullExpression";
@@ -38,6 +41,7 @@ export const KindReturnStatement = "KindReturnStatement";
 export const KindStringKeyword = "KindStringKeyword";
 export const KindStringLiteral = "KindStringLiteral";
 export const KindSatisfiesExpression = "KindSatisfiesExpression";
+export const KindSwitchStatement = "KindSwitchStatement";
 export const KindTrueKeyword = "KindTrueKeyword";
 export const KindTypeReference = "KindTypeReference";
 export const KindVariableDeclaration = "KindVariableDeclaration";
@@ -269,6 +273,59 @@ export function DoStatement_Statement(ast: AstReader, node: Node | undefined): N
   return node === undefined || ast.kindName(node) !== KindDoStatement
     ? undefined
     : ast.as.AsDoStatement(node)?.Statement;
+}
+
+export function LabeledStatement_Label(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindLabeledStatement
+    ? undefined
+    : ast.as.AsLabeledStatement(node)?.Label;
+}
+
+export function LabeledStatement_Statement(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindLabeledStatement
+    ? undefined
+    : ast.as.AsLabeledStatement(node)?.Statement;
+}
+
+export function SwitchStatement_Expression(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindSwitchStatement
+    ? undefined
+    : ast.as.AsSwitchStatement(node)?.Expression;
+}
+
+export function SwitchStatement_CaseBlock(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindSwitchStatement
+    ? undefined
+    : ast.as.AsSwitchStatement(node)?.CaseBlock;
+}
+
+export function CaseBlock_Clauses(
+  ast: AstReader,
+  node: Node | undefined,
+): readonly (Node | undefined)[] | undefined {
+  return node === undefined || ast.kindName(node) !== "KindCaseBlock"
+    ? undefined
+    : ast.as.AsCaseBlock(node)?.Clauses?.Nodes;
+}
+
+export function CaseOrDefaultClause_Expression(
+  ast: AstReader,
+  node: Node | undefined,
+): Node | undefined {
+  const kind = node === undefined ? undefined : ast.kindName(node);
+  return kind !== KindCaseClause && kind !== KindDefaultClause
+    ? undefined
+    : ast.as.AsCaseOrDefaultClause(node)?.Expression;
+}
+
+export function CaseOrDefaultClause_Statements(
+  ast: AstReader,
+  node: Node | undefined,
+): readonly (Node | undefined)[] | undefined {
+  const kind = node === undefined ? undefined : ast.kindName(node);
+  return kind !== KindCaseClause && kind !== KindDefaultClause
+    ? undefined
+    : ast.as.AsCaseOrDefaultClause(node)?.Statements?.Nodes;
 }
 
 export function IfStatement_ElseStatement(ast: AstReader, node: Node | undefined): Node | undefined {

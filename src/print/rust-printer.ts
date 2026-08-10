@@ -273,7 +273,10 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     }
     case "scope": {
       const body = printRustBlockStatements(statement.body, depth + 1);
-      return body.length === 0 ? `${indent}{}` : `${indent}{\n${body}\n${indent}}`;
+      const prefix = statement.label === undefined ? "" : `'${statement.label}: `;
+      return body.length === 0
+        ? `${indent}${prefix}{}`
+        : `${indent}${prefix}{\n${body}\n${indent}}`;
     }
     case "throw": {
       return [
@@ -326,13 +329,18 @@ function printRustResourceScope(
   const bodyCompletesNormally = !statement.terminates;
   const directBody = printDirectResourceBody(statement.body, depth + 1);
   const requiresBoundary = statement.fallible || rustBlockHasCompletionExit(statement.body);
+  const directAssignment = directBody === undefined
+    ? undefined
+    : `${indent}let ${statement.flowName}: ${bodyType} = ${directBody.trimStart()}`;
   const lines = body.length === 0
     ? [`${indent}let ${statement.flowName}: ${bodyType} = ${bodyTail.trim()};`]
     : directBody !== undefined
-      ? [
-          `${indent}let ${statement.flowName}: ${bodyType} =`,
-          directBody,
-        ]
+      ? directAssignment !== undefined && renderedFits(directAssignment, 0)
+        ? [directAssignment]
+        : [
+            `${indent}let ${statement.flowName}: ${bodyType} =`,
+            directBody,
+          ]
       : !requiresBoundary
         ? [
             `${indent}let ${statement.flowName}: ${bodyType} = {`,
@@ -440,15 +448,19 @@ function printCompletionDispatch(
         `${armIndent}rt::Completion::Return(value) => ${statement.terminates ? "" : "return "}${statement.fallible ? "Ok(value)" : "value"},`,
       );
     }
-    for (const target of statement.dispatchLoops) {
+    for (const target of statement.dispatchTargets) {
       arms.push(
         `${armIndent}rt::Completion::Break(${target.id}) => break '${target.label},`,
       );
-      if (target.continuePrelude.length === 0) {
+      if (target.kind !== "loop") {
+        continue;
+      }
+      const continuePrelude = target.continuePrelude ?? [];
+      if (continuePrelude.length === 0) {
         arms.push(`${armIndent}rt::Completion::Continue(${target.id}) => continue '${target.label},`);
       } else {
         const prelude = printRustBlockStatements(
-          { statements: target.continuePrelude },
+          { statements: continuePrelude },
           depth + 2,
         );
         arms.push(

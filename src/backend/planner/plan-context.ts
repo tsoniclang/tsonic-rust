@@ -6,13 +6,22 @@ import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
 import type { RustType } from "../rust-ast/nodes.js";
 
-export interface RustLoopTarget {
+interface RustControlTargetBase {
   readonly id: number;
   readonly label: string;
   readonly sourceLabel?: string;
   readonly resourceBoundary?: RustCompletionBoundary;
-  readonly continuePrelude: readonly import("../rust-ast/nodes.js").RustStmt[];
+  readonly used: { value: boolean };
 }
+
+export type RustControlTarget =
+  | (RustControlTargetBase & {
+      readonly kind: "loop";
+      readonly continuePrelude: readonly import("../rust-ast/nodes.js").RustStmt[];
+    })
+  | (RustControlTargetBase & { readonly kind: "switch" | "label" });
+
+export type RustLoopTarget = Extract<RustControlTarget, { readonly kind: "loop" }>;
 
 export interface RustCompletionBoundary {
   readonly parent?: RustCompletionBoundary;
@@ -20,7 +29,7 @@ export interface RustCompletionBoundary {
   readonly fallible: boolean;
   readonly asynchronous: boolean;
   readonly dispatchReturn: { value: boolean };
-  readonly dispatchLoops: Map<number, RustLoopTarget>;
+  readonly dispatchTargets: Map<number, RustControlTarget>;
 }
 
 export interface RustControlFlowState {
@@ -41,7 +50,7 @@ export interface RustPlanContext {
   readonly emittedLocalNames?: Set<string>;
   readonly syntheticNames?: RustSyntheticNameState;
   readonly controlFlow?: RustControlFlowState;
-  readonly loops?: readonly RustLoopTarget[];
+  readonly controlTargets?: readonly RustControlTarget[];
   readonly completionBoundary?: RustCompletionBoundary;
   readonly functionReturnType?: RustType;
   readonly asyncContext?: boolean;
