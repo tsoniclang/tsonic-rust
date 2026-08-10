@@ -29,7 +29,9 @@ import {
   KindPropertyAccessExpression,
   KindStringLiteral,
   KindSatisfiesExpression,
+  KindTemplateExpression,
   KindTrueKeyword,
+  KindTypeOfExpression,
   BinaryExpression_Left,
   BinaryExpression_Right,
   ConditionalExpression_Condition,
@@ -38,6 +40,10 @@ import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
   Node_Operand,
+  TemplateExpression_Head,
+  TemplateExpression_TemplateSpans,
+  TemplateSpan_Expression,
+  TemplateSpan_Literal,
 } from "../../common/source-ast.js";
 import { rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
@@ -252,6 +258,30 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return condition === undefined || whenTrue === undefined || whenFalse === undefined
         ? undefined
         : { kind: "conditional", condition, whenTrue, whenFalse };
+    }
+    case KindTemplateExpression: {
+      return planTemplateExpression(node, context);
+    }
+    case KindTypeOfExpression: {
+      const fact = rustOperationFact(node, context);
+      const operandNode = Node_Expression(context.input.ast, node);
+      if (fact?.kind !== "typeof" || operandNode === undefined ||
+        !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.typeof-carrier")) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.typeof",
+          "typeof requires one exact finalized Rust runtime-category fact.",
+        ));
+        return undefined;
+      }
+      const operand = planExpression(operandNode, context);
+      return operand === undefined
+        ? undefined
+        : {
+            kind: "evaluate-then",
+            effect: operand,
+            value: { kind: "string-literal", value: fact.result },
+          };
     }
     case "KindArrayLiteralExpression": {
       const fixedFact = rustOperationFact(node, context);
@@ -575,6 +605,54 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return undefined;
     }
   }
+}
+
+function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const fact = rustOperationFact(node, context);
+  const head = TemplateExpression_Head(context.input.ast, node);
+  const spans = TemplateExpression_TemplateSpans(context.input.ast, node);
+  if (fact?.kind !== "template-string" || head === undefined || spans === undefined ||
+    !isDenseDataArray(spans) || spans.some((span) => span === undefined) ||
+    spans.length !== fact.substitutions.length ||
+    !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.template-carrier")) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.template",
+      "Template expression requires one exact finalized substitution contract.",
+    ));
+    return undefined;
+  }
+  const parts: RustExpr[] = [{ kind: "string-literal", value: context.input.ast.text(head) }];
+  for (const [index, span] of (spans as readonly Node[]).entries()) {
+    const expression = TemplateSpan_Expression(context.input.ast, span);
+    const literal = TemplateSpan_Literal(context.input.ast, span);
+    const substitution = fact.substitutions[index];
+    const actualCarrier = expression === undefined
+      ? undefined
+      : context.input.facts.getRuntimeCarrierFact(expression)?.carrier;
+    if (expression === undefined || literal === undefined || substitution === undefined ||
+      substitution.expression !== expression || actualCarrier === undefined ||
+      !rustTargetTypeRefEquals(actualCarrier, substitution.carrier)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, span),
+        "rust.backend.template-substitution",
+        "Template substitution conflicts with its finalized expression identity or carrier.",
+      ));
+      return undefined;
+    }
+    const value = planExpression(expression, context);
+    if (value === undefined) {
+      return undefined;
+    }
+    context.usedAliases?.add("rt");
+    parts.push({
+      kind: "call",
+      path: "rt::source_string",
+      args: [{ kind: "reference", expr: value }],
+    });
+    parts.push({ kind: "string-literal", value: context.input.ast.text(literal) });
+  }
+  return { kind: "string-concat", parts };
 }
 
 export function expressionCarrier(node: Node, context: RustPlanContext): TargetTypeRef | undefined {

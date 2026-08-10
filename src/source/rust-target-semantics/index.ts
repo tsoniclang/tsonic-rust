@@ -22,6 +22,8 @@ import {
   ConditionalExpression_Condition,
   ConditionalExpression_WhenFalse,
   ConditionalExpression_WhenTrue,
+  TemplateExpression_TemplateSpans,
+  TemplateSpan_Expression,
   DoStatement_Statement,
   LabeledStatement_Statement,
   ForInOrOfStatement_Initializer,
@@ -73,7 +75,9 @@ import {
   KindStringLiteral,
   KindSatisfiesExpression,
   KindSwitchStatement,
+  KindTemplateExpression,
   KindTrueKeyword,
+  KindTypeOfExpression,
   KindVariableDeclaration,
   KindVariableStatement,
   KindWhileStatement,
@@ -90,7 +94,9 @@ import {
   isRustNumericCarrier,
   isRustNullishSourceCarrier,
   isRustOptionCarrier,
+  isRustSourceStringConvertibleCarrier,
   isRustStringCarrier,
+  isRustUnitCarrier,
   rustOptionElementCarrier,
   isRustVecCarrier,
   rustJsArrayTargetType,
@@ -1107,6 +1113,9 @@ function resolveExpressionCarrierUncached(
       }
       return setCarrierFact(walk, expression, rustStringTargetType());
     }
+    case KindTemplateExpression: {
+      return resolveTemplateExpressionCarrier(walk, expression, sourceFile);
+    }
     case KindTrueKeyword:
     case KindFalseKeyword: {
       return setCarrierFact(walk, expression, boolCarrier);
@@ -1302,6 +1311,33 @@ function resolveExpressionCarrierUncached(
       });
       return setCarrierFact(walk, expression, resultCarrier);
     }
+    case KindTypeOfExpression: {
+      const operand = Node_Expression(walk.context.ast, expression);
+      const operandCarrier = operand === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+      const result = operand === undefined || operandCarrier === undefined
+        ? undefined
+        : rustTypeofResult(walk.context.ast, operand, operandCarrier);
+      if (result === undefined) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_TYPEOF_CARRIER_UNSUPPORTED",
+          "typeof requires one exact closed Rust carrier with preserved TypeScript runtime category.",
+          expression,
+          ["target.capability=rust.syntax.typeof"],
+        );
+        return undefined;
+      }
+      const resultCarrier = rustStringTargetType();
+      setRustOperationFact(walk, expression, {
+        kind: "typeof",
+        operationId: `tsonic.rust.syntax.typeof.${result}`,
+        resultCarrier,
+        result,
+      });
+      return setCarrierFact(walk, expression, resultCarrier);
+    }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
       return resolvePostCheckUnaryCarrier(walk, expression, sourceFile, expected);
@@ -1323,6 +1359,85 @@ function resolveExpressionCarrierUncached(
       return undefined;
     }
   }
+}
+
+function resolveTemplateExpressionCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+): TargetTypeRef | undefined {
+  const spans = TemplateExpression_TemplateSpans(walk.context.ast, expression);
+  if (spans === undefined || !isDenseDataArray(spans) || spans.some((span) => span === undefined)) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_TEMPLATE_STRUCTURE_INVALID",
+      "Template expression requires a dense checked template-span sequence.",
+      expression,
+      ["target.capability=rust.syntax.template"],
+    );
+    return undefined;
+  }
+  const substitutions: { expression: Node; carrier: TargetTypeRef }[] = [];
+  for (const span of spans as readonly Node[]) {
+    const substitution = TemplateSpan_Expression(walk.context.ast, span);
+    const carrier = substitution === undefined
+      ? undefined
+      : resolveExpressionCarrier(walk, substitution, sourceFile, undefined);
+    if (substitution === undefined || carrier === undefined ||
+      !isRustSourceStringConvertibleCarrier(carrier)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_TEMPLATE_SUBSTITUTION_UNSUPPORTED",
+        "Template substitution requires an exact closed primitive, string, or undefined carrier.",
+        span,
+        ["target.capability=rust.syntax.template"],
+      );
+      return undefined;
+    }
+    substitutions.push({ expression: substitution, carrier });
+  }
+  const resultCarrier = rustStringTargetType();
+  setRustOperationFact(walk, expression, {
+    kind: "template-string",
+    operationId: "tsonic.rust.syntax.template-string",
+    resultCarrier,
+    substitutions,
+  });
+  return setCarrierFact(walk, expression, resultCarrier);
+}
+
+function rustTypeofResult(
+  ast: AstReader,
+  operand: Node,
+  carrier: TargetTypeRef,
+): Extract<RustTargetOperationFact, { readonly kind: "typeof" }>["result"] | undefined {
+  if (ast.kindName(operand) === "KindNullKeyword") {
+    return "object";
+  }
+  if (carrier.kind === "source-primitive") {
+    if (carrier.name === "bool") {
+      return "boolean";
+    }
+    if (carrier.name === "int64" || carrier.name === "uint64") {
+      return "bigint";
+    }
+    return isRustNumericCarrier(carrier) ? "number" : undefined;
+  }
+  if (isRustStringCarrier(carrier)) {
+    return "string";
+  }
+  if (isRustUnitCarrier(carrier)) {
+    return "undefined";
+  }
+  if (carrier.kind === "function-pointer") {
+    return "function";
+  }
+  const sourceType = rustSourceTypeCarrierValue(carrier);
+  if (sourceType?.shape === "enum" || isRustNullishSourceCarrier(carrier) ||
+    carrier.kind === "type-parameter" || carrier.kind === "associated-type") {
+    return undefined;
+  }
+  return "object";
 }
 
 function resolveBinaryOperandCarriers(

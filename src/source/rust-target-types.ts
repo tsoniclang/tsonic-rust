@@ -401,6 +401,11 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "source-primitive";
 }
 
+export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
+    carrier?.kind === "source-primitive";
+}
+
 const rustNumericPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
   int8: "i8",
   uint8: "u8",

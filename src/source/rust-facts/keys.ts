@@ -190,6 +190,21 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "template-string";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly substitutions: readonly {
+        readonly expression: Node;
+        readonly carrier: TargetTypeRef;
+      }[];
+    }
+  | {
+      readonly kind: "typeof";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly result: "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined";
+    }
+  | {
       readonly kind: "identity-expression";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
@@ -397,6 +412,8 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "provider-operation":
     case "operator-token":
     case "string-concat":
+    case "template-string":
+    case "typeof":
     case "array-literal":
     case "source-field":
     case "source-call":

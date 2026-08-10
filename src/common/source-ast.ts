@@ -44,7 +44,9 @@ export const KindStringKeyword = "KindStringKeyword";
 export const KindStringLiteral = "KindStringLiteral";
 export const KindSatisfiesExpression = "KindSatisfiesExpression";
 export const KindSwitchStatement = "KindSwitchStatement";
+export const KindTemplateExpression = "KindTemplateExpression";
 export const KindTrueKeyword = "KindTrueKeyword";
+export const KindTypeOfExpression = "KindTypeOfExpression";
 export const KindTypeReference = "KindTypeReference";
 export const KindVariableDeclaration = "KindVariableDeclaration";
 export const KindVariableDeclarationList = "KindVariableDeclarationList";
@@ -132,6 +134,8 @@ export function Node_Expression(ast: AstReader, node: Node | undefined): Node | 
       return ast.as.AsTypeAssertion(node)?.Expression;
     case "KindVoidExpression":
       return ast.as.AsVoidExpression(node)?.Expression;
+    case KindTypeOfExpression:
+      return ast.as.AsTypeOfExpression(node)?.Expression;
     case "KindYieldExpression":
       return ast.as.AsYieldExpression(node)?.Expression;
     case "KindSpreadElement":
@@ -157,6 +161,33 @@ export function ConditionalExpression_WhenFalse(ast: AstReader, node: Node | und
   return node === undefined || ast.kindName(node) !== KindConditionalExpression
     ? undefined
     : ast.as.AsConditionalExpression(node)?.WhenFalse;
+}
+
+export function TemplateExpression_Head(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindTemplateExpression
+    ? undefined
+    : ast.as.AsTemplateExpression(node)?.Head;
+}
+
+export function TemplateExpression_TemplateSpans(
+  ast: AstReader,
+  node: Node | undefined,
+): readonly (Node | undefined)[] | undefined {
+  return node === undefined || ast.kindName(node) !== KindTemplateExpression
+    ? undefined
+    : ast.as.AsTemplateExpression(node)?.TemplateSpans?.Nodes;
+}
+
+export function TemplateSpan_Expression(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== "KindTemplateSpan"
+    ? undefined
+    : ast.as.AsTemplateSpan(node)?.Expression;
+}
+
+export function TemplateSpan_Literal(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== "KindTemplateSpan"
+    ? undefined
+    : ast.as.AsTemplateSpan(node)?.Literal;
 }
 
 export function Node_Type(ast: AstReader, node: Node | undefined): Node | undefined {

@@ -15,6 +15,7 @@ import type { RustAssignmentOperator } from "../common/rust-syntax.js";
 const rustFormatWidth = 100;
 const rustNestedCallWidth = 60;
 const rustMethodChainWidth = 60;
+const rustFormatMacroInlineArgumentLimit = 4;
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
   const parts: string[] = [`// ${model.headerComment}`];
@@ -800,6 +801,32 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
         `${effectPrefix}${effect};`,
         `${statementIndent}${value}`,
         `${indentText(depth)}}`,
+      ].join("\n");
+    }
+    case "string-concat": {
+      if (expression.parts.length <= rustFormatMacroInlineArgumentLimit &&
+        renderedFits(flat, column)) {
+        return flat;
+      }
+      const argumentIndent = indentText(depth + 1);
+      const placeholders = expression.parts.map(() => "{}").join("");
+      const compactParts = expression.parts.map(printRustExpr).join(", ");
+      const renderedParts = !compactParts.includes("\n") &&
+          renderedFits(`${compactParts},`, argumentIndent.length)
+        ? [`${argumentIndent}${compactParts},`]
+        : expression.parts.map((part) => {
+            const rendered = printRustExprFitted(
+              part,
+              depth + 1,
+              argumentIndent.length,
+            );
+            return appendToLastLine(`${argumentIndent}${rendered}`, ",");
+          });
+      return [
+        "format!(",
+        `${argumentIndent}\"${placeholders}\",`,
+        ...renderedParts,
+        `${indentText(depth)})`,
       ].join("\n");
     }
     case "call":

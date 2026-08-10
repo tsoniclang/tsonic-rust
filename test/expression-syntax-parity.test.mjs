@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 test("conditional expressions use one finalized branch carrier", { timeout: 300_000 }, () => {
@@ -128,4 +128,58 @@ export function transform(values: int32[]): int32[] {
   assert.ok(result.diagnostics.some((diagnostic) =>
     diagnostic.message.includes("closure") || diagnostic.message.includes("callable") ||
     diagnostic.message.includes("callback")));
+});
+
+test("substituted templates use exact source-string conversions", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "template_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+export function main(): void {
+  const count: int32 = 42;
+  const enabled: boolean = true;
+  const negativeZero: number = -0;
+  const text = \`count=\${count}; enabled=\${enabled}; zero=\${negativeZero}\`;
+  check(text === "count=42; enabled=true; zero=0");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::source_string\(&count\)/u);
+  assert.match(source, /rt::source_string\(&enabled\)/u);
+  assert.match(source, /rt::source_string\(&negativeZero\)/u);
+  validateGeneratedProject("expression-substituted-template", result.artifacts, { run: true });
+});
+
+test("typeof consumes exact carriers and preserves operand evaluation without moves", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32, int64 } from "@tsonic/core/types.js";
+
+export function categories(text: string, count: int32, wide: int64, enabled: boolean): string {
+  const textKind = typeof text;
+  const countKind = typeof count;
+  const wideKind = typeof wide;
+  const enabledKind = typeof enabled;
+  return text + textKind + countKind + wideKind + enabledKind;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let _ = text;\s+String::from\("string"\)/u);
+  assert.match(source, /String::from\("number"\)/u);
+  assert.match(source, /String::from\("bigint"\)/u);
+  assert.match(source, /String::from\("boolean"\)/u);
+  validateGeneratedProject("expression-typeof", result.artifacts);
 });

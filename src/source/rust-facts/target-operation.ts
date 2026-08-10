@@ -26,7 +26,8 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "string-concat") {
     return "+";
   }
-  if (fact.kind === "conditional" || fact.kind === "identity-expression") {
+  if (fact.kind === "conditional" || fact.kind === "identity-expression" ||
+    fact.kind === "template-string" || fact.kind === "typeof") {
     return fact.operationId;
   }
   if (fact.kind === "switch") {
