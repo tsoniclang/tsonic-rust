@@ -49,10 +49,14 @@ test("node assert.ok overloads lower through exact selected signatures", async (
       "index.ts": `
 import { ok } from "node:assert";
 
+function sumIsFour(left: number, right: number): boolean {
+  return left + right === 4;
+}
+
 export function verify(value: boolean): void {
   ok(value);
   ok(value, "value must be true");
-  ok(2 + 2 === 4, "nested operations must be finalized");
+  ok(sumIsFour(2, 2), "nested operations must be finalized");
 }
 `,
     },
@@ -64,7 +68,7 @@ export function verify(value: boolean): void {
   assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\?/u);
   assert.match(
     text,
-    /tsonic_rust_node::assert::ok_with_message\(\n\s+2\.0 \+ 2\.0 == 4\.0,\n\s+"nested operations must be finalized",\n\s+\)\?/u,
+    /tsonic_rust_node::assert::ok_with_message\(\n\s+sumIsFour\(2\.0, 2\.0\),\n\s+"nested operations must be finalized",\n\s+\)\?/u,
   );
 });
 

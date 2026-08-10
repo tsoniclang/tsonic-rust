@@ -915,17 +915,7 @@ function resolveExpressionCarrierUncached(
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected)) {
         return setCarrierFact(walk, expression, effectiveExpected);
       }
-      if (effectiveExpected !== undefined) {
-        return undefined;
-      }
-      const selected = resolveRustTargetTypeRef(
-        expression,
-        rustResolutionContext(walk, expression),
-        walk.operationOptions,
-      );
-      return selected !== undefined && isRustNumericCarrier(selected)
-        ? setCarrierFact(walk, expression, selected)
-        : undefined;
+      return undefined;
     }
     case KindStringLiteral: {
       if (expected !== undefined) {
@@ -1070,11 +1060,18 @@ function resolveBinaryOperandCarriers(
     ? undefined
     : expected;
   if (strictEquality && expressionUsesContextualLiteralCarrier(walk.context.ast, leftNode)) {
-    const right = resolveExpressionCarrier(walk, rightNode, sourceFile, operandExpected);
     const rightSemanticCarrier = resolveRustTargetTypeRef(
       rightNode,
       rustResolutionContext(walk, rightNode),
       walk.operationOptions,
+    );
+    const right = resolveExpressionCarrier(
+      walk,
+      rightNode,
+      sourceFile,
+      isRustNullishSourceCarrier(rightSemanticCarrier)
+        ? undefined
+        : operandExpected ?? rightSemanticCarrier,
     );
     const left = resolveExpressionCarrier(
       walk,
@@ -1084,7 +1081,17 @@ function resolveBinaryOperandCarriers(
     );
     return { left, right, leftNode, rightNode, operatorKind };
   }
-  let left = resolveExpressionCarrier(walk, leftNode, sourceFile, operandExpected);
+  const leftSemanticCarrier = resolveRustTargetTypeRef(
+    leftNode,
+    rustResolutionContext(walk, leftNode),
+    walk.operationOptions,
+  );
+  let left = resolveExpressionCarrier(
+    walk,
+    leftNode,
+    sourceFile,
+    operandExpected ?? leftSemanticCarrier,
+  );
   const rightSemanticCarrier = strictEquality
     ? resolveRustTargetTypeRef(
         rightNode,
@@ -1707,6 +1714,10 @@ function finalizeProjectSourceTargetTypeArguments(
     if (contextualTarget === undefined || rustTargetTypeRefEquals(selectedTarget, contextualTarget)) {
       continue;
     }
+    const argumentTarget = inferred.get(source.typeParameterName);
+    if (argumentTarget !== undefined && !rustTargetTypeRefEquals(argumentTarget, contextualTarget)) {
+      continue;
+    }
     if (source.explicitTypeNode !== undefined || !isRustNumericCarrier(selectedTarget) ||
       contextualTarget.kind !== "source-primitive" || !isRustNumericCarrier(contextualTarget) ||
       !projectSourceTypeArgumentHasLiteralProof(
@@ -1917,19 +1928,24 @@ function recordSelectedOperationInputs(
       if (argument === undefined) {
         continue;
       }
+      const finalizedProviderArgument = fact?.kind === "provider-operation"
+        ? fact.abi.sourceArguments.find((candidate) => candidate.sourceIndex === index)
+        : undefined;
+      const finalizedArgumentCarrier = fact?.kind === "source-call"
+        ? fact.parameterCarriers[index]
+        : fact?.kind === "provider-operation"
+          ? finalizedProviderArgument?.carrier
+          : selectedCall?.member.parameters[index]?.type;
       resolveExpressionCarrier(
         walk,
         argument,
         sourceFile,
-        selectedCall?.member.parameters[index]?.type ??
-          (fact?.kind === "provider-operation"
-            ? fact.abi.sourceArguments[index]?.carrier
-            : undefined),
+        finalizedArgumentCarrier,
       );
       if (fact?.kind !== "provider-operation") {
         continue;
       }
-      const mode = fact.abi.sourceArguments[index]?.mode;
+      const mode = finalizedProviderArgument?.mode;
       if (mode === undefined) {
         continue;
       }
