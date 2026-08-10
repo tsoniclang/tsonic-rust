@@ -4,8 +4,10 @@ set -euo pipefail
 test_concurrency="${TSONIC_RUST_TEST_CONCURRENCY:-2}"
 heap_megabytes="${TSONIC_RUST_TEST_HEAP_MB:-1536}"
 memory_max="${TSONIC_RUST_TEST_MEMORY_MAX:-8G}"
+tasks_max="${TSONIC_RUST_TEST_TASKS_MAX:-256}"
 timeout_seconds="${TSONIC_RUST_TEST_TIMEOUT_SECONDS:-3600}"
 heartbeat_seconds="${TSONIC_RUST_TEST_HEARTBEAT_SECONDS:-180}"
+failure_excerpt_bytes="${TSONIC_RUST_TEST_FAILURE_EXCERPT_BYTES:-16384}"
 
 if ! [[ "${test_concurrency}" =~ ^[1-9][0-9]*$ ]]; then
   printf 'TSONIC_RUST_TEST_CONCURRENCY must be a positive integer.\n' >&2
@@ -14,6 +16,11 @@ fi
 
 if ! [[ "${heap_megabytes}" =~ ^[1-9][0-9]*$ ]]; then
   printf 'TSONIC_RUST_TEST_HEAP_MB must be a positive integer.\n' >&2
+  exit 2
+fi
+
+if ! [[ "${tasks_max}" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'TSONIC_RUST_TEST_TASKS_MAX must be a positive integer.\n' >&2
   exit 2
 fi
 
@@ -27,7 +34,12 @@ if ! [[ "${heartbeat_seconds}" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
-for required_command in node systemd-run systemctl timeout tee; do
+if ! [[ "${failure_excerpt_bytes}" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'TSONIC_RUST_TEST_FAILURE_EXCERPT_BYTES must be a positive integer.\n' >&2
+  exit 2
+fi
+
+for required_command in node systemd-run systemctl tail timeout; do
   if ! command -v "${required_command}" >/dev/null 2>&1; then
     printf 'Required bounded-test command is unavailable: %s\n' "${required_command}" >&2
     exit 2
@@ -65,13 +77,14 @@ printf '  workers: %s\n' "${test_concurrency}"
 printf '  heap per worker: %s MiB\n' "${heap_megabytes}"
 printf '  process-group memory ceiling: %s\n' "${memory_max}"
 printf '  process-group swap ceiling: 0\n'
+printf '  process-group task ceiling: %s\n' "${tasks_max}"
 printf '  hard timeout: %s seconds\n' "${timeout_seconds}"
 printf '  heartbeat: %s seconds\n' "${heartbeat_seconds}"
+printf '  live test output: log-only; failure excerpt capped at %s bytes\n' "${failure_excerpt_bytes}"
 printf '  user-slice oom_kill before: %s\n' "${oom_kill_before}"
 
 set +e
 (
-  set -o pipefail
   systemd-run \
     --user \
     --scope \
@@ -79,6 +92,7 @@ set +e
     --unit="${unit%.scope}" \
     --property="MemoryMax=${memory_max}" \
     --property="MemorySwapMax=0" \
+    --property="TasksMax=${tasks_max}" \
     timeout \
       --signal=TERM \
       --kill-after=30s \
@@ -87,8 +101,7 @@ set +e
         scripts/test-worker.sh \
         "${test_concurrency}" \
         "${test_arguments[@]}" \
-    2>&1 | tee "${log_file}"
-  exit "${PIPESTATUS[0]}"
+    >"${log_file}" 2>&1
 ) &
 test_runner_pid=$!
 
@@ -134,6 +147,15 @@ scope_result="$(systemctl --user show "${unit}" --property=Result --value --no-p
 printf '  exit status: %s\n' "${test_status}"
 printf '  scope result: %s\n' "${scope_result:-unavailable}"
 printf '  user-slice oom_kill after: %s\n' "${oom_kill_after}"
+printf '  complete log: %s (%s bytes)\n' "${log_file}" "$(wc -c <"${log_file}")"
+
+if (( test_status != 0 )); then
+  printf '\nLast %s bytes of failed run (complete output remains in %s):\n' \
+    "${failure_excerpt_bytes}" \
+    "${log_file}" >&2
+  tail -c "${failure_excerpt_bytes}" "${log_file}" >&2
+  printf '\n' >&2
+fi
 
 if [[ "${scope_result}" == "oom-kill" ]]; then
   printf 'Bounded test scope exhausted its memory ceiling; inspect %s.\n' "${log_file}" >&2
