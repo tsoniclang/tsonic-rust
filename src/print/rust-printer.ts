@@ -559,6 +559,22 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
         ? `${left}\n${continuation}`
         : `${left}\n${continuation}\n${remainingLines(right).join("\n")}`;
     }
+    case "vec-literal":
+    case "slice-literal": {
+      if (renderedFits(flat, column)) {
+        return flat;
+      }
+      const elementIndent = indentText(depth + 1);
+      const elements = expression.elements.map((element) => {
+        const rendered = printRustExprFitted(element, depth + 1, elementIndent.length);
+        return appendToLastLine(`${elementIndent}${rendered}`, ",");
+      });
+      return [
+        expression.kind === "vec-literal" ? "vec![" : "[",
+        ...elements,
+        `${indentText(depth)}]`,
+      ].join("\n");
+    }
     case "struct-literal": {
       if (expression.fields.length <= 2 && renderedFits(flat, column)) {
         return flat;

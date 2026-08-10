@@ -417,6 +417,47 @@ test("provider operation variants and constants reject malformed runtime metadat
   );
 });
 
+test("generic value-slice forms require closed leading and element carriers", () => {
+  const exported = functionExport("@acme/validation");
+  exported.signatures[0].parameters = [{ name: "leading", type: { kind: "number" } }];
+  const withOperations = (operations) => definition({
+    modules: [{ moduleSpecifier: "@acme/validation", providerModuleId: "acme.validation", exports: [exported] }],
+    operations,
+  });
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: int32Carrier,
+  });
+  const base = {
+    form: "call-value-slice",
+    path: "acme_validation::run",
+    leadingArguments: [{ carrier: int32Carrier, mode: "value" }],
+    elementCarrier: int32Carrier,
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(withOperations([operation(base)])));
+  assert.throws(
+    () => createRustProviderPackage(withOperations([
+      operation({ ...base, leadingArguments: [{ carrier: int32Carrier, mode: "guess" }] }),
+    ])),
+    /unsupported mode 'guess'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(withOperations([
+      operation({ ...base, elementCarrier: { kind: "target-named", id: "acme.Missing" } }),
+    ])),
+    /without a Rust carrier path/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(withOperations([
+      operation({ ...base, leadingArguments: [{ carrier: int32Carrier, mode: "value", fallback: true }] }),
+    ])),
+    /unsupported field 'fallback'/u,
+  );
+});
+
 test("provider crate registry replacement is explicit and schema-closed", () => {
   const accepted = createRustProviderPackage(definition({
     crates: [{

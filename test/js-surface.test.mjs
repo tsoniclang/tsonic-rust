@@ -110,6 +110,60 @@ test("unavailable argument carriers defer only when one operation row remains", 
   }), undefined);
 });
 
+test("console rows select one generic closed value-slice ABI", () => {
+  const selection = selectJsSurfaceOperation({
+    ownerName: "Console",
+    memberName: "log",
+    operationKind: "call",
+    argumentCarriers: [
+      rustStringTargetType(),
+      rustSourcePrimitiveTargetType("int32"),
+      rustSourcePrimitiveTargetType("bool"),
+    ],
+  });
+
+  assert.equal(selection?.fact.kind, "provider-operation");
+  assert.deepEqual(selection?.fact.target, {
+    form: "call-value-slice",
+    path: "js_abi::console_log",
+    leadingArguments: [],
+    elementCarrier: { kind: "target-named", id: "rust.js.JsValue" },
+  });
+  assert.equal(selection?.fact.parameterCarriers, undefined);
+  assert.deepEqual(selection?.fact.resultCarrier, { kind: "tuple", elements: [] });
+});
+
+test("console calls lower closed primitive values and reject unsupported object carriers", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function write(label: string, count: int32, ok: boolean): void {
+  console.log(label, count, ok);
+  console.info();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::console_log\(\s*&\[\s*tsonic_rust_js::abi::js_value_from_string\(&label\),\s*tsonic_rust_js::abi::JsValue::from\(count\),\s*tsonic_rust_js::abi::JsValue::from\(ok\),\s*\],\s*\);/su);
+  assert.match(text, /js_abi::console_info\(&\[\]\);/u);
+
+  assertRustTargetRejection({
+    surfaces: ["js"],
+    files: {
+      "index.ts": "export function write(): void { console.log({ ok: true }); }\n",
+    },
+  }, [{
+    code: "RUST_SELECTED_PARAMETER_CARRIER_MISSING",
+    message: "Selected call 'log' has no closed Rust carrier for every target parameter.",
+  }]);
+});
+
 test("string padding emits fallible runtime calls for explicit and default fillers", () => {
   const { result } = compileRust({
     surfaces: ["js"],

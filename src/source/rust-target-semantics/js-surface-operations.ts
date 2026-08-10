@@ -34,6 +34,7 @@ import {
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustUnitTargetType,
 } from "../rust-target-types.js";
 
 // Declarative JS surface operation rows. Rows are matched by the identity of
@@ -63,7 +64,7 @@ export interface JsOperationSelection {
   readonly callbackShape?: "map" | "reduce";
 }
 
-type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "regexp" | "regexp-match";
+type JsLane = "vec" | "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "console" | "regexp" | "regexp-match";
 
 type JsCarrierRef =
   | { readonly ref: "cb-predicate" }
@@ -75,6 +76,7 @@ type JsCarrierRef =
   | { readonly ref: "infer" }
   | { readonly ref: "selected-method-type-argument"; readonly index: number }
   | { readonly ref: "bool" }
+  | { readonly ref: "unit" }
   | { readonly ref: "string-vec" }
   | { readonly ref: "regexp-match" }
   | { readonly ref: "option-of-regexp-match" }
@@ -103,6 +105,7 @@ interface JsOperationRowData {
   readonly callback?: "map" | "reduce";
   readonly selectedMethodTypeArgumentArity?: number;
   readonly fallible?: boolean;
+  readonly variadic?: true;
   readonly firstArgCarrierId?: string;
   readonly shape:
     | {
@@ -129,6 +132,13 @@ const numberPredicateRows = [
   { member: "isInteger", path: "js_abi::number_is_integer" },
   { member: "isNaN", path: "js_abi::number_is_nan" },
   { member: "isSafeInteger", path: "js_abi::number_is_safe_integer" },
+] as const;
+const consoleRows = [
+  { member: "log", path: "js_abi::console_log" },
+  { member: "error", path: "js_abi::console_error" },
+  { member: "warn", path: "js_abi::console_warn" },
+  { member: "info", path: "js_abi::console_info" },
+  { member: "debug", path: "js_abi::console_debug" },
 ] as const;
 
 const jsOperationRows: readonly JsOperationRowData[] = [
@@ -205,6 +215,25 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   // JSON lane (static owner; fallible rows require a fallible context).
   { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
   { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
+
+  ...consoleRows.map(({ member, path }) => ({
+    owner: "Console",
+    member,
+    operationKind: "call" as const,
+    lane: "console" as const,
+    variadic: true as const,
+    shape: {
+      op: "operation" as const,
+      operationKind: "method" as const,
+      target: {
+        form: "call-value-slice" as const,
+        path,
+        leadingArguments: [],
+        elementCarrier: rustJsValueTargetType(),
+      },
+      result: { ref: "unit" as const },
+    },
+  })),
 
   // RegExp match-carrier lane.
   { owner: "RegExpExecArray", member: "index", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion } },
@@ -331,6 +360,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier === undefined && ownerName === "NumberConstructor") {
     return { lane: "number", bindings: {} };
   }
+  if (carrier === undefined && ownerName === "Console") {
+    return { lane: "console", bindings: {} };
+  }
   if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExp") {
     return { lane: "regexp", bindings: { receiver: carrier } };
   }
@@ -384,6 +416,8 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
       return bindings.selectedMethodTypeArguments?.[reference.index];
     case "bool":
       return rustSourcePrimitiveTargetType("bool");
+    case "unit":
+      return rustUnitTargetType();
     case "string":
       return rustStringTargetType();
     case "element":
@@ -527,16 +561,18 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     }
     const parameterCarriers = (candidate.shape.params ?? []).map((reference) =>
       reference === undefined ? undefined : resolveCarrierRef(reference, bindings));
-    if (parameterCarriers.length !== argumentCarriers.length) {
+    if (candidate.variadic !== true && parameterCarriers.length !== argumentCarriers.length) {
       return [];
     }
-    const argumentScores = parameterCarriers.map((carrier, index) =>
-      jsArgumentCarrierMatchScore(
-        carrier,
-        argumentCarriers[index],
-        index,
-        request.argumentCompatibility,
-      ));
+    const argumentScores = candidate.variadic === true
+      ? []
+      : parameterCarriers.map((carrier, index) =>
+          jsArgumentCarrierMatchScore(
+            carrier,
+            argumentCarriers[index],
+            index,
+            request.argumentCompatibility,
+          ));
     if (argumentScores.some((score) => score === undefined)) {
       return [];
     }
@@ -559,6 +595,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     return undefined;
   }
   const { row, parameterCarriers } = selected;
+  const selectedParameterCarriers = row.variadic === true ? undefined : parameterCarriers;
   const operationId = `tsonic.rust.js.${row.owner}.${row.member}.${row.operationKind}${row.variant === undefined ? "" : `.${row.variant}`}`;
   if (row.shape.op === "set") {
     if (parameterCarriers.some((carrier) => carrier === undefined)) {
@@ -571,7 +608,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
         target: row.shape.target,
         parameterCarriers: parameterCarriers as readonly TargetTypeRef[],
       },
-      parameterCarriers,
+      ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
     };
   }
   const resultCarrier = resolveCarrierRef(row.shape.result, bindings);
@@ -586,13 +623,13 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       operationKind: row.shape.operationKind,
       target: materializeTarget(row.shape.target, copyReference),
       resultCarrier,
-      parameterCarriers,
+      ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
       isAsync: false,
       isFallible: row.fallible === true,
       ...(row.shape.resultConversion === undefined ? {} : { resultConversion: row.shape.resultConversion }),
     },
     resultCarrier,
-    parameterCarriers,
+    ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
     ...(row.callback === undefined ? {} : { callbackShape: row.callback }),
   };
 }

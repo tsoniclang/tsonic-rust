@@ -63,7 +63,12 @@ export type RustValueConversionId =
   | "checked-f64-to-i32-trunc"
   | "js-number-from-isize"
   | "js-number-from-usize"
-  | "js-number-from-u64";
+  | "js-number-from-u64"
+  | "js-value-from-bool"
+  | "js-value-from-f64"
+  | "js-value-from-i32"
+  | "js-value-from-string"
+  | "js-value-clone";
 
 export interface RustValueConversion {
   readonly kind: "semantic-conversion";
@@ -84,10 +89,13 @@ export type RustProviderOperationForm =
       readonly path: string;
     }
   | {
-      // Free function taking a leading format string by reference and the
-      // remaining arguments as one &[JsValue] slice.
-      readonly form: "call-jsvalue-slice";
+      readonly form: "call-value-slice";
       readonly path: string;
+      readonly leadingArguments: readonly {
+        readonly carrier: TargetTypeRef;
+        readonly mode: RustArgumentMode;
+      }[];
+      readonly elementCarrier: TargetTypeRef;
     }
   | { readonly form: "path"; readonly path: string }
   | { readonly form: "method"; readonly name: string }

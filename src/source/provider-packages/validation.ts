@@ -572,7 +572,9 @@ function validateOperationRows(
     const operationFormContractViolation = rustProviderOperationFormContractViolation(
       row.operationKind,
       row.target,
-      row.parameterCarriers?.length ?? 0,
+      row.target.form === "call-value-slice"
+        ? row.target.leadingArguments.length
+        : row.parameterCarriers?.length ?? 0,
     );
     if (operationFormContractViolation !== undefined) {
       fail(`${label}.target violates the closed Rust operation-form contract: ${operationFormContractViolation}`);
@@ -587,7 +589,7 @@ function validateOperationParameters(
   signature: SignatureRecord | undefined,
   fail: Fail,
 ): void {
-  if (row.operationKind === "property" || row.target.form === "call-str-slice" || row.target.form === "call-jsvalue-slice") {
+  if (row.operationKind === "property" || row.target.form === "call-str-slice") {
     return;
   }
   const ownerSignatures = signature === undefined
@@ -596,6 +598,13 @@ function validateOperationParameters(
       : member?.declaration.signatures ?? []
     : [signature.declaration];
   if (ownerSignatures.length === 0) {
+    return;
+  }
+  if (row.target.form === "call-value-slice") {
+    const leadingArgumentCount = row.target.leadingArguments.length;
+    if (ownerSignatures.some((candidate) => candidate.parameters.length < leadingArgumentCount)) {
+      fail(`row '${row.memberId ?? row.exportId}' declares ${leadingArgumentCount} leading target arguments but its selected source signature has fewer parameters`);
+    }
     return;
   }
   const counts = new Set(ownerSignatures.map((candidate) => candidate.parameters.length));
@@ -631,10 +640,24 @@ function validateOperationForm(
       validateChain(form.chain, label, fail);
       return;
     case "call-str-slice":
-    case "call-jsvalue-slice":
     case "path":
       requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
+      return;
+    case "call-value-slice":
+      requireExactKeys(record, ["form", "path", "leadingArguments", "elementCarrier"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (!Array.isArray(form.leadingArguments)) {
+        fail(`${label}.target.leadingArguments must be a dense array`);
+      }
+      for (const [index, argument] of form.leadingArguments.entries()) {
+        requireExactKeys(argument, ["carrier", "mode"], `${label}.target.leadingArguments[${index}]`, fail);
+        validateCarrier(argument.carrier, definition, `${label}.target.leadingArguments[${index}].carrier`, fail);
+        if (argument.mode !== "value" && argument.mode !== "ref" && argument.mode !== "mut-ref") {
+          fail(`${label}.target.leadingArguments[${index}].mode contains unsupported mode '${String(argument.mode)}'`);
+        }
+      }
+      validateCarrier(form.elementCarrier, definition, `${label}.target.elementCarrier`, fail);
       return;
     case "method":
     case "arg-method":

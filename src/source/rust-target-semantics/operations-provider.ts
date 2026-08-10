@@ -1249,14 +1249,24 @@ function selectedCallSourceCarriers(
       ? { kind: "resolved", carriers: actual as TargetTypeRef[] }
       : { kind: "incompatible", sourceIndex: 0 };
   }
-  if (fact.target.form === "call-jsvalue-slice") {
-    if (actual.length === 0 || !rustTargetTypeRefEquals(actual[0], rustStringTargetType())) {
-      return { kind: "incompatible", sourceIndex: 0 };
+  if (fact.target.form === "call-value-slice") {
+    const form = fact.target;
+    if (actual.length < form.leadingArguments.length) {
+      return { kind: "incompatible", sourceIndex: actual.length };
     }
-    const jsValue = rustJsValueTargetType();
-    return actual.slice(1).every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, jsValue))
+    const incompatible = actual.findIndex((carrier, sourceIndex) => {
+      if (carrier === undefined) {
+        return true;
+      }
+      const target = sourceIndex < form.leadingArguments.length
+        ? form.leadingArguments[sourceIndex]!.carrier
+        : form.elementCarrier;
+      return !rustTargetTypeRefEquals(carrier, target) &&
+        selectRustSourceValueConversion(carrier, target) === undefined;
+    });
+    return incompatible < 0
       ? { kind: "resolved", carriers: actual as TargetTypeRef[] }
-      : { kind: "incompatible", sourceIndex: 1 };
+      : { kind: "incompatible", sourceIndex: incompatible };
   }
   return { kind: "resolved", carriers: actual as TargetTypeRef[] };
 }

@@ -6,7 +6,7 @@ lane carries exactly one classification — implemented (positive runtime
 proof in the generated Cargo bank), hard-rejected (architecture;
 zero-artifact proof), or blocked by a named contract — and the guard test
 keeps this document and the lane list from drifting. C# lanes without
-Rust rows (Object helpers, Number helpers, console, bare
+Rust rows (Object helpers, Number helpers, bare
 module aliases, Date extras, process and buffer extras) are enumerated in
 the blocked section with the contract each requires.
 
@@ -36,6 +36,10 @@ the blocked section with the contract each requires.
   when project lib settings expose the declarations.
 - Date: UTC carrier constructors, now, parse, UTC, getTime, valueOf,
   toISOString, toJSON, UTC getters.
+- Console: console.log, console.error, console.warn, console.info, and
+  console.debug with exact string, number,
+  int32, and boolean arguments through one closed `JsValue` slice ABI;
+  empty variadic calls pass an explicit empty slice.
 - Node: path, os, fs, fs/promises (async signatures over synchronous file
   operations), process (cwd, exit, value exports, env with null-preserving
   reads, fallible execPath property), Buffer, URL, URLSearchParams, legacy
@@ -78,7 +82,8 @@ the blocked section with the contract each requires.
   requires closed-shape reflection rows over the JsValue carrier.
 - Number.parseInt/parseFloat, toFixed and formatting: requires exact numeric
   parsing and formatting rows in the js runtime.
-- console.log/error/warn/info: requires a console/stdio carrier contract.
+- Console calls with open or structural object arguments: requires exact
+  closed source-to-JsValue object conversion facts.
 - Date UTC setters, remaining string methods, and local-time getters and
   setters:
   requires date-mutation and tzdata contracts.

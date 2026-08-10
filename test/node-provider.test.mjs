@@ -72,6 +72,32 @@ export function verify(value: boolean): void {
   );
 });
 
+test("node util.format lowers fixed and variadic arguments through one value-slice ABI", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { format } from "node:util";
+
+export function render(label: string, count: number, ok: boolean): string {
+  const output = format("%s:%d:%s", label, count, ok);
+  return output + label + format("%s");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(
+    text,
+    /tsonic_rust_node::util::format\(\s*"%s:%d:%s",\s*&\[\s*tsonic_rust_js::abi::js_value_from_string\(&label\),\s*tsonic_rust_js::abi::JsValue::from\(count\),\s*tsonic_rust_js::abi::JsValue::from\(ok\),\s*\]\s*,?\s*\)/su,
+  );
+  assert.match(text, /tsonic_rust_node::util::format\("%s", &\[\]\)/u);
+  assert.match(text, /format!\("\{\}\{\}\{\}", output, label,/u);
+});
+
 test("declared-but-unsupported node APIs diagnose deterministically", async () => {
   const options = {
     surfaces: ["js"],
@@ -110,6 +136,7 @@ test("generated cargo binary proves node provider rows at runtime", { timeout: 3
       "index.ts": `
 import { join, dirname, basename, extname, isAbsolute } from "node:path";
 import { platform } from "node:os";
+import { format } from "node:util";
 import { check } from "@acme/testing";
 
 export function main(): void {
@@ -121,12 +148,22 @@ export function main(): void {
   check(isAbsolute(full));
   check(!isAbsolute("relative.txt"));
   check(platform().length > 0);
+  const label = "count";
+  check(format("%s:%d", label, 3) === "count:3");
+  check(label === "count");
+  check(format("%s") === "%s");
+  const parsed = JSON.parse('{"ok":true}');
+  check(format("%j", parsed) === '{"ok":true}');
+  JSON.stringify(parsed);
 }
 `,
     },
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_value_from_string\(&label\)/u);
+  assert.match(text, /clone_js_value\(&parsed\)/u);
   const run = validateGeneratedProject("node-provider-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

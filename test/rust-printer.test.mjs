@@ -322,6 +322,54 @@ test("nested calls beyond rustfmt call width put each argument on its own line",
   assert.match(text, /can_parse\(\n        "https:\/\/example\.com",\n        None,\n    \)\);/u);
 });
 
+test("long borrowed slices use rustfmt-compatible element layout", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "call",
+              path: "node_util::format",
+              args: [
+                { kind: "str-literal", value: "%s:%d" },
+                {
+                  kind: "reference",
+                  expr: {
+                    kind: "slice-literal",
+                    elements: [
+                      {
+                        kind: "call",
+                        path: "tsonic_rust_js::abi::JsValue::from",
+                        args: [{ kind: "string-literal", value: "count" }],
+                      },
+                      {
+                        kind: "call",
+                        path: "tsonic_rust_js::abi::JsValue::from",
+                        args: [{ kind: "float-literal", text: "3.0" }],
+                      },
+                    ],
+                  },
+                },
+              ],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /&\[\n            tsonic_rust_js::abi::JsValue::from\(String::from\("count"\)\),\n            tsonic_rust_js::abi::JsValue::from\(3\.0\),\n        \],/u);
+});
+
 test("logical assignment keeps a fitting first operand beside the operator", () => {
   const first = {
     kind: "call",

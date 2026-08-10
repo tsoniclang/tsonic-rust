@@ -295,7 +295,7 @@ function materializeProviderOperationRow(
   return {
     ...row,
     ...owner,
-    target: materializeProviderOperationForm(row.target, aliases),
+    target: materializeProviderOperationForm(row.target, aliases, carrierPaths),
     resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths),
     ...(row.parameterCarriers === undefined
       ? {}
@@ -309,6 +309,7 @@ function materializeProviderOperationRow(
 function materializeProviderOperationForm(
   form: RustProviderOperationForm,
   aliases: ReadonlyMap<string, string>,
+  carrierPaths: Readonly<Record<string, string>>,
 ): RustProviderOperationForm {
   const argConversions = "argConversions" in form && form.argConversions !== undefined
     ? [...form.argConversions]
@@ -327,7 +328,18 @@ function materializeProviderOperationForm(
       ...(argConversions === undefined ? {} : { argConversions }),
     };
   }
-  if (form.form === "call-str-slice" || form.form === "call-jsvalue-slice" || form.form === "path") {
+  if (form.form === "call-value-slice") {
+    return {
+      ...form,
+      path: expandProviderPath(form.path, aliases),
+      leadingArguments: form.leadingArguments.map((argument) => ({
+        ...argument,
+        carrier: materializeProviderCarrier(argument.carrier, carrierPaths),
+      })),
+      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths),
+    };
+  }
+  if (form.form === "call-str-slice" || form.form === "path") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }
   if (form.form === "binary-operator") {

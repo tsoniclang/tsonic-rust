@@ -828,7 +828,10 @@ export function applyRustValueConversion(
     }
   }
   registerAliasFromPath(context, contract.path);
-  const call: RustExpr = { kind: "call", path: contract.path, args: [expression] };
+  const source = contract.sourceMode === "ref"
+    ? applyRustArgumentMode(context, expression, "ref", node)
+    : expression;
+  const call: RustExpr = { kind: "call", path: contract.path, args: [source] };
   if (!contract.fallible) {
     return call;
   }
@@ -954,7 +957,7 @@ function planProviderOperationExpression(
       registerAliasFromPath(context, form.path);
       return scoped(applyProviderOperationChain({ kind: "call", path: form.path, args }, form.chain));
     }
-    case "call-jsvalue-slice":
+    case "call-value-slice":
     case "call-str-slice":
     case "free-call": {
       registerAliasFromPath(context, form.path);

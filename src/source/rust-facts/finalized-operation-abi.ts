@@ -11,11 +11,13 @@ import type {
 } from "./keys.js";
 import {
   rustFutureTargetType,
-  rustJsValueTargetType,
   rustSliceRefTargetType,
   rustStringTargetType,
 } from "../rust-target-types.js";
-import { rustValueConversionContract } from "./value-conversions.js";
+import {
+  rustValueConversionContract,
+  selectRustSourceValueConversion,
+} from "./value-conversions.js";
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../../common/closed-metadata.js";
 import { rustProviderOperationFormContractViolation } from "./operation-form-contract.js";
 
@@ -483,7 +485,22 @@ function createInputFactory(
       ? undefined
       : sourceInput({ kind: "argument", sourceIndex }, carrier, mode, conversion);
   };
-  return { receiver, argument };
+  const argumentTo = (
+    sourceIndex: number,
+    mode: RustArgumentMode,
+    targetCarrier: TargetTypeRef,
+  ): RustFinalizedSourceInput | undefined => {
+    const sourceCarrier = argumentCarriers[sourceIndex];
+    if (sourceCarrier === undefined) {
+      return undefined;
+    }
+    const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier);
+    const identical = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
+    return !identical && conversion === undefined
+      ? undefined
+      : sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion);
+  };
+  return { receiver, argument, argumentTo };
 }
 
 function finalizeTargetInputs(
@@ -621,29 +638,28 @@ function finalizeTargetInputs(
         }],
       };
     }
-    case "call-jsvalue-slice": {
-      const head = input.argument(0, "ref");
-      const tailIndexes = indexes.slice(1);
-      const elements = tailIndexes.map((index) => input.argument(index, "value"));
-      if (head === undefined || !rustTargetTypeRefEquals(head.sourceCarrier, rustStringTargetType()) ||
-        elements.some((entry) => entry === undefined)) {
+    case "call-value-slice": {
+      const leading = form.leadingArguments.map((argument, sourceIndex) =>
+        input.argumentTo(sourceIndex, argument.mode, argument.carrier));
+      const sliceIndexes = indexes.slice(form.leadingArguments.length);
+      const elements = sliceIndexes.map((sourceIndex) =>
+        input.argumentTo(sourceIndex, "value", form.elementCarrier));
+      if (leading.some((entry) => entry === undefined) || elements.some((entry) => entry === undefined)) {
         return undefined;
       }
-      const targetArguments: RustFinalizedTargetInput[] = [head];
-      if (elements.length > 0) {
-        const closed = elements as RustFinalizedSourceInput[];
-        if (closed.some((entry) => !rustTargetTypeRefEquals(entry.sourceCarrier, rustJsValueTargetType()))) {
-          return undefined;
-        }
-        targetArguments.push({
-          source: { kind: "argument-slice", sourceIndexes: tailIndexes },
-          elements: closed,
-          elementCarrier: closed[0]!.parameterCarrier,
-          mode: "ref",
-          parameterCarrier: rustSliceRefTargetType(closed[0]!.parameterCarrier),
-        });
-      }
-      return { targetReceiver: none, targetArguments };
+      return {
+        targetReceiver: none,
+        targetArguments: [
+          ...leading as RustFinalizedSourceInput[],
+          {
+            source: { kind: "argument-slice", sourceIndexes: sliceIndexes },
+            elements: elements as RustFinalizedSourceInput[],
+            elementCarrier: form.elementCarrier,
+            mode: "ref",
+            parameterCarrier: rustSliceRefTargetType(form.elementCarrier),
+          },
+        ],
+      };
     }
   }
 }

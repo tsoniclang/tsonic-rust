@@ -6,7 +6,7 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
     const target = fact.abi.target;
     if (target.form === "call" || target.form === "path" || target.form === "free-call" ||
-      target.form === "call-str-slice" || target.form === "call-jsvalue-slice") {
+      target.form === "call-str-slice" || target.form === "call-value-slice") {
       return target.path;
     }
     if (target.form === "index") {

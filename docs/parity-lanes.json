@@ -493,9 +493,15 @@
   },
   {
     "area": "console",
-    "lane": "console.log/error/warn/info",
+    "lane": "console.log/error/warn/info/debug with closed primitive arguments",
+    "classification": "implemented",
+    "rowMember": "log"
+  },
+  {
+    "area": "console",
+    "lane": "console methods with open or structural object arguments",
     "classification": "blocked",
-    "contract": "requires a console/stdio carrier contract"
+    "contract": "requires exact closed source-to-JsValue object conversion facts"
   },
   {
     "area": "Date",

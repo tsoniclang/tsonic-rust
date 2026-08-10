@@ -146,6 +146,97 @@ test("variadic string slices are total for empty and nonempty calls and reject o
   assert.equal(wrong, undefined);
 });
 
+test("variadic value slices convert each source value exactly and always pass one slice", () => {
+  const form = {
+    form: "call-value-slice",
+    path: "node_util::format",
+    leadingArguments: [{ carrier: string, mode: "ref" }],
+    elementCarrier: jsValue,
+  };
+  const values = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string, int32, bool],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const emptyTail = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const preserved = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string, string, jsValue],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const unsupported = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string, unit],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const compileTimeElement = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string, int32],
+    compileTimeSourceArgumentIndexes: [1],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(values);
+  assert.ok(emptyTail);
+  assert.ok(preserved);
+  assert.equal(values.targetArguments[0].mode, "ref");
+  assert.deepEqual(values.targetArguments[1].source, {
+    kind: "argument-slice",
+    sourceIndexes: [1, 2],
+  });
+  assert.deepEqual(
+    values.targetArguments[1].elements.map((element) => element.conversion),
+    [
+      {
+        kind: "semantic",
+        conversion: { kind: "semantic-conversion", id: "js-value-from-i32" },
+        sourceCarrier: int32,
+        targetCarrier: jsValue,
+        fallible: false,
+      },
+      {
+        kind: "semantic",
+        conversion: { kind: "semantic-conversion", id: "js-value-from-bool" },
+        sourceCarrier: bool,
+        targetCarrier: jsValue,
+        fallible: false,
+      },
+    ],
+  );
+  assert.deepEqual(emptyTail.targetArguments[1].source, {
+    kind: "argument-slice",
+    sourceIndexes: [],
+  });
+  assert.deepEqual(emptyTail.targetArguments[1].elements, []);
+  assert.deepEqual(
+    preserved.targetArguments[1].elements.map((element) => element.conversion.kind === "semantic"
+      ? element.conversion.conversion.id
+      : element.conversion.kind),
+    ["js-value-from-string", "js-value-clone"],
+  );
+  assert.equal(unsupported, undefined);
+  assert.equal(compileTimeElement, undefined);
+});
+
 test("async ABI separates invocation, await fallibility, and post-await conversion", () => {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",

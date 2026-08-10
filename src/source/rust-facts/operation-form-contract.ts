@@ -7,6 +7,7 @@ import type { RustFinalizedOperationKind } from "./finalized-operation-abi.js";
 import { rustValueConversionContract } from "./value-conversions.js";
 import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../common/rust-syntax.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
+import { isRustTargetTypeRef } from "../../policy/equality.js";
 
 const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;
@@ -68,10 +69,24 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "path form must be a zero-argument closed Rust path";
     case "call-str-slice":
-    case "call-jsvalue-slice":
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path)
         ? undefined
         : "slice-call form must contain one closed Rust path";
+    case "call-value-slice":
+      return hasExactKeys(
+        form,
+        ["form", "path", "leadingArguments", "elementCarrier"],
+        ["form", "path", "leadingArguments", "elementCarrier"],
+      ) && typeof form.path === "string" && rustPathPattern.test(form.path) &&
+        isDenseDataArray(form.leadingArguments) &&
+        form.leadingArguments.every((argument) =>
+          hasExactKeys(argument, ["carrier", "mode"], ["carrier", "mode"]) &&
+          isRustTargetTypeRef(argument.carrier) && modes.has(argument.mode)) &&
+        isRustTargetTypeRef(form.elementCarrier) &&
+        runtimeSourceIndexes.length === sourceArgumentCount &&
+        runtimeSourceIndexes.length >= form.leadingArguments.length
+        ? undefined
+        : "value-slice call must contain one path, closed leading arguments, a closed element carrier, and only runtime source arguments";
     case "method":
     case "arg-method":
       return hasExactKeys(form, ["form", "name"], ["form", "name"]) && typeof form.name === "string" && rustIdentifierPattern.test(form.name)
