@@ -6,7 +6,7 @@ lane carries exactly one classification — implemented (positive runtime
 proof in the generated Cargo bank), hard-rejected (architecture;
 zero-artifact proof), or blocked by a named contract — and the guard test
 keeps this document and the lane list from drifting. C# lanes without
-Rust rows (Object helpers, Number helpers, console, node:assert, bare
+Rust rows (Object helpers, Number helpers, console, bare
 module aliases, Date extras, process and buffer extras) are enumerated in
 the blocked section with the contract each requires.
 
@@ -41,7 +41,8 @@ the blocked section with the contract each requires.
   reads, fallible execPath property), Buffer, URL, URLSearchParams, legacy
   url.parse/format with the UrlObject carrier, crypto (randomUUID,
   randomBytes, createHash, createHmac), util (closed string helpers,
-  inspect over closed JsValue, format with closed placeholders).
+  inspect over closed JsValue, format with closed placeholders), and
+  node:assert `ok` with optional string messages.
 - Error model, async/await, callbacks, tuples, fixed arrays, records,
   string-literal unions, generics, statics — see README.
 
@@ -81,7 +82,6 @@ the blocked section with the contract each requires.
 - Date UTC setters, remaining string methods, and local-time getters and
   setters:
   requires date-mutation and tzdata contracts.
-- node:assert: requires an assertion-failure error-mapping contract.
 - bare module aliases (fs as an alias of node:fs): requires a
   module-alias ownership contract.
 - process extras (argv0, hrtime, memoryUsage, stdio) and buffer extras

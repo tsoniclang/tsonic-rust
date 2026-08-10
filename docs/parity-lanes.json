@@ -542,8 +542,7 @@
   {
     "area": "Node",
     "lane": "node:assert",
-    "classification": "blocked",
-    "contract": "requires an assertion-failure error-mapping contract"
+    "classification": "implemented"
   },
   {
     "area": "Node",
