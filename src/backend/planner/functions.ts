@@ -210,6 +210,8 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),
     syntheticNames,
+    controlFlow: { nextLoopId: 0 },
+    functionReturnType: returnType ?? { kind: "unit" },
     ...(isAsync ? { asyncContext: true } : {}),
     ...(generatorFact === undefined
       ? {}
@@ -259,7 +261,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
               params: [{ name: generatorControllerName!, mutable: false }],
               move: true,
               async: true,
-              body: applyTailReturn(body, !isRustUnitCarrier(generatorFact.returnType)),
+              body: applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
             }],
           },
         }],
@@ -291,7 +293,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       : { typeParams: finalizedTypeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyFallibleShape(applyTailReturn(body, returnType !== undefined), fallible, returnType !== undefined),
+    body: applyFallibleShape(applyRustTailShape(body, returnType !== undefined), fallible, returnType !== undefined),
   };
   return publishRustSourceCallableContract(node, item, context)
     ? item
@@ -324,7 +326,8 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
         ...(statement.else === undefined ? {} : { else: { statements: statement.else.statements.map(wrap) } }),
       };
     }
-    if (statement.kind === "while" || statement.kind === "for") {
+    if (statement.kind === "while" || statement.kind === "for" ||
+      statement.kind === "while-let-some" || statement.kind === "if-let-some") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
     if (statement.kind === "scope") {
@@ -339,7 +342,12 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
   };
   const wrapped = body.statements.map(wrap);
   const last = wrapped[wrapped.length - 1];
-  const endsWithExit = last !== undefined && (last.kind === "tail" || last.kind === "return" || last.kind === "throw");
+  const endsWithExit = last !== undefined && (
+    last.kind === "tail" ||
+    last.kind === "return" ||
+    last.kind === "throw" ||
+    (last.kind === "resource-scope" && last.terminates)
+  );
   if (!hasReturnValue && !endsWithExit) {
     wrapped.push({ kind: "tail", expr: { kind: "path", path: "Ok(())" } });
   }
@@ -357,18 +365,38 @@ export function rustBlockTerminates(block: RustBlock): boolean {
   if (last.kind === "scope") {
     return rustBlockTerminates(last.body);
   }
+  if (last.kind === "resource-scope") {
+    return last.terminates;
+  }
   return last.kind === "if" && last.else !== undefined &&
     rustBlockTerminates(last.then) && rustBlockTerminates(last.else);
 }
 
-function applyTailReturn(body: RustBlock, hasReturnValue: boolean): RustBlock {
-  if (!hasReturnValue || body.statements.length === 0) {
+export function applyRustTailShape(body: RustBlock, hasReturnValue: boolean): RustBlock {
+  if (body.statements.length === 0) {
     return body;
   }
-  const last = body.statements[body.statements.length - 1];
-  if (last === undefined || last.kind !== "return" || last.expr === undefined) {
+  const lastIndex = body.statements.length - 1;
+  const last = body.statements[lastIndex];
+  if (last === undefined) {
     return body;
   }
-  const tail: RustStmt = { kind: "tail", expr: last.expr };
-  return { statements: [...body.statements.slice(0, -1), tail] };
+  let tail = last;
+  if (hasReturnValue && last.kind === "return" && last.expr !== undefined) {
+    tail = { kind: "tail", expr: last.expr };
+  } else if (last.kind === "throw") {
+    tail = { ...last, tail: true };
+  } else if (last.kind === "scope") {
+    tail = { ...last, body: applyRustTailShape(last.body, hasReturnValue) };
+  } else if (last.kind === "if" && last.else !== undefined &&
+    rustBlockTerminates(last.then) && rustBlockTerminates(last.else)) {
+    tail = {
+      ...last,
+      then: applyRustTailShape(last.then, hasReturnValue),
+      else: applyRustTailShape(last.else, hasReturnValue),
+    };
+  }
+  return tail === last
+    ? body
+    : { statements: [...body.statements.slice(0, lastIndex), tail] };
 }

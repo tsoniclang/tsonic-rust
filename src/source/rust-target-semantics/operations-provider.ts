@@ -133,6 +133,7 @@ import {
   selectRustGeneratorSourceCall,
   selectRustGeneratorSourceProperty,
 } from "./generator-source-profile.js";
+import { rustProjectCallableTargetName } from "./source-member-name.js";
 
 const sourceCallMarkerByIdentity = new Map(
   [
@@ -1065,7 +1066,9 @@ function acceptProjectSourceCall(
   if (returnType === undefined) {
     return rejectSelectedOperation(request.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
   }
-  const sourceName = ast.text(ast.name(callableDeclaration)) || (construction ? "constructor" : "<anonymous>");
+  const sourceName = construction
+    ? "constructor"
+    : rustProjectCallableTargetName(callableDeclaration, context) ?? "<anonymous>";
   const fileName = ast.getFileName(ast.getSourceFile(callableDeclaration));
   const member: RustTargetMember = {
     id: `tsonic.rust.source.call:${fileName}:${ast.pos(callableDeclaration)}:${ast.end(callableDeclaration)}`,

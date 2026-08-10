@@ -551,6 +551,32 @@ export const rustYieldFactKey: RustPlanKey<RustYieldFact> =
       : right.delegatedCarrier !== undefined &&
         rustTargetTypeRefEquals(left.delegatedCarrier, right.delegatedCarrier)));
 
+export type RustResourceDisposalTarget =
+  | {
+      readonly form: "source-method";
+      readonly name: "dispose" | "dispose_async";
+      readonly receiverMode: "ref" | "mut-ref";
+    }
+  | {
+      readonly form: "provider";
+      readonly target: RustProviderOperationForm;
+    };
+
+export interface RustResourceManagementFact {
+  readonly declarationKind: "using" | "await using";
+  readonly storageCarrier: TargetTypeRef;
+  readonly resourceCarrier: TargetTypeRef;
+  readonly nullable: boolean;
+  readonly disposal: {
+    readonly kind: "sync" | "async";
+    readonly fallible: boolean;
+    readonly target: RustResourceDisposalTarget;
+  };
+}
+
+export const rustResourceManagementFactKey: RustPlanKey<RustResourceManagementFact> =
+  defineRustPlanKey("resourceManagement", closedMetadataEquals);
+
 export interface RustSourceParameterAbiFact {
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;

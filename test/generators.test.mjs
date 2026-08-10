@@ -266,3 +266,51 @@ export function close(): void {
   assert.match(source, /generator\.throw_value\(rt::JsError::error/u);
   validateGeneratedProject("generator-throw", result.artifacts);
 });
+
+test("static generator methods use the same exact native protocol", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+${generatorTypes}
+
+class Values {
+  constructor() {}
+  static *items(): Generator<int32, void, void> {
+    yield 1;
+  }
+}
+
+export function run(): void {
+  const _values = new Values();
+  Values.items().next();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /pub fn items\(\) -> rt::Generator<i32, \(\), \(\)>/u);
+  validateGeneratedProject("static-generator-method", result.artifacts);
+});
+
+test("instance generator methods fail closed until a lifetime-bound carrier exists", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+${generatorTypes}
+
+class Values {
+  constructor() {}
+  *items(): Generator<int32, void, void> {
+    yield 1;
+  }
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.message.includes("lifetime-bound Rust generator carrier")));
+});

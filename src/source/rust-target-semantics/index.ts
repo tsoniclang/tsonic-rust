@@ -79,7 +79,7 @@ import {
   substituteRustTargetTypeParameters,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -143,6 +143,8 @@ import {
 import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
+import { selectRustResourceManagement } from "./resource-management.js";
+import { rustProjectCallableTargetName } from "./source-member-name.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -538,6 +540,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
   // Fallibility depends on finalized operation facts produced while walking
   // bodies. Compute the declaration fixpoint only after those facts exist.
   recordFallibilityFacts(walk, projectSourceFiles);
+  recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
 }
 
@@ -546,6 +549,17 @@ function promiseInnerCarrier(walk: RustFactWalk, typeNode: Node | undefined): Ta
 }
 
 function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
+  recordCallableSuspensionFacts(walk, declaration);
+  const parameters = requireDenseSourceNodes(walk, walk.context.ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
+  if (parameters === undefined) {
+    return;
+  }
+  for (const parameter of parameters) {
+    recordParameterAbiFacts(walk, parameter);
+  }
+}
+
+function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): void {
   const { ast } = walk.context;
   const sourceGenerator = walk.context.semanticsFor(declaration).getResolvedGeneratorInfo(declaration);
   if (sourceGenerator !== undefined) {
@@ -583,13 +597,6 @@ function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): vo
         { message: "rust async function" },
       ]);
     }
-  }
-  const parameters = requireDenseSourceNodes(walk, ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
-  if (parameters === undefined) {
-    return;
-  }
-  for (const parameter of parameters) {
-    recordParameterAbiFacts(walk, parameter);
   }
 }
 
@@ -1717,8 +1724,8 @@ function applySelectedProjectSourceCall(
     target = { form: "constructor", typeCarrier: resultCarrier };
     operationKind = "constructor";
   } else if (declarationKind === "KindMethodDeclaration") {
-    const methodName = ast.text(ast.name(selectedDeclaration));
-    if (methodName.length === 0) {
+    const methodName = rustProjectCallableTargetName(selectedDeclaration, walk.context);
+    if (methodName === undefined) {
       return undefined;
     }
     if (ast.hasModifierKind(selectedDeclaration, "static")) {
@@ -2341,6 +2348,9 @@ function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node): void 
       continue;
     }
     if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration") {
+      if (memberKind === "KindMethodDeclaration") {
+        recordCallableSuspensionFacts(walk, member);
+      }
       const parameters = requireDenseSourceNodes(walk, ast.parameters(member), "Class callable contains an undefined or non-data parameter slot.");
       if (parameters === undefined) {
         return;
@@ -2368,19 +2378,25 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
   for (const member of members) {
     const memberKind = ast.kindName(member);
     if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration") {
+      const asyncFact = walk.context.facts.get(member, rustAsyncFunctionFactKey);
+      const generatorFact = walk.context.facts.get(member, rustGeneratorFactKey);
       const returnCarrier = memberKind === "KindMethodDeclaration"
-        ? resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member))
+        ? generatorFact?.returnType ?? asyncFact?.outputCarrier ??
+          resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member))
         : undefined;
       const previousMethod = walk.currentMethodDeclaration;
       const previousCallable = walk.currentCallableDeclaration;
+      const previousGenerator = walk.currentGeneratorDeclaration;
       walk.currentMethodDeclaration = memberKind === "KindMethodDeclaration" ? member : undefined;
       walk.currentCallableDeclaration = member;
+      walk.currentGeneratorDeclaration = generatorFact === undefined ? undefined : member;
       const body = ast.body(member);
       if (body !== undefined) {
         const statements = requireDenseSourceNodes(walk, ast.statements(body), "Class callable body contains an undefined or non-data statement slot.");
         if (statements === undefined) {
           walk.currentMethodDeclaration = previousMethod;
           walk.currentCallableDeclaration = previousCallable;
+          walk.currentGeneratorDeclaration = previousGenerator;
           walk.currentThisCarrier = previousThis;
           return;
         }
@@ -2390,6 +2406,7 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
       }
       walk.currentMethodDeclaration = previousMethod;
       walk.currentCallableDeclaration = previousCallable;
+      walk.currentGeneratorDeclaration = previousGenerator;
     }
   }
   walk.currentThisCarrier = previousThis;
@@ -2828,6 +2845,30 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
         found = true;
         return;
       }
+      if (kind === KindVariableDeclaration &&
+        (ast.variableDeclarationKind(node) === "using" ||
+          ast.variableDeclarationKind(node) === "await using")) {
+        const selected = selectRustResourceManagement(
+          node,
+          rustOperationContext(walk, node),
+          walk.operationOptions,
+          (declaration) => {
+            const selfMode = walk.context.facts.get(declaration, rustSelfModeFactKey);
+            if (selfMode === undefined) {
+              return undefined;
+            }
+            return {
+              selfMode,
+              async: walk.context.facts.get(declaration, rustAsyncFunctionFactKey) !== undefined,
+              fallible: fallible.has(declaration),
+            };
+          },
+        );
+        if (!insideTry && selected.kind === "selected" && selected.fact.disposal.fallible) {
+          found = true;
+          return;
+        }
+      }
       if (kind === "KindTryStatement") {
         const tryBlock = TryStatement_TryBlock(walk.context.ast, node);
         const catchBlock = CatchClause_Block(walk.context.ast, TryStatement_CatchClause(walk.context.ast, node));
@@ -2934,6 +2975,53 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
       });
     };
     visit(sourceFile);
+  }
+}
+
+function recordResourceManagementFacts(
+  walk: RustFactWalk,
+  sourceFiles: readonly SourceFile[],
+): void {
+  const { ast } = walk.context;
+  for (const sourceFile of sourceFiles) {
+    for (const declaration of collectDescendantsOfKind(walk, sourceFile, KindVariableDeclaration)) {
+      const declarationKind = ast.variableDeclarationKind(declaration);
+      if (declarationKind !== "using" && declarationKind !== "await using") {
+        continue;
+      }
+      const selected = selectRustResourceManagement(
+        declaration,
+        rustOperationContext(walk, declaration),
+        walk.operationOptions,
+        (method) => {
+          const selfMode = walk.context.facts.get(method, rustSelfModeFactKey);
+          if (selfMode === undefined) {
+            return undefined;
+          }
+          return {
+            selfMode,
+            async: walk.context.facts.get(method, rustAsyncFunctionFactKey) !== undefined,
+            fallible: walk.context.facts.get(method, rustFallibleFactKey) !== undefined,
+          };
+        },
+      );
+      if (selected.kind === "rejected") {
+        appendRustDiagnostic(
+          walk,
+          "RUST_RESOURCE_MANAGEMENT_NOT_PROVEN",
+          selected.reason,
+          declaration,
+          ["target.capability=rust.resource-management.selected-disposer"],
+        );
+        continue;
+      }
+      walk.context.facts.set(
+        declaration,
+        rustResourceManagementFactKey,
+        selected.fact,
+        [{ message: "rust finalized exact resource-management operation" }],
+      );
+    }
   }
 }
 

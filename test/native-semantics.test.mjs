@@ -628,7 +628,7 @@ export async function drive(): Promise<int32> {
   assert.match(text, /fetch_value\(41\)\.await/u);
 });
 
-test("unawaited async calls and async binary entries fail closed", () => {
+test("future values remain first-class and async binary entries use block_on", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -645,8 +645,8 @@ export function bad(): int32 {
 `,
     },
   });
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /let stored = fetch_value\(\);/u);
 
   const asyncMain = compileRust({
     target: { id: "rust", options: { outputType: "bin", crateName: "async_main" } },
@@ -656,8 +656,11 @@ export async function main(): Promise<void> {}
 `,
     },
   });
-  assert.equal(asyncMain.result.artifacts.length, 0);
-  assert.ok(asyncMain.result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_ENTRYPOINT"));
+  assert.deepEqual(asyncMain.result.diagnostics, []);
+  assert.match(
+    artifactText(asyncMain.result, "src/main.rs"),
+    /tsonic_rust_runtime::block_on\(async_main::index::main\(\)\)/u,
+  );
 });
 
 test("throwing functions lower to TsonicResult with Err returns and Ok wrapping", () => {

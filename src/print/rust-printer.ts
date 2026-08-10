@@ -61,7 +61,7 @@ export function printRustItem(item: RustItem): string {
           ? ` -> rt::TsonicResult<${fn.returnType === undefined ? "()" : printRustType(fn.returnType)}>`
           : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
-        const header = `${fnAttrs}${printRustFunctionHeader(`    ${fn.pub ? "pub " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
+        const header = `${fnAttrs}${printRustFunctionHeader(`    ${fn.pub ? "pub " : ""}${fn.isAsync === true ? "async " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
         const body = printRustBlockStatements(fn.body, 2);
         return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
       }).join("\n\n");
@@ -208,17 +208,51 @@ function printRustStmt(statement: RustStmt, depth: number): string {
         : `${withoutTrailing} else {\n${elseBody}\n${indentStr}}`;
     }
     case "while": {
-      return printRustConditionalBlock("while", statement.condition, statement.body, depth);
+      const rendered = printRustConditionalBlock("while", statement.condition, statement.body, depth);
+      return statement.label === undefined
+        ? rendered
+        : `${indent}'${statement.label}: ${rendered.slice(indent.length)}`;
     }
     case "while-let-some": {
       return printRustBlock(
         statement.body,
         depth,
-        `while let Some(${statement.binding}) = ${printRustExpr(statement.expression)}`,
+        `${statement.label === undefined ? "" : `'${statement.label}: `}while let Some(${statement.bindingMutable === true ? "mut " : ""}${statement.binding}) = ${printRustExpr(statement.expression)}`,
       );
     }
     case "for": {
-      return printRustBlock(statement.body, depth, `for ${statement.binding} in ${printRustExpr(statement.iterable)}`);
+      return printRustBlock(
+        statement.body,
+        depth,
+        `${statement.label === undefined ? "" : `'${statement.label}: `}for ${statement.bindingMutable === true ? "mut " : ""}${statement.binding} in ${printRustExpr(statement.iterable)}`,
+      );
+    }
+    case "if-let-some": {
+      return printRustBlock(
+        statement.body,
+        depth,
+        `if let Some(${statement.binding}) = ${printRustExpr(statement.expression)}`,
+      );
+    }
+    case "break": {
+      return `${indent}break${statement.label === undefined ? "" : ` '${statement.label}`};`;
+    }
+    case "continue": {
+      return `${indent}continue${statement.label === undefined ? "" : ` '${statement.label}`};`;
+    }
+    case "completion-exit": {
+      const completion = statement.completion === "return"
+        ? `rt::Completion::Return(${statement.expr === undefined ? "()" : printRustExpr(statement.expr)})`
+        : statement.completion === "break"
+          ? `rt::Completion::Break(${statement.loopId ?? 0})`
+          : `rt::Completion::Continue(${statement.loopId ?? 0})`;
+      const value = statement.resultWrapped ? `Ok(${completion})` : completion;
+      return statement.tail === true
+        ? `${indent}${value}`
+        : `${indent}return ${value};`;
+    }
+    case "resource-scope": {
+      return printRustResourceScope(statement, depth);
     }
     case "index-assign": {
       return printRustAssignment({
@@ -233,10 +267,10 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     }
     case "throw": {
       return [
-        `${indent}return Err(rt::TsonicError::from(rt::JsError::new(`,
+        `${indent}${statement.tail === true ? "" : "return "}Err(rt::TsonicError::from(rt::JsError::new(`,
         `${indent}    rt::JsErrorKind::Error,`,
         `${indent}    ${printRustExpr(statement.message)},`,
-        `${indent})));`,
+        `${indent})))${statement.tail === true ? "" : ";"}`,
       ].join("\n");
     }
     case "try-catch": {
@@ -260,6 +294,183 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return lines.join("\n");
     }
   }
+}
+
+function printRustResourceScope(
+  statement: Extract<RustStmt, { readonly kind: "resource-scope" }>,
+  depth: number,
+): string {
+  const indent = indentText(depth);
+  const nested = indentText(depth + 1);
+  const completionType = `rt::Completion<${printRustType(statement.returnType)}>`;
+  const body = printRustBlockStatements(statement.body, depth + 1);
+  const nestedCleanup = printRustBlockStatements(statement.cleanup, depth + 1);
+  const directCleanup = printRustBlockStatements(statement.cleanup, depth);
+  const bodyTail = statement.fallible
+    ? `${nested}Ok(rt::Completion::Normal)`
+    : `${nested}rt::Completion::Normal`;
+  const cleanupTail = statement.fallible ? `${nested}Ok(())` : undefined;
+  const bodyType = statement.fallible
+    ? `rt::TsonicResult<${completionType}>`
+    : completionType;
+  const bodyCompletesNormally = !statement.terminates;
+  const directBody = printDirectResourceBody(statement.body, depth + 1);
+  const requiresBoundary = statement.fallible || rustBlockHasCompletionExit(statement.body);
+  const lines = body.length === 0
+    ? [`${indent}let ${statement.flowName}: ${bodyType} = ${bodyTail.trim()};`]
+    : directBody !== undefined
+      ? [
+          `${indent}let ${statement.flowName}: ${bodyType} =`,
+          directBody,
+        ]
+      : !requiresBoundary
+        ? [
+            `${indent}let ${statement.flowName}: ${bodyType} = {`,
+            body,
+            ...(bodyCompletesNormally ? [bodyTail] : []),
+            `${indent}};`,
+          ]
+    : [
+        `${indent}let ${statement.flowName}: ${bodyType} = ${statement.asynchronous ? "(async {" : "(|| {"}`,
+        body,
+        ...(bodyCompletesNormally ? [bodyTail] : []),
+        statement.asynchronous ? `${indent}})\n${indent}.await;` : `${indent}})();`,
+      ];
+  if (statement.fallible) {
+    if (nestedCleanup.length === 0) {
+      lines.push(statement.asynchronous
+        ? `${indent}let ${statement.cleanupName}: rt::TsonicResult<()> = (async { Ok(()) }).await;`
+        : `${indent}let ${statement.cleanupName}: rt::TsonicResult<()> = (|| Ok(()))();`);
+    } else {
+      lines.push(
+        `${indent}let ${statement.cleanupName}: rt::TsonicResult<()> = ${statement.asynchronous ? "(async {" : "(|| {"}`,
+        nestedCleanup,
+        cleanupTail!,
+        statement.asynchronous ? `${indent}})\n${indent}.await;` : `${indent}})();`,
+      );
+    }
+    lines.push(
+      `${indent}let ${statement.flowName} =`,
+      `${nested}rt::finish_resource(${statement.flowName}, ${statement.cleanupName})?;`,
+    );
+  } else if (statement.asynchronous) {
+    if (nestedCleanup.length > 0) {
+      lines.push(
+        `${indent}(async {`,
+        nestedCleanup,
+        `${indent}})`,
+        `${indent}.await;`,
+      );
+    }
+  } else if (directCleanup.length > 0) {
+    lines.push(directCleanup);
+  }
+  lines.push(...printCompletionDispatch(statement, depth));
+  return lines.join("\n");
+}
+
+function rustBlockHasCompletionExit(block: RustBlock): boolean {
+  return block.statements.some((statement): boolean => {
+    if (statement.kind === "completion-exit") {
+      return true;
+    }
+    if (statement.kind === "resource-scope") {
+      return statement.propagate;
+    }
+    if (statement.kind === "if") {
+      return rustBlockHasCompletionExit(statement.then) ||
+        (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
+    }
+    if (statement.kind === "while" || statement.kind === "while-let-some" ||
+      statement.kind === "for" || statement.kind === "if-let-some" || statement.kind === "scope") {
+      return rustBlockHasCompletionExit(statement.body);
+    }
+    if (statement.kind === "try-catch") {
+      return rustBlockHasCompletionExit(statement.body) ||
+        rustBlockHasCompletionExit(statement.catchBody);
+    }
+    return false;
+  });
+}
+
+function printDirectResourceBody(body: RustBlock, depth: number): string | undefined {
+  if (body.statements.length !== 1) {
+    return undefined;
+  }
+  const statement = body.statements[0]!;
+  const isTail = statement.kind === "tail" ||
+    (statement.kind === "throw" && statement.tail === true) ||
+    (statement.kind === "completion-exit" && statement.tail === true);
+  if (!isTail) {
+    return undefined;
+  }
+  return `${printRustStmt(statement, depth)};`;
+}
+
+function printCompletionDispatch(
+  statement: Extract<RustStmt, { readonly kind: "resource-scope" }>,
+  depth: number,
+): readonly string[] {
+  const indent = indentText(depth);
+  const armIndent = indentText(depth + 1);
+  const arms: string[] = statement.terminates
+    ? [
+        `${armIndent}rt::Completion::Normal => {`,
+        `${indentText(depth + 2)}unreachable!("terminating Tsonic resource scope completed normally")`,
+        `${armIndent}}`,
+      ]
+    : [`${armIndent}rt::Completion::Normal => {}`];
+  if (statement.propagate) {
+    arms.push(
+      `${armIndent}completion => ${statement.terminates ? "" : "return "}${statement.fallible ? "Ok(completion)" : "completion"},`,
+    );
+  } else {
+    if (statement.dispatchReturn) {
+      arms.push(
+        `${armIndent}rt::Completion::Return(value) => ${statement.terminates ? "" : "return "}${statement.fallible ? "Ok(value)" : "value"},`,
+      );
+    }
+    for (const target of statement.dispatchLoops) {
+      arms.push(
+        `${armIndent}rt::Completion::Break(${target.id}) => break '${target.label},`,
+      );
+      if (target.continuePrelude.length === 0) {
+        arms.push(`${armIndent}rt::Completion::Continue(${target.id}) => continue '${target.label},`);
+      } else {
+        const prelude = printRustBlockStatements(
+          { statements: target.continuePrelude },
+          depth + 2,
+        );
+        arms.push(
+          `${armIndent}rt::Completion::Continue(${target.id}) => {`,
+          prelude,
+          `${indentText(depth + 2)}continue '${target.label};`,
+          `${armIndent}}`,
+        );
+      }
+    }
+    const unmatchedVariants = [
+      ...(statement.dispatchReturn ? [] : ["rt::Completion::Return(_)"]),
+      "rt::Completion::Break(_)",
+      "rt::Completion::Continue(_)",
+    ];
+    const unmatchedPattern = `${unmatchedVariants.join(" | ")} => {`;
+    arms.push(
+      ...(armIndent.length + unmatchedPattern.length <= rustFormatWidth
+        ? [`${armIndent}${unmatchedPattern}`]
+        : [
+            ...unmatchedVariants.map((variant, index) =>
+              `${armIndent}${index === 0 ? "" : "| "}${variant}${index === unmatchedVariants.length - 1 ? " => {" : ""}`),
+          ]),
+      `${indentText(depth + 2)}unreachable!("invalid finalized Tsonic completion target")`,
+      `${armIndent}}`,
+    );
+  }
+  return [
+    `${indent}match ${statement.flowName} {`,
+    ...arms,
+    `${indent}}`,
+  ];
 }
 
 function printRustAssignment(

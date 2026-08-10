@@ -1,6 +1,6 @@
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
-import { rustFutureTargetType } from "../rust-target-types.js";
+import { rustFutureOutputCarrier, rustFutureTargetType } from "../rust-target-types.js";
 import { validateRustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import type {
   RustFutureValueFact,
@@ -31,10 +31,7 @@ export function rustFutureValueForOperation(
     sourceCallEffects.awaiting === "not-applicable") {
     return undefined;
   }
-  const outputCarrier = operation.resultCarrier.kind === "target-named" &&
-      operation.resultCarrier.id === "rust.core.Future"
-    ? operation.resultCarrier.typeArguments?.[0]
-    : undefined;
+  const outputCarrier = rustFutureOutputCarrier(operation.resultCarrier);
   if (outputCarrier === undefined) {
     return undefined;
   }

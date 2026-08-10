@@ -63,12 +63,41 @@ export type RustStmt =
   | { readonly kind: "return"; readonly expr?: RustExpr }
   | { readonly kind: "tail"; readonly expr: RustExpr }
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock }
-  | { readonly kind: "while"; readonly condition: RustExpr; readonly body: RustBlock }
-  | { readonly kind: "while-let-some"; readonly binding: string; readonly expression: RustExpr; readonly body: RustBlock }
-  | { readonly kind: "for"; readonly binding: string; readonly iterable: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "while"; readonly label?: string; readonly condition: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "while-let-some"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly expression: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "for"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly iterable: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "if-let-some"; readonly binding: string; readonly expression: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "break"; readonly label?: string }
+  | { readonly kind: "continue"; readonly label?: string }
+  | {
+      readonly kind: "completion-exit";
+      readonly completion: "return" | "break" | "continue";
+      readonly resultWrapped: boolean;
+      readonly tail?: true;
+      readonly expr?: RustExpr;
+      readonly loopId?: number;
+    }
+  | {
+      readonly kind: "resource-scope";
+      readonly flowName: string;
+      readonly cleanupName: string;
+      readonly returnType: RustType;
+      readonly fallible: boolean;
+      readonly asynchronous: boolean;
+      readonly body: RustBlock;
+      readonly cleanup: RustBlock;
+      readonly propagate: boolean;
+      readonly dispatchReturn: boolean;
+      readonly dispatchLoops: readonly {
+        readonly id: number;
+        readonly label: string;
+        readonly continuePrelude: readonly RustStmt[];
+      }[];
+      readonly terminates: boolean;
+    }
   | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
   | { readonly kind: "scope"; readonly body: RustBlock }
-  | { readonly kind: "throw"; readonly message: RustExpr }
+  | { readonly kind: "throw"; readonly message: RustExpr; readonly tail?: true }
   | { readonly kind: "try-catch"; readonly body: RustBlock; readonly catchBinding: string; readonly catchBody: RustBlock };
 
 export interface RustBlock {
@@ -102,6 +131,7 @@ export interface RustImplFunction {
   readonly name: string;
   readonly pub: boolean;
   readonly attrs?: readonly string[];
+  readonly isAsync?: boolean;
   readonly fallible?: boolean;
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];

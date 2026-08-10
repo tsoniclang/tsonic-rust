@@ -10,7 +10,6 @@ import {
   Node_Type,
 } from "../../common/source-ast.js";
 import type {
-  RustBlock,
   RustExpr,
   RustFunctionParam,
   RustImplFunction,
@@ -24,10 +23,11 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustSourceParameterAbiFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
-import { applyFallibleShape, rustBlockTerminates } from "./functions.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustSourceParameterAbiFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
+import { applyFallibleShape, applyRustTailShape, rustBlockTerminates } from "./functions.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
-import { createRustSyntheticNameState } from "./synthetic-names.js";
+import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
+import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
   return node === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(node)?.carrier;
@@ -106,15 +106,6 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       continue;
     }
     if (memberKind === "KindMethodDeclaration") {
-      if (ast.hasModifierKind(member, "async")) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, member),
-          "rust.backend.class",
-          "Async class methods are not supported by the Rust target.",
-        ));
-        failed = true;
-        continue;
-      }
       methods.push(member);
       continue;
     }
@@ -298,8 +289,9 @@ function buildStructLiteral(
 
 function planMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
   const { ast } = context.input;
-  const methodName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
-  const nonSnakeSeen = { value: rustPublicName(ast.text(ast.name(member) ?? member)).needsAllow };
+  const sourceMethodName = rustProjectCallableTargetName(member, context.input);
+  const methodName = rustPublicName(sourceMethodName ?? "").name;
+  const nonSnakeSeen = { value: rustPublicName(sourceMethodName ?? "").needsAllow };
   context = { ...context, nonSnakeSeen };
   if (!isValidRustIdentifier(methodName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -322,7 +314,18 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     ));
     return undefined;
   }
-  const returnCarrier = carrierOf(context, returnTypeNode);
+  const generatorFact = context.input.facts.getFact(member, rustGeneratorFactKey);
+  const asyncFact = context.input.facts.getFact(member, rustAsyncFunctionFactKey);
+  const sourceAsync = ast.hasModifierKind(member, "async");
+  if (sourceAsync && generatorFact === undefined && asyncFact === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.async-method",
+      "Async methods require a finalized Promise or async-generator carrier fact.",
+    ));
+    return undefined;
+  }
+  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ?? carrierOf(context, returnTypeNode);
   if (returnCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode),
@@ -351,21 +354,53 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     return undefined;
   }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  const isStatic = ast.hasModifierKind(member, "static");
+  if (generatorFact !== undefined && !isStatic) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.instance-generator-method",
+      "Instance generator methods require a lifetime-bound Rust generator carrier.",
+    ));
+    return undefined;
+  }
+  if (generatorFact !== undefined && fallible) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.generator-fallibility",
+      "Throwing generator method bodies require a closed Rust generator error protocol.",
+    ));
+    return undefined;
+  }
   if (fallible) {
     context.usedAliases?.add("rt");
   }
+  const syntheticNames = createRustSyntheticNameState(ast, bodyNode, params.map((param) => param.name));
+  const generatorControllerName = generatorFact === undefined
+    ? undefined
+    : allocateRustSyntheticName(syntheticNames, "generator");
   const bodyContext: RustPlanContext = {
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),
-    syntheticNames: createRustSyntheticNameState(ast, bodyNode, params.map((param) => param.name)),
-    ...(ast.hasModifierKind(member, "async") ? { asyncContext: true } : {}),
+    syntheticNames,
+    controlFlow: { nextLoopId: 0 },
+    functionReturnType: returnType ?? { kind: "unit" },
+    ...(sourceAsync && generatorFact === undefined ? { asyncContext: true } : {}),
+    ...(generatorFact === undefined
+      ? {}
+      : {
+          generator: {
+            declaration: member,
+            controllerName: generatorControllerName!,
+            protocol: generatorFact,
+          },
+        }),
     ...(fallible ? { fallibleContext: true } : {}),
   };
   const body = planBlockLike(bodyNode, bodyContext);
   if (body === undefined) {
     return undefined;
   }
-  if (returnType !== undefined && !rustBlockTerminates(body)) {
+  if (generatorFact === undefined && returnType !== undefined && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
       "rust.backend.return-flow",
@@ -373,7 +408,6 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     ));
     return undefined;
   }
-  const isStatic = ast.hasModifierKind(member, "static");
   const selfMode = isStatic ? undefined : context.input.facts.getFact(member, rustSelfModeFactKey);
   if (!isStatic && selfMode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -383,27 +417,52 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     ));
     return undefined;
   }
+  if (generatorFact !== undefined) {
+    if (!isRustUnitCarrier(generatorFact.returnType) && !rustBlockTerminates(body)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, bodyNode),
+        "rust.backend.generator-return-flow",
+        "Value-returning generator methods require finalized control flow that returns on every path.",
+      ));
+      return undefined;
+    }
+    context.usedAliases?.add("rt");
+    return {
+      name: methodName,
+      pub: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"),
+      ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+      ...(isStatic ? {} : { selfParam: selfMode!.mode }),
+      params,
+      ...(returnType === undefined ? {} : { returnType }),
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: generatorFact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new",
+            args: [{
+              kind: "closure-block",
+              params: [{ name: generatorControllerName!, mutable: false }],
+              move: true,
+              async: true,
+              body: applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
+            }],
+          },
+        }],
+      },
+    };
+  }
   return {
     name: methodName,
     pub: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"),
     ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(fallible ? { fallible: true } : {}),
+    ...(sourceAsync ? { isAsync: true } : {}),
     ...(isStatic ? {} : { selfParam: selfMode!.mode }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyFallibleShape(applyTail(body, returnType !== undefined), fallible, returnType !== undefined),
+    body: applyFallibleShape(applyRustTailShape(body, returnType !== undefined), fallible, returnType !== undefined),
   };
-}
-
-function applyTail(body: RustBlock, hasReturnValue: boolean): RustBlock {
-  if (!hasReturnValue || body.statements.length === 0) {
-    return body;
-  }
-  const last = body.statements[body.statements.length - 1];
-  if (last === undefined || last.kind !== "return" || last.expr === undefined) {
-    return body;
-  }
-  return { statements: [...body.statements.slice(0, -1), { kind: "tail", expr: last.expr }] };
 }
 
 export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {

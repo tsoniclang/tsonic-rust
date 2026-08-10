@@ -4,6 +4,28 @@ import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustGenericRequirementSet } from "./generic-requirements.js";
 import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
+import type { RustType } from "../rust-ast/nodes.js";
+
+export interface RustLoopTarget {
+  readonly id: number;
+  readonly label: string;
+  readonly sourceLabel?: string;
+  readonly resourceBoundary?: RustCompletionBoundary;
+  readonly continuePrelude: readonly import("../rust-ast/nodes.js").RustStmt[];
+}
+
+export interface RustCompletionBoundary {
+  readonly parent?: RustCompletionBoundary;
+  readonly returnType: RustType;
+  readonly fallible: boolean;
+  readonly asynchronous: boolean;
+  readonly dispatchReturn: { value: boolean };
+  readonly dispatchLoops: Map<number, RustLoopTarget>;
+}
+
+export interface RustControlFlowState {
+  nextLoopId: number;
+}
 
 export interface RustPlanContext {
   readonly input: RustTranslationContext;
@@ -18,6 +40,10 @@ export interface RustPlanContext {
   // diagnose same-scope collisions.
   readonly emittedLocalNames?: Set<string>;
   readonly syntheticNames?: RustSyntheticNameState;
+  readonly controlFlow?: RustControlFlowState;
+  readonly loops?: readonly RustLoopTarget[];
+  readonly completionBoundary?: RustCompletionBoundary;
+  readonly functionReturnType?: RustType;
   readonly asyncContext?: boolean;
   // Inside a fallible lowering (Result-returning fn body or try closure):
   // fallible calls take `?`, throws lower to Err returns.

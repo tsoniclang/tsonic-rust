@@ -35,7 +35,7 @@ export async function main(): Promise<void> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /while let Some\(row\) = __tsonic_async_iterator\.next_yield\(\)\.await/u);
+  assert.match(source, /while let Some\(row\) = __tsonic_async_iterator(?:_\d+)?\.next_yield\(\)\.await/u);
   assert.equal(validateGeneratedProject("async-iteration", result.artifacts, { run: true }).status, 0);
 });
 

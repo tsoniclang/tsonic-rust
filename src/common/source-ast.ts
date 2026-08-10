@@ -2,8 +2,10 @@ import type { AstReader, ExtensionFactSubject, Node } from "@tsonic/tsts";
 
 export const KindBinaryExpression = "KindBinaryExpression";
 export const KindBlock = "KindBlock";
+export const KindBreakStatement = "KindBreakStatement";
 export const KindBooleanKeyword = "KindBooleanKeyword";
 export const KindCallExpression = "KindCallExpression";
+export const KindContinueStatement = "KindContinueStatement";
 export const KindElementAccessExpression = "KindElementAccessExpression";
 export const KindExpressionStatement = "KindExpressionStatement";
 export const KindExportDeclaration = "KindExportDeclaration";
@@ -350,4 +352,19 @@ export function CatchClause_Block(ast: AstReader, node: Node | undefined): Node 
   return node === undefined || ast.kindName(node) !== "KindCatchClause"
     ? undefined
     : ast.as.AsCatchClause(node)?.Block;
+}
+
+export function BreakOrContinueStatement_Label(
+  ast: AstReader,
+  node: Node | undefined,
+): Node | undefined {
+  if (node === undefined) {
+    return undefined;
+  }
+  const kind = ast.kindName(node);
+  return kind === KindBreakStatement
+    ? ast.as.AsBreakStatement(node)?.Label
+    : kind === KindContinueStatement
+      ? ast.as.AsContinueStatement(node)?.Label
+      : undefined;
 }
