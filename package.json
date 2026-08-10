@@ -16,8 +16,7 @@
   },
   "scripts": {
     "build": "bash scripts/build.sh",
-    "pretest": "npm run build && node -e \"import('./test/helpers/rust-session.mjs').then(m => m.buildInstalledLayout())\"",
-    "test": "node --test test/*.test.mjs test/architecture/*.test.mjs",
+    "test": "bash scripts/test.sh",
     "prepack": "npm run build"
   },
   "peerDependencies": {
