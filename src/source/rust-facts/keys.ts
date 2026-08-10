@@ -10,6 +10,7 @@ import { closedMetadataEquals } from "../../common/closed-metadata.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type {
   RustFinalizedOperationAbiFor,
+  RustFinalizedValueConversion,
 } from "./finalized-operation-abi.js";
 
 export type {
@@ -567,3 +568,15 @@ export interface RustSourceCallEffectsFact {
 // Total post-fixpoint effects for an exact selected project-source call.
 export const rustSourceCallEffectsFactKey: RustPlanKey<RustSourceCallEffectsFact> =
   defineRustPlanKey("sourceCallEffects", closedMetadataEquals);
+
+export interface RustFutureValueFact {
+  readonly outputCarrier: TargetTypeRef;
+  readonly awaitedConversion: RustFinalizedValueConversion;
+  readonly awaiting: "infallible" | "fallible";
+}
+
+// Exact await behavior for one first-class future value. Unlike its runtime
+// carrier, this fact preserves operation-specific rejection and result-
+// conversion semantics while the value flows through immutable bindings.
+export const rustFutureValueFactKey: RustPlanKey<RustFutureValueFact> =
+  defineRustPlanKey("futureValue", closedMetadataEquals);

@@ -31,7 +31,7 @@ import {
   Node_Expression,
   Node_Operand,
 } from "../../common/source-ast.js";
-import { rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustFutureValueFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustProviderConstantArgument,
@@ -49,6 +49,7 @@ import {
   isRustFinalizedSliceInput,
   validateRustFinalizedOperationAbi,
 } from "../../source/rust-facts/finalized-operation-abi.js";
+import { rustFutureValueMatchesCarrier } from "../../source/rust-facts/future-values.js";
 import { rustValueConversionContract } from "../../source/rust-facts/value-conversions.js";
 import {
   rustFinalizedCarrierTransitionMatches,
@@ -287,75 +288,44 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         return undefined;
       }
       const operand = Node_Expression(context.input.ast, node);
-      if (operand !== undefined) {
-        context.awaitedCalls?.add(operand);
-      }
       const planned = operand === undefined ? undefined : planExpression(operand, context);
       if (planned === undefined) {
         return undefined;
       }
       let awaited: RustExpr = { kind: "await", expr: planned };
-      const operandOperation = operand === undefined ? undefined : rustOperationFact(operand, context);
-      if (operandOperation?.kind === "provider-operation") {
-        if (operandOperation.abi.result.kind !== "async" ||
-          !rustTargetTypeRefEquals(awaitFact.resultCarrier, operandOperation.abi.result.awaitedCarrier)) {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, node),
-            "rust.backend.async-provider-abi",
-            "Awaited provider operation does not carry a compatible finalized async result ABI.",
-          ));
-          return undefined;
-        }
-        if (operandOperation.abi.effects.awaiting === "fallible") {
-          if (context.fallibleContext !== true) {
-            context.diagnostics.push(unsupportedConstructDiagnostic(
-              diagnosticInput(context, node),
-              "rust.error.call",
-              "Fallible awaits require a finalized fallible lowering context.",
-            ));
-            return undefined;
-          }
-          awaited = { kind: "try", expr: awaited };
-        }
-        return applyFinalizedValueConversion(
-          context,
-          awaited,
-          operandOperation.abi.result.awaitedConversion,
-          node,
-          "operation-result",
-        );
+      const future = operand === undefined
+        ? undefined
+        : context.input.facts.getFact(operand, rustFutureValueFactKey);
+      const operandCarrier = operand === undefined
+        ? undefined
+        : context.input.facts.getRuntimeCarrierFact(operand)?.carrier;
+      if (future === undefined || !rustFutureValueMatchesCarrier(future, operandCarrier) ||
+        !rustTargetTypeRefEquals(awaitFact.resultCarrier, future.outputCarrier)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.await-future-value",
+          "Awaited expression requires one compatible finalized future-value fact.",
+        ));
+        return undefined;
       }
-      if (operandOperation?.kind === "source-call") {
-        const effects = operand === undefined
-          ? undefined
-          : context.input.facts.getFact(operand, rustSourceCallEffectsFactKey);
-        if (effects === undefined || effects.awaiting === "not-applicable") {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, node),
-            "rust.backend.async-source-call-effects",
-            "Awaited project-source call requires finalized post-fixpoint await effects.",
-          ));
-          return undefined;
-        }
-        if (effects.awaiting === "infallible") {
-          return awaited;
-        }
+      if (future.awaiting === "fallible") {
         if (context.fallibleContext !== true) {
           context.diagnostics.push(unsupportedConstructDiagnostic(
             diagnosticInput(context, node),
             "rust.error.call",
-            "Fallible calls require a fallible lowering context (a throwing function or a try block).",
+            "Fallible awaits require a finalized fallible lowering context.",
           ));
           return undefined;
         }
-        return { kind: "try", expr: awaited };
+        awaited = { kind: "try", expr: awaited };
       }
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.await-effects",
-        "Awaited expression requires finalized provider or project-source operation effects.",
-      ));
-      return undefined;
+      return applyFinalizedValueConversion(
+        context,
+        awaited,
+        future.awaitedConversion,
+        node,
+        "operation-result",
+      );
     }
     case "KindYieldExpression": {
       const generator = context.generator;
@@ -1347,19 +1317,6 @@ function planCallExpression(node: Node, context: RustPlanContext): RustExpr | un
       diagnosticInput(context, node),
       "rust.backend.source-call-effects",
       "Project-source call requires one structurally consistent finalized invocation/await effect fact.",
-    ));
-    return undefined;
-  }
-  const isAsyncCall = fact?.kind === "provider-operation"
-    ? fact.abi.result.kind === "async"
-    : fact?.kind === "source-call" && sourceCallEffects !== undefined
-      ? sourceCallEffects.awaiting !== "not-applicable"
-      : false;
-  if (isAsyncCall && context.awaitedCalls?.has(node) !== true) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.async",
-      "Async call results must be awaited; futures cannot be stored or ignored.",
     ));
     return undefined;
   }

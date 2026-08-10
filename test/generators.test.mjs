@@ -141,6 +141,48 @@ export async function read(): Promise<int32> {
   assert.match(artifactText(result, "src/index.rs"), /generator\.resume\(\)\.await/u);
 });
 
+test("async generator requests queue concurrently in FIFO order", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "async_generator_queue" } },
+    files: {
+      "index.ts": `
+${generatorTypes}
+import { check } from "@acme/testing";
+
+async function* rows(): AsyncGenerator<int32, int32, int32> {
+  const first: int32 = yield 1;
+  const second: int32 = yield first;
+  yield second;
+  return 12;
+}
+
+export async function main(): Promise<void> {
+  const generator = rows();
+  const first = generator.next();
+  const second = generator.next(7);
+  const third = generator.next(9);
+  const firstResult = await first;
+  const secondResult = await second;
+  const thirdResult = await third;
+  if (!firstResult.done) check(firstResult.value === 1);
+  if (!secondResult.done) check(secondResult.value === 7);
+  if (!thirdResult.done) check(thirdResult.value === 9);
+  const completed = await generator.next(11);
+  if (completed.done) check(completed.value === 12);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let first = generator\.resume\(\);/u);
+  assert.match(source, /let second = generator\.resume_with\(7\);/u);
+  const run = validateGeneratedProject("async-generator-queue", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
 test("generic generators publish exact static obligations and pass Cargo", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

@@ -18,7 +18,7 @@ import { printRustSourceFile } from "../../print/rust-printer.js";
 import { printCargoManifest } from "../../print/cargo-manifest-printer.js";
 import { planCargoManifest } from "./cargo-project.js";
 import { rustReservedIdentifiers } from "./plan-context.js";
-import { rustFallibleFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey } from "../../source/rust-facts/keys.js";
 import type { RustTranslationContext } from "../../translate/context.js";
 import { reconstructRustSourceFiles } from "./source-file-reconstruction.js";
 
@@ -82,6 +82,13 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
       path: `${crateName}::${entryFunction.moduleName}::${entryFunction.functionName}`,
       args: [],
     };
+    const entryExecution = entryFunction.async
+      ? {
+          kind: "call" as const,
+          path: "tsonic_rust_runtime::block_on",
+          args: [entryCall],
+        }
+      : entryCall;
     const mainItem: RustItem = {
       kind: "function",
       name: "main",
@@ -94,9 +101,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
               path: "tsonic_rust_runtime::TsonicResult",
               typeArguments: [{ kind: "unit" as const }],
             },
-            body: { statements: [{ kind: "tail" as const, expr: entryCall }] },
+            body: { statements: [{ kind: "tail" as const, expr: entryExecution }] },
           }
-        : { body: { statements: [{ kind: "expr" as const, expr: entryCall }] } }),
+        : { body: { statements: [{ kind: "expr" as const, expr: entryExecution }] } }),
     };
     artifacts.push(rustSourceArtifact("src/main.rs", printRustSourceFile(createRustSourceFile([mainItem]))));
   }
@@ -171,6 +178,7 @@ function moduleNameDiagnostic(input: RustTranslationContext, sourceFile: SourceF
 interface RustBinaryEntry {
   readonly moduleName: string;
   readonly functionName: string;
+  readonly async: boolean;
   readonly fallible: boolean;
 }
 
@@ -204,17 +212,18 @@ function resolveBinaryEntry(
     if (nameNode === undefined || input.ast.text(nameNode) !== "main") {
       continue;
     }
+    const asyncFact = input.facts.getFact(statement, rustAsyncFunctionFactKey);
     const returnTypeNode = Node_Type(input.ast, statement);
-    const returnCarrier = returnTypeNode === undefined
+    const returnCarrier = asyncFact?.outputCarrier ?? (returnTypeNode === undefined
       ? undefined
-      : input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
-    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier) || input.ast.hasModifierKind(statement, "async")) {
-      // Async entry points would require an implicit executor selection.
+      : input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier);
+    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier)) {
       break;
     }
     return {
       moduleName,
       functionName: "main",
+      async: asyncFact !== undefined,
       fallible: input.facts.getFact(statement, rustFallibleFactKey) !== undefined,
     };
   }

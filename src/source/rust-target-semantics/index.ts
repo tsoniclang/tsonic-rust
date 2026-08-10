@@ -79,8 +79,12 @@ import {
   substituteRustTargetTypeParameters,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
-import type { RustTargetOperationFact } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
+import {
+  rustFutureValueForOperation,
+  rustFutureValueMatchesCarrier,
+} from "../rust-facts/future-values.js";
 import {
   rustTargetOperationIsDirectLocation,
   rustTargetOperationText,
@@ -534,6 +538,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
   // Fallibility depends on finalized operation facts produced while walking
   // bodies. Compute the declaration fixpoint only after those facts exist.
   recordFallibilityFacts(walk, projectSourceFiles);
+  recordFutureValueFacts(walk, projectSourceFiles);
 }
 
 function promiseInnerCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
@@ -2715,6 +2720,56 @@ function rustOperationAbiAwaitIsFallible(abi: RustFinalizedOperationAbi): boolea
     (abi.effects.awaiting === "fallible" || abi.result.awaitedConversion.fallible);
 }
 
+interface RustFutureOperationOrigin {
+  readonly expression: Node;
+  readonly operation: RustTargetOperationFact;
+}
+
+function resolveFutureOperationOrigin(
+  walk: RustFactWalk,
+  node: Node,
+  resolving = new Set<Node>(),
+): RustFutureOperationOrigin | undefined {
+  if (resolving.has(node)) {
+    return undefined;
+  }
+  resolving.add(node);
+  try {
+    const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
+      walk.context.facts.resolve(node, rustTargetOperationFactKey);
+    if ((operation?.kind === "provider-operation" && operation.abi.result.kind === "async") ||
+      (operation?.kind === "source-call" && rustFutureOutputCarrier(operation.resultCarrier) !== undefined)) {
+      return { expression: node, operation };
+    }
+    const kind = walk.context.ast.kindName(node);
+    if (kind === KindParenthesizedExpression || kind === "KindAsExpression" ||
+      kind === "KindTypeAssertionExpression") {
+      const operand = Node_Expression(walk.context.ast, node);
+      return operand === undefined
+        ? undefined
+        : resolveFutureOperationOrigin(walk, operand, resolving);
+    }
+    if (kind === KindVariableDeclaration) {
+      if (walk.context.facts.get(node, rustMutatedBindingFactKey) !== undefined) {
+        return undefined;
+      }
+      const initializer = Node_Initializer(walk.context.ast, node);
+      return initializer === undefined
+        ? undefined
+        : resolveFutureOperationOrigin(walk, initializer, resolving);
+    }
+    if (kind === KindIdentifier) {
+      const declaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
+      return declaration === undefined
+        ? undefined
+        : resolveFutureOperationOrigin(walk, declaration, resolving);
+    }
+    return undefined;
+  } finally {
+    resolving.delete(node);
+  }
+}
+
 function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly SourceFile[]): void {
   const { ast } = walk.context;
   const declarations: Node[] = [];
@@ -2791,11 +2846,11 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
       }
       if (!insideTry && kind === "KindAwaitExpression") {
         const operand = Node_Expression(walk.context.ast, node);
-        const operandFact = operand === undefined
+        const origin = operand === undefined ? undefined : resolveFutureOperationOrigin(walk, operand);
+        const operandFact = origin?.operation;
+        const selectedDeclaration = origin === undefined
           ? undefined
-          : walk.context.facts.get(operand, rustTargetOperationFactKey) ??
-            walk.context.facts.resolve(operand, rustTargetOperationFactKey);
-        const selectedDeclaration = operand === undefined ? undefined : selectedProjectDeclaration(operand);
+          : selectedProjectDeclaration(origin.expression);
         const selectedAsync = selectedDeclaration !== undefined &&
           walk.context.facts.get(selectedDeclaration, rustAsyncFunctionFactKey) !== undefined;
         if ((operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)) ||
@@ -2874,6 +2929,85 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
         }
       }
       ast.forEachChild(node, (child) => {
+        if (child !== undefined) {
+          visit(child);
+        }
+      });
+    };
+    visit(sourceFile);
+  }
+}
+
+function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
+  const resolving = new Set<Node>();
+  const resolve = (node: Node): RustFutureValueFact | undefined => {
+    const existing = walk.context.facts.get(node, rustFutureValueFactKey) ??
+      walk.context.facts.resolve(node, rustFutureValueFactKey);
+    if (existing !== undefined || resolving.has(node)) {
+      return existing;
+    }
+    resolving.add(node);
+    try {
+      const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
+        walk.context.facts.resolve(node, rustTargetOperationFactKey);
+      const effects = operation?.kind === "source-call"
+        ? walk.context.facts.get(node, rustSourceCallEffectsFactKey) ??
+          walk.context.facts.resolve(node, rustSourceCallEffectsFactKey)
+        : undefined;
+      let fact = rustFutureValueForOperation(operation, effects);
+      if (fact === undefined) {
+        const kind = walk.context.ast.kindName(node);
+        if (kind === KindParenthesizedExpression || kind === "KindAsExpression" ||
+          kind === "KindTypeAssertionExpression") {
+          const operand = Node_Expression(walk.context.ast, node);
+          fact = operand === undefined ? undefined : resolve(operand);
+        } else if (kind === KindVariableDeclaration) {
+          const initializer = Node_Initializer(walk.context.ast, node);
+          fact = walk.context.facts.get(node, rustMutatedBindingFactKey) !== undefined || initializer === undefined
+            ? undefined
+            : resolve(initializer);
+        } else if (kind === KindIdentifier) {
+          const declaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
+          fact = declaration === undefined ? undefined : resolve(declaration);
+        }
+      }
+      if (fact === undefined) {
+        return undefined;
+      }
+      let carrier = walk.context.facts.get(node, rustRuntimeCarrierKey)?.carrier ??
+        walk.context.facts.resolve(node, rustRuntimeCarrierKey)?.carrier;
+      if (carrier === undefined && walk.context.ast.kindName(node) === KindIdentifier) {
+        const declaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
+        const declarationCarrier = declaration === undefined
+          ? undefined
+          : walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
+            walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
+        if (declarationCarrier !== undefined) {
+          carrier = setCarrierFact(walk, node, declarationCarrier);
+        }
+      }
+      if (!rustFutureValueMatchesCarrier(fact, carrier)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_FUTURE_VALUE_CARRIER_CONFLICT",
+          "First-class future evidence conflicts with the exact runtime carrier of this value.",
+          node,
+          ["target.capability=rust.async.future-value"],
+        );
+        return undefined;
+      }
+      walk.context.facts.set(node, rustFutureValueFactKey, fact, [
+        { message: "rust exact future value" },
+      ]);
+      return fact;
+    } finally {
+      resolving.delete(node);
+    }
+  };
+  for (const sourceFile of sourceFiles) {
+    const visit = (node: Node): void => {
+      resolve(node);
+      walk.context.ast.forEachChild(node, (child) => {
         if (child !== undefined) {
           visit(child);
         }

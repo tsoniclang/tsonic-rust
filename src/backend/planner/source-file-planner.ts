@@ -61,7 +61,6 @@ export function planRustSourceFile(
     moduleName,
     moduleNameByFileName,
     diagnostics,
-    awaitedCalls: new WeakSet(),
     usedAliases,
   };
   const items = planModuleItems(context);

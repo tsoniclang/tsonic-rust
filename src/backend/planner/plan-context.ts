@@ -16,9 +16,6 @@ export interface RustPlanContext {
   // Binding names already emitted in the enclosing function scope, used to
   // diagnose same-scope collisions.
   readonly emittedLocalNames?: Set<string>;
-  // Call nodes appearing directly under an await expression; future-carrier
-  // calls anywhere else fail closed.
-  readonly awaitedCalls?: WeakSet<object>;
   // Inside a fallible lowering (Result-returning fn body or try closure):
   // fallible calls take `?`, throws lower to Err returns.
   readonly fallibleContext?: boolean;
