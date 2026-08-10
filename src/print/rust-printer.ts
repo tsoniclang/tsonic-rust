@@ -801,6 +801,17 @@ function printFittedCall(
       if (renderedFits(compact, column)) {
         return compact;
       }
+    } else if (argument.kind === "reference" &&
+      (argument.expr.kind === "slice-literal" || argument.expr.kind === "vec-literal")) {
+      const rendered = printRustExprFitted(
+        argument,
+        depth,
+        column + prefix.length,
+      );
+      const compact = appendToLastLine(`${prefix}${rendered}`, ")");
+      if (renderedFits(compact, column)) {
+        return compact;
+      }
     } else if (renderedFits(flat, column)) {
       return flat;
     }

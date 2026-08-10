@@ -370,6 +370,53 @@ test("long borrowed slices use rustfmt-compatible element layout", () => {
   assert.match(text, /&\[\n            tsonic_rust_js::abi::JsValue::from\(String::from\("count"\)\),\n            tsonic_rust_js::abi::JsValue::from\(3\.0\),\n        \],/u);
 });
 
+test("single long borrowed slice arguments stay attached to their call", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "js_abi::console_log",
+            args: [{
+              kind: "reference",
+              expr: {
+                kind: "slice-literal",
+                elements: [
+                  {
+                    kind: "call",
+                    path: "tsonic_rust_js::abi::js_value_from_string",
+                    args: [{ kind: "reference", expr: { kind: "path", path: "label" } }],
+                  },
+                  {
+                    kind: "call",
+                    path: "tsonic_rust_js::abi::JsValue::from",
+                    args: [{ kind: "float-literal", text: "6.0" }],
+                  },
+                  {
+                    kind: "call",
+                    path: "tsonic_rust_js::abi::JsValue::from",
+                    args: [{ kind: "bool-literal", value: true }],
+                  },
+                ],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /js_abi::console_log\(&\[\n        tsonic_rust_js::abi::js_value_from_string\(&label\),\n        tsonic_rust_js::abi::JsValue::from\(6\.0\),\n        tsonic_rust_js::abi::JsValue::from\(true\),\n    \]\);/u);
+  assert.doesNotMatch(text, /js_abi::console_log\(\n/u);
+});
+
 test("logical assignment keeps a fitting first operand beside the operator", () => {
   const first = {
     kind: "call",
