@@ -3,6 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustGenericRequirementSet } from "./generic-requirements.js";
 import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
+import type { RustSyntheticNameState } from "./synthetic-names.js";
 
 export interface RustPlanContext {
   readonly input: RustTranslationContext;
@@ -16,6 +17,8 @@ export interface RustPlanContext {
   // Binding names already emitted in the enclosing function scope, used to
   // diagnose same-scope collisions.
   readonly emittedLocalNames?: Set<string>;
+  readonly syntheticNames?: RustSyntheticNameState;
+  readonly asyncContext?: boolean;
   // Inside a fallible lowering (Result-returning fn body or try closure):
   // fallible calls take `?`, throws lower to Err returns.
   readonly fallibleContext?: boolean;

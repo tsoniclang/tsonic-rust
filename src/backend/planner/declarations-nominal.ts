@@ -27,6 +27,7 @@ import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustFallibleFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustSourceParameterAbiFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
 import { applyFallibleShape, rustBlockTerminates } from "./functions.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
+import { createRustSyntheticNameState } from "./synthetic-names.js";
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
   return node === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(node)?.carrier;
@@ -356,6 +357,8 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   const bodyContext: RustPlanContext = {
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),
+    syntheticNames: createRustSyntheticNameState(ast, bodyNode, params.map((param) => param.name)),
+    ...(ast.hasModifierKind(member, "async") ? { asyncContext: true } : {}),
     ...(fallible ? { fallibleContext: true } : {}),
   };
   const body = planBlockLike(bodyNode, bodyContext);

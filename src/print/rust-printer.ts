@@ -210,6 +210,13 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     case "while": {
       return printRustConditionalBlock("while", statement.condition, statement.body, depth);
     }
+    case "while-let-some": {
+      return printRustBlock(
+        statement.body,
+        depth,
+        `while let Some(${statement.binding}) = ${printRustExpr(statement.expression)}`,
+      );
+    }
     case "for": {
       return printRustBlock(statement.body, depth, `for ${statement.binding} in ${printRustExpr(statement.iterable)}`);
     }

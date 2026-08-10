@@ -439,7 +439,7 @@ test("operation target shape and source-call effects have one finalized owner", 
   const statements = readFileSync(join(sourceRoot, "backend/planner/statements.ts"), "utf8");
   const factUnion = sourceSection(keys, "export type RustTargetOperationFact =", "export const rustTargetOperationFactKey");
   const providerFact = sourceSection(factUnion, 'readonly kind: "provider-operation";', 'readonly kind: "array-literal";');
-  const runtimeSetFact = sourceSection(factUnion, 'readonly kind: "runtime-set";', 'readonly kind: "for-of";');
+  const runtimeSetFact = sourceSection(factUnion, 'readonly kind: "runtime-set";', 'readonly kind: "iteration";');
 
   assert.match(abi, /readonly operationKind: RustFinalizedOperationKind/u);
   assert.match(abi, /readonly target: RustProviderOperationForm/u);

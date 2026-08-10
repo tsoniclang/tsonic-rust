@@ -23,6 +23,10 @@ import {
 import {
   publishRustSourceCallableContract,
 } from "./source-callable-contracts.js";
+import {
+  allocateRustSyntheticName,
+  createRustSyntheticNameState,
+} from "./synthetic-names.js";
 
 export function planFunctionDeclaration(node: Node, outerContext: RustPlanContext): RustItem | undefined {
   const { ast } = outerContext.input;
@@ -198,15 +202,21 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   if (fallible) {
     context.usedAliases?.add("rt");
   }
+  const syntheticNames = createRustSyntheticNameState(ast, bodyNode, params.map((param) => param.name));
+  const generatorControllerName = generatorFact === undefined
+    ? undefined
+    : allocateRustSyntheticName(syntheticNames, "generator");
   const bodyContext: RustPlanContext = {
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),
+    syntheticNames,
+    ...(isAsync ? { asyncContext: true } : {}),
     ...(generatorFact === undefined
       ? {}
       : {
           generator: {
             declaration: node,
-            controllerName: "__tsonic_generator",
+            controllerName: generatorControllerName!,
             protocol: generatorFact,
           },
         }),
@@ -246,7 +256,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
             path: generatorFact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new",
             args: [{
               kind: "closure-block",
-              params: [{ name: "__tsonic_generator", mutable: false }],
+              params: [{ name: generatorControllerName!, mutable: false }],
               move: true,
               async: true,
               body: applyTailReturn(body, !isRustUnitCarrier(generatorFact.returnType)),

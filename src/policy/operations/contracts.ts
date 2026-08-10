@@ -2,6 +2,7 @@ import type {
   ExtensionFactSubject,
   Node,
   ProviderDeclarationIdentity,
+  ResolvedSourceIterationInfo,
   Signature,
   SourceFile,
   Symbol,
@@ -160,8 +161,7 @@ export interface RustCheckedIterationSelectionInput {
   readonly statement: Node;
   readonly expression: Node;
   readonly initializer?: Node;
-  readonly kind: "for-in" | "for-of" | "for-await-of";
-  readonly sourceElementType?: Type;
+  readonly source: ResolvedSourceIterationInfo;
 }
 
 export type RustCheckedConversionSelectionInput =

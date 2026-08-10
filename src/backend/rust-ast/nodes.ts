@@ -64,6 +64,7 @@ export type RustStmt =
   | { readonly kind: "tail"; readonly expr: RustExpr }
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock }
   | { readonly kind: "while"; readonly condition: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "while-let-some"; readonly binding: string; readonly expression: RustExpr; readonly body: RustBlock }
   | { readonly kind: "for"; readonly binding: string; readonly iterable: RustExpr; readonly body: RustBlock }
   | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
   | { readonly kind: "scope"; readonly body: RustBlock }

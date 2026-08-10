@@ -204,10 +204,14 @@ export type RustTargetOperationFact =
       readonly abi: RustFinalizedOperationAbiFor<RustRuntimeSetOperationKind>;
     }
   | {
-      readonly kind: "for-of";
+      readonly kind: "iteration";
       readonly operationId: string;
+      readonly iterationKind: "for-of" | "for-await-of";
       readonly elementCarrier: TargetTypeRef;
-      readonly style: "copied" | "cloned";
+      readonly lowering:
+        | { readonly kind: "borrowed"; readonly style: "copied" | "cloned" }
+        | { readonly kind: "owned" }
+        | { readonly kind: "async-generator" };
     }
   | {
       readonly kind: "option-check";
@@ -376,7 +380,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "nullish-identity":
     case "typed-location":
       return fact.resultCarrier;
-    case "for-of":
+    case "iteration":
       return fact.elementCarrier;
     default:
       return undefined;

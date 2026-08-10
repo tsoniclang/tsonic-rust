@@ -68,6 +68,7 @@ import {
 } from "./expressions.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
+import { allocateRustSyntheticName } from "./synthetic-names.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
   planRustPromotedStorageWrite,
@@ -754,7 +755,7 @@ function selectedOperatorIdentityMatches(
 function planForOfStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const { ast } = context.input;
   const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
-  if (fact === undefined || fact.kind !== "for-of") {
+  if (fact === undefined || fact.kind !== "iteration") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.loop",
@@ -806,13 +807,44 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
   if (body === undefined) {
     return undefined;
   }
-  const iterChain: RustExpr = {
-    kind: "method-call",
-    receiver: { kind: "method-call", receiver: iterable, method: "iter", args: [] },
-    method: fact.style,
-    args: [],
-  };
-  return [{ kind: "for", binding, iterable: iterChain, body }];
+  if (fact.lowering.kind === "async-generator") {
+    if (context.asyncContext !== true || context.syntheticNames === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.async-iteration-context",
+        "Async generator iteration requires a finalized async function context and hygienic local-name state.",
+      ));
+      return undefined;
+    }
+    const iteratorName = allocateRustSyntheticName(context.syntheticNames, "async_iterator");
+    const next: RustExpr = {
+      kind: "await",
+      expr: {
+        kind: "method-call",
+        receiver: { kind: "path", path: iteratorName },
+        method: "next_yield",
+        args: [],
+      },
+    };
+    return [{
+      kind: "scope",
+      body: {
+        statements: [
+          { kind: "let", name: iteratorName, mutable: false, init: iterable },
+          { kind: "while-let-some", binding, expression: next, body },
+        ],
+      },
+    }];
+  }
+  const targetIterable: RustExpr = fact.lowering.kind === "borrowed"
+    ? {
+        kind: "method-call",
+        receiver: { kind: "method-call", receiver: iterable, method: "iter", args: [] },
+        method: fact.lowering.style,
+        args: [],
+      }
+    : iterable;
+  return [{ kind: "for", binding, iterable: targetIterable, body }];
 }
 
 function planSparseArrayLet(

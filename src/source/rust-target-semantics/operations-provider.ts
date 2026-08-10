@@ -59,6 +59,7 @@ import {
 import {
   isRustBoolCarrier,
   isRustCopyCarrier,
+  getRustGeneratorProtocol,
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
   isRustNullishSourceCarrier,
@@ -1636,58 +1637,101 @@ export function selectRustCheckedIteration(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  if (request.kind !== "for-of") {
+  const source = request.source;
+  if (source.iterationKind === "for-in") {
     return rejectSelectedOperation(
       request.statement,
       context,
       "RUST_ITERATION_KIND_UNSUPPORTED",
-      `Rust target iteration does not support selected '${request.kind}' semantics.`,
+      "Rust target property-key iteration is not implemented.",
     );
   }
   const iterable = resolveRustTargetTypeRef(request.expression, context, options);
-  const iterableElement = rustIterableElementCarrier(iterable);
-  if (request.sourceElementType === undefined) {
-    return rejectSelectedOperation(
-      request.statement,
-      context,
-      "RUST_ITERATION_SELECTED_ELEMENT_MISSING",
-      "Selected for-of iteration has no TSTS-selected source element carrier.",
-    );
-  }
-  if (iterableElement === undefined) {
+  const targetIteration = rustIterableTargetPolicy(iterable);
+  if (targetIteration === undefined) {
     return rejectSelectedOperation(
       request.statement,
       context,
       "RUST_ITERATION_CARRIER_UNSUPPORTED",
-      "Selected for-of iteration receiver is not a finalized supported Rust iterable carrier.",
+      `Selected ${source.iterationKind} iteration receiver is not a finalized supported Rust iterable carrier.`,
     );
   }
-  const elementCarrier = iterableElement;
+  const lowering = selectRustIterationLowering(source, targetIteration);
+  if (lowering === undefined) {
+    return rejectSelectedOperation(
+      request.statement,
+      context,
+      "RUST_ITERATION_MECHANISM_UNSUPPORTED",
+      `Selected ${source.iterationKind} mechanism is incompatible with the finalized Rust iterable carrier.`,
+    );
+  }
   const fact: RustTargetOperationFact = {
-    kind: "for-of",
-    operationId: "tsonic.rust.iteration.for-of.sync",
-    elementCarrier,
-    style: isRustCopyCarrier(elementCarrier) ? "copied" : "cloned",
+    kind: "iteration",
+    operationId: `tsonic.rust.iteration.${source.iterationKind}.${lowering.kind}`,
+    iterationKind: source.iterationKind,
+    elementCarrier: targetIteration.elementCarrier,
+    lowering,
   };
-  recordIterationInitializerCarrier(request.initializer, elementCarrier, context);
+  recordIterationInitializerCarrier(request.initializer, targetIteration.elementCarrier, context);
   return acceptRustOperation(request.statement, fact, context, {
     sourceExpression: request.expression,
-    sourceResultType: request.sourceElementType,
-  }, elementCarrier);
+    sourceResultType: source.sourceElementType,
+  }, targetIteration.elementCarrier);
 }
 
-function rustIterableElementCarrier(iterable: TargetTypeRef | undefined): TargetTypeRef | undefined {
+interface RustIterableTargetPolicy {
+  readonly kind: "borrowed" | "sync-generator" | "async-generator";
+  readonly elementCarrier: TargetTypeRef;
+}
+
+function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIterableTargetPolicy | undefined {
   if (iterable?.kind === "array") {
-    return iterable.element;
+    return { kind: "borrowed", elementCarrier: iterable.element };
   }
   if (iterable?.kind === "pointer" && iterable.pointee.kind === "array") {
-    return iterable.pointee.element;
+    return { kind: "borrowed", elementCarrier: iterable.pointee.element };
   }
   const fixed = rustFixedArrayCarrierValue(iterable);
   if (fixed !== undefined) {
-    return fixed.element;
+    return { kind: "borrowed", elementCarrier: fixed.element };
   }
-  return isRustJsArrayCarrier(iterable) ? iterable?.typeArguments?.[0] : undefined;
+  const jsElement = isRustJsArrayCarrier(iterable) ? iterable?.typeArguments?.[0] : undefined;
+  if (jsElement !== undefined) {
+    return { kind: "borrowed", elementCarrier: jsElement };
+  }
+  const generator = getRustGeneratorProtocol(iterable);
+  return generator === undefined
+    ? undefined
+    : {
+        kind: generator.kind === "sync" ? "sync-generator" : "async-generator",
+        elementCarrier: generator.yieldType,
+      };
+}
+
+function selectRustIterationLowering(
+  source: Exclude<import("@tsonic/tsts").ResolvedSourceIterationInfo, { readonly iterationKind: "for-in" }>,
+  target: RustIterableTargetPolicy,
+): Extract<RustTargetOperationFact, { readonly kind: "iteration" }>["lowering"] | undefined {
+  if (source.mechanism.kind === "union" || source.mechanism.kind === "untyped-dynamic-iteration") {
+    return undefined;
+  }
+  if (source.iterationKind === "for-of") {
+    if (target.kind === "async-generator") {
+      return undefined;
+    }
+    return target.kind === "borrowed"
+      ? { kind: "borrowed", style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned" }
+      : { kind: "owned" };
+  }
+  if (source.mechanism.kind === "asynchronous-iterator-protocol") {
+    return target.kind === "async-generator" ? { kind: "async-generator" } : undefined;
+  }
+  if (target.kind === "async-generator") {
+    return undefined;
+  }
+  return target.kind === "borrowed"
+    ? { kind: "borrowed", style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned" }
+    : { kind: "owned" };
 }
 
 function recordIterationInitializerCarrier(
@@ -2040,7 +2084,7 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     case "source-field":
     case "source-enum-member":
       return "property";
-    case "for-of":
+    case "iteration":
       return "iteration";
     default:
       return "operator";

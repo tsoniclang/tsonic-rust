@@ -2188,12 +2188,11 @@ function recordForOfFacts(
       statement,
       expression,
       initializer: ForInOrOfStatement_Initializer(walk.context.ast, statement),
-      kind: source.iterationKind,
-      sourceElementType: source.sourceElementType,
+      source,
     }, rustOperationContext(walk, statement), walk.operationOptions));
   }
   const selected = walk.context.facts.get(statement, rustTargetOperationFactKey);
-  if (selected?.kind === "for-of") {
+  if (selected?.kind === "iteration") {
     const initializer = ForInOrOfStatement_Initializer(walk.context.ast, statement);
     if (initializer !== undefined) {
       for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
