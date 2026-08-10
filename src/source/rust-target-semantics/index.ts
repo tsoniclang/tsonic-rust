@@ -94,6 +94,7 @@ import { collectRustProviderSemantics } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
 import {
   isRustAssignmentOperator,
+  rustBinaryResultCarrierIsIndependentOfOperands,
   rustOperatorCarrierKey,
   selectRustBinaryOperator,
   selectRustCompoundAssignment,
@@ -750,14 +751,19 @@ function resolveExpressionCarrier(
   const facts = walk.context.facts;
   const existing = facts.get(expression, rustRuntimeCarrierKey) ??
     walk.context.facts.resolve(expression, rustRuntimeCarrierKey);
-  if (existing !== undefined) {
-    return applyOptionLane(walk, expression, existing.carrier, expected);
-  }
   if (walk.resolving.has(expression)) {
-    return undefined;
+    return existing === undefined
+      ? undefined
+      : applyOptionLane(walk, expression, existing.carrier, expected);
   }
   walk.resolving.add(expression);
   try {
+    if (existing !== undefined) {
+      const operation = facts.get(expression, rustTargetOperationFactKey) ??
+        walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+      recordSelectedOperationInputs(walk, expression, sourceFile, operation);
+      return applyOptionLane(walk, expression, existing.carrier, expected);
+    }
     resolveExpressionOperationDependencies(walk, expression, sourceFile, expected);
     selectExpressionOperation(walk, expression, sourceFile);
     const selectedCarrier = facts.get(expression, rustRuntimeCarrierKey) ??
@@ -909,7 +915,17 @@ function resolveExpressionCarrierUncached(
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected)) {
         return setCarrierFact(walk, expression, effectiveExpected);
       }
-      return undefined;
+      if (effectiveExpected !== undefined) {
+        return undefined;
+      }
+      const selected = resolveRustTargetTypeRef(
+        expression,
+        rustResolutionContext(walk, expression),
+        walk.operationOptions,
+      );
+      return selected !== undefined && isRustNumericCarrier(selected)
+        ? setCarrierFact(walk, expression, selected)
+        : undefined;
     }
     case KindStringLiteral: {
       if (expected !== undefined) {
@@ -1050,8 +1066,11 @@ function resolveBinaryOperandCarriers(
   const operatorKind = walk.context.ast.kindName(operatorToken);
   const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
     operatorKind === KindExclamationEqualsEqualsToken;
+  const operandExpected = rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)
+    ? undefined
+    : expected;
   if (strictEquality && expressionUsesContextualLiteralCarrier(walk.context.ast, leftNode)) {
-    const right = resolveExpressionCarrier(walk, rightNode, sourceFile, expected);
+    const right = resolveExpressionCarrier(walk, rightNode, sourceFile, operandExpected);
     const rightSemanticCarrier = resolveRustTargetTypeRef(
       rightNode,
       rustResolutionContext(walk, rightNode),
@@ -1061,11 +1080,11 @@ function resolveBinaryOperandCarriers(
       walk,
       leftNode,
       sourceFile,
-      isRustNullishSourceCarrier(rightSemanticCarrier) ? undefined : right ?? expected,
+      isRustNullishSourceCarrier(rightSemanticCarrier) ? undefined : right ?? operandExpected,
     );
     return { left, right, leftNode, rightNode, operatorKind };
   }
-  let left = resolveExpressionCarrier(walk, leftNode, sourceFile, expected);
+  let left = resolveExpressionCarrier(walk, leftNode, sourceFile, operandExpected);
   const rightSemanticCarrier = strictEquality
     ? resolveRustTargetTypeRef(
         rightNode,
@@ -1076,10 +1095,10 @@ function resolveBinaryOperandCarriers(
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
     ? rustOptionElementCarrier(left) ?? expected
     : operatorKind === KindEqualsToken
-      ? useAssignmentReadCarrier ? left ?? expected : expected
+      ? useAssignmentReadCarrier ? left ?? operandExpected : operandExpected
     : strictEquality
-      ? isRustNullishSourceCarrier(rightSemanticCarrier) ? undefined : left ?? expected
-      : left ?? expected;
+      ? isRustNullishSourceCarrier(rightSemanticCarrier) ? undefined : left ?? operandExpected
+      : left ?? operandExpected;
   let right = resolveExpressionCarrier(
     walk,
     rightNode,

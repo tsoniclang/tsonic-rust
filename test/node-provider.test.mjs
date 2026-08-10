@@ -52,6 +52,7 @@ import { ok } from "node:assert";
 export function verify(value: boolean): void {
   ok(value);
   ok(value, "value must be true");
+  ok(2 + 2 === 4, "nested operations must be finalized");
 }
 `,
     },
@@ -61,6 +62,10 @@ export function verify(value: boolean): void {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::assert::ok\(value, None\)\?/u);
   assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\?/u);
+  assert.match(
+    text,
+    /tsonic_rust_node::assert::ok_with_message\(\n\s+2\.0 \+ 2\.0 == 4\.0,\n\s+"nested operations must be finalized",\n\s+\)\?/u,
+  );
 });
 
 test("declared-but-unsupported node APIs diagnose deterministically", async () => {

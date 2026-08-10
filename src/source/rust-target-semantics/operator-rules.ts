@@ -88,6 +88,13 @@ const operatorKindByText: Readonly<Record<string, string>> = {
   "%=": KindPercentEqualsToken,
 };
 
+export function rustBinaryResultCarrierIsIndependentOfOperands(
+  operatorKindOrText: string,
+): boolean {
+  const operatorKind = operatorKindByText[operatorKindOrText] ?? operatorKindOrText;
+  return comparisonTokens[operatorKind] !== undefined || equalityTokens[operatorKind] !== undefined;
+}
+
 export function selectRustBinaryOperator(
   operatorKindName: string,
   left: TargetTypeRef | undefined,
