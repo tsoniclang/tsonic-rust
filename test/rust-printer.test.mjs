@@ -118,3 +118,184 @@ test("a fitted outer call stays attached to its multiline nested call", () => {
   assert.match(text, /usize_to_i32\(tsonic_rust_js::string::js_len\(\n        &tsonic_rust_node/u);
   assert.doesNotMatch(text, /usize_to_i32\(\n        tsonic_rust_js/u);
 });
+
+test("long logical chains use rustfmt-compatible operand-per-line layout", () => {
+  const terms = Array.from({ length: 7 }, (_, index) => ({
+    kind: "binary",
+    operator: "!=",
+    left: { kind: "call", path: "fibonacci", args: [{ kind: "int-literal", text: String(index) }] },
+    right: { kind: "int-literal", text: String(index) },
+  }));
+  const condition = terms.slice(1).reduce(
+    (left, right) => ({ kind: "binary", operator: "||", left, right }),
+    terms[0],
+  );
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition,
+          then: { statements: [] },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /if fibonacci\(0\) != 0\n        \|\| fibonacci\(1\) != 1\n        \|\| fibonacci\(2\) != 2/u);
+});
+
+test("long assignments break after the assignment operator", () => {
+  const conversion = {
+    kind: "call",
+    path: "tsonic_rust_runtime::conversions::i32_to_usize",
+    args: [{ kind: "int-literal", text: "0" }],
+  };
+  const element = {
+    kind: "index",
+    receiver: { kind: "path", path: "values" },
+    index: { kind: "try", expr: conversion },
+  };
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "assign",
+          target: element,
+          operator: "=",
+          value: {
+            kind: "binary",
+            operator: "+",
+            left: element,
+            right: { kind: "int-literal", text: "1" },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /values\[tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\] =\n        values\[/u);
+});
+
+test("nested overflow calls keep jointly fitting inner arguments horizontal", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::isize_to_i32",
+              args: [{
+                kind: "call",
+                path: "tsonic_rust_js::array_dense_index_of",
+                args: [
+                  { kind: "reference", expr: { kind: "path", path: "values" } },
+                  { kind: "reference", expr: { kind: "int-literal", text: "3" } },
+                  { kind: "int-literal", text: "0" },
+                ],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /array_dense_index_of\(\n        &values, &3, 0,\n    \)\)\?/u);
+});
+
+test("nested calls beyond rustfmt call width put each argument on its own line", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "call",
+              path: "tsonic_rust_node::url::can_parse",
+              args: [
+                { kind: "str-literal", value: "https://example.com" },
+                { kind: "path", path: "None" },
+              ],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /can_parse\(\n        "https:\/\/example\.com",\n        None,\n    \)\);/u);
+});
+
+test("logical assignment keeps a fitting first operand beside the operator", () => {
+  const first = {
+    kind: "call",
+    path: "js_string::includes",
+    args: [
+      { kind: "reference", expr: { kind: "path", path: "rendered" } },
+      { kind: "str-literal", value: "tsonic" },
+      { kind: "int-literal", text: "0" },
+    ],
+  };
+  const condition = {
+    kind: "binary",
+    operator: "&&",
+    left: {
+      kind: "binary",
+      operator: "&&",
+      left: first,
+      right: { kind: "call", path: "digits.test", args: [{ kind: "str-literal", value: "a12" }] },
+    },
+    right: {
+      kind: "binary",
+      operator: "==",
+      left: { kind: "path", path: "date_value_with_an_intentionally_long_name_for_rustfmt" },
+      right: { kind: "int-literal", text: "1" },
+    },
+  };
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "assign",
+          target: { kind: "path", path: "passed" },
+          operator: "=",
+          value: condition,
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /passed = js_string::includes\(&rendered, "tsonic", 0\)\n        && digits\.test/u);
+});

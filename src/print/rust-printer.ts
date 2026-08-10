@@ -6,6 +6,7 @@ import type {
   RustStmt,
   RustType,
 } from "../backend/rust-ast/nodes.js";
+import type { RustAssignmentOperator } from "../common/rust-syntax.js";
 
 // Deterministic printer. Output must be `cargo fmt --check` clean for the
 // supported construct set: 4-space indent, no trailing whitespace, one blank
@@ -145,9 +146,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return `${indent}${printRustStatementExpr(statement.expr, depth, indent.length + 1)};`;
     }
     case "assign": {
-      const target = printRustExprFitted(statement.target, depth, indent.length);
-      const prefix = `${indent}${target} ${statement.operator} `;
-      return `${prefix}${printRustExprFitted(statement.value, depth, lastLineLength(prefix) + 1)};`;
+      return printRustAssignment(statement.target, statement.operator, statement.value, depth);
     }
     case "return": {
       return statement.expr === undefined
@@ -176,10 +175,11 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return printRustBlock(statement.body, depth, `for ${statement.binding} in ${printRustExpr(statement.iterable)}`);
     }
     case "index-assign": {
-      const receiver = printOperand(statement.receiver, RustPrecedence.Postfix, false);
-      const index = printRustExprFitted(statement.index, depth, indent.length + receiver.length + 1);
-      const prefix = `${indent}${receiver}[${index}] = `;
-      return `${prefix}${printRustExprFitted(statement.value, depth, lastLineLength(prefix) + 1)};`;
+      return printRustAssignment({
+        kind: "index",
+        receiver: statement.receiver,
+        index: statement.index,
+      }, "=", statement.value, depth);
     }
     case "scope": {
       const body = printRustBlockStatements(statement.body, depth + 1);
@@ -209,6 +209,29 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return lines.join("\n");
     }
   }
+}
+
+function printRustAssignment(
+  target: RustExpr,
+  operator: RustAssignmentOperator,
+  value: RustExpr,
+  depth: number,
+): string {
+  const indent = indentText(depth);
+  const flat = `${printRustExpr(target)} ${operator} ${printRustExpr(value)}`;
+  if (renderedFits(flat, indent.length + 1)) {
+    return `${indent}${flat};`;
+  }
+  const renderedTarget = printRustExprFitted(target, depth, indent.length);
+  const inlinePrefix = `${indent}${renderedTarget} ${operator} `;
+  const inlineValue = printRustExprFitted(value, depth, lastLineLength(inlinePrefix));
+  if (!renderedTarget.includes("\n") &&
+    inlinePrefix.length + firstLine(inlineValue).length <= rustFormatWidth) {
+    return `${inlinePrefix}${inlineValue};`;
+  }
+  const continuationIndent = indentText(depth + 1);
+  const renderedValue = printRustExprFitted(value, depth + 1, continuationIndent.length);
+  return `${indent}${renderedTarget} ${operator}\n${continuationIndent}${renderedValue};`;
 }
 
 function printRustStatementExpr(
@@ -443,6 +466,9 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       if (renderedFits(flat, column)) {
         return flat;
       }
+      if (expression.operator === "||" || expression.operator === "&&") {
+        return printFittedLogicalChain(expression, expression.operator, depth, column);
+      }
       const left = printRustExprFitted(expression.left, depth, column);
       const joined = appendToLastLine(
         left,
@@ -465,6 +491,48 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
     default:
       return flat;
   }
+}
+
+function printFittedLogicalChain(
+  expression: Extract<RustExpr, { readonly kind: "binary" }>,
+  operator: "||" | "&&",
+  depth: number,
+  column: number,
+): string {
+  const operands: RustExpr[] = [];
+  collectLogicalOperands(expression, operator, operands);
+  const first = operands[0];
+  if (first === undefined) {
+    return printRustExpr(expression);
+  }
+  let rendered = printRustExprFitted(first, depth, column);
+  const continuationIndent = indentText(depth + 1);
+  for (const operand of operands.slice(1)) {
+    const right = printRustExprFitted(
+      operand,
+      depth + 1,
+      continuationIndent.length + operator.length + 1,
+    );
+    rendered += `\n${continuationIndent}${operator} ${firstLine(right)}`;
+    const rest = remainingLines(right);
+    if (rest.length > 0) {
+      rendered += `\n${rest.join("\n")}`;
+    }
+  }
+  return rendered;
+}
+
+function collectLogicalOperands(
+  expression: RustExpr,
+  operator: "||" | "&&",
+  operands: RustExpr[],
+): void {
+  if (expression.kind === "binary" && expression.operator === operator) {
+    collectLogicalOperands(expression.left, operator, operands);
+    collectLogicalOperands(expression.right, operator, operands);
+    return;
+  }
+  operands.push(expression);
 }
 
 interface RustMethodChain {
@@ -584,6 +652,16 @@ function printFittedCall(
     return flat;
   }
   const argumentIndent = indentText(depth + 1);
+  if (forceExpanded && arguments_.length > 1 && flat.length <= rustNestedCallWidth) {
+    const compactArguments = arguments_.map(printRustExpr).join(", ");
+    if (!compactArguments.includes("\n") && renderedFits(`${compactArguments},`, argumentIndent.length)) {
+      return [
+        `${callable}(`,
+        `${argumentIndent}${compactArguments},`,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
+  }
   const renderedArguments = arguments_.map((argument) => {
     const rendered = printRustExprFitted(argument, depth + 1, argumentIndent.length + 1);
     return appendToLastLine(`${argumentIndent}${rendered}`, ",");
@@ -620,7 +698,15 @@ function printNestedCallArgument(
     return printRustExprFitted(argument, depth, column);
   }
   if (!forceExpanded && printRustExpr(argument).length <= rustNestedCallWidth) {
-    return printRustExprFitted(argument, depth, column);
+    const flat = printRustExpr(argument);
+    if (renderedFits(flat, column)) {
+      return flat;
+    }
+    if (argument.kind === "call") {
+      return printFittedCall(argument.path, argument.args, depth, column, true);
+    }
+    const receiver = printOperand(argument.receiver, RustPrecedence.Postfix, false);
+    return printFittedCall(`${receiver}.${argument.method}`, argument.args, depth, column, true);
   }
   if (argument.kind === "call") {
     return printFittedCall(argument.path, argument.args, depth, column, true);
