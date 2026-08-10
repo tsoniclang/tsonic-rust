@@ -1,0 +1,77 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
+
+test("conditional expressions use one finalized branch carrier", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function choose(condition: boolean, left: int32, right: int32): int32 {
+  return condition ? left : right;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /if condition \{\s+left\s+\} else \{\s+right\s+\}/u);
+  validateGeneratedProject("expression-conditional", result.artifacts);
+});
+
+test("no-substitution templates retain their exact string value", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function text(): string {
+  return \`line one\\nline two\`;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /String::from\("line one\\nline two"\)/u);
+  validateGeneratedProject("expression-template-literal", result.artifacts);
+});
+
+test("satisfies and redundant non-null syntax erase through exact identity facts", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function identity(value: int32): int32 {
+  const checked: int32 = value satisfies int32;
+  return checked!;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let checked: i32 = value;/u);
+  assert.match(source, /checked\n/u);
+  validateGeneratedProject("expression-erased-wrappers", result.artifacts);
+});
+
+test("non-null syntax does not guess through an Option carrier", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function require(value: string | null): string {
+  return value!;
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.message.includes("identity operation") ||
+    diagnostic.message.includes("Expression planning returned no Rust AST")));
+});

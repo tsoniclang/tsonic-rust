@@ -14,19 +14,26 @@ import {
   KindBinaryExpression,
   Node_Initializer,
   KindCallExpression,
+  KindConditionalExpression,
   KindElementAccessExpression,
   KindFalseKeyword,
   KindIdentifier,
   KindNewExpression,
+  KindNoSubstitutionTemplateLiteral,
+  KindNonNullExpression,
   KindNumericLiteral,
   KindParenthesizedExpression,
   KindPostfixUnaryExpression,
   KindPrefixUnaryExpression,
   KindPropertyAccessExpression,
   KindStringLiteral,
+  KindSatisfiesExpression,
   KindTrueKeyword,
   BinaryExpression_Left,
   BinaryExpression_Right,
+  ConditionalExpression_Condition,
+  ConditionalExpression_WhenFalse,
+  ConditionalExpression_WhenTrue,
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
   Node_Operand,
@@ -105,7 +112,8 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
     case KindNumericLiteral: {
       return planNumericLiteral(node, context);
     }
-    case KindStringLiteral: {
+    case KindStringLiteral:
+    case KindNoSubstitutionTemplateLiteral: {
       const literalFact = rustOperationFact(node, context);
       if (literalFact !== undefined && literalFact.kind === "source-enum-member") {
         if (!requireExpressionCarrier(node, literalFact.resultCarrier, context, "rust.backend.enum-literal-carrier")) {
@@ -201,6 +209,47 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
     case "KindAsExpression":
     case "KindTypeAssertionExpression": {
       return planSourceConversion(node, context);
+    }
+    case KindSatisfiesExpression:
+    case KindNonNullExpression: {
+      const fact = rustOperationFact(node, context);
+      const inner = Node_Expression(context.input.ast, node);
+      if (fact?.kind !== "identity-expression" || inner === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.identity-expression",
+          "Erased source syntax requires one exact finalized identity operation.",
+        ));
+        return undefined;
+      }
+      if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.identity-expression")) {
+        return undefined;
+      }
+      return planExpression(inner, context);
+    }
+    case KindConditionalExpression: {
+      const fact = rustOperationFact(node, context);
+      const conditionNode = ConditionalExpression_Condition(context.input.ast, node);
+      const whenTrueNode = ConditionalExpression_WhenTrue(context.input.ast, node);
+      const whenFalseNode = ConditionalExpression_WhenFalse(context.input.ast, node);
+      if (fact?.kind !== "conditional" || conditionNode === undefined ||
+        whenTrueNode === undefined || whenFalseNode === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.conditional",
+          "Conditional expression requires one exact finalized result carrier.",
+        ));
+        return undefined;
+      }
+      if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.conditional")) {
+        return undefined;
+      }
+      const condition = planExpression(conditionNode, context);
+      const whenTrue = planExpression(whenTrueNode, context);
+      const whenFalse = planExpression(whenFalseNode, context);
+      return condition === undefined || whenTrue === undefined || whenFalse === undefined
+        ? undefined
+        : { kind: "conditional", condition, whenTrue, whenFalse };
     }
     case "KindArrayLiteralExpression": {
       const fixedFact = rustOperationFact(node, context);

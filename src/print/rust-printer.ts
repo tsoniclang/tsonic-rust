@@ -634,6 +634,9 @@ export function printRustExpr(expression: RustExpr): string {
       const right = printOperand(expression.right, precedence, true);
       return `${left} ${expression.operator} ${right}`;
     }
+    case "conditional": {
+      return `if ${printRustExpr(expression.condition)} { ${printRustExpr(expression.whenTrue)} } else { ${printRustExpr(expression.whenFalse)} }`;
+    }
     case "assignment": {
       return `${printRustExpr(expression.target)} ${expression.operator} ${printRustExpr(expression.value)}`;
     }
@@ -721,6 +724,31 @@ export function printRustExpr(expression: RustExpr): string {
 function printRustExprFitted(expression: RustExpr, depth: number, column: number): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
+    case "conditional": {
+      const branchIndent = indentText(depth + 1);
+      const condition = printRustExprFitted(
+        expression.condition,
+        depth,
+        column + "if ".length,
+      );
+      const whenTrue = printRustExprFitted(
+        expression.whenTrue,
+        depth + 1,
+        branchIndent.length,
+      );
+      const whenFalse = printRustExprFitted(
+        expression.whenFalse,
+        depth + 1,
+        branchIndent.length,
+      );
+      return [
+        `if ${condition} {`,
+        `${branchIndent}${whenTrue}`,
+        `${indentText(depth)}} else {`,
+        `${branchIndent}${whenFalse}`,
+        `${indentText(depth)}}`,
+      ].join("\n");
+    }
     case "block": {
       const statementIndent = indentText(depth + 1);
       const bindings = expression.bindings.map((binding) => {

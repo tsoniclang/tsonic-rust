@@ -5,6 +5,7 @@ export const KindBlock = "KindBlock";
 export const KindBreakStatement = "KindBreakStatement";
 export const KindBooleanKeyword = "KindBooleanKeyword";
 export const KindCallExpression = "KindCallExpression";
+export const KindConditionalExpression = "KindConditionalExpression";
 export const KindContinueStatement = "KindContinueStatement";
 export const KindElementAccessExpression = "KindElementAccessExpression";
 export const KindExpressionStatement = "KindExpressionStatement";
@@ -22,6 +23,8 @@ export const KindOmittedExpression = "KindOmittedExpression";
 export const KindForOfStatement = "KindForOfStatement";
 export const KindInterfaceDeclaration = "KindInterfaceDeclaration";
 export const KindNewExpression = "KindNewExpression";
+export const KindNoSubstitutionTemplateLiteral = "KindNoSubstitutionTemplateLiteral";
+export const KindNonNullExpression = "KindNonNullExpression";
 export const KindNumericLiteral = "KindNumericLiteral";
 export const KindParameter = "KindParameter";
 export const KindParenthesizedExpression = "KindParenthesizedExpression";
@@ -31,6 +34,7 @@ export const KindPropertyAccessExpression = "KindPropertyAccessExpression";
 export const KindReturnStatement = "KindReturnStatement";
 export const KindStringKeyword = "KindStringKeyword";
 export const KindStringLiteral = "KindStringLiteral";
+export const KindSatisfiesExpression = "KindSatisfiesExpression";
 export const KindTrueKeyword = "KindTrueKeyword";
 export const KindTypeReference = "KindTypeReference";
 export const KindVariableDeclaration = "KindVariableDeclaration";
@@ -113,6 +117,8 @@ export function Node_Expression(ast: AstReader, node: Node | undefined): Node | 
       return ast.as.AsAsExpression(node)?.Expression;
     case "KindSatisfiesExpression":
       return ast.as.AsSatisfiesExpression(node)?.Expression;
+    case KindNonNullExpression:
+      return ast.as.AsNonNullExpression(node)?.Expression;
     case "KindTypeAssertionExpression":
       return ast.as.AsTypeAssertion(node)?.Expression;
     case "KindVoidExpression":
@@ -124,6 +130,24 @@ export function Node_Expression(ast: AstReader, node: Node | undefined): Node | 
     default:
       return undefined;
   }
+}
+
+export function ConditionalExpression_Condition(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindConditionalExpression
+    ? undefined
+    : ast.as.AsConditionalExpression(node)?.Condition;
+}
+
+export function ConditionalExpression_WhenTrue(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindConditionalExpression
+    ? undefined
+    : ast.as.AsConditionalExpression(node)?.WhenTrue;
+}
+
+export function ConditionalExpression_WhenFalse(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindConditionalExpression
+    ? undefined
+    : ast.as.AsConditionalExpression(node)?.WhenFalse;
 }
 
 export function Node_Type(ast: AstReader, node: Node | undefined): Node | undefined {

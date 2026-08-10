@@ -26,6 +26,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "string-concat") {
     return "+";
   }
+  if (fact.kind === "conditional" || fact.kind === "identity-expression") {
+    return fact.operationId;
+  }
   if (fact.kind === "source-conversion") {
     return fact.conversion === undefined ? "identity" : "runtime-conversion";
   }

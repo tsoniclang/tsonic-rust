@@ -16,6 +16,9 @@ import {
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
   CatchClause_Block,
+  ConditionalExpression_Condition,
+  ConditionalExpression_WhenFalse,
+  ConditionalExpression_WhenTrue,
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   TryStatement_CatchClause,
@@ -30,6 +33,7 @@ import {
   KindBinaryExpression,
   KindBlock,
   KindCallExpression,
+  KindConditionalExpression,
   KindElementAccessExpression,
   KindEqualsEqualsEqualsToken,
   KindEqualsToken,
@@ -43,6 +47,8 @@ import {
   KindIfStatement,
   KindArrayLiteralExpression,
   KindNewExpression,
+  KindNoSubstitutionTemplateLiteral,
+  KindNonNullExpression,
   KindNumericLiteral,
   KindOmittedExpression,
   KindParameter,
@@ -53,6 +59,7 @@ import {
   KindQuestionQuestionToken,
   KindReturnStatement,
   KindStringLiteral,
+  KindSatisfiesExpression,
   KindTrueKeyword,
   KindVariableDeclaration,
   KindVariableStatement,
@@ -66,6 +73,7 @@ import {
   isRustJsArrayCarrier,
   rustFutureOutputCarrier,
   getRustGeneratorProtocol,
+  isRustBoolCarrier,
   isRustNumericCarrier,
   isRustNullishSourceCarrier,
   isRustOptionCarrier,
@@ -867,6 +875,21 @@ function resolveExpressionOperationDependencies(
     resolveBinaryOperandCarriers(walk, expression, sourceFile, expected);
     return;
   }
+  if (kind === KindConditionalExpression) {
+    const condition = ConditionalExpression_Condition(ast, expression);
+    const whenTrue = ConditionalExpression_WhenTrue(ast, expression);
+    const whenFalse = ConditionalExpression_WhenFalse(ast, expression);
+    if (condition !== undefined) {
+      resolveExpressionCarrier(walk, condition, sourceFile, boolCarrier);
+    }
+    if (whenTrue !== undefined) {
+      resolveExpressionCarrier(walk, whenTrue, sourceFile, expected);
+    }
+    if (whenFalse !== undefined) {
+      resolveExpressionCarrier(walk, whenFalse, sourceFile, expected);
+    }
+    return;
+  }
   if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
     const operand = Node_Operand(ast, expression);
     if (operand !== undefined) {
@@ -965,7 +988,8 @@ function resolveExpressionCarrierUncached(
       }
       return undefined;
     }
-    case KindStringLiteral: {
+    case KindStringLiteral:
+    case KindNoSubstitutionTemplateLiteral: {
       if (expected !== undefined) {
         const value = rustSourceTypeCarrierValue(expected);
         if (value !== undefined && value.shape === "enum") {
@@ -1126,6 +1150,57 @@ function resolveExpressionCarrierUncached(
         recordFinalizedOperatorSelection(walk, expression, fact, carrier);
       }
       return setCarrierFact(walk, expression, carrier);
+    }
+    case KindSatisfiesExpression:
+    case KindNonNullExpression: {
+      const inner = Node_Expression(walk.context.ast, expression);
+      const carrier = inner === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, inner, sourceFile, expected);
+      if (carrier === undefined || (kind === KindNonNullExpression && isRustOptionCarrier(carrier))) {
+        return undefined;
+      }
+      const resultCarrier = expected ?? carrier;
+      if (!rustTargetTypeRefEquals(carrier, resultCarrier)) {
+        return undefined;
+      }
+      setRustOperationFact(walk, expression, {
+        kind: "identity-expression",
+        operationId: kind === KindSatisfiesExpression
+          ? "tsonic.rust.syntax.satisfies"
+          : "tsonic.rust.syntax.non-null-identity",
+        resultCarrier,
+      });
+      return setCarrierFact(walk, expression, resultCarrier);
+    }
+    case KindConditionalExpression: {
+      const condition = ConditionalExpression_Condition(walk.context.ast, expression);
+      const whenTrue = ConditionalExpression_WhenTrue(walk.context.ast, expression);
+      const whenFalse = ConditionalExpression_WhenFalse(walk.context.ast, expression);
+      if (condition === undefined || whenTrue === undefined || whenFalse === undefined) {
+        return undefined;
+      }
+      const conditionCarrier = resolveExpressionCarrier(walk, condition, sourceFile, boolCarrier);
+      const semanticCarrier = expected ?? resolveRustTargetTypeRef(
+        expression,
+        rustResolutionContext(walk, expression),
+        walk.operationOptions,
+      );
+      const trueCarrier = resolveExpressionCarrier(walk, whenTrue, sourceFile, semanticCarrier);
+      const falseCarrier = resolveExpressionCarrier(walk, whenFalse, sourceFile, semanticCarrier ?? trueCarrier);
+      const resultCarrier = semanticCarrier ?? trueCarrier;
+      if (!isRustBoolCarrier(conditionCarrier) || resultCarrier === undefined ||
+        trueCarrier === undefined || falseCarrier === undefined ||
+        !rustTargetTypeRefEquals(trueCarrier, resultCarrier) ||
+        !rustTargetTypeRefEquals(falseCarrier, resultCarrier)) {
+        return undefined;
+      }
+      setRustOperationFact(walk, expression, {
+        kind: "conditional",
+        operationId: "tsonic.rust.syntax.conditional",
+        resultCarrier,
+      });
+      return setCarrierFact(walk, expression, resultCarrier);
     }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {

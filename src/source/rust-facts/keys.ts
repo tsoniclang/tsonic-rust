@@ -185,6 +185,16 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "conditional";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "identity-expression";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "provider-operation";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
