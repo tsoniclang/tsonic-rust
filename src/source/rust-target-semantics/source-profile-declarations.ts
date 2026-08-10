@@ -170,12 +170,15 @@ interface String {
   toString(): string;
   valueOf(): string;
   charAt(index: number): string;
+  codePointAt(index: number): number | undefined;
+  slice(start?: number, end?: number): string;
   indexOf(searchString: string, position?: number): number;
   at(index: number): string | undefined;
   match(regexp: RegExp): RegExpMatchArray | null;
   matchAll(regexp: RegExp): IterableIterator<RegExpMatchArray>;
   replace(searchValue: string | RegExp, replaceValue: string): string;
   search(regexp: string | RegExp): number;
+  repeat(count: number): string;
   padStart(maxLength: number, fillString?: string): string;
   padEnd(maxLength: number, fillString?: string): string;
   toLowerCase(): string;
@@ -191,6 +194,8 @@ interface Array<T> extends Iterable<T> {
   length: number;
   [index: number]: T;
   push(...items: T[]): number;
+  slice(start?: number, end?: number): T[];
+  join(separator?: string): string;
   at(index: number): T | undefined;
   includes(searchElement: T, fromIndex?: number): boolean;
   indexOf(searchElement: T, fromIndex?: number): number;
@@ -211,6 +216,8 @@ interface ReadonlyArray<T> extends Iterable<T> {
   readonly length: number;
   readonly [index: number]: T;
   at(index: number): T | undefined;
+  slice(start?: number, end?: number): T[];
+  join(separator?: string): string;
   includes(searchElement: T, fromIndex?: number): boolean;
   indexOf(searchElement: T, fromIndex?: number): number;
   filter(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): T[];

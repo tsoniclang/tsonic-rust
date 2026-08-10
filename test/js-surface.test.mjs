@@ -11,6 +11,7 @@ import { selectJsSurfaceOperation } from "../dist/source/rust-target-semantics/j
 import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustVecTargetType,
 } from "../dist/source/rust-target-types.js";
 import { rustInt32ToFloat64ValueConversion } from "../dist/source/rust-facts/value-conversions.js";
 
@@ -195,6 +196,60 @@ export function probe(name: string): boolean {
   assert.match(text, /js_string::starts_with\(&upper, "A", 0\)/u);
   assert.match(text, /js_string::includes\(&upper, "B", 0\)/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(\s*js_string::js_len\(name\),?\s*\)\? > 0/su);
+});
+
+test("string slicing, code points, repeat, and dense array copies use exact JS rows", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function probe(text: string, values: readonly int32[]): boolean {
+  const copied = values.slice(1, 3);
+  const point = text.codePointAt(0) ?? 0;
+  return text.slice(1, -1) === "bc" &&
+    text.repeat(2) === "abcdabcd" &&
+    copied.join("-") === "2-3" &&
+    point === 97;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn probe\(text: &str, values: &\[i32\]\) -> rt::TsonicResult<bool>/u);
+  assert.match(text, /js_abi::array_dense_slice_to\(values, 1\.0, 3\.0\)/u);
+  assert.match(text, /js_abi::array_dense_join\(&copied, "-"\)/u);
+  assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)/u);
+  assert.match(text, /js_string::repeat\(text, 2\.0\)\?/u);
+  assert.match(text, /js_string::code_point_at\(text, 0\.0\)\.unwrap_or\(0\.0\)/u);
+});
+
+test("array copy and stringification rows reject unproven generic element traits", () => {
+  const receiver = rustVecTargetType({ kind: "type-parameter", name: "T" });
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "Array",
+    memberName: "slice",
+    operationKind: "call",
+    receiverCarrier: receiver,
+    argumentCarriers: [],
+  }), undefined);
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "Array",
+    memberName: "join",
+    operationKind: "call",
+    receiverCarrier: rustVecTargetType({ kind: "source-primitive", name: "float64" }),
+    argumentCarriers: [],
+  }), undefined);
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "Array",
+    memberName: "join",
+    operationKind: "call",
+    receiverCarrier: receiver,
+    argumentCarriers: [],
+  }), undefined);
 });
 
 test("Map and Set lower to runtime carriers with SameValueZero semantics", () => {

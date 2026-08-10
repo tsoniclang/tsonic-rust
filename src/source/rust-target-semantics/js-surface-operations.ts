@@ -6,6 +6,7 @@ import type {
   RustRuntimeSetTemplate,
   RustValueConversion,
 } from "../rust-facts/keys.js";
+import { rustSourceTypeCarrierValue } from "../rust-facts/keys.js";
 import {
   rustInt32ToFloat64ValueConversion,
   rustInt32ToUsizeValueConversion,
@@ -15,6 +16,9 @@ import {
 } from "../rust-facts/value-conversions.js";
 import {
   isRustJsArrayCarrier,
+  isRustBoolCarrier,
+  isRustIntegerCarrier,
+  isRustJsValueCarrier,
   rustJsValueTargetType,
   rustStringTargetId,
   rustVecTargetType,
@@ -77,6 +81,8 @@ type JsCarrierRef =
   | { readonly ref: "regexp-match-vec" }
   | { readonly ref: "option-of-string" }
   | { readonly ref: "option-of-string-vec" }
+  | { readonly ref: "element-vec" }
+  | { readonly ref: "option-of-float64" }
   | { readonly ref: "string" }
   | { readonly ref: "element" }
   | { readonly ref: "option-of-element" }
@@ -92,7 +98,7 @@ interface JsOperationRowData {
   readonly operationKind: JsOperationRequest["operationKind"];
   readonly lane: JsLane;
   readonly variant?: string;
-  readonly elementGuard?: "numeric";
+  readonly elementGuard?: "numeric" | "clone-concrete" | "stringifiable";
   readonly requiresOwnership?: readonly ("owned" | "borrowed" | "borrowed-mut")[];
   readonly callback?: "map" | "reduce";
   readonly selectedMethodTypeArgumentArity?: number;
@@ -138,12 +144,22 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Array", member: "map", operationKind: "call", lane: "vec", selectedMethodTypeArgumentArity: 1, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_map", receiverMode: "ref" }, result: { ref: "receiver" }, params: [{ ref: "cb-map" }] }, callback: "map" },
   { owner: "Array", member: "reduce", operationKind: "call", lane: "vec", variant: "receiver-element", selectedMethodTypeArgumentArity: 0, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_reduce", receiverMode: "ref", argOrder: [1, 0] }, result: { ref: "element" }, params: [{ ref: "cb-reduce" }, { ref: "element" }] }, callback: "reduce" },
   { owner: "Array", member: "reduce", operationKind: "call", lane: "vec", variant: "selected-accumulator", selectedMethodTypeArgumentArity: 1, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_reduce", receiverMode: "ref", argOrder: [1, 0] }, result: { ref: "selected-method-type-argument", index: 0 }, params: [{ ref: "cb-reduce" }, { ref: "selected-method-type-argument", index: 0 }] }, callback: "reduce" },
+  { owner: "Array", member: "slice", operationKind: "call", lane: "vec", variant: "default", elementGuard: "clone-concrete", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_slice", receiverMode: "ref", trailingArguments: [zeroArgument, noneArgument] }, result: { ref: "element-vec" } } },
+  { owner: "Array", member: "slice", operationKind: "call", lane: "vec", variant: "start", elementGuard: "clone-concrete", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_slice", receiverMode: "ref", trailingArguments: [noneArgument] }, result: { ref: "element-vec" }, params: [{ ref: "float64" }] } },
+  { owner: "Array", member: "slice", operationKind: "call", lane: "vec", variant: "start-end", elementGuard: "clone-concrete", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_slice_to", receiverMode: "ref" }, result: { ref: "element-vec" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
+  { owner: "Array", member: "join", operationKind: "call", lane: "vec", variant: "default", elementGuard: "stringifiable", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_join", receiverMode: "ref", trailingArguments: [{ kind: "string", value: "," }] }, result: { ref: "string" } } },
+  { owner: "Array", member: "join", operationKind: "call", lane: "vec", variant: "separator", elementGuard: "stringifiable", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_join", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
 
   // ReadonlyArray rows: read-only operations over dense/slice lanes.
   { owner: "ReadonlyArray", member: "length", operationKind: "property", lane: "vec", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
   { owner: "ReadonlyArray", member: "includes", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_includes", receiverMode: "ref", argModes: ["ref"], trailingArguments: [zeroArgument] }, result: { ref: "bool" }, params: [{ ref: "element" }] } },
   { owner: "ReadonlyArray", member: "indexOf", operationKind: "call", lane: "vec", elementGuard: "numeric", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_index_of", receiverMode: "ref", argModes: ["ref"], trailingArguments: [zeroArgument] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner: "ReadonlyArray", member: "index", operationKind: "indexer", lane: "vec", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argConversions: [rustInt32ToUsizeValueConversion], chain: [copySelectedCarrier] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
+  { owner: "ReadonlyArray", member: "slice", operationKind: "call", lane: "vec", variant: "default", elementGuard: "clone-concrete", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_slice", receiverMode: "ref", trailingArguments: [zeroArgument, noneArgument] }, result: { ref: "element-vec" } } },
+  { owner: "ReadonlyArray", member: "slice", operationKind: "call", lane: "vec", variant: "start", elementGuard: "clone-concrete", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_slice", receiverMode: "ref", trailingArguments: [noneArgument] }, result: { ref: "element-vec" }, params: [{ ref: "float64" }] } },
+  { owner: "ReadonlyArray", member: "slice", operationKind: "call", lane: "vec", variant: "start-end", elementGuard: "clone-concrete", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_slice_to", receiverMode: "ref" }, result: { ref: "element-vec" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
+  { owner: "ReadonlyArray", member: "join", operationKind: "call", lane: "vec", variant: "default", elementGuard: "stringifiable", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_join", receiverMode: "ref", trailingArguments: [{ kind: "string", value: "," }] }, result: { ref: "string" } } },
+  { owner: "ReadonlyArray", member: "join", operationKind: "call", lane: "vec", variant: "separator", elementGuard: "stringifiable", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::array_dense_join", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
 
   // Sparse JsArray<T> lane.
   { owner: "Array", member: "length", operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
@@ -161,6 +177,11 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "String", member: "toUpperCase", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_upper_case", receiverMode: "ref" }, result: { ref: "string" } } },
   { owner: "String", member: "toLowerCase", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_lower_case", receiverMode: "ref" }, result: { ref: "string" } } },
   { owner: "String", member: "trim", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim", receiverMode: "ref" }, result: { ref: "string" } } },
+  { owner: "String", member: "slice", operationKind: "call", lane: "string", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice", receiverMode: "ref", trailingArguments: [zeroArgument, noneArgument] }, result: { ref: "string" } } },
+  { owner: "String", member: "slice", operationKind: "call", lane: "string", variant: "start", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice", receiverMode: "ref", trailingArguments: [noneArgument] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  { owner: "String", member: "slice", operationKind: "call", lane: "string", variant: "start-end", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice_to", receiverMode: "ref" }, result: { ref: "string" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
+  { owner: "String", member: "codePointAt", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::code_point_at", receiverMode: "ref" }, result: { ref: "option-of-float64" }, params: [{ ref: "float64" }] } },
+  { owner: "String", member: "repeat", operationKind: "call", lane: "string", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::repeat", receiverMode: "ref" }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
 
   // Map lane.
   { owner: "Map", member: "set", operationKind: "call", lane: "map", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set", mutatesReceiver: true }, result: { ref: "receiver" }, params: [{ ref: "map-key" }, { ref: "map-value" }] } },
@@ -337,6 +358,10 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
       return rustOptionTargetType(rustStringTargetType());
     case "option-of-string-vec":
       return rustOptionTargetType(rustVecTargetType(rustStringTargetType()));
+    case "element-vec":
+      return bindings.element === undefined ? undefined : rustVecTargetType(bindings.element);
+    case "option-of-float64":
+      return rustOptionTargetType(rustSourcePrimitiveTargetType("float64"));
     case "float64":
       return rustSourcePrimitiveTargetType("float64");
     case "infer":
@@ -475,7 +500,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       (candidate.selectedMethodTypeArgumentArity === undefined ||
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
-      (candidate.elementGuard !== "numeric" || isRustNumericCarrier(bindings.element)) &&
+      elementGuardMatches(candidate.elementGuard, bindings.element) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
             other.owner === candidate.owner && other.member === candidate.member &&
@@ -556,6 +581,45 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     parameterCarriers,
     ...(row.callback === undefined ? {} : { callbackShape: row.callback }),
   };
+}
+
+function elementGuardMatches(
+  guard: JsOperationRowData["elementGuard"],
+  carrier: TargetTypeRef | undefined,
+): boolean {
+  if (guard === undefined) {
+    return true;
+  }
+  if (guard === "numeric") {
+    return isRustNumericCarrier(carrier);
+  }
+  if (guard === "stringifiable") {
+    return isRustIntegerCarrier(carrier) || isRustBoolCarrier(carrier) ||
+      isRustStringCarrier(carrier);
+  }
+  return rustConcreteCarrierIsClone(carrier);
+}
+
+function rustConcreteCarrierIsClone(carrier: TargetTypeRef | undefined): boolean {
+  if (carrier === undefined || carrier.kind === "type-parameter" ||
+    carrier.kind === "function-pointer" || carrier.kind === "associated-type" ||
+    carrier.kind === "pointer") {
+    return false;
+  }
+  if (carrier.kind === "source-primitive" || isRustStringCarrier(carrier) ||
+    isRustJsValueCarrier(carrier) || rustSourceTypeCarrierValue(carrier) !== undefined) {
+    return true;
+  }
+  if (carrier.kind === "array") {
+    return rustConcreteCarrierIsClone(carrier.element);
+  }
+  if (carrier.kind === "tuple") {
+    return carrier.elements.every(rustConcreteCarrierIsClone);
+  }
+  if (carrier.kind === "target-named") {
+    return (carrier.typeArguments ?? []).every(rustConcreteCarrierIsClone);
+  }
+  return false;
 }
 
 function jsArgumentCarrierMatchScore(
