@@ -1,4 +1,8 @@
 import type { TargetTypeRef } from "../../policy/types.js";
+import {
+  isRustTargetTypeRef,
+  rustTargetTypeRefEquals,
+} from "../../policy/equality.js";
 import type {
   RustArgumentMode,
   RustProviderConstantArgument,
@@ -10,8 +14,6 @@ import {
   rustJsValueTargetType,
   rustSliceRefTargetType,
   rustStringTargetType,
-  isRustTargetTypeRef,
-  rustTargetTypeRefEquals,
 } from "../rust-target-types.js";
 import { rustValueConversionContract } from "./value-conversions.js";
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../../common/closed-metadata.js";

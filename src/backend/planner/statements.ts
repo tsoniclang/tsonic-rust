@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
   BinaryExpression_Left,
@@ -47,8 +48,9 @@ import {
 } from "../../common/source-ast.js";
 import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import { rustTypeFromCarrierInContext as renderRustTypeInContext } from "./render-types.js";
-import { isRustBoolCarrier, isRustUnitCarrier, rustTargetTypeRefEquals } from "../../source/rust-target-types.js";
+import { isRustBoolCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { validateRustFinalizedOperationAbi } from "../../source/rust-facts/finalized-operation-abi.js";
+import { rustTargetOperationIsDirectLocation } from "../../source/rust-facts/target-operation.js";
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import {
@@ -313,12 +315,17 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
       KindSlashEqualsToken,
       KindPercentEqualsToken,
     ];
+    let selectedAssignmentFact: Extract<
+      import("../../source/rust-facts/keys.js").RustTargetOperationFact,
+      { kind: "operator-token" }
+    > | undefined;
     if (operatorKind === KindEqualsToken) {
-      const runtimeSet = context.input.facts.getFact(expression, rustTargetOperationFactKey);
-      if (runtimeSet !== undefined && runtimeSet.kind === "runtime-set") {
-        return planRuntimeSetStatement(expression, runtimeSet, context);
+      const assignment = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+      if (assignment !== undefined && assignment.kind === "runtime-set") {
+        return planRuntimeSetStatement(expression, assignment, context);
       }
-      if (runtimeSet === undefined || runtimeSet.kind !== "operator-token" || runtimeSet.operator !== "=") {
+      if (assignment === undefined || assignment.kind !== "operator-token" ||
+        !["=", "+=", "-=", "*=", "/=", "%="].includes(assignment.operator)) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment",
@@ -326,7 +333,7 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         ));
         return undefined;
       }
-      if (!selectedOperatorMatches(expression, runtimeSet, context)) {
+      if (!selectedOperatorMatches(expression, assignment, context)) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment-selected-evidence",
@@ -334,89 +341,71 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         ));
         return undefined;
       }
+      selectedAssignmentFact = assignment;
     }
     if (operatorKind === KindEqualsToken || compoundTokens.includes(operatorKind)) {
       const left = BinaryExpression_Left(context.input.ast, expression);
       const right = BinaryExpression_Right(context.input.ast, expression);
-      if (left !== undefined && right !== undefined && ast.kindName(left) === "KindPropertyAccessExpression") {
-        const leftFact = context.input.facts.getFact(left, rustTargetOperationFactKey);
-        if (leftFact !== undefined && leftFact.kind === "source-field") {
-          const target = planExpression(left, context);
-          const value = planExpression(right, context);
-          if (target === undefined || value === undefined) {
-            return undefined;
-          }
-          if (operatorKind === KindEqualsToken) {
-            return [{ kind: "assign", target, operator: "=", value }];
-          }
-          const compoundFact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
-          if (compoundFact === undefined || compoundFact.kind !== "operator-token") {
-            context.diagnostics.push(missingFactDiagnostic(
-              diagnosticInput(context, expression),
-              "rust.backend.operator",
-              "Compound field assignment requires a finalized Rust operator fact.",
-            ));
-            return undefined;
-          }
-          if (!selectedOperatorMatches(expression, compoundFact, context)) {
-            context.diagnostics.push(missingFactDiagnostic(
-              diagnosticInput(context, expression),
-              "rust.backend.operator-selected-evidence",
-              "Compound field-assignment fact conflicts with the TSTS-selected operator fact.",
-            ));
-            return undefined;
-          }
-          const operator = compoundFact.operator;
-          if (operator !== "+=" && operator !== "-=" && operator !== "*=" && operator !== "/=" && operator !== "%=") {
-            return undefined;
-          }
-          return [{ kind: "assign", target, operator, value }];
-        }
+      if (left === undefined || right === undefined) {
+        return undefined;
       }
-      if (left === undefined || right === undefined || ast.kindName(left) !== KindIdentifier) {
+      const target = ast.kindName(left) === KindIdentifier
+        ? (() => {
+            const path = rustSourceName(context, ast.text(left));
+            return isValidRustIdentifier(path) ? { kind: "path" as const, path } : undefined;
+          })()
+        : rustTargetOperationIsDirectLocation(
+            context.input.facts.getFact(left, rustTargetOperationFactKey),
+          )
+          ? planExpression(left, context)
+          : undefined;
+      if (target === undefined) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment",
-          "Assignments must target a plain identifier.",
+          "Assignments require a plain binding or a finalized direct Rust location.",
         ));
         return undefined;
       }
-      const target = rustSourceName(context, ast.text(left));
-      if (!isValidRustIdentifier(target)) {
+      const fact = selectedAssignmentFact ??
+        context.input.facts.getFact(expression, rustTargetOperationFactKey);
+      if (fact === undefined || fact.kind !== "operator-token") {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, expression),
+          "rust.backend.operator",
+          "Compound assignment requires a finalized Rust operator fact.",
+        ));
         return undefined;
       }
-      if (operatorKind !== KindEqualsToken) {
-        const fact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
-        if (fact === undefined || fact.kind !== "operator-token") {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, expression),
-            "rust.backend.operator",
-            "Compound assignment requires a finalized Rust operator fact.",
-          ));
-          return undefined;
-        }
-        if (!selectedOperatorMatches(expression, fact, context)) {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, expression),
-            "rust.backend.operator-selected-evidence",
-            "Compound assignment fact conflicts with the TSTS-selected operator fact.",
-          ));
-          return undefined;
-        }
-        const value = planExpression(right, context);
-        if (value === undefined) {
-          return undefined;
-        }
-        const operator = fact.operator;
-        return operator === "+=" || operator === "-=" || operator === "*=" || operator === "/=" || operator === "%="
-          ? [{ kind: "assign", target: { kind: "path", path: target }, operator, value }]
-          : undefined;
+      if (!selectedOperatorMatches(expression, fact, context)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, expression),
+          "rust.backend.operator-selected-evidence",
+          "Compound assignment fact conflicts with the TSTS-selected operator fact.",
+        ));
+        return undefined;
       }
-      const value = planExpression(right, context);
+      const operator = fact.operator;
+      const valueNode = operatorKind === KindEqualsToken && operator !== "="
+        ? BinaryExpression_Right(context.input.ast, right)
+        : right;
+      if (valueNode === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, expression),
+          "rust.backend.assignment-shape",
+          "Finalized equivalent assignment requires the proven binary value operand.",
+        ));
+        return undefined;
+      }
+      const value = planExpression(valueNode, context);
       if (value === undefined) {
         return undefined;
       }
-      return [{ kind: "assign", target: { kind: "path", path: target }, operator: "=", value }];
+      return operator === "+=" || operator === "-=" || operator === "*=" || operator === "/=" || operator === "%="
+        ? [{ kind: "assign", target, operator, value }]
+        : operator === "="
+          ? [{ kind: "assign", target, operator, value }]
+          : undefined;
     }
   }
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {

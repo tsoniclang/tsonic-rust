@@ -11,6 +11,7 @@ import {
   acceptRustPolicy,
   rejectRustPolicy,
 } from "../../policy/operations/contracts.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -38,6 +39,7 @@ import type {
 import {
   ElementAccessExpression_ArgumentExpression,
   Node_Type,
+  VariableDeclarationList_Declarations,
 } from "../../common/source-ast.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 import type {
@@ -49,7 +51,6 @@ import {
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-  rustTargetTypeRefEquals,
   rustUnitTargetType,
   rustVecTargetType,
 } from "../rust-target-types.js";
@@ -87,6 +88,7 @@ import {
 import {
   finalizeRustProviderOperationAbi,
 } from "../rust-facts/finalized-operation-abi.js";
+import { rustTargetOperationText } from "../rust-facts/target-operation.js";
 import {
   finalizeJsCallbackOperation,
   selectJsSurfaceConstructorBySourceOwner,
@@ -1545,20 +1547,16 @@ function recordIterationInitializerCarrier(
     return;
   }
   const evidence = [{ message: "rust selected iteration binding carrier" }];
-  const visit = (node: Node): void => {
-    const kind = context.ast.kindName(node);
-    if (node === root || kind === "KindVariableDeclaration") {
-      context.facts.set(node, rustRuntimeCarrierKey, { carrier }, evidence);
+  context.facts.set(root, rustRuntimeCarrierKey, { carrier }, evidence);
+  const declarations = VariableDeclarationList_Declarations(context.ast, root);
+  if (declarations === undefined || !isDenseDataArray(declarations)) {
+    return;
+  }
+  for (const declaration of declarations) {
+    if (declaration !== undefined && context.ast.kindName(declaration) === "KindVariableDeclaration") {
+      context.facts.set(declaration, rustRuntimeCarrierKey, { carrier }, evidence);
     }
-    if (kind === "KindVariableDeclaration" || node === root) {
-      for (const child of context.ast.children(node)) {
-        if (child !== undefined) {
-          visit(child);
-        }
-      }
-    }
-  };
-  visit(root);
+  }
 }
 
 export function selectRustCheckedConversion(
@@ -1852,7 +1850,7 @@ function sourceOperationId(
 
 function isDeclarationFileSubject(subject: ExtensionFactSubject, context: RustOperationPolicyContext): boolean {
   const node = asNode(subject, context);
-  return node !== undefined && context.ast.getFileName(context.ast.getSourceFile(node)).endsWith(".d.ts");
+  return node !== undefined && context.ast.isDeclarationFile(context.ast.getSourceFile(node));
 }
 
 function selectedDeclarationIsCallable(
@@ -1894,29 +1892,6 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     default:
       return "operator";
   }
-}
-
-function rustTargetOperationText(fact: RustTargetOperationFact): string {
-  if (fact.kind === "provider-operation") {
-    const target = fact.abi.target;
-    if (target.form === "call" || target.form === "path" || target.form === "free-call" || target.form === "call-str-slice" || target.form === "call-jsvalue-slice") {
-      return target.path;
-    }
-    if (target.form === "index") {
-      return "[]";
-    }
-    if (target.form === "marker") {
-      return "marker";
-    }
-    if (target.form === "binary-operator") {
-      return target.operator;
-    }
-    return target.name;
-  }
-  if (fact.kind === "operator-token") {
-    return fact.operator;
-  }
-  return fact.operationId;
 }
 
 function providerIdentityText(identity: ProviderDeclarationIdentity): string {

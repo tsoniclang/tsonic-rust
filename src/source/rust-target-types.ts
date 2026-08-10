@@ -1,6 +1,10 @@
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type { RustPrimitiveTypeName } from "../common/rust-syntax.js";
-import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../common/closed-metadata.js";
+import { isDenseDataArray } from "../common/closed-metadata.js";
+import {
+  isRustTargetTypeRef,
+  rustTargetTypeRefEquals,
+} from "../policy/equality.js";
 import type { TargetTypeRef } from "../policy/types.js";
 
 export type { TargetTypeRef } from "../policy/types.js";
@@ -136,16 +140,6 @@ export function rustFixedArrayCarrierValue(carrier: TargetTypeRef | undefined): 
     : undefined;
 }
 
-export function rustTargetTypeRefEquals(left: TargetTypeRef | undefined, right: TargetTypeRef | undefined): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right;
-  }
-  if (!isRustTargetTypeRef(left) || !isRustTargetTypeRef(right)) {
-    return false;
-  }
-  return rustTargetTypeRefEqualsValidated(left, right);
-}
-
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
@@ -223,138 +217,6 @@ export function inferRustTargetTypeParameterBindings(
         return rustTargetTypeRefEquals(left, right);
     }
   }
-}
-
-function rustTargetTypeRefEqualsValidated(left: TargetTypeRef, right: TargetTypeRef): boolean {
-  if (left === right) {
-    return true;
-  }
-  if (left.kind !== right.kind) {
-    return false;
-  }
-  switch (left.kind) {
-    case "source-primitive":
-      return right.kind === left.kind && left.name === right.name;
-    case "target-named":
-      return right.kind === left.kind && left.id === right.id && targetTypeRefListsEqual(left.typeArguments, right.typeArguments);
-    case "type-parameter":
-    case "lifetime":
-      return right.kind === left.kind && left.name === right.name;
-    case "opaque":
-      return right.kind === left.kind && left.id === right.id;
-    case "array":
-      return right.kind === left.kind && left.rank === right.rank && rustTargetTypeRefEqualsValidated(left.element, right.element);
-    case "tuple":
-      return right.kind === left.kind && targetTypeRefListsEqual(left.elements, right.elements);
-    case "pointer":
-      return right.kind === left.kind && left.mutability === right.mutability && rustTargetTypeRefEqualsValidated(left.pointee, right.pointee);
-    case "function-pointer":
-      return right.kind === left.kind &&
-        stringListsEqual(left.abi, right.abi) &&
-        targetTypeRefListsEqual(left.args, right.args) &&
-        rustTargetTypeRefEqualsValidated(left.result, right.result);
-    case "associated-type":
-      return right.kind === left.kind && left.name === right.name && rustTargetTypeRefEqualsValidated(left.owner, right.owner);
-    case "target-specific":
-      return right.kind === left.kind && left.target === right.target && left.name === right.name && closedMetadataEquals(left.value, right.value);
-  }
-}
-
-export function isRustTargetTypeRef(value: unknown): value is TargetTypeRef {
-  try {
-    return validateRustTargetTypeRef(value, new WeakSet<object>(), 0);
-  } catch {
-    return false;
-  }
-}
-
-function validateRustTargetTypeRef(value: unknown, active: WeakSet<object>, depth: number): value is TargetTypeRef {
-  if (!isPlainRecord(value) || depth > 128 || active.has(value)) {
-    return false;
-  }
-  active.add(value);
-  try {
-    const validateChild = (child: unknown): child is TargetTypeRef =>
-      validateRustTargetTypeRef(child, active, depth + 1);
-    const validateChildren = (children: unknown): children is readonly TargetTypeRef[] =>
-      isDenseDataArray(children) && children.every(validateChild);
-    switch (value.kind) {
-      case "source-primitive":
-        return hasExactKeys(value, ["kind", "name"], ["kind", "name"]) && sourcePrimitiveNames.has(value.name);
-      case "target-named":
-        return hasExactKeys(value, ["kind", "id", "typeArguments"], ["kind", "id"]) &&
-          typeof value.id === "string" && value.id.length > 0 &&
-          (value.typeArguments === undefined || validateChildren(value.typeArguments));
-      case "type-parameter":
-      case "lifetime":
-        return hasExactKeys(value, ["kind", "name"], ["kind", "name"]) && typeof value.name === "string" && value.name.length > 0;
-      case "array":
-        return hasExactKeys(value, ["kind", "element", "rank"], ["kind", "element"]) && validateChild(value.element) &&
-          (value.rank === undefined || (Number.isSafeInteger(value.rank) && (value.rank as number) > 0));
-      case "tuple":
-        return hasExactKeys(value, ["kind", "elements"], ["kind", "elements"]) && validateChildren(value.elements);
-      case "pointer":
-        return hasExactKeys(value, ["kind", "pointee", "mutability"], ["kind", "pointee"]) && validateChild(value.pointee) &&
-          (value.mutability === undefined || value.mutability === "const" || value.mutability === "mut" ||
-            value.mutability === "target-defined");
-      case "function-pointer":
-        return hasExactKeys(value, ["kind", "args", "result", "abi"], ["kind", "args", "result"]) && validateChildren(value.args) &&
-          validateChild(value.result) &&
-          (value.abi === undefined || (isDenseDataArray(value.abi) && value.abi.every((part) => typeof part === "string")));
-      case "opaque":
-        return hasExactKeys(value, ["kind", "id"], ["kind", "id"]) && typeof value.id === "string" && value.id.length > 0;
-      case "associated-type":
-        return hasExactKeys(value, ["kind", "owner", "name"], ["kind", "owner", "name"]) && validateChild(value.owner) &&
-          typeof value.name === "string" && value.name.length > 0;
-      case "target-specific":
-        return hasExactKeys(value, ["kind", "target", "name", "value"], ["kind", "target", "name"]) &&
-          typeof value.target === "string" && value.target.length > 0 &&
-          typeof value.name === "string" && value.name.length > 0 &&
-          (!Object.prototype.hasOwnProperty.call(value, "value") || isClosedMetadata(value.value));
-      default:
-        return false;
-    }
-  } finally {
-    active.delete(value);
-  }
-}
-
-const sourcePrimitiveNames = new Set<unknown>([
-  "bool", "char", "int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64",
-  "native-int", "native-uint", "float16", "float32", "float64", "decimal", "int128", "uint128",
-]);
-
-function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false;
-  }
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function hasExactKeys(
-  value: Readonly<Record<string, unknown>>,
-  allowed: readonly string[],
-  required: readonly string[],
-): boolean {
-  return Object.keys(value).every((key) => allowed.includes(key)) &&
-    required.every((key) => Object.prototype.hasOwnProperty.call(value, key));
-}
-
-function targetTypeRefListsEqual(
-  left: readonly TargetTypeRef[] | undefined,
-  right: readonly TargetTypeRef[] | undefined,
-): boolean {
-  if (left === right) {
-    return true;
-  }
-  if (left === undefined || right === undefined || left.length !== right.length) {
-    return false;
-  }
-  if (!isDenseDataArray(left) || !isDenseDataArray(right)) {
-    return false;
-  }
-  return left.every((entry, index) => rustTargetTypeRefEqualsValidated(entry, right[index]!));
 }
 
 function stringListsEqual(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {

@@ -31,6 +31,7 @@ export const KindStringLiteral = "KindStringLiteral";
 export const KindTrueKeyword = "KindTrueKeyword";
 export const KindTypeReference = "KindTypeReference";
 export const KindVariableDeclaration = "KindVariableDeclaration";
+export const KindVariableDeclarationList = "KindVariableDeclarationList";
 export const KindVariableStatement = "KindVariableStatement";
 export const KindVoidKeyword = "KindVoidKeyword";
 export const KindWhileStatement = "KindWhileStatement";
@@ -192,6 +193,16 @@ export function Node_Initializer(ast: AstReader, node: Node | undefined): Node |
     default:
       return undefined;
   }
+}
+
+export function VariableDeclarationList_Declarations(
+  ast: AstReader,
+  node: Node | undefined,
+): readonly (Node | undefined)[] | undefined {
+  if (node === undefined || ast.kindName(node) !== KindVariableDeclarationList) {
+    return undefined;
+  }
+  return ast.as.AsVariableDeclarationList(node)?.Declarations?.Nodes;
 }
 
 export function BinaryExpression_Left(ast: AstReader, node: Node | undefined): Node | undefined {

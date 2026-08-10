@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compileRust, createRustSession, rustSourceDiagnostics } from "./helpers/rust-session.mjs";
+import { assertRustTargetRejection, compileRust } from "./helpers/rust-session.mjs";
 
 test("unsupported AST fails closed with deterministic diagnostics", () => {
   const { result } = compileRust({
@@ -46,7 +46,7 @@ export function mix(a: int32, b: float64): float64 {
 });
 
 test("dynamic any member access fails closed in strict-native mode", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 declare const value: any;
@@ -56,15 +56,15 @@ export function read(): string {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Checked property access has no selected provider, source-profile, or project-source declaration evidence/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_SELECTED_EVIDENCE_MISSING",
+    message: "Checked property access has no selected provider, source-profile, or project-source declaration evidence.",
+  }]);
 });
 
 test("dynamic any calls fail closed without selected callable evidence", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 declare const invoke: any;
@@ -74,29 +74,30 @@ export function run(): void {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Checked project-source call has callee evidence but no exact selected callable declaration evidence/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_SELECTED_PROJECT_DECLARATION_MISSING",
+    message: "Checked project-source call has callee evidence but no exact selected callable declaration evidence.",
+  }]);
 });
 
 test("for-of over an unproven dynamic carrier fails closed", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
-export function walk(values: any): void {
+export function walk(): void {
+  const values: any = 1;
   for (const value of values) {
     value;
   }
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Selected for-of iteration receiver is not a finalized supported Rust iterable carrier/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_ITERATION_CARRIER_UNSUPPORTED",
+    message: "Selected for-of iteration receiver is not a finalized supported Rust iterable carrier.",
+  }]);
 });
 
 test("source-name guessing is impossible: unmapped module import fails closed", () => {
@@ -110,13 +111,10 @@ export function fallback(a: number, b: number): number {
 `,
     },
   };
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-
-  assert.match(diagnostics, /The selected JavaScript call 'Math\.max' has no closed Rust operation row/u);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-  );
+  assertRustTargetRejection(options, [{
+    code: "RUST_SELECTED_OPERATION_UNSUPPORTED",
+    message: "The selected JavaScript call 'Math.max' has no closed Rust operation row for the selected receiver and argument carriers.",
+  }]);
 });
 
 test("functions without return annotations fail closed", () => {
@@ -136,7 +134,7 @@ export function noAnnotation(a: number) {
 });
 
 test("throw Error requires the exact selected one-message constructor shape", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 export function invalid(): void {
@@ -144,12 +142,9 @@ export function invalid(): void {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /requires one checked string message argument/u);
-  assert.throws(
-    () => compileRust({ files: { "index.ts": `export function invalid(): void { throw new Error(); }` } }),
-    /requires one checked string message argument/u,
-  );
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_ERROR_MESSAGE_REQUIRED",
+    message: "Rust Error construction currently requires one checked string message argument.",
+  }]);
 });

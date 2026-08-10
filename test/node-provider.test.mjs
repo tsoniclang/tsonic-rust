@@ -3,27 +3,11 @@ import assert from "node:assert/strict";
 import {
   acmeTestingPackage,
   artifactText,
+  assertRustTargetRejection,
   compileRust,
-  createRustSession,
   nodejsCapability,
-  rustSourceDiagnostics,
 } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
-
-function assertSourceSemanticRejection(options, expectedMessages) {
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
-    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
-    assert.ok(match, `unexpected source diagnostic: ${line}`);
-    return match[1];
-  });
-  assert.deepEqual(actualMessages, expectedMessages);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-    "source diagnostics must block backend artifact handoff",
-  );
-}
 
 test("node path and os lower through provider rows to tsonic_rust_node", async () => {
   const { result } = compileRust({
@@ -71,9 +55,10 @@ export function observe(path: string): void {
 `,
     },
   };
-  assertSourceSemanticRejection(options, [
-    "No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::node:fs::watch::node:fs::watch(...)' as method.",
-  ]);
+  assertRustTargetRejection(options, [{
+    code: "RUST_PROVIDER_OPERATION_NOT_MAPPED",
+    message: "No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::node:fs::watch::node:fs::watch(...)' as method.",
+  }]);
 });
 
 test("node package requires the js surface", async () => {

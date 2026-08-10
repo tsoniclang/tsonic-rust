@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../../policy/types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type {
   RustProviderOperationForm,
   RustProviderOperationTemplate,
@@ -29,7 +30,6 @@ import {
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-  rustTargetTypeRefEquals,
 } from "../rust-target-types.js";
 
 // Declarative JS surface operation rows. Rows are matched by the identity of

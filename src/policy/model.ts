@@ -12,6 +12,11 @@ import type {
 } from "./types.js";
 import { defineRustPlanKey } from "./keys.js";
 import type { RustPlanKey } from "./keys.js";
+import {
+  rustSelectedTargetOperationEquals,
+  rustSelectedTargetSignatureEquals,
+  rustTargetTypeRefEquals,
+} from "./equality.js";
 
 export interface RustRuntimeCarrierSelection {
   readonly carrier: RustTargetTypeRef;
@@ -27,22 +32,22 @@ export interface RustIterationSelection extends RustSelectedTargetOperation {
 
 export const rustRuntimeCarrierKey = defineRustPlanKey<RustRuntimeCarrierSelection>(
   "runtimeCarrier",
-  (left, right) => left.carrier === right.carrier,
+  (left, right) => rustTargetTypeRefEquals(left.carrier, right.carrier),
 );
 
 export const rustSelectedCallKey = defineRustPlanKey<RustSelectedTargetSignature>(
   "selectedCall",
-  (left, right) => left === right,
+  rustSelectedTargetSignatureEquals,
 );
 
 export const rustSelectedOperationKey = defineRustPlanKey<RustSelectedTargetOperation>(
   "selectedOperation",
-  (left, right) => left === right,
+  rustSelectedTargetOperationEquals,
 );
 
 export const rustConversionKey = defineRustPlanKey<RustConversionSelection>(
   "conversion",
-  (left, right) => left === right,
+  (left, right) => rustTargetTypeRefEquals(left.convertedType, right.convertedType),
 );
 
 export const rustArgumentPassingKey = defineRustPlanKey<ArgumentPassingFact>(

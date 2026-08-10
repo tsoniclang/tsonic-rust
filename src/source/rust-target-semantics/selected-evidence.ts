@@ -211,8 +211,8 @@ export function isProjectSourceDeclaration(
   if (declaration === undefined) {
     return false;
   }
-  const fileName = context.ast.getFileName(context.ast.getSourceFile(declaration));
-  return fileName.length > 0 && !fileName.endsWith(".d.ts");
+  const sourceFile = context.ast.getSourceFile(declaration);
+  return context.ast.getFileName(sourceFile).length > 0 && !context.ast.isDeclarationFile(sourceFile);
 }
 
 export function asNode(

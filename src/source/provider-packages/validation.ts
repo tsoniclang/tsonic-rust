@@ -7,6 +7,7 @@ import type {
   ProviderTypeParameterDeclaration,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../policy/types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { RustProviderPackageDefinition } from "./index.js";
 import type {
   RustProviderConstantArgument,
@@ -30,7 +31,6 @@ import {
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,
-  rustTargetTypeRefEquals,
 } from "../rust-target-types.js";
 import { rustProviderOperationFormContractViolation } from "../rust-facts/operation-form-contract.js";
 import { isClosedMetadata } from "../../common/closed-metadata.js";

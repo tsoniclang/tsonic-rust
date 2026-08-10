@@ -2,6 +2,7 @@ import type { TargetTypeRef } from "../../policy/types.js";
 import type {
   RustAssignmentOperator,
   RustBinaryOperator,
+  RustOperatorToken,
 } from "../../common/rust-syntax.js";
 import {
   KindAmpersandAmpersandToken,
@@ -161,6 +162,31 @@ export function selectRustCompoundAssignment(
     return undefined;
   }
   return isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right) ? operator : undefined;
+}
+
+export function selectRustEquivalentAssignment(
+  operator: RustOperatorToken,
+  target: TargetTypeRef | undefined,
+  result: TargetTypeRef | undefined,
+): RustAssignmentOperator | undefined {
+  if (target === undefined || result === undefined || !isRustNumericCarrier(target) ||
+    !sameRustPrimitiveCarrier(target, result)) {
+    return undefined;
+  }
+  switch (operator) {
+    case "+":
+      return "+=";
+    case "-":
+      return "-=";
+    case "*":
+      return "*=";
+    case "/":
+      return "/=";
+    case "%":
+      return "%=";
+    default:
+      return undefined;
+  }
 }
 
 export function rustOperatorCarrierKey(carrier: TargetTypeRef): string {

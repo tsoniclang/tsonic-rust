@@ -12,7 +12,6 @@ import type {
 // line between items, trailing newline.
 
 const rustFormatWidth = 100;
-const rustFunctionCallWidth = 60;
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
   const parts: string[] = [`// ${model.headerComment}`];
@@ -354,6 +353,18 @@ export function printRustExpr(expression: RustExpr): string {
 function printRustExprFitted(expression: RustExpr, depth: number, column: number): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
+    case "evaluate-then": {
+      const statementIndent = indentText(depth + 1);
+      const effectPrefix = `${statementIndent}let _ = `;
+      const effect = printRustExprFitted(expression.effect, depth + 1, effectPrefix.length);
+      const value = printRustExprFitted(expression.value, depth + 1, statementIndent.length);
+      return [
+        "{",
+        `${effectPrefix}${effect};`,
+        `${statementIndent}${value}`,
+        `${indentText(depth)}}`,
+      ].join("\n");
+    }
     case "call":
       return printFittedCall(expression.path, expression.args, depth, column);
     case "method-call": {
@@ -482,21 +493,21 @@ function printFittedCall(
     if (argument.kind === "call" || argument.kind === "method-call" || argument.kind === "try") {
       const nested = printRustExprFitted(argument, depth, column + prefix.length);
       const compact = appendToLastLine(`${prefix}${nested}`, ")");
-      if (renderedFits(compact, column)) {
+      if (!nested.includes("\n") && renderedFits(compact, column)) {
         return compact;
       }
     } else if (renderedFits(flat, column)) {
       return flat;
     }
   } else if (renderedFits(flat, column)) {
-    const beginsAtCurrentIndent = column === indentText(depth).length;
-    if (beginsAtCurrentIndent || flat.length <= rustFunctionCallWidth) {
-      return flat;
-    }
+    return flat;
   }
   const argumentIndent = indentText(depth + 1);
   const renderedArguments = arguments_.map((argument) => {
-    const rendered = printRustExprFitted(argument, depth + 1, argumentIndent.length);
+    const chain = rustMethodChain(argument);
+    const rendered = rustMethodChainUsesVerticalLayout(chain)
+      ? printFittedMethodChain(chain, depth + 1, argumentIndent.length)
+      : printRustExprFitted(argument, depth + 1, argumentIndent.length);
     return appendToLastLine(`${argumentIndent}${rendered}`, ",");
   });
   return [

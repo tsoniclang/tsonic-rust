@@ -37,7 +37,7 @@ export function createRustTranslationContext(
   const sourceFiles = Object.freeze(
     isDenseDataArray(rawSourceFiles) && rawSourceFiles.every((sourceFile) => sourceFile !== undefined)
       ? rawSourceFiles.filter((sourceFile): sourceFile is SourceFile =>
-          sourceFile !== undefined && !ast.getFileName(sourceFile).endsWith(".d.ts"))
+          sourceFile !== undefined && !ast.isDeclarationFile(sourceFile))
       : [],
   );
   const facts = new RustSemanticModel(input.source.sourceFacts);

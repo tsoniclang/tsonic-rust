@@ -140,9 +140,6 @@ function planModuleNames(
   const seen = new Map<string, string>();
   for (const sourceFile of input.sourceFiles) {
     const fileName = input.ast.getFileName(sourceFile);
-    if (fileName.endsWith(".d.ts")) {
-      continue;
-    }
     const moduleName = rustModuleNameForFile(fileName);
     if (moduleName === undefined) {
       diagnostics.push(moduleNameDiagnostic(input, sourceFile, `Source file '${fileName}' does not map to a valid Rust module name.`));

@@ -2,6 +2,7 @@
 // the Rust target extensions, then plans Rust artifacts via the backend.
 // Uses only public @tsonic packages — no @tsonic/host.
 import { fileURLToPath } from "node:url";
+import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
@@ -370,6 +371,16 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
     translationContext,
     harness,
   };
+}
+
+export function assertRustTargetRejection(options, expectedDiagnostics) {
+  const compilation = compileRust(options);
+  assert.equal(compilation.result.artifacts.length, 0);
+  assert.deepEqual(
+    compilation.result.diagnostics.map(({ code, message }) => ({ code, message })),
+    expectedDiagnostics,
+  );
+  return compilation;
 }
 
 const diagnosticInspection = Symbol.for("nodejs.util.inspect.custom");

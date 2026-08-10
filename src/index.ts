@@ -71,6 +71,7 @@ export type {
   RustProviderTypeDefinition,
   RustProviderTypeRow,
 } from "./source/provider-packages/index.js";
+export type { RustTargetTypeRef } from "./policy/types.js";
 export { rustExtensionId, rustTargetOperationFactKey } from "./source/rust-facts/keys.js";
 export type {
   RustProviderChainStep,
@@ -105,12 +106,14 @@ export {
   isRustStringCarrier,
   isRustUnitCarrier,
   rustPrimitiveTypeName,
+  rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetId,
   rustStringTargetType,
   rustUnitTargetType,
   rustUsizeTargetId,
   rustUsizeTargetType,
+  rustVecTargetType,
   sameRustPrimitiveCarrier,
 } from "./source/rust-target-types.js";
 export { rustTypeFromCarrier } from "./backend/planner/render-types.js";

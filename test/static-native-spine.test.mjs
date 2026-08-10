@@ -135,9 +135,29 @@ export function total(limit: int32): int32 {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let mut i: i32 = 0;/u);
   assert.match(text, /while i < limit \{/u);
-  assert.match(text, /sum = sum \+ i;/u);
-  assert.doesNotMatch(text, /sum \+= i;/u);
+  assert.match(text, /sum \+= i;/u);
   assert.match(text, /i \+= 1;/u);
+});
+
+test("equivalent assignment requires exact source binding identity", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function replace(left: int32, right: int32): int32 {
+  let value: int32 = left;
+  value = right + 1;
+  return value;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /value = right \+ 1;/u);
+  assert.doesNotMatch(text, /value \+=/u);
 });
 
 test("string expressions lower concat and equality through facts", () => {

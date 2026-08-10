@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   artifactText,
+  assertRustTargetRejection,
   compileRust,
   createRustSession,
   rustSourceDiagnostics,
@@ -285,7 +286,7 @@ test("compat mode enables JS carrier lanes without explicit surface selection", 
 });
 
 test("dynamic any member access fails closed even in compat mode", () => {
-  const harness = createRustSession({
+  const options = {
     target: { id: "rust", options: { typescriptCompatibility: "compat" } },
     files: {
       "index.ts": `
@@ -296,11 +297,11 @@ export function read(): string {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Checked property access has no selected provider, source-profile, or project-source declaration evidence/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_SELECTED_EVIDENCE_MISSING",
+    message: "Checked property access has no selected provider, source-profile, or project-source declaration evidence.",
+  }]);
 });
 
 test("constant new RegExp lowers through the oracle-proven engine", () => {

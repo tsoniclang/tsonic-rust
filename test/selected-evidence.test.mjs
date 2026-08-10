@@ -4,8 +4,6 @@ import { createRustProviderPackage } from "../dist/index.js";
 import {
   artifactText,
   compileRust,
-  createRustSession,
-  rustSourceDiagnostics,
 } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
@@ -48,7 +46,8 @@ export function truncate(value: float64): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn truncate\(value: f64\) -> rt::TsonicResult<i32>/u);
-  assert.match(text, /tsonic_rust_runtime::conversions::f64_to_i32\(value\)\?/u);
+  assert.match(text, /\n    tsonic_rust_runtime::conversions::f64_to_i32\(value\)\n/u);
+  assert.doesNotMatch(text, /Ok\([^\n]*\?\)/u);
   assert.doesNotMatch(text, /\sas\si32/u);
   validateGeneratedProject("selected-assertion-conversion", result.artifacts);
 });
@@ -72,8 +71,8 @@ export function identity(value: int32): int32 {
   assert.doesNotMatch(text, / as /u);
 });
 
-test("unsupported checked assertions fail closed during source checking", () => {
-  const harness = createRustSession({
+test("unsupported checked assertions fail closed at Rust target analysis", () => {
+  const { result } = compileRust({
     files: {
       "index.ts": `
 interface Animal { name: string }
@@ -84,8 +83,11 @@ export const dog = animal as Dog;
     },
   });
 
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-  assert.match(diagnostics, /identity or explicit Rust runtime conversion/u);
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
+    code: "RUST_ASSERTION_UNSUPPORTED",
+    message: "Checked source assertion does not map to an identity or explicit Rust runtime conversion.",
+  }]);
 });
 
 test("named constant tuple indexes consume the TSTS-selected ordinal", () => {
@@ -103,12 +105,12 @@ export function second(pair: [int32, int32]): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /\{ let _ = one; pair\[1\] \}/u);
+  assert.match(artifactText(result, "src/index.rs"), /\{\n        let _ = one;\n        pair\[1\]\n    \}/u);
   validateGeneratedProject("selected-tuple-ordinal", result.artifacts);
 });
 
 test("ambiguous tuple indexes do not fall back to source spelling", () => {
-  const harness = createRustSession({
+  const { result } = compileRust({
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -120,8 +122,11 @@ export function pick(pair: [int32, int32], index: 0 | 1): int32 {
     },
   });
 
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-  assert.match(diagnostics, /Fixed-array element access requires a TSTS-selected in-range fixed ordinal/u);
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
+    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
+    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
+  }]);
 });
 
 test("for-of lowers only from selected iteration element evidence", () => {
@@ -147,7 +152,7 @@ export function total(values: readonly int32[]): int32 {
 });
 
 test("optional-chain access fails closed until a Rust Option operation is selected", () => {
-  const harness = createRustSession({
+  const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
@@ -158,8 +163,11 @@ export function length(value: string | null): number | undefined {
     },
   });
 
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-  assert.match(diagnostics, /Optional-chain property access has no finalized Rust Option operation/u);
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
+    code: "RUST_OPTIONAL_CHAIN_UNSUPPORTED",
+    message: "Optional-chain property access has no finalized Rust Option operation.",
+  }]);
 });
 
 test("provider value identifiers fail closed without TSTS-selected value evidence", () => {

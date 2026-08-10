@@ -3,26 +3,10 @@ import assert from "node:assert/strict";
 import {
   acmeTestingPackage,
   artifactText,
+  assertRustTargetRejection,
   compileRust,
-  createRustSession,
-  rustSourceDiagnostics,
 } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
-
-function assertSourceSemanticRejection(options, expectedMessages) {
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
-    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
-    assert.ok(match, `unexpected source diagnostic: ${line}`);
-    return match[1];
-  });
-  assert.deepEqual(actualMessages, expectedMessages);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-    "source diagnostics must block backend artifact handoff",
-  );
-}
 
 test("Math closed subset lowers to exact f64 methods", async () => {
   const { result } = compileRust({
@@ -57,9 +41,10 @@ test("Math members outside the exact subset fail closed", async () => {
       surfaces: ["js"],
       files: { "index.ts": `export function f(x: number): number {\n  return ${call};\n}\n` },
     };
-    assertSourceSemanticRejection(options, [
-      `The selected JavaScript call 'Math.${member}' has no closed Rust operation row for the selected receiver and argument carriers.`,
-    ]);
+    assertRustTargetRejection(options, [{
+      code: "RUST_SELECTED_OPERATION_UNSUPPORTED",
+      message: `The selected JavaScript call 'Math.${member}' has no closed Rust operation row for the selected receiver and argument carriers.`,
+    }]);
   }
 });
 
@@ -121,9 +106,10 @@ export function f(name: string): string {
 `,
     },
   };
-  assertSourceSemanticRejection(badOptions, [
-    "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
-  ]);
+  assertRustTargetRejection(badOptions, [{
+    code: "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
+    message: "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
+  }]);
 });
 
 test("RegExp oracle subset lowers constants, test, replace, split, search", async () => {
@@ -195,7 +181,10 @@ test("RegExp constructs outside the oracle subset fail closed", async () => {
       files: { "index.ts": `export function f(pattern: string, s: string): boolean {\n  const re = ${item.construct};\n  return re.test(s);\n}\n` },
     };
     if (item.sourceMessage !== undefined) {
-      assertSourceSemanticRejection(options, [item.sourceMessage]);
+      assertRustTargetRejection(options, [{
+        code: "RUST_REGEXP_DYNAMIC_UNSUPPORTED",
+        message: item.sourceMessage,
+      }]);
       continue;
     }
     const { result } = compileRust(options);

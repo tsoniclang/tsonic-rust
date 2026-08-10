@@ -63,6 +63,17 @@ test("no C# target references in Rust target code", () => {
   }
 });
 
+test("Rust target-type validation and equality have one policy owner", () => {
+  const owners = sourceFiles.filter(({ text }) =>
+    /export function (?:isRustTargetTypeRef|rustTargetTypeRefEquals)\b/u.test(text));
+  assert.deepEqual(
+    owners.map(({ path }) => path.slice(sourceRoot.length + 1)),
+    ["policy/equality.ts"],
+  );
+  const carrierHelpers = readFileSync(join(sourceRoot, "source/rust-target-types.ts"), "utf8");
+  assert.doesNotMatch(carrierHelpers, /export function (?:isRustTargetTypeRef|rustTargetTypeRefEquals)\b/u);
+});
+
 test("no embedded JS engine or runtime interpretation dependencies", () => {
   const packageJson = readFileSync(join(repositoryRoot, "package.json"), "utf8");
   const banned = /quickjs|rquickjs|boa_engine|deno_core|"v8"/iu;
@@ -247,6 +258,22 @@ test("selected source operation identity is never reconstructed through checker 
     }
   }
   assert.deepEqual([...observed].sort(), [...allowed].sort());
+});
+
+test("runtime source classification uses compiler declaration-file facts", () => {
+  for (const file of [
+    "translate/context.ts",
+    "backend/planner/rust-planner.ts",
+    "source/rust-target-semantics/index.ts",
+    "source/rust-target-semantics/operations-provider.ts",
+    "source/rust-target-semantics/selected-evidence.ts",
+    "source/rust-target-semantics/source-type-registry.ts",
+  ]) {
+    const text = readFileSync(join(sourceRoot, file), "utf8");
+    assert.doesNotMatch(text, /endsWith\(["']\.d\.ts["']\)/u, `${file} infers declaration-file status from a suffix`);
+  }
+  const context = readFileSync(join(sourceRoot, "translate/context.ts"), "utf8");
+  assert.match(context, /ast\.isDeclarationFile\(sourceFile\)/u);
 });
 
 test("project-source calls trust the exact TSTS-selected declaration rather than reconstructing alias identity", () => {
@@ -450,8 +477,14 @@ test("call-argument conversion consumes the checked expression carrier, not a se
 test("backend assignment and nullish checks consume finalized fact details", () => {
   const statements = readFileSync(join(sourceRoot, "backend/planner/statements.ts"), "utf8");
   const expressions = readFileSync(join(sourceRoot, "backend/planner/expressions.ts"), "utf8");
-  assert.match(statements, /runtimeSet\.kind !== "operator-token" \|\| runtimeSet\.operator !== "="/u);
-  assert.match(statements, /selectedOperatorMatches\(expression, runtimeSet, context\)/u);
+  const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/index.ts"), "utf8");
+  const operators = readFileSync(join(sourceRoot, "source/rust-target-semantics/operator-rules.ts"), "utf8");
+  assert.match(statements, /assignment === undefined \|\| assignment\.kind !== "operator-token"/u);
+  assert.match(statements, /selectedOperatorMatches\(expression, assignment, context\)/u);
+  assert.doesNotMatch(statements, /sourceReferenceFor|selectRustEquivalentAssignment/u);
+  assert.match(semantics, /targetReference\.symbol !== valueReference\.symbol/u);
+  assert.match(semantics, /targetReference\.declaration !== valueReference\.declaration/u);
+  assert.match(operators, /export function selectRustEquivalentAssignment\(/u);
   assert.match(expressions, /fact\.optionOperand === "left" \? leftNode : rightNode/u);
   assert.doesNotMatch(expressions, /getRuntimeCarrierFact\(leftNode\)/u);
 });

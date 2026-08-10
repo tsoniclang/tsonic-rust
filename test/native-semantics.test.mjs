@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, acmeVectorsPackage, artifactText, compileRust, createRustSession, rustSourceDiagnostics } from "./helpers/rust-session.mjs";
+import {
+  acmeTestingPackage,
+  acmeVectorsPackage,
+  artifactText,
+  assertRustTargetRejection,
+  compileRust,
+  createRustSession,
+} from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 const counterSource = `
@@ -207,7 +214,7 @@ export function bad(): int32 {
 });
 
 test("byref passing markers are rejected deterministically", () => {
-  const harness = createRustSession({
+  const options = {
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
@@ -221,12 +228,11 @@ export function bad(): int32 {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Rust does not support selected source marker 'read-write-reference' in this operation lane/u);
-  assert.ok(harness.session.extensionHost.diagnostics.all().some((diagnostic) =>
-    diagnostic.extensionCode === "RUST_SOURCE_MARKER_UNSUPPORTED"));
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_SOURCE_MARKER_UNSUPPORTED",
+    message: "Rust does not support selected source marker 'read-write-reference' in this operation lane.",
+  }]);
 });
 
 test("mutable array parameters take the &mut [T] lane with visible writes", () => {
@@ -252,7 +258,8 @@ export function drive(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn bump\(xs: &mut \[i32\]\)/u);
-  assert.match(text, /bump\(&mut values\);/u);
+  assert.match(text, /xs\[tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\] = 42;/u);
+  assert.match(text, /bump\(&mut values\)\?;/u);
 });
 
 test("push on borrowed slices fails closed; owned vectors keep push", () => {
@@ -268,13 +275,10 @@ export function grow(xs: int32[]): void {
 `,
     },
   };
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-
-  assert.match(diagnostics, /The selected JavaScript call 'Array\.push' has no closed Rust operation row for the selected receiver and argument carriers/u);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-  );
+  assertRustTargetRejection(options, [{
+    code: "RUST_SELECTED_OPERATION_UNSUPPORTED",
+    message: "The selected JavaScript call 'Array.push' has no closed Rust operation row for the selected receiver and argument carriers.",
+  }]);
 });
 
 test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
@@ -378,7 +382,7 @@ export function some_value(): int32 {
 });
 
 test("undefined-typed unions stay fail-closed without an explicit lane", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -388,10 +392,11 @@ export function value_or_zero(value: int32 | undefined): int32 {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Checked nullish coalescing requires an Option carrier and an exactly matching fallback carrier/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_PARAMETER_CARRIER_UNSUPPORTED",
+    message: "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
+  }]);
 });
 
 test("interfaces lower to record structs with annotated object literals", () => {
@@ -466,7 +471,7 @@ export function first(entry: [int32, string]): int32 {
 });
 
 test("dynamic tuple indexing fails closed", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -476,11 +481,11 @@ export function pick(entry: [int32, int32], i: int32): int32 {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Fixed-array element access requires a TSTS-selected in-range fixed ordinal/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
+    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
+  }]);
 });
 
 test("closed string-literal unions lower to unit-variant enums", () => {
@@ -732,13 +737,10 @@ export function bad(xs: int32[]): boolean {
 `,
     },
   };
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-
-  assert.match(diagnostics, /The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier/u);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-  );
+  assertRustTargetRejection(options, [{
+    code: "RUST_FALLIBLE_CLOSURE_UNSUPPORTED",
+    message: "Rust closures cannot contain fallible operations because the selected target callback ABI has an infallible result.",
+  }]);
 });
 
 test("string literals mentioning runtime aliases do not create imports", () => {

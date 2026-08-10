@@ -37,8 +37,9 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   };
 
   const carrierForDeclaration = (declaration: Node, ast: AstReader): TargetTypeRef | undefined => {
-    const fileName = ast.getFileName(ast.getSourceFile(declaration));
-    if (fileName.length === 0 || fileName.endsWith(".d.ts")) {
+    const sourceFile = ast.getSourceFile(declaration);
+    const fileName = ast.getFileName(sourceFile);
+    if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
       return undefined;
     }
     const kind = ast.kindName(declaration);
@@ -57,7 +58,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   return {
     registerSourceFile(sourceFile, ast) {
       const fileName = ast.getFileName(sourceFile);
-      if (fileName.length === 0 || fileName.endsWith(".d.ts")) {
+      if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
         return;
       }
       const statements = ast.statements(sourceFile);

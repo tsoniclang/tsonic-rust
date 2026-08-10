@@ -4,6 +4,7 @@ import type {
   RustSelectedTargetSignature as SelectedTargetSignatureFact,
   TargetTypeRef,
 } from "../../policy/types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 import {
   isRustBinaryOperator,
@@ -50,6 +51,10 @@ import {
 } from "../../source/rust-facts/finalized-operation-abi.js";
 import { rustValueConversionContract } from "../../source/rust-facts/value-conversions.js";
 import {
+  rustFinalizedCarrierTransitionMatches,
+  rustTargetOperationText,
+} from "../../source/rust-facts/target-operation.js";
+import {
   rustArgumentPassingMode,
 } from "../../source/rust-facts/parameter-passing.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
@@ -57,7 +62,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, rustPublicName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
-import { isRustIntegerCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, rustTargetTypeRefEquals, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { isRustIntegerCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -506,7 +511,9 @@ function planSourceConversion(node: Node, context: RustPlanContext): RustExpr | 
 }
 
 export function planNumericLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = context.input.facts.getTargetConversionFact(node)?.convertedType ?? expressionCarrier(node, context);
+  const carrier = context.input.facts.getFact(node, rustOptionWrapFactKey)?.wrap === true
+    ? expressionCarrier(node, context)
+    : context.input.facts.getTargetConversionFact(node)?.convertedType ?? expressionCarrier(node, context);
   if (carrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -627,7 +634,7 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       fact.operationId,
       "operator",
       fact.resultCarrier,
-      fact.kind === "operator-token" ? fact.operator : fact.operationId,
+      rustTargetOperationText(fact),
     )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -1066,8 +1073,7 @@ export function planFinalizedSourceInput(
     ));
     return undefined;
   }
-  if (!rustTargetTypeRefEquals(sourceCarrier, input.sourceCarrier) ||
-    (convertedCarrier !== undefined && !rustTargetTypeRefEquals(convertedCarrier, input.sourceCarrier))) {
+  if (!rustFinalizedCarrierTransitionMatches(sourceCarrier, convertedCarrier, input.sourceCarrier)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, sourceNode),
       "rust.backend.provider-operation-input-carrier",
@@ -1354,8 +1360,7 @@ function planSelectedSourceCall(
       return undefined;
     }
     if (mode === "value") {
-      if (!rustTargetTypeRefEquals(sourceCarrier, parameterCarrier) ||
-        (convertedCarrier !== undefined && !rustTargetTypeRefEquals(convertedCarrier, parameterCarrier))) {
+      if (!rustFinalizedCarrierTransitionMatches(sourceCarrier, convertedCarrier, parameterCarrier)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, argumentNode),
           "rust.backend.source-call-argument-carrier",
@@ -1582,8 +1587,7 @@ export function requireProviderArgumentPassingFacts(
       valid = false;
       continue;
     }
-    if (!rustTargetTypeRefEquals(sourceCarrier, sourceArgument.carrier) ||
-      (convertedCarrier !== undefined && !rustTargetTypeRefEquals(convertedCarrier, sourceArgument.carrier))) {
+    if (!rustFinalizedCarrierTransitionMatches(sourceCarrier, convertedCarrier, sourceArgument.carrier)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, argument),
         "rust.backend.provider-argument-carrier",

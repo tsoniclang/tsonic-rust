@@ -11,7 +11,7 @@ import {
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
-} from "../dist/source/rust-target-types.js";
+} from "../dist/policy/equality.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
@@ -361,6 +361,7 @@ test("target type references honor optional target-specific payloads and reject 
     { kind: "function-pointer", args: sparseTypes, result: unit },
     { kind: "target-specific", target: "rust", name: "opaque", value: () => undefined },
     { kind: "target-specific", target: "", name: "opaque" },
+    { kind: "target-specific", target: "csharp", name: "opaque" },
     { kind: "target-specific", target: "rust", name: "" },
   ];
   for (const candidate of malformed) {

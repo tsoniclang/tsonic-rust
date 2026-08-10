@@ -5,7 +5,7 @@ import {
   Node_Type,
 } from "../../common/source-ast.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
-import type { RustBlock, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
+import type { RustBlock, RustExpr, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
@@ -163,15 +163,18 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
   if (!fallible) {
     return body;
   }
+  const resultExpression = (expression: RustExpr): RustExpr => expression.kind === "try"
+    ? expression.expr
+    : { kind: "call", path: "Ok", args: [expression] };
   const wrap = (statement: RustStmt): RustStmt => {
     if (statement.kind === "return" && statement.expr !== undefined) {
-      return { kind: "return", expr: { kind: "call", path: "Ok", args: [statement.expr] } };
+      return { kind: "return", expr: resultExpression(statement.expr) };
     }
     if (statement.kind === "return") {
       return { kind: "return", expr: { kind: "path", path: "Ok(())" } };
     }
     if (statement.kind === "tail") {
-      return { kind: "tail", expr: { kind: "call", path: "Ok", args: [statement.expr] } };
+      return { kind: "tail", expr: resultExpression(statement.expr) };
     }
     if (statement.kind === "if") {
       return {

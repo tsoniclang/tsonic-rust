@@ -161,8 +161,8 @@ test("provider resolution requires the exact selected subject and uses broader f
   const selectedIdentity = identity({ signatureId: "acme.Store.get(string)" });
   const facts = new Map([[callee, selectedIdentity]]);
   const context = {
-    factResolver: {
-      resolve(subject) {
+    facts: {
+      get(subject) {
         return facts.get(subject);
       },
     },
