@@ -150,7 +150,7 @@ export function write(label: string, count: int32, ok: boolean): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_abi::console_log\(\s*&\[\s*tsonic_rust_js::abi::js_value_from_string\(&label\),\s*tsonic_rust_js::abi::JsValue::from\(count\),\s*tsonic_rust_js::abi::JsValue::from\(ok\),\s*\],\s*\);/su);
+  assert.match(text, /js_abi::console_log\(&\[\n        tsonic_rust_js::abi::js_value_from_string\(&label\),\n        tsonic_rust_js::abi::JsValue::from\(count\),\n        tsonic_rust_js::abi::JsValue::from\(ok\),\n    \]\);/u);
   assert.match(text, /js_abi::console_info\(&\[\]\);/u);
 
   assertRustTargetRejection({
