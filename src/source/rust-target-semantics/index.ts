@@ -29,6 +29,7 @@ import {
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   TryStatement_CatchClause,
+  TryStatement_FinallyBlock,
   TryStatement_TryBlock,
   ForStatement_Condition,
   ForStatement_Incrementor,
@@ -771,6 +772,10 @@ function recordStatementFacts(
     const catchBlock = CatchClause_Block(walk.context.ast, TryStatement_CatchClause(walk.context.ast, statement));
     if (catchBlock !== undefined) {
       recordStatementFacts(walk, catchBlock, sourceFile, returnCarrier);
+    }
+    const finallyBlock = TryStatement_FinallyBlock(walk.context.ast, statement);
+    if (finallyBlock !== undefined) {
+      recordStatementFacts(walk, finallyBlock, sourceFile, returnCarrier);
     }
     return;
   }
@@ -3357,11 +3362,15 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
       if (kind === "KindTryStatement") {
         const tryBlock = TryStatement_TryBlock(walk.context.ast, node);
         const catchBlock = CatchClause_Block(walk.context.ast, TryStatement_CatchClause(walk.context.ast, node));
+        const finallyBlock = TryStatement_FinallyBlock(walk.context.ast, node);
         if (tryBlock !== undefined) {
-          visit(tryBlock, true);
+          visit(tryBlock, catchBlock === undefined ? insideTry : true);
         }
         if (catchBlock !== undefined) {
           visit(catchBlock, insideTry);
+        }
+        if (finallyBlock !== undefined) {
+          visit(finallyBlock, insideTry);
         }
         return;
       }

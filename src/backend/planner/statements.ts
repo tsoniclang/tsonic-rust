@@ -361,16 +361,10 @@ function planResourceManagedBody(
     ));
     return undefined;
   }
-  const boundary: RustCompletionBoundary = {
-    ...(context.completionBoundary === undefined
-      ? {}
-      : { parent: context.completionBoundary }),
-    returnType: context.functionReturnType ?? { kind: "unit" },
-    fallible: context.fallibleContext === true,
-    asynchronous: context.asyncContext === true,
-    dispatchReturn: { value: false },
-    dispatchTargets: new Map(),
-  };
+  const boundary = createRustCompletionBoundary(
+    context,
+    context.fallibleContext === true,
+  );
   const body = planBody({ ...context, completionBoundary: boundary });
   const cleanupResourceName = allocateRustSyntheticName(
     context.syntheticNames,
@@ -408,6 +402,42 @@ function planResourceManagedBody(
         ...(target.kind === "loop" ? { continuePrelude: target.continuePrelude } : {}),
       })),
     terminates,
+  };
+}
+
+function createRustCompletionBoundary(
+  context: RustPlanContext,
+  fallible: boolean,
+): RustCompletionBoundary {
+  return {
+    ...(context.completionBoundary === undefined
+      ? {}
+      : { parent: context.completionBoundary }),
+    returnType: context.functionReturnType ?? { kind: "unit" },
+    fallible,
+    asynchronous: context.asyncContext === true || context.generator !== undefined,
+    dispatchReturn: { value: false },
+    dispatchTargets: new Map(),
+  };
+}
+
+function collectRustCompletionDispatch(
+  boundaries: readonly RustCompletionBoundary[],
+): {
+  readonly dispatchReturn: boolean;
+  readonly dispatchTargets: readonly RustControlTarget[];
+} {
+  const targets = new Map<number, RustControlTarget>();
+  let dispatchReturn = false;
+  for (const boundary of boundaries) {
+    dispatchReturn ||= boundary.dispatchReturn.value;
+    for (const [id, target] of boundary.dispatchTargets) {
+      targets.set(id, target);
+    }
+  }
+  return {
+    dispatchReturn,
+    dispatchTargets: [...targets.values()].sort((left, right) => left.id - right.id),
   };
 }
 
@@ -2081,78 +2111,135 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
   const catchClause = TryStatement_CatchClause(context.input.ast, node);
   const catchBlock = CatchClause_Block(context.input.ast, catchClause);
   const finallyBlock = TryStatement_FinallyBlock(context.input.ast, node);
-  if (tryBlock === undefined || catchBlock === undefined || finallyBlock !== undefined) {
+  if (tryBlock === undefined || (catchBlock === undefined && finallyBlock === undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.try",
-      "try statements require a catch clause and no finally block.",
+      "try statements require a finalized body and either catch or finally clause.",
     ));
     return undefined;
   }
-  // The try body lowers into a Result-returning closure; control flow that
-  // escapes the closure is unrepresentable.
-  let escapes = false;
-  const scan = (candidate: Node): void => {
-    if (escapes) {
-      return;
-    }
-    const kind = ast.kindName(candidate);
-    // Nested functions are their own control-flow boundary.
-    if (kind === "KindArrowFunction" || kind === "KindFunctionExpression" || kind === "KindFunctionDeclaration") {
-      return;
-    }
-    if (kind === KindReturnStatement || kind === "KindBreakStatement" || kind === "KindContinueStatement") {
-      escapes = true;
-      return;
-    }
-    ast.forEachChild(candidate, (child) => {
-      if (child !== undefined) {
-        scan(child);
-      }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.try-names",
+      "Try statement lowering requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+
+  const outwardFallible = context.fallibleContext === true;
+  const bodyFallible = catchBlock !== undefined || outwardFallible;
+  const bodyBoundary = createRustCompletionBoundary(context, bodyFallible);
+  const body = planBlockLike(tryBlock, {
+    ...context,
+    completionBoundary: bodyBoundary,
+    ...(bodyFallible ? { fallibleContext: true } : {}),
+  });
+  if (body === undefined) {
+    return undefined;
+  }
+
+  let plannedCatch: Extract<RustStmt, { readonly kind: "try-scope" }>["catchClause"];
+  let catchBoundary: RustCompletionBoundary | undefined;
+  if (catchBlock !== undefined) {
+    catchBoundary = createRustCompletionBoundary(context, outwardFallible);
+    const catchBody = planBlockLike(catchBlock, {
+      ...context,
+      completionBoundary: catchBoundary,
+      ...(outwardFallible ? { fallibleContext: true } : {}),
     });
-  };
-  scan(tryBlock);
-  if (escapes) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.error.try",
-      "try blocks must not contain return, break, or continue.",
-    ));
-    return undefined;
-  }
-  const tryContext: RustPlanContext = { ...context, fallibleContext: true };
-  const body = planBlockLike(tryBlock, tryContext);
-  const catchBody = planBlockLike(catchBlock, context);
-  if (body === undefined || catchBody === undefined) {
-    return undefined;
-  }
-  const bindingNode = Node_Name(
-    context.input.ast,
-    CatchClause_VariableDeclaration(context.input.ast, catchClause),
-  );
-  const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
-  let binding = bindingSource.length === 0 ? "_" : rustSourceName(context, bindingSource);
-  if (binding !== "_") {
-    let used = false;
-    const findUse = (candidate: Node): void => {
-      if (used) {
-        return;
-      }
-      if (ast.kindName(candidate) === KindIdentifier && ast.text(candidate) === bindingSource) {
-        used = true;
-        return;
-      }
-      ast.forEachChild(candidate, (child) => {
-        if (child !== undefined) {
-          findUse(child);
-        }
-      });
-    };
-    findUse(catchBlock);
-    if (!used) {
-      binding = `_${binding}`;
+    if (catchBody === undefined) {
+      return undefined;
     }
+    const bindingNode = Node_Name(
+      context.input.ast,
+      CatchClause_VariableDeclaration(context.input.ast, catchClause),
+    );
+    const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
+    let binding = bindingSource.length === 0 ? "_" : rustSourceName(context, bindingSource);
+    if (binding !== "_") {
+      let used = false;
+      const findUse = (candidate: Node): void => {
+        if (used) {
+          return;
+        }
+        if (ast.kindName(candidate) === KindIdentifier && ast.text(candidate) === bindingSource) {
+          used = true;
+          return;
+        }
+        ast.forEachChild(candidate, (child) => {
+          if (child !== undefined) {
+            findUse(child);
+          }
+        });
+      };
+      findUse(catchBlock);
+      if (!used) {
+        binding = `_${binding}`;
+      }
+    }
+    const terminates = rustBlockDefinitelyExits(catchBody);
+    plannedCatch = {
+      binding,
+      body: terminates ? tailCompletionExits(catchBody) : catchBody,
+      fallible: outwardFallible,
+      terminates,
+    };
   }
+
+  let plannedFinally: Extract<RustStmt, { readonly kind: "try-scope" }>["finallyClause"];
+  let finallyBoundary: RustCompletionBoundary | undefined;
+  if (finallyBlock !== undefined) {
+    finallyBoundary = createRustCompletionBoundary(context, outwardFallible);
+    const finallyBody = planBlockLike(finallyBlock, {
+      ...context,
+      completionBoundary: finallyBoundary,
+      ...(outwardFallible ? { fallibleContext: true } : {}),
+    });
+    if (finallyBody === undefined) {
+      return undefined;
+    }
+    const terminates = rustBlockDefinitelyExits(finallyBody);
+    plannedFinally = {
+      body: terminates ? tailCompletionExits(finallyBody) : finallyBody,
+      fallible: outwardFallible,
+      terminates,
+    };
+  }
+
+  const bodyTerminates = rustBlockDefinitelyExits(body);
+  const terminates = plannedFinally?.terminates === true ||
+    (plannedCatch === undefined
+      ? bodyTerminates
+      : bodyTerminates && plannedCatch.terminates);
+  const boundaries = [bodyBoundary, catchBoundary, finallyBoundary]
+    .filter((boundary): boundary is RustCompletionBoundary => boundary !== undefined);
+  const dispatch = collectRustCompletionDispatch(boundaries);
   context.usedAliases?.add("rt");
-  return [{ kind: "try-catch", body, catchBinding: binding, catchBody }];
+  return [{
+    kind: "try-scope",
+    bodyName: allocateRustSyntheticName(context.syntheticNames, "try_body"),
+    flowName: allocateRustSyntheticName(context.syntheticNames, "try_flow"),
+    ...(plannedFinally === undefined
+      ? {}
+      : { finallyName: allocateRustSyntheticName(context.syntheticNames, "finally_flow") }),
+    returnType: bodyBoundary.returnType,
+    fallible: outwardFallible,
+    asynchronous: bodyBoundary.asynchronous,
+    body: bodyTerminates ? tailCompletionExits(body) : body,
+    bodyFallible,
+    bodyTerminates,
+    ...(plannedCatch === undefined ? {} : { catchClause: plannedCatch }),
+    ...(plannedFinally === undefined ? {} : { finallyClause: plannedFinally }),
+    propagate: context.completionBoundary !== undefined,
+    dispatchReturn: dispatch.dispatchReturn,
+    dispatchTargets: dispatch.dispatchTargets.map((target) => ({
+      kind: target.kind,
+      id: target.id,
+      label: target.label,
+      ...(target.kind === "loop" ? { continuePrelude: target.continuePrelude } : {}),
+    })),
+    terminates,
+  }];
 }

@@ -262,7 +262,7 @@ export function drive(): int32 {
   assert.doesNotMatch(text, /Ok\(Machine::risky\(false\)\?\)/u);
 });
 
-test("catch bodies with returns wrap Ok inside fallible functions", async () => {
+test("catch returns propagate through exact completion state in fallible functions", async () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -291,7 +291,8 @@ export function fallback(flag: boolean): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn fallback\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /return Ok\(2\);/u);
+  assert.match(text, /Ok\(rt::Completion::Return\(2\)\)/u);
+  assert.match(text, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
   assert.match(text, /return risky\(\);/u);
   assert.doesNotMatch(text, /return Ok\(risky\(\)\?\);/u);
 });

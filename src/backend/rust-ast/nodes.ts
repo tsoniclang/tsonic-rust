@@ -102,7 +102,38 @@ export type RustStmt =
   | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
   | { readonly kind: "scope"; readonly label?: string; readonly body: RustBlock }
   | { readonly kind: "throw"; readonly message: RustExpr; readonly tail?: true }
-  | { readonly kind: "try-catch"; readonly body: RustBlock; readonly catchBinding: string; readonly catchBody: RustBlock };
+  | {
+      readonly kind: "try-scope";
+      readonly bodyName: string;
+      readonly flowName: string;
+      readonly finallyName?: string;
+      readonly returnType: RustType;
+      readonly fallible: boolean;
+      readonly asynchronous: boolean;
+      readonly body: RustBlock;
+      readonly bodyFallible: boolean;
+      readonly bodyTerminates: boolean;
+      readonly catchClause?: {
+        readonly binding: string;
+        readonly body: RustBlock;
+        readonly fallible: boolean;
+        readonly terminates: boolean;
+      };
+      readonly finallyClause?: {
+        readonly body: RustBlock;
+        readonly fallible: boolean;
+        readonly terminates: boolean;
+      };
+      readonly propagate: boolean;
+      readonly dispatchReturn: boolean;
+      readonly dispatchTargets: readonly {
+        readonly kind: "loop" | "switch" | "label";
+        readonly id: number;
+        readonly label: string;
+        readonly continuePrelude?: readonly RustStmt[];
+      }[];
+      readonly terminates: boolean;
+    };
 
 export interface RustBlock {
   readonly statements: readonly RustStmt[];

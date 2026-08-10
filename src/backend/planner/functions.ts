@@ -336,10 +336,8 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
     if (statement.kind === "scope") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
-    if (statement.kind === "try-catch") {
-      // The try body is its own Result closure; catch bodies run in the
-      // enclosing fallible function.
-      return { ...statement, catchBody: { statements: statement.catchBody.statements.map(wrap) } };
+    if (statement.kind === "try-scope") {
+      return statement;
     }
     return statement;
   };
@@ -349,7 +347,8 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
     last.kind === "tail" ||
     last.kind === "return" ||
     last.kind === "throw" ||
-    (last.kind === "resource-scope" && last.terminates)
+    (last.kind === "resource-scope" && last.terminates) ||
+    (last.kind === "try-scope" && last.terminates)
   );
   if (!hasReturnValue && !endsWithExit) {
     wrapped.push({ kind: "tail", expr: { kind: "path", path: "Ok(())" } });
