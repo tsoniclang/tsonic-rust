@@ -44,6 +44,14 @@ export type RustExpr =
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "closure"; readonly params: readonly { readonly name: string; readonly byRefCopy: boolean }[]; readonly body: RustExpr }
+  | {
+      readonly kind: "closure-block";
+      readonly params: readonly { readonly name: string; readonly mutable: boolean }[];
+      readonly move: boolean;
+      readonly async: boolean;
+      readonly body: RustBlock;
+    }
+  | { readonly kind: "await"; readonly expr: RustExpr }
   | { readonly kind: "try"; readonly expr: RustExpr }
   | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };

@@ -103,6 +103,7 @@ import {
   resolveSelectedJsSourceMember,
   resolveSelectedProviderDeclaration,
   resolveSelectedSourceProfileMember,
+  resolveSelectedSourceProfilePropertyMembers,
 } from "./selected-evidence.js";
 import {
   selectRustProviderExport,
@@ -127,6 +128,10 @@ import type { RustSourceCallableAbiResolver } from "./source-callable-abi.js";
 import {
   selectRustTypedLocationCall,
 } from "./typed-location-operations.js";
+import {
+  selectRustGeneratorSourceCall,
+  selectRustGeneratorSourceProperty,
+} from "./generator-source-profile.js";
 
 const sourceCallMarkerByIdentity = new Map(
   [
@@ -451,6 +456,37 @@ export function selectRustCheckedCall(
     }, [rustStringTargetType()], context, options, {
       sourceName: "Error",
     });
+  }
+  if (selectedSourceMember !== undefined) {
+    const receiverCarrier = resolveRustTargetTypeRef(
+      request.sourceReceiver?.expression,
+      context,
+      options,
+    );
+    const generator = selectRustGeneratorSourceCall({
+      ownerName: selectedSourceMember.ownerName,
+      memberName: selectedSourceMember.memberName,
+      ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
+      selectedParameterCount: request.sourceSelectedSignatureParameters.length,
+    });
+    if (generator.kind === "rejected") {
+      return rejectSelectedOperation(
+        request.call,
+        context,
+        "RUST_GENERATOR_SOURCE_CALL_NOT_CLOSED",
+        generator.message,
+      );
+    }
+    if (generator.kind === "resolved") {
+      return acceptSelectedCall(
+        request,
+        generator.template,
+        generator.parameterCarriers,
+        context,
+        options,
+        { sourceName: selectedSourceMember.memberName },
+      );
+    }
   }
   if (selectedSourceMember?.profile === "js") {
     if (!options.jsEnabled) {
@@ -1354,6 +1390,53 @@ export function selectRustCheckedPropertyAccess(
   }
   if (providerEvidence.kind === "selected") {
     return mapProviderCheckedOperation(request.expression, providerEvidence.identity, "property", context, options, request.receiver, []);
+  }
+
+  const sourceProfileMembers = resolveSelectedSourceProfilePropertyMembers(
+    context,
+    request.expression,
+    request.sourceSelectedSymbol,
+    request.sourceSelectedDeclaration,
+    options.sourceProfiles,
+  );
+  if (sourceProfileMembers !== undefined) {
+    const receiverCarrier = resolveRustTargetTypeRef(request.receiver, context, options);
+    const generator = selectRustGeneratorSourceProperty({
+      sourceMembers: sourceProfileMembers.members,
+      ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
+    });
+    if (generator.kind === "rejected") {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_GENERATOR_SOURCE_PROPERTY_NOT_CLOSED",
+        generator.message,
+      );
+    }
+    if (generator.kind === "resolved") {
+      const fact = finalizeProviderOperationFromSubjects(
+        generator.template,
+        request.receiver,
+        [],
+        context,
+        options,
+      );
+      if (fact === undefined) {
+        return rejectSelectedOperation(
+          request.expression,
+          context,
+          "RUST_GENERATOR_SOURCE_PROPERTY_ABI_INCOMPLETE",
+          "The exact selected iterator-result property cannot finalize one total Rust operation ABI.",
+        );
+      }
+      return acceptRustOperation(request.expression, fact, context, {
+        sourceExpression: request.expression,
+        sourceReceiver: request.receiver,
+        sourceSelectedSymbol: request.sourceSelectedSymbol,
+        sourceSelectedDeclaration: request.sourceSelectedDeclaration,
+        sourceResultType: request.sourceResultType,
+      });
+    }
   }
 
   const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);

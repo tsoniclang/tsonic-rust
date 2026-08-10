@@ -489,14 +489,15 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
     return planUpdateStatement(expression, context);
   }
-  if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression") {
+  if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression" ||
+    expressionKind === "KindYieldExpression") {
     const planned = planExpression(expression, context);
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
     diagnosticInput(context, node),
     "rust.backend.statement",
-    "Expression statements support only calls, assignments, and increments.",
+    "Expression statements support only calls, assignments, increments, awaits, and checked generator yields.",
   ));
   return undefined;
 }

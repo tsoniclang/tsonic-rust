@@ -28,6 +28,9 @@ import type {
 import { materializeProviderCarrier } from "../provider-packages/index.js";
 import {
   rustFutureTargetType,
+  rustGeneratorTargetType,
+  rustAsyncGeneratorTargetType,
+  rustIteratorResultTargetType,
   isRustLocationCarrier,
   isRustOptionCarrier,
   rustJsArrayTargetType,
@@ -639,6 +642,23 @@ function resolveSourceProfileCarrier(
     const output = resolveRustTargetType(arguments_[0], context, options, resolving);
     return output === undefined ? undefined : rustFutureTargetType(output);
   }
+  if (name === "Generator" || name === "AsyncGenerator") {
+    const [yieldType, returnType, nextType] = targetArguments;
+    if (yieldType === undefined || returnType === undefined || nextType === undefined) {
+      return undefined;
+    }
+    const protocol = { yieldType, returnType, nextType };
+    return name === "Generator"
+      ? rustGeneratorTargetType(protocol)
+      : rustAsyncGeneratorTargetType(protocol);
+  }
+  if (name === "IteratorResult" || name === "IteratorYieldResult" || name === "IteratorReturnResult") {
+    const yieldType = targetArguments[0];
+    const returnType = name === "IteratorYieldResult" ? yieldType : targetArguments[1] ?? yieldType;
+    return yieldType === undefined || returnType === undefined
+      ? undefined
+      : rustIteratorResultTargetType({ yieldType, returnType });
+  }
   if (name === "Array" || name === "ReadonlyArray") {
     const elementType = arguments_[0];
     const sparseElement = options.jsEnabled
@@ -673,6 +693,23 @@ function resolveSourceProfileCarrierFromArguments(
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;
     return output === undefined ? undefined : rustFutureTargetType(output);
+  }
+  if (name === "Generator" || name === "AsyncGenerator") {
+    const [yieldType, returnType, nextType] = arguments_;
+    if (yieldType === undefined || returnType === undefined || nextType === undefined) {
+      return undefined;
+    }
+    const protocol = { yieldType, returnType, nextType };
+    return name === "Generator"
+      ? rustGeneratorTargetType(protocol)
+      : rustAsyncGeneratorTargetType(protocol);
+  }
+  if (name === "IteratorResult" || name === "IteratorYieldResult" || name === "IteratorReturnResult") {
+    const yieldType = arguments_[0];
+    const returnType = name === "IteratorYieldResult" ? yieldType : arguments_[1] ?? yieldType;
+    return yieldType === undefined || returnType === undefined
+      ? undefined
+      : rustIteratorResultTargetType({ yieldType, returnType });
   }
   if (name === "Array" || name === "ReadonlyArray") {
     const [element] = arguments_;

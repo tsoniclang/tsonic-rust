@@ -6,6 +6,7 @@ import type {
   Node,
   ProviderDeclarationIdentity,
   ProviderMemberKey,
+  Symbol,
 } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../../policy/context.js";
 import { rustPolicyNode } from "../../policy/context.js";
@@ -16,6 +17,11 @@ export interface RustSelectedSourceMemberIdentity {
   readonly ownerName: string;
   readonly memberName: string;
   readonly declaration: Node;
+}
+
+export interface RustSelectedSourceMemberSet {
+  readonly profile: RustSelectedSourceMemberIdentity["profile"];
+  readonly members: readonly RustSelectedSourceMemberIdentity[];
 }
 
 export type RustSelectedProviderDeclarationResolution =
@@ -203,6 +209,45 @@ export function resolveSelectedSourceProfileMember(
   return ownerName.length > 0 && memberName.length > 0
     ? { profile, ownerName, memberName, declaration }
     : undefined;
+}
+
+export function resolveSelectedSourceProfilePropertyMembers(
+  context: RustSourcePolicyContext,
+  expressionSubject: ExtensionFactSubject | undefined,
+  selectedSymbol: Symbol | undefined,
+  selectedDeclaration: Node | undefined,
+  sourceProfiles: RustSourceProfileRegistry,
+): RustSelectedSourceMemberSet | undefined {
+  if (selectedDeclaration !== undefined) {
+    const selected = resolveSelectedSourceProfileMember(
+      context,
+      selectedDeclaration,
+      sourceProfiles,
+    );
+    return selected === undefined
+      ? undefined
+      : { profile: selected.profile, members: Object.freeze([selected]) };
+  }
+  const expression = rustPolicyNode(context, expressionSubject);
+  if (expression === undefined || selectedSymbol === undefined) {
+    return undefined;
+  }
+  const declarations = context.semanticsFor(expression)
+    .getSymbolDeclarations(selectedSymbol);
+  const members = declarations.map((declaration) =>
+    resolveSelectedSourceProfileMember(context, declaration, sourceProfiles)
+  );
+  const first = members[0];
+  if (first === undefined || members.some((member) =>
+    member === undefined || member.profile !== first.profile)) {
+    return undefined;
+  }
+  return {
+    profile: first.profile,
+    members: Object.freeze(
+      members as readonly RustSelectedSourceMemberIdentity[],
+    ),
+  };
 }
 
 export function resolveSelectedJsSourceExportName(

@@ -65,6 +65,7 @@ import {
 import {
   isRustJsArrayCarrier,
   rustFutureOutputCarrier,
+  getRustGeneratorProtocol,
   isRustNumericCarrier,
   isRustNullishSourceCarrier,
   isRustOptionCarrier,
@@ -78,7 +79,7 @@ import {
   substituteRustTargetTypeParameters,
   rustVecTargetType,
 } from "../rust-target-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustTargetOperationIsDirectLocation,
@@ -163,6 +164,7 @@ interface RustFactWalk {
   currentThisCarrier?: TargetTypeRef;
   currentMethodDeclaration?: Node;
   currentCallableDeclaration?: Node;
+  currentGeneratorDeclaration?: Node;
 }
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
@@ -540,7 +542,36 @@ function promiseInnerCarrier(walk: RustFactWalk, typeNode: Node | undefined): Ta
 
 function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   const { ast } = walk.context;
-  if (ast.hasModifierKind(declaration, "async")) {
+  const sourceGenerator = walk.context.semanticsFor(declaration).getResolvedGeneratorInfo(declaration);
+  if (sourceGenerator !== undefined) {
+    const carrier = resolveRustTargetTypeRef(
+      Node_Type(ast, declaration) ?? sourceGenerator.sourceReturnType,
+      rustResolutionContext(walk, declaration),
+      walk.operationOptions,
+    );
+    const protocol = getRustGeneratorProtocol(carrier);
+    if (carrier === undefined || protocol?.kind !== sourceGenerator.generatorKind) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_GENERATOR_PROTOCOL_NOT_CLOSED",
+        "The checked generator declaration has no closed Rust yield, return, and next protocol.",
+        declaration,
+        ["target.capability=rust.generator.protocol"],
+      );
+    } else {
+      walk.context.facts.set(declaration, rustGeneratorFactKey, {
+        kind: protocol.kind,
+        carrier,
+        yieldType: protocol.yieldType,
+        returnType: protocol.returnType,
+        nextType: protocol.nextType,
+      }, [{ message: "rust generator protocol" }]);
+      const typeNode = Node_Type(ast, declaration);
+      if (typeNode !== undefined) {
+        setCarrierFact(walk, typeNode, carrier);
+      }
+    }
+  } else if (ast.hasModifierKind(declaration, "async")) {
     const inner = promiseInnerCarrier(walk, Node_Type(walk.context.ast, declaration));
     if (inner !== undefined) {
       walk.context.facts.set(declaration, rustAsyncFunctionFactKey, { isAsync: true, outputCarrier: inner }, [
@@ -560,14 +591,18 @@ function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): vo
 function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.context;
   const asyncFact = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
-  const returnCarrier = asyncFact?.outputCarrier ?? resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
+  const generatorFact = walk.context.facts.get(declaration, rustGeneratorFactKey);
+  const returnCarrier = generatorFact?.returnType ?? asyncFact?.outputCarrier ?? resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
   const body = ast.body(declaration);
   const previousCallable = walk.currentCallableDeclaration;
+  const previousGenerator = walk.currentGeneratorDeclaration;
   walk.currentCallableDeclaration = declaration;
+  walk.currentGeneratorDeclaration = generatorFact === undefined ? undefined : declaration;
   if (body !== undefined) {
     const statements = requireDenseSourceNodes(walk, ast.statements(body), "Function body contains an undefined or non-data statement slot.");
     if (statements === undefined) {
       walk.currentCallableDeclaration = previousCallable;
+      walk.currentGeneratorDeclaration = previousGenerator;
       return;
     }
     for (const statement of statements) {
@@ -575,6 +610,7 @@ function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFi
     }
   }
   walk.currentCallableDeclaration = previousCallable;
+  walk.currentGeneratorDeclaration = previousGenerator;
 }
 
 function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
@@ -978,6 +1014,54 @@ function resolveExpressionCarrierUncached(
         resultCarrier: output,
       });
       return setCarrierFact(walk, expression, output);
+    }
+    case "KindYieldExpression": {
+      const generatorDeclaration = walk.currentGeneratorDeclaration;
+      const source = walk.context.semantics(sourceFile).getResolvedYieldInfo(expression);
+      if (generatorDeclaration === undefined || source === undefined ||
+        source.generator.declaration !== generatorDeclaration) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_GENERATOR_YIELD_EVIDENCE_NOT_PROVEN",
+          "Yield lowering requires exact TSTS evidence owned by the active generator declaration.",
+          expression,
+          ["target.capability=rust.generator.yield"],
+        );
+        return undefined;
+      }
+      const generator = walk.context.facts.get(generatorDeclaration, rustGeneratorFactKey);
+      if (generator === undefined) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_GENERATOR_YIELD_PROTOCOL_CONFLICT",
+          "The exact checked yield evidence conflicts with the active Rust generator protocol.",
+          expression,
+          ["target.capability=rust.generator.yield"],
+        );
+        return undefined;
+      }
+      const yieldType = generator.yieldType;
+      const resumeType = generator.nextType;
+      const operand = source.operand?.expression;
+      const delegatedCarrier = source.yieldKind === "delegate" && operand !== undefined
+        ? resolveExpressionCarrier(walk, operand, sourceFile, undefined)
+        : undefined;
+      if (operand !== undefined) {
+        resolveExpressionCarrier(
+          walk,
+          operand,
+          sourceFile,
+          source.yieldKind === "value" ? generator.yieldType : delegatedCarrier,
+        );
+      }
+      walk.context.facts.set(expression, rustYieldFactKey, {
+        generatorDeclaration,
+        kind: source.yieldKind,
+        yieldType,
+        resumeType,
+        ...(delegatedCarrier === undefined ? {} : { delegatedCarrier }),
+      }, [{ message: "rust checked yield" }]);
+      return setCarrierFact(walk, expression, resumeType);
     }
     case KindParenthesizedExpression: {
       const inner = Node_Expression(walk.context.ast, expression);

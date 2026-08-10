@@ -31,7 +31,7 @@ import {
   Node_Expression,
   Node_Operand,
 } from "../../common/source-ast.js";
-import { rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustProviderConstantArgument,
@@ -62,7 +62,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, rustPublicName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier } from "./render-types.js";
-import { isRustIntegerCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { isRustBoolCarrier, isRustIntegerCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import {
   planRustIdentifierValue,
   planRustPromotedStorageLocation,
@@ -293,7 +293,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       if (planned === undefined) {
         return undefined;
       }
-      let awaited: RustExpr = { kind: "field", receiver: planned, name: "await" };
+      let awaited: RustExpr = { kind: "await", expr: planned };
       const operandOperation = operand === undefined ? undefined : rustOperationFact(operand, context);
       if (operandOperation?.kind === "provider-operation") {
         if (operandOperation.abi.result.kind !== "async" ||
@@ -355,6 +355,45 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         "Awaited expression requires finalized provider or project-source operation effects.",
       ));
       return undefined;
+    }
+    case "KindYieldExpression": {
+      const generator = context.generator;
+      const fact = context.input.facts.getFact(node, rustYieldFactKey);
+      if (generator === undefined || fact === undefined ||
+        fact.generatorDeclaration !== generator.declaration ||
+        !rustTargetTypeRefEquals(fact.yieldType, generator.protocol.yieldType) ||
+        !rustTargetTypeRefEquals(fact.resumeType, generator.protocol.nextType)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.generator-yield",
+          "Yield expressions require an exact finalized fact owned by the active generator.",
+        ));
+        return undefined;
+      }
+      if (fact.kind === "delegate") {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.generator-delegation",
+          "Delegated yield requires a finalized Rust generator delegation plan.",
+        ));
+        return undefined;
+      }
+      const operand = Node_Expression(context.input.ast, node);
+      const value = operand === undefined
+        ? ({ kind: "path", path: "()" } as const)
+        : planExpression(operand, context);
+      if (value === undefined) {
+        return undefined;
+      }
+      return {
+        kind: "await",
+        expr: {
+          kind: "method-call",
+          receiver: { kind: "path", path: generator.controllerName },
+          method: "yield_value",
+          args: [value],
+        },
+      };
     }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
@@ -726,6 +765,17 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       ));
       return undefined;
     }
+    const booleanComparison = planBooleanLiteralComparison(
+      fact.operator,
+      left,
+      right,
+      leftNode,
+      rightNode,
+      context,
+    );
+    if (booleanComparison !== undefined) {
+      return booleanComparison;
+    }
     return { kind: "binary", operator: fact.operator, left: borrowLiteral(left), right: borrowLiteral(right) };
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -734,6 +784,32 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     "Binary expression selected a non-operator Rust operation.",
   ));
   return undefined;
+}
+
+function planBooleanLiteralComparison(
+  operator: string,
+  left: RustExpr,
+  right: RustExpr,
+  leftNode: Node | undefined,
+  rightNode: Node | undefined,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (operator !== "==" && operator !== "!=") {
+    return undefined;
+  }
+  const literal = left.kind === "bool-literal"
+    ? { value: left.value, other: right, otherNode: rightNode }
+    : right.kind === "bool-literal"
+      ? { value: right.value, other: left, otherNode: leftNode }
+      : undefined;
+  if (literal === undefined || literal.otherNode === undefined ||
+    !isRustBoolCarrier(expressionCarrier(literal.otherNode, context))) {
+    return undefined;
+  }
+  const negated = operator === "==" ? !literal.value : literal.value;
+  return negated
+    ? { kind: "unary", operator: "!", operand: literal.other }
+    : literal.other;
 }
 
 function planArguments(node: Node, context: RustPlanContext): readonly RustExpr[] | undefined {

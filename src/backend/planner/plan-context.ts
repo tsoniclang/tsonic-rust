@@ -2,6 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustGenericRequirementSet } from "./generic-requirements.js";
+import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
 
 export interface RustPlanContext {
   readonly input: RustTranslationContext;
@@ -30,6 +31,11 @@ export interface RustPlanContext {
   // The finalized signature is rendered only after the complete body has been
   // planned, so late requirements cannot produce an invalid partial contract.
   readonly genericRequirements?: RustGenericRequirementSet;
+  readonly generator?: {
+    readonly declaration: Node;
+    readonly controllerName: string;
+    readonly protocol: RustGeneratorFact;
+  };
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS

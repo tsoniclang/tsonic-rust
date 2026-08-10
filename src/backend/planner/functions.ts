@@ -12,7 +12,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustMutatedBindingFactKey, rustSourceParameterAbiFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSourceParameterAbiFactKey } from "../../source/rust-facts/keys.js";
 import { rustLocationStorageForDeclaration } from "./typed-locations.js";
 import {
   applyRustGenericRequirements,
@@ -26,8 +26,9 @@ import {
 export function planFunctionDeclaration(node: Node, outerContext: RustPlanContext): RustItem | undefined {
   const { ast } = outerContext.input;
   const isAsync = ast.hasModifierKind(node, "async");
+  const generatorFact = outerContext.input.facts.getFact(node, rustGeneratorFactKey);
   const asyncFact = outerContext.input.facts.getFact(node, rustAsyncFunctionFactKey);
-  if (isAsync && asyncFact === undefined) {
+  if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(outerContext, node),
       "rust.backend.async",
@@ -151,7 +152,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
-  const returnCarrier = asyncFact?.outputCarrier ?? context.input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
+  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ?? context.input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
   const isUnit = isRustUnitCarrier(returnCarrier);
   const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
   if (!isUnit && returnType === undefined) {
@@ -172,12 +173,29 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     return undefined;
   }
   const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  if (generatorFact !== undefined && fallible) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.generator-fallibility",
+      "Throwing generator bodies require a closed Rust generator error protocol.",
+    ));
+    return undefined;
+  }
   if (fallible) {
     context.usedAliases?.add("rt");
   }
   const bodyContext: RustPlanContext = {
     ...context,
     emittedLocalNames: new Set(params.map((param) => param.name)),
+    ...(generatorFact === undefined
+      ? {}
+      : {
+          generator: {
+            declaration: node,
+            controllerName: "__tsonic_generator",
+            protocol: generatorFact,
+          },
+        }),
     ...(fallible ? { fallibleContext: true } : {}),
   };
   const plannedBody = planBlockLike(bodyNode, bodyContext);
@@ -187,6 +205,44 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const body: RustBlock = {
     statements: [...locationParameterStatements, ...plannedBody.statements],
   };
+  if (generatorFact !== undefined) {
+    if (!isRustUnitCarrier(generatorFact.returnType) && !rustBlockTerminates(body)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, bodyNode),
+        "rust.backend.generator-return-flow",
+        "Value-returning generators require finalized control flow that returns on every path.",
+      ));
+      return undefined;
+    }
+    context.usedAliases?.add("rt");
+    const finalizedTypeParams = applyRustGenericRequirements(typeParams, genericRequirements);
+    const item: Extract<RustItem, { readonly kind: "function" }> = {
+      kind: "function",
+      name,
+      pub: isExported,
+      ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+      ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
+      params,
+      ...(returnType === undefined ? {} : { returnType }),
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: generatorFact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new",
+            args: [{
+              kind: "closure-block",
+              params: [{ name: "__tsonic_generator", mutable: false }],
+              move: true,
+              async: true,
+              body: applyTailReturn(body, !isRustUnitCarrier(generatorFact.returnType)),
+            }],
+          },
+        }],
+      },
+    };
+    return publishRustSourceCallableContract(node, item, context) ? item : undefined;
+  }
   if (returnType !== undefined && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),

@@ -17,6 +17,9 @@ export type { RustPrimitiveTypeName } from "../common/rust-syntax.js";
 export const rustStringTargetId = "rust.std.String";
 export const rustOptionTargetId = "rust.std.Option";
 export const rustLocationTargetId = "rust.runtime.Location";
+export const rustGeneratorTargetId = "rust.runtime.Generator";
+export const rustAsyncGeneratorTargetId = "rust.runtime.AsyncGenerator";
+export const rustIteratorResultTargetId = "rust.runtime.IteratorResult";
 export const rustJsValueTargetId = "rust.js.JsValue";
 export const rustJsArrayTargetId = "rust.js.JsArray";
 export const rustJsMapTargetId = "rust.js.JsMap";
@@ -235,6 +238,80 @@ export function rustOptionTargetType(value: TargetTypeRef): TargetTypeRef {
 
 export function rustLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustLocationTargetId, typeArguments: [pointee] };
+}
+
+export interface RustGeneratorProtocol {
+  readonly kind: "sync" | "async";
+  readonly yieldType: TargetTypeRef;
+  readonly returnType: TargetTypeRef;
+  readonly nextType: TargetTypeRef;
+}
+
+export interface RustIteratorResultProtocol {
+  readonly yieldType: TargetTypeRef;
+  readonly returnType: TargetTypeRef;
+}
+
+export function rustGeneratorTargetType(
+  protocol: Omit<RustGeneratorProtocol, "kind">,
+): TargetTypeRef {
+  return {
+    kind: "target-named",
+    id: rustGeneratorTargetId,
+    typeArguments: [protocol.yieldType, protocol.returnType, protocol.nextType],
+  };
+}
+
+export function rustAsyncGeneratorTargetType(
+  protocol: Omit<RustGeneratorProtocol, "kind">,
+): TargetTypeRef {
+  return {
+    kind: "target-named",
+    id: rustAsyncGeneratorTargetId,
+    typeArguments: [protocol.yieldType, protocol.returnType, protocol.nextType],
+  };
+}
+
+export function rustIteratorResultTargetType(
+  protocol: RustIteratorResultProtocol,
+): TargetTypeRef {
+  return {
+    kind: "target-named",
+    id: rustIteratorResultTargetId,
+    typeArguments: [protocol.yieldType, protocol.returnType],
+  };
+}
+
+export function getRustGeneratorProtocol(
+  carrier: TargetTypeRef | undefined,
+): RustGeneratorProtocol | undefined {
+  if (carrier?.kind !== "target-named" ||
+    (carrier.id !== rustGeneratorTargetId && carrier.id !== rustAsyncGeneratorTargetId) ||
+    carrier.typeArguments?.length !== 3) {
+    return undefined;
+  }
+  const [yieldType, returnType, nextType] = carrier.typeArguments;
+  return yieldType === undefined || returnType === undefined || nextType === undefined
+    ? undefined
+    : {
+        kind: carrier.id === rustGeneratorTargetId ? "sync" : "async",
+        yieldType,
+        returnType,
+        nextType,
+      };
+}
+
+export function getRustIteratorResultProtocol(
+  carrier: TargetTypeRef | undefined,
+): RustIteratorResultProtocol | undefined {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustIteratorResultTargetId ||
+    carrier.typeArguments?.length !== 2) {
+    return undefined;
+  }
+  const [yieldType, returnType] = carrier.typeArguments;
+  return yieldType === undefined || returnType === undefined
+    ? undefined
+    : { yieldType, returnType };
 }
 
 export function rustLocationPointeeCarrier(

@@ -511,6 +511,41 @@ export interface RustAsyncFunctionFact {
 export const rustAsyncFunctionFactKey: RustPlanKey<RustAsyncFunctionFact> =
   defineRustPlanKey("asyncFunction", closedMetadataEquals);
 
+export interface RustGeneratorFact {
+  readonly kind: "sync" | "async";
+  readonly carrier: TargetTypeRef;
+  readonly yieldType: TargetTypeRef;
+  readonly returnType: TargetTypeRef;
+  readonly nextType: TargetTypeRef;
+}
+
+export const rustGeneratorFactKey: RustPlanKey<RustGeneratorFact> =
+  defineRustPlanKey("generator", (left, right) =>
+    left.kind === right.kind &&
+    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    rustTargetTypeRefEquals(left.yieldType, right.yieldType) &&
+    rustTargetTypeRefEquals(left.returnType, right.returnType) &&
+    rustTargetTypeRefEquals(left.nextType, right.nextType));
+
+export interface RustYieldFact {
+  readonly generatorDeclaration: Node;
+  readonly kind: "value" | "delegate";
+  readonly yieldType: TargetTypeRef;
+  readonly resumeType: TargetTypeRef;
+  readonly delegatedCarrier?: TargetTypeRef;
+}
+
+export const rustYieldFactKey: RustPlanKey<RustYieldFact> =
+  defineRustPlanKey("yield", (left, right) =>
+    left.generatorDeclaration === right.generatorDeclaration &&
+    left.kind === right.kind &&
+    rustTargetTypeRefEquals(left.yieldType, right.yieldType) &&
+    rustTargetTypeRefEquals(left.resumeType, right.resumeType) &&
+    (left.delegatedCarrier === undefined
+      ? right.delegatedCarrier === undefined
+      : right.delegatedCarrier !== undefined &&
+        rustTargetTypeRefEquals(left.delegatedCarrier, right.delegatedCarrier)));
+
 export interface RustSourceParameterAbiFact {
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;

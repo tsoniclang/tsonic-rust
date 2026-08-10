@@ -334,6 +334,7 @@ function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "method-call":
     case "field":
     case "index":
+    case "await":
       return RustPrecedence.Postfix;
     default:
       return RustPrecedence.Atom;
@@ -428,6 +429,17 @@ export function printRustExpr(expression: RustExpr): string {
       return expression.body.kind === "assignment"
         ? `|${params}| { ${printRustExpr(expression.body)} }`
         : `|${params}| ${printRustExpr(expression.body)}`;
+    }
+    case "closure-block": {
+      const params = expression.params
+        .map((param) => `${param.mutable ? "mut " : ""}${param.name}`)
+        .join(", ");
+      const prefix = `${expression.move ? "move " : ""}|${params}| ${expression.async ? "async move " : ""}{`;
+      const body = printRustBlockStatements(expression.body, 1);
+      return body.length === 0 ? `${prefix}}` : `${prefix}\n${body}\n}`;
+    }
+    case "await": {
+      return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}.await`;
     }
     case "try": {
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`;
@@ -525,6 +537,21 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       );
       return [`|${params}| {`, `${indent}${body}`, `${indentText(depth)}}`].join("\n");
     }
+    case "closure-block": {
+      const params = expression.params
+        .map((param) => `${param.mutable ? "mut " : ""}${param.name}`)
+        .join(", ");
+      const prefix = `${expression.move ? "move " : ""}|${params}| ${expression.async ? "async move " : ""}{`;
+      const body = printRustBlockStatements(expression.body, depth + 1);
+      return body.length === 0
+        ? `${prefix}}`
+        : `${prefix}\n${body}\n${indentText(depth)}}`;
+    }
+    case "await":
+      return appendToLastLine(
+        printRustExprFitted(expression.expr, depth, column),
+        ".await",
+      );
     case "try":
       return appendToLastLine(printRustExprFitted(expression.expr, depth, column + 1), "?");
     case "reference": {
@@ -791,14 +818,14 @@ function printFittedCall(
       if (renderedFits(compact, column)) {
         return compact;
       }
-    } else if (argument.kind === "closure") {
+    } else if (argument.kind === "closure" || argument.kind === "closure-block") {
       const rendered = printRustExprFitted(
         argument,
         depth,
         column + prefix.length,
       );
       const compact = appendToLastLine(`${prefix}${rendered}`, ")");
-      if (renderedFits(compact, column)) {
+      if (argument.kind === "closure-block" || renderedFits(compact, column)) {
         return compact;
       }
     } else if (argument.kind === "reference" &&
