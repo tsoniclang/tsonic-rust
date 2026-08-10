@@ -183,3 +183,74 @@ export function categories(text: string, count: int32, wide: int64, enabled: boo
   assert.match(source, /String::from\("boolean"\)/u);
   validateGeneratedProject("expression-typeof", result.artifacts);
 });
+
+test("void evaluates its operand and produces the closed undefined carrier", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "void_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const discarded = void check(true);
+  check(typeof discarded === "undefined");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let discarded = \{\s+acme_testing::check\(true\);\s+rt::Undefined\s+\};/u);
+  validateGeneratedProject("expression-void", result.artifacts, { run: true });
+});
+
+test("delete lowers only an exact mutable JS Array index selection", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "delete_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+export function main(): void {
+  const values: (int32 | undefined)[] = [10, 20, 30];
+  check(delete values[1]);
+  check(values.length === 3);
+  let keyCount: int32 = 0;
+  for (const key in values) {
+    check(key !== "1");
+    keyCount += 1;
+  }
+  check(keyCount === 2);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /values\.delete_at\(/u);
+  validateGeneratedProject("expression-delete-js-array", result.artifacts, { run: true });
+});
+
+test("delete rejects non-JS-array targets without target-name inference", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function remove(values: int32[]): boolean {
+  return delete values[0];
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === "RUST_DELETE_SELECTION_UNSUPPORTED"));
+});

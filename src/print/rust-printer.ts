@@ -179,7 +179,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       const typeSuffix = statement.type === undefined ? "" : `: ${printRustType(statement.type)}`;
       const prefix = `${indent}let ${mutability}${statement.name}${typeSuffix} = `;
       const flat = printRustExpr(statement.init);
-      if (!renderedFits(flat, prefix.length + 1) &&
+      if (!flat.includes("\n") && !renderedFits(flat, prefix.length + 1) &&
         renderedFits(flat, indent.length + 4 + 1)) {
         return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
       }
@@ -742,6 +742,56 @@ export function printRustExpr(expression: RustExpr): string {
   }
 }
 
+function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
+  switch (expression.kind) {
+    case "block":
+    case "evaluate-then":
+      return true;
+    case "unary":
+      return rustExpressionContainsStatementBlock(expression.operand);
+    case "binary":
+      return rustExpressionContainsStatementBlock(expression.left) ||
+        rustExpressionContainsStatementBlock(expression.right);
+    case "range":
+      return rustExpressionContainsStatementBlock(expression.start) ||
+        rustExpressionContainsStatementBlock(expression.end);
+    case "conditional":
+      return rustExpressionContainsStatementBlock(expression.condition) ||
+        rustExpressionContainsStatementBlock(expression.whenTrue) ||
+        rustExpressionContainsStatementBlock(expression.whenFalse);
+    case "assignment":
+      return rustExpressionContainsStatementBlock(expression.target) ||
+        rustExpressionContainsStatementBlock(expression.value);
+    case "call":
+    case "associated-call":
+      return expression.args.some(rustExpressionContainsStatementBlock);
+    case "method-call":
+      return rustExpressionContainsStatementBlock(expression.receiver) ||
+        expression.args.some(rustExpressionContainsStatementBlock);
+    case "field":
+      return rustExpressionContainsStatementBlock(expression.receiver);
+    case "index":
+      return rustExpressionContainsStatementBlock(expression.receiver) ||
+        rustExpressionContainsStatementBlock(expression.index);
+    case "string-concat":
+      return expression.parts.some(rustExpressionContainsStatementBlock);
+    case "vec-literal":
+    case "slice-literal":
+    case "tuple-literal":
+      return expression.elements.some(rustExpressionContainsStatementBlock);
+    case "reference":
+    case "await":
+    case "try":
+      return rustExpressionContainsStatementBlock(expression.expr);
+    case "closure":
+      return rustExpressionContainsStatementBlock(expression.body);
+    case "struct-literal":
+      return expression.fields.some((field) => rustExpressionContainsStatementBlock(field.value));
+    default:
+      return false;
+  }
+}
+
 function printRustExprFitted(expression: RustExpr, depth: number, column: number): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
@@ -793,7 +843,9 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
     }
     case "evaluate-then": {
       const statementIndent = indentText(depth + 1);
-      const effectPrefix = `${statementIndent}let _ = `;
+      const effectPrefix = expression.discard === "unit"
+        ? statementIndent
+        : `${statementIndent}let _ = `;
       const effect = printRustExprFitted(expression.effect, depth + 1, effectPrefix.length);
       const value = printRustExprFitted(expression.value, depth + 1, statementIndent.length);
       return [
@@ -840,7 +892,8 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       );
     case "method-call": {
       const chain = rustMethodChain(expression);
-      if (renderedFits(flat, column) && !rustMethodChainRequiresVerticalLayout(expression)) {
+      if (!flat.includes("\n") && renderedFits(flat, column) &&
+        !rustMethodChainRequiresVerticalLayout(expression)) {
         return flat;
       }
       if (chain !== undefined &&
@@ -890,7 +943,7 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
         : `${expression.operator}${operand}`;
     }
     case "binary": {
-      if (renderedFits(flat, column)) {
+      if (!rustExpressionContainsStatementBlock(expression) && renderedFits(flat, column)) {
         return flat;
       }
       if (expression.operator === "||" || expression.operator === "&&") {
@@ -1183,10 +1236,11 @@ function printFittedCall(
       if (renderedFits(compact, column)) {
         return compact;
       }
-    } else if (renderedFits(flat, column)) {
+    } else if (!rustExpressionContainsStatementBlock(argument) && renderedFits(flat, column)) {
       return flat;
     }
-  } else if (!forceExpanded && !flat.includes("\n") && renderedFits(flat, column)) {
+  } else if (!forceExpanded && !arguments_.some(rustExpressionContainsStatementBlock) &&
+    !flat.includes("\n") && renderedFits(flat, column)) {
     return flat;
   }
   const argumentIndent = indentText(depth + 1);
@@ -1258,8 +1312,12 @@ function printNestedCallArgument(
     }
     return printRustExprFitted(argument, depth, column);
   }
-  if (!forceExpanded && printRustExpr(argument).length <= rustNestedCallWidth) {
-    const flat = printRustExpr(argument);
+  const flatArgument = printRustExpr(argument);
+  const compactNestedCall = argument.kind === "method-call"
+    ? renderedFits(flatArgument, column)
+    : flatArgument.length <= rustNestedCallWidth;
+  if (!forceExpanded && compactNestedCall) {
+    const flat = flatArgument;
     if (renderedFits(flat, column)) {
       return flat;
     }

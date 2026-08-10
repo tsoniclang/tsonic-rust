@@ -10,6 +10,7 @@ export const KindConditionalExpression = "KindConditionalExpression";
 export const KindContinueStatement = "KindContinueStatement";
 export const KindDebuggerStatement = "KindDebuggerStatement";
 export const KindDefaultClause = "KindDefaultClause";
+export const KindDeleteExpression = "KindDeleteExpression";
 export const KindDoStatement = "KindDoStatement";
 export const KindElementAccessExpression = "KindElementAccessExpression";
 export const KindEmptyStatement = "KindEmptyStatement";
@@ -52,6 +53,7 @@ export const KindVariableDeclaration = "KindVariableDeclaration";
 export const KindVariableDeclarationList = "KindVariableDeclarationList";
 export const KindVariableStatement = "KindVariableStatement";
 export const KindVoidKeyword = "KindVoidKeyword";
+export const KindVoidExpression = "KindVoidExpression";
 export const KindWhileStatement = "KindWhileStatement";
 
 export const KindPlusToken = "KindPlusToken";
@@ -132,7 +134,9 @@ export function Node_Expression(ast: AstReader, node: Node | undefined): Node | 
       return ast.as.AsNonNullExpression(node)?.Expression;
     case "KindTypeAssertionExpression":
       return ast.as.AsTypeAssertion(node)?.Expression;
-    case "KindVoidExpression":
+    case KindDeleteExpression:
+      return ast.as.AsDeleteExpression(node)?.Expression;
+    case KindVoidExpression:
       return ast.as.AsVoidExpression(node)?.Expression;
     case KindTypeOfExpression:
       return ast.as.AsTypeOfExpression(node)?.Expression;

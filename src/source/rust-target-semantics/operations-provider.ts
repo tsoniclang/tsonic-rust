@@ -17,6 +17,7 @@ import type {
   RustCheckedCallSelectionResult,
   RustCheckedConversionSelectionInput,
   RustCheckedConversionSelectionResult,
+  RustCheckedDeleteSelectionInput,
   RustCheckedElementSelectionInput,
   RustCheckedIterationSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -1369,6 +1370,77 @@ function checkedCallIsConstruction(
 ): boolean {
   const call = asNode(request.call, context);
   return call !== undefined && context.ast.kindName(call) === "KindNewExpression";
+}
+
+export function selectRustCheckedDelete(
+  request: RustCheckedDeleteSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const identity = resolveSelectedJsSourceMember(
+    context,
+    request.sourceSelectedDeclaration,
+    options.sourceProfiles,
+  );
+  if (!options.jsEnabled || identity?.ownerName !== "Array" ||
+    identity.memberName !== "index") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_DELETE_SELECTION_UNSUPPORTED",
+      "delete requires the exact mutable JavaScript Array index signature selected by TSTS.",
+    );
+  }
+  const receiverCarrier = resolveRustTargetTypeRef(request.receiver, context, options);
+  const selectedIndexCarrier = resolveRustTargetTypeRef(request.index, context, options);
+  const int32Carrier = rustSourcePrimitiveTargetType("int32");
+  const indexCarrier = normalizeSelectedLiteralCarrier(
+    request.index,
+    selectedIndexCarrier,
+    int32Carrier,
+    context,
+    options,
+  );
+  const selection = selectJsSurfaceOperation({
+    ownerName: identity.ownerName,
+    memberName: identity.memberName,
+    operationKind: "delete",
+    ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
+    argumentCarriers: [indexCarrier],
+  });
+  if (selection?.fact.kind !== "provider-operation") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_DELETE_CARRIER_UNSUPPORTED",
+      "The selected JavaScript Array deletion has no closed Rust receiver and index carriers.",
+    );
+  }
+  const fact = finalizeProviderOperationFromSubjects(
+    selection.fact,
+    request.receiver,
+    [request.index],
+    context,
+    options,
+  );
+  if (fact === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_DELETE_ABI_INCOMPLETE",
+      "The selected JavaScript Array deletion cannot finalize one total Rust operation ABI.",
+    );
+  }
+  return acceptRustOperation(request.expression, fact, context, {
+    sourceExpression: request.expression,
+    sourceReceiver: request.receiver,
+    ...(request.sourceSelectedSymbol === undefined
+      ? {}
+      : { sourceSelectedSymbol: request.sourceSelectedSymbol }),
+    ...(request.sourceSelectedDeclaration === undefined
+      ? {}
+      : { sourceSelectedDeclaration: request.sourceSelectedDeclaration }),
+  });
 }
 
 export function selectRustCheckedPropertyAccess(

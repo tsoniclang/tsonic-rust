@@ -27,7 +27,8 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     return "+";
   }
   if (fact.kind === "conditional" || fact.kind === "identity-expression" ||
-    fact.kind === "template-string" || fact.kind === "typeof") {
+    fact.kind === "template-string" || fact.kind === "typeof" ||
+    fact.kind === "void-expression") {
     return fact.operationId;
   }
   if (fact.kind === "switch") {

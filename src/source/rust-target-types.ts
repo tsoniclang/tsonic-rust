@@ -20,6 +20,7 @@ export const rustLocationTargetId = "rust.runtime.Location";
 export const rustGeneratorTargetId = "rust.runtime.Generator";
 export const rustAsyncGeneratorTargetId = "rust.runtime.AsyncGenerator";
 export const rustIteratorResultTargetId = "rust.runtime.IteratorResult";
+export const rustUndefinedTargetId = "rust.runtime.Undefined";
 export const rustJsValueTargetId = "rust.js.JsValue";
 export const rustJsArrayTargetId = "rust.js.JsArray";
 export const rustJsMapTargetId = "rust.js.JsMap";
@@ -47,6 +48,10 @@ export function rustIsizeTargetType(): TargetTypeRef {
 
 export function rustUnitTargetType(): TargetTypeRef {
   return { kind: "tuple", elements: [] };
+}
+
+export function rustUndefinedTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustUndefinedTargetId };
 }
 
 export function rustVecTargetType(element: TargetTypeRef): TargetTypeRef {
@@ -393,6 +398,10 @@ export function isRustUnitCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "tuple" && carrier.elements.length === 0;
 }
 
+export function isRustUndefinedCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && carrier.id === rustUndefinedTargetId;
+}
+
 export function isRustBoolCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "source-primitive" && carrier.name === "bool";
 }
@@ -403,6 +412,7 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
 
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
+    isRustUndefinedCarrier(carrier) ||
     carrier?.kind === "source-primitive";
 }
 

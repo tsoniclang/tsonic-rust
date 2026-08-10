@@ -455,6 +455,7 @@ function locationIndexExpression(expression: RustExpr | undefined): RustExpr | u
     ? {
         kind: "evaluate-then",
         effect: expression.effect,
+        discard: expression.discard,
         value: expression.value.index,
       }
     : undefined;

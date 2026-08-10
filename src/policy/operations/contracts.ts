@@ -148,6 +148,16 @@ export interface RustCheckedElementSelectionInput
   readonly sourceSelectedElementIndex?: number;
 }
 
+export interface RustCheckedDeleteSelectionInput {
+  readonly target?: "rust";
+  readonly expression: Node;
+  readonly operand: Node;
+  readonly receiver: Node;
+  readonly index: Node;
+  readonly sourceSelectedSymbol?: Symbol;
+  readonly sourceSelectedDeclaration?: Node;
+}
+
 export interface RustCheckedOperatorSelectionInput {
   readonly target?: "rust";
   readonly expression: Node;

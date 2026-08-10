@@ -205,6 +205,11 @@ export type RustTargetOperationFact =
       readonly result: "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined";
     }
   | {
+      readonly kind: "void-expression";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "identity-expression";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
@@ -414,6 +419,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "string-concat":
     case "template-string":
     case "typeof":
+    case "void-expression":
     case "array-literal":
     case "source-field":
     case "source-call":

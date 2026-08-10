@@ -46,7 +46,7 @@ import {
 export interface JsOperationRequest {
   readonly ownerName: string;
   readonly memberName: string;
-  readonly operationKind: "call" | "property" | "indexer" | "constructor" | "property-set" | "index-set";
+  readonly operationKind: "call" | "property" | "indexer" | "constructor" | "property-set" | "index-set" | "delete";
   readonly receiverCarrier?: TargetTypeRef;
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
@@ -184,6 +184,7 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Array", member: "push", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "push", mutatesReceiver: true }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "index", operationKind: "indexer", lane: "js-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argConversions: [rustInt32ToUsizeValueConversion], chain: [copySelectedCarrier] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
   { owner: "Array", member: "index", operationKind: "index-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set", argConversions: [rustInt32ToUsizeValueConversion, undefined], mutatesReceiver: true }, params: [{ ref: "int32" }, { ref: "element" }] } },
+  { owner: "Array", member: "index", operationKind: "delete", lane: "js-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "delete_at", argConversions: [rustInt32ToUsizeValueConversion], mutatesReceiver: true }, result: { ref: "bool" }, params: [{ ref: "int32" }] } },
 
   // String lane (runtime string module through the js_string alias).
   { owner: "String", member: "length", operationKind: "property", lane: "string", shape: { op: "operation", operationKind: "property", target: { form: "free-call", path: "js_string::js_len", receiverMode: "ref" }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },

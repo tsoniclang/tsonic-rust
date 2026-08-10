@@ -44,6 +44,7 @@ import {
   KindCallExpression,
   KindCaseClause,
   KindConditionalExpression,
+  KindDeleteExpression,
   KindDoStatement,
   KindLabeledStatement,
   KindElementAccessExpression,
@@ -78,6 +79,7 @@ import {
   KindTemplateExpression,
   KindTrueKeyword,
   KindTypeOfExpression,
+  KindVoidExpression,
   KindVariableDeclaration,
   KindVariableStatement,
   KindWhileStatement,
@@ -97,12 +99,14 @@ import {
   isRustSourceStringConvertibleCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
+  isRustUndefinedCarrier,
   rustOptionElementCarrier,
   isRustVecCarrier,
   rustJsArrayTargetType,
   rustNullishSourceTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustUndefinedTargetType,
   inferRustTargetTypeParameterBindings,
   substituteRustTargetTypeParameters,
   rustVecTargetType,
@@ -138,6 +142,7 @@ import {
   finalizeRustDeferredCheckedCall,
   selectRustCheckedCall,
   selectRustCheckedConversion,
+  selectRustCheckedDelete,
   selectRustCheckedElementAccess,
   selectRustCheckedIteration,
   selectRustCheckedOperator,
@@ -375,6 +380,32 @@ function selectExpressionOperation(
       ...(source.selectedElementIndex === undefined ? {} : { sourceSelectedElementIndex: source.selectedElementIndex }),
       sourceResultType: source.sourceReadType ?? source.sourceWriteType,
       optionalChain: source.optionalChain,
+    }, context, walk.operationOptions));
+    return;
+  }
+  if (kind === KindDeleteExpression) {
+    const operand = Node_Expression(ast, expression);
+    const source = operand === undefined || ast.kindName(operand) !== KindElementAccessExpression
+      ? undefined
+      : semantics.getResolvedElementAccessInfo(operand);
+    if (operand === undefined || source === undefined || source.callCallee) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_DELETE_SELECTION_UNSUPPORTED",
+        "delete requires one exact checked element-access selection.",
+        expression,
+        ["target.capability=rust.syntax.delete"],
+      );
+      return;
+    }
+    recordPolicySelection(walk, expression, selectRustCheckedDelete({
+      target: "rust",
+      expression,
+      operand,
+      receiver: source.receiver.expression,
+      index: source.argument.expression,
+      ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
+      ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
     }, context, walk.operationOptions));
     return;
   }
@@ -1002,6 +1033,32 @@ function resolveExpressionOperationDependencies(
     }
     return;
   }
+  if (kind === KindVoidExpression) {
+    const operand = Node_Expression(ast, expression);
+    if (operand !== undefined) {
+      resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+    }
+    return;
+  }
+  if (kind === KindDeleteExpression) {
+    const operand = Node_Expression(ast, expression);
+    const receiver = operand === undefined ? undefined : Node_Expression(ast, operand);
+    const index = operand === undefined
+      ? undefined
+      : ElementAccessExpression_ArgumentExpression(ast, operand);
+    if (receiver !== undefined) {
+      resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+    }
+    if (index !== undefined) {
+      resolveExpressionCarrier(
+        walk,
+        index,
+        sourceFile,
+        rustSourcePrimitiveTargetType("int32"),
+      );
+    }
+    return;
+  }
   if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
     const receiver = Node_Expression(ast, expression);
     if (receiver !== undefined) {
@@ -1338,6 +1395,38 @@ function resolveExpressionCarrierUncached(
       });
       return setCarrierFact(walk, expression, resultCarrier);
     }
+    case KindVoidExpression: {
+      const operand = Node_Expression(walk.context.ast, expression);
+      const operandCarrier = operand === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+      if (operand === undefined || operandCarrier === undefined) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_VOID_OPERAND_UNSUPPORTED",
+          "void requires one exact operand with a finalized Rust runtime carrier.",
+          expression,
+          ["target.capability=rust.syntax.void"],
+        );
+        return undefined;
+      }
+      const resultCarrier = rustUndefinedTargetType();
+      const operationId = "tsonic.rust.syntax.void";
+      setRustOperationFact(walk, expression, {
+        kind: "void-expression",
+        operationId,
+        resultCarrier,
+      });
+      recordTargetOperation(
+        walk,
+        expression,
+        operationId,
+        "operator",
+        "void",
+        resultCarrier,
+      );
+      return setCarrierFact(walk, expression, resultCarrier);
+    }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
       return resolvePostCheckUnaryCarrier(walk, expression, sourceFile, expected);
@@ -1426,7 +1515,7 @@ function rustTypeofResult(
   if (isRustStringCarrier(carrier)) {
     return "string";
   }
-  if (isRustUnitCarrier(carrier)) {
+  if (isRustUnitCarrier(carrier) || isRustUndefinedCarrier(carrier)) {
     return "undefined";
   }
   if (carrier.kind === "function-pointer") {
@@ -2057,7 +2146,14 @@ function applySelectedProjectSourceCall(
   if (target === undefined) {
     return undefined;
   }
-  recordTargetOperation(walk, expression, operationId, operationKind, target.form);
+  recordTargetOperation(
+    walk,
+    expression,
+    operationId,
+    operationKind,
+    target.form,
+    resultCarrier,
+  );
   setRustOperationFact(walk, expression, {
     kind: "source-call",
     operationId,
@@ -2218,11 +2314,12 @@ function recordTargetOperation(
   operationId: string,
   operationKind: "property" | "method" | "indexer" | "operator" | "constructor",
   targetOperation: string,
+  resultType: TargetTypeRef,
 ): void {
   walk.context.facts.set(
     expression,
     rustSelectedOperationKey,
-    { operationId, operationKind, targetOperation },
+    { operationId, operationKind, targetOperation, resultType },
     [{ message: `rust target operation ${operationId}` }],
   );
 }
@@ -2284,6 +2381,39 @@ function recordSelectedOperationInputs(
       if (fact?.kind === "operator-token" && (fact.operator === "+=" || fact.operator === "-=")) {
         recordBindingWrite(walk, operand);
       }
+    }
+    return;
+  }
+  if (kind === KindVoidExpression) {
+    const operand = Node_Expression(ast, expression);
+    if (operand !== undefined) {
+      resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+    }
+    return;
+  }
+  if (kind === KindDeleteExpression) {
+    const operand = Node_Expression(ast, expression);
+    const receiver = operand === undefined ? undefined : Node_Expression(ast, operand);
+    const index = operand === undefined
+      ? undefined
+      : ElementAccessExpression_ArgumentExpression(ast, operand);
+    if (receiver !== undefined) {
+      resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+      if (fact?.kind === "provider-operation" &&
+        fact.abi.targetReceiver.kind === "input" &&
+        fact.abi.targetReceiver.input.mode === "mut-ref") {
+        recordBindingWrite(walk, receiver, "referent");
+      }
+    }
+    if (index !== undefined) {
+      resolveExpressionCarrier(
+        walk,
+        index,
+        sourceFile,
+        fact?.kind === "provider-operation"
+          ? fact.abi.sourceArguments[0]?.carrier
+          : undefined,
+      );
     }
     return;
   }

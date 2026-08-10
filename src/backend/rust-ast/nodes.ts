@@ -40,7 +40,7 @@ export type RustExpr =
       readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
       readonly value: RustExpr;
     }
-  | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly value: RustExpr }
+  | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly discard: "unit" | "value"; readonly value: RustExpr }
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }

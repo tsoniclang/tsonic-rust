@@ -15,6 +15,7 @@ import {
   Node_Initializer,
   KindCallExpression,
   KindConditionalExpression,
+  KindDeleteExpression,
   KindElementAccessExpression,
   KindFalseKeyword,
   KindFunctionExpression,
@@ -32,6 +33,7 @@ import {
   KindTemplateExpression,
   KindTrueKeyword,
   KindTypeOfExpression,
+  KindVoidExpression,
   BinaryExpression_Left,
   BinaryExpression_Right,
   ConditionalExpression_Condition,
@@ -280,9 +282,42 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         : {
             kind: "evaluate-then",
             effect: operand,
+            discard: isRustUnitCarrier(expressionCarrier(operandNode, context)) ? "unit" : "value",
             value: { kind: "string-literal", value: fact.result },
           };
     }
+    case KindVoidExpression: {
+      const fact = rustOperationFact(node, context);
+      const operandNode = Node_Expression(context.input.ast, node);
+      if (fact?.kind !== "void-expression" || operandNode === undefined ||
+        !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.void-carrier") ||
+        !selectedOperationMatches(
+          context.input.facts.getSelectedTargetOperator(node),
+          fact.operationId,
+          "operator",
+          fact.resultCarrier,
+          "void",
+        )) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.void",
+          "void requires one exact finalized operand and undefined-result operation.",
+        ));
+        return undefined;
+      }
+      const operand = planExpression(operandNode, context);
+      context.usedAliases?.add("rt");
+      return operand === undefined
+        ? undefined
+        : {
+            kind: "evaluate-then",
+            effect: operand,
+            discard: isRustUnitCarrier(expressionCarrier(operandNode, context)) ? "unit" : "value",
+            value: { kind: "path", path: "rt::Undefined" },
+          };
+    }
+    case KindDeleteExpression:
+      return planDeleteExpression(node, context);
     case "KindArrayLiteralExpression": {
       const fixedFact = rustOperationFact(node, context);
       if (fixedFact !== undefined && fixedFact.kind === "fixed-array-literal") {
@@ -592,7 +627,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         };
         return ast.kindName(indexNode) === KindNumericLiteral
           ? value
-          : { kind: "evaluate-then", effect: index, value };
+          : { kind: "evaluate-then", effect: index, discard: "value", value };
       }
       return planElementAccess(node, context);
     }
@@ -653,6 +688,36 @@ function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr 
     parts.push({ kind: "string-literal", value: context.input.ast.text(literal) });
   }
   return { kind: "string-concat", parts };
+}
+
+function planDeleteExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const fact = rustOperationFact(node, context);
+  const operand = Node_Expression(context.input.ast, node);
+  const receiver = operand === undefined ? undefined : Node_Expression(context.input.ast, operand);
+  const index = operand === undefined
+    ? undefined
+    : ElementAccessExpression_ArgumentExpression(context.input.ast, operand);
+  if (fact?.kind !== "provider-operation" || fact.abi.operationKind !== "indexer" ||
+    operand === undefined || context.input.ast.kindName(operand) !== KindElementAccessExpression ||
+    receiver === undefined || index === undefined ||
+    !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.delete-carrier") ||
+    !selectedOperationMatches(
+      context.input.facts.getSelectedTargetOperator(node),
+      fact.operationId,
+      "indexer",
+      fact.resultCarrier,
+    ) || !requireProviderArgumentPassingFacts(context, fact, [index])) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.delete",
+      "delete requires one exact finalized mutable JavaScript Array index operation.",
+    ));
+    return undefined;
+  }
+  const planned = planProviderOperationExpression(context, fact, receiver, [index], node);
+  return planned === undefined
+    ? undefined
+    : finishProviderOperationExpression(context, fact, planned, node);
 }
 
 export function expressionCarrier(node: Node, context: RustPlanContext): TargetTypeRef | undefined {
@@ -2248,7 +2313,9 @@ function planElementAccess(node: Node, context: RustPlanContext): RustExpr | und
       return value;
     }
     const effect = planExpression(indexNode, context);
-    return effect === undefined ? undefined : { kind: "evaluate-then", effect, value };
+    return effect === undefined
+      ? undefined
+      : { kind: "evaluate-then", effect, discard: "value", value };
   }
   if (fact === undefined || fact.kind !== "provider-operation" || fact.abi.operationKind !== "indexer") {
     context.diagnostics.push(missingFactDiagnostic(

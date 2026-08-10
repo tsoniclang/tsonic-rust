@@ -41,6 +41,7 @@ import {
   KindCaseClause,
   KindContinueStatement,
   KindDebuggerStatement,
+  KindDeleteExpression,
   KindDoStatement,
   KindEmptyStatement,
   KindEqualsToken,
@@ -58,6 +59,7 @@ import {
   KindSwitchStatement,
   KindVariableDeclaration,
   KindVariableStatement,
+  KindVoidExpression,
   KindWhileStatement,
   Node_Expression,
   Node_Initializer,
@@ -943,14 +945,15 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
     return planUpdateStatement(expression, context);
   }
   if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression" ||
-    expressionKind === "KindYieldExpression") {
+    expressionKind === "KindYieldExpression" || expressionKind === KindDeleteExpression ||
+    expressionKind === KindVoidExpression) {
     const planned = planExpression(expression, context);
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
     diagnosticInput(context, node),
     "rust.backend.statement",
-    "Expression statements support only calls, assignments, increments, awaits, and checked generator yields.",
+    "Expression statements support only calls, assignments, increments, awaits, void, delete, and checked generator yields.",
   ));
   return undefined;
 }
