@@ -93,7 +93,7 @@ the blocked section with the contract each requires.
   option-narrowing lanes for nullable object results.
 - String.matchAll result consumption: requires iterator carrier lanes
   (the call and fallibility lowering are implemented).
-- Object.keys/values/entries, Object.assign, Object.hasOwn, Object.is:
+- Object.keys/values/entries, Object.assign, Object.hasOwn:
   requires closed-shape reflection rows over the JsValue carrier.
 - Console calls with open or structural object arguments: requires exact
   closed source-to-JsValue object conversion facts.

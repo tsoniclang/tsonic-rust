@@ -760,9 +760,15 @@
   },
   {
     "area": "Object",
-    "lane": "Object.hasOwn / Object.is",
+    "lane": "Object.hasOwn",
     "classification": "blocked",
     "contract": "requires closed-shape reflection rows over the JsValue carrier"
+  },
+  {
+    "area": "Object",
+    "lane": "Object.is",
+    "classification": "implemented",
+    "rowMember": "is"
   },
   {
     "area": "Number",

@@ -65,7 +65,7 @@ export interface JsOperationSelection {
   readonly callbackShape?: "direct" | "map" | "reduce";
 }
 
-type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "global" | "console" | "regexp" | "regexp-match";
+type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "global" | "console" | "object" | "regexp" | "regexp-match";
 
 type JsCarrierRef =
   | { readonly ref: "cb-array-predicate"; readonly arity: 0 | 1 | 2 | 3 }
@@ -281,6 +281,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
 ]);
 
 const jsOperationRows: readonly JsOperationRowData[] = [
+  { owner: "ObjectConstructor", member: "is", operationKind: "call", lane: "object", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::object_is", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "bool" } } },
   ...sharedArrayOperationRows,
   { owner: "ArrayConstructor", member: "isArray", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_is_array_value", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "jsvalue" }] } },
   { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "string", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_string", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
@@ -690,6 +691,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   }
   if (carrier === undefined && ownerName === "Console") {
     return { lane: "console", bindings: {} };
+  }
+  if (carrier === undefined && ownerName === "ObjectConstructor") {
+    return { lane: "object", bindings: {} };
   }
   if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExp") {
     return { lane: "regexp", bindings: { receiver: carrier } };

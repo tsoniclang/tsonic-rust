@@ -134,6 +134,27 @@ test("console rows select one generic closed value-slice ABI", () => {
   assert.deepEqual(selection?.fact.resultCarrier, { kind: "tuple", elements: [] });
 });
 
+test("Object.is lowers closed source values through exact JsValue conversions", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function same(): boolean {
+  return Object.is(Number.NaN, Number.NaN) &&
+    !Object.is(0, -0) &&
+    Object.is("same", "same");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?\]\)/u);
+  assert.match(text, /!js_abi::object_is\(\[[\s\S]*?JsValue::from\(0\.0\),[\s\S]*?JsValue::from\(-0\.0\),[\s\S]*?\]\)/u);
+  assert.match(text, /js_abi::object_is\(\[[\s\S]*?js_value_from_string\("same"\),[\s\S]*?js_value_from_string\("same"\),[\s\S]*?\]\)/u);
+});
+
 test("console calls lower closed primitive values and reject unsupported object carriers", () => {
   const { result } = compileRust({
     surfaces: ["js"],
