@@ -127,7 +127,7 @@ export function resolveRustTargetTypeRef(
       return undefined;
     }
     const carrier = resolveRustTargetTypeSyntax(parameterType, context, options, new Set<object>());
-    return parameterLaneTargetType(carrier, parameterType, context, options);
+    return rustParameterLaneTargetType(carrier, parameterType, context, options);
   }
   const syntax = node === undefined
     ? undefined
@@ -348,7 +348,7 @@ function resolveReferencedDeclarationType(
         const target = resolveRustTargetTypeSyntax(typeNode, context, options, new Set<object>());
         if (target !== undefined) {
           return ast.kindName(declaration) === "KindParameter"
-            ? parameterLaneTargetType(target, typeNode, context, options)
+            ? rustParameterLaneTargetType(target, typeNode, context, options)
             : target;
         }
       }
@@ -364,7 +364,7 @@ function resolveReferencedDeclarationType(
   return undefined;
 }
 
-function parameterLaneTargetType(
+export function rustParameterLaneTargetType(
   carrier: TargetTypeRef | undefined,
   typeNode: Node,
   context: RustTargetTypeResolutionContext,

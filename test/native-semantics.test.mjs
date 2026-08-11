@@ -368,6 +368,43 @@ export function drive(): int32 {
   assert.match(text, /bump\(values\.clone\(\)\)\?;/u);
 });
 
+test("native array parameters preserve caller storage through exact slice ABIs", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_array_parameter_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+function bump(values: int32[]): void {
+  values[0] = values[0] + 1;
+}
+
+function first(values: readonly int32[]): int32 {
+  return values[0];
+}
+
+export function main(): void {
+  const values: int32[] = [1, 2, 3];
+  bump(values);
+  check(first(values) === 2);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn bump\(values: &mut \[i32\]\)/u);
+  assert.match(text, /fn first\(values: &\[i32\]\)/u);
+  assert.match(text, /let mut values: Vec<i32> = vec!\[1, 2, 3\];/u);
+  assert.match(text, /bump\(&mut values\)\?;/u);
+  assert.match(text, /first\(&values\)\?/u);
+  const run = validateGeneratedProject("native-array-parameter-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
 test("push mutates the canonical shared JS array carrier", () => {
   const { result } = compileRust({
     surfaces: ["js"],

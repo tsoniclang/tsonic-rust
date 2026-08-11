@@ -980,11 +980,10 @@ export function printRustExpr(expression: RustExpr): string {
       return `${receiver}.${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "field": {
-      const tupleFieldSeparator = /^[0-9]+$/u.test(expression.name) &&
-          expression.receiver.kind === "field" && /^[0-9]+$/u.test(expression.receiver.name)
-        ? " ."
-        : ".";
-      return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}${tupleFieldSeparator}${expression.name}`;
+      const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
+      const nestedTupleField = /^[0-9]+$/u.test(expression.name) &&
+        expression.receiver.kind === "field" && /^[0-9]+$/u.test(expression.receiver.name);
+      return `${nestedTupleField ? `(${receiver})` : receiver}.${expression.name}`;
     }
     case "index": {
       return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(expression.index)}]`;
@@ -1312,7 +1311,7 @@ function printRustExprFitted(
           renderedFits(`${compactParts},`, argumentIndent.length)
         ? [`${argumentIndent}${compactParts},`]
         : expression.parts.map((part) => {
-            const rendered = printRustExprFitted(
+            const rendered = printRustFormatArgument(
               part,
               depth + 1,
               argumentIndent.length,
@@ -1446,7 +1445,7 @@ function printRustExprFitted(
         depth,
         column,
         methodChainContinuationIndent ??
-          (column > indentText(depth).length ? indentText(depth) : undefined),
+          (column > indentText(depth).length ? indentText(depth + 1) : undefined),
       );
       const left = expression.left.kind === "numeric-cast" &&
           (expression.operator === "<" || expression.operator === "<=" ||
@@ -1610,13 +1609,40 @@ function printFittedLogicalChain(
       depth + 1,
       continuationIndent.length + operator.length + 1,
     );
-    rendered += `\n${continuationIndent}${operator} ${firstLine(right)}`;
+    const continuation = `${operator} ${firstLine(right)}`;
+    rendered = lastLine(rendered).trim() === "}"
+      ? appendToLastLine(rendered, ` ${continuation}`)
+      : `${rendered}\n${continuationIndent}${continuation}`;
     const rest = remainingLines(right);
     if (rest.length > 0) {
       rendered += `\n${rest.join("\n")}`;
     }
   }
   return rendered;
+}
+
+function printRustFormatArgument(
+  expression: RustExpr,
+  depth: number,
+  column: number,
+): string {
+  if ((expression.kind === "call" || expression.kind === "associated-call") &&
+    expression.args.length === 1) {
+    const argument = expression.args[0]!;
+    const callable = expression.kind === "call"
+      ? expression.path
+      : `${printRustAssociatedCallOwner(expression)}::${expression.method}`;
+    const prefix = `${callable}(`;
+    const renderedArgument = printRustExprFitted(
+      argument,
+      depth,
+      column + prefix.length,
+    );
+    if (renderedArgument.includes("\n")) {
+      return appendToLastLine(`${prefix}${renderedArgument}`, ",)");
+    }
+  }
+  return printRustExprFitted(expression, depth, column);
 }
 
 function printFittedLogicalOperand(
@@ -2388,6 +2414,11 @@ function firstLine(rendered: string): string {
 
 function remainingLines(rendered: string): readonly string[] {
   return rendered.split("\n").slice(1);
+}
+
+function lastLine(rendered: string): string {
+  const lines = rendered.split("\n");
+  return lines[lines.length - 1] ?? rendered;
 }
 
 function lastLineLength(rendered: string): number {

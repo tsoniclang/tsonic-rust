@@ -9,6 +9,7 @@ import type { RustArgumentMode } from "../rust-facts/keys.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
   resolveRustTargetTypeRef,
+  rustParameterLaneTargetType,
 } from "./target-type-resolution.js";
 import type {
   RustTargetTypeResolutionContext,
@@ -60,6 +61,9 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           : context.ast.questionToken(parameter) !== undefined
             ? "optional" as const
             : "required" as const;
+      const requiredParameterCarrier = form === "required" && typeNode !== undefined
+        ? rustParameterLaneTargetType(base, typeNode, context, options)
+        : undefined;
       const abi = form === "optional"
         ? {
             form,
@@ -81,6 +85,15 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
                 parameterCarrier: base,
                 mode: "value" as const,
               }
+            : requiredParameterCarrier?.kind === "pointer"
+              ? {
+                  form,
+                  valueCarrier: base,
+                  parameterCarrier: requiredParameterCarrier,
+                  mode: requiredParameterCarrier.mutability === "mut"
+                    ? "mut-ref" as const
+                    : "ref" as const,
+                }
             : !isRustStringCarrier(base)
         ? {
             form,
