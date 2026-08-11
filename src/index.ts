@@ -107,6 +107,7 @@ export {
   isRustUnitCarrier,
   rustPrimitiveTypeName,
   rustJsArrayTargetType,
+  rustJsArrayConcatItemTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetId,

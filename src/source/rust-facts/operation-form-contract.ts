@@ -7,7 +7,7 @@ import type { RustFinalizedOperationKind } from "./finalized-operation-abi.js";
 import { rustValueConversionContract } from "./value-conversions.js";
 import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../common/rust-syntax.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
-import { isRustTargetTypeRef } from "../../policy/equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../policy/equality.js";
 
 const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;
@@ -108,6 +108,30 @@ export function rustProviderOperationFormContractViolation(
         runtimeSourceIndexes.length >= form.leadingArguments.length
         ? undefined
         : "receiver value-array call must contain one method, receiver mode, closed leading arguments, a closed element carrier, and only runtime source arguments";
+    case "receiver-tagged-array":
+      return hasExactKeys(
+        form,
+        ["form", "name", "receiverMode", "leadingArguments", "elementCarrier", "alternatives"],
+        ["form", "name", "receiverMode", "leadingArguments", "elementCarrier", "alternatives"],
+      ) && typeof form.name === "string" && rustIdentifierPattern.test(form.name) &&
+        modes.has(form.receiverMode) && isDenseDataArray(form.leadingArguments) &&
+        form.leadingArguments.every((argument) =>
+          hasExactKeys(argument, ["carrier", "mode"], ["carrier", "mode"]) &&
+          isRustTargetTypeRef(argument.carrier) && modes.has(argument.mode)) &&
+        isRustTargetTypeRef(form.elementCarrier) && isDenseDataArray(form.alternatives) &&
+        form.alternatives.length > 0 && form.alternatives.every((alternative, index) =>
+          hasExactKeys(
+            alternative,
+            ["inputCarrier", "mode", "constructorPath"],
+            ["inputCarrier", "mode", "constructorPath"],
+          ) && isRustTargetTypeRef(alternative.inputCarrier) && modes.has(alternative.mode) &&
+          typeof alternative.constructorPath === "string" && rustPathPattern.test(alternative.constructorPath) &&
+          !form.alternatives.slice(0, index).some((previous) =>
+            rustTargetTypeRefEquals(previous.inputCarrier, alternative.inputCarrier))) &&
+        runtimeSourceIndexes.length === sourceArgumentCount &&
+        runtimeSourceIndexes.length >= form.leadingArguments.length
+        ? undefined
+        : "receiver tagged-array call must contain one method, receiver mode, closed leading arguments, one closed tagged carrier, unique exact alternatives, and only runtime source arguments";
     case "method":
     case "arg-method":
       return hasExactKeys(form, ["form", "name"], ["form", "name"]) && typeof form.name === "string" && rustIdentifierPattern.test(form.name)

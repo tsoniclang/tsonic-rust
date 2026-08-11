@@ -5,6 +5,7 @@ import { rustSourceTypeCarrierValue } from "../../source/rust-facts/keys.js";
 import {
   rustBigIntTargetId,
   rustJsArrayTargetId,
+  rustJsArrayConcatItemTargetId,
   rustJsDateTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
@@ -33,6 +34,7 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustUndefinedTargetId]: "rt::Undefined",
   [rustJsValueTargetId]: "js_abi::JsValue",
   [rustJsArrayTargetId]: "js_abi::JsArray",
+  [rustJsArrayConcatItemTargetId]: "js_abi::JsArrayConcatItem",
   [rustJsMapTargetId]: "js_abi::JsMap",
   [rustJsSetTargetId]: "js_abi::JsSet",
   [rustJsDateTargetId]: "js_abi::JsDate",

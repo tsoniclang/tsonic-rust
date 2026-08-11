@@ -77,11 +77,21 @@ export interface RustFinalizedArrayInput {
   readonly mode: "value";
 }
 
+export interface RustFinalizedTaggedArrayInput {
+  readonly source: { readonly kind: "argument-tagged-array"; readonly sourceIndexes: readonly number[] };
+  readonly elements: readonly {
+    readonly input: RustFinalizedSourceInput;
+    readonly constructorPath: string;
+  }[];
+  readonly elementCarrier: TargetTypeRef;
+  readonly mode: "value";
+}
+
 export interface RustFinalizedConstantInput {
   readonly source: { readonly kind: "constant"; readonly value: RustProviderConstantArgument };
 }
 
-export type RustFinalizedTargetInput = RustFinalizedSourceInput | RustFinalizedSliceInput | RustFinalizedArrayInput | RustFinalizedConstantInput;
+export type RustFinalizedTargetInput = RustFinalizedSourceInput | RustFinalizedSliceInput | RustFinalizedArrayInput | RustFinalizedTaggedArrayInput | RustFinalizedConstantInput;
 
 export type RustFinalizedOperationResult =
   | {
@@ -299,6 +309,17 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
       }
       continue;
     }
+    if (isRustFinalizedTaggedArrayInput(input)) {
+      if (input.elements.length !== input.source.sourceIndexes.length ||
+        !input.elements.every((element, index) =>
+          element.input.source.kind === "argument" &&
+          element.input.source.sourceIndex === input.source.sourceIndexes[index] &&
+          typeof element.constructorPath === "string" &&
+          validateSourceInput(element.input))) {
+        return false;
+      }
+      continue;
+    }
     if (!validateSourceInput(input)) {
       return false;
     }
@@ -402,6 +423,15 @@ function isTargetInput(value: unknown): value is RustFinalizedTargetInput {
       hasExactKeys(value.source, ["kind", "sourceIndexes"]) && Array.isArray(value.source.sourceIndexes) &&
       value.source.sourceIndexes.every((index) => Number.isSafeInteger(index) && index >= 0) &&
       Array.isArray(value.elements) && value.elements.every(isSourceInput) &&
+      isRustTargetTypeRef(value.elementCarrier) && value.mode === "value";
+  }
+  if (value.source.kind === "argument-tagged-array") {
+    return hasExactKeys(value, ["source", "elements", "elementCarrier", "mode"]) &&
+      hasExactKeys(value.source, ["kind", "sourceIndexes"]) && Array.isArray(value.source.sourceIndexes) &&
+      value.source.sourceIndexes.every((index) => Number.isSafeInteger(index) && index >= 0) &&
+      Array.isArray(value.elements) && value.elements.every((element) =>
+        isRecord(element) && hasExactKeys(element, ["input", "constructorPath"]) &&
+        isSourceInput(element.input) && typeof element.constructorPath === "string") &&
       isRustTargetTypeRef(value.elementCarrier) && value.mode === "value";
   }
   return value.source.kind === "constant" && hasExactKeys(value, ["source"]) &&
@@ -515,7 +545,9 @@ function createInputFactory(
       ? undefined
       : sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion);
   };
-  return { receiver, argument, argumentTo };
+  const sourceArgumentCarrier = (sourceIndex: number): TargetTypeRef | undefined =>
+    argumentCarriers[sourceIndex];
+  return { receiver, argument, argumentTo, sourceArgumentCarrier };
 }
 
 function finalizeTargetInputs(
@@ -752,6 +784,50 @@ function finalizeTargetInputs(
         ],
       };
     }
+    case "receiver-tagged-array": {
+      const receiver = input.receiver(form.receiverMode);
+      const leading = form.leadingArguments.map((argument, sourceIndex) =>
+        input.argumentTo(sourceIndex, argument.mode, argument.carrier));
+      const arrayIndexes = indexes.slice(form.leadingArguments.length);
+      const elements = arrayIndexes.map((sourceIndex) => {
+        const sourceCarrier = input.sourceArgumentCarrier(sourceIndex);
+        const exact = sourceCarrier === undefined
+          ? []
+          : form.alternatives.filter((candidate) =>
+              rustTargetTypeRefEquals(candidate.inputCarrier, sourceCarrier));
+        const convertible = sourceCarrier === undefined || exact.length > 0
+          ? []
+          : form.alternatives.filter((candidate) =>
+              selectRustSourceValueConversion(sourceCarrier, candidate.inputCarrier) !== undefined);
+        const candidates = exact.length > 0 ? exact : convertible;
+        const alternative = candidates.length === 1 ? candidates[0] : undefined;
+        const selectedInput = alternative === undefined
+          ? undefined
+          : input.argumentTo(sourceIndex, alternative.mode, alternative.inputCarrier);
+        return selectedInput === undefined || alternative === undefined
+          ? undefined
+          : { input: selectedInput, constructorPath: alternative.constructorPath };
+      });
+      if (receiver === undefined || leading.some((entry) => entry === undefined) ||
+        elements.some((entry) => entry === undefined)) {
+        return undefined;
+      }
+      return {
+        targetReceiver: { kind: "input", input: receiver },
+        targetArguments: [
+          ...leading as RustFinalizedSourceInput[],
+          {
+            source: { kind: "argument-tagged-array", sourceIndexes: arrayIndexes },
+            elements: elements as readonly {
+              readonly input: RustFinalizedSourceInput;
+              readonly constructorPath: string;
+            }[],
+            elementCarrier: form.elementCarrier,
+            mode: "value",
+          },
+        ],
+      };
+    }
   }
 }
 
@@ -782,6 +858,12 @@ function finalizeSourceArguments(
     } else if (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) {
       for (const element of input.elements) {
         if (!collect(element)) {
+          return false;
+        }
+      }
+    } else if (isRustFinalizedTaggedArrayInput(input)) {
+      for (const element of input.elements) {
+        if (!collect(element.input)) {
           return false;
         }
       }
@@ -821,6 +903,10 @@ export function isRustFinalizedSliceInput(input: RustFinalizedTargetInput): inpu
 
 export function isRustFinalizedArrayInput(input: RustFinalizedTargetInput): input is RustFinalizedArrayInput {
   return input.source.kind === "argument-array";
+}
+
+export function isRustFinalizedTaggedArrayInput(input: RustFinalizedTargetInput): input is RustFinalizedTaggedArrayInput {
+  return input.source.kind === "argument-tagged-array";
 }
 
 export function isRustFinalizedConstantInput(input: RustFinalizedTargetInput): input is RustFinalizedConstantInput {

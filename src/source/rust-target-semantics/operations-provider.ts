@@ -1329,6 +1329,32 @@ function selectedCallSourceCarriers(
       ? { kind: "resolved", carriers: actual as TargetTypeRef[] }
       : { kind: "incompatible", sourceIndex: incompatible };
   }
+  if (fact.target.form === "receiver-tagged-array") {
+    const form = fact.target;
+    if (actual.length < form.leadingArguments.length) {
+      return { kind: "incompatible", sourceIndex: actual.length };
+    }
+    const incompatible = actual.findIndex((carrier, sourceIndex) => {
+      if (carrier === undefined) {
+        return true;
+      }
+      if (sourceIndex < form.leadingArguments.length) {
+        const target = form.leadingArguments[sourceIndex]!.carrier;
+        return !rustTargetTypeRefEquals(carrier, target) &&
+          selectRustSourceValueConversion(carrier, target) === undefined;
+      }
+      const exact = form.alternatives.filter((alternative) =>
+        rustTargetTypeRefEquals(carrier, alternative.inputCarrier));
+      const convertible = exact.length > 0
+        ? []
+        : form.alternatives.filter((alternative) =>
+            selectRustSourceValueConversion(carrier, alternative.inputCarrier) !== undefined);
+      return (exact.length > 0 ? exact : convertible).length !== 1;
+    });
+    return incompatible < 0
+      ? { kind: "resolved", carriers: actual as TargetTypeRef[] }
+      : { kind: "incompatible", sourceIndex: incompatible };
+  }
   return { kind: "resolved", carriers: actual as TargetTypeRef[] };
 }
 
@@ -1350,6 +1376,7 @@ function providerFormRequiresSourceReceiver(form: RustProviderOperationForm): bo
     form.form === "free-call-str-slice" ||
     form.form === "receiver-method" ||
     form.form === "receiver-value-array" ||
+    form.form === "receiver-tagged-array" ||
     form.form === "arg-receiver-method";
 }
 

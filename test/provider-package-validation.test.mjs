@@ -487,6 +487,44 @@ test("generic value-array forms require closed paths and element carriers", () =
   );
 });
 
+test("tagged-array forms require unique exact alternatives and closed constructors", () => {
+  const arrayCarrier = { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32Carrier] };
+  const taggedCarrier = { kind: "target-named", id: "rust.js.JsArrayConcatItem", typeArguments: [int32Carrier] };
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: arrayCarrier,
+  });
+  const alternative = {
+    inputCarrier: int32Carrier,
+    mode: "value",
+    constructorPath: "acme_validation::Tagged::Value",
+  };
+  const base = {
+    form: "receiver-tagged-array",
+    name: "concat",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: taggedCarrier,
+    alternatives: [alternative],
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({ operations: [operation(base)] })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, alternatives: [alternative, alternative] })],
+    })),
+    /unique exact alternatives/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, alternatives: [{ ...alternative, constructorPath: "not-a-path" }] })],
+    })),
+    /not a closed Rust path/u,
+  );
+});
+
 test("receiver string-slice forms require an exact path and receiver mode", () => {
   const operation = (target) => ({
     exportId: "@acme/validation::run",

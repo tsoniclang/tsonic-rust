@@ -132,6 +132,7 @@ import {
   isRustFinalizedArrayInput,
   isRustFinalizedSliceInput,
   isRustFinalizedSourceInput,
+  isRustFinalizedTaggedArrayInput,
 } from "../rust-facts/finalized-operation-abi.js";
 import type { RustFinalizedOperationAbi } from "../rust-facts/finalized-operation-abi.js";
 import { collectRustProviderSemantics } from "../provider-packages/index.js";
@@ -3231,7 +3232,9 @@ function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperationAbi): b
       isRustFinalizedSourceInput(input)
         ? input.conversion.fallible
         : (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) &&
-          input.elements.some((element) => element.conversion.fallible))) {
+          input.elements.some((element) => element.conversion.fallible) ||
+          isRustFinalizedTaggedArrayInput(input) &&
+          input.elements.some((element) => element.input.conversion.fallible))) {
     return true;
   }
   return abi.result.kind === "sync" && abi.result.conversion.fallible;

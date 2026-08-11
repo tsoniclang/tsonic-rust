@@ -69,6 +69,7 @@ import {
   isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
   isRustFinalizedSliceInput,
+  isRustFinalizedTaggedArrayInput,
   validateRustFinalizedOperationAbi,
 } from "../../source/rust-facts/finalized-operation-abi.js";
 import { rustFutureValueMatchesCarrier } from "../../source/rust-facts/future-values.js";
@@ -1349,6 +1350,7 @@ function planProviderOperationExpression(
     case "method":
     case "arg-receiver-method":
     case "receiver-value-array":
+    case "receiver-tagged-array":
       return scoped(receiver === undefined
         ? undefined
         : { kind: "method-call", receiver, method: form.name, args });
@@ -1458,6 +1460,26 @@ export function planFinalizedTargetInput(
 ): RustExpr | undefined {
   if (isRustFinalizedConstantInput(input)) {
     return providerConstantExpression(input.source.value);
+  }
+  if (isRustFinalizedTaggedArrayInput(input)) {
+    const elements: RustExpr[] = [];
+    for (const element of input.elements) {
+      const planned = planFinalizedSourceInput(
+        context,
+        element.input,
+        receiverNode,
+        argumentNodes,
+        operationNode,
+        "target-argument",
+        overrides,
+      );
+      if (planned === undefined) {
+        return undefined;
+      }
+      registerAliasFromPath(context, element.constructorPath);
+      elements.push({ kind: "call", path: element.constructorPath, args: [planned] });
+    }
+    return { kind: "slice-literal", elements };
   }
   if (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) {
     const elements: RustExpr[] = [];

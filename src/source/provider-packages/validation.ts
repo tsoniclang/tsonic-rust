@@ -23,6 +23,7 @@ import {
   rustBigIntTargetId,
   rustFixedArrayCarrierValue,
   rustJsArrayTargetId,
+  rustJsArrayConcatItemTargetId,
   rustJsDateTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
@@ -64,6 +65,7 @@ const builtInTargetCarrierIds = new Set([
   rustUndefinedTargetId,
   rustJsValueTargetId,
   rustJsArrayTargetId,
+  rustJsArrayConcatItemTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsDateTargetId,
@@ -577,7 +579,7 @@ function validateOperationRows(
       row.operationKind,
       row.target,
       row.target.form === "call-value-slice" || row.target.form === "call-value-array" ||
-          row.target.form === "receiver-value-array"
+          row.target.form === "receiver-value-array" || row.target.form === "receiver-tagged-array"
         ? row.target.leadingArguments.length
         : row.parameterCarriers?.length ?? 0,
     );
@@ -607,7 +609,7 @@ function validateOperationParameters(
     return;
   }
   if (row.target.form === "call-value-slice" || row.target.form === "call-value-array" ||
-    row.target.form === "receiver-value-array") {
+    row.target.form === "receiver-value-array" || row.target.form === "receiver-tagged-array") {
     const leadingArgumentCount = row.target.leadingArguments.length;
     if (ownerSignatures.some((candidate) => candidate.parameters.length < leadingArgumentCount)) {
       fail(`row '${row.memberId ?? row.exportId}' declares ${leadingArgumentCount} leading target arguments but its selected source signature has fewer parameters`);
@@ -672,6 +674,40 @@ function validateOperationForm(
       }
       validateValueSliceArguments(form, definition, label, fail);
       return;
+    case "receiver-tagged-array":
+      requireExactKeys(
+        record,
+        ["form", "name", "receiverMode", "leadingArguments", "elementCarrier", "alternatives"],
+        `${label}.target`,
+        fail,
+      );
+      requireRustIdentifier(form.name, `${label}.target.name`, fail);
+      if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
+        fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
+      validateValueSliceArguments(form, definition, label, fail);
+      if (!Array.isArray(form.alternatives) || form.alternatives.length === 0) {
+        fail(`${label}.target.alternatives must be a non-empty dense array`);
+      }
+      for (const [index, alternative] of form.alternatives.entries()) {
+        requireExactKeys(
+          alternative,
+          ["inputCarrier", "mode", "constructorPath"],
+          `${label}.target.alternatives[${index}]`,
+          fail,
+        );
+        validateCarrier(
+          alternative.inputCarrier,
+          definition,
+          `${label}.target.alternatives[${index}].inputCarrier`,
+          fail,
+        );
+        if (alternative.mode !== "value" && alternative.mode !== "ref" && alternative.mode !== "mut-ref") {
+          fail(`${label}.target.alternatives[${index}].mode contains unsupported mode '${String(alternative.mode)}'`);
+        }
+        requireRustPath(alternative.constructorPath, `${label}.target.alternatives[${index}].constructorPath`, fail);
+      }
+      return;
     case "method":
     case "arg-method":
     case "field":
@@ -735,7 +771,7 @@ function validateOperationForm(
 
 function validateValueSliceArguments(
   form: Extract<RustProviderOperationForm, {
-    readonly form: "call-value-slice" | "call-value-array" | "receiver-value-array";
+    readonly form: "call-value-slice" | "call-value-array" | "receiver-value-array" | "receiver-tagged-array";
   }>,
   definition: RustProviderPackageDefinition,
   label: string,

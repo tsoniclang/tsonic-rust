@@ -6,6 +6,7 @@ import {
   isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
   isRustFinalizedSliceInput,
+  isRustFinalizedTaggedArrayInput,
 } from "../../source/rust-facts/finalized-operation-abi.js";
 import type {
   RustTargetOperationFact,
@@ -277,6 +278,7 @@ function providerSourceInputs(
       : []),
     ...fact.abi.targetArguments.flatMap((input) =>
       isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input) ? input.elements :
+        isRustFinalizedTaggedArrayInput(input) ? input.elements.map((element) => element.input) :
         isRustFinalizedConstantInput(input) ? [] : [input]),
   ];
 }

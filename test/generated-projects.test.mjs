@@ -180,6 +180,12 @@ export function main(): void {
   const unknownArray = JSON.parse("[1]");
   check(Array.isArray(unknownArray));
 
+  const concatLeft: int32[] = [1, 2, 3];
+  const concatRight: int32[] = [5];
+  const concatenated = concatLeft.concat(4, concatRight);
+  check(concatenated.length === 5);
+  check(concatenated.join(",") === "1,2,3,4,5");
+
   const values = [1, , 3];
   values.length = 5;
   values[3] = 4;

@@ -383,6 +383,46 @@ test("receiver value arrays move every variadic source value into one fixed Rust
   assert.equal(validateRustFinalizedOperationAbi(pair), true);
 });
 
+test("tagged value arrays select one exact constructor for every variadic source value", () => {
+  const array = { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] };
+  const tagged = { kind: "target-named", id: "rust.js.JsArrayConcatItem", typeArguments: [int32] };
+  const form = {
+    form: "receiver-tagged-array",
+    name: "concat",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: tagged,
+    alternatives: [
+      { inputCarrier: int32, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Value" },
+      { inputCarrier: array, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Array" },
+    ],
+  };
+  const selected = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: array,
+    sourceArgumentCarriers: [int32, array],
+    resultCarrier: array,
+    isAsync: false,
+    isFallible: false,
+  });
+  const unsupported = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: array,
+    sourceArgumentCarriers: [bool],
+    resultCarrier: array,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.deepEqual(
+    selected?.targetArguments[0].elements.map((element) => element.constructorPath),
+    ["js_abi::JsArrayConcatItem::Value", "js_abi::JsArrayConcatItem::Array"],
+  );
+  assert.equal(unsupported, undefined);
+});
+
 test("async ABI separates invocation, await fallibility, and post-await conversion", () => {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",

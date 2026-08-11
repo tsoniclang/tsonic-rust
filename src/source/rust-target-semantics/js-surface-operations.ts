@@ -28,6 +28,7 @@ import {
   isRustStringCarrier,
   rustJsDateTargetId,
   rustJsDateTargetType,
+  rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
   rustJsMapTargetType,
   rustJsSetTargetType,
@@ -274,6 +275,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_all" }, result: { ref: "element-array" } } },
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "start", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_from" }, result: { ref: "element-array" }, params: [{ ref: "float64" }] } },
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "start-end", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_to" }, result: { ref: "element-array" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
+  { owner, member: "concat", operationKind: "call", lane: "js-array", variadic: true, requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-tagged-array", name: "concat", receiverMode: "ref", leadingArguments: [], elementCarrier: rustJsArrayConcatItemTargetType(rustInferCarrier), alternatives: [{ inputCarrier: rustInferCarrier, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Value" }, { inputCarrier: rustJsArrayTargetType(rustInferCarrier), mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Array" }] }, result: { ref: "element-array" } } },
   { owner, member: "join", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "stringifiable" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join_default" }, result: { ref: "string" } } },
   { owner, member: "join", operationKind: "call", lane: "js-array", variant: "separator", requirements: [{ carrier: { ref: "element" }, capability: "stringifiable" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
 ]);
@@ -921,6 +923,19 @@ function materializeVariadicTarget(
   target: RustProviderOperationForm,
   elementCarrier: TargetTypeRef | undefined,
 ): RustProviderOperationForm | undefined {
+  if (target.form === "receiver-tagged-array") {
+    if (elementCarrier === undefined) {
+      return undefined;
+    }
+    return {
+      ...target,
+      elementCarrier: materializeInferredCarrier(target.elementCarrier, elementCarrier),
+      alternatives: target.alternatives.map((alternative) => ({
+        ...alternative,
+        inputCarrier: materializeInferredCarrier(alternative.inputCarrier, elementCarrier),
+      })),
+    };
+  }
   if (target.form !== "receiver-value-array" && target.form !== "call-value-array") {
     return target;
   }
@@ -931,6 +946,34 @@ function materializeVariadicTarget(
   return resolvedElementCarrier === undefined
     ? undefined
     : { ...target, elementCarrier: resolvedElementCarrier };
+}
+
+function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetTypeRef): TargetTypeRef {
+  if (carrier.kind === "opaque" && carrier.id === "tsonic.rust.infer") {
+    return inferred;
+  }
+  switch (carrier.kind) {
+    case "target-named":
+      return carrier.typeArguments === undefined
+        ? carrier
+        : { ...carrier, typeArguments: carrier.typeArguments.map((argument) => materializeInferredCarrier(argument, inferred)) };
+    case "array":
+      return { ...carrier, element: materializeInferredCarrier(carrier.element, inferred) };
+    case "tuple":
+      return { ...carrier, elements: carrier.elements.map((element) => materializeInferredCarrier(element, inferred)) };
+    case "pointer":
+      return { ...carrier, pointee: materializeInferredCarrier(carrier.pointee, inferred) };
+    case "function-pointer":
+      return {
+        ...carrier,
+        args: carrier.args.map((argument) => materializeInferredCarrier(argument, inferred)),
+        result: materializeInferredCarrier(carrier.result, inferred),
+      };
+    case "associated-type":
+      return { ...carrier, owner: materializeInferredCarrier(carrier.owner, inferred) };
+    default:
+      return carrier;
+  }
 }
 
 function firstArgumentId(request: JsOperationRequest): string | undefined {

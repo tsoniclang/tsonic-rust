@@ -248,6 +248,7 @@ interface Array<T> extends Iterable<T> {
   unshift(...items: T[]): number;
   slice(start?: number, end?: number): T[];
   splice(start: number, deleteCount?: number, ...items: T[]): T[];
+  concat(...items: (T | readonly T[])[]): T[];
   join(separator?: string): string;
   at(index: number): T | undefined;
   includes(searchElement: T, fromIndex?: number): boolean;
@@ -276,6 +277,7 @@ interface ReadonlyArray<T> extends Iterable<T> {
   readonly [index: number]: T;
   at(index: number): T | undefined;
   slice(start?: number, end?: number): T[];
+  concat(...items: (T | readonly T[])[]): T[];
   join(separator?: string): string;
   includes(searchElement: T, fromIndex?: number): boolean;
   indexOf(searchElement: T, fromIndex?: number): number;

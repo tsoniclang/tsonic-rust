@@ -291,6 +291,52 @@ export function values(): string {
   assert.match(text, /js_abi::array_is_array_value\(&input\)/u);
 });
 
+test("Array concat tags exact scalar and array arguments while preserving the receiver lane", () => {
+  const int32Carrier = rustSourcePrimitiveTargetType("int32");
+  const arrayCarrier = rustJsArrayTargetType(int32Carrier);
+  const selected = selectJsSurfaceOperation({
+    ownerName: "Array",
+    memberName: "concat",
+    operationKind: "call",
+    receiverCarrier: arrayCarrier,
+    argumentCarriers: [int32Carrier, arrayCarrier],
+  });
+  assert.deepEqual(selected?.fact.target, {
+    form: "receiver-tagged-array",
+    name: "concat",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: {
+      kind: "target-named",
+      id: "rust.js.JsArrayConcatItem",
+      typeArguments: [int32Carrier],
+    },
+    alternatives: [
+      { inputCarrier: int32Carrier, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Value" },
+      { inputCarrier: arrayCarrier, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Array" },
+    ],
+  });
+
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function values(): string {
+  const left: int32[] = [1, 2, 3];
+  const right: int32[] = [5];
+  return left.concat(4, right).join(",");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /left[\s\S]*\.concat\(\[[\s\S]*JsArrayConcatItem::Value\([\s\S]*f64_to_i32\(4\.0\)\?[\s\S]*JsArrayConcatItem::Array\(right\.clone\(\)\)[\s\S]*\]\)/u);
+});
+
 test("sparse arrays lower to JsArray with holes, length writes, and at()", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": sparseSource } });
 

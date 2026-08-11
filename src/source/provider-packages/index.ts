@@ -342,6 +342,21 @@ function materializeProviderOperationForm(
       elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths),
     };
   }
+  if (form.form === "receiver-tagged-array") {
+    return {
+      ...form,
+      leadingArguments: form.leadingArguments.map((argument) => ({
+        ...argument,
+        carrier: materializeProviderCarrier(argument.carrier, carrierPaths),
+      })),
+      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths),
+      alternatives: form.alternatives.map((alternative) => ({
+        ...alternative,
+        inputCarrier: materializeProviderCarrier(alternative.inputCarrier, carrierPaths),
+        constructorPath: expandProviderPath(alternative.constructorPath, aliases),
+      })),
+    };
+  }
   if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }

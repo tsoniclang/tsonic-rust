@@ -24,6 +24,7 @@ export const rustIteratorResultTargetId = "rust.runtime.IteratorResult";
 export const rustUndefinedTargetId = "rust.runtime.Undefined";
 export const rustJsValueTargetId = "rust.js.JsValue";
 export const rustJsArrayTargetId = "rust.js.JsArray";
+export const rustJsArrayConcatItemTargetId = "rust.js.JsArrayConcatItem";
 export const rustJsMapTargetId = "rust.js.JsMap";
 export const rustJsSetTargetId = "rust.js.JsSet";
 export const rustJsDateTargetId = "rust.js.JsDate";
@@ -355,6 +356,10 @@ export function rustJsValueTargetType(): TargetTypeRef {
 
 export function rustJsArrayTargetType(element: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustJsArrayTargetId, typeArguments: [element] };
+}
+
+export function rustJsArrayConcatItemTargetType(element: TargetTypeRef): TargetTypeRef {
+  return { kind: "target-named", id: rustJsArrayConcatItemTargetId, typeArguments: [element] };
 }
 
 export function rustJsMapTargetType(key: TargetTypeRef, value: TargetTypeRef): TargetTypeRef {

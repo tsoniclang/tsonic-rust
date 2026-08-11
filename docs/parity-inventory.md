@@ -15,7 +15,7 @@ the blocked section with the contract each requires.
 - Array: literals, index/at, length, variadic push/unshift, pop, shift,
   splice, includes, indexOf, lastIndexOf, forEach, map, filter, reduce, some,
   every, find, findIndex, findLast, findLastIndex, reverse, default sort,
-  fill, and copyWithin; slice over closed Clone carriers and join over
+  fill, copyWithin, and concat over exact scalar/array alternatives; slice over closed Clone carriers and join over
   exact stringifiable carriers; Array.of over an exact selected element type,
   Array.from over strings, and Array.isArray over closed JsValue inputs;
   callbacks receive every declared argument,
