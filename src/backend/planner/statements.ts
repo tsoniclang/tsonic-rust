@@ -74,6 +74,7 @@ import type { RustResourceManagementFact } from "../../source/rust-facts/keys.js
 import {
   isRustBigIntCarrier,
   isRustBoolCarrier,
+  isRustStringCarrier,
   isRustUnitCarrier,
   rustLocationTargetType,
 } from "../../source/rust-target-types.js";
@@ -97,11 +98,14 @@ import { planRustBindingPattern } from "./binding-patterns.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
   planRustNonConsumingValue,
+  planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
   rustLocationStorageForDeclaration,
 } from "./typed-locations.js";
 import { requireRustLocationValueCarrier } from "./generic-requirements.js";
 import {
+  readRustProjectDispatchedField,
+  readRustProjectObjectField,
   writeRustProjectDispatchedField,
   writeRustProjectObjectField,
 } from "./project-objects.js";
@@ -1106,6 +1110,49 @@ function planExpressionAsStatement(
         }
         const receiverName = allocateRustSyntheticName(context.syntheticNames, "receiver");
         const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
+        if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+          const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+          const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
+          const current = sourceField.dispatch === undefined
+            ? readRustProjectObjectField(
+                selectedReceiver,
+                sourceField.storageIndex,
+                fact.resultCarrier,
+              )
+            : readRustProjectDispatchedField(selectedReceiver, sourceField.dispatch.read);
+          const concatenated: RustExpr = {
+            kind: "string-concat",
+            parts: [
+              { kind: "path", path: currentName },
+              value,
+            ],
+          };
+          return [{
+            kind: "expr",
+            expr: {
+              kind: "block",
+              bindings: [
+                { name: receiverName, value: receiver },
+                { name: currentName, value: current },
+              ],
+              value: sourceField.dispatch === undefined
+                ? writeRustProjectObjectField(
+                    selectedReceiver,
+                    sourceField.storageIndex,
+                    "=",
+                    concatenated,
+                  )
+                : writeRustProjectDispatchedField(
+                    selectedReceiver,
+                    allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"),
+                    sourceField.dispatch.read,
+                    sourceField.dispatch.write,
+                    "=",
+                    concatenated,
+                  ),
+            },
+          }];
+        }
         return [{
           kind: "expr",
           expr: {
@@ -1135,6 +1182,77 @@ function planExpressionAsStatement(
       const value = planExpression(valueNode, context);
       if (value === undefined || target === undefined) {
         return undefined;
+      }
+      if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+        if (context.syntheticNames === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.string-append-temporary",
+            "String compound assignment requires one finalized hygienic-name scope.",
+          ));
+          return undefined;
+        }
+        const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+        const concatenated: RustExpr = {
+          kind: "string-concat",
+          parts: [
+            { kind: "path", path: currentName },
+            value,
+          ],
+        };
+        const promotedLocation = planRustPromotedStorageLocation(
+          left,
+          context,
+          planExpression,
+          false,
+        );
+        if (promotedLocation.kind === "promoted") {
+          if (promotedLocation.expression === undefined) {
+            return undefined;
+          }
+          const locationName = allocateRustSyntheticName(context.syntheticNames, "location");
+          const location: RustExpr = { kind: "path", path: locationName };
+          return [{
+            kind: "expr",
+            expr: {
+              kind: "block",
+              bindings: [
+                { name: locationName, value: promotedLocation.expression },
+                {
+                  name: currentName,
+                  value: { kind: "method-call", receiver: location, method: "load", args: [] },
+                },
+              ],
+              value: {
+                kind: "method-call",
+                receiver: location,
+                method: "store",
+                args: [concatenated],
+              },
+            },
+          }];
+        }
+        if (ast.kindName(left) !== KindIdentifier) {
+          context.diagnostics.push(unsupportedConstructDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.string-append-location",
+            "String compound assignment requires a binding or finalized Rust location plan.",
+          ));
+          return undefined;
+        }
+        return [{
+          kind: "expr",
+          expr: {
+            kind: "block",
+            bindings: [
+              {
+                name: currentName,
+                value: { kind: "method-call", receiver: target, method: "clone", args: [] },
+              },
+            ],
+            value: { kind: "assignment", operator: "=", target, value: concatenated },
+          },
+        }];
       }
       const promoted = planRustPromotedStorageWrite(
         left,

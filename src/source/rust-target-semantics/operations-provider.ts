@@ -1050,29 +1050,53 @@ function acceptProjectSourceCall(
   const selectedKind = ast.kindName(selectedDeclaration);
   const construction = checkedCallIsConstruction(request, context) ||
     selectedKind === "KindConstructor";
-  if (construction && selectedKind === "KindClassDeclaration") {
-    const members = ast.members(selectedDeclaration);
-    if (!isDenseDataArray(members) || members.some((member) => member === undefined)) {
-      return rejectSelectedOperation(request.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_MALFORMED", "Project-source class declaration contains an undefined or non-data member slot.");
-    }
-    const constructors = (members as readonly Node[]).filter((member) =>
-      ast.kindName(member) === "KindConstructor");
-    if (constructors.length !== 0 || request.arguments.length !== 0) {
-      return rejectSelectedOperation(request.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_MISSING", "A project-source construction with an explicit constructor requires that exact TSTS-selected constructor declaration; class-level fallback is allowed only for the implicit zero-argument constructor.");
-    }
-  }
   if (construction && selectedKind !== "KindClassDeclaration" && selectedKind !== "KindConstructor") {
     return rejectSelectedOperation(request.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_INVALID", "Project-source construction evidence is not an exact constructor declaration or an implicit-constructor class declaration.");
   }
-  const callableDeclaration = selectedDeclaration;
+  const selectedCalleeDeclaration = asNode(request.sourceCalleeDeclaration, context);
+  const selectedOwner = construction && selectedCalleeDeclaration !== undefined &&
+      ast.kindName(selectedCalleeDeclaration) === "KindClassDeclaration"
+    ? selectedCalleeDeclaration
+    : selectedKind === "KindClassDeclaration"
+      ? selectedDeclaration
+      : selectedKind === "KindConstructor" ? ast.parent(selectedDeclaration) : undefined;
+  const selectedOwnerDefinition = options.projectTypes.definitionForDeclaration(selectedOwner);
+  const selectedConstructor = construction && selectedOwnerDefinition?.kind === "class"
+    ? selectedProjectConstructor(
+        selectedOwnerDefinition,
+        request,
+        options,
+      )
+    : undefined;
+  if (construction && selectedConstructor === undefined) {
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_SELECTED_CONSTRUCTOR_SIGNATURE_MISSING",
+      "Project construction requires one exact effective constructor signature from shared source-program navigation.",
+    );
+  }
+  if (selectedConstructor !== undefined &&
+    (request.sourceSelectedSignatureParameters.length !== selectedConstructor.parameters.length ||
+      request.sourceSelectedSignatureParameters.some((parameter, index) => {
+        const expected = selectedConstructor.parameters[index];
+        return expected === undefined ||
+          parameter.parameterDeclaration !== expected.parameterDeclaration ||
+          parameter.acceptsOmission !== expected.acceptsOmission ||
+          parameter.rest !== expected.rest;
+      }))) {
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_SELECTED_CONSTRUCTOR_PARAMETER_EVIDENCE_CONFLICT",
+      "The selected constructor parameter evidence conflicts with the exact effective constructor signature.",
+    );
+  }
+  const callableDeclaration = selectedConstructor?.declaration ?? selectedDeclaration;
   const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
   if (targetTypeArguments === undefined && (request.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
     return rejectSelectedOperation(request.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
   }
-  const selectedOwner = selectedKind === "KindConstructor"
-    ? ast.parent(selectedDeclaration)
-    : undefined;
-  const selectedOwnerDefinition = options.projectTypes.definitionForDeclaration(selectedOwner);
   const containingDefinition = options.projectTypes.definitionContainingDeclaration(
     asNode(request.call, context),
   );
@@ -1088,9 +1112,10 @@ function acceptProjectSourceCall(
       ? selectedOwnerRelationship.targetType
       : resolveRustTargetTypeRef(request.sourceReturnType, context, options)
     : resolveRustTargetTypeRef(request.sourceReceiver?.type, context, options);
-  const sourceParameters = selectedKind === "KindClassDeclaration"
-    ? []
-    : ast.parameters(callableDeclaration);
+  const sourceParameters = selectedConstructor === undefined
+    ? ast.parameters(callableDeclaration)
+    : request.sourceSelectedSignatureParameters.map((parameter) =>
+        parameter.parameterDeclaration);
   const parameters = sourceParameters.map((parameter, index) => {
     if (parameter === undefined) {
       return undefined;
@@ -1169,11 +1194,13 @@ function acceptProjectSourceCall(
     : selectedKind === "KindFunctionType" || selectedKind === "KindCallSignature"
       ? "call"
       : rustProjectCallableTargetName(callableDeclaration, context) ?? "<anonymous>";
-  const fileName = ast.getFileName(ast.getSourceFile(callableDeclaration));
+  const memberDeclaration = construction ? selectedOwner ?? callableDeclaration : callableDeclaration;
+  const fileName = ast.getFileName(ast.getSourceFile(memberDeclaration));
+  const targetName = selectedConstructor?.targetName ?? sourceName;
   const member: RustTargetMember = {
-    id: `tsonic.rust.source.call:${fileName}:${ast.pos(callableDeclaration)}:${ast.end(callableDeclaration)}`,
+    id: `tsonic.rust.source.call:${fileName}:${ast.pos(memberDeclaration)}:${ast.end(memberDeclaration)}:${targetName}`,
     sourceName,
-    targetName: sourceName,
+    targetName,
     kind: construction ? "constructor" : "method",
     parameters: parameters as NonNullable<RustTargetMember["parameters"]>,
     returnType,
@@ -1213,6 +1240,30 @@ function acceptProjectSourceCall(
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
     },
   }, [{ message: `rust selected project-source call ${member.id}` }]);
+}
+
+function selectedProjectConstructor(
+  definition: import("./project-type-policy.js").RustProjectTypeDefinition,
+  request: RustCheckedCallSelectionInput,
+  options: RustOperationsProviderOptions,
+): import("./project-type-policy.js").RustProjectConstructorSignature | undefined {
+  const exact = options.projectTypes.constructorForSignature(
+    definition,
+    request.sourceSelectedSignature,
+  );
+  if (exact !== undefined) {
+    return exact;
+  }
+  const candidates = options.projectTypes.constructorsForDefinition(definition).filter((candidate) =>
+    candidate.parameters.length === request.sourceSelectedSignatureParameters.length &&
+    candidate.parameters.every((parameter, index) => {
+      const selected = request.sourceSelectedSignatureParameters[index];
+      return selected !== undefined &&
+        parameter.parameterDeclaration === selected.parameterDeclaration &&
+        parameter.acceptsOmission === selected.acceptsOmission &&
+        parameter.rest === selected.rest;
+    }));
+  return candidates.length === 1 ? candidates[0] : undefined;
 }
 
 function mapSelectedTargetTypeArguments(

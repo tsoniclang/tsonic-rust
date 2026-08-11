@@ -85,7 +85,9 @@ export function printRustItem(item: RustItem): string {
       }).join("\n");
       const declaration = `${printRustVisibility(item.visibility)}trait ${item.name}${generics}`;
       const flatHeader = `${declaration}${superTraits}`;
-      const expandedHeader = renderedSuperTraits.length > 0 && flatHeader.length > rustFormatWidth
+      const expandedHeader = renderedSuperTraits.length > 0 &&
+          (`${flatHeader} {`.length >= rustFormatWidth ||
+            (renderedSuperTraits.length > 1 && flatHeader.length > 80))
         ? `${declaration}:\n    ${renderedSuperTraits.join(" + ")}\n{`
         : `${flatHeader} {`;
       return functions.length === 0
@@ -1153,6 +1155,67 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
   }
 }
 
+function rustExpressionContainsPreferredVerticalMethodChain(expression: RustExpr): boolean {
+  switch (expression.kind) {
+    case "method-call":
+      return rustMethodChainPrefersVerticalLayout(expression) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.receiver) ||
+        expression.args.some(rustExpressionContainsPreferredVerticalMethodChain);
+    case "unary":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.operand);
+    case "numeric-cast":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
+    case "binary":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.left) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.right);
+    case "range":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.start) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.end);
+    case "conditional":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.condition) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.whenTrue) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.whenFalse);
+    case "assignment":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.target) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.value);
+    case "call":
+    case "associated-call":
+      return expression.args.some(rustExpressionContainsPreferredVerticalMethodChain);
+    case "invoke":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.callee) ||
+        expression.args.some(rustExpressionContainsPreferredVerticalMethodChain);
+    case "field":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.receiver);
+    case "index":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.receiver) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.index);
+    case "block":
+      return expression.bindings.some((binding) =>
+        rustExpressionContainsPreferredVerticalMethodChain(binding.value)) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.value);
+    case "evaluate-then":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.effect) ||
+        rustExpressionContainsPreferredVerticalMethodChain(expression.value);
+    case "string-concat":
+      return expression.parts.some(rustExpressionContainsPreferredVerticalMethodChain);
+    case "vec-literal":
+    case "slice-literal":
+    case "tuple-literal":
+      return expression.elements.some(rustExpressionContainsPreferredVerticalMethodChain);
+    case "reference":
+    case "await":
+    case "try":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.expr);
+    case "closure":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.body);
+    case "struct-literal":
+      return expression.fields.some((field) =>
+        rustExpressionContainsPreferredVerticalMethodChain(field.value));
+    default:
+      return false;
+  }
+}
+
 function printRustExprFitted(
   expression: RustExpr,
   depth: number,
@@ -1225,6 +1288,22 @@ function printRustExprFitted(
       if (expression.parts.length <= rustFormatMacroInlineArgumentLimit &&
         renderedFits(flat, column)) {
         return flat;
+      }
+      const trailingPart = expression.parts[expression.parts.length - 1];
+      const leadingParts = expression.parts.slice(0, -1).map(printRustExpr);
+      if (trailingPart !== undefined && leadingParts.every((part) => !part.includes("\n"))) {
+        const prefix = `format!("${expression.parts.map(() => "{}").join("")}", ${
+          leadingParts.length === 0 ? "" : `${leadingParts.join(", ")}, `
+        }`;
+        const trailing = printRustExprFitted(
+          trailingPart,
+          depth,
+          column + prefix.length,
+        );
+        if (trailing.includes("\n") &&
+          column + prefix.length + firstLine(trailing).length <= rustFormatWidth) {
+          return appendToLastLine(`${prefix}${trailing}`, ",)");
+        }
       }
       const argumentIndent = indentText(depth + 1);
       const placeholders = expression.parts.map(() => "{}").join("");
@@ -1985,10 +2064,12 @@ function printFittedCall(
         return compact;
       }
     } else if (!rustExpressionContainsStatementBlock(argument) &&
+      !rustExpressionContainsPreferredVerticalMethodChain(argument) &&
       !rustExpressionContainsExpandedStructLiteral(argument) && renderedFits(flat, column)) {
       return flat;
     }
   } else if (!forceExpanded && !arguments_.some(rustExpressionContainsStatementBlock) &&
+    !arguments_.some(rustExpressionContainsPreferredVerticalMethodChain) &&
     !arguments_.some(rustExpressionContainsExpandedStructLiteral) &&
     !flat.includes("\n") && renderedFits(flat, column)) {
     return flat;

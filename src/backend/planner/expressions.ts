@@ -2408,7 +2408,7 @@ function planSelectedSourceCall(
       const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
       if (typePath !== undefined) {
-        planned = { kind: "call", path: `${typePath}::new`, args: shaped };
+        planned = { kind: "call", path: `${typePath}::${fact.target.name}`, args: shaped };
       }
       break;
     }
@@ -2678,7 +2678,7 @@ export function sourceCallSelectedMemberMatches(
   }
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
-    ? member.sourceName
+    ? fact.target.name
     : fact.target.form === "callable" ? member.targetName : fact.target.name;
   const selectedReturn = member.returnType === undefined
     ? undefined

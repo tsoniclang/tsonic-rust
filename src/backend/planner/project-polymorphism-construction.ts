@@ -8,9 +8,17 @@ import {
   Node_Expression,
   Node_Name,
 } from "../../common/source-ast.js";
-import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
+import type {
+  RustProjectConstructorSignature,
+  RustProjectTypeDefinition,
+} from "../../source/rust-target-semantics/project-type-policy.js";
+import {
+  rustSourceParameterAbiFactKey,
+  rustTargetOperationFactKey,
+} from "../../source/rust-facts/keys.js";
 import type {
   RustExpr,
+  RustFunctionParam,
   RustImplFunction,
   RustStmt,
   RustType,
@@ -38,12 +46,15 @@ import {
   projectStateType,
   sourceSubtreeContainsThis,
 } from "./project-polymorphism-model.js";
-import { rustProjectInitializeMethod } from "./project-polymorphism-names.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
   planRustCallableParameterPrelude,
   planRustCallableParameters,
 } from "./callable-parameters.js";
+import {
+  isValidRustIdentifier,
+  rustSourceName,
+} from "./plan-context.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -69,17 +80,39 @@ export function planProjectClassConstructor(
     return undefined;
   }
   const constructors = members.filter((member) => context.input.ast.kindName(member) === "KindConstructor");
-  if (constructors.length > 1) {
+  const constructorSignatures = context.input.projectTypes.constructorsForDefinition(definition);
+  if (constructorSignatures.length !== 1) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, definition.declaration),
+      "rust.backend.project-constructor-overloads",
+      "Project construction currently requires one exact effective constructor signature.",
+    ));
     return undefined;
   }
-  const constructor = constructors[0];
+  const constructorSignature = constructorSignatures[0]!;
+  const implementationConstructors = constructors.filter((candidate) =>
+    context.input.ast.body(candidate) !== undefined);
+  const constructor = implementationConstructors[0];
+  if (implementationConstructors.length > 1 ||
+    constructorSignature.implicit !== (constructor === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, definition.declaration),
+      "rust.backend.project-constructor-implementation",
+      "Effective project constructor evidence conflicts with the exact authored constructor implementation.",
+    ));
+    return undefined;
+  }
   const syntheticNames = createRustSyntheticNameState(
     context.input.ast,
     constructor ?? definition.declaration,
     [],
   );
   const parameterPlan = constructor === undefined
-    ? { params: [], prelude: [], bodyInnerAttrs: [] }
+    ? planImplicitProjectConstructorParameters(
+        definition,
+        constructorSignature,
+        context,
+      )
     : planRustCallableParameters(constructor, context, syntheticNames, { requireStatic: false });
   if (parameterPlan === undefined) {
     return undefined;
@@ -105,22 +138,30 @@ export function planProjectClassConstructor(
     edge.kind === "extends" && edge.target.kind === "class");
   let bodyIndex = 0;
   if (base !== undefined) {
-    const first = bodyStatements[0];
-    const expression = first === undefined ? undefined : Node_Expression(context.input.ast, first);
-    const callee = expression === undefined ? undefined : Node_Expression(context.input.ast, expression);
-    if (constructor === undefined || expression === undefined ||
-      context.input.ast.kindName(expression) !== KindCallExpression ||
-      callee === undefined || context.input.ast.kindName(callee) !== "KindSuperKeyword") {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, constructor ?? definition.declaration),
-        "rust.backend.project-super-constructor",
-        "Derived project construction requires one explicit, checked super(...) call as its first constructor statement.",
-      ));
-      return undefined;
-    }
-    const baseArgs = planRustSelectedSourceCallArguments(expression, initializationContext);
+    const explicitBase = constructor === undefined
+      ? undefined
+      : selectedExplicitBaseConstructor(
+          constructor,
+          bodyStatements as readonly Node[],
+          base.target,
+          context,
+        );
+    const implicitBase = constructor === undefined
+      ? selectedImplicitBaseConstructor(
+          constructorSignature,
+          base.target,
+          context,
+        )
+      : undefined;
+    const baseConstructor = explicitBase?.constructor ?? implicitBase;
+    const baseArgs = explicitBase === undefined
+      ? parameterPlan.params.map((parameter) => ({
+          kind: "path" as const,
+          path: parameter.name,
+        }))
+      : planRustSelectedSourceCallArguments(explicitBase.call, initializationContext);
     const baseType = rustTypeFromCarrierInContext(base.targetType, context);
-    if (baseArgs === undefined || baseType === undefined) {
+    if (baseConstructor === undefined || baseArgs === undefined || baseType === undefined) {
       return undefined;
     }
     statements.push({
@@ -130,11 +171,11 @@ export function planProjectClassConstructor(
       init: {
         kind: "associated-call",
         owner: baseType,
-        method: rustProjectInitializeMethod,
+        method: baseConstructor.initializeName,
         args: baseArgs,
       },
     });
-    bodyIndex = 1;
+    bodyIndex = constructor === undefined ? 0 : 1;
   }
   const ownLayer = layers[layers.length - 1];
   if (ownLayer === undefined || ownLayer.definition !== definition) {
@@ -210,7 +251,7 @@ export function planProjectClassConstructor(
       };
   statements.push({ kind: "tail", expr: state });
   const initialize: RustImplFunction = {
-    name: rustProjectInitializeMethod,
+    name: constructorSignature.initializeName,
     visibility: "crate",
     params: parameterPlan.params,
     returnType: stateType,
@@ -224,7 +265,7 @@ export function planProjectClassConstructor(
     path: parameter.name,
   }));
   const construct: RustImplFunction = {
-    name: "new",
+    name: constructorSignature.targetName,
     visibility: constructor === undefined ||
         (!context.input.ast.hasModifierKind(constructor, "private") &&
           !context.input.ast.hasModifierKind(constructor, "protected"))
@@ -250,7 +291,7 @@ export function planProjectClassConstructor(
           init: {
             kind: "associated-call",
             owner: wrapperType,
-            method: rustProjectInitializeMethod,
+            method: constructorSignature.initializeName,
             args: forwardArgs,
           },
         },
@@ -308,4 +349,95 @@ export function planProjectClassConstructor(
     },
   };
   return { initialize, construct };
+}
+
+function planImplicitProjectConstructorParameters(
+  definition: RustProjectTypeDefinition,
+  signature: RustProjectConstructorSignature,
+  context: RustPlanContext,
+): {
+  readonly params: readonly RustFunctionParam[];
+  readonly prelude: readonly never[];
+  readonly bodyInnerAttrs: readonly never[];
+} | undefined {
+  const receiver = context.input.projectTypes.openCarrier(definition);
+  const params: RustFunctionParam[] = [];
+  for (const parameter of signature.parameters) {
+    const abi = context.input.facts.getFact(
+      parameter.parameterDeclaration,
+      rustSourceParameterAbiFactKey,
+    );
+    const carrier = abi === undefined
+      ? undefined
+      : context.input.projectTypes.instantiateMemberCarrier(
+          parameter.parameterDeclaration,
+          receiver,
+          abi.parameterCarrier,
+        );
+    const type = rustTypeFromCarrierInContext(carrier, context);
+    const name = rustSourceName(context, parameter.parameterName);
+    if (type === undefined || !isValidRustIdentifier(name)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, parameter.parameterDeclaration),
+        "rust.backend.project-implicit-constructor-parameter",
+        "An inherited effective constructor parameter has no exact instantiated Rust ABI.",
+      ));
+      return undefined;
+    }
+    params.push({ name, type, mutable: false });
+  }
+  return { params, prelude: [], bodyInnerAttrs: [] };
+}
+
+function selectedImplicitBaseConstructor(
+  derived: RustProjectConstructorSignature,
+  base: RustProjectTypeDefinition,
+  context: RustPlanContext,
+): RustProjectConstructorSignature | undefined {
+  const matches = context.input.projectTypes.constructorsForDefinition(base).filter((candidate) =>
+    candidate.parameters.length === derived.parameters.length &&
+    candidate.parameters.every((parameter, index) => {
+      const selected = derived.parameters[index];
+      return selected !== undefined &&
+        parameter.parameterDeclaration === selected.parameterDeclaration &&
+        parameter.acceptsOmission === selected.acceptsOmission &&
+        parameter.rest === selected.rest;
+    }));
+  if (matches.length !== 1) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, base.declaration),
+      "rust.backend.project-inherited-constructor",
+      "An implicit derived constructor does not identify one exact inherited base constructor ABI.",
+    ));
+    return undefined;
+  }
+  return matches[0];
+}
+
+function selectedExplicitBaseConstructor(
+  constructor: Node,
+  statements: readonly Node[],
+  base: RustProjectTypeDefinition,
+  context: RustPlanContext,
+): { readonly call: Node; readonly constructor: RustProjectConstructorSignature } | undefined {
+  const first = statements[0];
+  const call = first === undefined ? undefined : Node_Expression(context.input.ast, first);
+  const callee = call === undefined ? undefined : Node_Expression(context.input.ast, call);
+  const fact = call === undefined
+    ? undefined
+    : context.input.facts.getFact(call, rustTargetOperationFactKey);
+  const selected = fact?.kind === "source-call" && fact.target.form === "constructor"
+    ? context.input.projectTypes.constructorForTargetName(base, fact.target.name)
+    : undefined;
+  if (call === undefined || context.input.ast.kindName(call) !== KindCallExpression ||
+    callee === undefined || context.input.ast.kindName(callee) !== "KindSuperKeyword" ||
+    selected === undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, constructor),
+      "rust.backend.project-super-constructor",
+      "Derived project construction requires one exact checked super(...) constructor call as its first statement.",
+    ));
+    return undefined;
+  }
+  return { call, constructor: selected };
 }

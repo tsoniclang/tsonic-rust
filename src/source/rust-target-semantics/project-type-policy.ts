@@ -1,10 +1,12 @@
 import type {
   AstReader,
   Node,
+  Signature,
   SourceFile,
   Type,
 } from "@tsonic/tsts";
 import type {
+  SourceClassConstructorParameter,
   SourceProgramNavigation,
   SourceProjectMemberImplementationResult,
 } from "@tsonic/target-api";
@@ -30,6 +32,17 @@ export interface RustProjectTypeDefinition {
   readonly sourceName: string;
   readonly kind: "class" | "interface";
   readonly typeParameterNames: readonly string[];
+  readonly dispatchName: string;
+  readonly rootName?: string;
+}
+
+export interface RustProjectConstructorSignature {
+  readonly signature: Signature;
+  readonly declaration?: Node;
+  readonly parameters: readonly SourceClassConstructorParameter[];
+  readonly implicit: boolean;
+  readonly targetName: string;
+  readonly initializeName: string;
 }
 
 export interface RustProjectHeritageEdge {
@@ -64,6 +77,15 @@ export interface RustProjectTypePolicy {
   classLineage(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
   interfacesForClass(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
   concreteClassesFor(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[];
+  constructorsForDefinition(definition: RustProjectTypeDefinition): readonly RustProjectConstructorSignature[];
+  constructorForSignature(
+    definition: RustProjectTypeDefinition,
+    signature: Signature | undefined,
+  ): RustProjectConstructorSignature | undefined;
+  constructorForTargetName(
+    definition: RustProjectTypeDefinition,
+    targetName: string,
+  ): RustProjectConstructorSignature | undefined;
   memberImplementation(
     concreteClass: RustProjectTypeDefinition,
     contractMember: Node,
@@ -162,6 +184,15 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     concreteClassesFor(definition) {
       return requireCurrent().concreteClassesFor(definition);
     },
+    constructorsForDefinition(definition) {
+      return requireCurrent().constructorsForDefinition(definition);
+    },
+    constructorForSignature(definition, signature) {
+      return requireCurrent().constructorForSignature(definition, signature);
+    },
+    constructorForTargetName(definition, targetName) {
+      return requireCurrent().constructorForTargetName(definition, targetName);
+    },
     memberImplementation(concreteClass, contractMember) {
       return requireCurrent().memberImplementation(concreteClass, contractMember);
     },
@@ -178,8 +209,9 @@ export function createRustProjectTypePolicy(
   const byKey = new Map<string, RustProjectTypeDefinition>();
 
   for (const sourceFile of host.sourceFiles) {
+    const usedNames = sourceFileIdentifierNames(sourceFile, host.ast);
     for (const statement of denseNodes(host.ast.statements(sourceFile)) ?? []) {
-      const definition = projectDefinition(statement, sourceFile, host.ast);
+      const definition = projectDefinition(statement, sourceFile, host.ast, usedNames);
       if (definition === undefined) {
         continue;
       }
@@ -399,6 +431,50 @@ export function createRustProjectTypePolicy(
     return Object.freeze(result);
   };
 
+  const constructorsByDefinition = new WeakMap<
+    RustProjectTypeDefinition,
+    readonly RustProjectConstructorSignature[]
+  >();
+  const constructorsBySignature = new WeakMap<Signature, RustProjectConstructorSignature>();
+  for (const definition of definitions) {
+    if (definition.kind !== "class") {
+      constructorsByDefinition.set(definition, Object.freeze([]));
+      continue;
+    }
+    const selected = host.navigation.classConstructors(definition.declaration);
+    if (selected.kind === "unresolved") {
+      issues.push({
+        node: selected.declaration,
+        code: "RUST_PROJECT_CONSTRUCTOR_SOURCE_UNRESOLVED",
+        message: selected.reason,
+      });
+      constructorsByDefinition.set(definition, Object.freeze([]));
+      continue;
+    }
+    const usedNames = projectMemberNames(definition.declaration, host.ast);
+    const signatures = selected.signatures.map((signature, index) => {
+      const preferredTargetName = index === 0 && !usedNames.has("new")
+        ? "new"
+        : index === 0 ? "__tsonic_new" : `__tsonic_new_${index + 1}`;
+      const targetName = allocateGeneratedName(usedNames, preferredTargetName);
+      const initializeName = allocateGeneratedName(
+        usedNames,
+        index === 0 ? "__tsonic_initialize" : `__tsonic_initialize_${index + 1}`,
+      );
+      const plan: RustProjectConstructorSignature = Object.freeze({
+        signature: signature.signature,
+        ...(signature.declaration === undefined ? {} : { declaration: signature.declaration }),
+        parameters: signature.parameters,
+        implicit: selected.implicit,
+        targetName,
+        initializeName,
+      });
+      constructorsBySignature.set(signature.signature, plan);
+      return plan;
+    });
+    constructorsByDefinition.set(definition, Object.freeze(signatures));
+  }
+
   const frozenDefinitions = Object.freeze(definitions);
   const frozenIssues = Object.freeze(issues);
   const policy: RustProjectTypePolicy = {
@@ -454,6 +530,23 @@ export function createRustProjectTypePolicy(
         return relation.kind === "related";
       }));
     },
+    constructorsForDefinition(definition) {
+      return constructorsByDefinition.get(definition) ?? Object.freeze([]);
+    },
+    constructorForSignature(definition, signature) {
+      if (signature === undefined) {
+        return undefined;
+      }
+      const selected = constructorsBySignature.get(signature);
+      return selected !== undefined &&
+          (constructorsByDefinition.get(definition) ?? []).includes(selected)
+        ? selected
+        : undefined;
+    },
+    constructorForTargetName(definition, targetName) {
+      return (constructorsByDefinition.get(definition) ?? []).find((signature) =>
+        signature.targetName === targetName);
+    },
     memberImplementation(concreteClass, contractMember) {
       return host.navigation.memberImplementation(
         concreteClass.declaration,
@@ -468,6 +561,7 @@ function projectDefinition(
   declaration: Node,
   sourceFile: SourceFile,
   ast: AstReader,
+  usedNames: Set<string>,
 ): RustProjectTypeDefinition | undefined {
   const kindName = ast.kindName(declaration);
   const kind = kindName === "KindClassDeclaration"
@@ -490,14 +584,69 @@ function projectDefinition(
   return sourceName.length === 0 || fileName.length === 0 ||
       parameters === undefined || names === undefined || names.some((name) => name.length === 0)
     ? undefined
-    : Object.freeze({
+    : (() => {
+        const dispatchName = allocateGeneratedName(
+          usedNames,
+          `__TsonicDispatch_${sourceName}`,
+        );
+        const rootName = kind === "class"
+          ? allocateGeneratedName(usedNames, `__TsonicRoot_${sourceName}`)
+          : undefined;
+        return Object.freeze({
         declaration,
         sourceFile,
         fileName,
         sourceName,
         kind,
         typeParameterNames: Object.freeze(names),
+        dispatchName,
+        ...(rootName === undefined ? {} : { rootName }),
       });
+      })();
+}
+
+function sourceFileIdentifierNames(sourceFile: SourceFile, ast: AstReader): Set<string> {
+  const names = new Set<string>();
+  const visit = (node: Node | undefined): void => {
+    if (node === undefined) {
+      return;
+    }
+    if (ast.kindName(node) === "KindIdentifier") {
+      const name = ast.text(node);
+      if (name.length > 0) {
+        names.add(name);
+      }
+    }
+    ast.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+}
+
+function projectMemberNames(declaration: Node, ast: AstReader): Set<string> {
+  const names = new Set<string>();
+  for (const member of denseNodes(ast.members(declaration)) ?? []) {
+    const nameNode = ast.name(member);
+    if (nameNode === undefined || ast.kindName(nameNode) !== "KindIdentifier") {
+      continue;
+    }
+    const name = ast.text(nameNode);
+    if (name.length > 0) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
+function allocateGeneratedName(usedNames: Set<string>, preferred: string): string {
+  let candidate = preferred;
+  let suffix = 2;
+  while (usedNames.has(candidate)) {
+    candidate = `${preferred}_${suffix}`;
+    suffix += 1;
+  }
+  usedNames.add(candidate);
+  return candidate;
 }
 
 function heritageKindIssue(

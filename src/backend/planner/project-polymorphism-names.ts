@@ -5,18 +5,19 @@ import type { RustType, RustTypeParameter } from "../rust-ast/nodes.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 
-export const rustProjectInitializeMethod = "__tsonic_initialize";
-
 export function rustProjectDispatchTraitName(
   definition: RustProjectTypeDefinition,
 ): string {
-  return `__TsonicDispatch_${definition.sourceName}`;
+  return definition.dispatchName;
 }
 
 export function rustProjectRootName(
   definition: RustProjectTypeDefinition,
 ): string {
-  return `__TsonicRoot_${definition.sourceName}`;
+  if (definition.rootName === undefined) {
+    throw new Error("Rust project root names exist only for project classes.");
+  }
+  return definition.rootName;
 }
 
 export function rustProjectTypeParameters(

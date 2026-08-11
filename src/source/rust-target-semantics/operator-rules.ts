@@ -241,6 +241,9 @@ export function selectRustCompoundAssignment(
     return undefined;
   }
   const binaryOperator = compoundBinaryOperator(operator);
+  if (operator === "+=" && isRustStringCarrier(left) && isRustStringCarrier(right)) {
+    return operator;
+  }
   return binaryOperator !== undefined && sameRustArithmeticCarrier(left, right) &&
       rustArithmeticOperatorHasDirectSemantics(binaryOperator, left)
     ? operator

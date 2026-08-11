@@ -379,3 +379,75 @@ test("short optional chains stay attached when their fitted closure body expands
 
   assert.match(source, /item\.as_ref\(\)\.map\(\|__tsonic_optional_receiver\| \{/u);
 });
+
+test("long multi-supertrait headers use rustfmt-compatible vertical layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_CompleteProjectObject",
+      visibility: "private",
+      superTraits: [
+        { kind: "named", path: "__TsonicDispatch_TaggedProjectObject" },
+        { kind: "named", path: "__TsonicDispatch_CountedProjectObject" },
+      ],
+      functions: [],
+    }],
+  });
+
+  assert.match(
+    source,
+    /trait __TsonicDispatch_CompleteProjectObject:\n    __TsonicDispatch_TaggedProjectObject \+ __TsonicDispatch_CountedProjectObject\n\{\n\}/u,
+  );
+});
+
+test("string concatenation preserves vertical chains inside trailing blocks", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "append",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "string-concat",
+            parts: [
+              { kind: "path", path: "current" },
+              {
+                kind: "block",
+                bindings: [{
+                  name: "receiver_with_a_deliberately_long_name",
+                  value: { kind: "path", path: "value" },
+                }],
+                value: {
+                  kind: "method-call",
+                  receiver: {
+                    kind: "method-call",
+                    receiver: {
+                      kind: "field",
+                      receiver: { kind: "path", path: "receiver_with_a_deliberately_long_name" },
+                      name: "__tsonic_state_with_a_deliberately_long_name",
+                    },
+                    method: "load_the_complete_project_state_without_inference",
+                    args: [],
+                  },
+                  method: "clone_the_exact_selected_value",
+                  args: [],
+                },
+              },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /format!\("\{\}\{\}", current, \{/u);
+  assert.match(
+    source,
+    /receiver_with_a_deliberately_long_name\n            \.__tsonic_state_with_a_deliberately_long_name\n            \.load_the_complete_project_state_without_inference\(\)\n            \.clone_the_exact_selected_value\(\)/u,
+  );
+});

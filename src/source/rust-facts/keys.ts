@@ -391,7 +391,11 @@ export type RustTargetOperationFact =
           }
         | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef }
         | { readonly form: "callable"; readonly carrier: TargetTypeRef }
-        | { readonly form: "constructor"; readonly typeCarrier: TargetTypeRef };
+        | {
+            readonly form: "constructor";
+            readonly name: string;
+            readonly typeCarrier: TargetTypeRef;
+          };
       readonly parameters: readonly RustSourceCallParameterPlan[];
       readonly targetTypeArguments?: readonly TargetTypeRef[];
       readonly resultCarrier: TargetTypeRef;

@@ -431,6 +431,10 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
   }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const isStatic = ast.hasModifierKind(member, "static");
+  const methodAttributes = [
+    ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
+    ...(isStatic && methodName === "new" ? ["#[allow(clippy::new_ret_no_self)]"] : []),
+  ];
   if (generatorFact !== undefined && fallible) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -515,7 +519,7 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
     return {
       name: methodName,
       visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
-      ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+      ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
       ...(isStatic ? {} : { selfParam: "ref" as const }),
       params,
       returnType: generatorReturnType,
@@ -545,7 +549,7 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
   return {
     name: methodName,
     visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
-    ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+    ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
     ...(fallible ? { fallible: true } : {}),
     ...(sourceAsync ? { isAsync: true } : {}),
     ...(isStatic ? {} : { selfParam: "ref" as const }),

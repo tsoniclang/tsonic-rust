@@ -2541,7 +2541,11 @@ function applySelectedProjectSourceCall(
   if (indirectCallable) {
     target = { form: "callable", carrier: selectedCallableCarrier };
   } else if (expressionKind === KindNewExpression || declarationKind === "KindConstructor") {
-    target = { form: "constructor", typeCarrier: resultCarrier };
+    target = {
+      form: "constructor",
+      name: selectedMember.targetName,
+      typeCarrier: resultCarrier,
+    };
     operationKind = "constructor";
   } else if (declarationKind === "KindMethodDeclaration" ||
     declarationKind === "KindMethodSignature") {

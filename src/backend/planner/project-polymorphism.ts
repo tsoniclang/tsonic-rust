@@ -93,7 +93,10 @@ export function planPolymorphicClassDeclaration(
       kind: "struct",
       name: rustProjectRootName(definition),
       visibility: "crate",
-      attrs: ["#[allow(non_camel_case_types)]"],
+      attrs: [
+        "#[allow(non_camel_case_types)]",
+        "#[allow(clippy::type_complexity)]",
+      ],
       derives: [],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
@@ -151,6 +154,9 @@ export function planPolymorphicInterfaceDeclaration(
       kind: "struct",
       name: definition.sourceName,
       visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "private",
+      ...(context.input.ast.hasModifierKind(declaration, "export")
+        ? {}
+        : { attrs: ["#[allow(dead_code)]"] }),
       derives: ["Clone"],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
