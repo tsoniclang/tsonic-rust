@@ -169,6 +169,7 @@ import type { RustSourceProfileRegistry } from "./source-profile-registry.js";
 import { selectedSourceLiteralIsRepresentable } from "./selected-numeric-literal.js";
 import {
   createRustSourceCallableAbiResolver,
+  resolveRustContextualParameterAbi,
 } from "./source-callable-abi.js";
 import type { RustSourceCallableAbiResolver } from "./source-callable-abi.js";
 import type {
@@ -2352,7 +2353,9 @@ function applySelectedProjectSourceCall(
       const carrier = parameterAbi.form === "rest" &&
           binding.sourceParameterForm === "rest-element"
         ? valueCarrier.kind === "array" ? valueCarrier.element : undefined
-        : valueCarrier;
+        : parameterAbi.form === "optional" || parameterAbi.form === "default"
+          ? parameterCarrier
+          : valueCarrier;
       return carrier === undefined
         ? undefined
         : {
@@ -4021,7 +4024,12 @@ function resolveFunctionExpressionCarrier(
     if (argCarrier === undefined || (argCarrier.kind === "opaque" && argCarrier.id === "tsonic.rust.infer")) {
       return undefined;
     }
-    const parameterAbi = resolveParameterAbi(walk, parameter);
+    const parameterAbi = resolveRustContextualParameterAbi(
+      parameter,
+      argCarrier,
+      rustResolutionContext(walk, parameter),
+      walk.operationOptions,
+    );
     if (parameterAbi === undefined ||
       !rustTargetTypeRefEquals(parameterAbi.parameterCarrier, argCarrier)) {
       return undefined;

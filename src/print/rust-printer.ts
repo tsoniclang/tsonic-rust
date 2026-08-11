@@ -1365,7 +1365,7 @@ function printRustLetInitializer(
   if (flat.includes("\n")) {
     const continuationIndent = indentText(depth + 1);
     const authoredOpening = firstLine(flat);
-    if (prefix.length + authoredOpening.length > rustFormatWidth &&
+    if (prefix.length + authoredOpening.length + 1 > rustFormatWidth &&
       continuationIndent.length + authoredOpening.length <= rustFormatWidth) {
       const continuation = printRustExprFitted(
         initializer,

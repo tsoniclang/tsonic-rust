@@ -224,3 +224,62 @@ test("selectors after multiline call bases align with the base", () => {
   assert.match(source, /\n        \.unwrap_or\(-1\)/u);
   assert.doesNotMatch(source, /\n            \.unwrap_or\(-1\)/u);
 });
+
+test("long multiline let initializers reflow from their continuation column", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "textFunction",
+          mutable: false,
+          init: {
+            kind: "associated-call",
+            owner: {
+              kind: "named",
+              path: "rt::Callable",
+              typeArguments: [
+                { kind: "tuple", elements: [{ kind: "string" }] },
+                { kind: "string" },
+              ],
+            },
+            method: "new",
+            args: [{
+              kind: "closure-block",
+              params: [{
+                name: "__tsonic_callable_arguments_5",
+                mutable: false,
+              }],
+              move: true,
+              async: false,
+              body: {
+                statements: [{
+                  kind: "tail",
+                  expr: {
+                    kind: "call",
+                    path: "preserveText",
+                    args: [{
+                      kind: "field",
+                      receiver: { kind: "path", path: "__tsonic_callable_arguments_5" },
+                      name: "0",
+                    }],
+                  },
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let textFunction =\n        rt::Callable::<\(String,\), String>::new\(move \|__tsonic_callable_arguments_5\| \{/u,
+  );
+});

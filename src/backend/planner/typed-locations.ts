@@ -20,7 +20,11 @@ import {
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
 } from "../../source/rust-facts/keys.js";
-import { rustValueCarrierRequiresCloneOnRead } from "../../source/rust-target-types.js";
+import {
+  isRustCopyCarrier,
+  rustCarrierSupportsClone,
+  rustValueCarrierRequiresCloneOnRead,
+} from "../../source/rust-target-types.js";
 import type { RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
@@ -130,7 +134,7 @@ export function planRustIdentifierValue(
       : { kind: "method-call", receiver: value, method: "load", args: [] };
   }
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustValueCarrierRequiresCloneOnRead(carrier)
+  return rustReadRequiresClone(node, carrier, context)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : value;
 }
@@ -150,7 +154,12 @@ export function planRustCaptureValue(
       args: [],
     };
   }
-  return planRustIdentifierValue(node, path, context);
+  const value = planRustIdentifierValue(node, path, context);
+  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier) &&
+      !(value.kind === "method-call" && value.method === "clone" && value.args.length === 0)
+    ? { kind: "method-call", receiver: value, method: "clone", args: [] }
+    : value;
 }
 
 export function planRustNonConsumingValue(
@@ -159,11 +168,21 @@ export function planRustNonConsumingValue(
   context: RustPlanContext,
 ): RustExpr {
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustValueCarrierRequiresCloneOnRead(carrier) &&
+  return rustReadRequiresClone(node, carrier, context) &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver
     : expression;
+}
+
+function rustReadRequiresClone(
+  node: Node,
+  carrier: TargetTypeRef | undefined,
+  context: RustPlanContext,
+): boolean {
+  return rustValueCarrierRequiresCloneOnRead(carrier) ||
+    (rustCapturedBindingPath(node, context) !== undefined &&
+      !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier));
 }
 
 export function rustLocationStorageForReference(

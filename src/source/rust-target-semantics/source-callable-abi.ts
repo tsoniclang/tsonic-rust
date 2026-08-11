@@ -1,5 +1,10 @@
 import type { Node, Symbol } from "@tsonic/tsts";
-import { isRustStringCarrier, rustOptionTargetType } from "../rust-target-types.js";
+import {
+  isRustStringCarrier,
+  rustOptionElementCarrier,
+  rustOptionTargetType,
+} from "../rust-target-types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { RustArgumentMode } from "../rust-facts/keys.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
@@ -100,6 +105,55 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
       cache.set(parameter, abi);
       return abi;
     },
+  };
+}
+
+export function resolveRustContextualParameterAbi(
+  parameter: Node,
+  selectedParameterCarrier: TargetTypeRef,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): RustSourceParameterAbi | undefined {
+  const declaration = context.ast.as.AsParameterDeclaration(parameter);
+  if (declaration === undefined) {
+    return undefined;
+  }
+  const form = declaration.DotDotDotToken !== undefined
+    ? "rest" as const
+    : Node_Initializer(context.ast, parameter) !== undefined
+      ? "default" as const
+      : context.ast.questionToken(parameter) !== undefined
+        ? "optional" as const
+        : "required" as const;
+  const selectedValueCarrier = form === "optional"
+    ? selectedParameterCarrier
+    : form === "default"
+      ? rustOptionElementCarrier(selectedParameterCarrier)
+      : selectedParameterCarrier.kind === "pointer"
+        ? selectedParameterCarrier.pointee
+        : selectedParameterCarrier;
+  if (selectedValueCarrier === undefined) {
+    return undefined;
+  }
+  const authoredType = Node_Type(context.ast, parameter);
+  const authoredCarrier = authoredType === undefined
+    ? undefined
+    : resolveRustTargetTypeRef(authoredType, context, options);
+  const authoredExpectation = form === "optional"
+    ? rustOptionElementCarrier(selectedParameterCarrier)
+    : selectedValueCarrier;
+  if (authoredType !== undefined &&
+    (authoredCarrier === undefined || authoredExpectation === undefined ||
+      !rustTargetTypeRefEquals(authoredCarrier, authoredExpectation))) {
+    return undefined;
+  }
+  return {
+    form,
+    valueCarrier: selectedValueCarrier,
+    parameterCarrier: selectedParameterCarrier,
+    mode: selectedParameterCarrier.kind === "pointer"
+      ? selectedParameterCarrier.mutability === "mut" ? "mut-ref" : "ref"
+      : "value",
   };
 }
 

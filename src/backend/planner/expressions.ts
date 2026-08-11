@@ -2363,18 +2363,7 @@ function shapeRustSourceCallParameters(
     if (value === undefined) {
       return undefined;
     }
-    if (parameter.form !== "optional" && parameter.form !== "default") {
-      shaped.push(value);
-      continue;
-    }
-    const argumentNode = argumentNodes[input.sourceArgumentIndex];
-    const argumentCarrier = argumentNode === undefined
-      ? undefined
-      : context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
-    shaped.push(value.kind === "none" ||
-        rustTargetTypeRefEquals(argumentCarrier, parameter.parameterCarrier)
-      ? value
-      : { kind: "call", path: "Some", args: [value] });
+    shaped.push(value);
   }
   return shaped;
 }

@@ -207,3 +207,92 @@ export function main(): void {
   );
   validateGeneratedProject("callable-recursive", result.artifacts, { run: true });
 });
+
+test("callable values preserve shared captures and complete source parameter semantics", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "callable_complete" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+let defaultEvaluations: int32 = 0;
+
+function fallback(base: int32): int32 {
+  defaultEvaluations += 1;
+  return base + 1;
+}
+
+function choose(base: int32, value: int32 = fallback(base)): int32 {
+  return value;
+}
+
+function optional(value?: int32): int32 {
+  return value ?? 0;
+}
+
+function total(first: int32, ...rest: int32[]): int32 {
+  let result = first;
+  for (const value of rest) {
+    result += value;
+  }
+  return result;
+}
+
+function preserveText(value: string): string {
+  return value;
+}
+
+function counters(seed: int32): [() => int32, () => int32] {
+  let value = seed;
+  const increment = (): int32 => {
+    value += 1;
+    return value;
+  };
+  const current = (): int32 => value;
+  return [increment, current];
+}
+
+export function main(): void {
+  const [increment, current] = counters(4);
+  check(current() === 4);
+  check(increment() === 5);
+  check(current() === 5);
+
+  let visible: int32 = 10;
+  const bump = (): void => {
+    visible += 1;
+  };
+  bump();
+  check(visible === 11);
+
+  const label = "kept";
+  const readLabel = (): string => label;
+  check(readLabel() === "kept");
+  check(readLabel() === "kept");
+  check(label === "kept");
+
+  check(choose(4) === 5);
+  check(defaultEvaluations === 1);
+  check(choose(4, 9) === 9);
+  check(defaultEvaluations === 1);
+  check(choose(4, undefined) === 5);
+  check(defaultEvaluations === 2);
+
+  check(optional() === 0);
+  check(optional(undefined) === 0);
+  check(optional(8) === 8);
+  check(total(1) === 1);
+  check(total(1, 2, 3) === 6);
+
+  const textFunction = preserveText;
+  check(textFunction("text") === "text");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("callable-complete", result.artifacts, { run: true });
+});
