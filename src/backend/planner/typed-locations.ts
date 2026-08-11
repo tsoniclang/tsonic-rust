@@ -119,7 +119,10 @@ export function planRustIdentifierValue(
   context: RustPlanContext,
 ): RustExpr {
   const storage = rustLocationStorageForReference(node, context);
-  const value: RustExpr = { kind: "path", path };
+  const value: RustExpr = {
+    kind: "path",
+    path: rustCapturedBindingPath(node, context) ?? path,
+  };
   if (storage !== undefined) {
     context.usedAliases?.add("rt");
     return storage.storage === "module-cell"
@@ -130,6 +133,24 @@ export function planRustIdentifierValue(
   return rustValueCarrierRequiresCloneOnRead(carrier)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : value;
+}
+
+export function planRustCaptureValue(
+  node: Node,
+  path: string,
+  context: RustPlanContext,
+): RustExpr {
+  const capturedPath = rustCapturedBindingPath(node, context) ?? path;
+  const storage = rustLocationStorageForReference(node, context);
+  if (storage?.storage === "local-location") {
+    return {
+      kind: "method-call",
+      receiver: { kind: "path", path: capturedPath },
+      method: "clone",
+      args: [],
+    };
+  }
+  return planRustIdentifierValue(node, path, context);
 }
 
 export function planRustNonConsumingValue(
@@ -203,14 +224,25 @@ export function rustRawLocationRoot(
     return undefined;
   }
   const declarationModule = context.moduleNameByFileName.get(binding.fileName);
-  const path = declarationModule !== undefined && declarationModule !== context.moduleName
-    ? `crate::${declarationModule}::${name}`
-    : name;
+  const path = rustCapturedBindingPath(expression, context) ??
+    (declarationModule !== undefined && declarationModule !== context.moduleName
+      ? `crate::${declarationModule}::${name}`
+      : name);
   const storage = rustLocationStorageForReference(expression, context);
   const value: RustExpr = { kind: "path", path };
   return storage?.storage === "module-cell"
     ? moduleCellAccess(value, "location", [])
     : value;
+}
+
+function rustCapturedBindingPath(
+  node: Node,
+  context: RustPlanContext,
+): string | undefined {
+  const declaration = context.input.source.navigation.sourceReferenceFor(node)?.declaration;
+  return declaration === undefined
+    ? undefined
+    : context.capturedBindingPaths?.get(declaration);
 }
 
 function moduleCellAccess(

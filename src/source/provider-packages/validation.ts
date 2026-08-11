@@ -964,6 +964,17 @@ function validateCarrier(
         return;
       }
       fail(`${where} is not a renderable Rust pointer carrier`);
+    case "function-pointer":
+      requireExactKeys(record, ["kind", "args", "result", "abi"], where, fail);
+      if ((carrier.abi?.length ?? 0) > 1 || carrier.abi?.some((entry) =>
+        entry !== "target-default" && entry !== "C" && entry !== "system")) {
+        fail(`${where}.abi must contain at most one supported Rust ABI name`);
+      }
+      for (const [index, argument] of carrier.args.entries()) {
+        validateCarrier(argument, definition, `${where}.args[${index}]`, fail);
+      }
+      validateCarrier(carrier.result, definition, `${where}.result`, fail);
+      return;
     case "target-specific": {
       requireExactKeys(record, ["kind", "target", "name", "value"], where, fail);
       const fixedArray = rustFixedArrayCarrierValue(carrier);

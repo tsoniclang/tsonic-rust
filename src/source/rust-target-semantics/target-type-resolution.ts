@@ -1,4 +1,5 @@
 import {
+  functionPointerFactKey,
   pointerFactKey,
   providerVirtualDeclarationFactKey,
   sourcePrimitiveFactKey,
@@ -29,6 +30,7 @@ import { materializeProviderCarrier } from "../provider-packages/index.js";
 import {
   rustFutureTargetType,
   rustBigIntTargetType,
+  rustCallableTargetType,
   rustGeneratorTargetType,
   rustAsyncGeneratorTargetType,
   rustIteratorResultTargetType,
@@ -78,6 +80,21 @@ export function resolveRustTargetTypeRef(
 ): TargetTypeRef | undefined {
   if (subject === undefined) {
     return undefined;
+  }
+  const functionPointer = context.facts.resolve(subject, functionPointerFactKey) ??
+    context.facts.get(subject, functionPointerFactKey);
+  if (functionPointer !== undefined) {
+    const parameters = functionPointer.parameters.map((parameter) =>
+      resolveRustTargetTypeRef(parameter, context, options));
+    const result = resolveRustTargetTypeRef(functionPointer.result, context, options);
+    return result === undefined || parameters.some((parameter) => parameter === undefined)
+      ? undefined
+      : {
+          kind: "function-pointer",
+          args: parameters as TargetTypeRef[],
+          result,
+          ...(functionPointer.abi.length === 0 ? {} : { abi: functionPointer.abi }),
+        };
   }
   const pointer = context.facts.resolve(subject, pointerFactKey) ??
     context.facts.get(subject, pointerFactKey);
@@ -134,6 +151,21 @@ function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const functionPointer = context.facts.resolve(node, functionPointerFactKey) ??
+    context.facts.get(node, functionPointerFactKey);
+  if (functionPointer !== undefined) {
+    const parameters = functionPointer.parameters.map((parameter) =>
+      resolveRustTargetTypeSyntax(parameter, context, options, resolving));
+    const result = resolveRustTargetTypeSyntax(functionPointer.result, context, options, resolving);
+    return result === undefined || parameters.some((parameter) => parameter === undefined)
+      ? undefined
+      : {
+          kind: "function-pointer",
+          args: parameters as TargetTypeRef[],
+          result,
+          ...(functionPointer.abi.length === 0 ? {} : { abi: functionPointer.abi }),
+        };
+  }
   const pointer = context.facts.resolve(node, pointerFactKey) ??
     context.facts.get(node, pointerFactKey);
   if (pointer !== undefined) {
@@ -163,6 +195,20 @@ function resolveRustTargetTypeSyntax(
   }
   if (kind === "KindVoidKeyword") {
     return rustUnitTargetType();
+  }
+  if (kind === "KindFunctionType") {
+    return resolveRustTargetType(
+      context.semanticsFor(node).getTypeAtLocation(node),
+      context,
+      options,
+      resolving,
+    );
+  }
+  if (kind === "KindParenthesizedType") {
+    const inner = ast.as.AsParenthesizedTypeNode(node)?.Type;
+    return inner === undefined
+      ? undefined
+      : resolveRustTargetTypeSyntax(inner, context, options, resolving);
   }
   if (kind === "KindArrayType") {
     const elementNode = ArrayTypeNode_ElementType(ast, node);
@@ -394,6 +440,11 @@ function resolveRustTargetType(
       return typeParameter;
     }
 
+    const callable = resolveCallableType(type, context, options, resolving);
+    if (callable !== undefined) {
+      return callable;
+    }
+
     if (typeShape.isNullish(type)) {
       return rustNullishSourceTargetType();
     }
@@ -436,6 +487,63 @@ function resolveRustTargetType(
   } finally {
     resolving.delete(type);
   }
+}
+
+function resolveCallableType(
+  type: Type,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  const signatures = denseDefined(context.checker.getCallSignaturesOfType(type));
+  if (signatures === undefined || signatures.length !== 1) {
+    return undefined;
+  }
+  const signature = signatures[0]!;
+  const declaration = context.checker.getSignatureDeclaration(signature);
+  if (declaration !== undefined && context.ast.typeParameters(declaration).length > 0) {
+    return undefined;
+  }
+  const parameters = denseDefined(context.checker.getSignatureParameters(signature));
+  if (parameters === undefined) {
+    return undefined;
+  }
+  const parameterCarriers = parameters.map((parameter) => {
+    const declarations = denseDefined(context.checker.getSymbolDeclarations(parameter));
+    if (declarations === undefined) {
+      return undefined;
+    }
+    const parameterDeclaration = declarations.find((candidate) =>
+      context.ast.is.IsParameterDeclaration(candidate));
+    const authoredType = Node_Type(context.ast, parameterDeclaration);
+    const selected = authoredType === undefined
+      ? resolveRustTargetType(
+          context.checker.getTypeOfSymbol(parameter),
+          context,
+          options,
+          resolving,
+        )
+      : resolveRustTargetTypeSyntax(authoredType, context, options, resolving);
+    if (selected === undefined || parameterDeclaration === undefined ||
+      context.ast.as.AsParameterDeclaration(parameterDeclaration)?.DotDotDotToken !== undefined) {
+      return selected;
+    }
+    return context.ast.questionToken(parameterDeclaration) !== undefined ||
+        Node_Initializer(context.ast, parameterDeclaration) !== undefined
+      ? rustOptionTargetType(selected)
+      : selected;
+  });
+  if (parameterCarriers.some((parameter) => parameter === undefined)) {
+    return undefined;
+  }
+  const returnType = context.checker.getReturnTypeOfSignature(signature);
+  const authoredReturn = Node_Type(context.ast, declaration);
+  const result = authoredReturn === undefined
+    ? resolveRustTargetType(returnType, context, options, resolving)
+    : resolveRustTargetTypeSyntax(authoredReturn, context, options, resolving);
+  return result === undefined
+    ? undefined
+    : rustCallableTargetType(parameterCarriers as TargetTypeRef[], result);
 }
 
 function resolveSourceTypeParameter(

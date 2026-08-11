@@ -235,6 +235,20 @@ export interface RustOptionalChainFact {
   readonly lowering: "map" | "and-then";
 }
 
+export interface RustSourceCallParameterPlan {
+  readonly form: "required" | "optional" | "default" | "rest";
+  readonly valueCarrier: TargetTypeRef;
+  readonly parameterCarrier: TargetTypeRef;
+  readonly mode: RustArgumentMode;
+  readonly inputs: readonly {
+    readonly sourceArgumentIndex: number;
+    readonly sourceForm: "value" | "spread-element" | "spread-sequence";
+    readonly sourceParameterForm: "parameter" | "rest-element" | "rest-sequence";
+    readonly carrier: TargetTypeRef;
+    readonly spreadElementIndex?: number;
+  }[];
+}
+
 export type RustTargetOperationFact =
   | {
       readonly kind: "operator-token";
@@ -341,6 +355,12 @@ export type RustTargetOperationFact =
       readonly optionOperand: "left" | "right";
     }
   | {
+      readonly kind: "option-value-equality";
+      readonly operationId: string;
+      readonly negated: boolean;
+      readonly optionOperand: "left" | "right";
+    }
+  | {
       readonly kind: "source-field";
       readonly operationId: string;
       readonly storageIndex: number;
@@ -355,9 +375,9 @@ export type RustTargetOperationFact =
         | { readonly form: "function"; readonly fileName: string; readonly name: string }
         | { readonly form: "method"; readonly name: string; readonly mutatesSelf: boolean }
         | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef }
+        | { readonly form: "callable"; readonly carrier: TargetTypeRef }
         | { readonly form: "constructor"; readonly typeCarrier: TargetTypeRef };
-      readonly parameterCarriers: readonly TargetTypeRef[];
-      readonly argumentModes: readonly RustArgumentMode[];
+      readonly parameters: readonly RustSourceCallParameterPlan[];
       readonly targetTypeArguments?: readonly TargetTypeRef[];
       readonly resultCarrier: TargetTypeRef;
     }
@@ -508,6 +528,9 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
       return fact.resultCarrier;
     case "iteration":
       return fact.elementCarrier;
+    case "option-check":
+    case "option-value-equality":
+      return { kind: "source-primitive", name: "bool" };
     default:
       return undefined;
   }
@@ -531,6 +554,54 @@ export const rustLocationStorageFactKey: RustPlanKey<{
 }> = defineRustPlanKey(
   "locationStorage",
   (left, right) => rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
+);
+
+export interface RustClosureCaptureFact {
+  readonly captures: readonly {
+    readonly declaration: Node;
+    readonly reference: Node;
+    readonly carrier: TargetTypeRef;
+    readonly storage: "value" | "location";
+  }[];
+  readonly recursiveDeclaration?: Node;
+}
+
+export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = defineRustPlanKey(
+  "closureCaptures",
+  (left, right) => left.recursiveDeclaration === right.recursiveDeclaration &&
+    left.captures.length === right.captures.length &&
+    left.captures.every((capture, index) => {
+      const other = right.captures[index];
+      return other !== undefined &&
+        capture.declaration === other.declaration &&
+        capture.reference === other.reference &&
+        capture.storage === other.storage &&
+        rustTargetTypeRefEquals(capture.carrier, other.carrier);
+    }),
+);
+
+export interface RustSourceCallableValueFact {
+  readonly form: "function";
+  readonly fileName: string;
+  readonly name: string;
+  readonly carrier: TargetTypeRef;
+  readonly parameterCarriers: readonly TargetTypeRef[];
+  readonly argumentModes: readonly RustArgumentMode[];
+  readonly resultCarrier: TargetTypeRef;
+}
+
+export const rustSourceCallableValueFactKey: RustPlanKey<RustSourceCallableValueFact> = defineRustPlanKey(
+  "sourceCallableValue",
+  (left, right) => left.form === right.form &&
+    left.fileName === right.fileName &&
+    left.name === right.name &&
+    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    left.parameterCarriers.length === right.parameterCarriers.length &&
+    left.parameterCarriers.every((carrier, index) =>
+      rustTargetTypeRefEquals(carrier, right.parameterCarriers[index])) &&
+    left.argumentModes.length === right.argumentModes.length &&
+    left.argumentModes.every((mode, index) => mode === right.argumentModes[index]) &&
+    rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier),
 );
 
 export interface RustModuleBindingFact {
@@ -715,6 +786,8 @@ export const rustResourceManagementFactKey: RustPlanKey<RustResourceManagementFa
   defineRustPlanKey("resourceManagement", closedMetadataEquals);
 
 export interface RustSourceParameterAbiFact {
+  readonly form: "required" | "optional" | "default" | "rest";
+  readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
 }

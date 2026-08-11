@@ -225,6 +225,12 @@ test("selected source operation identity is never reconstructed through checker 
     "target-type-resolution.ts|resolveSourcePrimitive|getSymbolDeclarations",
     "target-type-resolution.ts|resolveOwnedSourceProfileTypeName|getSymbolDeclarations",
     "target-type-resolution.ts|resolveProjectSourceCarrier|getSymbolDeclarations",
+    "target-type-resolution.ts|resolveCallableType|getCallSignaturesOfType",
+    "target-type-resolution.ts|resolveCallableType|getReturnTypeOfSignature",
+    "target-type-resolution.ts|resolveCallableType|getSignatureDeclaration",
+    "target-type-resolution.ts|resolveCallableType|getSignatureParameters",
+    "target-type-resolution.ts|resolveCallableType|getSymbolDeclarations",
+    "target-type-resolution.ts|resolveCallableType|getTypeOfSymbol",
   ]);
   const observed = new Set();
   for (const { path, text } of semanticFiles) {
@@ -527,12 +533,12 @@ test("project-source backend calls require the exact finalized selected member A
   assert.match(selectedGate, /member\.id === fact\.operationId/u);
   assert.match(selectedGate, /member\.kind === expectedKind/u);
   assert.match(selectedGate, /member\.targetName === expectedTargetName/u);
-  assert.match(selectedGate, /member\.parameters\.length === fact\.parameterCarriers\.length/u);
+  assert.match(selectedGate, /member\.parameters\.length === fact\.parameters\.length/u);
   assert.match(selectedGate, /sourceSelectedMethodTypeArguments/u);
   assert.match(selectedGate, /substituteRustTargetTypeParameters\(parameter\.type, substitutions\)/u);
   assert.match(selectedGate, /fact\.targetTypeArguments/u);
-  assert.match(selectedGate, /fact\.parameterCarriers\[index\]/u);
-  assert.match(selectedGate, /mode === fact\.argumentModes\[index\]/u);
+  assert.match(selectedGate, /fact\.parameters\[index\]\?\.parameterCarrier/u);
+  assert.match(selectedGate, /mode === fact\.parameters\[index\]\?\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);
 });
 

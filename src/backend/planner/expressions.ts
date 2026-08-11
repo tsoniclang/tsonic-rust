@@ -54,7 +54,7 @@ import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
 } from "../../common/source-literal-values.js";
-import { rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustClosureCaptureFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustOptionalChainFact,
@@ -89,10 +89,11 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustCallableProtocol, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
+  planRustCaptureValue,
   planRustNonConsumingValue,
   planRustPromotedStorageLocation,
   planRustTypedLocationCall,
@@ -209,6 +210,64 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
           return undefined;
         }
         return finishProviderOperationExpression(context, identifierFact, planned, node);
+      }
+      const callableValue = context.input.facts.getFact(node, rustSourceCallableValueFactKey);
+      if (callableValue !== undefined) {
+        if (context.syntheticNames === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node),
+            "rust.backend.callable-value-name",
+            "Project-source callable values require a finalized hygienic-name scope.",
+          ));
+          return undefined;
+        }
+        const callableType = rustTypeFromCarrierInContext(callableValue.carrier, context);
+        const declarationModule = context.moduleNameByFileName.get(callableValue.fileName);
+        if (callableType === undefined || declarationModule === undefined ||
+          !isValidRustIdentifier(callableValue.name)) {
+          return undefined;
+        }
+        const argumentsName = allocateRustSyntheticName(context.syntheticNames, "callable_arguments");
+        const path = declarationModule === context.moduleName
+          ? callableValue.name
+          : `crate::${declarationModule}::${callableValue.name}`;
+        context.usedAliases?.add("rt");
+        return {
+          kind: "associated-call",
+          owner: callableType,
+          method: "new",
+          args: [{
+            kind: "closure-block",
+            params: [{
+              name: argumentsName,
+              mutable: callableValue.argumentModes.some((mode) => mode === "mut-ref"),
+            }],
+            move: true,
+            async: false,
+            body: {
+              statements: [{
+                kind: "tail",
+                expr: {
+                  kind: "call",
+                  path,
+                  args: callableValue.parameterCarriers.map((_carrier, index) => {
+                    const value: RustExpr = {
+                      kind: "field",
+                      receiver: { kind: "path", path: argumentsName },
+                      name: String(index),
+                    };
+                    const mode = callableValue.argumentModes[index];
+                    return mode === "ref"
+                      ? { kind: "reference", expr: value }
+                      : mode === "mut-ref"
+                        ? { kind: "reference", expr: value, mutable: true }
+                        : value;
+                  }),
+                },
+              }],
+            },
+          }],
+        };
       }
       const binding = context.input.facts.getFact(node, rustSourceBindingFactKey);
       if (binding === undefined) {
@@ -383,8 +442,35 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       if (!requireExpressionCarrier(node, closureFact.resultCarrier, context, "rust.backend.closure-carrier")) {
         return undefined;
       }
+      const callableProtocol = rustCallableProtocol(closureFact.resultCarrier);
+      const parameterCarriers = closureFact.resultCarrier.kind === "function-pointer"
+        ? closureFact.resultCarrier.args
+        : callableProtocol?.parameters;
+      const resultCarrier = closureFact.resultCarrier.kind === "function-pointer"
+        ? closureFact.resultCarrier.result
+        : callableProtocol?.result;
+      const captureFact = context.input.facts.getFact(node, rustClosureCaptureFactKey);
+      if (captureFact === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.closure-captures",
+          "Callable expressions require finalized exact capture evidence.",
+        ));
+        return undefined;
+      }
+      if (callableProtocol === undefined &&
+        (captureFact.captures.length !== 0 || captureFact.recursiveDeclaration !== undefined)) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.function-pointer-capture",
+          "Native Rust function pointers cannot carry captured or recursive callable state.",
+        ));
+        return undefined;
+      }
       const sourceParams = context.input.ast.parameters(node);
-      if (closureFact.byRefCopyParams.length !== sourceParams.length) {
+      if (parameterCarriers === undefined || resultCarrier === undefined ||
+        closureFact.byRefCopyParams.length !== sourceParams.length ||
+        parameterCarriers.length !== sourceParams.length) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.closure-abi",
@@ -392,7 +478,24 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         ));
         return undefined;
       }
-      const params: { name: string; byRefCopy: boolean }[] = [];
+      if (callableProtocol !== undefined && context.syntheticNames === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.closure-argument-tuple",
+          "Runtime callable expressions require a finalized hygienic-name scope.",
+        ));
+        return undefined;
+      }
+      const sourceParameterPlans: {
+        readonly parameter: Node;
+        readonly name: string;
+        readonly pattern?: Node;
+        readonly carrier: TargetTypeRef;
+        readonly valueCarrier: TargetTypeRef;
+        readonly form: "required" | "optional" | "default" | "rest";
+        readonly byRefCopy: boolean;
+        readonly mutable: boolean;
+      }[] = [];
       const bindingParameters: {
         readonly pattern: Node;
         readonly name: string;
@@ -427,12 +530,27 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         if (!isValidRustIdentifier(parameterName)) {
           return undefined;
         }
-        params.push({ name: parameterName, byRefCopy: closureFact.byRefCopyParams[index] === true });
-        const parameterCarrier = closureFact.resultCarrier.kind === "function-pointer"
-          ? closureFact.resultCarrier.args[index]
-          : undefined;
+        const parameterCarrier = parameterCarriers[index];
+        const parameterAbi = context.input.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+        if (parameterCarrier === undefined || parameterAbi === undefined ||
+          !rustTargetTypeRefEquals(parameterCarrier, parameterAbi.parameterCarrier) ||
+          (callableProtocol === undefined && parameterAbi.form !== "required")) {
+          return undefined;
+        }
+        const byRefCopy = closureFact.byRefCopyParams[index] === true;
+        sourceParameterPlans.push({
+          parameter,
+          name: parameterName,
+          ...(bindingPattern === undefined ? {} : { pattern: bindingPattern }),
+          carrier: parameterCarrier,
+          valueCarrier: parameterAbi.valueCarrier,
+          form: parameterAbi.form,
+          byRefCopy,
+          mutable: bindingPattern === undefined &&
+            context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+        });
         if (bindingPattern !== undefined) {
-          if (parameterCarrier === undefined || closureFact.byRefCopyParams[index] === true) {
+          if (byRefCopy) {
             context.diagnostics.push(missingFactDiagnostic(
               diagnosticInput(context, parameter),
               "rust.backend.closure-binding-carrier",
@@ -440,7 +558,11 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
             ));
             return undefined;
           }
-          bindingParameters.push({ pattern: bindingPattern, name: parameterName, sourceCarrier: parameterCarrier });
+          bindingParameters.push({
+            pattern: bindingPattern,
+            name: parameterName,
+            sourceCarrier: parameterAbi.valueCarrier,
+          });
         }
       }
       const bodyNode = context.input.ast.body(node);
@@ -456,13 +578,99 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         asyncContext: false,
         generator: undefined,
       };
+      const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
+      const capturedBindingPaths = new Map(context.capturedBindingPaths);
+      for (const capture of captureFact.captures) {
+        if (context.syntheticNames === undefined || !requireRustCarrierRequirements(
+          capture.carrier,
+          ["clone", "static"],
+          capture.reference,
+          context,
+        )) {
+          return undefined;
+        }
+        const binding = context.input.facts.getFact(capture.reference, rustSourceBindingFactKey);
+        if (binding === undefined) {
+          return undefined;
+        }
+        const sourceName = rustSourceName(context, binding.sourceName);
+        const declarationModule = context.moduleNameByFileName.get(binding.fileName);
+        const sourcePath = declarationModule !== undefined && declarationModule !== context.moduleName
+          ? `crate::${declarationModule}::${sourceName}`
+          : sourceName;
+        if (!isValidRustIdentifier(sourceName)) {
+          return undefined;
+        }
+        const name = allocateRustSyntheticName(context.syntheticNames, `capture_${sourceName}`);
+        captureBindings.push({
+          name,
+          value: planRustCaptureValue(capture.reference, sourcePath, context),
+        });
+        capturedBindingPaths.set(capture.declaration, name);
+      }
+      let recursiveName: string | undefined;
+      if (captureFact.recursiveDeclaration !== undefined) {
+        if (context.syntheticNames === undefined || callableProtocol === undefined) {
+          return undefined;
+        }
+        recursiveName = allocateRustSyntheticName(context.syntheticNames, "recursive_callable");
+        capturedBindingPaths.set(captureFact.recursiveDeclaration, recursiveName);
+      }
+      const callableClosureContext: RustPlanContext = {
+        ...closureContext,
+        capturedBindingPaths,
+      };
       const bindingStatements: RustStmt[] = [];
+      let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
+      let closureMove = false;
+      if (callableProtocol === undefined) {
+        closureParams = sourceParameterPlans.map((parameter) => ({
+          name: parameter.name,
+          mutable: parameter.mutable,
+          byRefCopy: parameter.byRefCopy,
+        }));
+      } else {
+        const tupleName = allocateRustSyntheticName(context.syntheticNames!, "callable_arguments");
+        closureParams = [
+          ...(recursiveName === undefined ? [] : [{ name: recursiveName, mutable: false }]),
+          { name: tupleName, mutable: false },
+        ];
+        closureMove = true;
+        for (const [index, parameter] of sourceParameterPlans.entries()) {
+          let initializer: RustExpr = {
+            kind: "field",
+            receiver: { kind: "path", path: tupleName },
+            name: String(index),
+          };
+          if (parameter.form === "default") {
+            const defaultNode = Node_Initializer(context.input.ast, parameter.parameter);
+            const defaultValue = defaultNode === undefined
+              ? undefined
+              : planExpression(defaultNode, callableClosureContext);
+            if (defaultValue === undefined) {
+              return undefined;
+            }
+            initializer = {
+              kind: "method-call",
+              receiver: initializer,
+              method: "unwrap_or_else",
+              args: [{ kind: "closure", params: [], body: defaultValue }],
+            };
+          }
+          bindingStatements.push({
+            kind: "let",
+            name: parameter.name,
+            mutable: parameter.mutable,
+            init: initializer,
+          });
+        }
+      }
       for (const binding of bindingParameters) {
         const planned = planRustBindingPattern(
           binding.pattern,
           { kind: "path", path: binding.name },
           binding.sourceCarrier,
-          closureContext,
+          callableClosureContext,
           planExpression,
         );
         if (planned === undefined) {
@@ -471,25 +679,50 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         bindingStatements.push(...planned);
       }
       if (context.input.ast.kindName(bodyNode) !== "KindBlock") {
-        const body = planExpression(bodyNode, closureContext);
+        const body = planExpression(bodyNode, callableClosureContext);
         if (body === undefined) {
           return undefined;
         }
-        return bindingStatements.length === 0
-          ? { kind: "closure", params, body }
+        const closure: RustExpr = bindingStatements.length === 0 && !closureMove &&
+            closureParams.every((parameter) => !parameter.mutable)
+          ? {
+              kind: "closure",
+              params: closureParams.map((parameter) => ({
+                name: parameter.name,
+                byRefCopy: parameter.byRefCopy === true,
+              })),
+              body,
+            }
           : {
               kind: "closure-block",
-              params: params.map((parameter) => ({ ...parameter, mutable: false })),
-              move: false,
+              params: closureParams,
+              move: closureMove,
               async: false,
               body: { statements: [...bindingStatements, { kind: "tail", expr: body }] },
             };
+        if (callableProtocol === undefined) {
+          return closure;
+        }
+        const callableType = rustTypeFromCarrierInContext(closureFact.resultCarrier, context);
+        if (callableType === undefined) {
+          return undefined;
+        }
+        context.usedAliases?.add("rt");
+        const callable = {
+          kind: "associated-call" as const,
+          owner: callableType,
+          method: recursiveName === undefined ? "new" : "recursive",
+          args: [closure],
+        };
+        return finishRuntimeCallableExpression(
+          callable,
+          captureBindings,
+          sourceParameterPlans.some((parameter) => parameter.form === "default"),
+          context,
+        );
       }
-      const resultCarrier = closureFact.resultCarrier.kind === "function-pointer"
-        ? closureFact.resultCarrier.result
-        : undefined;
       const resultType = rustTypeFromCarrierInContext(resultCarrier, context);
-      if (resultCarrier === undefined || resultType === undefined) {
+      if (resultType === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.closure-result",
@@ -498,7 +731,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         return undefined;
       }
       const block = context.planBlock(bodyNode, {
-        ...closureContext,
+        ...callableClosureContext,
         functionReturnType: resultType,
       });
       if (block === undefined) {
@@ -512,12 +745,6 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         ));
         return undefined;
       }
-      const blockParams = params.map((parameter, index) => ({
-        name: parameter.name,
-        mutable: sourceParams[index] !== undefined &&
-          context.input.facts.getFact(sourceParams[index]!, rustMutatedBindingFactKey) !== undefined,
-        byRefCopy: parameter.byRefCopy,
-      }));
       const finalizedBlock = applyRustTailShape(
         { statements: [...bindingStatements, ...block.statements] },
         !isRustUnitCarrier(resultCarrier),
@@ -525,20 +752,43 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       const onlyStatement = finalizedBlock.statements.length === 1
         ? finalizedBlock.statements[0]
         : undefined;
-      if (onlyStatement?.kind === "tail" && blockParams.every((parameter) => !parameter.mutable)) {
-        return {
+      const closure: RustExpr = onlyStatement?.kind === "tail" && !closureMove &&
+          closureParams.every((parameter) => !parameter.mutable)
+        ? {
           kind: "closure",
-          params,
+          params: closureParams.map((parameter) => ({
+            name: parameter.name,
+            byRefCopy: parameter.byRefCopy === true,
+          })),
           body: onlyStatement.expr,
-        };
+        }
+        : {
+            kind: "closure-block",
+            params: closureParams,
+            move: closureMove,
+            async: false,
+            body: finalizedBlock,
+          };
+      if (callableProtocol === undefined) {
+        return closure;
       }
-      return {
-        kind: "closure-block",
-        params: blockParams,
-        move: false,
-        async: false,
-        body: finalizedBlock,
+      const callableType = rustTypeFromCarrierInContext(closureFact.resultCarrier, context);
+      if (callableType === undefined) {
+        return undefined;
+      }
+      context.usedAliases?.add("rt");
+      const callable = {
+        kind: "associated-call" as const,
+        owner: callableType,
+        method: recursiveName === undefined ? "new" : "recursive",
+        args: [closure],
       };
+      return finishRuntimeCallableExpression(
+        callable,
+        captureBindings,
+        sourceParameterPlans.some((parameter) => parameter.form === "default"),
+        context,
+      );
     }
     case "KindRegularExpressionLiteral": {
       return planRegExpCreate(node, context);
@@ -689,6 +939,35 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return undefined;
     }
   }
+}
+
+function finishRuntimeCallableExpression(
+  callable: RustExpr,
+  captureBindings: readonly { readonly name: string; readonly value: RustExpr }[],
+  hasDefaultParameters: boolean,
+  context: RustPlanContext,
+): RustExpr {
+  if (!hasDefaultParameters) {
+    return captureBindings.length === 0
+      ? callable
+      : { kind: "block", bindings: captureBindings, value: callable };
+  }
+  const callableName = allocateRustSyntheticName(
+    context.syntheticNames!,
+    "callable_implementation",
+  );
+  return {
+    kind: "block",
+    bindings: [
+      ...captureBindings,
+      {
+        name: callableName,
+        value: callable,
+        attrs: ["#[allow(clippy::let_and_return, clippy::unnecessary_lazy_evaluations)]"],
+      },
+    ],
+    value: { kind: "path", path: callableName },
+  };
 }
 
 function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -1051,6 +1330,27 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       return undefined;
     }
     return { kind: "method-call", receiver: value, method: fact.negated ? "is_some" : "is_none", args: [] };
+  }
+  if (fact !== undefined && fact.kind === "option-value-equality") {
+    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.ast, node);
+    const optionNode = fact.optionOperand === "left" ? leftNode : rightNode;
+    const valueNode = fact.optionOperand === "left" ? rightNode : leftNode;
+    const option = optionNode === undefined ? undefined : planExpression(optionNode, context);
+    const value = valueNode === undefined ? undefined : planExpression(valueNode, context);
+    if (option === undefined || value === undefined) {
+      return undefined;
+    }
+    return {
+      kind: "binary",
+      operator: fact.negated ? "!=" : "==",
+      left: fact.optionOperand === "left"
+        ? option
+        : { kind: "call", path: "Some", args: [value] },
+      right: fact.optionOperand === "left"
+        ? { kind: "call", path: "Some", args: [value] }
+        : option,
+    };
   }
   if (fact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -1852,14 +2152,6 @@ function planSelectedSourceCall(
   if (!applyRustSourceCallableRequirements(node, selected, fact, context)) {
     return undefined;
   }
-  if (fact.parameterCarriers.length !== fact.argumentModes.length || args.length !== fact.parameterCarriers.length) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.source-call-abi",
-      "Selected project-source call has an incomplete finalized Rust parameter ABI.",
-    ));
-    return undefined;
-  }
   const rawArgumentNodes = context.input.ast.arguments(node);
   if (!isDenseDataArray(rawArgumentNodes) || rawArgumentNodes.some((argument) => argument === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -1878,100 +2170,15 @@ function planSelectedSourceCall(
     ));
     return undefined;
   }
-  const shaped: RustExpr[] = [];
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    const argumentNode = argumentNodes[index];
-    const parameterCarrier = fact.parameterCarriers[index];
-    const mode = fact.argumentModes[index];
-    if (argument === undefined || argumentNode === undefined || parameterCarrier === undefined || mode === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, argumentNode ?? node),
-        "rust.backend.source-call-abi",
-        `Selected project-source call argument ${index} has incomplete finalized ABI evidence.`,
-      ));
-      return undefined;
-    }
-    const convertedCarrier = context.input.facts.getTargetConversionFact(argumentNode)?.convertedType;
-    const sourceCarrier = context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
-    if (sourceCarrier === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, argumentNode),
-        "rust.backend.source-call-argument-carrier",
-        `Project-source call argument ${index} has no finalized source carrier.`,
-      ));
-      return undefined;
-    }
-    const expectedPassingMode = rustArgumentPassingMode(mode);
-    const passingFact = context.input.facts.getArgumentPassingFact(argumentNode);
-    if (passingFact === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, argumentNode),
-        "rust.backend.source-call-parameter-passing",
-        `Project-source call argument ${index} requires finalized parameter-passing mode '${expectedPassingMode}'.`,
-      ));
-      return undefined;
-    }
-    if (passingFact.mode !== expectedPassingMode) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, argumentNode),
-        "rust.backend.source-call-parameter-passing",
-        `Project-source call argument ${index} has parameter-passing mode '${passingFact.mode}', expected '${expectedPassingMode}'.`,
-      ));
-      return undefined;
-    }
-    if (mode === "value") {
-      if (!rustFinalizedCarrierTransitionMatches(sourceCarrier, convertedCarrier, parameterCarrier)) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, argumentNode),
-          "rust.backend.source-call-argument-carrier",
-          `Project-source call argument ${index} does not match its finalized by-value parameter carrier.`,
-        ));
-        return undefined;
-      }
-      shaped.push(argument);
-      continue;
-    }
-    if (parameterCarrier.kind !== "pointer") {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, argumentNode),
-        "rust.backend.source-call-parameter-mode",
-        `Project-source call argument ${index} has a borrow mode without a pointer parameter carrier.`,
-      ));
-      return undefined;
-    }
-    const mutable = mode === "mut-ref";
-    if ((parameterCarrier.mutability === "mut") !== mutable) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, argumentNode),
-        "rust.backend.source-call-parameter-mode",
-        `Project-source call argument ${index} has inconsistent finalized pointer mutability and passing mode.`,
-      ));
-      return undefined;
-    }
-    if (sourceCarrier === undefined || !rustTargetTypeRefEquals(sourceCarrier, parameterCarrier.pointee)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, argumentNode),
-        "rust.backend.source-call-argument-carrier",
-        `Project-source call argument ${index} cannot borrow into its finalized pointer parameter carrier.`,
-      ));
-      return undefined;
-    }
-    if (convertedCarrier !== undefined && !rustTargetTypeRefEquals(convertedCarrier, parameterCarrier)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, argumentNode),
-        "rust.backend.source-call-converted-carrier",
-        `Project-source call argument ${index} has a finalized converted carrier inconsistent with its borrow parameter carrier.`,
-      ));
-      return undefined;
-    }
-    const sourceParameterAbi = context.input.facts.getFact(argumentNode, rustSourceParameterAbiFactKey);
-    shaped.push(sourceParameterAbi?.mode === mode &&
-      rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameterCarrier)
-      ? argument
-      : argument.kind === "string-literal" && !mutable
-        ? { kind: "str-literal", value: argument.value }
-        : { kind: "reference", expr: argument, ...(mutable ? { mutable: true } : {}) });
+  const shaped = shapeRustSourceCallParameters(
+    node,
+    argumentNodes,
+    args,
+    fact,
+    context,
+  );
+  if (shaped === undefined) {
+    return undefined;
   }
 
   let planned: RustExpr | undefined;
@@ -2042,6 +2249,27 @@ function planSelectedSourceCall(
       }
       break;
     }
+    case "callable": {
+      const plannedCallable = callee === undefined ? undefined : planExpression(callee, context);
+      if (callee === undefined || plannedCallable === undefined) {
+        break;
+      }
+      const callable = planRustNonConsumingValue(callee, plannedCallable, context);
+      if (fact.target.carrier.kind === "function-pointer") {
+        planned = { kind: "invoke", callee: callable, args: shaped };
+        break;
+      }
+      const protocol = rustCallableProtocol(fact.target.carrier);
+      if (protocol !== undefined && protocol.parameters.length === shaped.length) {
+        planned = {
+          kind: "method-call",
+          receiver: callable,
+          method: "call",
+          args: [{ kind: "tuple-literal", elements: shaped }],
+        };
+      }
+      break;
+    }
   }
   if (planned === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -2072,6 +2300,134 @@ function planSelectedSourceCall(
     return undefined;
   }
   return { kind: "try", expr: planned };
+}
+
+function shapeRustSourceCallParameters(
+  call: Node,
+  argumentNodes: readonly Node[],
+  arguments_: readonly RustExpr[],
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
+  context: RustPlanContext,
+): readonly RustExpr[] | undefined {
+  const shaped: RustExpr[] = [];
+  for (const [parameterIndex, parameter] of fact.parameters.entries()) {
+    if (parameter.inputs.some((input) => input.sourceForm !== "value")) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, call),
+        "rust.backend.source-call-spread",
+        "Selected project-source spread arguments require a finalized Rust spread evaluation plan.",
+      ));
+      return undefined;
+    }
+    if (parameter.form === "rest") {
+      if (parameter.mode !== "value") {
+        return undefined;
+      }
+      const elements: RustExpr[] = [];
+      for (const input of parameter.inputs) {
+        const element = shapeRustSourceCallInput(
+          parameterIndex,
+          parameter,
+          input,
+          argumentNodes,
+          arguments_,
+          context,
+        );
+        if (element === undefined) {
+          return undefined;
+        }
+        elements.push(element);
+      }
+      shaped.push({ kind: "vec-literal", elements });
+      continue;
+    }
+    const input = parameter.inputs[0];
+    if (input === undefined) {
+      if (parameter.form !== "optional" && parameter.form !== "default") {
+        return undefined;
+      }
+      shaped.push({ kind: "none" });
+      continue;
+    }
+    if (parameter.inputs.length !== 1) {
+      return undefined;
+    }
+    const value = shapeRustSourceCallInput(
+      parameterIndex,
+      parameter,
+      input,
+      argumentNodes,
+      arguments_,
+      context,
+    );
+    if (value === undefined) {
+      return undefined;
+    }
+    if (parameter.form !== "optional" && parameter.form !== "default") {
+      shaped.push(value);
+      continue;
+    }
+    const argumentNode = argumentNodes[input.sourceArgumentIndex];
+    const argumentCarrier = argumentNode === undefined
+      ? undefined
+      : context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
+    shaped.push(value.kind === "none" ||
+        rustTargetTypeRefEquals(argumentCarrier, parameter.parameterCarrier)
+      ? value
+      : { kind: "call", path: "Some", args: [value] });
+  }
+  return shaped;
+}
+
+function shapeRustSourceCallInput(
+  parameterIndex: number,
+  parameter: import("../../source/rust-facts/keys.js").RustSourceCallParameterPlan,
+  input: import("../../source/rust-facts/keys.js").RustSourceCallParameterPlan["inputs"][number],
+  argumentNodes: readonly Node[],
+  arguments_: readonly RustExpr[],
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const argumentNode = argumentNodes[input.sourceArgumentIndex];
+  const argument = arguments_[input.sourceArgumentIndex];
+  if (argumentNode === undefined || argument === undefined) {
+    return undefined;
+  }
+  const passing = context.input.facts.getArgumentPassingFact(argumentNode);
+  const expectedPassing = rustArgumentPassingMode(parameter.mode);
+  if (passing?.mode !== expectedPassing) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, argumentNode),
+      "rust.backend.source-call-parameter-passing",
+      `Project-source parameter ${parameterIndex} requires finalized passing mode '${expectedPassing}'.`,
+    ));
+    return undefined;
+  }
+  const sourceCarrier = context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
+  const convertedCarrier = context.input.facts.getTargetConversionFact(argumentNode)?.convertedType;
+  if (sourceCarrier === undefined ||
+    !rustFinalizedCarrierTransitionMatches(sourceCarrier, convertedCarrier, input.carrier)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, argumentNode),
+      "rust.backend.source-call-argument-carrier",
+      `Project-source argument ${input.sourceArgumentIndex} conflicts with parameter ${parameterIndex}'s exact selected carrier.`,
+    ));
+    return undefined;
+  }
+  if (parameter.mode === "value") {
+    return argument;
+  }
+  if (parameter.parameterCarrier.kind !== "pointer" ||
+    !rustTargetTypeRefEquals(parameter.parameterCarrier.pointee, input.carrier)) {
+    return undefined;
+  }
+  const mutable = parameter.mode === "mut-ref";
+  const sourceParameterAbi = context.input.facts.getFact(argumentNode, rustSourceParameterAbiFactKey);
+  return sourceParameterAbi?.mode === parameter.mode &&
+      rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameter.parameterCarrier)
+    ? argument
+    : argument.kind === "string-literal" && !mutable
+      ? { kind: "str-literal", value: argument.value }
+      : { kind: "reference", expr: argument, ...(mutable ? { mutable: true } : {}) };
 }
 
 function planPromotedSourceMethodCall(
@@ -2131,7 +2487,9 @@ export function sourceCallSelectedMemberMatches(
     substitutions.set(sourceTypeArguments[index]!.typeParameterName, targetTypeArguments[index]!);
   }
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
-  const expectedTargetName = fact.target.form === "constructor" ? member.sourceName : fact.target.name;
+  const expectedTargetName = fact.target.form === "constructor"
+    ? member.sourceName
+    : fact.target.form === "callable" ? member.targetName : fact.target.name;
   const selectedReturn = member.returnType === undefined
     ? undefined
     : substituteRustTargetTypeParameters(member.returnType, substitutions);
@@ -2139,7 +2497,7 @@ export function sourceCallSelectedMemberMatches(
     member.kind === expectedKind &&
     member.targetName === expectedTargetName &&
     selectedReturn !== undefined && rustTargetTypeRefEquals(selectedReturn, fact.resultCarrier) &&
-    isDenseDataArray(member.parameters) && member.parameters.length === fact.parameterCarriers.length &&
+    isDenseDataArray(member.parameters) && member.parameters.length === fact.parameters.length &&
     member.parameters.every((parameter, index) => {
       const mode = parameter.passingMode === "borrow-mut"
         ? "mut-ref"
@@ -2148,8 +2506,8 @@ export function sourceCallSelectedMemberMatches(
           : "value";
       return rustTargetTypeRefEquals(
         substituteRustTargetTypeParameters(parameter.type, substitutions),
-        fact.parameterCarriers[index],
-      ) && mode === fact.argumentModes[index];
+        fact.parameters[index]?.parameterCarrier,
+      ) && mode === fact.parameters[index]?.mode;
     });
 }
 

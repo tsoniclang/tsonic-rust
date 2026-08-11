@@ -68,8 +68,18 @@ test("project-source call consumption requires exact selected member kind, targe
     kind: "source-call",
     operationId: "source:add",
     target: { form: "function", fileName: "/src/math.ts", name: "add" },
-    parameterCarriers: [int32],
-    argumentModes: ["value"],
+    parameters: [{
+      form: "required",
+      valueCarrier: int32,
+      parameterCarrier: int32,
+      mode: "value",
+      inputs: [{
+        sourceArgumentIndex: 0,
+        sourceForm: "value",
+        sourceParameterForm: "parameter",
+        carrier: int32,
+      }],
+    }],
     resultCarrier: int32,
   };
   const member = {

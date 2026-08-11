@@ -49,5 +49,5 @@ export function applyRustTailShape(body: RustBlock, hasReturnValue: boolean): Ru
   }
   return tail === last
     ? body
-    : { statements: [...body.statements.slice(0, lastIndex), tail] };
+    : { ...body, statements: [...body.statements.slice(0, lastIndex), tail] };
 }

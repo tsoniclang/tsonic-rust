@@ -63,6 +63,7 @@ import {
   rustJsArrayTargetType,
   rustJsValueTargetType,
   rustOptionTargetType,
+  rustCallableProtocol,
   rustSourceTypeCarrier,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
@@ -1076,6 +1077,8 @@ function acceptProjectSourceCall(
       return undefined;
     }
     context.facts.set(parameter, rustSourceParameterAbiFactKey, {
+      form: abi.form,
+      valueCarrier: abi.valueCarrier,
       parameterCarrier: abi.parameterCarrier,
       mode: abi.mode,
     }, [
@@ -1125,7 +1128,9 @@ function acceptProjectSourceCall(
   }
   const sourceName = construction
     ? "constructor"
-    : rustProjectCallableTargetName(callableDeclaration, context) ?? "<anonymous>";
+    : selectedKind === "KindFunctionType" || selectedKind === "KindCallSignature"
+      ? "call"
+      : rustProjectCallableTargetName(callableDeclaration, context) ?? "<anonymous>";
   const fileName = ast.getFileName(ast.getSourceFile(callableDeclaration));
   const member: RustTargetMember = {
     id: `tsonic.rust.source.call:${fileName}:${ast.pos(callableDeclaration)}:${ast.end(callableDeclaration)}`,
@@ -1487,26 +1492,38 @@ function selectRustOptionalCallResult(
     return { kind: "resolved", resultCarrier: innerResultCarrier };
   }
   const receiver = request.sourceReceiver;
-  if (receiver === undefined) {
+  const guard = receiver?.expression ?? request.callee;
+  const sourceGuardCarrier = receiver === undefined
+    ? resolveRustTargetTypeRef(
+        request.sourceCalleeDeclaration ?? request.callee,
+        context,
+        options,
+      )
+    : resolveRustTargetTypeRef(
+        receiver.declaration ?? receiver.expression,
+        context,
+        options,
+      );
+  const selectedGuardCarrier = receiver === undefined
+    ? resolveRustTargetTypeRef(
+        request.sourceSelectedDeclaration,
+        context,
+        options,
+      )
+    : selectedCallReceiverValueCarrier(request, context, options);
+  if (rustCallableProtocol(selectedGuardCarrier) === undefined &&
+    selectedGuardCarrier?.kind !== "function-pointer" && receiver === undefined) {
     return {
       kind: "rejected",
-      message: "Optional method calls require the exact TSTS-selected receiver evidence.",
+      message: "Optional direct calls require exact callable selected-signature evidence.",
     };
   }
   const selection = selectRustOptionalChain({
     expression: request.call,
-    guard: receiver.expression,
+    guard,
     operationKind: "method",
-    sourceGuardCarrier: resolveRustTargetTypeRef(
-      receiver.declaration ?? receiver.expression,
-      context,
-      options,
-    ),
-    selectedGuardCarrier: selectedCallReceiverValueCarrier(
-      request,
-      context,
-      options,
-    ),
+    sourceGuardCarrier,
+    selectedGuardCarrier,
     innerResultCarrier,
   });
   if (selection.kind === "rejected") {
@@ -2567,7 +2584,8 @@ function selectedDeclarationIsCallable(
     kind === "KindMethodSignature" ||
     kind === "KindCallSignature" ||
     kind === "KindConstructSignature" ||
-    kind === "KindFunctionDeclaration";
+    kind === "KindFunctionDeclaration" ||
+    kind === "KindFunctionType";
 }
 
 function genericOperation(

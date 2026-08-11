@@ -5,6 +5,7 @@ import {
   KindArrayBindingPattern,
   KindIdentifier,
   KindObjectBindingPattern,
+  Node_Initializer,
   Node_Name,
 } from "../../common/source-ast.js";
 import {
@@ -35,6 +36,12 @@ import type { RustBindingExpressionPlanner } from "./binding-patterns.js";
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
   | {
+      readonly kind: "default";
+      readonly initializer: Node;
+      readonly name: string;
+      readonly mutable: boolean;
+    }
+  | {
       readonly kind: "binding";
       readonly pattern: Node;
       readonly name: string;
@@ -44,6 +51,7 @@ type RustParameterPrelude =
 export interface RustCallableParameterPlan {
   readonly params: readonly RustFunctionParam[];
   readonly prelude: readonly RustParameterPrelude[];
+  readonly bodyInnerAttrs: readonly string[];
 }
 
 export function planRustCallableParameters(
@@ -101,8 +109,8 @@ export function planRustCallableParameters(
       return undefined;
     }
     if (locationStorage !== undefined &&
-      (parameterCarrier === undefined ||
-        !rustTargetTypeRefEquals(parameterCarrier, locationStorage.valueCarrier))) {
+      (abi?.valueCarrier === undefined ||
+        !rustTargetTypeRefEquals(abi.valueCarrier, locationStorage.valueCarrier))) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, parameter),
         "rust.backend.typed-location-parameter-carrier",
@@ -113,9 +121,27 @@ export function planRustCallableParameters(
     params.push({
       name: parameterName,
       type: parameterType,
-      mutable: pattern === undefined && locationStorage === undefined &&
+      mutable: pattern === undefined && locationStorage === undefined && abi?.form !== "default" &&
         context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
     });
+    if (abi?.form === "default") {
+      const initializer = Node_Initializer(ast, parameter);
+      if (initializer === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, parameter),
+          "rust.backend.default-parameter-initializer",
+          "Default-parameter ABI requires one exact authored initializer.",
+        ));
+        return undefined;
+      }
+      prelude.push({
+        kind: "default",
+        initializer,
+        name: parameterName,
+        mutable: pattern === undefined && locationStorage === undefined &&
+          context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+      });
+    }
     if (pattern !== undefined && sourceCarrier !== undefined) {
       prelude.push({ kind: "binding", pattern, name: parameterName, sourceCarrier });
       continue;
@@ -141,7 +167,13 @@ export function planRustCallableParameters(
       },
     });
   }
-  return { params, prelude };
+  return {
+    params,
+    prelude,
+    bodyInnerAttrs: prelude.some((entry) => entry.kind === "default")
+      ? ["#![allow(clippy::let_and_return, clippy::unnecessary_lazy_evaluations)]"]
+      : [],
+  };
 }
 
 export function planRustCallableParameterPrelude(
@@ -153,6 +185,24 @@ export function planRustCallableParameterPrelude(
   for (const entry of plan.prelude) {
     if (entry.kind === "statement") {
       statements.push(entry.statement);
+      continue;
+    }
+    if (entry.kind === "default") {
+      const initializer = planExpression(entry.initializer, context);
+      if (initializer === undefined) {
+        return undefined;
+      }
+      statements.push({
+        kind: "let",
+        name: entry.name,
+        mutable: entry.mutable,
+        init: {
+          kind: "method-call",
+          receiver: { kind: "path", path: entry.name },
+          method: "unwrap_or_else",
+          args: [{ kind: "closure", params: [], body: initializer }],
+        },
+      });
       continue;
     }
     const binding = planRustBindingPattern(

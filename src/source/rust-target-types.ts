@@ -18,6 +18,7 @@ export const rustStringTargetId = "rust.std.String";
 export const rustBigIntTargetId = "rust.runtime.BigInt";
 export const rustOptionTargetId = "rust.std.Option";
 export const rustLocationTargetId = "rust.runtime.Location";
+export const rustCallableTargetId = "rust.runtime.Callable";
 export const rustGeneratorTargetId = "rust.runtime.Generator";
 export const rustAsyncGeneratorTargetId = "rust.runtime.AsyncGenerator";
 export const rustIteratorResultTargetId = "rust.runtime.IteratorResult";
@@ -297,6 +298,30 @@ export function rustLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustLocationTargetId, typeArguments: [pointee] };
 }
 
+export function rustCallableTargetType(
+  parameters: readonly TargetTypeRef[],
+  result: TargetTypeRef,
+): TargetTypeRef {
+  return {
+    kind: "target-named",
+    id: rustCallableTargetId,
+    typeArguments: [rustTupleTargetType(parameters), result],
+  };
+}
+
+export function rustCallableProtocol(
+  carrier: TargetTypeRef | undefined,
+): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustCallableTargetId ||
+    carrier.typeArguments?.length !== 2) {
+    return undefined;
+  }
+  const [argumentsCarrier, result] = carrier.typeArguments;
+  return argumentsCarrier?.kind === "tuple" && result !== undefined
+    ? { parameters: argumentsCarrier.elements, result }
+    : undefined;
+}
+
 export interface RustGeneratorProtocol {
   readonly kind: "sync" | "async";
   readonly yieldType: TargetTypeRef;
@@ -548,6 +573,7 @@ export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined
 
 const rustCloneOnReadTargetIds: ReadonlySet<string> = new Set([
   rustBigIntTargetId,
+  rustCallableTargetId,
   rustLocationTargetId,
   rustJsValueTargetId,
   rustJsArrayTargetId,
@@ -569,6 +595,7 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
 const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustStringTargetId,
   rustBigIntTargetId,
+  rustCallableTargetId,
   rustLocationTargetId,
   rustUndefinedTargetId,
   rustJsValueTargetId,

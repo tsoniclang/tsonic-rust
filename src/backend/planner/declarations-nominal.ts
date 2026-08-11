@@ -218,7 +218,7 @@ function planConstructor(
     [],
   );
   const parameterPlan = member === undefined
-    ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
+    ? { params: [], prelude: [], bodyInnerAttrs: [] } satisfies RustCallableParameterPlan
     : planRustCallableParameters(member, context, syntheticNames, { requireStatic: false });
   if (parameterPlan === undefined) {
     return undefined;
@@ -335,7 +335,12 @@ function planConstructor(
     ...(params.length === 0 ? { attrs: ["#[allow(clippy::new_without_default)]"] } : {}),
     params,
     returnType: { kind: "named", path: className },
-    body: { statements },
+    body: {
+      ...(parameterPlan.bodyInnerAttrs.length === 0
+        ? {}
+        : { innerAttrs: parameterPlan.bodyInnerAttrs }),
+      statements,
+    },
   };
 }
 
@@ -511,6 +516,9 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
       params,
       returnType: generatorReturnType,
       body: {
+        ...(parameterPlan.bodyInnerAttrs.length === 0
+          ? {}
+          : { innerAttrs: parameterPlan.bodyInnerAttrs }),
         statements: [...parameterStatements, {
           kind: "tail",
           expr: {
@@ -539,11 +547,16 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     ...(isStatic ? {} : { selfParam: "ref" as const }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyFallibleShape(
-      applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-      fallible,
-      returnType !== undefined,
-    ),
+    body: {
+      ...applyFallibleShape(
+        applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
+        fallible,
+        returnType !== undefined,
+      ),
+      ...(parameterPlan.bodyInnerAttrs.length === 0
+        ? {}
+        : { innerAttrs: parameterPlan.bodyInnerAttrs }),
+    },
   };
 }
 

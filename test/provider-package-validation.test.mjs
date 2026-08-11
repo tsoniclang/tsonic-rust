@@ -200,11 +200,6 @@ test("provider operation carriers are closed and renderable", () => {
       cast: true,
       pattern: /resultConversion\.target does not match the selected operation result carrier/u,
     },
-    {
-      label: "unsupported function-pointer carrier",
-      carrier: { kind: "function-pointer", args: [], result: int32Carrier },
-      pattern: /unsupported Rust carrier kind 'function-pointer'/u,
-    },
   ];
 
   for (const item of invalidCarriers) {

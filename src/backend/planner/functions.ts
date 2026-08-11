@@ -193,6 +193,9 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       params,
       ...(returnType === undefined ? {} : { returnType }),
       body: {
+        ...(parameterPlan.bodyInnerAttrs.length === 0
+          ? {}
+          : { innerAttrs: parameterPlan.bodyInnerAttrs }),
         statements: [...parameterStatements, {
           kind: "tail",
           expr: {
@@ -235,11 +238,16 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       : { typeParams: finalizedTypeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyFallibleShape(
+    body: {
+      ...applyFallibleShape(
       applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
       fallible,
       returnType !== undefined,
-    ),
+      ),
+      ...(parameterPlan.bodyInnerAttrs.length === 0
+        ? {}
+        : { innerAttrs: parameterPlan.bodyInnerAttrs }),
+    },
   };
   return publishRustSourceCallableContract(node, item, context)
     ? item
@@ -296,5 +304,5 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
   if (!hasReturnValue && !endsWithExit) {
     wrapped.push({ kind: "tail", expr: { kind: "path", path: "Ok(())" } });
   }
-  return { statements: wrapped };
+  return { ...body, statements: wrapped };
 }

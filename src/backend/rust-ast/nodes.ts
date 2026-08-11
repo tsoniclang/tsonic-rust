@@ -15,6 +15,7 @@ export type RustType =
   | { readonly kind: "named"; readonly path: string; readonly lifetimeArguments?: readonly string[]; readonly typeArguments?: readonly RustType[] }
   | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: number }
   | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean }
+  | { readonly kind: "function-pointer"; readonly parameters: readonly RustType[]; readonly result: RustType; readonly abi?: readonly string[] }
   | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
 
 export type RustExpr =
@@ -32,13 +33,18 @@ export type RustExpr =
   | { readonly kind: "conditional"; readonly condition: RustExpr; readonly whenTrue: RustExpr; readonly whenFalse: RustExpr }
   | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
   | { readonly kind: "call"; readonly path: string; readonly args: readonly RustExpr[] }
+  | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
   | { readonly kind: "associated-call"; readonly owner: RustType; readonly method: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "method-call"; readonly receiver: RustExpr; readonly method: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "field"; readonly receiver: RustExpr; readonly name: string }
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
   | {
       readonly kind: "block";
-      readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+      readonly bindings: readonly {
+        readonly name: string;
+        readonly value: RustExpr;
+        readonly attrs?: readonly string[];
+      }[];
       readonly value: RustExpr;
     }
   | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly discard: "unit" | "value"; readonly value: RustExpr }
@@ -137,6 +143,7 @@ export type RustStmt =
     };
 
 export interface RustBlock {
+  readonly innerAttrs?: readonly string[];
   readonly statements: readonly RustStmt[];
 }
 

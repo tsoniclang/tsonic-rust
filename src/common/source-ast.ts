@@ -213,6 +213,10 @@ export function Node_Type(ast: AstReader, node: Node | undefined): Node | undefi
       return ast.as.AsArrowFunction(node)?.Type;
     case KindFunctionExpression:
       return ast.as.AsFunctionExpression(node)?.Type;
+    case "KindFunctionType":
+      return ast.as.AsFunctionTypeNode(node)?.Type;
+    case "KindConstructorType":
+      return ast.as.AsConstructorTypeNode(node)?.Type;
     case "KindMethodDeclaration":
       return ast.as.AsMethodDeclaration(node)?.Type;
     case "KindMethodSignature":

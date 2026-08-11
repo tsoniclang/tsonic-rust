@@ -11,6 +11,7 @@ import {
   rustJsSetTargetId,
   rustJsValueTargetId,
   rustLocationTargetId,
+  rustCallableTargetId,
   rustGeneratorTargetId,
   rustAsyncGeneratorTargetId,
   rustIteratorResultTargetId,
@@ -28,6 +29,7 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustBigIntTargetId]: "rt::BigInt",
   [rustOptionTargetId]: "Option",
   [rustLocationTargetId]: "rt::Location",
+  [rustCallableTargetId]: "rt::Callable",
   [rustGeneratorTargetId]: "rt::Generator",
   [rustAsyncGeneratorTargetId]: "rt::AsyncGenerator",
   [rustIteratorResultTargetId]: "rt::IteratorResult",
@@ -88,6 +90,19 @@ export function rustTypeFromCarrier(
   if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
+  }
+  if (carrier.kind === "function-pointer") {
+    const parameters = carrier.args.map((argument) =>
+      rustTypeFromCarrier(argument, resolveSourceTypePath));
+    const result = rustTypeFromCarrier(carrier.result, resolveSourceTypePath);
+    return result === undefined || parameters.some((parameter) => parameter === undefined)
+      ? undefined
+      : {
+          kind: "function-pointer",
+          parameters: parameters as RustType[],
+          result,
+          ...(carrier.abi === undefined ? {} : { abi: carrier.abi }),
+        };
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   if (fixedArray !== undefined) {
@@ -171,6 +186,13 @@ export function collectAliasesFromRustType(
   }
   if (type.kind === "slice-ref") {
     collectAliasesFromRustType(type.element, register);
+    return;
+  }
+  if (type.kind === "function-pointer") {
+    for (const parameter of type.parameters) {
+      collectAliasesFromRustType(parameter, register);
+    }
+    collectAliasesFromRustType(type.result, register);
     return;
   }
   if (type.kind === "fixed-array") {

@@ -1,5 +1,5 @@
 import type { Node, Symbol } from "@tsonic/tsts";
-import { isRustStringCarrier } from "../rust-target-types.js";
+import { isRustStringCarrier, rustOptionTargetType } from "../rust-target-types.js";
 import type { RustArgumentMode } from "../rust-facts/keys.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
@@ -9,6 +9,7 @@ import type {
   RustTargetTypeResolutionContext,
   RustTargetTypeResolutionOptions,
 } from "./target-type-resolution.js";
+import { Node_Initializer, Node_Type } from "../../common/source-ast.js";
 
 export interface RustSourceCallableAbiResolver {
   resolveParameterAbi(
@@ -19,6 +20,7 @@ export interface RustSourceCallableAbiResolver {
 }
 
 export interface RustSourceParameterAbi {
+  readonly form: "required" | "optional" | "default" | "rest";
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
@@ -33,13 +35,50 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
       if (cached !== undefined) {
         return cached ?? undefined;
       }
-      const base = resolveRustTargetTypeRef(parameter, context, options);
+      const typeNode = Node_Type(context.ast, parameter);
+      const base = typeNode === undefined
+        ? undefined
+        : resolveRustTargetTypeRef(typeNode, context, options);
       if (base === undefined) {
         cache.set(parameter, null);
         return undefined;
       }
-      const abi = !isRustStringCarrier(base)
+      const declaration = context.ast.as.AsParameterDeclaration(parameter);
+      if (declaration === undefined) {
+        cache.set(parameter, null);
+        return undefined;
+      }
+      const form = declaration.DotDotDotToken !== undefined
+        ? "rest" as const
+        : Node_Initializer(context.ast, parameter) !== undefined
+          ? "default" as const
+          : context.ast.questionToken(parameter) !== undefined
+            ? "optional" as const
+            : "required" as const;
+      const abi = form === "optional"
         ? {
+            form,
+            valueCarrier: rustOptionTargetType(base),
+            parameterCarrier: rustOptionTargetType(base),
+            mode: "value" as const,
+          }
+        : form === "default"
+          ? {
+              form,
+              valueCarrier: base,
+              parameterCarrier: rustOptionTargetType(base),
+              mode: "value" as const,
+            }
+          : form === "rest"
+            ? {
+                form,
+                valueCarrier: base,
+                parameterCarrier: base,
+                mode: "value" as const,
+              }
+            : !isRustStringCarrier(base)
+        ? {
+            form,
             valueCarrier: base,
             parameterCarrier: base,
             mode: base.kind === "pointer"
@@ -48,6 +87,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           }
         : parameterOnlyReadsThroughReceiver(parameter, context)
           ? {
+              form,
               valueCarrier: base,
               parameterCarrier: {
                 kind: "pointer" as const,
@@ -56,7 +96,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
               },
               mode: "ref" as const,
             }
-          : { valueCarrier: base, parameterCarrier: base, mode: "value" as const };
+          : { form, valueCarrier: base, parameterCarrier: base, mode: "value" as const };
       cache.set(parameter, abi);
       return abi;
     },

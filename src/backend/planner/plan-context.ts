@@ -77,6 +77,7 @@ export interface RustPlanContext {
     readonly protocol: RustGeneratorFact;
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustExpressionOverride>;
+  readonly capturedBindingPaths?: ReadonlyMap<Node, string>;
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS
