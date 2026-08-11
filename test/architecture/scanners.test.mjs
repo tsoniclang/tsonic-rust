@@ -108,6 +108,13 @@ test("target builds delete stale dist artifacts before compilation", () => {
   assert.match(cleaner, /rmSync\(resolve\(repositoryRoot, "dist"\), \{ recursive: true, force: true \}\)/u);
 });
 
+test("bounded tests cap and report nested Cargo parallelism", () => {
+  const runner = readFileSync(join(repositoryRoot, "scripts/test.sh"), "utf8");
+  assert.match(runner, /cargo_build_jobs="\$\{CARGO_BUILD_JOBS:-2\}"/u);
+  assert.match(runner, /export CARGO_BUILD_JOBS="\$\{cargo_build_jobs\}"/u);
+  assert.match(runner, /nested Cargo jobs: %s per Cargo invocation/u);
+});
+
 test("no product dependency on analysis files", () => {
   for (const { path, text } of sourceFiles) {
     assert.ok(!text.includes(".analysis/") && !text.includes('".analysis"'), `${path} references .analysis`);

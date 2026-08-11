@@ -2,6 +2,7 @@
 set -euo pipefail
 
 test_concurrency="${TSONIC_RUST_TEST_CONCURRENCY:-2}"
+cargo_build_jobs="${CARGO_BUILD_JOBS:-2}"
 heap_megabytes="${TSONIC_RUST_TEST_HEAP_MB:-1536}"
 memory_max="${TSONIC_RUST_TEST_MEMORY_MAX:-8G}"
 tasks_max="${TSONIC_RUST_TEST_TASKS_MAX:-256}"
@@ -12,6 +13,11 @@ log_size_max_bytes="${TSONIC_RUST_TEST_LOG_SIZE_MAX_BYTES:-67108864}"
 
 if ! [[ "${test_concurrency}" =~ ^[1-9][0-9]*$ ]]; then
   printf 'TSONIC_RUST_TEST_CONCURRENCY must be a positive integer.\n' >&2
+  exit 2
+fi
+
+if ! [[ "${cargo_build_jobs}" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'CARGO_BUILD_JOBS must be a positive integer.\n' >&2
   exit 2
 fi
 
@@ -53,6 +59,7 @@ for required_command in node systemd-run systemctl tail timeout; do
 done
 
 export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }--max-old-space-size=${heap_megabytes}"
+export CARGO_BUILD_JOBS="${cargo_build_jobs}"
 
 if (( $# == 0 )); then
   test_arguments=(test/*.test.mjs test/architecture/*.test.mjs)
@@ -80,6 +87,7 @@ printf 'Tsonic Rust bounded test run\n'
 printf '  unit: %s\n' "${unit}"
 printf '  log: %s\n' "${log_file}"
 printf '  workers: %s\n' "${test_concurrency}"
+printf '  nested Cargo jobs: %s per Cargo invocation\n' "${cargo_build_jobs}"
 printf '  heap per worker: %s MiB\n' "${heap_megabytes}"
 printf '  process-group memory ceiling: %s\n' "${memory_max}"
 printf '  process-group swap ceiling: 0\n'
