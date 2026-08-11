@@ -96,6 +96,7 @@ export interface RustCheckedCallSelectionInput {
   readonly arguments: readonly Node[];
   readonly sourceArgumentBindings: ResolvedSourceCallInfo["sourceArgumentBindings"];
   readonly sourceSelectedSignatureParameters: ResolvedSourceCallInfo["sourceSelectedSignatureParameters"];
+  readonly optionalChain: ResolvedSourceCallInfo["optionalChain"];
   readonly sourceReceiver?: ResolvedSourceCallInfo["sourceReceiver"];
   readonly sourceCalleeAccess?: ResolvedSourceCallInfo["sourceCalleeAccess"];
   readonly sourceSelectedSignature?: Signature;
@@ -136,6 +137,8 @@ export interface RustCheckedPropertySelectionInput {
   readonly target?: "rust";
   readonly expression: Node;
   readonly receiver: Node;
+  readonly sourceReceiverType?: Type;
+  readonly sourceReceiverDeclaration?: Node;
   readonly sourceSelectedSymbol?: Symbol;
   readonly sourceSelectedDeclaration?: Node;
   readonly sourceResultType?: Type;

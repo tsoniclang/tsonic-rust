@@ -18,14 +18,6 @@ const unsupportedLanes = [
       message: "RegExp construct outside the oracle-proven subset: lookahead `(?=` is not supported.",
     },
   },
-  {
-    capability: "undefined unions without js surface",
-    files: { "index.ts": "import type { int32 } from \"@tsonic/core/types.js\";\nexport function f(value: int32 | undefined): int32 {\n  return value ?? 0;\n}\n" },
-    finalizedDiagnostic: {
-      code: "RUST_PARAMETER_CARRIER_UNSUPPORTED",
-      message: "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
-    },
-  },
 ];
 
 for (const lane of unsupportedLanes) {

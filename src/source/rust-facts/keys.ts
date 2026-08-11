@@ -224,6 +224,17 @@ export interface RustRuntimeSetTemplate {
 export type RustProviderFactOperationKind = "method" | "constructor" | "property" | "indexer";
 export type RustRuntimeSetOperationKind = "property-set" | "index-set";
 
+export interface RustOptionalChainFact {
+  readonly expression: Node;
+  readonly guard: Node;
+  readonly operationKind: "property" | "indexer" | "method";
+  readonly sourceGuardCarrier: TargetTypeRef;
+  readonly selectedGuardCarrier: TargetTypeRef;
+  readonly innerResultCarrier: TargetTypeRef;
+  readonly resultCarrier: TargetTypeRef;
+  readonly lowering: "map" | "and-then";
+}
+
 export type RustTargetOperationFact =
   | {
       readonly kind: "operator-token";
@@ -508,6 +519,9 @@ function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: Rus
 
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
   defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
+
+export const rustOptionalChainFactKey: RustPlanKey<RustOptionalChainFact> =
+  defineRustPlanKey("optionalChain", closedMetadataEquals);
 
 export const rustTypedLocationPlanKey: RustPlanKey<RustTypedLocationPlan> =
   defineRustPlanKey("typedLocationPlan", rustTypedLocationPlanEquals);

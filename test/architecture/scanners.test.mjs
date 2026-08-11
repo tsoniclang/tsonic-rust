@@ -313,30 +313,34 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
   assert.match(passingGate, /missingFactDiagnostic/u);
 });
 
-test("optional chains fail closed before normal member selection", () => {
+test("optional chains consume exact TSTS evidence through one finalized Option fact", () => {
+  const contracts = readFileSync(join(sourceRoot, "policy/operations/contracts.ts"), "utf8");
+  assert.match(contracts, /readonly optionalChain: ResolvedSourceCallInfo\["optionalChain"\]/u);
+  assert.match(contracts, /readonly sourceReceiver\?: ResolvedSourceCallInfo\["sourceReceiver"\]/u);
+  assert.match(contracts, /readonly sourceReceiverType\?: Type/u);
+
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/operations-provider.ts"), "utf8");
-  const property = sourceSection(
-    semantics,
-    "export function selectRustCheckedPropertyAccess(",
-    "export function selectRustCheckedElementAccess(",
+  assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
+  assert.match(semantics, /selectRustOptionalChain\(\{/u);
+  assert.match(semantics, /resolveRustTargetTypeRef\(receiver\.type, context, options\)/u);
+  assert.match(semantics, /rustOptionalChainFactKey/u);
+
+  const selector = readFileSync(join(sourceRoot, "source/rust-target-semantics/optional-chains.ts"), "utf8");
+  assert.match(selector, /rustOptionElementCarrier\(sourceGuardCarrier\)/u);
+  assert.match(selector, /rustTargetTypeRefEquals\(sourceElement, selectedGuardCarrier\)/u);
+  assert.doesNotMatch(selector, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
+  assert.doesNotMatch(selector, /memberName|propertyName|sourceName|targetName/u);
+
+  const backend = readFileSync(join(sourceRoot, "backend/planner/expressions.ts"), "utf8");
+  const planner = sourceSection(
+    backend,
+    "function planOptionalChainExpression(",
+    "function planPropertyAccess(",
   );
-  const element = sourceSection(
-    semantics,
-    "export function selectRustCheckedElementAccess(",
-    "export function selectRustCheckedIteration(",
-  );
-  for (const [kind, section] of [["property", property], ["element", element]]) {
-    assert.match(section, /if \(request\.optionalChain === true\) \{\s*return rejectSelectedOperation\([^;]+"RUST_OPTIONAL_CHAIN_UNSUPPORTED"/su, `${kind} optional chains must reject`);
-    assert.ok(
-      section.indexOf("request.optionalChain") < section.indexOf("resolveSelectedProviderDeclaration"),
-      `${kind} optional chains must reject before provider selection`,
-    );
-  }
-  for (const { path, text } of sourceFiles) {
-    if (path.includes("/backend/")) {
-      assert.doesNotMatch(text, /optionalChain/u, `${path} infers optional-chain semantics in the backend`);
-    }
-  }
+  assert.match(planner, /getFact\(node, rustOptionalChainFactKey\)/u);
+  assert.match(planner, /planExpression\(fact\.guard, context\)/u);
+  assert.match(planner, /overrides\.set\(fact\.guard/u);
+  assert.doesNotMatch(planner, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
 });
 
 test("plain identifier binding cannot become a provider-value identity workaround", () => {

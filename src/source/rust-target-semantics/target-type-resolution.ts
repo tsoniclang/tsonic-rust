@@ -32,7 +32,6 @@ import {
   rustGeneratorTargetType,
   rustAsyncGeneratorTargetType,
   rustIteratorResultTargetType,
-  isRustLocationCarrier,
   rustJsArrayTargetType,
   rustJsDateTargetType,
   rustJsMapTargetType,
@@ -226,10 +225,7 @@ function resolveRustTargetTypeSyntax(
       const valueCarrier = nullish === undefined || value === undefined
         ? undefined
         : resolveRustTargetTypeSyntax(value, context, options, resolving);
-      const undefinedUnion = nullish !== undefined &&
-        ast.kindName(nullish) === "KindUndefinedKeyword";
-      if (valueCarrier !== undefined &&
-        (!undefinedUnion || options.jsEnabled || isRustLocationCarrier(valueCarrier))) {
+      if (valueCarrier !== undefined) {
         return rustOptionTargetType(valueCarrier);
       }
     }
@@ -502,10 +498,7 @@ function resolveUnion(
   const nullishMembers = members.filter((member) => context.typeShape.isNullish(member));
   if (valueMembers.length === 1 && nullishMembers.length > 0) {
     const value = resolveRustTargetType(valueMembers[0], context, options, resolving);
-    return value !== undefined &&
-      (options.jsEnabled || isRustLocationCarrier(value))
-      ? rustOptionTargetType(value)
-      : undefined;
+    return value === undefined ? undefined : rustOptionTargetType(value);
   }
   if (members.length > 0 && members.every((member) => context.typeShape.isStringLike(member))) {
     return rustStringTargetType();

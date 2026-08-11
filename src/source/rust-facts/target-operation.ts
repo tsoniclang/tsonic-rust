@@ -1,6 +1,14 @@
 import type { RustTargetOperationFact } from "./keys.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
+import {
+  isRustFinalizedArrayInput,
+  isRustFinalizedSliceInput,
+  isRustFinalizedSourceInput,
+  isRustFinalizedTaggedArrayInput,
+} from "./finalized-operation-abi.js";
+import type { RustFinalizedOperationAbi } from "./finalized-operation-abi.js";
+import { rustValueConversionIsFallible } from "./value-conversions.js";
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
@@ -54,6 +62,42 @@ export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFac
 
 export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationFact | undefined): boolean {
   return fact?.kind === "source-field" || rustTargetOperationIsDirectLocation(fact);
+}
+
+export function rustTargetOperationIsFallible(fact: RustTargetOperationFact | undefined): boolean {
+  if (fact === undefined) {
+    return false;
+  }
+  if (fact.kind === "regexp-create") {
+    return true;
+  }
+  if (fact.kind === "source-conversion") {
+    return rustValueConversionIsFallible(fact.conversion);
+  }
+  if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
+    return rustOperationAbiInvocationIsFallible(fact.abi);
+  }
+  return false;
+}
+
+export function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperationAbi): boolean {
+  if (abi.effects.invocation === "fallible" ||
+    (abi.targetReceiver.kind === "input" && abi.targetReceiver.input.conversion.fallible) ||
+    abi.targetArguments.some((input) =>
+      isRustFinalizedSourceInput(input)
+        ? input.conversion.fallible
+        : (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) &&
+            input.elements.some((element) => element.conversion.fallible) ||
+          isRustFinalizedTaggedArrayInput(input) &&
+            input.elements.some((element) => element.input.conversion.fallible))) {
+    return true;
+  }
+  return abi.result.kind === "sync" && abi.result.conversion.fallible;
+}
+
+export function rustOperationAbiAwaitIsFallible(abi: RustFinalizedOperationAbi): boolean {
+  return abi.result.kind === "async" &&
+    (abi.effects.awaiting === "fallible" || abi.result.awaitedConversion.fallible);
 }
 
 export function rustFinalizedCarrierTransitionMatches(

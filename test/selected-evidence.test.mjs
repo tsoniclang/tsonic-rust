@@ -6,6 +6,11 @@ import {
   compileRust,
 } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
+import { selectRustOptionalChain } from "../dist/source/rust-target-semantics/optional-chains.js";
+import {
+  rustOptionTargetType,
+  rustStringTargetType,
+} from "../dist/source/rust-target-types.js";
 
 const providerValuePackage = createRustProviderPackage({
   id: "acme-environment",
@@ -170,23 +175,57 @@ export function total(values: readonly int32[]): int32 {
   validateGeneratedProject("selected-for-of", result.artifacts);
 });
 
-test("optional-chain access fails closed until a Rust Option operation is selected", () => {
+test("optional-chain access consumes exact selected receiver evidence", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
-export function length(value: string | null): number | undefined {
+import type { int32 } from "@tsonic/core/types.js";
+
+export function length(value: string | null): int32 | undefined {
   return value?.length;
 }
 `,
     },
   });
 
-  assert.deepEqual(result.artifacts, []);
-  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
-    code: "RUST_OPTIONAL_CHAIN_UNSUPPORTED",
-    message: "Optional-chain property access has no finalized Rust Option operation.",
-  }]);
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /value\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u,
+  );
+  validateGeneratedProject("selected-optional-property", result.artifacts);
+});
+
+test("optional-chain selection fails closed without every exact carrier", () => {
+  const expression = {};
+  const guard = {};
+  const stringCarrier = rustStringTargetType();
+  const optionStringCarrier = rustOptionTargetType(stringCarrier);
+
+  assert.deepEqual(selectRustOptionalChain({
+    expression,
+    guard,
+    operationKind: "property",
+    sourceGuardCarrier: optionStringCarrier,
+    selectedGuardCarrier: undefined,
+    innerResultCarrier: stringCarrier,
+  }), {
+    kind: "rejected",
+    message: "Optional chaining requires exact source, selected-receiver, and inner-result carriers.",
+  });
+
+  assert.deepEqual(selectRustOptionalChain({
+    expression,
+    guard,
+    operationKind: "property",
+    sourceGuardCarrier: optionStringCarrier,
+    selectedGuardCarrier: { kind: "source-primitive", name: "int32" },
+    innerResultCarrier: stringCarrier,
+  }), {
+    kind: "rejected",
+    message: "Optional-chain guard must be exactly Option of the TSTS-selected non-null receiver carrier.",
+  });
 });
 
 test("provider value identifiers lower only from exact provider declaration evidence", () => {

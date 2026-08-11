@@ -586,6 +586,105 @@ test("one-field struct literals honor rustfmt's compact body limit", () => {
   assert.match(source, /Counter \{\n        value: value\.clone\(\),\n    \}/u);
 });
 
+test("optional closure chains and nested struct arguments stay rustfmt-stable", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      visibility: "public",
+      name: "proof",
+      params: [],
+      body: {
+        statements: [
+          {
+            kind: "expr",
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: { kind: "path", path: "value" },
+                method: "as_ref",
+                args: [],
+              },
+              method: "map",
+              args: [{
+                kind: "closure",
+                params: [{ name: "selected", byRefCopy: false }],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "selected" },
+                  method: "operation_with_a_deliberately_long_name_that_requires_a_closure_body_break",
+                  args: [],
+                },
+              }],
+            },
+          },
+          {
+            kind: "expr",
+            expr: {
+              kind: "call",
+              path: "read",
+              args: [{
+                kind: "call",
+                path: "Some",
+                args: [{
+                  kind: "struct-literal",
+                  path: "Box",
+                  fields: [{
+                    name: "state",
+                    value: {
+                      kind: "call",
+                      path: "ObjectHandle::new",
+                      args: [{ kind: "int-literal", text: "7" }],
+                    },
+                  }],
+                }],
+              }],
+            },
+          },
+          {
+            kind: "expr",
+            expr: {
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "method-call",
+                receiver: {
+                  kind: "call",
+                  path: "read",
+                  args: [{
+                    kind: "call",
+                    path: "Some",
+                    args: [{
+                      kind: "struct-literal",
+                      path: "Box",
+                      fields: [{
+                        name: "state",
+                        value: {
+                          kind: "call",
+                          path: "ObjectHandle::new",
+                          args: [{ kind: "int-literal", text: "7" }],
+                        },
+                      }],
+                    }],
+                  }],
+                },
+                method: "unwrap_or",
+                args: [{ kind: "unary", operator: "-", operand: { kind: "int-literal", text: "1" } }],
+              },
+              right: { kind: "int-literal", text: "7" },
+            },
+          },
+        ],
+      },
+    }],
+  });
+
+  assert.match(source, /value\.as_ref\(\)\.map\(\|selected\| \{\n/u);
+  assert.match(source, /read\(Some\(Box \{\n        state: ObjectHandle::new\(7\),\n    \}\)\);/u);
+  assert.match(source, /read\(Some\(Box \{\n        state: ObjectHandle::new\(7\),\n    \}\)\)\n    \.unwrap_or\(-1\)\n        == 7;/u);
+});
+
 test("long logical chains use rustfmt-compatible operand-per-line layout", () => {
   const terms = Array.from({ length: 7 }, (_, index) => ({
     kind: "binary",

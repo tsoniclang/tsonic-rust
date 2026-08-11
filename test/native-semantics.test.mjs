@@ -482,8 +482,8 @@ export function some_value(): int32 {
   assert.match(text, /value_or_zero\(None\)/u);
 });
 
-test("undefined-typed unions stay fail-closed without an explicit lane", () => {
-  const options = {
+test("undefined-typed unions lower to Option in the native profile", () => {
+  const { result } = compileRust({
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -491,13 +491,19 @@ import type { int32 } from "@tsonic/core/types.js";
 export function value_or_zero(value: int32 | undefined): int32 {
   return value ?? 0;
 }
+
+export function some_value(): int32 {
+  return value_or_zero(5) + value_or_zero(undefined);
+}
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_PARAMETER_CARRIER_UNSUPPORTED",
-    message: "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
-  }]);
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32/u);
+  assert.match(text, /value_or_zero\(Some\(5\)\)/u);
+  assert.match(text, /value_or_zero\(None\)/u);
 });
 
 test("interfaces lower to reference-backed object wrappers with annotated object literals", () => {

@@ -123,24 +123,18 @@ import {
   rustSourceTypeCarrierValue,
 } from "../rust-target-types.js";
 import { parseSourceBigIntLiteral } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
   rustFutureValueMatchesCarrier,
 } from "../rust-facts/future-values.js";
 import {
+  rustOperationAbiAwaitIsFallible,
+  rustTargetOperationIsFallible,
   rustTargetOperationSupportsAssignment,
   rustTargetOperationText,
 } from "../rust-facts/target-operation.js";
-import { rustValueConversionIsFallible } from "../rust-facts/value-conversions.js";
-import {
-  isRustFinalizedArrayInput,
-  isRustFinalizedSliceInput,
-  isRustFinalizedSourceInput,
-  isRustFinalizedTaggedArrayInput,
-} from "../rust-facts/finalized-operation-abi.js";
-import type { RustFinalizedOperationAbi } from "../rust-facts/finalized-operation-abi.js";
 import { collectRustProviderSemantics } from "../provider-packages/index.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
 import {
@@ -343,6 +337,7 @@ function selectExpressionOperation(
       arguments: source.sourceArguments.map((argument) => argument.expression),
       sourceArgumentBindings: source.sourceArgumentBindings,
       sourceSelectedSignatureParameters: source.sourceSelectedSignatureParameters,
+      optionalChain: source.optionalChain,
       ...(source.sourceReceiver === undefined ? {} : { sourceReceiver: source.sourceReceiver }),
       ...(source.sourceCalleeAccess === undefined ? {} : { sourceCalleeAccess: source.sourceCalleeAccess }),
       sourceSelectedSignature: source.selectedSignature,
@@ -374,6 +369,10 @@ function selectExpressionOperation(
       target: "rust",
       expression,
       receiver: source.receiver.expression,
+      sourceReceiverType: source.receiver.type,
+      ...(source.receiver.declaration === undefined
+        ? {}
+        : { sourceReceiverDeclaration: source.receiver.declaration }),
       ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
       ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
       sourceResultType: source.sourceReadType ?? source.sourceWriteType,
@@ -390,6 +389,7 @@ function selectExpressionOperation(
       target: "rust",
       expression,
       receiver: source.receiver.expression,
+      sourceReceiverType: source.receiver.type,
       argument: source.argument.expression,
       ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
       ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
@@ -1034,6 +1034,7 @@ function resolveExpressionCarrier(
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const facts = walk.context.facts;
+  const contextualExpected = rustOptionElementCarrier(expected) ?? expected;
   const existing = facts.get(expression, rustRuntimeCarrierKey) ??
     walk.context.facts.resolve(expression, rustRuntimeCarrierKey);
   if (walk.resolving.has(expression)) {
@@ -1049,7 +1050,7 @@ function resolveExpressionCarrier(
       recordSelectedOperationInputs(walk, expression, sourceFile, operation);
       return applyOptionLane(walk, expression, existing.carrier, expected);
     }
-    resolveExpressionOperationDependencies(walk, expression, sourceFile, expected);
+    resolveExpressionOperationDependencies(walk, expression, sourceFile, contextualExpected);
     selectExpressionOperation(walk, expression, sourceFile);
     const selectedCarrier = facts.get(expression, rustRuntimeCarrierKey) ??
       walk.context.facts.resolve(expression, rustRuntimeCarrierKey);
@@ -1061,9 +1062,22 @@ function resolveExpressionCarrier(
     if (selectedOperation !== undefined) {
       const rustOperation = facts.get(expression, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(expression, rustTargetOperationFactKey);
-      const finalizedResult = rustOperation === undefined
+      const optionalChain = facts.get(expression, rustOptionalChainFactKey) ??
+        walk.context.facts.resolve(expression, rustOptionalChainFactKey);
+      if (optionalChain !== undefined && selectedOperation.resultType !== undefined &&
+        !rustTargetTypeRefEquals(optionalChain.resultCarrier, selectedOperation.resultType)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_OPTIONAL_CHAIN_RESULT_CONFLICT",
+          "The finalized optional-chain result conflicts with the selected Rust operation result.",
+          expression,
+          ["target.capability=rust.optional-chain.exact-result"],
+        );
+        return undefined;
+      }
+      const finalizedResult = optionalChain?.resultCarrier ?? (rustOperation === undefined
         ? selectedOperation.resultType
-        : rustTargetOperationResultCarrier(rustOperation) ?? selectedOperation.resultType;
+        : rustTargetOperationResultCarrier(rustOperation) ?? selectedOperation.resultType);
       const expressionKind = walk.context.ast.kindName(expression);
       const sourceCallNeedsLifecycle = finalizedResult === undefined && rustOperation === undefined &&
         (expressionKind === KindCallExpression || expressionKind === KindNewExpression);
@@ -1085,7 +1099,12 @@ function resolveExpressionCarrier(
             );
       }
     }
-    const resolved = resolveExpressionCarrierUncached(walk, expression, sourceFile, expected);
+    const resolved = resolveExpressionCarrierUncached(
+      walk,
+      expression,
+      sourceFile,
+      contextualExpected,
+    );
     return applyOptionLane(walk, expression, resolved, expected);
   } finally {
     recordExpressionBindingEffects(walk, expression);
@@ -1198,9 +1217,6 @@ function resolveExpressionOperationDependencies(
     if (receiver !== undefined) {
       resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
     }
-    for (const argument of source?.sourceArguments ?? []) {
-      resolveExpressionCarrier(walk, argument.expression, sourceFile, undefined);
-    }
   }
 }
 
@@ -1219,11 +1235,11 @@ function applyOptionLane(
   if (inner === undefined) {
     return resolved;
   }
-  const existing = walk.context.facts.get(expression, rustTargetOperationFactKey);
   if (resolved !== undefined && isRustOptionCarrier(resolved)) {
     return resolved;
   }
   if (walk.context.ast.kindName(expression) === "KindNullKeyword" || isRustNullishSourceCarrier(resolved)) {
+    const existing = walk.context.facts.get(expression, rustTargetOperationFactKey);
     if (existing === undefined) {
       setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
     }
@@ -1233,11 +1249,7 @@ function applyOptionLane(
     return expected;
   }
   if (resolved !== undefined && rustTargetTypeRefEquals(resolved, inner)) {
-    if (existing === undefined || existing.kind === "operator-token" ||
-      existing.kind === "provider-operation" || existing.kind === "source-field" ||
-      existing.kind === "source-call" || existing.kind === "typed-location") {
-      walk.context.facts.set(expression, rustOptionWrapFactKey, { wrap: true }, [{ message: "rust option wrap" }]);
-    }
+    walk.context.facts.set(expression, rustOptionWrapFactKey, { wrap: true }, [{ message: "rust option wrap" }]);
     walk.context.facts.set(expression, rustConversionKey, { convertedType: expected }, [
       { message: "rust option some conversion" },
     ]);
@@ -2314,13 +2326,28 @@ function applySelectedProjectSourceCall(
   if (target === undefined) {
     return undefined;
   }
+  const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??
+    walk.context.facts.resolve(expression, rustOptionalChainFactKey);
+  if (optionalCall !== undefined &&
+    (!rustTargetTypeRefEquals(optionalCall.innerResultCarrier, resultCarrier) ||
+      optionalCall.operationKind !== "method")) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_OPTIONAL_CALL_RESULT_CONFLICT",
+      "The finalized optional call conflicts with the exact selected project-source result carrier.",
+      expression,
+      ["target.capability=rust.optional-call.exact-result"],
+    );
+    return undefined;
+  }
+  const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
   recordTargetOperation(
     walk,
     expression,
     operationId,
     operationKind,
     target.form,
-    resultCarrier,
+    finalResultCarrier,
   );
   setRustOperationFact(walk, expression, {
     kind: "source-call",
@@ -2331,7 +2358,7 @@ function applySelectedProjectSourceCall(
     ...(targetTypeArguments.length === 0 ? {} : { targetTypeArguments }),
     resultCarrier,
   });
-  return setCarrierFact(walk, expression, resultCarrier);
+  return setCarrierFact(walk, expression, finalResultCarrier);
 }
 
 function finalizeProjectSourceTargetTypeArguments(
@@ -3283,42 +3310,6 @@ function validateFlowMarkerAgainstMode(
 // Fallibility: a declaration lowers to TsonicResult when it throws or calls a
 // fallible operation outside a try boundary. Computed to a fixpoint over all
 // project declarations after operation facts are closed.
-function rustOperationIsFallible(fact: RustTargetOperationFact | undefined): boolean {
-  if (fact === undefined) {
-    return false;
-  }
-  if (fact.kind === "regexp-create") {
-    return true;
-  }
-  if (fact.kind === "source-conversion") {
-    return rustValueConversionIsFallible(fact.conversion);
-  }
-  if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
-    return rustOperationAbiInvocationIsFallible(fact.abi);
-  }
-  return false;
-}
-
-function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperationAbi): boolean {
-  if (abi.effects.invocation === "fallible" ||
-    (abi.targetReceiver.kind === "input" && abi.targetReceiver.input.conversion.fallible) ||
-    abi.targetArguments.some((input) =>
-      isRustFinalizedSourceInput(input)
-        ? input.conversion.fallible
-        : (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) &&
-          input.elements.some((element) => element.conversion.fallible) ||
-          isRustFinalizedTaggedArrayInput(input) &&
-          input.elements.some((element) => element.input.conversion.fallible))) {
-    return true;
-  }
-  return abi.result.kind === "sync" && abi.result.conversion.fallible;
-}
-
-function rustOperationAbiAwaitIsFallible(abi: RustFinalizedOperationAbi): boolean {
-  return abi.result.kind === "async" &&
-    (abi.effects.awaiting === "fallible" || abi.result.awaitedConversion.fallible);
-}
-
 interface RustFutureOperationOrigin {
   readonly expression: Node;
   readonly operation: RustTargetOperationFact;
@@ -3405,7 +3396,7 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
   const operationIsFallible = (node: Node): boolean => {
     const fact = walk.context.facts.get(node, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(node, rustTargetOperationFactKey);
-    return rustOperationIsFallible(fact);
+    return rustTargetOperationIsFallible(fact);
   };
 
   const expressionRegionIsFallible = (root: Node): boolean => {

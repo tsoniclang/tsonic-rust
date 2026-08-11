@@ -3,8 +3,15 @@ import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustGenericRequirementSet } from "./generic-requirements.js";
 import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
+import type { TargetTypeRef } from "../../policy/types.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
-import type { RustBlock, RustType } from "../rust-ast/nodes.js";
+import type { RustBlock, RustExpr, RustType } from "../rust-ast/nodes.js";
+
+export interface RustExpressionOverride {
+  readonly expression: RustExpr;
+  readonly carrier: TargetTypeRef;
+  readonly valueForm: "value" | "shared-reference";
+}
 
 interface RustControlTargetBase {
   readonly id: number;
@@ -69,6 +76,7 @@ export interface RustPlanContext {
     readonly controllerName: string;
     readonly protocol: RustGeneratorFact;
   };
+  readonly expressionOverrides?: ReadonlyMap<Node, RustExpressionOverride>;
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS
