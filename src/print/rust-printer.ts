@@ -751,8 +751,9 @@ const enum RustPrecedence {
   Additive = 4,
   Multiplicative = 5,
   Unary = 6,
-  Postfix = 7,
-  Atom = 8,
+  Cast = 7,
+  Postfix = 8,
+  Atom = 9,
 }
 
 function operatorPrecedence(operator: string): RustPrecedence {
@@ -787,6 +788,8 @@ function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "unary":
     case "reference":
       return RustPrecedence.Unary;
+    case "numeric-cast":
+      return RustPrecedence.Cast;
     case "method-call":
     case "field":
     case "index":
@@ -804,6 +807,18 @@ function printOperand(operand: RustExpr, parent: RustPrecedence, isRightSide: bo
     (own === parent && (isRightSide || parent === RustPrecedence.Comparison));
   const text = printRustExpr(operand);
   return needsParens ? `(${text})` : text;
+}
+
+function printBinaryOperand(
+  operand: RustExpr,
+  operator: string,
+  isRightSide: boolean,
+): string {
+  const rendered = printOperand(operand, operatorPrecedence(operator), isRightSide);
+  return operand.kind === "numeric-cast" &&
+      (operator === "<" || operator === "<=" || operator === ">" || operator === ">=")
+    ? `(${rendered})`
+    : rendered;
 }
 
 export function printRustExpr(expression: RustExpr): string {
@@ -830,10 +845,12 @@ export function printRustExpr(expression: RustExpr): string {
     case "unary": {
       return `${expression.operator}${printOperand(expression.operand, RustPrecedence.Unary, false)}`;
     }
+    case "numeric-cast": {
+      return `${printOperand(expression.expression, RustPrecedence.Cast, false)} as ${expression.target}`;
+    }
     case "binary": {
-      const precedence = operatorPrecedence(expression.operator);
-      const left = printOperand(expression.left, precedence, false);
-      const right = printOperand(expression.right, precedence, true);
+      const left = printBinaryOperand(expression.left, expression.operator, false);
+      const right = printBinaryOperand(expression.right, expression.operator, true);
       return `${left} ${expression.operator} ${right}`;
     }
     case "range": {
@@ -927,6 +944,8 @@ function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
       return true;
     case "unary":
       return rustExpressionContainsStatementBlock(expression.operand);
+    case "numeric-cast":
+      return rustExpressionContainsStatementBlock(expression.expression);
     case "binary":
       return rustExpressionContainsStatementBlock(expression.left) ||
         rustExpressionContainsStatementBlock(expression.right);
@@ -977,6 +996,8 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
       return true;
     case "unary":
       return rustExpressionContainsClosure(expression.operand);
+    case "numeric-cast":
+      return rustExpressionContainsClosure(expression.expression);
     case "binary":
       return rustExpressionContainsClosure(expression.left) || rustExpressionContainsClosure(expression.right);
     case "range":
@@ -1178,10 +1199,15 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       if (expression.operator === "||" || expression.operator === "&&") {
         return printFittedLogicalChain(expression, expression.operator, depth, column);
       }
-      const left = printRustExprFitted(expression.left, depth, column);
+      const renderedLeft = printRustExprFitted(expression.left, depth, column);
+      const left = expression.left.kind === "numeric-cast" &&
+          (expression.operator === "<" || expression.operator === "<=" ||
+            expression.operator === ">" || expression.operator === ">=")
+        ? `(${renderedLeft})`
+        : renderedLeft;
       const joined = appendToLastLine(
         left,
-        ` ${expression.operator} ${printOperand(expression.right, operatorPrecedence(expression.operator), true)}`,
+        ` ${expression.operator} ${printBinaryOperand(expression.right, expression.operator, true)}`,
       );
       if (!(left.includes("\n") && expression.left.kind === "method-call") &&
         renderedFits(joined, column)) {

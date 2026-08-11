@@ -5,12 +5,16 @@ import type {
   RustValueConversionId,
 } from "./keys.js";
 import {
+  isRustNumericCarrier,
   rustIsizeTargetType,
   rustJsValueTargetType,
+  rustPrimitiveTypeName,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUsizeTargetType,
 } from "../rust-target-types.js";
+import type { RustPrimitiveTypeName } from "../../common/rust-syntax.js";
+import { rustNumericPromotionKind } from "../rust-target-semantics/numeric-promotion.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -23,15 +27,24 @@ const isizeCarrier = rustIsizeTargetType();
 const stringCarrier = rustStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 
-export interface RustValueConversionContract {
-  readonly id: RustValueConversionId;
-  readonly category: "exact" | "checked-range" | "js-number";
-  readonly path: string;
+interface RustValueConversionContractBase {
+  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion";
   readonly sourceMode: "value" | "ref";
   readonly source: TargetTypeRef;
   readonly target: TargetTypeRef;
   readonly fallible: boolean;
 }
+
+export type RustValueConversionContract = RustValueConversionContractBase & (
+  | {
+      readonly lowering: "call";
+      readonly path: string;
+    }
+  | {
+      readonly lowering: "numeric-cast";
+      readonly targetType: RustPrimitiveTypeName;
+    }
+);
 
 function conversion(id: RustValueConversionId): RustValueConversion {
   return Object.freeze({ kind: "semantic-conversion", id });
@@ -57,6 +70,24 @@ export const rustJsValueCloneConversion = conversion("js-value-clone");
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "numeric-promotion") {
+    const source = rustSourcePrimitiveTargetType(value.source);
+    const target = rustSourcePrimitiveTargetType(value.target);
+    const targetType = rustPrimitiveTypeName(value.target);
+    return isRustNumericCarrier(source) && isRustNumericCarrier(target) &&
+        rustNumericPromotionKind(value.source, value.target) === value.target &&
+        targetType !== undefined
+      ? {
+          category: "numeric-promotion",
+          lowering: "numeric-cast",
+          sourceMode: "value",
+          source,
+          target,
+          targetType,
+          fallible: false,
+        }
+      : undefined;
+  }
   switch (value.id) {
     case "checked-i32-to-usize":
       return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::i32_to_usize", "value", int32Carrier, usizeCarrier, true);
@@ -94,7 +125,7 @@ export function rustValueConversionContract(
 }
 
 function contract(
-  id: RustValueConversionId,
+  _id: RustValueConversionId,
   category: RustValueConversionContract["category"],
   path: string,
   sourceMode: RustValueConversionContract["sourceMode"],
@@ -102,11 +133,17 @@ function contract(
   target: TargetTypeRef,
   fallible: boolean,
 ): RustValueConversionContract {
-  return { id, category, path, sourceMode, source, target, fallible };
+  return { category, lowering: "call", path, sourceMode, source, target, fallible };
 }
 
 export function rustValueConversionIsFallible(value: RustValueConversion | undefined): boolean {
   return value !== undefined && rustValueConversionContract(value)?.fallible === true;
+}
+
+export function rustValueConversionIdentity(value: RustValueConversion): string {
+  return value.kind === "semantic-conversion"
+    ? value.id
+    : `numeric-promotion.${value.source}.${value.target}`;
 }
 
 export function selectRustSourceValueConversion(

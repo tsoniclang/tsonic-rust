@@ -99,6 +99,7 @@ import type {
 import {
   rustInt32ToUsizeValueConversion,
   selectRustSourceValueConversion,
+  rustValueConversionIdentity,
 } from "../rust-facts/value-conversions.js";
 import {
   rustArgumentPassingMode,
@@ -2097,7 +2098,7 @@ export function selectRustCheckedConversion(
   }
   const operationId = identity
     ? "tsonic.rust.conversion.identity"
-    : `tsonic.rust.conversion.${conversion!.id}`;
+    : `tsonic.rust.conversion.${rustValueConversionIdentity(conversion!)}`;
   const fact: RustTargetOperationFact = {
     kind: "source-conversion",
     operationId,
@@ -2118,7 +2119,7 @@ export function selectRustCheckedConversion(
   };
   const evidence = [{ message: identity
     ? "rust selected assertion identity conversion"
-    : `rust selected assertion conversion '${conversion!.id}'` }];
+    : `rust selected assertion conversion '${rustValueConversionIdentity(conversion!)}'` }];
   context.facts.set(request.expression, rustTargetOperationFactKey, fact, evidence);
   context.facts.set(request.expression, rustSelectedOperationKey, operation, evidence);
   return acceptRustPolicy({ convertedType: targetCarrier, operation }, evidence);

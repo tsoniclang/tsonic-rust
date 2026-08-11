@@ -459,8 +459,13 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
   }
   return value.kind === "semantic" && hasExactKeys(value, [
     "kind", "conversion", "sourceCarrier", "targetCarrier", "fallible",
-  ]) && isRecord(value.conversion) && hasExactKeys(value.conversion, ["kind", "id"]) &&
-    value.conversion.kind === "semantic-conversion" && typeof value.conversion.id === "string" &&
+  ]) && isRecord(value.conversion) &&
+    ((value.conversion.kind === "semantic-conversion" &&
+      hasExactKeys(value.conversion, ["kind", "id"]) && typeof value.conversion.id === "string") ||
+    (value.conversion.kind === "numeric-promotion" &&
+      hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
+      typeof value.conversion.source === "string" && typeof value.conversion.target === "string")) &&
+    rustValueConversionContract(value.conversion as RustValueConversion) !== undefined &&
     typeof value.fallible === "boolean";
 }
 

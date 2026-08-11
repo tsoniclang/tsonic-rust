@@ -540,11 +540,13 @@ test("provider operation metadata contains only structured Rust forms", () => {
   }
 });
 
-test("backend Rust AST has no unchecked cast expression lane", () => {
+test("backend Rust AST exposes only fact-backed primitive numeric casts", () => {
   const nodes = readFileSync(join(sourceRoot, "backend/rust-ast/nodes.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/rust-printer.ts"), "utf8");
   assert.doesNotMatch(nodes, /readonly kind: "cast"/u);
-  assert.doesNotMatch(printer, /\sas\s\$\{target\}/u);
+  assert.match(nodes, /readonly kind: "numeric-cast"; readonly expression: RustExpr; readonly target: RustPrimitiveTypeName/u);
+  assert.match(printer, /case "numeric-cast"/u);
+  assert.doesNotMatch(nodes, /numeric-cast[^\n]+target: string/u);
 });
 
 test("value conversions use target-owned semantic ids, never arbitrary helper paths", () => {

@@ -19,7 +19,7 @@ export let value: int32 = 1;
   assert.ok(result.diagnostics.some((diagnostic) => diagnostic.evidence.some((entry) => entry.startsWith("target.capability=rust.backend."))));
 });
 
-test("mixed-kind numeric operators have no fact and fail closed", () => {
+test("mixed-kind numeric operators use exact target-owned promotion conversions", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -31,15 +31,9 @@ export function mix(a: int32, b: float64): float64 {
 `,
     },
   });
-  assert.deepEqual(result.artifacts, []);
-  assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), [{
-    code: "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED",
-    message: "Checked binary operator 'KindPlusToken' has no closed Rust operation for the finalized operand carriers.",
-    evidence: [
-      "target.capability=rust.operation.binary",
-      "source.operatorKind=KindPlusToken",
-    ],
-  }]);
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /a as f64 \+ b/u);
 });
 
 test("dynamic any member access fails closed in strict-native mode", () => {

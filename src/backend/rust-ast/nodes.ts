@@ -26,6 +26,7 @@ export type RustExpr =
   | { readonly kind: "str-literal"; readonly value: string }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "unary"; readonly operator: "-" | "!"; readonly operand: RustExpr }
+  | { readonly kind: "numeric-cast"; readonly expression: RustExpr; readonly target: RustPrimitiveTypeName }
   | { readonly kind: "binary"; readonly operator: RustBinaryOperator; readonly left: RustExpr; readonly right: RustExpr }
   | { readonly kind: "range"; readonly start: RustExpr; readonly end: RustExpr }
   | { readonly kind: "conditional"; readonly condition: RustExpr; readonly whenTrue: RustExpr; readonly whenFalse: RustExpr }

@@ -1823,6 +1823,8 @@ function resolvePostCheckBinaryCarrier(
               operationId: `tsonic.rust.operator.${binary.rustOperator}.${rustOperatorCarrierKey(binary.resultCarrier)}`,
               operator: binary.rustOperator,
               resultCarrier: binary.resultCarrier,
+              leftConversion: binary.leftConversion,
+              rightConversion: binary.rightConversion,
             };
       }
     }

@@ -1047,12 +1047,17 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     // Owned-String literals in comparison position lower as &str literals so
     // generated code stays clippy-clean (cmp_owned).
     const comparison = fact.operator === "==" || fact.operator === "!=";
+    const convertedLeft = applyRustValueConversion(context, left, fact.leftConversion, leftNode);
+    const convertedRight = applyRustValueConversion(context, right, fact.rightConversion, rightNode);
+    if (convertedLeft === undefined || convertedRight === undefined) {
+      return undefined;
+    }
     const comparisonLeft = comparison && leftNode !== undefined
-      ? planRustNonConsumingValue(leftNode, left, context)
-      : left;
+      ? planRustNonConsumingValue(leftNode, convertedLeft, context)
+      : convertedLeft;
     const comparisonRight = comparison && rightNode !== undefined
-      ? planRustNonConsumingValue(rightNode, right, context)
-      : right;
+      ? planRustNonConsumingValue(rightNode, convertedRight, context)
+      : convertedRight;
     const borrowLiteral = (side: RustExpr): RustExpr =>
       comparison && side.kind === "string-literal" ? { kind: "str-literal", value: side.value } : side;
     if (!isRustBinaryOperator(fact.operator)) {
@@ -1206,16 +1211,20 @@ export function applyRustValueConversion(
       return undefined;
     }
   }
-  registerAliasFromPath(context, contract.path);
   const nonConsumingSource = contract.sourceMode === "ref" && node !== undefined
     ? planRustNonConsumingValue(node, expression, context)
     : expression;
   const source = contract.sourceMode === "ref"
     ? applyRustArgumentMode(context, nonConsumingSource, "ref", node)
     : nonConsumingSource;
-  const call: RustExpr = { kind: "call", path: contract.path, args: [source] };
+  const converted: RustExpr = contract.lowering === "call"
+    ? (() => {
+        registerAliasFromPath(context, contract.path);
+        return { kind: "call", path: contract.path, args: [source] } as const;
+      })()
+    : { kind: "numeric-cast", expression: source, target: contract.targetType };
   if (!contract.fallible) {
-    return call;
+    return converted;
   }
   if (context.fallibleContext !== true) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -1225,7 +1234,7 @@ export function applyRustValueConversion(
     ));
     return undefined;
   }
-  return { kind: "try", expr: call };
+  return { kind: "try", expr: converted };
 }
 
 function providerConstantExpression(argument: RustProviderConstantArgument): RustExpr {

@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../policy/types.js";
-import type { Node } from "@tsonic/tsts";
+import type { Node, SourcePrimitiveKind } from "@tsonic/tsts";
 import { defineRustPlanKey } from "../../policy/keys.js";
 import type { RustPlanKey } from "../../policy/keys.js";
 import type {
@@ -71,10 +71,16 @@ export type RustValueConversionId =
   | "js-value-from-string"
   | "js-value-clone";
 
-export interface RustValueConversion {
-  readonly kind: "semantic-conversion";
-  readonly id: RustValueConversionId;
-}
+export type RustValueConversion =
+  | {
+      readonly kind: "semantic-conversion";
+      readonly id: RustValueConversionId;
+    }
+  | {
+      readonly kind: "numeric-promotion";
+      readonly source: SourcePrimitiveKind;
+      readonly target: SourcePrimitiveKind;
+    };
 
 export type RustProviderOperationForm =
   | {
@@ -224,6 +230,8 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly operator: RustOperatorToken;
       readonly resultCarrier: TargetTypeRef;
+      readonly leftConversion?: RustValueConversion;
+      readonly rightConversion?: RustValueConversion;
     }
   | {
       readonly kind: "string-concat";

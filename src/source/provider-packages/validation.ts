@@ -986,13 +986,16 @@ function validateValueConversion(
   expectedTarget: TargetTypeRef | undefined,
   fail: Fail,
 ): void {
-  requireExactKeys(asRecord(conversion), ["kind", "id"], where, fail);
-  if (conversion.kind !== "semantic-conversion") {
+  if (conversion.kind === "semantic-conversion") {
+    requireExactKeys(asRecord(conversion), ["kind", "id"], where, fail);
+  } else if (conversion.kind === "numeric-promotion") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
+  } else {
     fail(`${where}.kind '${String((conversion as { readonly kind?: unknown }).kind)}' is not supported`);
   }
   const contract = rustValueConversionContract(conversion);
   if (contract === undefined) {
-    fail(`${where}.id '${String((conversion as { readonly id?: unknown }).id)}' is not a supported Rust value conversion`);
+    fail(`${where} is not a supported Rust value conversion`);
   }
   validateCarrier(contract.source, definition, `${where}.source`, fail);
   validateCarrier(contract.target, definition, `${where}.target`, fail);
