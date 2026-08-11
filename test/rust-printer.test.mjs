@@ -627,6 +627,41 @@ test("nested calls beyond rustfmt call width put each argument on its own line",
   assert.match(text, /can_parse\(\n        "https:\/\/example\.com",\n        None,\n    \)\);/u);
 });
 
+test("nested single-argument wrappers stay attached to the expanded inner call", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "call",
+              path: "js_abi::number_is_nan",
+              args: [{
+                kind: "call",
+                path: "js_abi::math_pow",
+                args: [
+                  { kind: "float-literal", text: "1.0" },
+                  { kind: "path", path: "js_abi::NUMBER_POSITIVE_INFINITY" },
+                ],
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /check\(js_abi::number_is_nan\(js_abi::math_pow\(\n        1\.0,\n        js_abi::NUMBER_POSITIVE_INFINITY,\n    \)\)\);/u);
+});
+
 test("long borrowed slices use rustfmt-compatible element layout", () => {
   const text = printRustSourceFile({
     headerComment,

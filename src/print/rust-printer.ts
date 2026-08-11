@@ -1377,6 +1377,23 @@ function printFittedCall(
       ")",
     );
   }
+  if (forceExpanded && arguments_.length === 1) {
+    const argument = arguments_[0]!;
+    if (argument.kind === "call" || argument.kind === "associated-call" ||
+      argument.kind === "method-call" || argument.kind === "try") {
+      const prefix = `${callable}(`;
+      const nested = printNestedCallArgument(
+        argument,
+        depth,
+        column + prefix.length,
+        true,
+      );
+      const compact = appendToLastLine(`${prefix}${nested}`, ")");
+      if (renderedFits(compact, column)) {
+        return compact;
+      }
+    }
+  }
   if (!forceExpanded && arguments_.length === 1) {
     const argument = arguments_[0]!;
     if (argument.kind === "call" || argument.kind === "associated-call" ||
@@ -1491,7 +1508,8 @@ function printFittedCall(
     return flat;
   }
   const argumentIndent = indentText(depth + 1);
-  if (forceExpanded && arguments_.length > 1 && flat.length <= rustNestedCallWidth) {
+  if (forceExpanded && arguments_.length > 1 && flat.length <= rustNestedCallWidth &&
+    renderedFits(flat, column)) {
     const compactArguments = arguments_.map(printRustExpr).join(", ");
     if (!compactArguments.includes("\n") && renderedFits(`${compactArguments},`, argumentIndent.length)) {
       return [

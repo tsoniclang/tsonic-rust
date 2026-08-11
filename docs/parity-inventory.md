@@ -26,9 +26,10 @@ the blocked section with the contract each requires.
 - RegExp: constant literals and new RegExp with literal arguments over the
   oracle-proven subset; test, replace, split, search, global match with
   null coalescing; regexp property reads.
-- Math: floor, ceil, trunc, abs, sqrt, pow, round, min, max, and random;
-  operations whose Rust primitives differ from JavaScript use exact runtime
-  rows.
+- Math: all source-profile constants and functions, including trigonometric,
+  hyperbolic, logarithmic, rounding, bit-conversion, variadic hypot/min/max,
+  pow, and random operations; operations whose Rust primitives differ from
+  JavaScript use exact runtime rows.
 - Number.parseInt/parseFloat: exact prefix parsing; Number constants, valueOf,
   decimal toString, integral-radix toString, toFixed, toExponential,
   toPrecision, and non-coercive Number.isNaN/isFinite/isInteger/isSafeInteger

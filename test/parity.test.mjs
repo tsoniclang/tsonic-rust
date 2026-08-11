@@ -25,9 +25,10 @@ export function literal(): number {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  for (const method of ["floor", "ceil", "trunc", "abs", "sqrt", "powf"]) {
+  for (const method of ["floor", "ceil", "trunc", "abs", "sqrt"]) {
     assert.ok(text.includes(`.${method}(`), method);
   }
+  assert.match(text, /js_abi::math_pow\(x, y\)/u);
   assert.match(text, /2\.0f64\.floor\(\)/u);
 });
 

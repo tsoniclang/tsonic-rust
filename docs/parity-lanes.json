@@ -294,6 +294,77 @@
   },
   {
     "area": "Math",
+    "lane": "Math constants",
+    "classification": "implemented"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.acos/acosh/asin/asinh/atan/atanh",
+    "classification": "implemented",
+    "rowMember": "acosh"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.atan2",
+    "classification": "implemented",
+    "rowMember": "atan2"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.cbrt",
+    "classification": "implemented",
+    "rowMember": "cbrt"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.clz32",
+    "classification": "implemented",
+    "rowMember": "clz32"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.cos/cosh/sin/sinh/tan/tanh",
+    "classification": "implemented",
+    "rowMember": "cosh"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.exp/expm1",
+    "classification": "implemented",
+    "rowMember": "expm1"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.fround",
+    "classification": "implemented",
+    "rowMember": "fround"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.hypot",
+    "classification": "implemented",
+    "rowMember": "hypot"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.imul",
+    "classification": "implemented",
+    "rowMember": "imul"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.log/log1p/log10/log2",
+    "classification": "implemented",
+    "rowMember": "log1p"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.sign",
+    "classification": "implemented",
+    "rowMember": "sign"
+  },
+  {
+    "area": "Math",
     "lane": "Math.sqrt",
     "classification": "implemented",
     "rowMember": "sqrt"
