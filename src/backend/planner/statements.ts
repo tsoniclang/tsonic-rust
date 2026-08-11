@@ -69,7 +69,6 @@ import {
 } from "../../common/source-ast.js";
 import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustResourceManagementFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import type { RustResourceManagementFact } from "../../source/rust-facts/keys.js";
-import { rustTypeFromCarrierInContext as renderRustTypeInContext } from "./render-types.js";
 import {
   isRustBigIntCarrier,
   isRustBoolCarrier,
@@ -93,6 +92,7 @@ import type { RustCompletionBoundary, RustControlTarget, RustLoopTarget, RustPla
 import { allocateRustSyntheticName } from "./synthetic-names.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
+  planRustNonConsumingValue,
   planRustPromotedStorageWrite,
   rustLocationStorageForDeclaration,
 } from "./typed-locations.js";
@@ -701,19 +701,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     ));
     return undefined;
   }
-  const initializerFact = context.input.facts.getFact(initializer, rustTargetOperationFactKey);
   const locationStorage = rustLocationStorageForDeclaration(declaration, context);
-  if (initializerFact !== undefined && initializerFact.kind === "array-literal" && initializerFact.lane === "sparse") {
-    if (locationStorage !== undefined) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.typed-location-storage",
-        "Sparse JavaScript array storage cannot be promoted to a Rust typed location.",
-      ));
-      return undefined;
-    }
-    return planSparseArrayLet(node, declaration, name, initializer, initializerFact, context);
-  }
   const planned = planExpression(initializer, context);
   if (planned === undefined) {
     return undefined;
@@ -1561,8 +1549,13 @@ function planRuntimeSetStatement(
     return undefined;
   }
   const receiverNode = Node_Expression(context.input.ast, left);
+  const expectedReceiverMode = fact.abi.target.form === "index"
+    ? "mut-ref"
+    : fact.abi.target.form === "receiver-method"
+      ? fact.abi.target.mutatesReceiver === true ? "mut-ref" : "ref"
+      : undefined;
   if (receiverNode === undefined || fact.abi.targetReceiver.kind !== "input" ||
-    fact.abi.targetReceiver.input.mode !== "mut-ref") {
+    expectedReceiverMode === undefined || fact.abi.targetReceiver.input.mode !== expectedReceiverMode) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
       "rust.backend.runtime-set-receiver",
@@ -1774,14 +1767,19 @@ function planForOfStatement(
       },
     }];
   }
+  const nonConsumingIterable = iterableNode === undefined
+    ? iterable
+    : planRustNonConsumingValue(iterableNode, iterable, context);
   const targetIterable: RustExpr = fact.lowering.kind === "borrowed"
     ? {
         kind: "method-call",
-        receiver: { kind: "method-call", receiver: iterable, method: "iter", args: [] },
+        receiver: { kind: "method-call", receiver: nonConsumingIterable, method: "iter", args: [] },
         method: fact.lowering.style,
         args: [],
       }
-    : iterable;
+    : fact.lowering.kind === "js-array"
+      ? { kind: "method-call", receiver: nonConsumingIterable, method: "iter_values", args: [] }
+      : iterable;
   return [{
     kind: "for",
     ...(target.used.value ? { label: target.label } : {}),
@@ -1804,7 +1802,7 @@ function planForInStatement(
   const { ast } = context.input;
   const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
   if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind !== "for-in" ||
-    (fact.lowering.kind !== "dense-index-keys" && fact.lowering.kind !== "sparse-index-keys" &&
+    (fact.lowering.kind !== "dense-index-keys" && fact.lowering.kind !== "js-array-index-keys" &&
       fact.lowering.kind !== "static-keys")) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -1901,7 +1899,7 @@ function planForInStatement(
   const activation = binding.kind === "assignment"
     ? activateForInBinding(binding, { kind: "path", path: keyName })
     : [];
-  const iterable: RustExpr = fact.lowering.kind === "sparse-index-keys"
+  const iterable: RustExpr = fact.lowering.kind === "js-array-index-keys"
     ? {
         kind: "method-call",
         receiver: expression,
@@ -1997,60 +1995,6 @@ function rejectForInBinding(
     message,
   ));
   return undefined;
-}
-
-function planSparseArrayLet(
-  statement: Node,
-  declaration: Node,
-  name: string,
-  initializer: Node,
-  fact: Extract<import("../../source/rust-facts/keys.js").RustTargetOperationFact, { kind: "array-literal" }>,
-  context: RustPlanContext,
-): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const elementType = renderRustTypeInContext(fact.elementCarrier, context);
-  const arrayType = renderRustTypeInContext(fact.resultCarrier, context);
-  if (elementType === undefined || arrayType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.js.sparse-array",
-      "Sparse array lane carrier cannot be rendered.",
-    ));
-    return undefined;
-  }
-  context.usedAliases?.add("js_abi");
-  const statements: RustStmt[] = [{
-    kind: "let",
-    name,
-    mutable: true,
-    type: arrayType,
-    init: {
-      kind: "call",
-      path: "js_abi::JsArray::with_length",
-      args: [{ kind: "int-literal", text: String(fact.length) }],
-    },
-  }];
-  const elements = ast.elements(initializer);
-  for (const [index, element] of elements.entries()) {
-    if (element === undefined || ast.kindName(element) === "KindOmittedExpression") {
-      continue;
-    }
-    const planned = planExpression(element, context);
-    if (planned === undefined) {
-      return undefined;
-    }
-    statements.push({
-      kind: "expr",
-      expr: {
-        kind: "method-call",
-        receiver: { kind: "path", path: name },
-        method: "set",
-        args: [{ kind: "int-literal", text: String(index) }, planned],
-      },
-    });
-  }
-  void statement;
-  return statements;
 }
 
 function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {

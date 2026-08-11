@@ -319,7 +319,7 @@ test("nested overflow calls keep jointly fitting inner arguments horizontal", ()
               path: "tsonic_rust_runtime::conversions::isize_to_i32",
               args: [{
                 kind: "call",
-                path: "tsonic_rust_js::array_dense_index_of",
+                path: "example_runtime::canonical_array_index_of",
                 args: [
                   { kind: "reference", expr: { kind: "path", path: "values" } },
                   { kind: "reference", expr: { kind: "int-literal", text: "3" } },
@@ -333,7 +333,7 @@ test("nested overflow calls keep jointly fitting inner arguments horizontal", ()
     }],
   });
 
-  assert.match(text, /array_dense_index_of\(\n        &values, &3, 0,\n    \)\)\?/u);
+  assert.match(text, /canonical_array_index_of\(\n        &values, &3, 0,\n    \)\)\?/u);
 });
 
 test("nested calls beyond rustfmt call width put each argument on its own line", () => {

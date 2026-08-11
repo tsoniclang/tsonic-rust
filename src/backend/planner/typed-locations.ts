@@ -128,6 +128,19 @@ export function planRustIdentifierValue(
     : value;
 }
 
+export function planRustNonConsumingValue(
+  node: Node,
+  expression: RustExpr,
+  context: RustPlanContext,
+): RustExpr {
+  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  return rustValueCarrierRequiresCloneOnRead(carrier) &&
+      expression.kind === "method-call" && expression.method === "clone" &&
+      expression.args.length === 0
+    ? expression.receiver
+    : expression;
+}
+
 export function rustLocationStorageForReference(
   node: Node,
   context: RustPlanContext,

@@ -122,6 +122,18 @@ test("generated cargo binary proves JS surface lanes at runtime", { timeout: 300
 import type { int32 } from "@tsonic/core/types.js";
 import { check } from "@acme/testing";
 
+function append(values: int32[]): void {
+  values.push(5);
+}
+
+function populate(values: Map<int32, string>): void {
+  values.set(2, "two");
+}
+
+function extend(values: Set<int32>): void {
+  values.add(8);
+}
+
 export function main(): void {
   const xs: int32[] = [1, 2, 3];
   let total: int32 = 0;
@@ -132,6 +144,10 @@ export function main(): void {
   check(xs.length === 3);
   check(xs.includes(2));
   check(xs.indexOf(3) === 2);
+  const xsAlias = xs;
+  xsAlias.push(4);
+  append(xsAlias);
+  check(xs.length === 5);
 
   const values = [1, , 3];
   values.length = 5;
@@ -151,17 +167,23 @@ export function main(): void {
   const m = new Map<int32, string>();
   m.set(1, "one");
   m.set(1, "uno");
-  check(m.size === 1);
+  const mAlias = m;
+  populate(mAlias);
+  check(m.size === 2);
   check(m.has(1));
-  check(m.get(2) === undefined);
+  check(m.has(2));
+  check(m.get(2) !== undefined);
   check(m.delete(1));
-  check(m.size === 0);
+  check(m.size === 1);
 
   const s = new Set<int32>();
   s.add(7);
   s.add(7);
-  check(s.size === 1);
+  const sAlias = s;
+  extend(sAlias);
+  check(s.size === 2);
   check(s.has(7));
+  check(s.has(8));
 
   const d = new Date(86400000);
   check(d.getTime() === 86400000);

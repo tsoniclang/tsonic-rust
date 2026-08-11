@@ -88,6 +88,7 @@ import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRus
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
+  planRustNonConsumingValue,
   planRustPromotedStorageLocation,
   planRustTypedLocationCall,
 } from "./typed-locations.js";
@@ -1521,11 +1522,15 @@ export function planFinalizedSourceInput(
   if (inputOverride !== undefined) {
     return inputOverride;
   }
-  const expression = overrides?.sourceValues.get(sourceNode) ??
+  const plannedExpression = overrides?.sourceValues.get(sourceNode) ??
     planExpression(sourceNode, context);
-  if (expression === undefined) {
+  if (plannedExpression === undefined) {
     return undefined;
   }
+  const expression = input.conversion.kind === "identity" &&
+      (position === "target-receiver" || input.mode !== "value")
+    ? planRustNonConsumingValue(sourceNode, plannedExpression, context)
+    : plannedExpression;
   const converted = applyFinalizedValueConversion(context, expression, input.conversion, sourceNode, "source-input");
   return converted === undefined
     ? undefined
@@ -2435,21 +2440,14 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     ));
     return undefined;
   }
-  if (fact.lane !== "dense") {
-    // Sparse literals lower at variable-declaration level into JsArray
-    // construction statements.
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.js.sparse-array",
-      "Sparse array literals are supported only as variable initializers.",
-    ));
-    return undefined;
-  }
   if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.array-literal-carrier")) {
     return undefined;
   }
+  const sourceElements = context.input.ast.elements(node);
+  const hasHoles = sourceElements.some((element) =>
+    element !== undefined && context.input.ast.kindName(element) === "KindOmittedExpression");
   const elements: RustExpr[] = [];
-  for (const element of context.input.ast.elements(node)) {
+  for (const [index, element] of sourceElements.entries()) {
     if (element === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -2458,13 +2456,28 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
+    if (context.input.ast.kindName(element) === "KindOmittedExpression") {
+      continue;
+    }
     const planned = planExpression(element, context);
     if (planned === undefined) {
       return undefined;
     }
-    elements.push(planned);
+    elements.push(fact.lane === "js" && hasHoles
+      ? { kind: "tuple-literal", elements: [{ kind: "int-literal", text: String(index) }, planned] }
+      : planned);
   }
-  return { kind: "vec-literal", elements };
+  if (fact.lane === "native") {
+    return { kind: "vec-literal", elements };
+  }
+  context.usedAliases?.add("js_abi");
+  return {
+    kind: "call",
+    path: hasHoles ? "js_abi::JsArray::from_sparse" : "js_abi::JsArray::from_dense",
+    args: hasHoles
+      ? [{ kind: "int-literal", text: String(fact.length) }, { kind: "vec-literal", elements }]
+      : [{ kind: "vec-literal", elements }],
+  };
 }
 
 function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {

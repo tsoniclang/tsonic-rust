@@ -233,7 +233,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "array-literal";
       readonly operationId: string;
-      readonly lane: "dense" | "sparse";
+      readonly lane: "native" | "js";
       readonly elementCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
       readonly length: number;
@@ -250,7 +250,7 @@ export type RustTargetOperationFact =
       readonly elementCarrier: TargetTypeRef;
       readonly lowering:
         | { readonly kind: "dense-index-keys" }
-        | { readonly kind: "sparse-index-keys" }
+        | { readonly kind: "js-array-index-keys" }
         | { readonly kind: "static-keys"; readonly keys: readonly string[] };
     }
   | {
@@ -260,6 +260,7 @@ export type RustTargetOperationFact =
       readonly elementCarrier: TargetTypeRef;
       readonly lowering:
         | { readonly kind: "borrowed"; readonly style: "copied" | "cloned" }
+        | { readonly kind: "js-array" }
         | { readonly kind: "owned" }
         | { readonly kind: "async-generator" };
     }

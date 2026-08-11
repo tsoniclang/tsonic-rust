@@ -33,7 +33,6 @@ import {
   rustAsyncGeneratorTargetType,
   rustIteratorResultTargetType,
   isRustLocationCarrier,
-  isRustOptionCarrier,
   rustJsArrayTargetType,
   rustJsDateTargetType,
   rustJsMapTargetType,
@@ -171,7 +170,11 @@ function resolveRustTargetTypeSyntax(
     const element = elementNode === undefined
       ? undefined
       : resolveRustTargetTypeSyntax(elementNode, context, options, resolving);
-    return element === undefined ? undefined : rustVecTargetType(element);
+    return element === undefined
+      ? undefined
+      : options.jsEnabled
+        ? rustJsArrayTargetType(element)
+        : rustVecTargetType(element);
   }
   if (kind === "KindTypeOperator") {
     const inner = TypeOperatorNode_Type(ast, node);
@@ -427,7 +430,11 @@ function resolveRustTargetType(
     if (typeShape.isArrayLike(type) && typeShape.isTypeReference(type)) {
       const [elementType] = typeShape.getTypeArguments(type);
       const element = resolveRustTargetType(elementType, context, options, resolving);
-      return element === undefined ? undefined : rustVecTargetType(element);
+      return element === undefined
+        ? undefined
+        : options.jsEnabled
+          ? rustJsArrayTargetType(element)
+          : rustVecTargetType(element);
     }
     return undefined;
   } finally {
@@ -668,14 +675,12 @@ function resolveSourceProfileCarrier(
   }
   if (name === "Array" || name === "ReadonlyArray") {
     const elementType = arguments_[0];
-    const sparseElement = options.jsEnabled
-      ? resolveSparseArrayElement(elementType, context, options, resolving)
-      : undefined;
-    if (sparseElement !== undefined) {
-      return rustJsArrayTargetType(sparseElement);
-    }
     const element = resolveRustTargetType(elementType, context, options, resolving);
-    return element === undefined ? undefined : rustVecTargetType(element);
+    return element === undefined
+      ? undefined
+      : options.jsEnabled
+        ? rustJsArrayTargetType(element)
+        : rustVecTargetType(element);
   }
   if (options.jsEnabled && name === "Map") {
     const key = resolveRustTargetType(arguments_[0], context, options, resolving);
@@ -723,11 +728,7 @@ function resolveSourceProfileCarrierFromArguments(
     if (element === undefined) {
       return undefined;
     }
-    if (options.jsEnabled && isRustOptionCarrier(element) && element.kind === "target-named") {
-      const sparseElement = element.typeArguments?.[0];
-      return sparseElement === undefined ? undefined : rustJsArrayTargetType(sparseElement);
-    }
-    return rustVecTargetType(element);
+    return options.jsEnabled ? rustJsArrayTargetType(element) : rustVecTargetType(element);
   }
   if (options.jsEnabled && name === "Map") {
     const [key, value] = arguments_;
@@ -747,26 +748,6 @@ function resolveSourceProfileCarrierFromArguments(
     return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
   }
   return undefined;
-}
-
-function resolveSparseArrayElement(
-  type: Type | undefined,
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
-): TargetTypeRef | undefined {
-  if (type === undefined || !context.typeShape.isUnion(type)) {
-    return undefined;
-  }
-  const members = denseDefined(context.typeShape.getUnionOrIntersectionTypes(type));
-  if (members === undefined) {
-    return undefined;
-  }
-  const hasUndefined = members.some((member) => context.typeShape.isVoidLike(member));
-  const values = members.filter((member) => !context.typeShape.isVoidLike(member));
-  return hasUndefined && values.length === 1
-    ? resolveRustTargetType(values[0], context, options, resolving)
-    : undefined;
 }
 
 function resolveProjectSourceCarrier(

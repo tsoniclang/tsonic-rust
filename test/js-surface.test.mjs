@@ -183,13 +183,13 @@ export function pad(): string {
   assert.match(text, /js_string::pad_end\("x", 2\.0\)\?/u);
 });
 
-test("dense arrays lower to Vec with fact-backed iteration, length, and index", () => {
+test("JS arrays lower to one identity-preserving carrier with fact-backed iteration", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": denseSource } });
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let xs: Vec<i32> = vec!\[1, 2, 3\];/u);
-  assert.match(text, /for value in xs\.iter\(\)\.copied\(\) \{/u);
+  assert.match(text, /let xs: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
+  assert.match(text, /for value in xs\.iter_values\(\) \{/u);
   assert.match(text, /total \+ tsonic_rust_runtime::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
 });
 
@@ -198,12 +198,10 @@ test("sparse arrays lower to JsArray with holes, length writes, and at()", () =>
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let mut values: js_abi::JsArray<f64> = js_abi::JsArray::with_length\(3\);/u);
-  assert.match(text, /values\.set\(0, 1\.0\);/u);
-  assert.match(text, /values\.set\(2, 3\.0\);/u);
+  assert.match(text, /let values = js_abi::JsArray::from_sparse\(3, vec!\[\(0, 1\.0\), \(2, 3\.0\)\]\);/u);
   assert.match(text, /values\.set_len\(tsonic_rust_runtime::conversions::i32_to_usize\(5\)\?\);/u);
   assert.match(text, /values\.set\(tsonic_rust_runtime::conversions::i32_to_usize\(3\)\?, 4\.0\);/u);
-  assert.match(text, /values\.at\(-1\.0\)\.copied\(\)\.is_none\(\)/u);
+  assert.match(text, /values\.at\(-1\.0\)\.is_none\(\)/u);
   assert.match(text, /use tsonic_rust_js::abi as js_abi;/u);
 });
 
@@ -225,8 +223,8 @@ export function update(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let dense: Vec<i32> = vec!\[1, 2, 3\];/u);
-  assert.match(text, /let mut sparse: js_abi::JsArray<f64>/u);
+  assert.match(text, /let dense: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
+  assert.match(text, /let sparse = js_abi::JsArray::from_sparse/u);
   assert.match(text, /sparse\.set\(tsonic_rust_runtime::conversions::i32_to_usize\(3\)\?, 4\.0\);/u);
 });
 
@@ -252,7 +250,7 @@ export function probe(name: string): boolean {
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(\s*js_string::js_len\(name\),?\s*\)\? > 0/su);
 });
 
-test("string slicing, code points, repeat, and dense array copies use exact JS rows", () => {
+test("string slicing, code points, repeat, and JS array copies use exact rows", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -273,9 +271,9 @@ export function probe(text: string, values: readonly int32[]): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn probe\(text: &str, values: &\[i32\]\) -> rt::TsonicResult<bool>/u);
-  assert.match(text, /js_abi::array_dense_slice_to\(values, 1\.0, 3\.0\)/u);
-  assert.match(text, /js_abi::array_dense_join\(&copied, "-"\)/u);
+  assert.match(text, /pub fn probe\(text: &str, values: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
+  assert.match(text, /values\.slice_to\(1\.0, 3\.0\)/u);
+  assert.match(text, /copied\.join\("-"\)/u);
   assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)/u);
   assert.match(text, /js_string::repeat\(text, 2\.0\)\?/u);
   assert.match(text, /js_string::code_point_at\(text, 0\.0\)\.unwrap_or\(0\.0\)/u);
@@ -361,10 +359,10 @@ export function collections(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let mut m = js_abi::JsMap::new\(\);/u);
+  assert.match(text, /let m = js_abi::JsMap::new\(\);/u);
   assert.match(text, /m\.set\(1, String::from\("one"\)\);/u);
   assert.match(text, /m\.has\(&1\)/u);
-  assert.match(text, /m\.get\(&2\)\.cloned\(\)\.is_none\(\)/u);
+  assert.match(text, /m\.get\(&2\)\.is_none\(\)/u);
   assert.match(text, /s\.add\(4\);/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(m\.len\(\)\)\? == 1/u);
 });
@@ -425,7 +423,7 @@ test("compat mode enables JS carrier lanes without explicit surface selection", 
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsArray::with_length\(3\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsArray::from_sparse\(3,/u);
   assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_js/u);
 });
 
@@ -464,7 +462,7 @@ export function probe(text: string): boolean {
   assert.match(artifactText(result, "src/index.rs"), /js_abi::JsRegExp::new\("\\\\d\+", ""\)\?/u);
 });
 
-test("readonly arrays lower to borrowed slice parameters with slice iteration", () => {
+test("readonly arrays retain shared JS identity while exposing only read operations", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -489,10 +487,10 @@ export function caller(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn sum\(xs: &\[i32\]\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /for x in xs\.iter\(\)\.copied\(\) \{/u);
+  assert.match(text, /pub fn sum\(xs: js_abi::JsArray<i32>\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /for x in xs\.iter_values\(\) \{/u);
   assert.match(text, /total \+ tsonic_rust_runtime::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
-  assert.match(text, /sum\(&values\)/u);
+  assert.match(text, /sum\(values\.clone\(\)\)/u);
 });
 
 test("undefined unions take the Option lane only under the js surface", () => {

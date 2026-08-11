@@ -27,6 +27,8 @@ export const rustJsArrayTargetId = "rust.js.JsArray";
 export const rustJsMapTargetId = "rust.js.JsMap";
 export const rustJsSetTargetId = "rust.js.JsSet";
 export const rustJsDateTargetId = "rust.js.JsDate";
+export const rustJsRegExpTargetId = "rust.js.JsRegExp";
+export const rustJsRegExpMatchTargetId = "rust.js.JsRegExpMatch";
 export const rustUsizeTargetId = "rust.core.usize";
 export const rustIsizeTargetId = "rust.core.isize";
 export const rustNamedTypeCarrierName = "named-type";
@@ -420,8 +422,18 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
 }
 
 export function rustValueCarrierRequiresCloneOnRead(carrier: TargetTypeRef | undefined): boolean {
-  return isRustBigIntCarrier(carrier) || isRustLocationCarrier(carrier);
+  return carrier?.kind === "target-named" && rustCloneOnReadTargetIds.has(carrier.id);
 }
+
+const rustCloneOnReadTargetIds: ReadonlySet<string> = new Set([
+  rustBigIntTargetId,
+  rustLocationTargetId,
+  rustJsValueTargetId,
+  rustJsArrayTargetId,
+  rustJsMapTargetId,
+  rustJsSetTargetId,
+  rustJsRegExpTargetId,
+]);
 
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||

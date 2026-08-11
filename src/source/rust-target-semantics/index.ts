@@ -749,15 +749,15 @@ function recordStatementFacts(
     if (expression === undefined) {
       return;
     }
+    resolveExpressionCarrier(walk, expression, sourceFile, undefined);
     if (ast.kindName(expression) === KindBinaryExpression) {
       const operatorToken = BinaryExpression_OperatorToken(walk.context.ast, expression);
       const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
       if (isRustAssignmentOperator(operatorKind)) {
         const left = BinaryExpression_Left(walk.context.ast, expression);
-        recordBindingWrite(walk, left);
+        recordAssignmentWrite(walk, expression, left);
       }
     }
-    resolveExpressionCarrier(walk, expression, sourceFile, undefined);
     return;
   }
   if (kind === "KindThrowStatement") {
@@ -2600,12 +2600,11 @@ function resolveArrayLiteralCarrier(
     return setCarrierFact(walk, expression, expected);
   }
   let expectedElement: TargetTypeRef | undefined;
-  let lane: "dense" | "sparse" = hasHoles ? "sparse" : "dense";
+  const lane: "native" | "js" = walk.jsEnabled ? "js" : "native";
   if (expected !== undefined && isRustVecCarrier(expected)) {
     expectedElement = expected.element;
   } else if (expected?.kind === "target-named" && isRustJsArrayCarrier(expected)) {
     expectedElement = expected.typeArguments?.[0];
-    lane = "sparse";
   }
   if (expected?.kind === "target-specific" && expected.name === "fixed-array") {
     const value = expected.value as { element: TargetTypeRef; length: number };
@@ -2633,7 +2632,7 @@ function resolveArrayLiteralCarrier(
   if (expectedElement === undefined) {
     return undefined;
   }
-  if (lane === "sparse" && !walk.jsEnabled) {
+  if (hasHoles && lane === "native") {
     appendRustDiagnostic(
       walk,
       "RUST_JS_SURFACE_REQUIRED",
@@ -2646,7 +2645,7 @@ function resolveArrayLiteralCarrier(
   for (const element of presentElements) {
     resolveExpressionCarrier(walk, element, sourceFile, expectedElement);
   }
-  const resultCarrier = lane === "sparse"
+  const resultCarrier = lane === "js"
     ? rustJsArrayTargetType(expectedElement)
     : rustVecTargetType(expectedElement);
   setRustOperationFact(walk, expression, {
@@ -3116,6 +3115,21 @@ function recordBindingWrite(walk: RustFactWalk, target: Node | undefined, writeK
       { message: `rust ${writeKind} write` },
     ]);
   }
+}
+
+function recordAssignmentWrite(
+  walk: RustFactWalk,
+  expression: Node,
+  target: Node | undefined,
+): void {
+  const targetKind = target === undefined ? "" : walk.context.ast.kindName(target);
+  const operation = walk.context.facts.get(expression, rustTargetOperationFactKey);
+  if ((targetKind === KindPropertyAccessExpression || targetKind === KindElementAccessExpression) &&
+    operation?.kind === "runtime-set" && operation.abi.targetReceiver.kind === "input" &&
+    operation.abi.targetReceiver.input.mode === "ref") {
+    return;
+  }
+  recordBindingWrite(walk, target);
 }
 
 // --- Source-core flow markers ----------------------------------------------
@@ -3656,8 +3670,8 @@ function resolveFunctionExpressionCarrier(
       return undefined;
     }
     setCarrierFact(walk, parameter, argCarrier);
-    // Slice-based dense helpers hand elements by reference: primitive
-    // elements bind with |&x| copy patterns; accumulators pass by value.
+    // JS collection callbacks hand elements by reference: primitive elements
+    // bind with |&x| copy patterns; accumulators pass by value.
     byRefCopyParams.push(index === parameters.length - 1 && argCarrier.kind === "source-primitive");
   }
   const body = ast.body(expression);

@@ -301,6 +301,36 @@ test("runtime index setters finalize mutable receiver, index conversion, and val
   }), false);
 });
 
+test("runtime method setters preserve the provider-declared receiver mode", () => {
+  const shared = finalizeRustProviderOperationAbi({
+    operationKind: "property-set",
+    form: { form: "receiver-method", name: "set_value" },
+    sourceReceiverCarrier: { kind: "target-named", id: "acme.SharedCell" },
+    sourceArgumentCarriers: [int32],
+    declaredSourceArgumentCarriers: [int32],
+    resultCarrier: unit,
+    isAsync: false,
+    isFallible: false,
+  });
+  const exclusive = finalizeRustProviderOperationAbi({
+    operationKind: "property-set",
+    form: { form: "receiver-method", name: "set_value", mutatesReceiver: true },
+    sourceReceiverCarrier: { kind: "target-named", id: "acme.ExclusiveCell" },
+    sourceArgumentCarriers: [int32],
+    declaredSourceArgumentCarriers: [int32],
+    resultCarrier: unit,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(shared);
+  assert.equal(shared.targetReceiver.kind, "input");
+  assert.equal(shared.targetReceiver.input.mode, "ref");
+  assert.ok(exclusive);
+  assert.equal(exclusive.targetReceiver.kind, "input");
+  assert.equal(exclusive.targetReceiver.input.mode, "mut-ref");
+});
+
 test("finalized ABI validation is total and rejects every mutated closed-contract field", () => {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",

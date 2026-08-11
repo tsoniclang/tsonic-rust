@@ -102,9 +102,9 @@ export function transform(values: int32[]): int32[] {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /array_dense_map\(values, \|&value\| \{/u);
-  assert.match(source, /array_dense_filter\(&mapped, \|&value\| value > 1\)/u);
-  assert.match(source, /array_dense_map\(&filtered, \|&\(mut value\)\| \{/u);
+  assert.match(source, /values\.map\(\|&value\| \{/u);
+  assert.match(source, /mapped\.filter\(\|&value\| value > 1\)/u);
+  assert.match(source, /filtered\.map\(\|&\(mut value\)\| \{/u);
   validateGeneratedProject("expression-callable-blocks", result.artifacts);
 });
 

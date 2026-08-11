@@ -51,12 +51,12 @@ import type {
 } from "../provider-packages/index.js";
 import {
   rustFixedArrayCarrierValue,
+  rustJsArrayTargetType,
   rustJsValueTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
-  rustVecTargetType,
 } from "../rust-target-types.js";
 import {
   isRustBigIntCarrier,
@@ -946,7 +946,7 @@ function mapSelectedJsSpecialCall(
     }
     const global = creation.flags.includes("g");
     const resultCarrier: TargetTypeRef = global
-      ? rustOptionTargetType(rustVecTargetType(rustStringTargetType()))
+      ? rustOptionTargetType(rustJsArrayTargetType(rustStringTargetType()))
       : rustOptionTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
     return acceptSelectedCall(request, {
       kind: "provider-operation",
@@ -1802,7 +1802,7 @@ function rustPropertyKeyIterationLowering(
     return { kind: "dense-index-keys" };
   }
   if (isRustJsArrayCarrier(iterable)) {
-    return { kind: "sparse-index-keys" };
+    return { kind: "js-array-index-keys" };
   }
   const keys = iterable === undefined
     ? undefined
@@ -1811,7 +1811,7 @@ function rustPropertyKeyIterationLowering(
 }
 
 interface RustIterableTargetPolicy {
-  readonly kind: "borrowed" | "sync-generator" | "async-generator";
+  readonly kind: "borrowed" | "js-array" | "sync-generator" | "async-generator";
   readonly elementCarrier: TargetTypeRef;
 }
 
@@ -1828,7 +1828,7 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
   }
   const jsElement = isRustJsArrayCarrier(iterable) ? iterable?.typeArguments?.[0] : undefined;
   if (jsElement !== undefined) {
-    return { kind: "borrowed", elementCarrier: jsElement };
+    return { kind: "js-array", elementCarrier: jsElement };
   }
   const generator = getRustGeneratorProtocol(iterable);
   return generator === undefined
@@ -1853,9 +1853,10 @@ function selectRustIterationLowering(
     if (target.kind === "async-generator") {
       return undefined;
     }
-    return target.kind === "borrowed"
-      ? { kind: "borrowed", style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned" }
-      : { kind: "owned" };
+    if (target.kind === "borrowed") {
+      return { kind: "borrowed", style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned" };
+    }
+    return target.kind === "js-array" ? { kind: "js-array" } : { kind: "owned" };
   }
   if (source.mechanism.kind === "asynchronous-iterator-protocol") {
     return target.kind === "async-generator" ? { kind: "async-generator" } : undefined;
@@ -1863,9 +1864,10 @@ function selectRustIterationLowering(
   if (target.kind === "async-generator") {
     return undefined;
   }
-  return target.kind === "borrowed"
-    ? { kind: "borrowed", style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned" }
-    : { kind: "owned" };
+  if (target.kind === "borrowed") {
+    return { kind: "borrowed", style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned" };
+  }
+  return target.kind === "js-array" ? { kind: "js-array" } : { kind: "owned" };
 }
 
 function recordIterationInitializerCarrier(
