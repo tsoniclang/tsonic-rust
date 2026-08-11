@@ -31,21 +31,24 @@ export function literal(): number {
   assert.match(text, /2\.0f64\.floor\(\)/u);
 });
 
-test("Math members outside the exact subset fail closed", async () => {
-  for (const { call, member } of [
-    { call: "Math.round(x)", member: "round" },
-    { call: "Math.min(x, 1)", member: "min" },
-    { call: "Math.random()", member: "random" },
-  ]) {
-    const options = {
-      surfaces: ["js"],
-      files: { "index.ts": `export function f(x: number): number {\n  return ${call};\n}\n` },
-    };
-    assertRustTargetRejection(options, [{
-      code: "RUST_SELECTED_OPERATION_UNSUPPORTED",
-      message: `The selected JavaScript call 'Math.${member}' has no closed Rust operation row for the selected receiver and argument carriers.`,
-    }]);
-  }
+test("Math operations with distinct JavaScript semantics use runtime rows", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function f(x: number): number {
+  return Math.round(x) + Math.min(x, 1) + Math.max() + Math.random();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::math_round\(x\)/u);
+  assert.match(text, /js_abi::math_min\(&\[x, 1\.0\]\)/u);
+  assert.match(text, /js_abi::math_max\(&\[\]\)/u);
+  assert.match(text, /js_abi::math_random\(\)/u);
 });
 
 test("generated cargo binary proves the Math lane at runtime", { timeout: 300_000 }, async () => {
@@ -64,6 +67,13 @@ export function main(): void {
   check(Math.abs(-5) === 5);
   check(Math.sqrt(9) === 3);
   check(Math.pow(2, 10) === 1024);
+  check(Math.round(-1.5) === -1);
+  check(Math.min(-0, 0) === 0);
+  check(Math.max(1, 5, 3) === 5);
+  check(Math.max() < 0);
+  const random = Math.random();
+  check(random >= 0);
+  check(random < 1);
 }
 `,
     },

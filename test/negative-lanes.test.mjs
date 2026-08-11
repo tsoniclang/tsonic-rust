@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assertRustTargetRejection, compileRust } from "./helpers/rust-session.mjs";
+import { artifactText, assertRustTargetRejection, compileRust } from "./helpers/rust-session.mjs";
 
 test("unsupported top-level mutable declarations fail closed with deterministic diagnostics", () => {
   const { result } = compileRust({
@@ -97,21 +97,30 @@ export function walk(): void {
   }]);
 });
 
-test("source-name guessing is impossible: unmapped module import fails closed", () => {
-  const options = {
+test("source-name guessing is impossible: a project Math class stays project-owned", () => {
+  const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
+class Math {
+  constructor() {}
+
+  static max(a: number, _b: number): number {
+    return a;
+  }
+}
+
 export function fallback(a: number, b: number): number {
   return Math.max(a, b);
 }
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_SELECTED_OPERATION_UNSUPPORTED",
-    message: "The selected JavaScript call 'Math.max' has no closed Rust operation row for the selected receiver and argument carriers.",
-  }]);
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /Math::max\(a, b\)/u);
+  assert.doesNotMatch(text, /js_abi::math_max/u);
 });
 
 test("functions without return annotations fail closed", () => {
