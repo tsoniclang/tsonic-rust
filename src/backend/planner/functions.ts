@@ -12,7 +12,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSourceParameterAbiFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "../../source/rust-facts/keys.js";
 import { rustLocationStorageForDeclaration } from "./typed-locations.js";
 import {
   applyRustGenericRequirements,
@@ -157,20 +157,13 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     }
   }
   const returnTypeNode = Node_Type(ast, node);
-  if (returnTypeNode === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.function",
-      "Functions require an explicit return type annotation.",
-    ));
-    return undefined;
-  }
-  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ?? context.input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
+  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
+    context.input.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
   const isUnit = isRustUnitCarrier(returnCarrier);
   const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
   if (!isUnit && returnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, returnTypeNode),
+      diagnosticInput(context, returnTypeNode ?? node),
       "rust.backend.function",
       "Function return type has no supported Rust carrier fact.",
     ));

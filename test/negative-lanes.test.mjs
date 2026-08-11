@@ -123,20 +123,29 @@ export function fallback(a: number, b: number): number {
   assert.doesNotMatch(text, /js_abi::math_max/u);
 });
 
-test("functions without return annotations fail closed", () => {
+test("functions and methods consume exact checker-inferred return carriers", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
 export function noAnnotation(a: number) {
   return a;
 }
+
+export class Box {
+  constructor() {}
+
+  value() {
+    return 42;
+  }
+}
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("explicit return type annotation")));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn noAnnotation\(a: f64\) -> f64/u);
+  assert.match(text, /pub fn value\(&self\) -> f64/u);
 });
 
 test("throw Error requires the exact selected one-message constructor shape", () => {

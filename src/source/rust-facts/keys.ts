@@ -652,6 +652,14 @@ export interface RustSourceParameterAbiFact {
 export const rustSourceParameterAbiFactKey: RustPlanKey<RustSourceParameterAbiFact> =
   defineRustPlanKey("sourceParameterAbi", closedMetadataEquals);
 
+export interface RustSourceCallableReturnFact {
+  readonly returnCarrier: TargetTypeRef;
+}
+
+export const rustSourceCallableReturnFactKey: RustPlanKey<RustSourceCallableReturnFact> =
+  defineRustPlanKey("sourceCallableReturn", (left, right) =>
+    rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier));
+
 // Declarations whose lowering returns TsonicResult<T>: they throw, or they
 // transitively call fallible operations outside a try boundary.
 export const rustFallibleFactKey: RustPlanKey<{ readonly fallible: true }> =

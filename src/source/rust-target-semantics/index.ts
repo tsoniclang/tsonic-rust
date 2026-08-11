@@ -4,6 +4,7 @@ import {
 } from "@tsonic/tsts";
 import type {
   AstReader,
+  ExtensionFactSubject,
   Node,
   SourceFile,
 } from "@tsonic/tsts";
@@ -118,7 +119,7 @@ import {
   rustSourceTypeCarrierValue,
 } from "../rust-target-types.js";
 import { parseSourceBigIntLiteral } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -613,12 +614,21 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
   recordFutureValueFacts(walk, projectSourceFiles);
 }
 
-function promiseInnerCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
-  return rustFutureOutputCarrier(resolveTypeNodeCarrier(walk, typeNode));
+function promiseInnerCarrier(
+  walk: RustFactWalk,
+  declaration: Node,
+  subject: ExtensionFactSubject | undefined,
+): TargetTypeRef | undefined {
+  return rustFutureOutputCarrier(resolveRustTargetTypeRef(
+    subject,
+    rustResolutionContext(walk, declaration),
+    walk.operationOptions,
+  ));
 }
 
 function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableSuspensionFacts(walk, declaration);
+  recordCallableReturnFact(walk, declaration);
   const parameters = requireDenseSourceNodes(walk, walk.context.ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
   if (parameters === undefined) {
     return;
@@ -630,10 +640,11 @@ function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): vo
 
 function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): void {
   const { ast } = walk.context;
+  const sourceReturn = selectedSourceCallableReturn(walk, declaration);
   const sourceGenerator = walk.context.semanticsFor(declaration).getResolvedGeneratorInfo(declaration);
   if (sourceGenerator !== undefined) {
     const carrier = resolveRustTargetTypeRef(
-      Node_Type(ast, declaration) ?? sourceGenerator.sourceReturnType,
+      Node_Type(ast, declaration) ?? sourceGenerator.sourceReturnType ?? sourceReturn,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
@@ -660,7 +671,11 @@ function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): v
       }
     }
   } else if (ast.hasModifierKind(declaration, "async")) {
-    const inner = promiseInnerCarrier(walk, Node_Type(walk.context.ast, declaration));
+    const inner = promiseInnerCarrier(
+      walk,
+      declaration,
+      Node_Type(walk.context.ast, declaration) ?? sourceReturn,
+    );
     if (inner !== undefined) {
       walk.context.facts.set(declaration, rustAsyncFunctionFactKey, { isAsync: true, outputCarrier: inner }, [
         { message: "rust async function" },
@@ -669,11 +684,42 @@ function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): v
   }
 }
 
+function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
+  const semantics = walk.context.semanticsFor(declaration);
+  const callableType = semantics.getDeclaredValueType(declaration);
+  if (callableType === undefined) {
+    return undefined;
+  }
+  const signatures = semantics.getCallSignaturesOfType(callableType).filter((signature) =>
+    semantics.getSignatureDeclaration(signature) === declaration);
+  return signatures.length === 1
+    ? semantics.getReturnTypeOfSignature(signatures[0]!)
+    : undefined;
+}
+
+function recordCallableReturnFact(walk: RustFactWalk, declaration: Node): void {
+  const generator = walk.context.facts.get(declaration, rustGeneratorFactKey);
+  const asynchronous = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
+  const sourceReturn = selectedSourceCallableReturn(walk, declaration);
+  const carrier = generator?.carrier ?? asynchronous?.outputCarrier ??
+    resolveRustTargetTypeRef(
+      Node_Type(walk.context.ast, declaration) ?? sourceReturn,
+      rustResolutionContext(walk, declaration),
+      walk.operationOptions,
+    );
+  if (carrier !== undefined) {
+    walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
+      returnCarrier: carrier,
+    }, [{ message: "rust finalized source callable return carrier" }]);
+  }
+}
+
 function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.context;
   const asyncFact = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
   const generatorFact = walk.context.facts.get(declaration, rustGeneratorFactKey);
-  const returnCarrier = generatorFact?.returnType ?? asyncFact?.outputCarrier ?? resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
+  const returnCarrier = generatorFact?.returnType ?? asyncFact?.outputCarrier ??
+    walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
   const body = ast.body(declaration);
   const previousCallable = walk.currentCallableDeclaration;
   const previousGenerator = walk.currentGeneratorDeclaration;
@@ -2763,6 +2809,7 @@ function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node): void 
     if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration") {
       if (memberKind === "KindMethodDeclaration") {
         recordCallableSuspensionFacts(walk, member);
+        recordCallableReturnFact(walk, member);
       }
       const parameters = requireDenseSourceNodes(walk, ast.parameters(member), "Class callable contains an undefined or non-data parameter slot.");
       if (parameters === undefined) {
@@ -2795,7 +2842,7 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
       const generatorFact = walk.context.facts.get(member, rustGeneratorFactKey);
       const returnCarrier = memberKind === "KindMethodDeclaration"
         ? generatorFact?.returnType ?? asyncFact?.outputCarrier ??
-          resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member))
+          walk.context.facts.get(member, rustSourceCallableReturnFactKey)?.returnCarrier
         : undefined;
       const previousMethod = walk.currentMethodDeclaration;
       const previousCallable = walk.currentCallableDeclaration;

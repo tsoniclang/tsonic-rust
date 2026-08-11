@@ -24,7 +24,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustSourceParameterAbiFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
 import { applyFallibleShape, applyRustTailShape, rustBlockTerminates } from "./functions.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
@@ -338,14 +338,6 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     return undefined;
   }
   const returnTypeNode = Node_Type(ast, member);
-  if (returnTypeNode === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, member),
-      "rust.backend.class",
-      "Methods require an explicit return type annotation.",
-    ));
-    return undefined;
-  }
   const generatorFact = context.input.facts.getFact(member, rustGeneratorFactKey);
   const asyncFact = context.input.facts.getFact(member, rustAsyncFunctionFactKey);
   const sourceAsync = ast.hasModifierKind(member, "async");
@@ -357,17 +349,18 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     ));
     return undefined;
   }
-  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ?? carrierOf(context, returnTypeNode);
+  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
+    context.input.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
   if (returnCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, returnTypeNode),
+      diagnosticInput(context, returnTypeNode ?? member),
       "rust.backend.class",
       "Method return type has no finalized Rust carrier fact.",
     ));
     return undefined;
   }
   const isUnit = isRustUnitCarrier(returnCarrier);
-  const returnType = isUnit ? undefined : renderType(context, returnTypeNode);
+  const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
   if (!isUnit && returnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode ?? member),

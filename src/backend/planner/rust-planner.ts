@@ -8,7 +8,6 @@ import type {
 import {
   KindFunctionDeclaration,
   Node_Name,
-  Node_Type,
 } from "../../common/source-ast.js";
 import { readRustCrateName, readRustOutputType } from "../../options/rust-target-options.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
@@ -18,7 +17,7 @@ import { printRustSourceFile } from "../../print/rust-printer.js";
 import { printCargoManifest } from "../../print/cargo-manifest-printer.js";
 import { planCargoManifest } from "./cargo-project.js";
 import { rustReservedIdentifiers } from "./plan-context.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
 import type { RustTranslationContext } from "../../translate/context.js";
 import { reconstructRustSourceFiles } from "./source-file-reconstruction.js";
 
@@ -213,10 +212,8 @@ function resolveBinaryEntry(
       continue;
     }
     const asyncFact = input.facts.getFact(statement, rustAsyncFunctionFactKey);
-    const returnTypeNode = Node_Type(input.ast, statement);
-    const returnCarrier = asyncFact?.outputCarrier ?? (returnTypeNode === undefined
-      ? undefined
-      : input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier);
+    const returnCarrier = asyncFact?.outputCarrier ??
+      input.facts.getFact(statement, rustSourceCallableReturnFactKey)?.returnCarrier;
     if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier)) {
       break;
     }
