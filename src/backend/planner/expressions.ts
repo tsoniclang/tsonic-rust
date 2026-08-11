@@ -13,6 +13,7 @@ import {
 import {
   KindBinaryExpression,
   KindBigIntLiteral,
+  KindArrayBindingPattern,
   Node_Initializer,
   KindCallExpression,
   KindConditionalExpression,
@@ -21,6 +22,7 @@ import {
   KindFalseKeyword,
   KindFunctionExpression,
   KindIdentifier,
+  KindObjectBindingPattern,
   KindNewExpression,
   KindNoSubstitutionTemplateLiteral,
   KindNonNullExpression,
@@ -81,7 +83,7 @@ import {
 import {
   rustArgumentPassingMode,
 } from "../../source/rust-facts/parameter-passing.js";
-import type { RustExpr } from "../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
@@ -109,6 +111,8 @@ import {
   applyRustSourceCallableRequirements,
 } from "./source-callable-contracts.js";
 import { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
+import { allocateRustSyntheticName } from "./synthetic-names.js";
+import { planRustBindingPattern } from "./binding-patterns.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -383,6 +387,11 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         return undefined;
       }
       const params: { name: string; byRefCopy: boolean }[] = [];
+      const bindingParameters: {
+        readonly pattern: Node;
+        readonly name: string;
+        readonly sourceCarrier: TargetTypeRef;
+      }[] = [];
       for (const [index, parameter] of sourceParams.entries()) {
         if (parameter === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
@@ -392,11 +401,41 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
           ));
           return undefined;
         }
-        const parameterName = rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
+        const nameNode = ast.name(parameter);
+        const nameKind = nameNode === undefined ? "" : ast.kindName(nameNode);
+        const bindingPattern = nameNode !== undefined &&
+            (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern)
+          ? nameNode
+          : undefined;
+        if (bindingPattern !== undefined && context.syntheticNames === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, parameter),
+            "rust.backend.closure-binding-name",
+            "Binding-pattern closure parameter requires a finalized hygienic-name scope.",
+          ));
+          return undefined;
+        }
+        const parameterName = bindingPattern === undefined
+          ? rustSourceName(context, nameNode !== undefined && nameKind === KindIdentifier ? ast.text(nameNode) : "")
+          : allocateRustSyntheticName(context.syntheticNames!, "binding_parameter");
         if (!isValidRustIdentifier(parameterName)) {
           return undefined;
         }
         params.push({ name: parameterName, byRefCopy: closureFact.byRefCopyParams[index] === true });
+        const parameterCarrier = closureFact.resultCarrier.kind === "function-pointer"
+          ? closureFact.resultCarrier.args[index]
+          : undefined;
+        if (bindingPattern !== undefined) {
+          if (parameterCarrier === undefined || closureFact.byRefCopyParams[index] === true) {
+            context.diagnostics.push(missingFactDiagnostic(
+              diagnosticInput(context, parameter),
+              "rust.backend.closure-binding-carrier",
+              "Binding-pattern closure parameter requires one exact by-value source carrier.",
+            ));
+            return undefined;
+          }
+          bindingParameters.push({ pattern: bindingPattern, name: parameterName, sourceCarrier: parameterCarrier });
+        }
       }
       const bodyNode = context.input.ast.body(node);
       if (bodyNode === undefined) {
@@ -411,9 +450,34 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         asyncContext: false,
         generator: undefined,
       };
+      const bindingStatements: RustStmt[] = [];
+      for (const binding of bindingParameters) {
+        const planned = planRustBindingPattern(
+          binding.pattern,
+          { kind: "path", path: binding.name },
+          binding.sourceCarrier,
+          closureContext,
+          planExpression,
+        );
+        if (planned === undefined) {
+          return undefined;
+        }
+        bindingStatements.push(...planned);
+      }
       if (context.input.ast.kindName(bodyNode) !== "KindBlock") {
         const body = planExpression(bodyNode, closureContext);
-        return body === undefined ? undefined : { kind: "closure", params, body };
+        if (body === undefined) {
+          return undefined;
+        }
+        return bindingStatements.length === 0
+          ? { kind: "closure", params, body }
+          : {
+              kind: "closure-block",
+              params: params.map((parameter) => ({ ...parameter, mutable: false })),
+              move: false,
+              async: false,
+              body: { statements: [...bindingStatements, { kind: "tail", expr: body }] },
+            };
       }
       const resultCarrier = closureFact.resultCarrier.kind === "function-pointer"
         ? closureFact.resultCarrier.result
@@ -448,7 +512,10 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
           context.input.facts.getFact(sourceParams[index]!, rustMutatedBindingFactKey) !== undefined,
         byRefCopy: parameter.byRefCopy,
       }));
-      const finalizedBlock = applyRustTailShape(block, !isRustUnitCarrier(resultCarrier));
+      const finalizedBlock = applyRustTailShape(
+        { statements: [...bindingStatements, ...block.statements] },
+        !isRustUnitCarrier(resultCarrier),
+      );
       const onlyStatement = finalizedBlock.statements.length === 1
         ? finalizedBlock.statements[0]
         : undefined;

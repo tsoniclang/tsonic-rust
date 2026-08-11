@@ -1,7 +1,9 @@
 import type { AstReader, ExtensionFactSubject, Node } from "@tsonic/tsts";
 
 export const KindBinaryExpression = "KindBinaryExpression";
+export const KindArrayBindingPattern = "KindArrayBindingPattern";
 export const KindBigIntLiteral = "KindBigIntLiteral";
+export const KindBindingElement = "KindBindingElement";
 export const KindBlock = "KindBlock";
 export const KindBreakStatement = "KindBreakStatement";
 export const KindBooleanKeyword = "KindBooleanKeyword";
@@ -36,6 +38,7 @@ export const KindNewExpression = "KindNewExpression";
 export const KindNoSubstitutionTemplateLiteral = "KindNoSubstitutionTemplateLiteral";
 export const KindNonNullExpression = "KindNonNullExpression";
 export const KindNumericLiteral = "KindNumericLiteral";
+export const KindObjectBindingPattern = "KindObjectBindingPattern";
 export const KindParameter = "KindParameter";
 export const KindParenthesizedExpression = "KindParenthesizedExpression";
 export const KindPostfixUnaryExpression = "KindPostfixUnaryExpression";
@@ -269,6 +272,17 @@ export function Node_Initializer(ast: AstReader, node: Node | undefined): Node |
     default:
       return undefined;
   }
+}
+
+export function BindingElement_PropertyName(ast: AstReader, node: Node | undefined): Node | undefined {
+  return node === undefined || !ast.is.IsBindingElement(node)
+    ? undefined
+    : ast.as.AsBindingElement(node)?.PropertyName;
+}
+
+export function BindingElement_IsRest(ast: AstReader, node: Node | undefined): boolean {
+  return node !== undefined && ast.is.IsBindingElement(node) &&
+    ast.as.AsBindingElement(node)?.DotDotDotToken !== undefined;
 }
 
 export function VariableDeclarationList_Declarations(

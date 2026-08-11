@@ -49,6 +49,8 @@ import {
   KindForStatement,
   KindForInStatement,
   KindIdentifier,
+  KindArrayBindingPattern,
+  KindObjectBindingPattern,
   KindIfStatement,
   KindLabeledStatement,
   KindNumericLiteral,
@@ -91,6 +93,7 @@ import {
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName } from "./plan-context.js";
 import type { RustCompletionBoundary, RustControlTarget, RustLoopTarget, RustPlanContext } from "./plan-context.js";
 import { allocateRustSyntheticName } from "./synthetic-names.js";
+import { planRustBindingPattern } from "./binding-patterns.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
   planRustNonConsumingValue,
@@ -684,7 +687,7 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     if (planned === undefined) {
       return undefined;
     }
-    statements.push(planned);
+    statements.push(...planned);
   }
   return statements;
 }
@@ -692,9 +695,13 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
 function planVariableDeclaration(
   declaration: Node,
   context: RustPlanContext,
-): Extract<RustStmt, { readonly kind: "let" }> | undefined {
+): readonly RustStmt[] | undefined {
   const { ast } = context.input;
   const nameNode = Node_Name(context.input.ast, declaration);
+  const nameKind = nameNode === undefined ? "" : ast.kindName(nameNode);
+  if (nameNode !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern)) {
+    return planBindingVariableDeclaration(declaration, nameNode, context);
+  }
   const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const name = rustSourceName(context, sourceName);
   if (!isValidRustIdentifier(name)) {
@@ -797,14 +804,54 @@ function planVariableDeclaration(
   if (initializer !== undefined && init === undefined) {
     return undefined;
   }
-  return {
+  return [{
     kind: "let",
     name,
     mutable,
     ...(rustType === undefined ? {} : { type: rustType }),
     ...(init === undefined ? {} : { init }),
     ...(initializer === undefined && mutable ? { attrs: ["#[allow(unused_mut)]"] } : {}),
-  };
+  }];
+}
+
+function planBindingVariableDeclaration(
+  declaration: Node,
+  pattern: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const initializer = Node_Initializer(context.input.ast, declaration);
+  const sourceCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  if (initializer === undefined || sourceCarrier === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.binding-declaration",
+      "Binding-pattern declaration requires an initializer and one finalized source carrier.",
+    ));
+    return undefined;
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, pattern),
+      "rust.backend.binding-temporary",
+      "Binding-pattern declaration requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  const value = planExpression(initializer, context);
+  if (value === undefined) {
+    return undefined;
+  }
+  const temporary = allocateRustSyntheticName(context.syntheticNames, "binding");
+  const bindings = planRustBindingPattern(
+    pattern,
+    { kind: "path", path: temporary },
+    sourceCarrier,
+    context,
+    planExpression,
+  );
+  return bindings === undefined
+    ? undefined
+    : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
 }
 
 function planUpdateStatement(expression: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -1747,16 +1794,25 @@ function planForOfStatement(
     ? []
     : collectVariableDeclarations(initializer, context);
   const bindingDeclaration = declarations.length === 1 ? declarations[0] : undefined;
+  const bindingNameNode = bindingDeclaration === undefined
+    ? undefined
+    : Node_Name(context.input.ast, bindingDeclaration);
+  const bindingNameKind = bindingNameNode === undefined ? "" : ast.kindName(bindingNameNode);
+  const bindingPattern = bindingNameNode !== undefined &&
+      (bindingNameKind === KindArrayBindingPattern || bindingNameKind === KindObjectBindingPattern)
+    ? bindingNameNode
+    : undefined;
   let binding = "";
-  if (bindingDeclaration !== undefined) {
-    const nameNode = Node_Name(context.input.ast, bindingDeclaration);
-    binding = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? rustSourceName(context, ast.text(nameNode)) : "";
+  if (bindingNameNode !== undefined && bindingNameKind === KindIdentifier) {
+    binding = rustSourceName(context, ast.text(bindingNameNode));
+  } else if (bindingPattern !== undefined && context.syntheticNames !== undefined) {
+    binding = allocateRustSyntheticName(context.syntheticNames, "binding_element");
   }
   if (!isValidRustIdentifier(binding)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.loop",
-      "for-of bindings require a plain identifier.",
+      "for-of bindings require an exact identifier or finalized binding pattern.",
     ));
     return undefined;
   }
@@ -1782,13 +1838,21 @@ function planForOfStatement(
     ? undefined
     : ast.variableDeclarationKind(bindingDeclaration);
   const resourceBinding = resourceKind === "using" || resourceKind === "await using";
+  if (resourceBinding && bindingPattern !== undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, bindingPattern),
+      "rust.backend.resource-binding-pattern",
+      "Resource-managed iteration binding patterns require an exact per-binding disposal contract.",
+    ));
+    return undefined;
+  }
   const resourceFact = resourceBinding && bindingDeclaration !== undefined
     ? resourceFactForPlanning(bindingDeclaration, context)
     : undefined;
   if (resourceBinding && resourceFact === undefined) {
     return undefined;
   }
-  const body = resourceFact === undefined || bindingDeclaration === undefined
+  let body = resourceFact === undefined || bindingDeclaration === undefined
     ? planBlockLike(
         bodyNode,
         withRustControlTarget(context, target),
@@ -1810,6 +1874,19 @@ function planForOfStatement(
       })();
   if (body === undefined) {
     return undefined;
+  }
+  if (bindingPattern !== undefined) {
+    const bindings = planRustBindingPattern(
+      bindingPattern,
+      { kind: "path", path: binding },
+      fact.elementCarrier,
+      context,
+      planExpression,
+    );
+    if (bindings === undefined) {
+      return undefined;
+    }
+    body = { statements: [...bindings, ...body.statements] };
   }
   const bindingMutable = resourceFact !== undefined &&
     resourceDisposalReceiverMode(resourceFact) === "mut-ref";

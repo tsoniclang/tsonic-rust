@@ -1,24 +1,21 @@
 import type { Node } from "@tsonic/tsts";
-import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import {
   KindIdentifier,
   Node_Name,
   Node_Type,
 } from "../../common/source-ast.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
-import type { RustBlock, RustExpr, RustFunctionParam, RustItem, RustStmt, RustTypeParameter } from "../rust-ast/nodes.js";
+import type { RustBlock, RustExpr, RustItem, RustStmt, RustTypeParameter } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "../../source/rust-facts/keys.js";
-import { rustLocationStorageForDeclaration } from "./typed-locations.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
 import {
   applyRustGenericRequirements,
   createRustGenericRequirementSet,
   requireRustCarrierRequirements,
-  requireRustLocationValueCarrier,
 } from "./generic-requirements.js";
 import {
   publishRustSourceCallableContract,
@@ -28,6 +25,11 @@ import {
   createRustSyntheticNameState,
 } from "./synthetic-names.js";
 import { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
+import { planExpression } from "./expressions.js";
+import {
+  planRustCallableParameterPrelude,
+  planRustCallableParameters,
+} from "./callable-parameters.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 
@@ -86,76 +88,14 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     typeParams.map((parameter) => parameter.name),
   );
   context = { ...context, genericRequirements };
-  const params: RustFunctionParam[] = [];
-  const locationParameterStatements: RustStmt[] = [];
-  let paramsFailed = false;
-  for (const parameter of ast.parameters(node)) {
-    if (parameter === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.parameter",
-        "Function declaration contains an undefined parameter slot.",
-      ));
-      paramsFailed = true;
-      continue;
-    }
-    const parameterName = rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
-    const parameterCarrier = context.input.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier;
-    const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
-    if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, parameter),
-        "rust.backend.parameter",
-        `Parameter '${parameterName}' has no supported Rust carrier fact.`,
-      ));
-      paramsFailed = true;
-      continue;
-    }
-    if (generatorFact !== undefined && parameterCarrier !== undefined &&
-      !requireRustCarrierRequirements(parameterCarrier, ["static"], parameter, context)) {
-      paramsFailed = true;
-      continue;
-    }
-    const locationStorage = rustLocationStorageForDeclaration(parameter, context);
-    if (locationStorage !== undefined &&
-      (parameterCarrier === undefined ||
-        !rustTargetTypeRefEquals(parameterCarrier, locationStorage.valueCarrier))) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, parameter),
-        "rust.backend.typed-location-parameter-carrier",
-        `Promoted parameter '${parameterName}' conflicts with its finalized parameter carrier.`,
-      ));
-      paramsFailed = true;
-      continue;
-    }
-    params.push({
-      name: parameterName,
-      type: parameterType,
-      mutable: locationStorage === undefined &&
-        context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
-    });
-    if (locationStorage !== undefined) {
-      if (!requireRustLocationValueCarrier(
-        locationStorage.valueCarrier,
-        parameter,
-        context,
-      )) {
-        paramsFailed = true;
-        continue;
-      }
-      context.usedAliases?.add("rt");
-      locationParameterStatements.push({
-        kind: "let",
-        name: parameterName,
-        mutable: false,
-        init: {
-          kind: "call",
-          path: "rt::Location::allocate",
-          args: [{ kind: "path", path: parameterName }],
-        },
-      });
-    }
+  const syntheticNames = createRustSyntheticNameState(ast, node, []);
+  const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
+    requireStatic: generatorFact !== undefined,
+  });
+  if (parameterPlan === undefined) {
+    return undefined;
   }
+  const params = parameterPlan.params;
   const returnTypeNode = Node_Type(ast, node);
   const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
     context.input.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
@@ -198,7 +138,6 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   if (fallible) {
     context.usedAliases?.add("rt");
   }
-  const syntheticNames = createRustSyntheticNameState(ast, bodyNode, params.map((param) => param.name));
   const generatorControllerName = generatorFact === undefined
     ? undefined
     : allocateRustSyntheticName(syntheticNames, "generator");
@@ -219,12 +158,20 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
         }),
     ...(fallible ? { fallibleContext: true } : {}),
   };
+  const parameterStatements = planRustCallableParameterPrelude(
+    parameterPlan,
+    bodyContext,
+    planExpression,
+  );
+  if (parameterStatements === undefined) {
+    return undefined;
+  }
   const plannedBody = planBlockLike(bodyNode, bodyContext);
-  if (paramsFailed || plannedBody === undefined) {
+  if (plannedBody === undefined) {
     return undefined;
   }
   const body: RustBlock = {
-    statements: [...locationParameterStatements, ...plannedBody.statements],
+    statements: plannedBody.statements,
   };
   if (generatorFact !== undefined) {
     if (!isRustUnitCarrier(generatorFact.returnType) && !rustBlockTerminates(body)) {
@@ -246,7 +193,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       params,
       ...(returnType === undefined ? {} : { returnType }),
       body: {
-        statements: [{
+        statements: [...parameterStatements, {
           kind: "tail",
           expr: {
             kind: "call",
@@ -288,7 +235,11 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       : { typeParams: finalizedTypeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyFallibleShape(applyRustTailShape(body, returnType !== undefined), fallible, returnType !== undefined),
+    body: applyFallibleShape(
+      applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
+      fallible,
+      returnType !== undefined,
+    ),
   };
   return publishRustSourceCallableContract(node, item, context)
     ? item

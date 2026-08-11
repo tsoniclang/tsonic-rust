@@ -579,6 +579,41 @@ export interface RustSourceBindingFact {
 export const rustSourceBindingFactKey: RustPlanKey<RustSourceBindingFact> =
   defineRustPlanKey("sourceBinding", closedMetadataEquals);
 
+export type RustBindingProjection =
+  | { readonly kind: "project-field"; readonly storageIndex: number }
+  | { readonly kind: "tuple-element"; readonly index: number }
+  | { readonly kind: "fixed-array-element"; readonly index: number }
+  | { readonly kind: "vec-element"; readonly index: number; readonly checked: boolean }
+  | { readonly kind: "js-array-element"; readonly index: number }
+  | { readonly kind: "tuple-rest"; readonly start: number }
+  | { readonly kind: "fixed-array-rest"; readonly start: number }
+  | { readonly kind: "vec-rest"; readonly start: number }
+  | { readonly kind: "js-array-rest"; readonly start: number };
+
+export type RustBindingNormalization =
+  | "identity"
+  | "expect-some"
+  | "flatten-option"
+  | "default-on-none"
+  | "flatten-expect-some"
+  | "flatten-default-on-none";
+
+export interface RustBindingProjectionFact {
+  readonly sourceCarrier: TargetTypeRef;
+  readonly projectedCarrier: TargetTypeRef;
+  readonly bindingCarrier: TargetTypeRef;
+  readonly projection: RustBindingProjection;
+  readonly normalization: RustBindingNormalization;
+}
+
+export const rustBindingProjectionFactKey: RustPlanKey<RustBindingProjectionFact> =
+  defineRustPlanKey("bindingProjection", (left, right) =>
+    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
+    rustTargetTypeRefEquals(left.projectedCarrier, right.projectedCarrier) &&
+    rustTargetTypeRefEquals(left.bindingCarrier, right.bindingCarrier) &&
+    closedMetadataEquals(left.projection, right.projection) &&
+    left.normalization === right.normalization);
+
 // Formal source-use facts: mutation is recorded per declaration subject at
 // semantics finalization; the backend never scans for writes.
 export const rustMutatedBindingFactKey: RustPlanKey<{ readonly mutated: true }> =

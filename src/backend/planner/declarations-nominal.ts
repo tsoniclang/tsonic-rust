@@ -13,7 +13,6 @@ import {
 import type {
   RustType,
   RustExpr,
-  RustFunctionParam,
   RustImplFunction,
   RustItem,
   RustStmt,
@@ -22,10 +21,10 @@ import type {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustSourceName, rustPublicName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
 import { applyFallibleShape, applyRustTailShape, rustBlockTerminates } from "./functions.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
@@ -36,6 +35,11 @@ import {
   rustProjectObjectStateField,
   rustProjectObjectType,
 } from "./project-objects.js";
+import {
+  planRustCallableParameterPrelude,
+  planRustCallableParameters,
+  type RustCallableParameterPlan,
+} from "./callable-parameters.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -191,38 +195,6 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   return [structItem, { kind: "impl", name: className, functions: implFunctions }];
 }
 
-function planParams(member: Node, context: RustPlanContext): readonly RustFunctionParam[] | undefined {
-  const { ast } = context.input;
-  const params: RustFunctionParam[] = [];
-  for (const parameter of ast.parameters(member)) {
-    if (parameter === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, member),
-        "rust.backend.parameter",
-        "Class callable contains an undefined parameter slot.",
-      ));
-      return undefined;
-    }
-    const parameterName = rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
-    const parameterCarrier = context.input.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier;
-    const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
-    if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, parameter),
-        "rust.backend.parameter",
-        `Parameter '${parameterName}' has no supported Rust carrier fact.`,
-      ));
-      return undefined;
-    }
-    params.push({
-      name: parameterName,
-      type: parameterType,
-      mutable: context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
-    });
-  }
-  return params;
-}
-
 function planConstructor(
   classDeclaration: Node,
   member: Node | undefined,
@@ -231,10 +203,6 @@ function planConstructor(
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const { ast } = context.input;
-  const params = member === undefined ? [] : planParams(member, context);
-  if (params === undefined) {
-    return undefined;
-  }
   const body = member === undefined ? undefined : ast.body(member);
   if (member !== undefined && body === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -246,17 +214,32 @@ function planConstructor(
   }
   const syntheticNames = createRustSyntheticNameState(
     ast,
-    body ?? classDeclaration,
-    params.map((parameter) => parameter.name),
+    member ?? classDeclaration,
+    [],
   );
+  const parameterPlan = member === undefined
+    ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
+    : planRustCallableParameters(member, context, syntheticNames, { requireStatic: false });
+  if (parameterPlan === undefined) {
+    return undefined;
+  }
+  const params = parameterPlan.params;
   const constructorContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "named", path: className },
   };
+  const parameterStatements = planRustCallableParameterPrelude(
+    parameterPlan,
+    constructorContext,
+    planExpression,
+  );
+  if (parameterStatements === undefined) {
+    return undefined;
+  }
   const values = new Map<string, RustExpr>();
-  const statements: RustStmt[] = [];
+  const statements: RustStmt[] = [...parameterStatements];
   const evaluateField = (field: PlannedProjectObjectField, expression: Node): boolean => {
     if (sourceSubtreeContainsThis(expression, ast)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -388,12 +371,25 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     ));
     return undefined;
   }
-  const params = planParams(member, context);
-  if (params === undefined) {
+  const bodyNode = ast.body(member);
+  if (bodyNode === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.method-body",
+      "Method declaration has no concrete source body.",
+    ));
     return undefined;
   }
-  const returnTypeNode = Node_Type(ast, member);
   const generatorFact = context.input.facts.getFact(member, rustGeneratorFactKey);
+  const syntheticNames = createRustSyntheticNameState(ast, member, []);
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
+    requireStatic: generatorFact !== undefined,
+  });
+  if (parameterPlan === undefined) {
+    return undefined;
+  }
+  const params = parameterPlan.params;
+  const returnTypeNode = Node_Type(ast, member);
   const asyncFact = context.input.facts.getFact(member, rustAsyncFunctionFactKey);
   const sourceAsync = ast.hasModifierKind(member, "async");
   if (sourceAsync && generatorFact === undefined && asyncFact === undefined) {
@@ -424,15 +420,6 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     ));
     return undefined;
   }
-  const bodyNode = ast.body(member);
-  if (bodyNode === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, member),
-      "rust.backend.method-body",
-      "Method declaration has no concrete source body.",
-    ));
-    return undefined;
-  }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const isStatic = ast.hasModifierKind(member, "static");
   if (generatorFact !== undefined && fallible) {
@@ -446,7 +433,6 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
   if (fallible) {
     context.usedAliases?.add("rt");
   }
-  const syntheticNames = createRustSyntheticNameState(ast, bodyNode, params.map((param) => param.name));
   const generatorControllerName = generatorFact === undefined
     ? undefined
     : allocateRustSyntheticName(syntheticNames, "generator");
@@ -467,6 +453,14 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
         }),
     ...(fallible ? { fallibleContext: true } : {}),
   };
+  const parameterStatements = planRustCallableParameterPrelude(
+    parameterPlan,
+    bodyContext,
+    planExpression,
+  );
+  if (parameterStatements === undefined) {
+    return undefined;
+  }
   const body = planBlockLike(bodyNode, bodyContext);
   if (body === undefined) {
     return undefined;
@@ -517,7 +511,7 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
       params,
       returnType: generatorReturnType,
       body: {
-        statements: [{
+        statements: [...parameterStatements, {
           kind: "tail",
           expr: {
             kind: "call",
@@ -545,7 +539,11 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     ...(isStatic ? {} : { selfParam: "ref" as const }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyFallibleShape(applyRustTailShape(body, returnType !== undefined), fallible, returnType !== undefined),
+    body: applyFallibleShape(
+      applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
+      fallible,
+      returnType !== undefined,
+    ),
   };
 }
 

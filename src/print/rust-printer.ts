@@ -1156,7 +1156,20 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       if (!flat.includes("\n") && renderedFits(flat, column) && !verticalLayout) {
         return flat;
       }
-      if (chain !== undefined && (verticalLayout || rustMethodChainBreaksReceiverWhenExpanded(chain))) {
+      if (chain !== undefined && verticalLayout) {
+        return printFittedMethodChain(
+          chain,
+          depth,
+          column,
+          column > indentText(depth + 1).length,
+        );
+      }
+      if (expression.args.some((argument) =>
+        argument.kind === "closure" || argument.kind === "closure-block")) {
+        const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
+        return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
+      }
+      if (chain !== undefined && rustMethodChainBreaksReceiverWhenExpanded(chain)) {
         return printFittedMethodChain(chain, depth, column);
       }
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
@@ -1399,7 +1412,6 @@ function rustMethodChain(expression: RustExpr): RustMethodChain | undefined {
 function rustMethodChainRequiresVerticalLayout(expression: RustExpr): boolean {
   const chain = rustMethodChain(expression);
   return chain !== undefined &&
-    chain.base.kind === "path" &&
     printRustExpr(expression).length > rustMethodChainWidth &&
     chain.steps.length > 1;
 }

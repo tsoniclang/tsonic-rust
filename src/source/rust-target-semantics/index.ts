@@ -63,11 +63,14 @@ import {
   KindIdentifier,
   KindIfStatement,
   KindArrayLiteralExpression,
+  KindArrayBindingPattern,
   KindBigIntLiteral,
+  KindBindingElement,
   KindNewExpression,
   KindNoSubstitutionTemplateLiteral,
   KindNonNullExpression,
   KindNumericLiteral,
+  KindObjectBindingPattern,
   KindOmittedExpression,
   KindParameter,
   KindParenthesizedExpression,
@@ -88,6 +91,7 @@ import {
   KindWhileStatement,
   Node_Expression,
   Node_Initializer,
+  Node_Name,
   Node_Type,
   asSourceNode,
 } from "../../common/source-ast.js";
@@ -189,6 +193,7 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { selectRustResourceManagement } from "./resource-management.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
 import { rustProjectObjectLayout } from "./project-object-layout.js";
+import { recordRustBindingPatternFacts } from "./binding-patterns.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -758,6 +763,18 @@ function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourc
     const effective = annotated ?? initializerCarrier;
     if (effective !== undefined) {
       setCarrierFact(walk, declaration, effective);
+      const name = Node_Name(walk.context.ast, declaration);
+      const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
+      if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
+        !recordBindingPatternFacts(walk, name, effective)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_BINDING_PATTERN_NOT_CLOSED",
+          "Binding pattern has no total Rust projection from its exact finalized source carrier.",
+          name,
+          ["target.capability=rust.binding-pattern"],
+        );
+      }
       const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
       if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
         const initializerKind = initializer === undefined
@@ -2010,7 +2027,8 @@ function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFi
         }, [{ message: "rust project-source binding" }]);
       }
     }
-    if (declarationKind === KindParameter || declarationKind === KindVariableDeclaration) {
+    if (declarationKind === KindParameter || declarationKind === KindVariableDeclaration ||
+      declarationKind === KindBindingElement) {
       const facts = walk.context.facts;
       const parameterAbi = declarationKind === KindParameter
         ? facts.get(declaration, rustSourceParameterAbiFactKey) ??
@@ -2778,6 +2796,18 @@ function recordForOfFacts(
       }
       for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
         setCarrierFact(walk, declaration, selected.elementCarrier);
+        const name = Node_Name(walk.context.ast, declaration);
+        const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
+        if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
+          !recordBindingPatternFacts(walk, name, selected.elementCarrier)) {
+          appendRustDiagnostic(
+            walk,
+            "RUST_BINDING_PATTERN_NOT_CLOSED",
+            "Iteration binding pattern has no total Rust projection from its exact finalized element carrier.",
+            name,
+            ["target.capability=rust.binding-pattern.iteration"],
+          );
+        }
       }
     }
     const body = ForInOrOfStatement_Statement(walk.context.ast, statement);
@@ -3073,6 +3103,44 @@ function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node): void {
   }
   setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
   setParameterAbiFact(walk, parameter, parameterAbi.parameterCarrier, parameterAbi.mode);
+  const name = Node_Name(walk.context.ast, parameter);
+  const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
+  if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
+    !recordBindingPatternFacts(walk, name, parameterAbi.valueCarrier)) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_BINDING_PATTERN_NOT_CLOSED",
+      "Parameter binding pattern has no total Rust projection from its exact finalized source carrier.",
+      name,
+      ["target.capability=rust.binding-pattern.parameter"],
+    );
+  }
+}
+
+function recordBindingPatternFacts(
+  walk: RustFactWalk,
+  pattern: Node,
+  sourceCarrier: TargetTypeRef,
+): boolean {
+  return recordRustBindingPatternFacts(pattern, sourceCarrier, {
+    ast: walk.context.ast,
+    facts: walk.context.facts,
+    sourceTypes: walk.sourceTypes,
+    resolveCarrier: (subject) => resolveRustTargetTypeRef(
+      subject,
+      rustResolutionContext(walk, subject),
+      walk.operationOptions,
+    ),
+    resolveExpressionCarrier: (expression, expected) => resolveExpressionCarrier(
+      walk,
+      expression,
+      walk.context.semanticsFor(expression).sourceFile,
+      expected,
+    ),
+    setCarrier: (subject, carrier) => {
+      setCarrierFact(walk, subject, carrier);
+    },
+  });
 }
 
 function setParameterAbiFact(
@@ -3703,6 +3771,12 @@ function resolveFunctionExpressionCarrier(
       return undefined;
     }
     setCarrierFact(walk, parameter, argCarrier);
+    const name = Node_Name(ast, parameter);
+    const nameKind = name === undefined ? "" : ast.kindName(name);
+    if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
+      !recordBindingPatternFacts(walk, name, argCarrier)) {
+      return undefined;
+    }
     byRefCopyParams.push(false);
   }
   const body = ast.body(expression);
