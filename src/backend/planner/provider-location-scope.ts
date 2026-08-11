@@ -3,6 +3,7 @@ import type {
   RustFinalizedSourceInput,
 } from "../../source/rust-facts/finalized-operation-abi.js";
 import {
+  isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
   isRustFinalizedSliceInput,
 } from "../../source/rust-facts/finalized-operation-abi.js";
@@ -275,7 +276,7 @@ function providerSourceInputs(
       ? [fact.abi.targetReceiver.input]
       : []),
     ...fact.abi.targetArguments.flatMap((input) =>
-      isRustFinalizedSliceInput(input) ? input.elements :
+      isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input) ? input.elements :
         isRustFinalizedConstantInput(input) ? [] : [input]),
   ];
 }

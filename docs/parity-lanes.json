@@ -7,6 +7,54 @@
   },
   {
     "area": "Array",
+    "lane": "Array.prototype.pop",
+    "classification": "implemented",
+    "rowMember": "pop"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.shift",
+    "classification": "implemented",
+    "rowMember": "shift"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.unshift",
+    "classification": "implemented",
+    "rowMember": "unshift"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.splice",
+    "classification": "implemented",
+    "rowMember": "splice"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.reverse",
+    "classification": "implemented",
+    "rowMember": "reverse"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.sort",
+    "classification": "implemented",
+    "rowMember": "sort"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.fill",
+    "classification": "implemented",
+    "rowMember": "fill"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.copyWithin",
+    "classification": "implemented",
+    "rowMember": "copyWithin"
+  },
+  {
+    "area": "Array",
     "lane": "Array.prototype.includes",
     "classification": "implemented",
     "rowMember": "includes"
@@ -16,6 +64,12 @@
     "lane": "Array.prototype.indexOf",
     "classification": "implemented",
     "rowMember": "indexOf"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.lastIndexOf",
+    "classification": "implemented",
+    "rowMember": "lastIndexOf"
   },
   {
     "area": "Array",
@@ -251,6 +305,30 @@
     "rowMember": "pow"
   },
   {
+    "area": "Math",
+    "lane": "Math.round",
+    "classification": "implemented",
+    "rowMember": "round"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.min",
+    "classification": "implemented",
+    "rowMember": "min"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.max",
+    "classification": "implemented",
+    "rowMember": "max"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.random",
+    "classification": "implemented",
+    "rowMember": "random"
+  },
+  {
     "area": "JSON",
     "lane": "JSON.parse",
     "classification": "implemented",
@@ -439,11 +517,6 @@
   {
     "area": "RegExp",
     "lane": "dynamic patterns and out-of-subset constructs",
-    "classification": "hard-rejected"
-  },
-  {
-    "area": "Math",
-    "lane": "Math.round / Math.min / Math.max / Math.random",
     "classification": "hard-rejected"
   },
   {

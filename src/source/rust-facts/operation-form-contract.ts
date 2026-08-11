@@ -87,6 +87,21 @@ export function rustProviderOperationFormContractViolation(
         runtimeSourceIndexes.length >= form.leadingArguments.length
         ? undefined
         : "value-slice call must contain one path, closed leading arguments, a closed element carrier, and only runtime source arguments";
+    case "receiver-value-array":
+      return hasExactKeys(
+        form,
+        ["form", "name", "receiverMode", "leadingArguments", "elementCarrier"],
+        ["form", "name", "receiverMode", "leadingArguments", "elementCarrier"],
+      ) && typeof form.name === "string" && rustIdentifierPattern.test(form.name) &&
+        modes.has(form.receiverMode) && isDenseDataArray(form.leadingArguments) &&
+        form.leadingArguments.every((argument) =>
+          hasExactKeys(argument, ["carrier", "mode"], ["carrier", "mode"]) &&
+          isRustTargetTypeRef(argument.carrier) && modes.has(argument.mode)) &&
+        isRustTargetTypeRef(form.elementCarrier) &&
+        runtimeSourceIndexes.length === sourceArgumentCount &&
+        runtimeSourceIndexes.length >= form.leadingArguments.length
+        ? undefined
+        : "receiver value-array call must contain one method, receiver mode, closed leading arguments, a closed element carrier, and only runtime source arguments";
     case "method":
     case "arg-method":
       return hasExactKeys(form, ["form", "name"], ["form", "name"]) && typeof form.name === "string" && rustIdentifierPattern.test(form.name)

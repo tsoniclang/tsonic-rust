@@ -9,6 +9,7 @@ import {
 } from "./helpers/rust-session.mjs";
 import { selectJsSurfaceOperation } from "../dist/source/rust-target-semantics/js-surface-operations.js";
 import {
+  rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustVecTargetType,
@@ -191,6 +192,60 @@ test("JS arrays lower to one identity-preserving carrier with fact-backed iterat
   assert.match(text, /let xs: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
   assert.match(text, /for value in xs\.iter_values\(\) \{/u);
   assert.match(text, /total \+ tsonic_rust_runtime::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
+});
+
+test("variadic and mutating array calls lower through exact identity-backed runtime rows", () => {
+  const int32Carrier = rustSourcePrimitiveTargetType("int32");
+  const receiverCarrier = rustJsArrayTargetType(int32Carrier);
+  const push = selectJsSurfaceOperation({
+    ownerName: "Array",
+    memberName: "push",
+    operationKind: "call",
+    receiverCarrier,
+    argumentCarriers: [int32Carrier, int32Carrier],
+  });
+  assert.deepEqual(push?.fact.target, {
+    form: "receiver-value-array",
+    name: "push_many",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: int32Carrier,
+  });
+
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function edit(values: int32[]): int32 {
+  const length = values.push(2, 3);
+  values.unshift(0, 1);
+  const removed = values.splice(1, 2, 7, 8);
+  values.fill(4);
+  values.fill(5, 1);
+  values.fill(9, 1, 2);
+  values.copyWithin(0, 2);
+  values.reverse();
+  values.sort();
+  return length + (values.pop() ?? 0) + (values.shift() ?? 0) + removed.length + values.lastIndexOf(9, -1);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /values\.push_many\([\s\S]*f64_to_i32\(2\.0\)\?[\s\S]*f64_to_i32\(3\.0\)\?[\s\S]*\)/u);
+  assert.match(text, /values\.unshift_many\([\s\S]*f64_to_i32\(0\.0\)\?[\s\S]*f64_to_i32\(1\.0\)\?[\s\S]*\)/u);
+  assert.match(text, /values\.splice_many\([\s\S]*1\.0,[\s\S]*2\.0,[\s\S]*f64_to_i32\(7\.0\)\?[\s\S]*f64_to_i32\(8\.0\)\?[\s\S]*\)/u);
+  assert.match(text, /values\.fill_all\(4\)/u);
+  assert.match(text, /values\.fill_from\(5, 1\.0\)/u);
+  assert.match(text, /values\.fill_to\(9, 1\.0, 2\.0\)/u);
+  assert.match(text, /values\.copy_within_from\(0\.0, 2\.0\)/u);
+  assert.match(text, /values\.reverse\(\)/u);
+  assert.match(text, /values\.sort_by_js_string\(\)/u);
+  assert.match(text, /values\.last_index_of\(&9, -1\.0\)/u);
 });
 
 test("sparse arrays lower to JsArray with holes, length writes, and at()", () => {

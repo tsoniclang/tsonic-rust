@@ -1299,7 +1299,7 @@ function selectedCallSourceCarriers(
       ? { kind: "resolved", carriers: actual as TargetTypeRef[] }
       : { kind: "incompatible", sourceIndex: 0 };
   }
-  if (fact.target.form === "call-value-slice") {
+  if (fact.target.form === "call-value-slice" || fact.target.form === "receiver-value-array") {
     const form = fact.target;
     if (actual.length < form.leadingArguments.length) {
       return { kind: "incompatible", sourceIndex: actual.length };
@@ -1337,6 +1337,7 @@ function providerFormRequiresSourceReceiver(form: RustProviderOperationForm): bo
     form.form === "index" ||
     form.form === "free-call" ||
     form.form === "receiver-method" ||
+    form.form === "receiver-value-array" ||
     form.form === "arg-receiver-method";
 }
 

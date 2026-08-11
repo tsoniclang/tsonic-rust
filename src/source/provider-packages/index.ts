@@ -328,10 +328,12 @@ function materializeProviderOperationForm(
       ...(argConversions === undefined ? {} : { argConversions }),
     };
   }
-  if (form.form === "call-value-slice") {
+  if (form.form === "call-value-slice" || form.form === "receiver-value-array") {
     return {
       ...form,
-      path: expandProviderPath(form.path, aliases),
+      ...(form.form === "call-value-slice"
+        ? { path: expandProviderPath(form.path, aliases) }
+        : {}),
       leadingArguments: form.leadingArguments.map((argument) => ({
         ...argument,
         carrier: materializeProviderCarrier(argument.carrier, carrierPaths),

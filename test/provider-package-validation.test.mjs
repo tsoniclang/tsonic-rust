@@ -458,6 +458,42 @@ test("generic value-slice forms require closed leading and element carriers", ()
   );
 });
 
+test("owned receiver value-array forms require exact method, receiver, and carrier metadata", () => {
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: int32Carrier,
+  });
+  const base = {
+    form: "receiver-value-array",
+    name: "append_many",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: int32Carrier,
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({ operations: [operation(base)] })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, receiverMode: "guess" })],
+    })),
+    /unsupported mode 'guess'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, name: "append-many" })],
+    })),
+    /not a Rust identifier/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, fallback: true })],
+    })),
+    /unsupported field 'fallback'/u,
+  );
+});
+
 test("provider crate registry replacement is explicit and schema-closed", () => {
   const accepted = createRustProviderPackage(definition({
     crates: [{

@@ -98,6 +98,18 @@ export type RustProviderOperationForm =
       }[];
       readonly elementCarrier: TargetTypeRef;
     }
+  | {
+      // Receiver method taking fixed leading arguments followed by one
+      // owned fixed-size array assembled from the remaining source arguments.
+      readonly form: "receiver-value-array";
+      readonly name: string;
+      readonly receiverMode: RustArgumentMode;
+      readonly leadingArguments: readonly {
+        readonly carrier: TargetTypeRef;
+        readonly mode: RustArgumentMode;
+      }[];
+      readonly elementCarrier: TargetTypeRef;
+    }
   | { readonly form: "path"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
   | {

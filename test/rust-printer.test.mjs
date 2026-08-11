@@ -646,6 +646,46 @@ test("single long borrowed slice arguments stay attached to their call", () => {
   assert.doesNotMatch(text, /js_abi::console_log\(\n/u);
 });
 
+test("single long owned array arguments stay attached to their call", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "values" },
+            method: "push_many",
+            args: [{
+              kind: "slice-literal",
+              elements: [
+                {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::conversions::f64_to_i32",
+                  args: [{ kind: "float-literal", text: "2.0" }],
+                },
+                {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::conversions::f64_to_i32",
+                  args: [{ kind: "float-literal", text: "3.0" }],
+                },
+              ],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /values\.push_many\(\[\n        tsonic_rust_runtime::conversions::f64_to_i32\(2\.0\),\n        tsonic_rust_runtime::conversions::f64_to_i32\(3\.0\),\n    \]\);/u);
+  assert.doesNotMatch(text, /values\.push_many\(\n/u);
+});
+
 test("logical assignment keeps a fitting first operand beside the operator", () => {
   const first = {
     kind: "call",

@@ -129,6 +129,7 @@ import {
 } from "../rust-facts/target-operation.js";
 import { rustValueConversionIsFallible } from "../rust-facts/value-conversions.js";
 import {
+  isRustFinalizedArrayInput,
   isRustFinalizedSliceInput,
   isRustFinalizedSourceInput,
 } from "../rust-facts/finalized-operation-abi.js";
@@ -3229,7 +3230,8 @@ function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperationAbi): b
     abi.targetArguments.some((input) =>
       isRustFinalizedSourceInput(input)
         ? input.conversion.fallible
-        : isRustFinalizedSliceInput(input) && input.elements.some((element) => element.conversion.fallible))) {
+        : (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) &&
+          input.elements.some((element) => element.conversion.fallible))) {
     return true;
   }
   return abi.result.kind === "sync" && abi.result.conversion.fallible;

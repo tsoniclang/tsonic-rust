@@ -66,6 +66,7 @@ import type {
   RustFinalizedValueConversion,
 } from "../../source/rust-facts/finalized-operation-abi.js";
 import {
+  isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
   isRustFinalizedSliceInput,
   validateRustFinalizedOperationAbi,
@@ -1345,6 +1346,7 @@ function planProviderOperationExpression(
     }
     case "method":
     case "arg-receiver-method":
+    case "receiver-value-array":
       return scoped(receiver === undefined
         ? undefined
         : { kind: "method-call", receiver, method: form.name, args });
@@ -1455,7 +1457,7 @@ export function planFinalizedTargetInput(
   if (isRustFinalizedConstantInput(input)) {
     return providerConstantExpression(input.source.value);
   }
-  if (isRustFinalizedSliceInput(input)) {
+  if (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) {
     const elements: RustExpr[] = [];
     for (const element of input.elements) {
       const planned = planFinalizedSourceInput(
@@ -1481,7 +1483,9 @@ export function planFinalizedTargetInput(
         : planned;
       elements.push(asTargetElement);
     }
-    return { kind: "reference", expr: { kind: "slice-literal", elements } };
+    return isRustFinalizedSliceInput(input)
+      ? { kind: "reference", expr: { kind: "slice-literal", elements } }
+      : { kind: "slice-literal", elements };
   }
   return planFinalizedSourceInput(
     context,

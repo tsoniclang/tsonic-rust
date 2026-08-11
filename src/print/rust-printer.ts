@@ -1335,6 +1335,18 @@ function printFittedCall(
       }
     }
   }
+  if (arguments_.length === 1 &&
+    (arguments_[0]?.kind === "slice-literal" || arguments_[0]?.kind === "vec-literal")) {
+    const prefix = `${callable}(`;
+    return appendToLastLine(
+      `${prefix}${printRustExprFitted(
+        arguments_[0],
+        depth,
+        column + prefix.length,
+      )}`,
+      ")",
+    );
+  }
   if (arguments_.length === 1 && arguments_[0]?.kind === "block") {
     const prefix = `${callable}(`;
     return appendToLastLine(

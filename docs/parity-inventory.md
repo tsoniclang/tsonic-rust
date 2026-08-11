@@ -12,10 +12,12 @@ the blocked section with the contract each requires.
 
 ## Implemented
 
-- Array: literals, index/at, length, push, includes, indexOf, map,
-  filter, reduce, some, every, find, findIndex, findLast, findLastIndex;
-  slice over closed Clone carriers and join over exact stringifiable carriers;
-  one identity-preserving `JsArray<T>` carrier for dense and sparse arrays.
+- Array: literals, index/at, length, variadic push/unshift, pop, shift,
+  splice, includes, indexOf, lastIndexOf, map, filter, reduce, some,
+  every, find, findIndex, findLast, findLastIndex, reverse, default sort,
+  fill, and copyWithin; slice over closed Clone carriers and join over
+  exact stringifiable carriers; one identity-preserving `JsArray<T>`
+  carrier for dense and sparse arrays.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
   endsWith, indexOf, slice, at, charAt, codePointAt, repeat, padStart,
   padEnd, trim, trimStart, trimEnd, concat via +, split, replace, search,
@@ -24,7 +26,9 @@ the blocked section with the contract each requires.
 - RegExp: constant literals and new RegExp with literal arguments over the
   oracle-proven subset; test, replace, split, search, global match with
   null coalescing; regexp property reads.
-- Math: floor, ceil, trunc, abs, sqrt, pow (exact f64 semantics).
+- Math: floor, ceil, trunc, abs, sqrt, pow, round, min, max, and random;
+  operations whose Rust primitives differ from JavaScript use exact runtime
+  rows.
 - Number.isNaN, Number.isFinite, Number.isInteger and Number.isSafeInteger
   over exact numeric carriers; non-number unknown values fail closed without
   coercion.
@@ -57,7 +61,6 @@ the blocked section with the contract each requires.
   quantifiers, backreferences, lookaround, named groups, word-boundary
   assertions, unicode property escapes, flags d s u v y).
 - JSON replacer functions and custom toJSON dispatch.
-- Math lanes whose Rust semantics differ from JS (round, min, max, random).
 - Process termination side effects beyond exit(code).
 
 ## Blocked by named external contracts

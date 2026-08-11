@@ -149,6 +149,31 @@ export function main(): void {
   append(xsAlias);
   check(xs.length === 5);
 
+  const mutating: int32[] = [2];
+  check(mutating.push(3, 4) === 3);
+  check(mutating.join(",") === "2,3,4");
+  check(mutating.unshift(0, 1) === 5);
+  check(mutating.join(",") === "0,1,2,3,4");
+  const removed = mutating.splice(1, 2, 8, 9);
+  check(removed.join(",") === "1,2");
+  check(mutating.join(",") === "0,8,9,3,4");
+  mutating.fill(6);
+  check(mutating.join(",") === "6,6,6,6,6");
+  mutating.fill(5, 3);
+  check(mutating.join(",") === "6,6,6,5,5");
+  mutating.fill(7, 1, 3);
+  check(mutating.join(",") === "6,7,7,5,5");
+  mutating.copyWithin(3, 0, 2);
+  check(mutating.join(",") === "6,7,7,6,7");
+  check(mutating.reverse() === mutating);
+  check(mutating.join(",") === "7,6,7,7,6");
+  check(mutating.sort() === mutating);
+  check(mutating.join(",") === "6,6,7,7,7");
+  check((mutating.pop() ?? -1) === 7);
+  check((mutating.shift() ?? -1) === 6);
+  check(mutating.lastIndexOf(7) === 2);
+  check(mutating.lastIndexOf(7, -2) === 1);
+
   const values = [1, , 3];
   values.length = 5;
   values[3] = 4;

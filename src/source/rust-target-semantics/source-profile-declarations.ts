@@ -223,11 +223,20 @@ interface Array<T> extends Iterable<T> {
   length: number;
   [index: number]: T;
   push(...items: T[]): number;
+  pop(): T | undefined;
+  shift(): T | undefined;
+  unshift(...items: T[]): number;
   slice(start?: number, end?: number): T[];
+  splice(start: number, deleteCount?: number, ...items: T[]): T[];
   join(separator?: string): string;
   at(index: number): T | undefined;
   includes(searchElement: T, fromIndex?: number): boolean;
   indexOf(searchElement: T, fromIndex?: number): number;
+  lastIndexOf(searchElement: T, fromIndex?: number): number;
+  reverse(): T[];
+  sort(compareFn?: (a: T, b: T) => number): T[];
+  fill(value: T, start?: number, end?: number): T[];
+  copyWithin(target: number, start: number, end?: number): T[];
   filter(callbackfn: (value: T, index: number, array: T[]) => unknown): T[];
   find(callbackfn: (value: T, index: number, array: T[]) => unknown): T | undefined;
   findIndex(callbackfn: (value: T, index: number, array: T[]) => unknown): number;
@@ -249,6 +258,7 @@ interface ReadonlyArray<T> extends Iterable<T> {
   join(separator?: string): string;
   includes(searchElement: T, fromIndex?: number): boolean;
   indexOf(searchElement: T, fromIndex?: number): number;
+  lastIndexOf(searchElement: T, fromIndex?: number): number;
   filter(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): T[];
   find(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): T | undefined;
   findIndex(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): number;
