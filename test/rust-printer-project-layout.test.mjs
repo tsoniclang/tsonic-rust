@@ -88,6 +88,49 @@ test("logical block operands keep the following operator on the closing brace", 
   assert.doesNotMatch(text, /\n            let value/u);
 });
 
+test("detached logical block operands use the continuation indentation", () => {
+  const selectedValue = (receiver) => ({
+    kind: "block",
+    bindings: [{ name: "selected", value: clone({ kind: "path", path: receiver }) }],
+    value: {
+      kind: "method-call",
+      receiver: clone(field({ kind: "path", path: "selected" }, "dispatch")),
+      method: "read_selected_value",
+      args: [],
+    },
+  });
+  const compared = (receiver, value) => ({
+    kind: "binary",
+    operator: "!=",
+    left: selectedValue(receiver),
+    right: { kind: "string-literal", value },
+  });
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: {
+            kind: "binary",
+            operator: "||",
+            left: compared("first", "one"),
+            right: compared("second", "two"),
+          },
+          then: { statements: [] },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /\n        \|\| \{\n            let selected/u);
+  assert.match(text, /\n        \} != String::from\("two"\)\n    \{/u);
+});
+
 test("format macro arguments keep borrowed blocks attached to their call", () => {
   const text = projectFunction({
     kind: "string-concat",
@@ -208,8 +251,52 @@ test("multiline awaited match-arm expressions use a canonical arm block", () => 
   });
 
   assert.match(text, /Err\(_\) => \{\n\s+\(async \{/u);
-  assert.match(text, /\n\s+\.await\n\s+\},/u);
+  assert.match(text, /\n\s+\.await\n\s+\}\n/u);
+  assert.doesNotMatch(text, /\n\s+\.await\n\s+\},/u);
   assert.doesNotMatch(text, /Err\(_\) => \(async \{/u);
+});
+
+test("multiline synchronous match-arm expressions remain direct", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      fallible: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "try-scope",
+          bodyName: "try_body",
+          flowName: "try_flow",
+          returnType: { kind: "unit" },
+          fallible: true,
+          asynchronous: false,
+          body: {
+            statements: [{ kind: "expr", expr: { kind: "call", path: "may_fail", args: [] } }],
+          },
+          bodyFallible: true,
+          bodyTerminates: false,
+          catchClause: {
+            binding: "_",
+            body: {
+              statements: [{ kind: "expr", expr: { kind: "call", path: "record_failure", args: [] } }],
+            },
+            fallible: true,
+            terminates: false,
+          },
+          propagate: false,
+          dispatchReturn: false,
+          dispatchTargets: [],
+          terminates: false,
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /Err\(_\) => rt::completion_region\(\|\| \{/u);
+  assert.doesNotMatch(text, /Err\(_\) => \{\n\s+rt::completion_region/u);
 });
 
 test("method chains in logical continuations use the continuation body indent", () => {

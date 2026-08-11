@@ -442,19 +442,25 @@ function printRustTryScope(
       catchClause.fallible,
       catchClause.terminates,
       statement.asynchronous,
-      depth + 2,
+      depth + (statement.asynchronous ? 2 : 1),
     );
     const flowType = catchClause.fallible
       ? `rt::TsonicResult<${completionType}>`
       : completionType;
     const catchArm = catchExpression.length === 1
       ? [`${nested}Err(${catchClause.binding}) => ${catchExpression[0]},`]
-      : [
+      : statement.asynchronous
+        ? [
           `${nested}Err(${catchClause.binding}) => {`,
           `${indentText(depth + 2)}${catchExpression[0]}`,
           ...catchExpression.slice(1),
-          `${nested}},`,
-        ];
+          `${nested}}`,
+        ]
+        : [
+            `${nested}Err(${catchClause.binding}) => ${catchExpression[0]}`,
+            ...catchExpression.slice(1, -1),
+            `${catchExpression[catchExpression.length - 1]},`,
+          ];
     lines.push(
       `${indent}let ${statement.flowName}: ${flowType} = match ${statement.bodyName} {`,
       `${nested}Ok(completion) => ${catchClause.fallible ? "Ok(completion)" : "completion"},`,
@@ -841,7 +847,10 @@ function printRustConditionalBlock(
       : `${indent}${prefix}${renderedCondition}\n${indent}{\n${body}\n${indent}}`;
   }
   const body = printRustBlockStatements(block, depth + 1);
-  const header = `${indent}${prefix}${renderedCondition}\n${indent}{`;
+  const conditionHeader = `${indent}${prefix}${renderedCondition}`;
+  const header = lastLine(renderedCondition).trim() === "}"
+    ? appendToLastLine(conditionHeader, " {")
+    : `${conditionHeader}\n${indent}{`;
   return body.length === 0
     ? `${header}}`
     : `${header}\n${body}\n${indent}}`;
@@ -1604,7 +1613,8 @@ function printFittedLogicalChain(
   let rendered = printFittedLogicalOperand(first, operator, depth, column);
   const continuationIndent = indentText(depth + 1);
   for (const operand of operands.slice(1)) {
-    const operandDepth = rustExpressionContainsStatementBlock(operand)
+    const attachedToClosingBlock = lastLine(rendered).trim() === "}";
+    const operandDepth = rustExpressionContainsStatementBlock(operand) && attachedToClosingBlock
       ? depth
       : depth + 1;
     const right = printFittedLogicalOperand(
@@ -1614,7 +1624,7 @@ function printFittedLogicalChain(
       continuationIndent.length + operator.length + 1,
     );
     const continuation = `${operator} ${firstLine(right)}`;
-    rendered = lastLine(rendered).trim() === "}"
+    rendered = attachedToClosingBlock
       ? appendToLastLine(rendered, ` ${continuation}`)
       : `${rendered}\n${continuationIndent}${continuation}`;
     const rest = remainingLines(right);
