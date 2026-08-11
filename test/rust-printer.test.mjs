@@ -428,6 +428,119 @@ test("three-field struct literals use rustfmt-compatible vertical layout", () =>
   assert.match(source, /TodoItem \{\n        id,\n        title,\n        completed: false,\n    \}/u);
 });
 
+test("a fitted condition moves only its overflowing brace", () => {
+  const condition = {
+    kind: "binary",
+    operator: "||",
+    left: {
+      kind: "binary",
+      operator: "||",
+      left: {
+        kind: "binary",
+        operator: "!=",
+        left: { kind: "call", path: "js_abi::math_pow", args: [{ kind: "float-literal", text: "2.0" }, { kind: "float-literal", text: "10.0" }] },
+        right: { kind: "float-literal", text: "1024.0" },
+      },
+      right: {
+        kind: "binary",
+        operator: "!=",
+        left: { kind: "call", path: "absolute_value", args: [{ kind: "float-literal", text: "-5.0" }] },
+        right: { kind: "float-literal", text: "5.0" },
+      },
+    },
+    right: {
+      kind: "binary",
+      operator: "!=",
+      left: { kind: "call", path: "truncate_value", args: [{ kind: "float-literal", text: "-2.7" }] },
+      right: { kind: "float-literal", text: "-2.0" },
+    },
+  };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: { statements: [{ kind: "if", condition, then: { statements: [] } }] },
+    }],
+  });
+
+  assert.match(source, /truncate_value\(-2\.7\) != -2\.0\n    \{\}/u);
+});
+
+test("comparisons follow multiline arithmetic operands", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: {
+            kind: "binary",
+            operator: "!=",
+            left: {
+              kind: "binary",
+              operator: "+",
+              left: { kind: "call", path: "first_source_value_with_a_deliberately_long_name", args: [] },
+              right: { kind: "call", path: "second_source_value_with_a_deliberately_long_name", args: [] },
+            },
+            right: { kind: "int-literal", text: "7" },
+          },
+          then: { statements: [] },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /first_source_value_with_a_deliberately_long_name\(\)\n        \+ second_source_value_with_a_deliberately_long_name\(\)\n        != 7/u);
+});
+
+test("long let-bound method chains stay attached to their receiver", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "module_value_with_a_deliberately_long_generated_identity",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "second" },
+              method: "with",
+              args: [{
+                kind: "closure",
+                params: [{ name: "module_binding", byRefCopy: false }],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "module_binding" },
+                  method: "location",
+                  args: [],
+                },
+              }],
+            },
+            method: "clone",
+            args: [],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /let module_value_with_a_deliberately_long_generated_identity = second\n        \.with\(\|module_binding\| module_binding\.location\(\)\)\n        \.clone\(\);/u);
+});
+
 test("one-field struct literals honor rustfmt's compact body limit", () => {
   const source = printRustSourceFile({
     headerComment,

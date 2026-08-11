@@ -734,7 +734,14 @@ function printRustConditionalBlock(
     indent.length + prefix.length,
   );
   if (!renderedCondition.includes("\n")) {
-    return printRustBlock(block, depth, `${prefix}${renderedCondition}`);
+    const header = `${indent}${prefix}${renderedCondition} {`;
+    if (header.length <= rustFormatWidth) {
+      return printRustBlock(block, depth, `${prefix}${renderedCondition}`);
+    }
+    const body = printRustBlockStatements(block, depth + 1);
+    return body.length === 0
+      ? `${indent}${prefix}${renderedCondition}\n${indent}{}`
+      : `${indent}${prefix}${renderedCondition}\n${indent}{\n${body}\n${indent}}`;
   }
   const body = printRustBlockStatements(block, depth + 1);
   const header = `${indent}${prefix}${renderedCondition}\n${indent}{`;
@@ -1206,8 +1213,9 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
         left,
         ` ${expression.operator} ${printBinaryOperand(expression.right, expression.operator, true)}`,
       );
-      if (!(left.includes("\n") && expression.left.kind === "method-call") &&
-        renderedFits(joined, column)) {
+      const multilineLeftRequiresOwnOperator = left.includes("\n") &&
+        (expression.left.kind === "binary" || expression.left.kind === "method-call");
+      if (!multilineLeftRequiresOwnOperator && renderedFits(joined, column)) {
         return joined;
       }
       const continuationIndent = indentText(depth + 1);
@@ -1281,7 +1289,8 @@ function printRustLetInitializer(
 ): string {
   const flat = printRustExpr(initializer);
   if (!flat.includes("\n") && !renderedFits(flat, prefix.length + 1) &&
-    renderedFits(flat, indentText(depth + 1).length + 1)) {
+    renderedFits(flat, indentText(depth + 1).length + 1) &&
+    !rustMethodChainPrefersVerticalLayout(initializer)) {
     return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
   }
   return `${prefix}${printRustExprFitted(initializer, depth, prefix.length + 1)};`;
