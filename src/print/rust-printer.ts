@@ -1340,7 +1340,8 @@ function printFittedCall(
     return flat;
   }
   const trailingClosure = arguments_[arguments_.length - 1];
-  if (!forceExpanded && trailingClosure?.kind === "closure-block") {
+  if (!forceExpanded &&
+    (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block")) {
     const preceding = arguments_.slice(0, -1).map(printRustExpr);
     if (preceding.every((argument) => !argument.includes("\n"))) {
       const prefix = `${callable}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;

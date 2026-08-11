@@ -247,6 +247,7 @@ interface Array<T> extends Iterable<T> {
   sort(compareFn?: (a: T, b: T) => number): T[];
   fill(value: T, start?: number, end?: number): T[];
   copyWithin(target: number, start: number, end?: number): T[];
+  forEach(callbackfn: (value: T, index: number, array: T[]) => void): void;
   filter(callbackfn: (value: T, index: number, array: T[]) => unknown): T[];
   find(callbackfn: (value: T, index: number, array: T[]) => unknown): T | undefined;
   findIndex(callbackfn: (value: T, index: number, array: T[]) => unknown): number;
@@ -255,9 +256,9 @@ interface Array<T> extends Iterable<T> {
   some(callbackfn: (value: T, index: number, array: T[]) => unknown): boolean;
   every(callbackfn: (value: T, index: number, array: T[]) => unknown): boolean;
   map<U>(callbackfn: (value: T, index: number, array: T[]) => U): U[];
-  reduce(callbackfn: (previousValue: T, currentValue: T) => T): T;
-  reduce(callbackfn: (previousValue: T, currentValue: T) => T, initialValue: T): T;
-  reduce<U>(callbackfn: (previousValue: U, currentValue: T) => U, initialValue: U): U;
+  reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T): T;
+  reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue: T): T;
+  reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 }
 
 interface ReadonlyArray<T> extends Iterable<T> {
@@ -269,6 +270,7 @@ interface ReadonlyArray<T> extends Iterable<T> {
   includes(searchElement: T, fromIndex?: number): boolean;
   indexOf(searchElement: T, fromIndex?: number): number;
   lastIndexOf(searchElement: T, fromIndex?: number): number;
+  forEach(callbackfn: (value: T, index: number, array: readonly T[]) => void): void;
   filter(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): T[];
   find(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): T | undefined;
   findIndex(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): number;

@@ -176,3 +176,54 @@ export function main(): void {
   assert.match(source, /set\.for_each\(\|value, key, owner\|/u);
   assert.equal(validateGeneratedProject("js-collections", result.artifacts, { run: true }).status, 0);
 });
+
+test("generated Rust preserves every declared Array callback argument", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_array_callbacks" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const values: int32[] = [2, 4, 6];
+  let visits: int32 = 0;
+  values.forEach(() => { visits += 1; });
+  values.forEach((value) => { if (value > 0) visits += 1; });
+  values.forEach((value, index) => { if (value > 0 && index >= 0) visits += 1; });
+  values.forEach((value, index, array) => { if (value > 0 && index >= 0 && array.includes(value)) visits += 1; });
+
+  const mapped = values.map<int32>((value, index, array) =>
+    index >= 0 && array.includes(value) ? value : 0);
+  const filtered = values.filter((value, index, array) => value > 2 && index > 0 && array.includes(value));
+  const first = values.find((value, index, array) => value === 4 && index === 1 && array.includes(value));
+  const index = values.findIndex((value, current, array) => value === 6 && current === 2 && array.includes(value));
+  const total = values.reduce<int32>((sum, value, current, array) =>
+    current >= 0 && array.includes(value) ? sum + value : sum, 0);
+  const withoutInitial = values.reduce((sum, value, current, array) =>
+    current > 0 && array.includes(value) ? sum + value : sum);
+
+  check(visits === 12);
+  check(mapped.length === 3);
+  check(filtered.length === 2);
+  check((first ?? 0) === 4);
+  check(index === 2);
+  check(total === 12);
+  check(withoutInitial === 12);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /values\.for_each_zero\(\|\|/u);
+  assert.match(source, /values\.for_each\(\|value, index, array\|/u);
+  assert.match(source, /values\.map_with_array\(\|value, index, array\|/u);
+  assert.match(source, /values\.filter_with_array\(\|value, index, array\|/u);
+  assert.match(source, /values\.reduce_with_array\(\s*0,\s*\|sum, value, current, array\|/u);
+  assert.match(source, /values\.reduce_from_first_with_array\(\|sum, value, current, array\|/u);
+  assert.equal(validateGeneratedProject("js-array-callbacks", result.artifacts, { run: true }).status, 0);
+});

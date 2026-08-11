@@ -13,11 +13,12 @@ the blocked section with the contract each requires.
 ## Implemented
 
 - Array: literals, index/at, length, variadic push/unshift, pop, shift,
-  splice, includes, indexOf, lastIndexOf, map, filter, reduce, some,
+  splice, includes, indexOf, lastIndexOf, forEach, map, filter, reduce, some,
   every, find, findIndex, findLast, findLastIndex, reverse, default sort,
   fill, and copyWithin; slice over closed Clone carriers and join over
-  exact stringifiable carriers; one identity-preserving `JsArray<T>`
-  carrier for dense and sparse arrays.
+  exact stringifiable carriers; callbacks receive every declared argument,
+  reduce supports both initial-value and first-present-element forms, and one
+  identity-preserving `JsArray<T>` carrier represents dense and sparse arrays.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
   endsWith, indexOf, slice, at, charAt, codePointAt, repeat, padStart,
   padEnd, trim, trimStart, trimEnd, concat via +, split, replace, search,

@@ -91,6 +91,12 @@
   },
   {
     "area": "Array",
+    "lane": "Array.prototype.forEach",
+    "classification": "implemented",
+    "rowMember": "forEach"
+  },
+  {
+    "area": "Array",
     "lane": "Array.prototype.filter",
     "classification": "implemented",
     "rowMember": "filter"

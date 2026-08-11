@@ -67,9 +67,11 @@ export interface JsOperationSelection {
 type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "global" | "console" | "regexp" | "regexp-match";
 
 type JsCarrierRef =
-  | { readonly ref: "cb-predicate" }
-  | { readonly ref: "cb-map" }
-  | { readonly ref: "cb-reduce" }
+  | { readonly ref: "cb-array-predicate"; readonly arity: 0 | 1 | 2 | 3 }
+  | { readonly ref: "cb-array-map"; readonly arity: 0 | 1 | 2 | 3 }
+  | { readonly ref: "cb-array-reduce"; readonly arity: 0 | 1 | 2 | 3 | 4 }
+  | { readonly ref: "cb-array-reduce-first"; readonly arity: 0 | 1 | 2 | 3 | 4 }
+  | { readonly ref: "cb-array-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "cb-map-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "cb-set-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "int32" }
@@ -150,6 +152,28 @@ const setForEachRows = [
   { arity: 2, variant: "value-key", targetName: "for_each_value_key" },
   { arity: 3, variant: "value-key-set", targetName: "for_each" },
 ] as const;
+const arrayCallbackRows = [
+  { arity: 0, variant: "zero", suffix: "_zero" },
+  { arity: 1, variant: "value", suffix: "" },
+  { arity: 2, variant: "value-index", suffix: "_with_index" },
+  { arity: 3, variant: "value-index-array", suffix: "_with_array" },
+] as const;
+const arrayReduceCallbackRows = [
+  { arity: 0, variant: "zero", suffix: "_zero" },
+  { arity: 1, variant: "accumulator", suffix: "_accumulator" },
+  { arity: 2, variant: "accumulator-value", suffix: "" },
+  { arity: 3, variant: "accumulator-value-index", suffix: "_with_index" },
+  { arity: 4, variant: "accumulator-value-index-array", suffix: "_with_array" },
+] as const;
+const arrayPredicateRows = [
+  { member: "filter", targetName: "filter", result: { ref: "receiver" } as const },
+  { member: "find", targetName: "find", result: { ref: "option-of-element" } as const },
+  { member: "findIndex", targetName: "find_index", result: { ref: "float64" } as const, resultConversion: rustIsizeToFloat64ValueConversion },
+  { member: "findLast", targetName: "find_last", result: { ref: "option-of-element" } as const },
+  { member: "findLastIndex", targetName: "find_last_index", result: { ref: "float64" } as const, resultConversion: rustIsizeToFloat64ValueConversion },
+  { member: "some", targetName: "some", result: { ref: "bool" } as const },
+  { member: "every", targetName: "every", result: { ref: "bool" } as const },
+] as const;
 const numberPredicateRows = [
   { member: "isFinite", path: "js_abi::number_is_finite" },
   { member: "isInteger", path: "js_abi::number_is_integer" },
@@ -185,14 +209,60 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
   { owner, member: "lastIndexOf", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "last_index_of_from_end", argModes: ["ref"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner, member: "lastIndexOf", operationKind: "call", lane: "js-array", variant: "from", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "last_index_of", argModes: ["ref", "value"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }, { ref: "float64" }] } },
   { owner, member: "index", operationKind: "indexer", lane: "js-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["value"], argConversions: [rustInt32ToUsizeValueConversion] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
-  { owner, member: "filter", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "filter" }, result: { ref: "receiver" }, params: [{ ref: "cb-predicate" }] } },
-  { owner, member: "find", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "find" }, result: { ref: "option-of-element" }, params: [{ ref: "cb-predicate" }] } },
-  { owner, member: "findIndex", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "find_index" }, result: { ref: "float64" }, resultConversion: rustIsizeToFloat64ValueConversion, params: [{ ref: "cb-predicate" }] } },
-  { owner, member: "findLast", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "find_last" }, result: { ref: "option-of-element" }, params: [{ ref: "cb-predicate" }] } },
-  { owner, member: "findLastIndex", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "find_last_index" }, result: { ref: "float64" }, resultConversion: rustIsizeToFloat64ValueConversion, params: [{ ref: "cb-predicate" }] } },
-  { owner, member: "some", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "some" }, result: { ref: "bool" }, params: [{ ref: "cb-predicate" }] } },
-  { owner, member: "every", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "every" }, result: { ref: "bool" }, params: [{ ref: "cb-predicate" }] } },
-  { owner, member: "map", operationKind: "call", lane: "js-array", selectedMethodTypeArgumentArity: 1, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "map" }, result: { ref: "receiver" }, params: [{ ref: "cb-map" }] }, callback: "map" },
+  ...arrayPredicateRows.flatMap((predicateRow) =>
+    arrayCallbackRows.map(({ arity, variant, suffix }): JsOperationRowData => ({
+      owner,
+      member: predicateRow.member,
+      operationKind: "call",
+      lane: "js-array",
+      variant,
+      callback: "direct",
+      shape: {
+        op: "operation",
+        operationKind: "method",
+        target: { form: "receiver-method", name: `${predicateRow.targetName}${suffix}` },
+        result: predicateRow.result,
+        ...("resultConversion" in predicateRow
+          ? { resultConversion: predicateRow.resultConversion }
+          : {}),
+        params: [{ ref: "cb-array-predicate", arity }],
+      },
+    }))
+  ),
+  ...arrayCallbackRows.map(({ arity, variant, suffix }): JsOperationRowData => ({
+    owner,
+    member: "map",
+    operationKind: "call",
+    lane: "js-array",
+    variant,
+    selectedMethodTypeArgumentArity: 1,
+    callback: "map",
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "receiver-method", name: `map${suffix}` },
+      result: { ref: "receiver" },
+      params: [{ ref: "cb-array-map", arity }],
+    },
+  })),
+  ...arrayCallbackRows.map(({ arity, variant }): JsOperationRowData => ({
+    owner,
+    member: "forEach",
+    operationKind: "call",
+    lane: "js-array",
+    variant,
+    callback: "direct",
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: {
+        form: "receiver-method",
+        name: ["for_each_zero", "for_each_value", "for_each_value_index", "for_each"][arity]!,
+      },
+      result: { ref: "unit" },
+      params: [{ ref: "cb-array-for-each", arity }],
+    },
+  })),
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_all" }, result: { ref: "element-array" } } },
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "start", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_from" }, result: { ref: "element-array" }, params: [{ ref: "float64" }] } },
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "start-end", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_to" }, result: { ref: "element-array" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
@@ -218,8 +288,57 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "Array", member: "copyWithin", operationKind: "call", lane: "js-array", variant: "to", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "copy_within_to" }, result: { ref: "receiver" }, params: [{ ref: "float64" }, { ref: "float64" }, { ref: "float64" }] } },
   { owner: "Array", member: "index", operationKind: "index-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set", argConversions: [rustInt32ToUsizeValueConversion, undefined] }, params: [{ ref: "int32" }, { ref: "element" }] } },
   { owner: "Array", member: "index", operationKind: "delete", lane: "js-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "delete_at", argConversions: [rustInt32ToUsizeValueConversion] }, result: { ref: "bool" }, params: [{ ref: "int32" }] } },
-  { owner: "Array", member: "reduce", operationKind: "call", lane: "js-array", variant: "receiver-element", selectedMethodTypeArgumentArity: 0, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "reduce", argOrder: [1, 0] }, result: { ref: "element" }, params: [{ ref: "cb-reduce" }, { ref: "element" }] }, callback: "reduce" },
-  { owner: "Array", member: "reduce", operationKind: "call", lane: "js-array", variant: "selected-accumulator", selectedMethodTypeArgumentArity: 1, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "reduce", argOrder: [1, 0] }, result: { ref: "selected-method-type-argument", index: 0 }, params: [{ ref: "cb-reduce" }, { ref: "selected-method-type-argument", index: 0 }] }, callback: "reduce" },
+  ...arrayReduceCallbackRows.flatMap(({ arity, variant, suffix }): readonly JsOperationRowData[] => [
+    {
+      owner: "Array",
+      member: "reduce",
+      operationKind: "call",
+      lane: "js-array",
+      variant: `from-first-${variant}`,
+      selectedMethodTypeArgumentArity: 0,
+      fallible: true,
+      callback: "direct",
+      shape: {
+        op: "operation",
+        operationKind: "method",
+        target: { form: "receiver-method", name: `reduce_from_first${suffix}` },
+        result: { ref: "element" },
+        params: [{ ref: "cb-array-reduce-first", arity }],
+      },
+    },
+    {
+      owner: "Array",
+      member: "reduce",
+      operationKind: "call",
+      lane: "js-array",
+      variant: `element-initial-${variant}`,
+      selectedMethodTypeArgumentArity: 0,
+      callback: "reduce",
+      shape: {
+        op: "operation",
+        operationKind: "method",
+        target: { form: "receiver-method", name: `reduce${suffix}`, argOrder: [1, 0] },
+        result: { ref: "element" },
+        params: [{ ref: "cb-array-reduce", arity }, { ref: "element" }],
+      },
+    },
+    {
+      owner: "Array",
+      member: "reduce",
+      operationKind: "call",
+      lane: "js-array",
+      variant: `selected-initial-${variant}`,
+      selectedMethodTypeArgumentArity: 1,
+      callback: "reduce",
+      shape: {
+        op: "operation",
+        operationKind: "method",
+        target: { form: "receiver-method", name: `reduce${suffix}`, argOrder: [1, 0] },
+        result: { ref: "selected-method-type-argument", index: 0 },
+        params: [{ ref: "cb-array-reduce", arity }, { ref: "selected-method-type-argument", index: 0 }],
+      },
+    },
+  ]),
 
   // String lane (runtime string module through the js_string alias).
   { owner: "String", member: "length", operationKind: "property", lane: "string", shape: { op: "operation", operationKind: "property", target: { form: "free-call", path: "js_string::js_len", receiverMode: "ref" }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
@@ -508,18 +627,20 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
 
 function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): TargetTypeRef | undefined {
   switch (reference.ref) {
-    case "cb-predicate":
+    case "cb-array-predicate":
+      return arrayCallbackCarrier(bindings, reference.arity, rustSourcePrimitiveTargetType("bool"));
+    case "cb-array-map":
+      return bindings.selectedMethodTypeArguments?.[0] === undefined
+        ? undefined
+        : arrayCallbackCarrier(bindings, reference.arity, bindings.selectedMethodTypeArguments[0]);
+    case "cb-array-for-each":
+      return arrayCallbackCarrier(bindings, reference.arity, rustUnitTargetType());
+    case "cb-array-reduce":
+      return arrayReduceCallbackCarrier(bindings, reference.arity, rustInferCarrier);
+    case "cb-array-reduce-first":
       return bindings.element === undefined
         ? undefined
-        : { kind: "function-pointer", args: [bindings.element], result: rustSourcePrimitiveTargetType("bool") };
-    case "cb-map":
-      return bindings.element === undefined
-        ? undefined
-        : { kind: "function-pointer", args: [bindings.element], result: rustInferCarrier };
-    case "cb-reduce":
-      return bindings.element === undefined
-        ? undefined
-        : { kind: "function-pointer", args: [rustInferCarrier, bindings.element], result: rustInferCarrier };
+        : arrayReduceCallbackCarrier(bindings, reference.arity, bindings.element);
     case "cb-map-for-each": {
       const args = [bindings.mapValue, bindings.mapKey, bindings.receiver].slice(0, reference.arity);
       return args.some((argument) => argument === undefined)
@@ -635,8 +756,8 @@ export function finalizeJsCallbackOperation(
     };
   }
   const accumulator = argumentCarriers[1];
-  if (accumulator === undefined || callback.args.length < 1 ||
-    !rustTargetTypeRefEquals(callback.args[0]!, accumulator) ||
+  if (accumulator === undefined ||
+    (callback.args[0] !== undefined && !rustTargetTypeRefEquals(callback.args[0], accumulator)) ||
     !rustTargetTypeRefEquals(callback.result, accumulator)) {
     return undefined;
   }
@@ -650,6 +771,33 @@ export function finalizeJsCallbackOperation(
     resultCarrier: accumulator,
     parameterCarriers,
   };
+}
+
+function arrayCallbackCarrier(
+  bindings: JsLaneBindings,
+  arity: 0 | 1 | 2 | 3,
+  result: TargetTypeRef,
+): TargetTypeRef | undefined {
+  const args = [bindings.element, rustSourcePrimitiveTargetType("float64"), bindings.receiver].slice(0, arity);
+  return args.some((argument) => argument === undefined)
+    ? undefined
+    : { kind: "function-pointer", args: args as TargetTypeRef[], result };
+}
+
+function arrayReduceCallbackCarrier(
+  bindings: JsLaneBindings,
+  arity: 0 | 1 | 2 | 3 | 4,
+  accumulator: TargetTypeRef,
+): TargetTypeRef | undefined {
+  const args = [
+    accumulator,
+    bindings.element,
+    rustSourcePrimitiveTargetType("float64"),
+    bindings.receiver,
+  ].slice(0, arity);
+  return args.some((argument) => argument === undefined)
+    ? undefined
+    : { kind: "function-pointer", args: args as TargetTypeRef[], result: accumulator };
 }
 
 function rustCallbackCarrierMatchesTemplate(

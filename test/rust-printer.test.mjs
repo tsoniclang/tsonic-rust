@@ -344,6 +344,62 @@ test("a single block argument stays attached to its outer call", () => {
   assert.match(source, /\n    \}\);/);
 });
 
+test("a trailing fitted closure stays attached after preceding arguments", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      pub: true,
+      name: "run",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "total",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "values" },
+            method: "reduce_with_array",
+            args: [
+              { kind: "int-literal", text: "0" },
+              {
+                kind: "closure",
+                params: [
+                  { name: "sum", byRefCopy: false },
+                  { name: "value", byRefCopy: false },
+                  { name: "current", byRefCopy: false },
+                  { name: "array", byRefCopy: false },
+                ],
+                body: {
+                  kind: "conditional",
+                  condition: {
+                    kind: "binary",
+                    operator: ">=",
+                    left: { kind: "path", path: "current" },
+                    right: { kind: "float-literal", text: "0.0" },
+                  },
+                  whenTrue: {
+                    kind: "binary",
+                    operator: "+",
+                    left: { kind: "path", path: "sum" },
+                    right: { kind: "path", path: "value" },
+                  },
+                  whenFalse: { kind: "path", path: "sum" },
+                },
+              },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /let total = values\.reduce_with_array\(0, \|sum, value, current, array\| \{\n/u);
+  assert.match(source, /\n    \}\);/u);
+  assert.doesNotMatch(source, /reduce_with_array\(\n/u);
+});
+
 test("three-field struct literals use rustfmt-compatible vertical layout", () => {
   const source = printRustSourceFile({
     headerComment,
