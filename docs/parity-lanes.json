@@ -642,8 +642,8 @@
   {
     "area": "Number",
     "lane": "Number.parseInt / parseFloat",
-    "classification": "blocked",
-    "contract": "requires JS numeric-string parsing rows in the js runtime"
+    "classification": "implemented",
+    "rowMember": "parseInt"
   },
   {
     "area": "Number",
@@ -653,8 +653,8 @@
   {
     "area": "Number",
     "lane": "Number.prototype.toFixed and formatting",
-    "classification": "blocked",
-    "contract": "requires JS number-formatting rows in the js runtime"
+    "classification": "implemented",
+    "rowMember": "toFixed"
   },
   {
     "area": "console",

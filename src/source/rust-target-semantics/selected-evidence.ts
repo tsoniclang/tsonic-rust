@@ -193,6 +193,12 @@ export function resolveSelectedSourceProfileMember(
   if (declaration === undefined || profile === undefined) {
     return undefined;
   }
+  if (context.ast.is.IsFunctionDeclaration(declaration)) {
+    const memberName = context.ast.text(context.ast.name(declaration));
+    return memberName.length === 0
+      ? undefined
+      : { profile, ownerName: "Global", memberName, declaration };
+  }
   let owner = context.ast.parent(declaration);
   while (owner !== undefined && !context.ast.is.IsInterfaceDeclaration(owner)) {
     owner = context.ast.parent(owner);

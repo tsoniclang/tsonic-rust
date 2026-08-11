@@ -29,9 +29,12 @@ the blocked section with the contract each requires.
 - Math: floor, ceil, trunc, abs, sqrt, pow, round, min, max, and random;
   operations whose Rust primitives differ from JavaScript use exact runtime
   rows.
-- Number.isNaN, Number.isFinite, Number.isInteger and Number.isSafeInteger
-  over exact numeric carriers; non-number unknown values fail closed without
-  coercion.
+- Number.parseInt/parseFloat: exact prefix parsing; Number constants, valueOf,
+  decimal toString, integral-radix toString, toFixed, toExponential,
+  toPrecision, and non-coercive Number.isNaN/isFinite/isInteger/isSafeInteger
+  predicates. Decimal conversion uses the
+  ECMAScript Ryū algorithm; non-number unknown values and fractional
+  non-decimal radix calls fail closed.
 - JSON: parse, stringify, stringify with null replacer and closed numeric
   or string space, over the closed JsValue carrier.
 - Map, Set: empty constructors, mutable and read-only carriers,
@@ -85,8 +88,6 @@ the blocked section with the contract each requires.
   (the call and fallibility lowering are implemented).
 - Object.keys/values/entries, Object.assign, Object.hasOwn, Object.is:
   requires closed-shape reflection rows over the JsValue carrier.
-- Number.parseInt/parseFloat, toFixed and formatting: requires exact numeric
-  parsing and formatting rows in the js runtime.
 - Console calls with open or structural object arguments: requires exact
   closed source-to-JsValue object conversion facts.
 - Date UTC setters, remaining string methods, and local-time getters and

@@ -18,6 +18,7 @@ import {
   getRustJsSetElementTargetType,
   rustCarrierSupportsClone,
   rustCarrierSupportsJsEquality,
+  isRustIntegerCarrier,
   isRustJsArrayCarrier,
   isRustSourceStringConvertibleCarrier,
   rustJsValueTargetType,
@@ -63,7 +64,7 @@ export interface JsOperationSelection {
   readonly callbackShape?: "direct" | "map" | "reduce";
 }
 
-type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "console" | "regexp" | "regexp-match";
+type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "global" | "console" | "regexp" | "regexp-match";
 
 type JsCarrierRef =
   | { readonly ref: "cb-predicate" }
@@ -100,7 +101,7 @@ type JsCarrierRef =
   | { readonly ref: "set-value-array" }
   | { readonly ref: "set-entry-array" };
 
-type JsCarrierCapability = "numeric" | "clone" | "stringifiable" | "js-equality";
+type JsCarrierCapability = "numeric" | "integer" | "clone" | "stringifiable" | "js-equality";
 
 interface JsOperationRowData {
   readonly owner: string;
@@ -154,6 +155,16 @@ const numberPredicateRows = [
   { member: "isInteger", path: "js_abi::number_is_integer" },
   { member: "isNaN", path: "js_abi::number_is_nan" },
   { member: "isSafeInteger", path: "js_abi::number_is_safe_integer" },
+] as const;
+const numberPropertyRows = [
+  { member: "MAX_VALUE", path: "js_abi::NUMBER_MAX_VALUE" },
+  { member: "MIN_VALUE", path: "js_abi::NUMBER_MIN_VALUE" },
+  { member: "NaN", path: "js_abi::NUMBER_NAN" },
+  { member: "NEGATIVE_INFINITY", path: "js_abi::NUMBER_NEGATIVE_INFINITY" },
+  { member: "POSITIVE_INFINITY", path: "js_abi::NUMBER_POSITIVE_INFINITY" },
+  { member: "MAX_SAFE_INTEGER", path: "js_abi::NUMBER_MAX_SAFE_INTEGER" },
+  { member: "MIN_SAFE_INTEGER", path: "js_abi::NUMBER_MIN_SAFE_INTEGER" },
+  { member: "EPSILON", path: "js_abi::NUMBER_EPSILON" },
 ] as const;
 const consoleRows = [
   { member: "log", path: "js_abi::console_log" },
@@ -357,6 +368,34 @@ const jsOperationRows: readonly JsOperationRowData[] = [
     { owner: "NumberConstructor", member, operationKind: "call" as const, lane: "number" as const, variant: "float64", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path }, result: { ref: "bool" as const }, params: [{ ref: "float64" as const }] } },
     { owner: "NumberConstructor", member, operationKind: "call" as const, lane: "number" as const, variant: "int32", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path, argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "bool" as const }, params: [{ ref: "int32" as const }] } },
   ]),
+  { owner: "NumberConstructor", member: "parseFloat", operationKind: "call", lane: "number", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
+  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
+  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "float64-radix", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "float64" }] } },
+  { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "int32-radix", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "int32" }] } },
+  ...numberPropertyRows.map(({ member, path }): JsOperationRowData => ({ owner: "NumberConstructor", member, operationKind: "property", lane: "number", shape: { op: "operation", operationKind: "property", target: { form: "path", path }, result: { ref: "float64" } } })),
+
+  { owner: "Number", member: "toString", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_string", receiverMode: "value" }, result: { ref: "string" } } },
+  { owner: "Number", member: "toString", operationKind: "call", lane: "number", variant: "float64-radix", fallible: true, requirements: [{ carrier: { ref: "receiver" }, capability: "integer" }], shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_string_radix", receiverMode: "value", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  { owner: "Number", member: "toString", operationKind: "call", lane: "number", variant: "int32-radix", fallible: true, requirements: [{ carrier: { ref: "receiver" }, capability: "integer" }], shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_string_radix", receiverMode: "value", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
+  { owner: "Number", member: "valueOf", operationKind: "call", lane: "number", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_value_of", receiverMode: "value" }, result: { ref: "receiver" } } },
+  { owner: "Number", member: "toFixed", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_fixed", receiverMode: "value" }, result: { ref: "string" } } },
+  { owner: "Number", member: "toFixed", operationKind: "call", lane: "number", variant: "float64-digits", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_fixed_digits", receiverMode: "value", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  { owner: "Number", member: "toFixed", operationKind: "call", lane: "number", variant: "int32-digits", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_fixed_digits", receiverMode: "value", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
+  { owner: "Number", member: "toExponential", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_exponential", receiverMode: "value" }, result: { ref: "string" } } },
+  { owner: "Number", member: "toExponential", operationKind: "call", lane: "number", variant: "float64-digits", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_exponential_digits", receiverMode: "value", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  { owner: "Number", member: "toExponential", operationKind: "call", lane: "number", variant: "int32-digits", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_exponential_digits", receiverMode: "value", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
+  { owner: "Number", member: "toPrecision", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_precision", receiverMode: "value" }, result: { ref: "string" } } },
+  { owner: "Number", member: "toPrecision", operationKind: "call", lane: "number", variant: "float64-precision", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_precision_digits", receiverMode: "value", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  { owner: "Number", member: "toPrecision", operationKind: "call", lane: "number", variant: "int32-precision", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::number_to_precision_digits", receiverMode: "value", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
+
+  { owner: "Global", member: "parseFloat", operationKind: "call", lane: "global", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
+  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
+  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "float64-radix", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "float64" }] } },
+  { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "int32-radix", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "int32" }] } },
+  ...numberPredicateRows.filter(({ member }) => member === "isNaN" || member === "isFinite").flatMap(({ member, path }) => [
+    { owner: "Global", member, operationKind: "call" as const, lane: "global" as const, variant: "float64", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path }, result: { ref: "bool" as const }, params: [{ ref: "float64" as const }] } },
+    { owner: "Global", member, operationKind: "call" as const, lane: "global" as const, variant: "int32", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path, argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "bool" as const }, params: [{ ref: "int32" as const }] } },
+  ]),
 
   // Date lane.
   { owner: "DateConstructor", member: "parse", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::parse", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
@@ -402,6 +441,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (isRustStringCarrier(carrier)) {
     return { lane: "string", bindings: { receiver: carrier } };
   }
+  if (isRustNumericCarrier(carrier)) {
+    return { lane: "number", bindings: { receiver: carrier } };
+  }
   // Static owners have no receiver carrier; the lane comes from the owner row.
   if (carrier === undefined && ownerName === "DateConstructor") {
     return { lane: "date", bindings: {} };
@@ -414,6 +456,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   }
   if (carrier === undefined && ownerName === "NumberConstructor") {
     return { lane: "number", bindings: {} };
+  }
+  if (carrier === undefined && ownerName === "Global") {
+    return { lane: "global", bindings: {} };
   }
   if (carrier === undefined && ownerName === "Console") {
     return { lane: "console", bindings: {} };
@@ -752,6 +797,8 @@ function carrierRequirementsMatch(
     switch (requirement.capability) {
       case "numeric":
         return isRustNumericCarrier(carrier);
+      case "integer":
+        return isRustIntegerCarrier(carrier);
       case "clone":
         return rustCarrierSupportsClone(carrier);
       case "stringifiable":

@@ -172,9 +172,14 @@ interface Number {
   toPrecision(precision?: number): string;
 }
 interface NumberConstructor {
+  readonly MAX_VALUE: number;
+  readonly MIN_VALUE: number;
   readonly NaN: number;
   readonly NEGATIVE_INFINITY: number;
   readonly POSITIVE_INFINITY: number;
+  readonly MAX_SAFE_INTEGER: number;
+  readonly MIN_SAFE_INTEGER: number;
+  readonly EPSILON: number;
   new (value?: unknown): Number;
   (value?: unknown): number;
   isFinite(value: unknown): boolean;
@@ -185,6 +190,11 @@ interface NumberConstructor {
   parseInt(value: string, radix?: number): number;
 }
 declare var Number: NumberConstructor;
+
+declare function parseInt(value: string, radix?: number): number;
+declare function parseFloat(value: string): number;
+declare function isNaN(value: number): boolean;
+declare function isFinite(value: number): boolean;
 
 interface String {
   readonly length: number;
