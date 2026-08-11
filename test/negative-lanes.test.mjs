@@ -1,22 +1,37 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { artifactText, assertRustTargetRejection, compileRust } from "./helpers/rust-session.mjs";
+import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
-test("unsupported top-level mutable declarations fail closed with deterministic diagnostics", () => {
+test("top-level mutable declarations use initialized module cells", () => {
   const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "module_binding_proof" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 
 export let value: int32 = 1;
+
+export function main(): void {
+  value += 2;
+  if (value !== 3) {
+    throw new Error("module binding mismatch");
+  }
+}
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
-  assert.ok(result.diagnostics.every((diagnostic) => diagnostic.code === "RUST_UNSUPPORTED_AST" || diagnostic.code === "RUST_MISSING_TARGET_FACT"));
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.evidence.some((entry) => entry.startsWith("target.capability=rust.backend."))));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub static value: rt::ModuleCell<i32>/u);
+  assert.match(text, /pub fn __tsonic_module_init/u);
+  assert.match(
+    text,
+    /let (__tsonic_module_value_\d+) = 1;[\s\S]*?\.initialize\(\1\)/u,
+  );
+  assert.match(text, /\.location\(\)\)\s*\.update_with/u);
+  validateGeneratedProject("module-binding-proof", result.artifacts, { run: true });
 });
 
 test("mixed-kind numeric operators use exact target-owned promotion conversions", () => {

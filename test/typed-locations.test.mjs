@@ -148,6 +148,39 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("module binding locations preserve one initialized identity", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "module_location_proof" },
+    },
+    files: {
+      "index.ts": `
+import { addressOf, equalPointer, loadPointer } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+export let value: int32 = 1;
+
+export function main(): void {
+  const first = addressOf(value);
+  value += 1;
+  const second = addressOf(value);
+  check(loadPointer(first) === 2);
+  check(equalPointer(first, second));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /pub static value: rt::ModuleCell<i32>/u);
+  assert.match(output, /\.with\(\|__tsonic_module_binding\| __tsonic_module_binding\.location\(\)\)/u);
+  validateGeneratedProject("module-location-proof", result.artifacts, { run: true });
+});
+
 test("typed-location requirements propagate through transitive source calls", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

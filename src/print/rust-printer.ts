@@ -46,6 +46,11 @@ export function printRustItem(item: RustItem): string {
       const prefix = `${constAttrs}${printRustVisibility(item.visibility)}const ${item.name}: ${printRustType(item.type)} = `;
       return `${prefix}${printRustExprFitted(item.value, 0, lastLineLength(prefix) + 1)};`;
     }
+    case "thread-local": {
+      const attrs = (item.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
+      const declaration = `${printRustVisibility(item.visibility)}static ${item.name}: ${printRustType(item.type)} = const { ${printRustExpr(item.value)} };`;
+      return `std::thread_local! {\n${attrs}    ${declaration}\n}`;
+    }
     case "struct": {
       const structAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
@@ -185,12 +190,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       const mutability = statement.mutable ? "mut " : "";
       const typeSuffix = statement.type === undefined ? "" : `: ${printRustType(statement.type)}`;
       const prefix = `${indent}let ${mutability}${statement.name}${typeSuffix} = `;
-      const flat = printRustExpr(statement.init);
-      if (!flat.includes("\n") && !renderedFits(flat, prefix.length + 1) &&
-        renderedFits(flat, indent.length + 4 + 1)) {
-        return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
-      }
-      return `${prefix}${printRustExprFitted(statement.init, depth, prefix.length + 1)};`;
+      return printRustLetInitializer(prefix, statement.init, depth);
     }
     case "expr": {
       return `${indent}${printRustStatementExpr(statement.expr, depth, indent.length + 1)};`;
@@ -1072,10 +1072,7 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
       const statementIndent = indentText(depth + 1);
       const bindings = expression.bindings.map((binding) => {
         const prefix = `${statementIndent}let ${binding.name} = `;
-        return appendToLastLine(
-          `${prefix}${printRustExprFitted(binding.value, depth + 1, prefix.length)}`,
-          ";",
-        );
+        return printRustLetInitializer(prefix, binding.value, depth + 1);
       });
       const value = printRustExprFitted(
         expression.value,
@@ -1275,6 +1272,19 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
     default:
       return flat;
   }
+}
+
+function printRustLetInitializer(
+  prefix: string,
+  initializer: RustExpr,
+  depth: number,
+): string {
+  const flat = printRustExpr(initializer);
+  if (!flat.includes("\n") && !renderedFits(flat, prefix.length + 1) &&
+    renderedFits(flat, indentText(depth + 1).length + 1)) {
+    return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
+  }
+  return `${prefix}${printRustExprFitted(initializer, depth, prefix.length + 1)};`;
 }
 
 function printRustAssociatedOwner(owner: RustType): string {

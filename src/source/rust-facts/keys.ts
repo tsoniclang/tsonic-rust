@@ -519,6 +519,19 @@ export const rustLocationStorageFactKey: RustPlanKey<{
   (left, right) => rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
 );
 
+export interface RustModuleBindingFact {
+  readonly declarationKind: "const" | "let" | "var";
+  readonly storage: "native-const" | "module-cell";
+  readonly valueCarrier: TargetTypeRef;
+}
+
+export const rustModuleBindingFactKey: RustPlanKey<RustModuleBindingFact> = defineRustPlanKey(
+  "moduleBinding",
+  (left, right) => left.declarationKind === right.declarationKind &&
+    left.storage === right.storage &&
+    rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
+);
+
 function rustTypedLocationPlanEquals(
   left: RustTypedLocationPlan,
   right: RustTypedLocationPlan,

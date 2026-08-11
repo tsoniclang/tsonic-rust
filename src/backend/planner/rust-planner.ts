@@ -20,6 +20,10 @@ import { rustReservedIdentifiers } from "./plan-context.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
 import type { RustTranslationContext } from "../../translate/context.js";
 import { reconstructRustSourceFiles } from "./source-file-reconstruction.js";
+import {
+  diagnoseRustLibraryModuleInitialization,
+  planRustBinaryModuleInitializers,
+} from "./module-initialization.js";
 
 export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [...input.diagnostics];
@@ -49,6 +53,17 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const entryFunction = outputType === "bin"
     ? resolveBinaryEntry(input, moduleNameByFileName, diagnostics)
     : undefined;
+  if (outputType === "lib") {
+    diagnoseRustLibraryModuleInitialization(input, plannedSources, diagnostics);
+  }
+  const moduleInitializers = outputType === "bin" && entryFunction !== undefined
+    ? planRustBinaryModuleInitializers(
+        input,
+        plannedSources,
+        entryFunction.sourceFile,
+        diagnostics,
+      )
+    : [];
 
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
@@ -88,21 +103,51 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
           args: [entryCall],
         }
       : entryCall;
+    const initializationStatements = (moduleInitializers ?? []).map((initializer) => {
+      const call = {
+        kind: "call" as const,
+        path: `${crateName}::${initializer.moduleName}::${initializer.functionName}`,
+        args: [],
+      };
+      const execution = initializer.asynchronous
+        ? {
+            kind: "call" as const,
+            path: "tsonic_rust_runtime::block_on",
+            args: [call],
+          }
+        : call;
+      return {
+        kind: "expr" as const,
+        expr: initializer.fallible
+          ? { kind: "try" as const, expr: execution }
+          : execution,
+      };
+    });
+    const mainFallible = entryFunction.fallible ||
+      (moduleInitializers ?? []).some((initializer) => initializer.fallible);
+    const entryStatements = entryFunction.fallible
+      ? [{ kind: "tail" as const, expr: entryExecution }]
+      : mainFallible
+        ? [
+            { kind: "expr" as const, expr: entryExecution },
+            { kind: "tail" as const, expr: { kind: "path" as const, path: "Ok(())" } },
+          ]
+        : [{ kind: "expr" as const, expr: entryExecution }];
     const mainItem: RustItem = {
       kind: "function",
       name: "main",
       visibility: "private",
       params: [],
-      ...(entryFunction.fallible
+      ...(mainFallible
         ? {
             returnType: {
               kind: "named" as const,
               path: "tsonic_rust_runtime::TsonicResult",
               typeArguments: [{ kind: "unit" as const }],
             },
-            body: { statements: [{ kind: "tail" as const, expr: entryExecution }] },
+            body: { statements: [...initializationStatements, ...entryStatements] },
           }
-        : { body: { statements: [{ kind: "expr" as const, expr: entryExecution }] } }),
+        : { body: { statements: [...initializationStatements, ...entryStatements] } }),
     };
     artifacts.push(rustSourceArtifact("src/main.rs", printRustSourceFile(createRustSourceFile([mainItem]))));
   }
@@ -175,6 +220,7 @@ function moduleNameDiagnostic(input: RustTranslationContext, sourceFile: SourceF
 }
 
 interface RustBinaryEntry {
+  readonly sourceFile: SourceFile;
   readonly moduleName: string;
   readonly functionName: string;
   readonly async: boolean;
@@ -218,6 +264,7 @@ function resolveBinaryEntry(
       break;
     }
     return {
+      sourceFile: entrySourceFile,
       moduleName,
       functionName: "main",
       async: asyncFact !== undefined,

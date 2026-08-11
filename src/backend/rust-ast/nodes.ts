@@ -198,6 +198,14 @@ export type RustItem =
       readonly type: RustType;
       readonly value: RustExpr;
     }
+  | {
+      readonly kind: "thread-local";
+      readonly attrs?: readonly string[];
+      readonly name: string;
+      readonly visibility: RustVisibility;
+      readonly type: RustType;
+      readonly value: RustExpr;
+    }
   | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility }
   | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly fields: readonly RustStructField[] }
   | { readonly kind: "impl"; readonly name: string; readonly functions: readonly RustImplFunction[] }

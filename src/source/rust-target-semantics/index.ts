@@ -119,7 +119,7 @@ import {
   rustSourceTypeCarrierValue,
 } from "../rust-target-types.js";
 import { parseSourceBigIntLiteral } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -604,6 +604,13 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
         recordVariableStatementFacts(walk, statement, sourceFile);
       } else if (kind === "KindClassDeclaration") {
         recordClassBodyFacts(walk, statement, sourceFile);
+      } else if (kind !== "KindImportDeclaration" &&
+        kind !== "KindExportDeclaration" &&
+        kind !== "KindInterfaceDeclaration" &&
+        kind !== "KindTypeAliasDeclaration" &&
+        kind !== "KindEnumDeclaration" &&
+        kind !== "KindEndOfFile") {
+        recordStatementFacts(walk, statement, sourceFile, undefined);
       }
     }
   }
@@ -741,6 +748,7 @@ function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFi
 }
 
 function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
+  const moduleLevel = walk.context.ast.kindName(walk.context.ast.parent(statement)) === "KindSourceFile";
   for (const declaration of collectDescendantsOfKind(walk, statement, KindVariableDeclaration)) {
     const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
     const initializer = Node_Initializer(walk.context.ast, declaration);
@@ -750,6 +758,22 @@ function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourc
     const effective = annotated ?? initializerCarrier;
     if (effective !== undefined) {
       setCarrierFact(walk, declaration, effective);
+      const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
+      if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
+        const initializerKind = initializer === undefined
+          ? undefined
+          : walk.context.ast.kindName(initializer);
+        const nativeConst = declarationKind === "const" && (
+          initializerKind === KindNumericLiteral ||
+          initializerKind === KindTrueKeyword ||
+          initializerKind === KindFalseKeyword
+        );
+        walk.context.facts.set(declaration, rustModuleBindingFactKey, {
+          declarationKind,
+          storage: nativeConst ? "native-const" : "module-cell",
+          valueCarrier: effective,
+        }, [{ message: "rust finalized project module binding storage" }]);
+      }
     }
   }
 }
@@ -3413,6 +3437,24 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
     walk.context.facts.set(declaration, rustFallibleFactKey, { fallible: true }, [
       { message: "rust fallible declaration" },
     ]);
+  }
+  for (const sourceFile of projectSourceFiles) {
+    const runtimeStatements = (ast.statements(sourceFile) as readonly Node[]).filter((statement) => {
+      const kind = ast.kindName(statement);
+      return kind !== KindFunctionDeclaration &&
+        kind !== "KindClassDeclaration" &&
+        kind !== "KindInterfaceDeclaration" &&
+        kind !== "KindTypeAliasDeclaration" &&
+        kind !== "KindEnumDeclaration" &&
+        kind !== "KindImportDeclaration" &&
+        kind !== "KindExportDeclaration" &&
+        kind !== "KindEndOfFile";
+    });
+    if (runtimeStatements.some(expressionRegionIsFallible)) {
+      walk.context.facts.set(sourceFile, rustFallibleFactKey, { fallible: true }, [
+        { message: "rust fallible project module initialization" },
+      ]);
+    }
   }
   for (const sourceFile of projectSourceFiles) {
     const visit = (node: Node): void => {

@@ -28,6 +28,7 @@ import {
 } from "../../common/source-ast.js";
 import {
   rustLocationStorageFactKey,
+  rustModuleBindingFactKey,
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
 } from "../rust-facts/keys.js";
@@ -373,9 +374,11 @@ function rustTypedLocationPlan(
             "Selected address-of storage root has no closed Rust value carrier.",
         };
       }
-      context.facts.set(root.declaration, rustLocationStorageFactKey, {
-        valueCarrier: rootCarrier,
-      }, [{ message: "rust selected canonical typed-location storage root" }]);
+      if (root.storage === "local-location") {
+        context.facts.set(root.declaration, rustLocationStorageFactKey, {
+          valueCarrier: rootCarrier,
+        }, [{ message: "rust selected canonical typed-location storage root" }]);
+      }
       return {
         kind: "selected",
         value: {
@@ -438,6 +441,7 @@ function rustTypedLocationStorageRoot(
 ): {
   readonly expression: Node;
   readonly declaration: Node;
+  readonly storage: "local-location" | "module-cell";
   readonly carrier?: TargetTypeRef;
 } | undefined {
   let expression = storage;
@@ -468,6 +472,7 @@ function rustTypedLocationStorageRoot(
   }
   let owner = context.ast.parent(declaration);
   let functionLocal = false;
+  let moduleBinding = false;
   while (owner !== undefined) {
     const kind = context.ast.kindName(owner);
     if (kind === "KindFunctionDeclaration" ||
@@ -479,16 +484,22 @@ function rustTypedLocationStorageRoot(
       break;
     }
     if (kind === "KindSourceFile") {
+      moduleBinding = context.ast.kindName(declaration) === "KindVariableDeclaration";
       break;
     }
     owner = context.ast.parent(owner);
   }
-  if (!functionLocal) {
+  if (!functionLocal && !moduleBinding) {
+    return undefined;
+  }
+  if (moduleBinding &&
+    context.facts.get(declaration, rustModuleBindingFactKey)?.storage !== "module-cell") {
     return undefined;
   }
   return {
     expression,
     declaration,
+    storage: functionLocal ? "local-location" : "module-cell",
     carrier: resolveRustTargetTypeRef(
       Node_Type(context.ast, declaration) ?? declaration,
       context,

@@ -146,7 +146,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
   assert.deepEqual(context.diagnostics, []);
 });
 
-test("top-level mutable bindings never masquerade as Rust constants", () => {
+test("runtime module bindings require an explicit Rust executable startup contract", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -159,8 +159,8 @@ export let VALUE: int32 = 1;
 
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
-    diagnostic.message.includes("annotated const bindings")));
+    diagnostic.code === "RUST_LIBRARY_MODULE_INITIALIZATION_UNSUPPORTED" &&
+    diagnostic.message.includes("runtime module initialization")));
 });
 
 test("singleton tuples render with the Rust-required trailing comma", () => {

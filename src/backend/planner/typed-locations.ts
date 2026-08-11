@@ -15,6 +15,7 @@ import type {
 } from "../../source/rust-facts/keys.js";
 import {
   rustLocationStorageFactKey,
+  rustModuleBindingFactKey,
   rustSourceBindingFactKey,
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
@@ -121,7 +122,9 @@ export function planRustIdentifierValue(
   const value: RustExpr = { kind: "path", path };
   if (storage !== undefined) {
     context.usedAliases?.add("rt");
-    return { kind: "method-call", receiver: value, method: "load", args: [] };
+    return storage.storage === "module-cell"
+      ? moduleCellAccess(value, "load", [])
+      : { kind: "method-call", receiver: value, method: "load", args: [] };
   }
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustValueCarrierRequiresCloneOnRead(carrier)
@@ -147,18 +150,33 @@ export function rustLocationStorageForReference(
   context: RustPlanContext,
 ): {
   readonly declaration: Node;
+  readonly storage: "local-location" | "module-cell";
   readonly valueCarrier: TargetTypeRef;
 } | undefined {
   const reference = context.input.source.navigation.sourceReferenceFor(node);
   const declaration = reference?.project === true
     ? reference.declaration
     : undefined;
-  const storage = declaration === undefined
+  const localStorage = declaration === undefined
     ? undefined
     : context.input.facts.getFact(declaration, rustLocationStorageFactKey);
-  return declaration === undefined || storage === undefined
+  if (declaration !== undefined && localStorage !== undefined) {
+    return {
+      declaration,
+      storage: "local-location",
+      valueCarrier: localStorage.valueCarrier,
+    };
+  }
+  const moduleBinding = declaration === undefined
     ? undefined
-    : { declaration, valueCarrier: storage.valueCarrier };
+    : context.input.facts.getFact(declaration, rustModuleBindingFactKey);
+  return declaration !== undefined && moduleBinding?.storage === "module-cell"
+    ? {
+        declaration,
+        storage: "module-cell",
+        valueCarrier: moduleBinding.valueCarrier,
+      }
+    : undefined;
 }
 
 export function rustLocationStorageForDeclaration(
@@ -179,13 +197,43 @@ export function rustRawLocationRoot(
   if (binding === undefined) {
     return undefined;
   }
-  const sourceName = binding.sourceName;
-  const name = rustSourceName(context, sourceName);
+  const name = rustSourceName(context, binding.sourceName);
   if (!isValidRustIdentifier(name) ||
     rustLocationStorageForReference(expression, context) === undefined) {
     return undefined;
   }
-  return { kind: "path", path: name };
+  const declarationModule = context.moduleNameByFileName.get(binding.fileName);
+  const path = declarationModule !== undefined && declarationModule !== context.moduleName
+    ? `crate::${declarationModule}::${name}`
+    : name;
+  const storage = rustLocationStorageForReference(expression, context);
+  const value: RustExpr = { kind: "path", path };
+  return storage?.storage === "module-cell"
+    ? moduleCellAccess(value, "location", [])
+    : value;
+}
+
+function moduleCellAccess(
+  cell: RustExpr,
+  method: "load" | "location",
+  args: readonly RustExpr[],
+): RustExpr {
+  const bindingName = "__tsonic_module_binding";
+  return {
+    kind: "method-call",
+    receiver: cell,
+    method: "with",
+    args: [{
+      kind: "closure",
+      params: [{ name: bindingName, byRefCopy: false }],
+      body: {
+        kind: "method-call",
+        receiver: { kind: "path", path: bindingName },
+        method,
+        args,
+      },
+    }],
+  };
 }
 
 export type RustPromotedStorageWritePlan =
