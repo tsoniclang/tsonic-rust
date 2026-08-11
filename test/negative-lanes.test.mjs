@@ -2,16 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { assertRustTargetRejection, compileRust } from "./helpers/rust-session.mjs";
 
-test("unsupported AST fails closed with deterministic diagnostics", () => {
+test("unsupported top-level mutable declarations fail closed with deterministic diagnostics", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-export function f(value: number): number {
-  switch (value) {
-    default:
-      return value;
-  }
-}
+import type { int32 } from "@tsonic/core/types.js";
+
+export let value: int32 = 1;
 `,
     },
   });

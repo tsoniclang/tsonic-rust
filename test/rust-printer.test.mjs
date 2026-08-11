@@ -44,8 +44,7 @@ test("multiline method-chain arguments use rustfmt-compatible outer-call layout"
     }],
   });
 
-  assert.match(text, /acme_testing::check\(\n        values\n            \.get/u);
-  assert.match(text, /            \.is_none\(\),\n    \);/u);
+  assert.match(text, /acme_testing::check\(\n        values\.get\(tsonic_rust_runtime::conversions::i32_to_usize\(1\)\?\)\.copied\(\)\.is_none\(\),\n    \);/u);
 });
 
 test("fitted multi-argument calls stay horizontal inside assignments", () => {
@@ -117,6 +116,191 @@ test("a fitted outer call stays attached to its multiline nested call", () => {
 
   assert.match(text, /usize_to_i32\(tsonic_rust_js::string::js_len\(\n        &tsonic_rust_node/u);
   assert.doesNotMatch(text, /usize_to_i32\(\n        tsonic_rust_js/u);
+});
+
+test("a nested call owns the fitting break inside a wider expression", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: ">",
+              left: {
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::conversions::usize_to_i32",
+                  args: [{
+                    kind: "call",
+                    path: "js_string::js_len",
+                    args: [{
+                      kind: "reference",
+                      expr: {
+                        kind: "call",
+                        path: "tsonic_rust_node::os::platform",
+                        args: [],
+                      },
+                    }],
+                  }],
+                },
+              },
+              right: { kind: "int-literal", text: "0" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /usize_to_i32\(js_string::js_len\(\n            &tsonic_rust_node::os::platform\(\),\n        \)\)\? > 0/u);
+});
+
+test("a fallible nested call owns the fitting break", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: { kind: "bool-literal", value: true },
+          then: {
+            statements: [{
+              kind: "expr",
+              expr: {
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "tsonic_rust_node::crypto::random_bytes",
+                  args: [{
+                    kind: "try",
+                    expr: {
+                      kind: "call",
+                      path: "tsonic_rust_runtime::conversions::i32_to_usize",
+                      args: [{ kind: "int-literal", text: "16" }],
+                    },
+                  }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(\n            16,\n        \)\?\)\?/u);
+});
+
+test("a long outer call expands before a jointly fitting method argument", () => {
+  const clone = (name) => ({
+    kind: "method-call",
+    receiver: { kind: "path", path: name },
+    method: "clone",
+    args: [],
+  });
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      pub: true,
+      name: "proof",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "method-call",
+                receiver: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "values" },
+                  method: "load",
+                  args: [],
+                },
+                method: "push",
+                args: [{
+                  kind: "try",
+                  expr: {
+                    kind: "call",
+                    path: "nextValue",
+                    args: [clone("alias"), clone("calls")],
+                  },
+                }],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /usize_to_i32\(\n        values\.load\(\)\.push\(nextValue\(alias\.clone\(\), calls\.clone\(\)\)\?\),\n    \)\?;/u);
+});
+
+test("an outer call stays attached to an expanded associated call", () => {
+  const optionalLocation = (name) => ({
+    kind: "method-call",
+    receiver: {
+      kind: "call",
+      path: "Some",
+      args: [{
+        kind: "method-call",
+        receiver: { kind: "path", path: name },
+        method: "clone",
+        args: [],
+      }],
+    },
+    method: "as_ref",
+    args: [],
+  });
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      pub: true,
+      name: "proof",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "associated-call",
+              owner: {
+                kind: "named",
+                path: "rt::Location",
+                typeArguments: [{ kind: "primitive", name: "i32" }],
+              },
+              method: "same",
+              args: [optionalLocation("first"), optionalLocation("firstAgain")],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /acme_testing::check\(rt::Location::<i32>::same\(\n        Some\(first\.clone\(\)\)\.as_ref\(\),\n        Some\(firstAgain\.clone\(\)\)\.as_ref\(\),\n    \)\);/u);
 });
 
 test("a single block argument stays attached to its outer call", () => {
@@ -301,7 +485,7 @@ test("long assignments break after the assignment operator", () => {
   assert.match(text, /values\[tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\] =\n        values\[/u);
 });
 
-test("nested overflow calls keep jointly fitting inner arguments horizontal", () => {
+test("overflowing outer calls retain jointly fitting nested arguments", () => {
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -333,7 +517,7 @@ test("nested overflow calls keep jointly fitting inner arguments horizontal", ()
     }],
   });
 
-  assert.match(text, /canonical_array_index_of\(\n        &values, &3, 0,\n    \)\)\?/u);
+  assert.match(text, /isize_to_i32\(\n        example_runtime::canonical_array_index_of\(&values, &3, 0\),\n    \)\?/u);
 });
 
 test("nested calls beyond rustfmt call width put each argument on its own line", () => {

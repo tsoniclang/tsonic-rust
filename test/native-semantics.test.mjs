@@ -235,7 +235,7 @@ export function bad(): int32 {
   }]);
 });
 
-test("mutable array parameters take the &mut [T] lane with visible writes", () => {
+test("JS array parameters preserve shared identity with visible writes", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -257,13 +257,13 @@ export function drive(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn bump\(xs: &mut \[i32\]\)/u);
-  assert.match(text, /xs\[tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\] = 42;/u);
-  assert.match(text, /bump\(&mut values\)\?;/u);
+  assert.match(text, /pub fn bump\(xs: js_abi::JsArray<i32>\)/u);
+  assert.match(text, /xs\.set\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?, 42\);/u);
+  assert.match(text, /bump\(values\.clone\(\)\)\?;/u);
 });
 
-test("push on borrowed slices fails closed; owned vectors keep push", () => {
-  const options = {
+test("push mutates the canonical shared JS array carrier", () => {
+  const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
@@ -274,11 +274,11 @@ export function grow(xs: int32[]): void {
 }
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_SELECTED_OPERATION_UNSUPPORTED",
-    message: "The selected JavaScript call 'Array.push' has no closed Rust operation row for the selected receiver and argument carriers.",
-  }]);
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn grow\(xs: js_abi::JsArray<i32>\)/u);
+  assert.match(text, /xs\.push\(4\)/u);
 });
 
 test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
@@ -426,7 +426,7 @@ export function shift(p: Point, dx: int32): Point {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /#\[derive\(Clone, Copy, Debug, PartialEq\)\]\npub struct Point \{\n    pub x: i32,\n    pub y: i32,\n\}/u);
   assert.match(text, /let p: Point = Point \{ x: 0, y: 0 \};/u);
-  assert.match(text, /Point \{ x: p\.x \+ dx, y: p\.y \}/u);
+  assert.match(text, /Point \{\n        x: p\.x \+ dx,\n        y: p\.y,\n    \}/u);
 });
 
 test("unannotated object literals fail closed", () => {
@@ -694,9 +694,10 @@ export function caller(flag: boolean): int32 {
   assert.match(text, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
   assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::new\(/u);
   assert.match(text, /Ok\(7\)/u);
-  assert.match(text, /let __try: rt::TsonicResult<\(\)> = \(\|\| \{/u);
+  assert.match(text, /let __tsonic_try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
   assert.match(text, /outcome = risky\(flag\)\?;/u);
-  assert.match(text, /if let Err\(_error\) = __try \{/u);
+  assert.match(text, /let __tsonic_try_flow_\d+: rt::Completion<i32> = match __tsonic_try_body \{/u);
+  assert.match(text, /Err\(_error\) => rt::completion_region\(\|\| \{/u);
   assert.match(text, /use tsonic_rust_runtime as rt;/u);
 });
 

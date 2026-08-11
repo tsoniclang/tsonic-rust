@@ -15,7 +15,7 @@ the blocked section with the contract each requires.
 - Array: literals, index/at, length, push, includes, indexOf, map,
   filter, reduce, some, every, find, findIndex, findLast, findLastIndex;
   slice over closed Clone carriers and join over exact stringifiable carriers;
-  sparse lane via JsArray.
+  one identity-preserving `JsArray<T>` carrier for dense and sparse arrays.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
   endsWith, indexOf, slice, at, charAt, codePointAt, repeat, padStart,
   padEnd, trim, trimStart, trimEnd, concat via +, split, replace, search,

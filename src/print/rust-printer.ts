@@ -233,11 +233,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       );
     }
     case "for": {
-      return printRustBlock(
-        statement.body,
-        depth,
-        `${statement.label === undefined ? "" : `'${statement.label}: `}for ${statement.bindingMutable === true ? "mut " : ""}${statement.binding} in ${printRustExpr(statement.iterable)}`,
-      );
+      return printRustForBlock(statement, depth);
     }
     case "if-let-some": {
       return printRustBlock(
@@ -292,6 +288,33 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return printRustTryScope(statement, depth);
     }
   }
+}
+
+function printRustForBlock(
+  statement: Extract<RustStmt, { readonly kind: "for" }>,
+  depth: number,
+): string {
+  const indent = indentText(depth);
+  const prefix = `${statement.label === undefined ? "" : `'${statement.label}: `}for ${statement.bindingMutable === true ? "mut " : ""}${statement.binding} in`;
+  const flatIterable = printRustExpr(statement.iterable);
+  const flatHeader = `${prefix} ${flatIterable}`;
+  if (!flatIterable.includes("\n") && renderedFits(flatHeader, indent.length)) {
+    return printRustBlock(statement.body, depth, flatHeader);
+  }
+  const iterableIndent = indentText(depth + 1);
+  const iterable = printRustExprFitted(
+    statement.iterable,
+    depth + 1,
+    iterableIndent.length,
+  );
+  const body = printRustBlockStatements(statement.body, depth + 1);
+  return [
+    `${indent}${prefix}`,
+    `${iterableIndent}${iterable}`,
+    `${indent}{`,
+    ...(body.length === 0 ? [] : [body]),
+    `${indent}}`,
+  ].join("\n");
 }
 
 function printRustTryScope(
@@ -1139,7 +1162,7 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
           return value === field.name ? field.name : `${field.name}: ${value}`;
         })
         .join(", ");
-      if (expression.fields.length <= 1 && compactFields.length <= rustStructLiteralWidth &&
+      if (expression.fields.length <= 2 && compactFields.length <= rustStructLiteralWidth &&
         renderedFits(flat, column)) {
         return flat;
       }
@@ -1322,6 +1345,44 @@ function printFittedCall(
       )}`,
       ")",
     );
+  }
+  if (!forceExpanded && arguments_.length === 1) {
+    const argument = arguments_[0]!;
+    if (argument.kind === "call" || argument.kind === "associated-call" ||
+      argument.kind === "method-call" || argument.kind === "try") {
+      const argumentIndent = indentText(depth + 1);
+      const flatArgument = printRustExpr(argument);
+      const nestedInvocationArguments = argument.kind === "call" || argument.kind === "associated-call"
+        ? argument.args
+        : argument.kind === "try" &&
+            (argument.expr.kind === "call" || argument.expr.kind === "associated-call")
+          ? argument.expr.args
+          : undefined;
+      if (nestedInvocationArguments !== undefined &&
+        (nestedInvocationArguments.length === 1 || flatArgument.length > rustNestedCallWidth) &&
+        !renderedFits(flat, column)) {
+        const prefix = `${callable}(`;
+        const expandedNested = printNestedCallArgument(
+          argument,
+          depth,
+          column + prefix.length,
+          true,
+        );
+        const compact = appendToLastLine(`${prefix}${expandedNested}`, ")");
+        if (expandedNested.includes("\n") && renderedFits(compact, column)) {
+          return compact;
+        }
+      }
+      if (!flatArgument.includes("\n") &&
+        renderedFits(flatArgument, argumentIndent.length) &&
+        !renderedFits(flat, column)) {
+        return [
+          `${callable}(`,
+          `${argumentIndent}${flatArgument},`,
+          `${indentText(depth)})`,
+        ].join("\n");
+      }
+    }
   }
   if (!forceExpanded && arguments_.length === 1) {
     const prefix = `${callable}(`;

@@ -6,10 +6,6 @@ import { compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 // Rows name the capability, a minimal repro, and the required behavior.
 const unsupportedLanes = [
   {
-    capability: "rust.backend.statement (switch)",
-    files: { "index.ts": "export function f(x: number): number {\n  switch (x) {\n    default:\n      return x;\n  }\n}\n" },
-  },
-  {
     capability: "discriminated object unions (require narrowing facts)",
     files: { "index.ts": "export type Shape = { kind: \"circle\"; radius: number } | { kind: \"square\"; size: number };\nexport function make(): Shape {\n  return { kind: \"circle\", radius: 1 };\n}\n" },
   },

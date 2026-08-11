@@ -1190,9 +1190,12 @@ export function applyRustValueConversion(
     }
   }
   registerAliasFromPath(context, contract.path);
-  const source = contract.sourceMode === "ref"
-    ? applyRustArgumentMode(context, expression, "ref", node)
+  const nonConsumingSource = contract.sourceMode === "ref" && node !== undefined
+    ? planRustNonConsumingValue(node, expression, context)
     : expression;
+  const source = contract.sourceMode === "ref"
+    ? applyRustArgumentMode(context, nonConsumingSource, "ref", node)
+    : nonConsumingSource;
   const call: RustExpr = { kind: "call", path: contract.path, args: [source] };
   if (!contract.fallible) {
     return call;

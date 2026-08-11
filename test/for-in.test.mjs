@@ -13,7 +13,7 @@ import type { int32 } from "@tsonic/core/types.js";
 import { check } from "@acme/testing";
 `;
 
-test("for-in lowers finalized dense, sparse, and project-shape key policies", { timeout: 300_000 }, () => {
+test("for-in lowers finalized JS-array and project-shape key policies", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     surfaces: ["js"],
@@ -31,6 +31,7 @@ export function main(): void {
   for (let key in [4, 5, 6]) {
     denseKeys = denseKeys + key;
     key = "consumed";
+    check(key === "consumed");
   }
   check(denseKeys === "012");
 
@@ -59,10 +60,10 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /0\.\.__tsonic_for_in_length|0\.\.__tsonic_for_in_length_\d+/u);
+  assert.match(source, /JsArray::from_dense\(vec!\[4\.0, 5\.0, 6\.0\]\)\.enumerable_own_keys\(\)/u);
   assert.match(source, /enumerable_own_keys\(\)/u);
   assert.match(source, /String::from\("first"\)/u);
-  assert.match(source, /assignedKey = __tsonic_for_in_index/u);
+  assert.match(source, /assignedKey = __tsonic_for_in_key_\d+;/u);
   assert.equal(validateGeneratedProject("for-in-policies", result.artifacts, { run: true }).status, 0);
 });
 
