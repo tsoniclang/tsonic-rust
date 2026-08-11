@@ -248,6 +248,49 @@ export function edit(values: int32[]): int32 {
   assert.match(text, /values\.last_index_of\(&9, -1\.0\)/u);
 });
 
+test("Array static operations lower through exact selected generic and unknown carriers", () => {
+  const int32Carrier = rustSourcePrimitiveTargetType("int32");
+  const of = selectJsSurfaceOperation({
+    ownerName: "ArrayConstructor",
+    memberName: "of",
+    operationKind: "call",
+    argumentCarriers: [int32Carrier, int32Carrier],
+    selectedMethodTypeArgumentCarriers: [int32Carrier],
+  });
+  assert.deepEqual(of?.fact.target, {
+    form: "call-value-array",
+    path: "js_abi::array_of",
+    leadingArguments: [],
+    elementCarrier: int32Carrier,
+  });
+  assert.deepEqual(of?.resultCarrier, rustJsArrayTargetType(int32Carrier));
+
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function values(): string {
+  const input = JSON.parse("[1]");
+  const made = Array.of<int32>(1, 2, 3);
+  const text = Array.from("a😀");
+  return made.join("-") + text.join("") + (Array.isArray(input) ? "Y" : "N");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(
+    text,
+    /js_abi::array_of\(\[[\s\S]*f64_to_i32\(1\.0\)\?[\s\S]*f64_to_i32\(2\.0\)\?[\s\S]*f64_to_i32\(3\.0\)\?[\s\S]*\]\)/u,
+  );
+  assert.match(text, /js_abi::array_from_string\("a😀"\)/u);
+  assert.match(text, /js_abi::array_is_array_value\(&input\)/u);
+});
+
 test("sparse arrays lower to JsArray with holes, length writes, and at()", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": sparseSource } });
 

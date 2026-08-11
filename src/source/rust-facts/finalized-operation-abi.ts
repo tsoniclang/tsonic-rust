@@ -706,6 +706,28 @@ function finalizeTargetInputs(
         ],
       };
     }
+    case "call-value-array": {
+      const leading = form.leadingArguments.map((argument, sourceIndex) =>
+        input.argumentTo(sourceIndex, argument.mode, argument.carrier));
+      const arrayIndexes = indexes.slice(form.leadingArguments.length);
+      const elements = arrayIndexes.map((sourceIndex) =>
+        input.argumentTo(sourceIndex, "value", form.elementCarrier));
+      if (leading.some((entry) => entry === undefined) || elements.some((entry) => entry === undefined)) {
+        return undefined;
+      }
+      return {
+        targetReceiver: none,
+        targetArguments: [
+          ...leading as RustFinalizedSourceInput[],
+          {
+            source: { kind: "argument-array", sourceIndexes: arrayIndexes },
+            elements: elements as RustFinalizedSourceInput[],
+            elementCarrier: form.elementCarrier,
+            mode: "value",
+          },
+        ],
+      };
+    }
     case "receiver-value-array": {
       const receiver = input.receiver(form.receiverMode);
       const leading = form.leadingArguments.map((argument, sourceIndex) =>

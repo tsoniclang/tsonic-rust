@@ -576,7 +576,8 @@ function validateOperationRows(
     const operationFormContractViolation = rustProviderOperationFormContractViolation(
       row.operationKind,
       row.target,
-      row.target.form === "call-value-slice" || row.target.form === "receiver-value-array"
+      row.target.form === "call-value-slice" || row.target.form === "call-value-array" ||
+          row.target.form === "receiver-value-array"
         ? row.target.leadingArguments.length
         : row.parameterCarriers?.length ?? 0,
     );
@@ -605,7 +606,8 @@ function validateOperationParameters(
   if (ownerSignatures.length === 0) {
     return;
   }
-  if (row.target.form === "call-value-slice" || row.target.form === "receiver-value-array") {
+  if (row.target.form === "call-value-slice" || row.target.form === "call-value-array" ||
+    row.target.form === "receiver-value-array") {
     const leadingArgumentCount = row.target.leadingArguments.length;
     if (ownerSignatures.some((candidate) => candidate.parameters.length < leadingArgumentCount)) {
       fail(`row '${row.memberId ?? row.exportId}' declares ${leadingArgumentCount} leading target arguments but its selected source signature has fewer parameters`);
@@ -657,6 +659,7 @@ function validateOperationForm(
       }
       return;
     case "call-value-slice":
+    case "call-value-array":
       requireExactKeys(record, ["form", "path", "leadingArguments", "elementCarrier"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
       validateValueSliceArguments(form, definition, label, fail);
@@ -731,7 +734,9 @@ function validateOperationForm(
 }
 
 function validateValueSliceArguments(
-  form: Extract<RustProviderOperationForm, { readonly form: "call-value-slice" | "receiver-value-array" }>,
+  form: Extract<RustProviderOperationForm, {
+    readonly form: "call-value-slice" | "call-value-array" | "receiver-value-array";
+  }>,
   definition: RustProviderPackageDefinition,
   label: string,
   fail: Fail,

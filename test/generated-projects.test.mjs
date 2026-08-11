@@ -174,6 +174,12 @@ export function main(): void {
   check(mutating.lastIndexOf(7) === 2);
   check(mutating.lastIndexOf(7, -2) === 1);
 
+  const made = Array.of<int32>(10, 20, 30);
+  check(made.join("-") === "10-20-30");
+  check(Array.from("a😀").join("") === "a😀");
+  const unknownArray = JSON.parse("[1]");
+  check(Array.isArray(unknownArray));
+
   const values = [1, , 3];
   values.length = 5;
   values[3] = 4;

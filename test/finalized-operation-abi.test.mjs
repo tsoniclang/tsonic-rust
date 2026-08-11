@@ -278,6 +278,51 @@ test("variadic value slices convert each source value exactly and always pass on
   assert.equal(compileTimeElement, undefined);
 });
 
+test("variadic value arrays move each source value into one owned fixed Rust array", () => {
+  const form = {
+    form: "call-value-array",
+    path: "js_abi::array_of",
+    leadingArguments: [],
+    elementCarrier: int32,
+  };
+  const pair = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [int32, int32],
+    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    isAsync: false,
+    isFallible: false,
+  });
+  const empty = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [],
+    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    isAsync: false,
+    isFallible: false,
+  });
+  const wrong = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string],
+    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.deepEqual(pair?.targetArguments[0], {
+    source: { kind: "argument-array", sourceIndexes: [0, 1] },
+    elements: pair.targetArguments[0].elements,
+    elementCarrier: int32,
+    mode: "value",
+  });
+  assert.deepEqual(empty?.targetArguments[0].source, {
+    kind: "argument-array",
+    sourceIndexes: [],
+  });
+  assert.equal(wrong, undefined);
+});
+
 test("receiver value arrays move every variadic source value into one fixed Rust array", () => {
   const receiver = {
     kind: "target-named",

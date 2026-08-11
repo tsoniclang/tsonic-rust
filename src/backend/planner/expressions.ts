@@ -1335,6 +1335,7 @@ function planProviderOperationExpression(
       return scoped(applyProviderOperationChain({ kind: "call", path: form.path, args }, form.chain));
     }
     case "call-value-slice":
+    case "call-value-array":
     case "call-str-slice":
     case "free-call-str-slice":
     case "free-call": {

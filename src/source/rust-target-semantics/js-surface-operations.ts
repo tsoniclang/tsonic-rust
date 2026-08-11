@@ -101,7 +101,8 @@ type JsCarrierRef =
   | { readonly ref: "map-entry-array" }
   | { readonly ref: "set-value" }
   | { readonly ref: "set-value-array" }
-  | { readonly ref: "set-entry-array" };
+  | { readonly ref: "set-entry-array" }
+  | { readonly ref: "argument"; readonly index: number };
 
 type JsCarrierCapability = "numeric" | "integer" | "clone" | "stringifiable" | "js-equality";
 
@@ -279,6 +280,9 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
 
 const jsOperationRows: readonly JsOperationRowData[] = [
   ...sharedArrayOperationRows,
+  { owner: "ArrayConstructor", member: "isArray", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_is_array_value", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "jsvalue" }] } },
+  { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "string", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_string", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
+  { owner: "ArrayConstructor", member: "of", operationKind: "call", lane: "js-array", selectedMethodTypeArgumentArity: 1, variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::array_of", leadingArguments: [], elementCarrier: rustInferCarrier }, result: { ref: "element-array" } } },
   { owner: "Array", member: "length", operationKind: "property-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set_len", argConversions: [rustInt32ToUsizeValueConversion] }, params: [{ ref: "int32" }] } },
   { owner: "Array", member: "push", operationKind: "call", lane: "js-array", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-value-array", name: "push_many", receiverMode: "ref", leadingArguments: [], elementCarrier: rustInferCarrier }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
   { owner: "Array", member: "pop", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "pop" }, result: { ref: "option-of-element" } } },
@@ -629,6 +633,7 @@ interface JsLaneBindings {
   readonly setValue?: TargetTypeRef;
   readonly receiver?: TargetTypeRef;
   readonly selectedMethodTypeArguments?: readonly (TargetTypeRef | undefined)[];
+  readonly arguments?: readonly (TargetTypeRef | undefined)[];
 }
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
@@ -662,6 +667,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   // Static owners have no receiver carrier; the lane comes from the owner row.
   if (carrier === undefined && ownerName === "StringConstructor") {
     return { lane: "string", bindings: {} };
+  }
+  if (carrier === undefined && ownerName === "ArrayConstructor") {
+    return { lane: "js-array", bindings: {} };
   }
   if (carrier === undefined && ownerName === "DateConstructor") {
     return { lane: "date", bindings: {} };
@@ -778,6 +786,8 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
       return bindings.setValue === undefined
         ? undefined
         : rustVecTargetType({ kind: "tuple", elements: [bindings.setValue, bindings.setValue] });
+    case "argument":
+      return bindings.arguments?.[reference.index];
   }
 }
 
@@ -911,7 +921,7 @@ function materializeVariadicTarget(
   target: RustProviderOperationForm,
   elementCarrier: TargetTypeRef | undefined,
 ): RustProviderOperationForm | undefined {
-  if (target.form !== "receiver-value-array") {
+  if (target.form !== "receiver-value-array" && target.form !== "call-value-array") {
     return target;
   }
   const resolvedElementCarrier = target.elementCarrier.kind === "opaque" &&
@@ -937,6 +947,12 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
   const bindings: JsLaneBindings = {
     ...laneMatch.bindings,
     selectedMethodTypeArguments: request.selectedMethodTypeArgumentCarriers,
+    arguments: request.argumentCarriers,
+    ...(lane === "js-array" && laneMatch.bindings.element === undefined &&
+        request.selectedMethodTypeArgumentCarriers?.length === 1 &&
+        request.selectedMethodTypeArgumentCarriers[0] !== undefined
+      ? { element: request.selectedMethodTypeArgumentCarriers[0] }
+      : {}),
   };
   const argumentCarriers = request.argumentCarriers ?? [];
   const matches = jsOperationRows.flatMap((candidate) => {

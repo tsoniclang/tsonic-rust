@@ -78,6 +78,7 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "receiver slice-call form must contain one closed Rust path and receiver mode";
     case "call-value-slice":
+    case "call-value-array":
       return hasExactKeys(
         form,
         ["form", "path", "leadingArguments", "elementCarrier"],
@@ -91,7 +92,7 @@ export function rustProviderOperationFormContractViolation(
         runtimeSourceIndexes.length === sourceArgumentCount &&
         runtimeSourceIndexes.length >= form.leadingArguments.length
         ? undefined
-        : "value-slice call must contain one path, closed leading arguments, a closed element carrier, and only runtime source arguments";
+        : "value collection call must contain one path, closed leading arguments, a closed element carrier, and only runtime source arguments";
     case "receiver-value-array":
       return hasExactKeys(
         form,

@@ -295,6 +295,10 @@ interface ArrayConstructor {
   new <T>(...items: T[]): T[];
   <T>(...items: T[]): T[];
   isArray(value: unknown): value is unknown[];
+  from(arrayLike: string): string[];
+  from<T>(arrayLike: ArrayLike<T> | Iterable<T>): T[];
+  from<T, U>(arrayLike: ArrayLike<T> | Iterable<T>, mapfn: (value: T, index: number) => U): U[];
+  of<T>(...items: T[]): T[];
 }
 declare var Array: ArrayConstructor;
 

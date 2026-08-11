@@ -16,7 +16,9 @@ the blocked section with the contract each requires.
   splice, includes, indexOf, lastIndexOf, forEach, map, filter, reduce, some,
   every, find, findIndex, findLast, findLastIndex, reverse, default sort,
   fill, and copyWithin; slice over closed Clone carriers and join over
-  exact stringifiable carriers; callbacks receive every declared argument,
+  exact stringifiable carriers; Array.of over an exact selected element type,
+  Array.from over strings, and Array.isArray over closed JsValue inputs;
+  callbacks receive every declared argument,
   reduce supports both initial-value and first-present-element forms, and one
   identity-preserving `JsArray<T>` carrier represents dense and sparse arrays.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
