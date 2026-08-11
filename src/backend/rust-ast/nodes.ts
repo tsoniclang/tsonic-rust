@@ -20,6 +20,13 @@ export type RustType =
   | { readonly kind: "function-pointer"; readonly parameters: readonly RustType[]; readonly result: RustType; readonly abi?: readonly string[] }
   | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
 
+export type RustPattern =
+  | {
+      readonly kind: "tuple-variant";
+      readonly path: string;
+      readonly bindings: readonly string[];
+    };
+
 export type RustExpr =
   | { readonly kind: "int-literal"; readonly text: string }
   | { readonly kind: "float-literal"; readonly text: string }
@@ -33,6 +40,14 @@ export type RustExpr =
   | { readonly kind: "binary"; readonly operator: RustBinaryOperator; readonly left: RustExpr; readonly right: RustExpr }
   | { readonly kind: "range"; readonly start: RustExpr; readonly end: RustExpr }
   | { readonly kind: "conditional"; readonly condition: RustExpr; readonly whenTrue: RustExpr; readonly whenFalse: RustExpr }
+  | {
+      readonly kind: "match";
+      readonly expression: RustExpr;
+      readonly arms: readonly {
+        readonly pattern: RustPattern;
+        readonly expression: RustExpr;
+      }[];
+    }
   | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
   | { readonly kind: "call"; readonly path: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
@@ -64,6 +79,7 @@ export type RustExpr =
     }
   | { readonly kind: "await"; readonly expr: RustExpr }
   | { readonly kind: "try"; readonly expr: RustExpr }
+  | { readonly kind: "return-expression"; readonly expr?: RustExpr }
   | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 

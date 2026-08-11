@@ -1530,6 +1530,7 @@ function resolveExpressionCarrierUncached(
         (delegatedProtocol === undefined ||
           !rustTargetTypeRefEquals(delegatedProtocol.yieldType, generator.yieldType) ||
           !rustTargetTypeRefEquals(delegatedProtocol.nextType, generator.nextType) ||
+          !rustTargetTypeRefEquals(delegatedProtocol.returnType, generator.returnType) ||
           (generator.kind === "sync" && delegatedProtocol.kind !== "sync"))) {
         appendRustDiagnostic(
           walk,

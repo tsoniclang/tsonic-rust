@@ -24,8 +24,11 @@ export function* exchange(seed: int32): Generator<int32, int32, int32> {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exchange\(seed: i32\) -> rt::Generator<i32, i32, i32>/u);
   assert.match(source, /rt::Generator::new\(move \|__tsonic_generator\| async move \{/u);
-  assert.match(source, /let resumed: i32 = __tsonic_generator\.yield_value\(seed\)\.await;/u);
-  assert.match(source, /__tsonic_generator\.yield_value\(resumed\)\.await;/u);
+  assert.match(source, /let resumed: i32 = match __tsonic_generator\.yield_value\(seed\)\.await \{/u);
+  assert.match(source, /rt::GeneratorResume::Next/u);
+  assert.match(source, /rt::GeneratorResume::Return/u);
+  assert.match(source, /rt::GeneratorResume::Throw/u);
+  assert.match(source, /match __tsonic_generator\.yield_value\(resumed\)\.await \{/u);
 });
 
 test("async generators use the native async-generator carrier", () => {
@@ -108,8 +111,10 @@ export function run(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.equal(source.match(/rt::Completion<String>/gu)?.length, 4);
-  assert.doesNotMatch(source, /rt::Completion<rt::Generator</u);
+  const completionTypes = [...source.matchAll(/rt::Completion<([^>\n]+)>/gu)]
+    .map((match) => match[1]);
+  assert.equal(completionTypes.length > 0, true);
+  assert.deepEqual([...new Set(completionTypes)], ["String"]);
   validateGeneratedProject("generator-completion-return-carrier", result.artifacts);
 });
 
@@ -307,6 +312,132 @@ export function close(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /generator\.throw_value\(rt::JsError::error/u);
   validateGeneratedProject("generator-throw", result.artifacts);
+});
+
+test("sync generator commands execute catch, finally, and delegated cleanup", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "generator_cleanup" } },
+    files: {
+      "index.ts": `
+${generatorTypes}
+import { check } from "@acme/testing";
+
+let cleanup: int32 = 0;
+
+function* guarded(): Generator<int32, int32, int32> {
+  try {
+    yield 1;
+    return 2;
+  } finally {
+    cleanup += 1;
+  }
+}
+
+function* catches(): Generator<int32, int32, int32> {
+  try {
+    yield 3;
+  } catch {
+    yield 4;
+  } finally {
+    cleanup += 10;
+  }
+  return 5;
+}
+
+function* inner(): Generator<int32, int32, int32> {
+  try {
+    yield 6;
+    return 7;
+  } finally {
+    cleanup += 100;
+  }
+}
+
+function* outer(): Generator<int32, int32, int32> {
+  return yield* inner();
+}
+
+export function main(): void {
+  const returned = guarded();
+  returned.next();
+  const returnResult = returned.return(9);
+  check(returnResult.done === true && returnResult.value === 9);
+  check(cleanup === 1);
+
+  const caught = catches();
+  caught.next();
+  const caughtResult = caught.throw(new Error("caught"));
+  check(caughtResult.done !== true && caughtResult.value === 4);
+  const caughtCompletion = caught.next();
+  check(caughtCompletion.done === true && caughtCompletion.value === 5);
+  check(cleanup === 11);
+
+  const delegated = outer();
+  delegated.next();
+  const delegatedResult = delegated.return(12);
+  check(delegatedResult.done === true && delegatedResult.value === 12);
+  check(cleanup === 111);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::GeneratorResume::Return/u);
+  assert.match(source, /rt::GeneratorResume::Throw/u);
+  assert.match(source, /rt::finish_finally/u);
+  assert.equal(validateGeneratedProject("generator-cleanup", result.artifacts, { run: true }).status, 0);
+});
+
+test("async generator return and throw commands execute cleanup", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "async_generator_cleanup" } },
+    files: {
+      "index.ts": `
+${generatorTypes}
+import { check } from "@acme/testing";
+
+let cleanup: int32 = 0;
+
+async function* guarded(delta: int32): AsyncGenerator<int32, int32, int32> {
+  try {
+    yield delta;
+    return 2;
+  } finally {
+    cleanup += delta;
+  }
+}
+
+export async function main(): Promise<void> {
+  const returned = guarded(1);
+  await returned.next();
+  const returnResult = await returned.return(9);
+  check(returnResult.done === true && returnResult.value === 9);
+  check(cleanup === 1);
+
+  const thrown = guarded(10);
+  await thrown.next();
+  let observed = false;
+  try {
+    await thrown.throw(new Error("stop"));
+  } catch {
+    observed = true;
+  }
+  check(observed);
+  check(cleanup === 11);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /return_value\(9\)\.await/u);
+  assert.match(source, /throw_value\(rt::JsError::error/u);
+  assert.equal(validateGeneratedProject("async-generator-cleanup", result.artifacts, { run: true }).status, 0);
 });
 
 test("static generator methods use the same exact native protocol", { timeout: 300_000 }, () => {

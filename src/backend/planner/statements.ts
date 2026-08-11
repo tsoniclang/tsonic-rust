@@ -103,6 +103,7 @@ import {
   rustLocationStorageForDeclaration,
 } from "./typed-locations.js";
 import { requireRustLocationValueCarrier } from "./generic-requirements.js";
+import { planRustReturnExit } from "./completion-exits.js";
 import {
   readRustProjectDispatchedField,
   readRustProjectObjectField,
@@ -136,7 +137,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       if (expression !== undefined && planned === undefined) {
         return undefined;
       }
-      return planReturnStatement(planned, context);
+      return [planRustReturnExit(planned, context)];
     }
     case KindBreakStatement:
     case KindContinueStatement: {
@@ -553,28 +554,6 @@ function planResourceDisposalExpression(
     "Finalized provider resource disposal target is not a closed Rust receiver operation.",
   ));
   return undefined;
-}
-
-function planReturnStatement(
-  expression: RustExpr | undefined,
-  context: RustPlanContext,
-): readonly RustStmt[] {
-  const boundary = context.completionBoundary;
-  if (boundary === undefined) {
-    return [{ kind: "return", ...(expression === undefined ? {} : { expr: expression }) }];
-  }
-  let outermost = boundary;
-  while (outermost.parent !== undefined) {
-    outermost = outermost.parent;
-  }
-  outermost.dispatchReturn.value = true;
-  context.usedAliases?.add("rt");
-  return [{
-    kind: "completion-exit",
-    completion: "return",
-    resultWrapped: boundary.fallible,
-    ...(expression === undefined ? {} : { expr: expression }),
-  }];
 }
 
 function planLoopExitStatement(

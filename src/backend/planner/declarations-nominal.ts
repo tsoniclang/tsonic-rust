@@ -478,7 +478,7 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
             protocol: generatorFact,
           },
         }),
-    ...(fallible ? { fallibleContext: true } : {}),
+    ...(fallible || generatorFact !== undefined ? { fallibleContext: true } : {}),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -553,7 +553,11 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
               params: [{ name: generatorControllerName!, mutable: false }],
               move: true,
               async: true,
-              body: applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
+              body: applyFallibleShape(
+                applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
+                true,
+                !isRustUnitCarrier(generatorFact.returnType),
+              ),
             }],
           },
         }],

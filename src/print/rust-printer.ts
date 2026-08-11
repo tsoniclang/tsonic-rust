@@ -2,6 +2,7 @@ import type {
   RustBlock,
   RustExpr,
   RustItem,
+  RustPattern,
   RustSourceFileModel,
   RustStmt,
   RustType,
@@ -898,6 +899,7 @@ function operatorPrecedence(operator: string): RustPrecedence {
 function expressionPrecedence(expression: RustExpr): RustPrecedence {
   switch (expression.kind) {
     case "assignment":
+    case "return-expression":
       return RustPrecedence.Assignment;
     case "range":
       return RustPrecedence.Or;
@@ -978,6 +980,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "conditional": {
       return `if ${printRustExpr(expression.condition)} { ${printRustExpr(expression.whenTrue)} } else { ${printRustExpr(expression.whenFalse)} }`;
     }
+    case "match": {
+      return printRustMatchExpression(expression, 0);
+    }
     case "assignment": {
       return `${printRustExpr(expression.target)} ${expression.operator} ${printRustExpr(expression.value)}`;
     }
@@ -1042,6 +1047,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "try": {
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`;
     }
+    case "return-expression": {
+      return expression.expr === undefined ? "return" : `return ${printRustExpr(expression.expr)}`;
+    }
     case "tuple-literal": {
       const elements = expression.elements.map(printRustExpr).join(", ");
       return `(${elements}${expression.elements.length === 1 ? "," : ""})`;
@@ -1066,6 +1074,7 @@ function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "block":
     case "evaluate-then":
+    case "match":
       return true;
     case "unary":
       return rustExpressionContainsStatementBlock(expression.operand);
@@ -1107,6 +1116,8 @@ function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
     case "await":
     case "try":
       return rustExpressionContainsStatementBlock(expression.expr);
+    case "return-expression":
+      return expression.expr !== undefined && rustExpressionContainsStatementBlock(expression.expr);
     case "closure":
       return rustExpressionContainsStatementBlock(expression.body);
     case "struct-literal":
@@ -1133,6 +1144,9 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
       return rustExpressionContainsClosure(expression.condition) ||
         rustExpressionContainsClosure(expression.whenTrue) ||
         rustExpressionContainsClosure(expression.whenFalse);
+    case "match":
+      return rustExpressionContainsClosure(expression.expression) ||
+        expression.arms.some((arm) => rustExpressionContainsClosure(arm.expression));
     case "assignment":
       return rustExpressionContainsClosure(expression.target) || rustExpressionContainsClosure(expression.value);
     case "call":
@@ -1162,6 +1176,8 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
     case "await":
     case "try":
       return rustExpressionContainsClosure(expression.expr);
+    case "return-expression":
+      return expression.expr !== undefined && rustExpressionContainsClosure(expression.expr);
     case "struct-literal":
       return expression.fields.some((field) => rustExpressionContainsClosure(field.value));
     default:
@@ -1189,6 +1205,10 @@ function rustExpressionContainsPreferredVerticalMethodChain(expression: RustExpr
       return rustExpressionContainsPreferredVerticalMethodChain(expression.condition) ||
         rustExpressionContainsPreferredVerticalMethodChain(expression.whenTrue) ||
         rustExpressionContainsPreferredVerticalMethodChain(expression.whenFalse);
+    case "match":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.expression) ||
+        expression.arms.some((arm) =>
+          rustExpressionContainsPreferredVerticalMethodChain(arm.expression));
     case "assignment":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.target) ||
         rustExpressionContainsPreferredVerticalMethodChain(expression.value);
@@ -1220,6 +1240,9 @@ function rustExpressionContainsPreferredVerticalMethodChain(expression: RustExpr
     case "await":
     case "try":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.expr);
+    case "return-expression":
+      return expression.expr !== undefined &&
+        rustExpressionContainsPreferredVerticalMethodChain(expression.expr);
     case "closure":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.body);
     case "struct-literal":
@@ -1238,6 +1261,8 @@ function printRustExprFitted(
 ): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
+    case "match":
+      return printRustMatchExpression(expression, depth);
     case "conditional": {
       const branchIndent = indentText(depth + 1);
       const condition = printRustExprFitted(
@@ -1433,6 +1458,13 @@ function printRustExprFitted(
         ), "?");
       }
       return appendToLastLine(printRustExprFitted(expression.expr, depth, column + 1), "?");
+    }
+    case "return-expression": {
+      if (expression.expr === undefined) {
+        return "return";
+      }
+      const prefix = "return ";
+      return `${prefix}${printRustExprFitted(expression.expr, depth, column + prefix.length)}`;
     }
     case "reference": {
       const prefix = expression.mutable === true ? "&mut " : "&";
@@ -1943,7 +1975,8 @@ function printFittedCall(
       ")",
     );
   }
-  if (arguments_.length === 1 && arguments_[0]?.kind === "block") {
+  if (arguments_.length === 1 &&
+    (arguments_[0]?.kind === "block" || arguments_[0]?.kind === "match")) {
     const prefix = `${callable}(`;
     return appendToLastLine(
       `${prefix}${printRustExprFitted(
@@ -2422,6 +2455,10 @@ function rustExpressionContainsExpandedStructLiteral(expression: RustExpr): bool
       return rustExpressionContainsExpandedStructLiteral(expression.condition) ||
         rustExpressionContainsExpandedStructLiteral(expression.whenTrue) ||
         rustExpressionContainsExpandedStructLiteral(expression.whenFalse);
+    case "match":
+      return rustExpressionContainsExpandedStructLiteral(expression.expression) ||
+        expression.arms.some((arm) =>
+          rustExpressionContainsExpandedStructLiteral(arm.expression));
     case "assignment":
       return rustExpressionContainsExpandedStructLiteral(expression.target) ||
         rustExpressionContainsExpandedStructLiteral(expression.value);
@@ -2464,11 +2501,58 @@ function rustExpressionContainsExpandedStructLiteral(expression: RustExpr): bool
     case "await":
     case "try":
       return rustExpressionContainsExpandedStructLiteral(expression.expr);
+    case "return-expression":
+      return expression.expr !== undefined &&
+        rustExpressionContainsExpandedStructLiteral(expression.expr);
     case "closure":
       return rustExpressionContainsExpandedStructLiteral(expression.body);
     default:
       return false;
   }
+}
+
+function printRustPattern(pattern: RustPattern): string {
+  switch (pattern.kind) {
+    case "tuple-variant":
+      return `${pattern.path}(${pattern.bindings.join(", ")})`;
+  }
+}
+
+function printRustMatchExpression(
+  expression: Extract<RustExpr, { readonly kind: "match" }>,
+  depth: number,
+): string {
+  const matched = printRustExprFitted(expression.expression, depth, "match ".length);
+  const header = matched.includes("\n")
+    ? `match ${matched}\n${indentText(depth)}{`
+    : `match ${matched} {`;
+  const armIndent = indentText(depth + 1);
+  const arms = expression.arms.flatMap((arm) => {
+    const pattern = printRustPattern(arm.pattern);
+    if (arm.expression.kind === "return-expression" || arm.expression.kind === "try") {
+      const valueIndent = indentText(depth + 2);
+      const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
+      return [
+        `${armIndent}${pattern} => {`,
+        `${valueIndent}${value}`,
+        `${armIndent}}`,
+      ];
+    }
+    const prefix = `${armIndent}${pattern} => `;
+    const flatValue = printRustExpr(arm.expression);
+    if (flatValue.includes("\n") || !renderedFits(`${prefix}${flatValue},`, 0)) {
+      const valueIndent = indentText(depth + 2);
+      const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
+      return [
+        `${armIndent}${pattern} => {`,
+        `${valueIndent}${value}`,
+        `${armIndent}}`,
+      ];
+    }
+    const value = printRustExprFitted(arm.expression, depth + 1, prefix.length);
+    return [appendToLastLine(`${prefix}${value}`, ",")];
+  });
+  return [header, ...arms, `${indentText(depth)}}`].join("\n");
 }
 
 function renderedFits(rendered: string, firstColumn: number): boolean {

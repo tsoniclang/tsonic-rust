@@ -119,6 +119,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synth
 import { planRustBindingPattern } from "./binding-patterns.js";
 import { rustTargetOperationIsFallible } from "../../source/rust-facts/target-operation.js";
 import { rustProjectDispatchTraitType } from "./project-polymorphism-names.js";
+import { planRustFallibleReturnExpression } from "./completion-exits.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
@@ -954,6 +955,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
           !rustTargetTypeRefEquals(delegated.yieldType, generator.protocol.yieldType) ||
           !rustTargetTypeRefEquals(delegated.nextType, generator.protocol.nextType) ||
           !rustTargetTypeRefEquals(delegated.returnType, fact.resultType) ||
+          !rustTargetTypeRefEquals(delegated.returnType, generator.protocol.returnType) ||
           (generator.protocol.kind === "sync" && delegated.kind !== "sync")) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, node),
@@ -970,7 +972,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         if (delegate === undefined) {
           return undefined;
         }
-        return {
+        return planGeneratorResumeExpression({
           kind: "await",
           expr: {
             kind: "method-call",
@@ -978,7 +980,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
             method: delegated.kind === "sync" ? "yield_from" : "yield_from_async",
             args: [delegate],
           },
-        };
+        }, context);
       }
       const operand = Node_Expression(context.input.ast, node);
       const value = operand === undefined
@@ -987,7 +989,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       if (value === undefined) {
         return undefined;
       }
-      return {
+      return planGeneratorResumeExpression({
         kind: "await",
         expr: {
           kind: "method-call",
@@ -995,7 +997,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
           method: "yield_value",
           args: [value],
         },
-      };
+      }, context);
     }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
@@ -1025,6 +1027,60 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       return undefined;
     }
   }
+}
+
+function planGeneratorResumeExpression(
+  resume: RustExpr,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, context.sourceFile),
+      "rust.backend.generator-resume-names",
+      "Generator resume lowering requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  const nextName = allocateRustSyntheticName(context.syntheticNames, "generator_next");
+  const returnName = allocateRustSyntheticName(context.syntheticNames, "generator_return");
+  const errorName = allocateRustSyntheticName(context.syntheticNames, "generator_error");
+  context.usedAliases?.add("rt");
+  return {
+    kind: "match",
+    expression: resume,
+    arms: [{
+      pattern: {
+        kind: "tuple-variant",
+        path: "rt::GeneratorResume::Next",
+        bindings: [nextName],
+      },
+      expression: { kind: "path", path: nextName },
+    }, {
+      pattern: {
+        kind: "tuple-variant",
+        path: "rt::GeneratorResume::Return",
+        bindings: [returnName],
+      },
+      expression: planRustFallibleReturnExpression(
+        { kind: "path", path: returnName },
+        context,
+      ),
+    }, {
+      pattern: {
+        kind: "tuple-variant",
+        path: "rt::GeneratorResume::Throw",
+        bindings: [errorName],
+      },
+      expression: {
+        kind: "try",
+        expr: {
+          kind: "call",
+          path: "Err",
+          args: [{ kind: "path", path: errorName }],
+        },
+      },
+    }],
+  };
 }
 
 function finishRuntimeCallableExpression(
