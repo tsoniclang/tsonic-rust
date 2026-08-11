@@ -500,7 +500,11 @@ function printRustResourceScope(
     ? undefined
     : `${indent}let ${statement.flowName}: ${bodyType} = ${directBody.trimStart()}`;
   const lines = body.length === 0
-    ? [`${indent}let ${statement.flowName}: ${bodyType} = ${bodyTail.trim()};`]
+    ? [printRustFlatLetInitializer(
+        `${indent}let ${statement.flowName}: ${bodyType} = `,
+        bodyTail.trim(),
+        depth,
+      )]
     : directBody !== undefined
       ? directAssignment !== undefined && renderedFits(directAssignment, 0)
         ? [directAssignment]
@@ -1294,6 +1298,17 @@ function printRustLetInitializer(
     return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
   }
   return `${prefix}${printRustExprFitted(initializer, depth, prefix.length + 1)};`;
+}
+
+function printRustFlatLetInitializer(
+  prefix: string,
+  initializer: string,
+  depth: number,
+): string {
+  const assignment = `${prefix}${initializer};`;
+  return renderedFits(assignment, 0)
+    ? assignment
+    : `${prefix.trimEnd()}\n${indentText(depth + 1)}${initializer};`;
 }
 
 function printRustAssociatedOwner(owner: RustType): string {

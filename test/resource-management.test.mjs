@@ -128,12 +128,15 @@ class AsyncResource {
   async [Symbol.asyncDispose](): Promise<void> {}
 }
 
-export async function run(): Promise<void> {
+export async function run(fail: boolean): Promise<void> {
   {
     using resource = new Resource();
   }
   {
     await using resource = new AsyncResource();
+  }
+  if (fail) {
+    throw new Error("failure");
   }
 }
 `,
@@ -145,6 +148,7 @@ export async function run(): Promise<void> {
   assert.equal([...source.matchAll(/let resource =/gu)].length, 2);
   assert.match(source, /resource\.dispose\(\)/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
+  assert.match(source, /let __tsonic_resource_flow(?:_\d+)?: rt::TsonicResult<rt::Completion<\(\)>> =\n\s+Ok\(rt::Completion::Normal\);/u);
   validateGeneratedProject("resource-management-lexical-scope", result.artifacts);
 });
 
