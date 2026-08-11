@@ -1247,7 +1247,8 @@ function printRustExprFitted(
         expression.left,
         depth,
         column,
-        column > indentText(depth).length ? indentText(depth) : undefined,
+        methodChainContinuationIndent ??
+          (column > indentText(depth).length ? indentText(depth) : undefined),
       );
       const left = expression.left.kind === "numeric-cast" &&
           (expression.operator === "<" || expression.operator === "<=" ||
@@ -1438,7 +1439,7 @@ function rustMethodChainRequiresVerticalLayout(expression: RustExpr): boolean {
   return chain !== undefined &&
     !rustMethodCallKeepsTrailingClosureAttached(expression) &&
     printRustExpr(expression).length > rustMethodChainWidth &&
-    chain.steps.length > 1;
+    chain.steps.filter((step) => step.kind === "method" || step.kind === "field").length > 1;
 }
 
 function rustMethodCallKeepsTrailingClosureAttached(expression: RustExpr): boolean {
@@ -1600,6 +1601,11 @@ function printFittedCall(
     );
   }
   if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "method-call") {
+    if (!flat.includes("\n") && renderedFits(flat, column) &&
+      !rustExpressionContainsStatementBlock(arguments_[0]) &&
+      !rustExpressionContainsExpandedStructLiteral(arguments_[0])) {
+      return flat;
+    }
     const chain = rustMethodChain(arguments_[0]);
     const outerCallMustOwnBreak = chain !== undefined &&
       chain.steps.length === 1 &&
@@ -1814,7 +1820,12 @@ function printFittedCall(
     }
   }
   const renderedArguments = arguments_.map((argument) => {
-    const rendered = printRustExprFitted(argument, depth + 1, argumentIndent.length + 1);
+    const rendered = printRustExprFitted(
+      argument,
+      depth + 1,
+      argumentIndent.length + 1,
+      indentText(depth + 2),
+    );
     return appendToLastLine(`${argumentIndent}${rendered}`, ",");
   });
   return [

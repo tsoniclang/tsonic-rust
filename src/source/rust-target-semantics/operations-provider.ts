@@ -482,8 +482,8 @@ export function selectRustCheckedCall(
     });
   }
   if (selectedSourceMember !== undefined) {
-    const receiverCarrier = resolveRustTargetTypeRef(
-      request.sourceReceiver?.type,
+    const receiverCarrier = selectedCallReceiverValueCarrier(
+      request,
       context,
       options,
     );
@@ -538,8 +538,11 @@ export function selectRustCheckedCall(
         sourceName: selectedSourceMember.ownerName,
       });
     }
-    const receiver = request.sourceReceiver?.type;
-    const receiverCarrier = resolveRustTargetTypeRef(receiver, context, options);
+    const receiverCarrier = selectedCallReceiverValueCarrier(
+      request,
+      context,
+      options,
+    );
     const argumentCarriers = request.arguments.map((argument) =>
       resolveRustTargetTypeRef(argument, context, options));
     const selectedMethodTypeArgumentCarriers =
@@ -1435,9 +1438,35 @@ function selectedCallReceiverCarrier(
   if (!providerFormRequiresSourceReceiver(form)) {
     return undefined;
   }
-  return request.sourceReceiver === undefined
-    ? undefined
-    : resolveRustTargetTypeRef(request.sourceReceiver.type, context, options);
+  return selectedCallReceiverValueCarrier(request, context, options);
+}
+
+function selectedCallReceiverValueCarrier(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  const receiver = request.sourceReceiver;
+  if (receiver === undefined) {
+    return undefined;
+  }
+  const sourceCarrier = resolveRustTargetTypeRef(
+    receiver.declaration ?? receiver.expression,
+    context,
+    options,
+  );
+  if (!request.optionalChain) {
+    return sourceCarrier;
+  }
+  const optionElement = rustOptionElementCarrier(sourceCarrier);
+  if (optionElement !== undefined) {
+    return optionElement;
+  }
+  const selectedCarrier = resolveRustTargetTypeRef(receiver.type, context, options);
+  return sourceCarrier !== undefined && selectedCarrier !== undefined &&
+      rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)
+    ? selectedCarrier
+    : undefined;
 }
 
 type RustOptionalCallResult =
@@ -1473,7 +1502,11 @@ function selectRustOptionalCallResult(
       context,
       options,
     ),
-    selectedGuardCarrier: resolveRustTargetTypeRef(receiver.type, context, options),
+    selectedGuardCarrier: selectedCallReceiverValueCarrier(
+      request,
+      context,
+      options,
+    ),
     innerResultCarrier,
   });
   if (selection.kind === "rejected") {
@@ -1615,7 +1648,7 @@ export function selectRustCheckedPropertyAccess(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const selectedReceiverCarrier = selectedMemberReceiverCarrier(request, context, options);
-  if (selectedReceiverCarrier === undefined) {
+  if (request.optionalChain === true && selectedReceiverCarrier === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_EVIDENCE_MISSING", "Optional-chain property access has no exact TSTS-selected non-null receiver type.");
   }
   if (isDeclarationFileSubject(request.expression, context)) {
@@ -1777,7 +1810,7 @@ export function selectRustCheckedElementAccess(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const selectedReceiverCarrier = selectedMemberReceiverCarrier(request, context, options);
-  if (selectedReceiverCarrier === undefined) {
+  if (request.optionalChain === true && selectedReceiverCarrier === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_EVIDENCE_MISSING", "Optional-chain element access has no exact TSTS-selected non-null receiver type.");
   }
   if (isDeclarationFileSubject(request.expression, context)) {

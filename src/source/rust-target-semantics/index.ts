@@ -1217,6 +1217,36 @@ function resolveExpressionOperationDependencies(
     if (receiver !== undefined) {
       resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
     }
+    for (const argument of source?.sourceArguments ?? []) {
+      resolveCallArgumentOperationPrerequisite(
+        walk,
+        argument.expression,
+        sourceFile,
+      );
+    }
+  }
+}
+
+function resolveCallArgumentOperationPrerequisite(
+  walk: RustFactWalk,
+  argument: Node,
+  sourceFile: SourceFile,
+): void {
+  const kind = walk.context.ast.kindName(argument);
+  if (kind === KindCallExpression || kind === KindNewExpression ||
+    kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
+    kind === KindBinaryExpression || kind === KindPrefixUnaryExpression ||
+    kind === KindPostfixUnaryExpression) {
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    return;
+  }
+  if (kind === KindParenthesizedExpression || kind === KindNonNullExpression ||
+    kind === KindSatisfiesExpression || kind === "KindAsExpression" ||
+    kind === "KindTypeAssertionExpression") {
+    const inner = Node_Expression(walk.context.ast, argument);
+    if (inner !== undefined) {
+      resolveCallArgumentOperationPrerequisite(walk, inner, sourceFile);
+    }
   }
 }
 
@@ -2455,7 +2485,8 @@ function reconcileProjectSourceArgumentTypeParameters(
       return undefined;
     }
     const parameter = selected.member.parameters[first.sourceParameterIndex];
-    const actual = walk.context.facts.getRuntimeCarrierFact(argument)?.carrier;
+    const actual = walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ??
+      resolveProjectSourceInferenceCarrier(walk, argument);
     if (parameter === undefined || actual === undefined) {
       continue;
     }
@@ -2476,6 +2507,27 @@ function reconcileProjectSourceArgumentTypeParameters(
     }
   }
   return reconciled;
+}
+
+function resolveProjectSourceInferenceCarrier(
+  walk: RustFactWalk,
+  argument: Node,
+): TargetTypeRef | undefined {
+  const kind = walk.context.ast.kindName(argument);
+  if (kind !== KindIdentifier && kind !== KindCallExpression &&
+    kind !== KindNewExpression && kind !== KindPropertyAccessExpression &&
+    kind !== KindElementAccessExpression && kind !== KindBinaryExpression &&
+    kind !== KindPrefixUnaryExpression && kind !== KindPostfixUnaryExpression &&
+    kind !== KindParenthesizedExpression && kind !== KindNonNullExpression &&
+    kind !== KindSatisfiesExpression && kind !== "KindAsExpression" &&
+    kind !== "KindTypeAssertionExpression") {
+    return undefined;
+  }
+  return resolveRustTargetTypeRef(
+    argument,
+    rustOperationContext(walk, argument),
+    walk.operationOptions,
+  );
 }
 
 function projectSourceTypeArgumentHasLiteralProof(
