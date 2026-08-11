@@ -425,6 +425,10 @@ export function rustValueCarrierRequiresCloneOnRead(carrier: TargetTypeRef | und
   return carrier?.kind === "target-named" && rustCloneOnReadTargetIds.has(carrier.id);
 }
 
+export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && rustJsStrictEqualityTargetIds.has(carrier.id);
+}
+
 const rustCloneOnReadTargetIds: ReadonlySet<string> = new Set([
   rustBigIntTargetId,
   rustLocationTargetId,
@@ -432,6 +436,16 @@ const rustCloneOnReadTargetIds: ReadonlySet<string> = new Set([
   rustJsArrayTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
+  rustJsDateTargetId,
+  rustJsRegExpTargetId,
+]);
+
+const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
+  rustJsValueTargetId,
+  rustJsArrayTargetId,
+  rustJsMapTargetId,
+  rustJsSetTargetId,
+  rustJsDateTargetId,
   rustJsRegExpTargetId,
 ]);
 

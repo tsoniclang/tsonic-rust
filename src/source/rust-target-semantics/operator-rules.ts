@@ -28,11 +28,13 @@ import {
 import {
   isRustBigIntCarrier,
   isRustBoolCarrier,
+  isRustJsStrictEqualityCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
   rustSourcePrimitiveTargetType,
   sameRustPrimitiveCarrier,
 } from "../rust-target-types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import { rustSourceTypeCarrierValue } from "../rust-facts/keys.js";
 
 export interface RustBinaryOperatorSelection {
@@ -165,6 +167,7 @@ export function selectRustBinaryOperator(
       (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) ||
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
       (isRustStringCarrier(left) && isRustStringCarrier(right)) ||
+      (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
       sameEnum;
     return comparable
       ? { kind: "operator-token", rustOperator: equality, resultCarrier: boolCarrier }

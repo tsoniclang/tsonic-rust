@@ -1041,6 +1041,12 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     // Owned-String literals in comparison position lower as &str literals so
     // generated code stays clippy-clean (cmp_owned).
     const comparison = fact.operator === "==" || fact.operator === "!=";
+    const comparisonLeft = comparison && leftNode !== undefined
+      ? planRustNonConsumingValue(leftNode, left, context)
+      : left;
+    const comparisonRight = comparison && rightNode !== undefined
+      ? planRustNonConsumingValue(rightNode, right, context)
+      : right;
     const borrowLiteral = (side: RustExpr): RustExpr =>
       comparison && side.kind === "string-literal" ? { kind: "str-literal", value: side.value } : side;
     if (!isRustBinaryOperator(fact.operator)) {
@@ -1053,8 +1059,8 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     }
     const booleanComparison = planBooleanLiteralComparison(
       fact.operator,
-      left,
-      right,
+      comparisonLeft,
+      comparisonRight,
       leftNode,
       rightNode,
       context,
@@ -1062,7 +1068,12 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     if (booleanComparison !== undefined) {
       return booleanComparison;
     }
-    return { kind: "binary", operator: fact.operator, left: borrowLiteral(left), right: borrowLiteral(right) };
+    return {
+      kind: "binary",
+      operator: fact.operator,
+      left: borrowLiteral(comparisonLeft),
+      right: borrowLiteral(comparisonRight),
+    };
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
     diagnosticInput(context, node),

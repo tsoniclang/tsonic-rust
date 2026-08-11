@@ -386,6 +386,32 @@ export function timing(): boolean {
   assert.match(text, /d\.get_time\(\) == 1000\.0/u);
 });
 
+test("mutable JS object assignments preserve reference identity", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function aliases(): boolean {
+  const date = new Date(0);
+  const sameDate = date;
+  const pattern = /\\d+/g;
+  const samePattern = pattern;
+  samePattern.test("1");
+  return sameDate === date && pattern.lastIndex === 1;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let sameDate = date\.clone\(\);/u);
+  assert.match(text, /let samePattern = pattern\.clone\(\);/u);
+  assert.match(text, /samePattern\.test\("1"\)\?/u);
+  assert.match(text, /sameDate == date/u);
+  assert.match(text, /i32_to_f64\(pattern\.last_index\(\)\) == 1\.0/u);
+});
+
 test("js surface contributes the rust-js cargo dependency", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": denseSource } });
   assert.deepEqual(result.diagnostics, []);
