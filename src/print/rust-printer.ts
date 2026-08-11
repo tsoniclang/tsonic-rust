@@ -2532,9 +2532,12 @@ function printRustMatchExpression(
     if (arm.expression.kind === "return-expression" || arm.expression.kind === "try") {
       const valueIndent = indentText(depth + 2);
       const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
+      const statement = arm.expression.kind === "return-expression"
+        ? appendToLastLine(value, ";")
+        : value;
       return [
         `${armIndent}${pattern} => {`,
-        `${valueIndent}${value}`,
+        `${valueIndent}${statement}`,
         `${armIndent}}`,
       ];
     }
