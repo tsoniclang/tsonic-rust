@@ -60,7 +60,7 @@ export type RustExpr =
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 
 export type RustStmt =
-  | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init: RustExpr }
+  | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init?: RustExpr; readonly attrs?: readonly string[] }
   | { readonly kind: "expr"; readonly expr: RustExpr }
   | { readonly kind: "assign"; readonly target: RustExpr; readonly operator: RustAssignmentOperator; readonly value: RustExpr }
   | { readonly kind: "return"; readonly expr?: RustExpr }

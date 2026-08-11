@@ -189,8 +189,12 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     case "let": {
       const mutability = statement.mutable ? "mut " : "";
       const typeSuffix = statement.type === undefined ? "" : `: ${printRustType(statement.type)}`;
+      const attributes = statement.attrs?.map((attribute) => `${indent}${attribute}\n`).join("") ?? "";
+      if (statement.init === undefined) {
+        return `${attributes}${indent}let ${mutability}${statement.name}${typeSuffix};`;
+      }
       const prefix = `${indent}let ${mutability}${statement.name}${typeSuffix} = `;
-      return printRustLetInitializer(prefix, statement.init, depth);
+      return `${attributes}${printRustLetInitializer(prefix, statement.init, depth)}`;
     }
     case "expr": {
       return `${indent}${printRustStatementExpr(statement.expr, depth, indent.length + 1)};`;

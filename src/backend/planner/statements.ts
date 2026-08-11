@@ -669,20 +669,31 @@ function tailCompletionExits(block: RustBlock): RustBlock {
 }
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
   const declarations = collectVariableDeclarations(node, context);
-  if (declarations.length !== 1) {
+  if (declarations.length === 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.variable",
-      "Variable statements must declare exactly one binding.",
+      "Variable statement has no exact variable declaration.",
     ));
     return undefined;
   }
-  const declaration = declarations[0];
-  if (declaration === undefined) {
-    return undefined;
+  const statements: RustStmt[] = [];
+  for (const declaration of declarations) {
+    const planned = planVariableDeclaration(declaration, context);
+    if (planned === undefined) {
+      return undefined;
+    }
+    statements.push(planned);
   }
+  return statements;
+}
+
+function planVariableDeclaration(
+  declaration: Node,
+  context: RustPlanContext,
+): Extract<RustStmt, { readonly kind: "let" }> | undefined {
+  const { ast } = context.input;
   const nameNode = Node_Name(context.input.ast, declaration);
   const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const name = rustSourceName(context, sourceName);
@@ -695,17 +706,17 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     return undefined;
   }
   const initializer = Node_Initializer(context.input.ast, declaration);
-  if (initializer === undefined) {
+  const locationStorage = rustLocationStorageForDeclaration(declaration, context);
+  if (initializer === undefined && locationStorage !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
-      "rust.backend.variable",
-      "Variable declarations require an initializer.",
+      "rust.backend.typed-location-storage",
+      "Promoted Rust location storage requires an initialized source binding.",
     ));
     return undefined;
   }
-  const locationStorage = rustLocationStorageForDeclaration(declaration, context);
-  const planned = planExpression(initializer, context);
-  if (planned === undefined) {
+  const planned = initializer === undefined ? undefined : planExpression(initializer, context);
+  if (initializer !== undefined && planned === undefined) {
     return undefined;
   }
   const typeNode = Node_Type(context.input.ast, declaration);
@@ -736,6 +747,17 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     ));
     return undefined;
   }
+  if (initializer === undefined && rustType === undefined) {
+    rustType = rustTypeFromCarrierInContext(declarationCarrier, context);
+    if (rustType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.variable",
+        "Uninitialized variable declaration has no renderable finalized Rust carrier.",
+      ));
+      return undefined;
+    }
+  }
   if (locationStorage !== undefined &&
     (!rustTargetTypeRefEquals(declarationCarrier, locationStorage.valueCarrier) ||
       (annotatedCarrier !== undefined &&
@@ -753,29 +775,36 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     (context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
       (ownedBinding && context.input.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
       resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
-  const init = locationStorage === undefined
-    ? planned
-    : (() => {
-        if (!requireRustLocationValueCarrier(
-          locationStorage.valueCarrier,
-          declaration,
-          context,
-        )) {
-          return undefined;
-        }
-        context.usedAliases?.add("rt");
-        return { kind: "call", path: "rt::Location::allocate", args: [planned] } as const;
-      })();
-  if (init === undefined) {
+  let init: RustExpr | undefined;
+  if (initializer !== undefined) {
+    if (planned === undefined) {
+      return undefined;
+    }
+    if (locationStorage === undefined) {
+      init = planned;
+    } else {
+      if (!requireRustLocationValueCarrier(
+        locationStorage.valueCarrier,
+        declaration,
+        context,
+      )) {
+        return undefined;
+      }
+      context.usedAliases?.add("rt");
+      init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
+    }
+  }
+  if (initializer !== undefined && init === undefined) {
     return undefined;
   }
-  return [{
+  return {
     kind: "let",
     name,
     mutable,
     ...(rustType === undefined ? {} : { type: rustType }),
-    init,
-  }];
+    ...(init === undefined ? {} : { init }),
+    ...(initializer === undefined && mutable ? { attrs: ["#[allow(unused_mut)]"] } : {}),
+  };
 }
 
 function planUpdateStatement(expression: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
