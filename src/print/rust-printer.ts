@@ -442,7 +442,7 @@ function printRustTryScope(
       catchClause.fallible,
       catchClause.terminates,
       statement.asynchronous,
-      depth + 1,
+      depth + 2,
     );
     const flowType = catchClause.fallible
       ? `rt::TsonicResult<${completionType}>`
@@ -450,9 +450,10 @@ function printRustTryScope(
     const catchArm = catchExpression.length === 1
       ? [`${nested}Err(${catchClause.binding}) => ${catchExpression[0]},`]
       : [
-          `${nested}Err(${catchClause.binding}) => ${catchExpression[0]}`,
-          ...catchExpression.slice(1, -1),
-          `${catchExpression[catchExpression.length - 1]},`,
+          `${nested}Err(${catchClause.binding}) => {`,
+          `${indentText(depth + 2)}${catchExpression[0]}`,
+          ...catchExpression.slice(1),
+          `${nested}},`,
         ];
     lines.push(
       `${indent}let ${statement.flowName}: ${flowType} = match ${statement.bodyName} {`,
@@ -1603,10 +1604,13 @@ function printFittedLogicalChain(
   let rendered = printFittedLogicalOperand(first, operator, depth, column);
   const continuationIndent = indentText(depth + 1);
   for (const operand of operands.slice(1)) {
+    const operandDepth = rustExpressionContainsStatementBlock(operand)
+      ? depth
+      : depth + 1;
     const right = printFittedLogicalOperand(
       operand,
       operator,
-      depth + 1,
+      operandDepth,
       continuationIndent.length + operator.length + 1,
     );
     const continuation = `${operator} ${firstLine(right)}`;
@@ -1641,8 +1645,64 @@ function printRustFormatArgument(
     if (renderedArgument.includes("\n")) {
       return appendToLastLine(`${prefix}${renderedArgument}`, ",)");
     }
+    const borrowedNested = printBorrowedNestedRustFormatArgument(
+      callable,
+      argument,
+      expression,
+      depth,
+      column,
+    );
+    if (borrowedNested !== undefined) {
+      return borrowedNested;
+    }
   }
   return printRustExprFitted(expression, depth, column);
+}
+
+function printBorrowedNestedRustFormatArgument(
+  outerCallable: string,
+  argument: RustExpr,
+  expression: RustExpr,
+  depth: number,
+  column: number,
+): string | undefined {
+  if (argument.kind !== "reference" || renderedFits(printRustExpr(expression), column)) {
+    return undefined;
+  }
+  const nested = argument.expr;
+  const nestedCall = nested.kind === "call"
+    ? { callable: nested.path, arguments: nested.args }
+    : nested.kind === "associated-call"
+      ? {
+          callable: `${printRustAssociatedCallOwner(nested)}::${nested.method}`,
+          arguments: nested.args,
+        }
+      : nested.kind === "method-call"
+        ? {
+            callable: `${printOperand(nested.receiver, RustPrecedence.Postfix, false)}.${nested.method}`,
+            arguments: nested.args,
+          }
+        : undefined;
+  const nestedArgument = nestedCall?.arguments[0];
+  if (nestedCall === undefined || nestedCall.arguments.length !== 1 ||
+    nestedArgument === undefined || rustExpressionContainsStatementBlock(nestedArgument) ||
+    rustExpressionContainsExpandedStructLiteral(nestedArgument) ||
+    rustExpressionContainsPreferredVerticalMethodChain(nestedArgument)) {
+    return undefined;
+  }
+  const referencePrefix = argument.mutable === true ? "&mut " : "&";
+  const opening = `${outerCallable}(${referencePrefix}${nestedCall.callable}(`;
+  const renderedArgument = printRustExpr(nestedArgument);
+  const argumentIndent = indentText(depth + 1);
+  if (!renderedFits(opening, column) || renderedArgument.includes("\n") ||
+    !renderedFits(renderedArgument, argumentIndent.length)) {
+    return undefined;
+  }
+  return [
+    opening,
+    `${argumentIndent}${renderedArgument}`,
+    `${indentText(depth)}),)`,
+  ].join("\n");
 }
 
 function printFittedLogicalOperand(

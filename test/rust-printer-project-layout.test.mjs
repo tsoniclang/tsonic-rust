@@ -51,14 +51,24 @@ test("logical block operands keep the following operator on the closing brace", 
     operator: "||",
     left: {
       kind: "binary",
-      operator: "!=",
-      left: { kind: "path", path: "first" },
-      right: upcast(),
+      operator: "||",
+      left: {
+        kind: "binary",
+        operator: "!=",
+        left: { kind: "path", path: "first" },
+        right: upcast(),
+      },
+      right: {
+        kind: "binary",
+        operator: "!=",
+        left: { kind: "path", path: "second" },
+        right: upcast(),
+      },
     },
     right: {
       kind: "binary",
       operator: "!=",
-      left: { kind: "path", path: "second" },
+      left: { kind: "path", path: "third" },
       right: upcast(),
     },
   };
@@ -74,7 +84,8 @@ test("logical block operands keep the following operator on the closing brace", 
   });
 
   assert.match(text, /\n    \} \|\| second != \{/u);
-  assert.doesNotMatch(text, /\n    \}\n        \|\| second/u);
+  assert.match(text, /\n    \} \|\| third != \{/u);
+  assert.doesNotMatch(text, /\n            let value/u);
 });
 
 test("format macro arguments keep borrowed blocks attached to their call", () => {
@@ -109,6 +120,96 @@ test("format macro arguments keep borrowed blocks attached to their call", () =>
   assert.match(text, /rt::source_string\(&\{\n            let receiver/u);
   assert.match(text, /\n        \},\),\n/u);
   assert.doesNotMatch(text, /rt::source_string\(\n/u);
+});
+
+test("format macro arguments keep borrowed nested calls attached to their call", () => {
+  const expression = {
+    kind: "string-concat",
+    parts: [
+      { kind: "string-literal", value: "middle>" },
+      {
+        kind: "call",
+        path: "rt::source_string",
+        args: [{
+          kind: "reference",
+          expr: {
+            kind: "associated-call",
+            owner: { kind: "named", path: "Self" },
+            trait: { kind: "named", path: "__TsonicDispatch_Base" },
+            method: "__tsonic_exact_489_549",
+            args: [clone({ kind: "path", path: "self" })],
+          },
+        }],
+      },
+      { kind: "string-literal", value: "" },
+    ],
+  };
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "impl",
+      target: { kind: "named", path: "Proof" },
+      functions: [{
+        name: "proof",
+        visibility: "private",
+        selfParam: "rc",
+        params: [],
+        body: { statements: [{ kind: "tail", expr: expression }] },
+      }],
+    }],
+  });
+
+  assert.match(
+    text,
+    /rt::source_string\(&<Self as __TsonicDispatch_Base>::__tsonic_exact_489_549\(\n/u,
+  );
+  assert.match(text, /self\.clone\(\)\n\s+\),\),/u);
+  assert.doesNotMatch(text, /rt::source_string\(\n/u);
+});
+
+test("multiline awaited match-arm expressions use a canonical arm block", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      isAsync: true,
+      fallible: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "try-scope",
+          bodyName: "try_body",
+          flowName: "try_flow",
+          returnType: { kind: "unit" },
+          fallible: true,
+          asynchronous: true,
+          body: {
+            statements: [{ kind: "expr", expr: { kind: "call", path: "may_fail", args: [] } }],
+          },
+          bodyFallible: true,
+          bodyTerminates: false,
+          catchClause: {
+            binding: "_",
+            body: {
+              statements: [{ kind: "expr", expr: { kind: "call", path: "record_failure", args: [] } }],
+            },
+            fallible: true,
+            terminates: false,
+          },
+          propagate: false,
+          dispatchReturn: false,
+          dispatchTargets: [],
+          terminates: false,
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /Err\(_\) => \{\n\s+\(async \{/u);
+  assert.match(text, /\n\s+\.await\n\s+\},/u);
+  assert.doesNotMatch(text, /Err\(_\) => \(async \{/u);
 });
 
 test("method chains in logical continuations use the continuation body indent", () => {
