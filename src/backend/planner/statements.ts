@@ -896,11 +896,17 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
 }
 
 function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
   const expression = Node_Expression(context.input.ast, node);
-  if (expression === undefined) {
-    return undefined;
-  }
+  return expression === undefined
+    ? undefined
+    : planExpressionAsStatement(expression, context);
+}
+
+function planExpressionAsStatement(
+  expression: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {
     const operatorToken = BinaryExpression_OperatorToken(context.input.ast, expression);
@@ -1067,12 +1073,10 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
     const planned = planExpression(expression, context);
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
-  context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, node),
-    "rust.backend.statement",
-    "Expression statements support only calls, assignments, increments, awaits, void, delete, and checked generator yields.",
-  ));
-  return undefined;
+  const planned = planExpression(expression, context);
+  return planned === undefined
+    ? undefined
+    : [{ kind: "let", name: "_", mutable: false, init: planned }];
 }
 
 function planCondition(condition: Node, context: RustPlanContext, construct: string) {
@@ -1561,17 +1565,7 @@ function withRustControlTarget(
 }
 
 function planIncrementor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const kind = ast.kindName(node);
-  if (kind === KindPostfixUnaryExpression || kind === KindPrefixUnaryExpression) {
-    return planUpdateStatement(node, context);
-  }
-  context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, node),
-    "rust.backend.loop",
-    "For incrementors support only increment/decrement of an identifier.",
-  ));
-  return undefined;
+  return planExpressionAsStatement(node, context);
 }
 
 

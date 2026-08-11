@@ -824,14 +824,6 @@ function recordStatementFacts(
       return;
     }
     resolveExpressionCarrier(walk, expression, sourceFile, undefined);
-    if (ast.kindName(expression) === KindBinaryExpression) {
-      const operatorToken = BinaryExpression_OperatorToken(walk.context.ast, expression);
-      const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
-      if (isRustAssignmentOperator(operatorKind)) {
-        const left = BinaryExpression_Left(walk.context.ast, expression);
-        recordAssignmentWrite(walk, expression, left);
-      }
-    }
     return;
   }
   if (kind === "KindThrowStatement") {
@@ -1079,7 +1071,27 @@ function resolveExpressionCarrier(
     const resolved = resolveExpressionCarrierUncached(walk, expression, sourceFile, expected);
     return applyOptionLane(walk, expression, resolved, expected);
   } finally {
+    recordExpressionBindingEffects(walk, expression);
     walk.resolving.delete(expression);
+  }
+}
+
+function recordExpressionBindingEffects(walk: RustFactWalk, expression: Node): void {
+  const { ast } = walk.context;
+  const kind = ast.kindName(expression);
+  if (kind === KindBinaryExpression) {
+    const operatorToken = BinaryExpression_OperatorToken(ast, expression);
+    const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
+    if (isRustAssignmentOperator(operatorKind)) {
+      recordAssignmentWrite(walk, expression, BinaryExpression_Left(ast, expression));
+    }
+    return;
+  }
+  if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
+    const fact = walk.context.facts.get(expression, rustTargetOperationFactKey);
+    if (fact?.kind === "operator-token" && (fact.operator === "+=" || fact.operator === "-=")) {
+      recordBindingWrite(walk, Node_Operand(ast, expression));
+    }
   }
 }
 
@@ -2516,9 +2528,6 @@ function recordSelectedOperationInputs(
     const operand = Node_Operand(walk.context.ast, expression);
     if (operand !== undefined) {
       resolveExpressionCarrier(walk, operand, sourceFile, undefined);
-      if (fact?.kind === "operator-token" && (fact.operator === "+=" || fact.operator === "-=")) {
-        recordBindingWrite(walk, operand);
-      }
     }
     return;
   }
