@@ -12,7 +12,7 @@ import { isDenseDataArray } from "../../common/closed-metadata.js";
 import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
-} from "../rust-facts/keys.js";
+} from "../rust-target-types.js";
 
 export interface RustSourceEnumVariant {
   readonly name: string;
@@ -45,7 +45,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
     }
     const kind = ast.kindName(declaration);
     const shape = kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration"
-      ? "struct"
+      ? "object"
       : kind === "KindEnumDeclaration" ||
           (kind === "KindTypeAliasDeclaration" && variantsByDeclaration.has(declaration))
         ? "enum"

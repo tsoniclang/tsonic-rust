@@ -34,6 +34,50 @@ export const rustUsizeTargetId = "rust.core.usize";
 export const rustIsizeTargetId = "rust.core.isize";
 export const rustNamedTypeCarrierName = "named-type";
 
+export interface RustSourceTypeCarrierValue {
+  readonly fileName: string;
+  readonly typeName: string;
+  readonly shape: "object" | "enum";
+}
+
+export function rustSourceTypeCarrier(
+  fileName: string,
+  typeName: string,
+  shape: "object" | "enum",
+): TargetTypeRef {
+  return { kind: "target-specific", target: "rust", name: "source-type", value: { fileName, typeName, shape } };
+}
+
+export function rustSourceTypeCarrierValue(
+  carrier: TargetTypeRef | undefined,
+): RustSourceTypeCarrierValue | undefined {
+  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "source-type") {
+    return undefined;
+  }
+  const value = carrier.value;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const keys = Object.keys(value).sort();
+  if (keys.length !== 3 || keys[0] !== "fileName" || keys[1] !== "shape" || keys[2] !== "typeName") {
+    return undefined;
+  }
+  const candidate = value as {
+    readonly fileName?: unknown;
+    readonly typeName?: unknown;
+    readonly shape?: unknown;
+  };
+  return typeof candidate.fileName === "string" && candidate.fileName.length > 0 &&
+    typeof candidate.typeName === "string" && candidate.typeName.length > 0 &&
+    (candidate.shape === "object" || candidate.shape === "enum")
+    ? {
+        fileName: candidate.fileName,
+        typeName: candidate.typeName,
+        shape: candidate.shape,
+      }
+    : undefined;
+}
+
 export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
   return { kind: "source-primitive", name: kind };
 }
@@ -443,11 +487,25 @@ export function isRustBoolCarrier(carrier: TargetTypeRef | undefined): boolean {
 }
 
 export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "source-primitive";
+  if (carrier === undefined) {
+    return false;
+  }
+  if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer") {
+    return true;
+  }
+  if (carrier.kind === "tuple") {
+    return carrier.elements.every(isRustCopyCarrier);
+  }
+  const fixedArray = rustFixedArrayCarrierValue(carrier);
+  if (fixedArray !== undefined) {
+    return isRustCopyCarrier(fixedArray.element);
+  }
+  return rustSourceTypeCarrierValue(carrier)?.shape === "enum";
 }
 
 export function rustValueCarrierRequiresCloneOnRead(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && rustCloneOnReadTargetIds.has(carrier.id);
+  return carrier?.kind === "target-named" && rustCloneOnReadTargetIds.has(carrier.id) ||
+    rustSourceTypeCarrierValue(carrier)?.shape === "object";
 }
 
 export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined): boolean {

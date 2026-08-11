@@ -115,16 +115,17 @@ import {
   inferRustTargetTypeParameterBindings,
   substituteRustTargetTypeParameters,
   rustVecTargetType,
+  rustSourceTypeCarrierValue,
 } from "../rust-target-types.js";
 import { parseSourceBigIntLiteral } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
   rustFutureValueMatchesCarrier,
 } from "../rust-facts/future-values.js";
 import {
-  rustTargetOperationIsDirectLocation,
+  rustTargetOperationSupportsAssignment,
   rustTargetOperationText,
 } from "../rust-facts/target-operation.js";
 import { rustValueConversionIsFallible } from "../rust-facts/value-conversions.js";
@@ -186,6 +187,7 @@ import type { RustOperationPolicyContext } from "../../policy/operations/contrac
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { selectRustResourceManagement } from "./resource-management.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
+import { rustProjectObjectLayout } from "./project-object-layout.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -1735,7 +1737,7 @@ function resolvePostCheckBinaryCarrier(
       optionOperand: isRustOptionCarrier(left) ? "left" : "right",
     };
   } else if (operatorKind === KindEqualsToken &&
-    (selectedLeftOperation === undefined || rustTargetOperationIsDirectLocation(selectedLeftFact)) &&
+    (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact)) &&
     left !== undefined && right !== undefined &&
     rustTargetTypeRefEquals(left, right)) {
     const equivalentOperator = selectEquivalentBindingAssignment(
@@ -1782,7 +1784,7 @@ function resolvePostCheckBinaryCarrier(
   if (fact === undefined) {
     walk.postCheckOperations.delete(expression);
     if (operatorKind === KindEqualsToken && selectedLeftOperation !== undefined &&
-      !rustTargetOperationIsDirectLocation(selectedLeftFact)) {
+      !rustTargetOperationSupportsAssignment(selectedLeftFact)) {
       appendRustDiagnostic(
         walk,
         "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED",
@@ -2717,7 +2719,6 @@ function sourceTypeCarrierForDeclaration(walk: RustFactWalk, declaration: Node):
 
 function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const { ast } = walk.context;
-  const methods: Node[] = [];
   for (const sourceFile of sourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       if (ast.kindName(statement) !== "KindClassDeclaration") {
@@ -2730,92 +2731,13 @@ function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly Sou
       for (const member of members) {
         if (ast.kindName(member) === "KindMethodDeclaration" &&
           !ast.hasModifierKind(member, "static")) {
-          methods.push(member);
+          walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
+            { message: "rust reference-backed project object method self mode" },
+          ]);
         }
       }
     }
   }
-  const methodSet = new Set<Node>(methods);
-  const mutating = new Set<Node>();
-  const calls = new Map<Node, Set<Node>>();
-  for (const method of methods) {
-    const callees = new Set<Node>();
-    calls.set(method, callees);
-    const body = ast.body(method);
-    if (body === undefined) {
-      continue;
-    }
-    const visit = (node: Node): void => {
-      const kind = ast.kindName(node);
-      if (kind === KindBinaryExpression) {
-        const operator = BinaryExpression_OperatorToken(walk.context.ast, node);
-        const left = BinaryExpression_Left(walk.context.ast, node);
-        if (operator !== undefined && left !== undefined &&
-          isRustAssignmentOperator(ast.kindName(operator)) && expressionIsRootedAtThis(ast, left)) {
-          mutating.add(method);
-        }
-      } else if ((kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) &&
-        expressionIsRootedAtThis(ast, Node_Operand(walk.context.ast, node))) {
-        mutating.add(method);
-      } else if (kind === KindCallExpression) {
-        const callee = Node_Expression(walk.context.ast, node);
-        const receiver = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
-          ? Node_Expression(walk.context.ast, callee)
-          : undefined;
-        if (expressionIsRootedAtThis(ast, receiver)) {
-          const selected = walk.context.facts.get(node, rustSelectedCallKey) ??
-            walk.context.facts.resolve(node, rustSelectedCallKey);
-          const selectedDeclaration = asSourceNode(selected?.sourceDeclaration, ast);
-          if (selectedDeclaration !== undefined && methodSet.has(selectedDeclaration)) {
-            callees.add(selectedDeclaration);
-          }
-          const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-            walk.context.facts.resolve(node, rustTargetOperationFactKey);
-          if ((operation?.kind === "provider-operation" || operation?.kind === "runtime-set") &&
-            operation.abi.targetReceiver.kind === "input" &&
-            operation.abi.targetReceiver.input.mode === "mut-ref") {
-            mutating.add(method);
-          }
-        }
-      }
-      ast.forEachChild(node, (child) => {
-        if (child !== undefined) {
-          visit(child);
-        }
-      });
-    };
-    visit(body);
-  }
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const method of methods) {
-      if (!mutating.has(method) && [...(calls.get(method) ?? [])].some((callee) => mutating.has(callee))) {
-        mutating.add(method);
-        changed = true;
-      }
-    }
-  }
-  for (const method of methods) {
-    walk.context.facts.set(method, rustSelfModeFactKey, {
-      mode: mutating.has(method) ? "mut-ref" : "ref",
-    }, [{ message: "rust finalized method self mode" }]);
-  }
-}
-
-function expressionIsRootedAtThis(ast: AstReader, expression: Node | undefined): boolean {
-  let current = expression;
-  while (current !== undefined) {
-    const kind = ast.kindName(current);
-    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-      return true;
-    }
-    if (kind !== KindPropertyAccessExpression && kind !== KindElementAccessExpression) {
-      return false;
-    }
-    current = Node_Expression(ast, current);
-  }
-  return false;
 }
 
 function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node): void {
@@ -2959,7 +2881,7 @@ function resolveRecordLiteralCarrier(
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   const value = expected === undefined ? undefined : rustSourceTypeCarrierValue(expected);
-  if (value === undefined || value.shape !== "struct" || expected === undefined) {
+  if (value === undefined || value.shape !== "object" || expected === undefined) {
     return undefined;
   }
   const propertiesByName = new Map<string, Node>();
@@ -2985,37 +2907,33 @@ function resolveRecordLiteralCarrier(
   if (shapeDeclaration === undefined) {
     return undefined;
   }
-  const fieldNames: string[] = [];
-  const members = requireDenseSourceNodes(walk, ast.members(shapeDeclaration), "Record shape declaration contains an undefined or non-data member slot.");
-  if (members === undefined) {
+  const layout = rustProjectObjectLayout(shapeDeclaration, ast);
+  if (layout?.kind !== "interface") {
     return undefined;
   }
-  for (const memberDeclaration of members) {
-    if (ast.kindName(memberDeclaration) !== "KindPropertySignature") {
-      continue;
-    }
-    const fieldName = ast.text(ast.name(memberDeclaration) ?? memberDeclaration);
-    const property = propertiesByName.get(fieldName);
-    if (fieldName.length === 0 || property === undefined) {
+  const fields: { sourceName: string; storageIndex: number }[] = [];
+  for (const field of layout.fields) {
+    const property = propertiesByName.get(field.sourceName);
+    if (property === undefined) {
       return undefined;
     }
-    const expectedField = walk.context.facts.get(memberDeclaration, rustRuntimeCarrierKey)?.carrier ??
-      resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, memberDeclaration));
+    const expectedField = walk.context.facts.get(field.declaration, rustRuntimeCarrierKey)?.carrier ??
+      resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration));
     const initializer = Node_Initializer(walk.context.ast, property);
     if (expectedField === undefined || initializer === undefined ||
       resolveExpressionCarrier(walk, initializer, sourceFile, expectedField) === undefined) {
       return undefined;
     }
-    fieldNames.push(fieldName);
+    fields.push({ sourceName: field.sourceName, storageIndex: field.storageIndex });
   }
-  if (fieldNames.length !== propertiesByName.size) {
+  if (fields.length !== propertiesByName.size) {
     return undefined;
   }
   setRustOperationFact(walk, expression, {
     kind: "record-literal",
     operationId: "tsonic.rust.record.literal",
     resultCarrier: expected,
-    fieldNames,
+    fields,
   });
   return setCarrierFact(walk, expression, expected);
 }
@@ -3077,9 +2995,6 @@ function setParameterAbiFact(
   ]);
 }
 
-// Formal source-use rule: a write records a mutation fact on the resolved
-// declaration of the written binding (or a mut-ref self mode on the enclosing
-// method for `this` field writes). Backend mutability reads facts only.
 function recordBindingWrite(walk: RustFactWalk, target: Node | undefined, writeKind: "binding" | "referent" = "binding"): void {
   if (target === undefined) {
     return;
@@ -3087,14 +3002,14 @@ function recordBindingWrite(walk: RustFactWalk, target: Node | undefined, writeK
   const { ast } = walk.context;
   const kind = ast.kindName(target);
   if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
+    const operation = walk.context.facts.get(target, rustTargetOperationFactKey) ??
+      walk.context.facts.resolve(target, rustTargetOperationFactKey);
+    if (operation?.kind === "source-field") {
+      return;
+    }
     const receiver = Node_Expression(walk.context.ast, target);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
     if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {
-      if (walk.currentMethodDeclaration !== undefined) {
-        walk.context.facts.set(walk.currentMethodDeclaration, rustSelfModeFactKey, { mode: "mut-ref" }, [
-          { message: "rust self write" },
-        ]);
-      }
       return;
     }
     recordBindingWrite(walk, receiver, "referent");

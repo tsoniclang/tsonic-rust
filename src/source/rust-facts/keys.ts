@@ -322,10 +322,9 @@ export type RustTargetOperationFact =
       readonly optionOperand: "left" | "right";
     }
   | {
-      // Member access on a project-source class instance: struct field.
       readonly kind: "source-field";
       readonly operationId: string;
-      readonly name: string;
+      readonly storageIndex: number;
       readonly resultCarrier: TargetTypeRef;
     }
   | {
@@ -356,7 +355,10 @@ export type RustTargetOperationFact =
       readonly kind: "record-literal";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
-      readonly fieldNames: readonly string[];
+      readonly fields: readonly {
+        readonly sourceName: string;
+        readonly storageIndex: number;
+      }[];
     }
   | { readonly kind: "fixed-array-literal"; readonly operationId: string }
   | { readonly kind: "fixed-index"; readonly operationId: string; readonly index: number }
@@ -490,46 +492,6 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     default:
       return undefined;
   }
-}
-
-// Carrier for a project-source declared type (class or enum). The backend
-// renders it against the module map derived from the same source files.
-export function rustSourceTypeCarrier(fileName: string, typeName: string, shape: "struct" | "enum"): TargetTypeRef {
-  return { kind: "target-specific", target: "rust", name: "source-type", value: { fileName, typeName, shape } };
-}
-
-export interface RustSourceTypeCarrierValue {
-  readonly fileName: string;
-  readonly typeName: string;
-  readonly shape: "struct" | "enum";
-}
-
-export function rustSourceTypeCarrierValue(carrier: TargetTypeRef | undefined): RustSourceTypeCarrierValue | undefined {
-  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "source-type") {
-    return undefined;
-  }
-  const value = carrier.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
-  }
-  const keys = Object.keys(value).sort();
-  if (keys.length !== 3 || keys[0] !== "fileName" || keys[1] !== "shape" || keys[2] !== "typeName") {
-    return undefined;
-  }
-  const candidate = value as {
-    readonly fileName?: unknown;
-    readonly typeName?: unknown;
-    readonly shape?: unknown;
-  };
-  return typeof candidate.fileName === "string" && candidate.fileName.length > 0 &&
-    typeof candidate.typeName === "string" && candidate.typeName.length > 0 &&
-    (candidate.shape === "struct" || candidate.shape === "enum")
-    ? {
-        fileName: candidate.fileName,
-        typeName: candidate.typeName,
-        shape: candidate.shape,
-      }
-    : undefined;
 }
 
 function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: RustTargetOperationFact): boolean {

@@ -10,6 +10,7 @@ import {
 import {
   rustFinalizedCarrierTransitionMatches,
   rustTargetOperationIsDirectLocation,
+  rustTargetOperationSupportsAssignment,
   rustTargetOperationText,
 } from "../dist/source/rust-facts/target-operation.js";
 
@@ -123,22 +124,29 @@ test("one canonical operation projection serves selection and backend validation
   }), "identity");
 });
 
-test("direct Rust locations are selected by finalized target form", () => {
-  assert.equal(rustTargetOperationIsDirectLocation({
+test("assignment support distinguishes direct Rust places from reference-backed project fields", () => {
+  const projectField = {
     kind: "source-field",
     operationId: "source-field",
-    name: "value",
+    storageIndex: 0,
     resultCarrier: { kind: "source-primitive", name: "int32" },
-  }), true);
-  assert.equal(rustTargetOperationIsDirectLocation({
+  };
+  const providerField = {
     kind: "provider-operation",
     abi: { target: { form: "field", name: "value" } },
-  }), true);
-  assert.equal(rustTargetOperationIsDirectLocation({
+  };
+  const providerMethod = {
     kind: "provider-operation",
     abi: { target: { form: "receiver-method", name: "value" } },
-  }), false);
+  };
+  assert.equal(rustTargetOperationIsDirectLocation(projectField), false);
+  assert.equal(rustTargetOperationSupportsAssignment(projectField), true);
+  assert.equal(rustTargetOperationIsDirectLocation(providerField), true);
+  assert.equal(rustTargetOperationSupportsAssignment(providerField), true);
+  assert.equal(rustTargetOperationIsDirectLocation(providerMethod), false);
+  assert.equal(rustTargetOperationSupportsAssignment(providerMethod), false);
   assert.equal(rustTargetOperationIsDirectLocation(undefined), false);
+  assert.equal(rustTargetOperationSupportsAssignment(undefined), false);
 });
 
 test("finalized carrier transitions require one exact conversion lane", () => {

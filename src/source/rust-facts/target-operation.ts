@@ -45,11 +45,15 @@ export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFac
   if (fact === undefined) {
     return false;
   }
-  if (fact.kind === "source-field" || fact.kind === "tuple-index" || fact.kind === "fixed-index") {
+  if (fact.kind === "tuple-index" || fact.kind === "fixed-index") {
     return true;
   }
   return fact.kind === "provider-operation" &&
     (fact.abi.target.form === "field" || fact.abi.target.form === "index");
+}
+
+export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationFact | undefined): boolean {
+  return fact?.kind === "source-field" || rustTargetOperationIsDirectLocation(fact);
 }
 
 export function rustFinalizedCarrierTransitionMatches(

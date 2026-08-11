@@ -268,7 +268,7 @@ function planTopLevelConst(
   return {
     kind: "const",
     name,
-    pub: ast.hasModifierKind(statement, "export"),
+    visibility: ast.hasModifierKind(statement, "export") ? "public" : "private",
     ...(isUpperSnakeName(name)
       ? {}
       : { attrs: ["#[allow(non_upper_case_globals)]"] }),

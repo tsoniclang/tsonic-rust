@@ -63,6 +63,7 @@ import {
   rustJsArrayTargetType,
   rustJsValueTargetType,
   rustOptionTargetType,
+  rustSourceTypeCarrier,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
@@ -82,7 +83,6 @@ import {
   isRustSignedNumericCarrier,
 } from "../rust-target-types.js";
 import {
-  rustSourceTypeCarrier,
   rustTargetOperationResultCarrier,
   rustTargetOperationFactKey,
   rustPostCheckBinaryOperationId,
@@ -148,6 +148,7 @@ import {
   selectRustGeneratorSourceProperty,
 } from "./generator-source-profile.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
+import { rustProjectObjectField } from "./project-object-layout.js";
 
 const sourceCallMarkerByIdentity = new Map(
   [
@@ -1622,13 +1623,14 @@ export function selectRustCheckedPropertyAccess(
         });
       }
     }
+    const field = rustProjectObjectField(declaration, context.ast);
     const resultCarrier = resolveRustTargetTypeRef(Node_Type(context.ast, declaration) ?? request.sourceResultType, context, options);
-    if (memberName.length > 0 && resultCarrier !== undefined) {
+    if (field !== undefined && resultCarrier !== undefined) {
       const operationId = sourceOperationId(context, declaration, "field");
       return acceptRustOperation(request.expression, {
         kind: "source-field",
         operationId,
-        name: memberName,
+        storageIndex: field.storageIndex,
         resultCarrier,
       }, context, {
         sourceExpression: request.expression,

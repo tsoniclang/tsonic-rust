@@ -66,7 +66,7 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
     },
   ];
   const libraryModel = createRustSourceFile(
-    sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, pub: true })),
+    sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
   );
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
   for (const source of sortedSources) {
@@ -92,7 +92,7 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
     const mainItem: RustItem = {
       kind: "function",
       name: "main",
-      pub: false,
+      visibility: "private",
       params: [],
       ...(entryFunction.fallible
         ? {

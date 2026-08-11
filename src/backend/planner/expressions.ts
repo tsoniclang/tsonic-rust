@@ -52,7 +52,7 @@ import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
 } from "../../common/source-literal-values.js";
-import { rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustSourceTypeCarrierValue, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustSourceBindingFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustProviderConstantArgument,
@@ -83,10 +83,10 @@ import {
 } from "../../source/rust-facts/parameter-passing.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, rustPublicName, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, rustValueCarrierRequiresCloneOnRead, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustFutureOutputCarrier, rustPrimitiveTypeName, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -94,6 +94,10 @@ import {
   planRustPromotedStorageLocation,
   planRustTypedLocationCall,
 } from "./typed-locations.js";
+import {
+  createRustProjectObject,
+  readRustProjectObjectField,
+} from "./project-objects.js";
 import {
   applyRustProviderLocationScope,
   planRustProviderLocationScope,
@@ -2256,12 +2260,7 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.source-field-carrier")) {
       return undefined;
     }
-    if (!selectedOperationMatches(
-      context.input.facts.getSelectedTargetProperty(node),
-      fact.operationId,
-      "property",
-      fact.resultCarrier,
-    )) {
+    if (!sourceFieldSelectedOperationMatches(node, fact, context)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.source-field-selected-evidence",
@@ -2274,10 +2273,7 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
     if (receiver === undefined) {
       return undefined;
     }
-    const field: RustExpr = { kind: "field", receiver, name: fact.name };
-    return rustValueCarrierRequiresCloneOnRead(fact.resultCarrier)
-      ? { kind: "method-call", receiver: field, method: "clone", args: [] }
-      : field;
+    return readRustProjectObjectField(receiver, fact.storageIndex, fact.resultCarrier);
   }
   if (fact !== undefined && fact.kind === "source-enum-member") {
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.enum-member-carrier")) {
@@ -2354,6 +2350,19 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
     return undefined;
   }
   return finishProviderOperationExpression(context, fact, planned, node);
+}
+
+export function sourceFieldSelectedOperationMatches(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>,
+  context: RustPlanContext,
+): boolean {
+  return selectedOperationMatches(
+    context.input.facts.getSelectedTargetProperty(node),
+    fact.operationId,
+    "property",
+    fact.resultCarrier,
+  );
 }
 
 function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -2565,9 +2574,10 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     }
     fieldsBySourceName.set(sourceName, planned);
   }
-  if (fieldsBySourceName.size !== fact.fieldNames.length ||
-    fact.fieldNames.some((fieldName) => !fieldsBySourceName.has(fieldName)) ||
-    new Set(fact.fieldNames).size !== fact.fieldNames.length) {
+  if (fieldsBySourceName.size !== fact.fields.length ||
+    fact.fields.some((field) => !fieldsBySourceName.has(field.sourceName)) ||
+    new Set(fact.fields.map((field) => field.sourceName)).size !== fact.fields.length ||
+    new Set(fact.fields.map((field) => field.storageIndex)).size !== fact.fields.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.record-fields",
@@ -2575,14 +2585,14 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     ));
     return undefined;
   }
-  const fields: { name: string; value: RustExpr }[] = [];
-  for (const sourceName of fact.fieldNames) {
-    const fieldName = rustPublicName(sourceName).name;
-    const value = fieldsBySourceName.get(sourceName);
-    if (!isValidRustIdentifier(fieldName) || value === undefined) {
+  const values: RustExpr[] = [];
+  for (const field of [...fact.fields].sort((left, right) => left.storageIndex - right.storageIndex)) {
+    const value = fieldsBySourceName.get(field.sourceName);
+    if (field.storageIndex !== values.length || value === undefined) {
       return undefined;
     }
-    fields.push({ name: fieldName, value });
+    values.push(value);
   }
-  return { kind: "struct-literal", path: typePath, fields };
+  context.usedAliases?.add("rt");
+  return createRustProjectObject(typePath, values);
 }

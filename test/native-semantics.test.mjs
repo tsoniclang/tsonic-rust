@@ -37,20 +37,21 @@ export function drive(): int32 {
 }
 `;
 
-test("classes lower to struct plus impl with fact-backed members", () => {
+test("classes lower to reference-backed object wrappers with fact-backed members", () => {
   const { result } = compileRust({ files: { "index.ts": counterSource } });
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[derive\(Clone, Copy, Debug, PartialEq\)\]\npub struct Counter \{\n    pub value: i32,\n\}/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32,\)>,\n\}/u);
+  assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
-  assert.match(text, /pub fn new\(value: i32\) -> Counter \{\n        Counter \{ value \}\n    \}/u);
-  assert.match(text, /pub fn add\(&mut self, delta: i32\) -> i32 \{/u);
-  assert.match(text, /self\.value \+= delta;/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(value,\)\)/u);
+  assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
+  assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value\)/u);
   assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
-  assert.match(text, /let mut counter = Counter::new\(10\);/u);
-  assert.match(text, /counter\.add\(5\);/u);
-  assert.match(text, /counter\.current\(\) \+ counter\.value/u);
+  assert.match(text, /let counter = Counter::new\(10\);/u);
+  assert.match(text, /counter\.clone\(\)\.add\(5\);/u);
+  assert.match(text, /counter\.clone\(\)\.current\(\)/u);
 });
 
 test("enums lower with TSTS integer discriminants and fact-backed equality", () => {
@@ -132,9 +133,13 @@ export function pick_mode(flag: boolean): Mode {
 
 export function main(): void {
   const counter = new Counter(10);
-  check(counter.add(5) === 15);
+  const alias = counter;
+  check(alias === counter);
+  check(alias.add(5) === 15);
   check(counter.current() === 15);
   check(counter.value === 15);
+  const sameValue = new Counter(15);
+  check(sameValue !== counter);
   const mode = pick_mode(true);
   check(mode === Mode.On);
   check(mode !== Mode.Off);
@@ -278,7 +283,7 @@ export function grow(xs: int32[]): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn grow\(xs: js_abi::JsArray<i32>\)/u);
-  assert.match(text, /xs\.push\(4\)/u);
+  assert.match(text, /xs\s*\.push_many\(\[tsonic_rust_runtime::conversions::f64_to_i32\(4\.0\)\?\]\)/u);
 });
 
 test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
@@ -399,7 +404,7 @@ export function value_or_zero(value: int32 | undefined): int32 {
   }]);
 });
 
-test("interfaces lower to record structs with annotated object literals", () => {
+test("interfaces lower to reference-backed object wrappers with annotated object literals", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -424,9 +429,61 @@ export function shift(p: Point, dx: int32): Point {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[derive\(Clone, Copy, Debug, PartialEq\)\]\npub struct Point \{\n    pub x: i32,\n    pub y: i32,\n\}/u);
-  assert.match(text, /let p: Point = Point \{ x: 0, y: 0 \};/u);
-  assert.match(text, /Point \{\n        x: p\.x \+ dx,\n        y: p\.y,\n    \}/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32, i32\)>,\n\}/u);
+  assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(0, 0\)\)/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(/u);
+  assert.match(text, /p\.clone\(\)\.__tsonic_state\.with\(\|state\| state\.0\) \+ dx/u);
+});
+
+test("generated interface objects preserve aliases, identity, and single receiver evaluation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "interface_identity_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Cell {
+  value: int32;
+}
+
+class Holder {
+  item: Cell;
+  calls: int32;
+
+  constructor(item: Cell) {
+    this.item = item;
+    this.calls = 0;
+  }
+
+  current(): Cell {
+    this.calls += 1;
+    return this.item;
+  }
+}
+
+export function main(): void {
+  const cell: Cell = { value: 1 };
+  const alias = cell;
+  alias.value = 2;
+  check(cell.value === 2);
+  check(alias === cell);
+  const separate: Cell = { value: 2 };
+  check(separate !== cell);
+  const holder = new Holder(cell);
+  holder.current().value += 3;
+  check(holder.calls === 1);
+  check(cell.value === 5);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("interface-identity-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
 });
 
 test("unannotated object literals fail closed", () => {

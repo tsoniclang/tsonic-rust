@@ -86,6 +86,7 @@ import {
   planFinalizedTargetInput,
   providerSelectedCallMatches,
   requireProviderArgumentPassingFacts,
+  sourceFieldSelectedOperationMatches,
 } from "./expressions.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName } from "./plan-context.js";
 import type { RustCompletionBoundary, RustControlTarget, RustLoopTarget, RustPlanContext } from "./plan-context.js";
@@ -97,6 +98,7 @@ import {
   rustLocationStorageForDeclaration,
 } from "./typed-locations.js";
 import { requireRustLocationValueCarrier } from "./generic-requirements.js";
+import { writeRustProjectObjectField } from "./project-objects.js";
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -807,7 +809,40 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
     return undefined;
   }
   const operand = Node_Operand(context.input.ast, expression);
-  if (operand === undefined || ast.kindName(operand) !== KindIdentifier) {
+  if (operand === undefined) {
+    return undefined;
+  }
+  const sourceField = context.input.facts.getFact(operand, rustTargetOperationFactKey);
+  if (sourceField?.kind === "source-field") {
+    if (!sourceFieldSelectedOperationMatches(operand, sourceField, context)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, operand),
+        "rust.backend.source-field-selected-evidence",
+        "Project-source field update conflicts with the TSTS-selected property fact.",
+      ));
+      return undefined;
+    }
+    const receiverNode = Node_Expression(ast, operand);
+    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+    if (receiver === undefined) {
+      return undefined;
+    }
+    const step: RustExpr = isRustBigIntCarrier(fact.resultCarrier)
+      ? {
+          kind: "call",
+          path: "rt::BigInt::from_decimal_literal",
+          args: [{ kind: "str-literal", value: "1" }],
+        }
+      : { kind: "int-literal", text: "1" };
+    if (isRustBigIntCarrier(fact.resultCarrier)) {
+      context.usedAliases?.add("rt");
+    }
+    return [{
+      kind: "expr",
+      expr: writeRustProjectObjectField(receiver, sourceField.storageIndex, fact.operator, step),
+    }];
+  }
+  if (ast.kindName(operand) !== KindIdentifier) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, expression),
       "rust.backend.operator",
@@ -893,6 +928,7 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
       if (left === undefined || right === undefined) {
         return undefined;
       }
+      const sourceField = context.input.facts.getFact(left, rustTargetOperationFactKey);
       const target = ast.kindName(left) === KindIdentifier
         ? (() => {
             const path = rustSourceName(context, ast.text(left));
@@ -903,7 +939,7 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
           )
           ? planExpression(left, context)
           : undefined;
-      if (target === undefined) {
+      if (target === undefined && sourceField?.kind !== "source-field") {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment",
@@ -949,8 +985,42 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         ));
         return undefined;
       }
+      if (sourceField?.kind === "source-field") {
+        if (!sourceFieldSelectedOperationMatches(left, sourceField, context)) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, left),
+            "rust.backend.source-field-selected-evidence",
+            "Project-source field assignment conflicts with the TSTS-selected property fact.",
+          ));
+          return undefined;
+        }
+        const receiverNode = Node_Expression(ast, left);
+        const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+        const value = planExpression(valueNode, context);
+        if (receiver === undefined || value === undefined) {
+          return undefined;
+        }
+        const receiverName = "__tsonic_receiver";
+        const valueName = "__tsonic_value";
+        return [{
+          kind: "expr",
+          expr: {
+            kind: "block",
+            bindings: [
+              { name: receiverName, value: receiver },
+              { name: valueName, value },
+            ],
+            value: writeRustProjectObjectField(
+              { kind: "path", path: receiverName },
+              sourceField.storageIndex,
+              operator,
+              { kind: "path", path: valueName },
+            ),
+          },
+        }];
+      }
       const value = planExpression(valueNode, context);
-      if (value === undefined) {
+      if (value === undefined || target === undefined) {
         return undefined;
       }
       const promoted = planRustPromotedStorageWrite(

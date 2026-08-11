@@ -38,7 +38,7 @@ function functionItem(primitive, value) {
   return {
     kind: "function",
     name: "value",
-    pub: true,
+    visibility: "public",
     params: [],
     returnType: { kind: "primitive", name: primitive },
     body: {

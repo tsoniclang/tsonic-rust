@@ -33,7 +33,7 @@ test("multiline method-chain arguments use rustfmt-compatible outer-call layout"
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -53,7 +53,7 @@ test("fitted multi-argument calls stay horizontal inside assignments", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -85,7 +85,7 @@ test("a fitted outer call stays attached to its multiline nested call", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -124,7 +124,7 @@ test("a nested call owns the fitting break inside a wider expression", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -171,7 +171,7 @@ test("a fallible nested call owns the fitting break", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -216,7 +216,7 @@ test("a long outer call expands before a jointly fitting method argument", () =>
     headerComment,
     items: [{
       kind: "function",
-      pub: true,
+      visibility: "public",
       name: "proof",
       params: [],
       body: {
@@ -275,7 +275,7 @@ test("an outer call stays attached to an expanded associated call", () => {
     headerComment,
     items: [{
       kind: "function",
-      pub: true,
+      visibility: "public",
       name: "proof",
       params: [],
       body: {
@@ -308,7 +308,7 @@ test("a single block argument stays attached to its outer call", () => {
     headerComment,
     items: [{
       kind: "function",
-      pub: true,
+      visibility: "public",
       name: "run",
       params: [],
       body: {
@@ -349,7 +349,7 @@ test("a trailing fitted closure stays attached after preceding arguments", () =>
     headerComment,
     items: [{
       kind: "function",
-      pub: true,
+      visibility: "public",
       name: "run",
       params: [],
       body: {
@@ -405,7 +405,7 @@ test("three-field struct literals use rustfmt-compatible vertical layout", () =>
     headerComment,
     items: [{
       kind: "function",
-      pub: true,
+      visibility: "public",
       name: "new_item",
       params: [],
       body: {
@@ -433,7 +433,7 @@ test("one-field struct literals honor rustfmt's compact body limit", () => {
     headerComment,
     items: [{
       kind: "function",
-      pub: true,
+      visibility: "public",
       name: "new_counter",
       params: [],
       body: {
@@ -489,7 +489,7 @@ test("long logical chains use rustfmt-compatible operand-per-line layout", () =>
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -526,7 +526,7 @@ test("multiline mixed logical groups preserve source precedence", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -557,7 +557,7 @@ test("long assignments break after the assignment operator", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -601,7 +601,7 @@ test("multiline arithmetic assignments break after the assignment operator", () 
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -623,7 +623,7 @@ test("overflowing outer calls retain jointly fitting nested arguments", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -658,7 +658,7 @@ test("nested calls beyond rustfmt call width put each argument on its own line",
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -689,7 +689,7 @@ test("nested single-argument wrappers stay attached to the expanded inner call",
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -724,7 +724,7 @@ test("fallible nested calls in comparisons use rustfmt-compatible wrapper layout
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -767,7 +767,7 @@ test("long borrowed slices use rustfmt-compatible element layout", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -815,7 +815,7 @@ test("single long borrowed slice arguments stay attached to their call", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -862,7 +862,7 @@ test("single long owned array arguments stay attached to their call", () => {
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{
@@ -927,7 +927,7 @@ test("logical assignment keeps a fitting first operand beside the operator", () 
     items: [{
       kind: "function",
       name: "proof",
-      pub: true,
+      visibility: "public",
       params: [],
       body: {
         statements: [{

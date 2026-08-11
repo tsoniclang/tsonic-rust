@@ -248,7 +248,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
       name,
-      pub: isExported,
+      visibility: isExported ? "public" : "private",
       ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
       ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
       params,
@@ -287,7 +287,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
-    pub: isExported,
+    visibility: isExported ? "public" : "private",
     ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(isAsync ? { isAsync: true } : {}),
     ...(fallible ? { fallible: true } : {}),

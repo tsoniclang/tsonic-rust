@@ -156,15 +156,17 @@ export interface RustTypeParameter {
 
 export type RustSelfParam = "ref" | "mut-ref";
 
+export type RustVisibility = "private" | "crate" | "public";
+
 export interface RustStructField {
   readonly name: string;
   readonly type: RustType;
-  readonly pub: boolean;
+  readonly visibility: RustVisibility;
 }
 
 export interface RustImplFunction {
   readonly name: string;
-  readonly pub: boolean;
+  readonly visibility: RustVisibility;
   readonly attrs?: readonly string[];
   readonly isAsync?: boolean;
   readonly fallible?: boolean;
@@ -178,7 +180,7 @@ export type RustItem =
   | {
       readonly kind: "function";
       readonly name: string;
-      readonly pub: boolean;
+      readonly visibility: RustVisibility;
       readonly attrs?: readonly string[];
       readonly isAsync?: boolean;
       readonly fallible?: boolean;
@@ -191,14 +193,14 @@ export type RustItem =
       readonly kind: "const";
       readonly attrs?: readonly string[];
       readonly name: string;
-      readonly pub: boolean;
+      readonly visibility: RustVisibility;
       readonly type: RustType;
       readonly value: RustExpr;
     }
-  | { readonly kind: "mod-decl"; readonly name: string; readonly pub: boolean }
-  | { readonly kind: "struct"; readonly name: string; readonly pub: boolean; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly fields: readonly RustStructField[] }
+  | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility }
+  | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly fields: readonly RustStructField[] }
   | { readonly kind: "impl"; readonly name: string; readonly functions: readonly RustImplFunction[] }
-  | { readonly kind: "enum"; readonly name: string; readonly pub: boolean; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string }[] }
+  | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string }[] }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string };
 
 export interface RustSourceFileModel {

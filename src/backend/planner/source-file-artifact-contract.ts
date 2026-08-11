@@ -51,7 +51,7 @@ function rustPublicSurface(items: readonly RustItem[]): string {
 function publicItemSurface(item: RustItem): readonly string[] {
   switch (item.kind) {
     case "function":
-      return item.pub
+      return item.visibility === "public"
         ? [rustFunctionSurface({
             name: item.name,
             isAsync: item.isAsync === true,
@@ -65,9 +65,9 @@ function publicItemSurface(item: RustItem): readonly string[] {
         : [];
     case "const":
     case "enum":
-      return item.pub ? [printRustItem(item)] : [];
+      return item.visibility === "public" ? [printRustItem(item)] : [];
     case "struct":
-      return item.pub
+      return item.visibility === "public"
         ? [encodeRustContractParts([
             "struct",
             item.name,
@@ -77,17 +77,17 @@ function publicItemSurface(item: RustItem): readonly string[] {
               encodeRustContractParts([
                 "field",
                 field.name,
-                field.pub ? "public" : "private",
+                field.visibility,
                 printRustType(field.type),
               ])),
           ])]
         : [];
     case "impl":
       return item.functions
-        .filter((fn) => fn.pub)
+        .filter((fn) => fn.visibility === "public")
         .map((fn) => publicMethodSurface(item.name, fn));
     case "mod-decl":
-      return item.pub
+      return item.visibility === "public"
         ? [encodeRustContractParts(["module", item.name])]
         : [];
     case "use":

@@ -19,10 +19,7 @@ import {
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
 } from "../../source/rust-facts/keys.js";
-import {
-  isRustCopyCarrier,
-  rustValueCarrierRequiresCloneOnRead,
-} from "../../source/rust-target-types.js";
+import { rustValueCarrierRequiresCloneOnRead } from "../../source/rust-target-types.js";
 import type { RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
@@ -36,6 +33,10 @@ import {
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { requireRustLocationValueCarrier } from "./generic-requirements.js";
+import {
+  readRustProjectObjectField,
+  writeRustProjectObjectField,
+} from "./project-objects.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -360,11 +361,6 @@ function planRustLocationStorage(
     operation?.kind === "source-field") {
     const ownerName = "__tsonic_location_owner";
     const valueName = "__tsonic_location_value";
-    const field = (owner: RustExpr): RustExpr => ({
-      kind: "field",
-      receiver: owner,
-      name: operation.name,
-    });
     return {
       kind: "method-call",
       receiver: receiverLocation,
@@ -374,14 +370,11 @@ function planRustLocationStorage(
         {
           kind: "closure",
           params: [{ name: ownerName, byRefCopy: false }],
-          body: isRustCopyCarrier(operation.resultCarrier)
-            ? field({ kind: "path", path: ownerName })
-            : {
-                kind: "method-call",
-                receiver: field({ kind: "path", path: ownerName }),
-                method: "clone",
-                args: [],
-              },
+          body: readRustProjectObjectField(
+            { kind: "path", path: ownerName },
+            operation.storageIndex,
+            operation.resultCarrier,
+          ),
         },
         {
           kind: "closure",
@@ -389,12 +382,12 @@ function planRustLocationStorage(
             { name: ownerName, byRefCopy: false },
             { name: valueName, byRefCopy: false },
           ],
-          body: {
-            kind: "assignment",
-            operator: "=",
-            target: field({ kind: "path", path: ownerName }),
-            value: { kind: "path", path: valueName },
-          },
+          body: writeRustProjectObjectField(
+            { kind: "path", path: ownerName },
+            operation.storageIndex,
+            "=",
+            { kind: "path", path: valueName },
+          ),
         },
       ],
     };

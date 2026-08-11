@@ -181,7 +181,7 @@ export function singleton(value: int32): [int32] {
   validateGeneratedProject("backend-singleton-tuple", result.artifacts);
 });
 
-test("empty classes use braced structs compatible with structured constructors", () => {
+test("empty classes retain reference identity through an empty object state", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -198,8 +198,8 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\}/u);
-  assert.match(text, /Empty \{\}/u);
+  assert.match(text, /pub struct Empty \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(\)>,\n\}/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(\)\)/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
 
@@ -248,8 +248,8 @@ export class Secret {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /    value: i32,/u);
-  assert.doesNotMatch(text, /    pub value: i32,/u);
+  assert.match(text, /    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32,\)>,/u);
+  assert.doesNotMatch(text, /    (?:pub )?value: i32,/u);
   assert.match(text, /    fn hidden\(&self\) -> i32/u);
   assert.doesNotMatch(text, /    pub fn hidden\(&self\)/u);
   assert.match(text, /    pub fn reveal\(&self\) -> i32/u);

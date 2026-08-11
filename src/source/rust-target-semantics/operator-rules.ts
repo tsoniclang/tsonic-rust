@@ -35,7 +35,7 @@ import {
   sameRustPrimitiveCarrier,
 } from "../rust-target-types.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
-import { rustSourceTypeCarrierValue } from "../rust-facts/keys.js";
+import { rustSourceTypeCarrierValue } from "../rust-target-types.js";
 
 export interface RustBinaryOperatorSelection {
   readonly kind: "operator-token" | "string-concat";
@@ -162,13 +162,16 @@ export function selectRustBinaryOperator(
     const sameEnum = leftEnum !== undefined && rightEnum !== undefined &&
       leftEnum.shape === "enum" && rightEnum.shape === "enum" &&
       leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
+    const sameObject = leftEnum !== undefined && rightEnum !== undefined &&
+      leftEnum.shape === "object" && rightEnum.shape === "object" &&
+      leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
     const comparable =
       (isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right)) ||
       (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) ||
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
       (isRustStringCarrier(left) && isRustStringCarrier(right)) ||
       (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
-      sameEnum;
+      sameEnum || sameObject;
     return comparable
       ? { kind: "operator-token", rustOperator: equality, resultCarrier: boolCarrier }
       : undefined;
