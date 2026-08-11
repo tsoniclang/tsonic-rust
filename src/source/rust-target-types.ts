@@ -278,6 +278,66 @@ export function substituteRustTargetTypeParameters(
   }
 }
 
+export function rustTargetTypeContainsTypeParameter(
+  type: TargetTypeRef,
+  selectedNames: ReadonlySet<string>,
+): boolean {
+  return visitRustTargetTypeParameters(type, (name) => selectedNames.has(name));
+}
+
+export function rustTargetTypeParameterNames(type: TargetTypeRef): readonly string[] {
+  const names = new Set<string>();
+  visitRustTargetTypeParameters(type, (name) => {
+    names.add(name);
+    return false;
+  });
+  return Object.freeze([...names].sort());
+}
+
+function visitRustTargetTypeParameters(
+  type: TargetTypeRef,
+  visit: (name: string) => boolean,
+): boolean {
+  switch (type.kind) {
+    case "type-parameter":
+      return visit(type.name);
+    case "target-named":
+      return type.typeArguments?.some((argument) =>
+        visitRustTargetTypeParameters(argument, visit)) === true;
+    case "array":
+      return visitRustTargetTypeParameters(type.element, visit);
+    case "tuple":
+      return type.elements.some((element) =>
+        visitRustTargetTypeParameters(element, visit));
+    case "pointer":
+      return visitRustTargetTypeParameters(type.pointee, visit);
+    case "function-pointer":
+    case "closure":
+      return type.args.some((argument) =>
+        visitRustTargetTypeParameters(argument, visit)) ||
+        visitRustTargetTypeParameters(type.result, visit);
+    case "associated-type":
+      return visitRustTargetTypeParameters(type.owner, visit);
+    case "target-specific": {
+      const sourceType = rustSourceTypeCarrierValue(type);
+      if (sourceType !== undefined) {
+        return sourceType.typeArguments.some((argument) =>
+          visitRustTargetTypeParameters(argument, visit));
+      }
+      const namedType = rustNamedTypeCarrierValue(type);
+      if (namedType !== undefined) {
+        return namedType.typeArguments.some((argument) =>
+          visitRustTargetTypeParameters(argument, visit));
+      }
+      const fixedArray = rustFixedArrayCarrierValue(type);
+      return fixedArray !== undefined &&
+        visitRustTargetTypeParameters(fixedArray.element, visit);
+    }
+    default:
+      return false;
+  }
+}
+
 export function inferRustTargetTypeParameterBindings(
   pattern: TargetTypeRef,
   actual: TargetTypeRef,
@@ -339,6 +399,23 @@ export function inferRustTargetTypeParameterBindings(
             leftSource.typeArguments.length === rightSource.typeArguments.length &&
             leftSource.typeArguments.every((argument, index) =>
               match(argument, rightSource.typeArguments[index]!));
+        }
+        const leftNamed = rustNamedTypeCarrierValue(left);
+        const rightNamed = rustNamedTypeCarrierValue(right);
+        if (leftNamed !== undefined || rightNamed !== undefined) {
+          return leftNamed !== undefined && rightNamed !== undefined &&
+            leftNamed.id === rightNamed.id &&
+            leftNamed.path === rightNamed.path &&
+            leftNamed.typeArguments.length === rightNamed.typeArguments.length &&
+            leftNamed.typeArguments.every((argument, index) =>
+              match(argument, rightNamed.typeArguments[index]!));
+        }
+        const leftArray = rustFixedArrayCarrierValue(left);
+        const rightArray = rustFixedArrayCarrierValue(right);
+        if (leftArray !== undefined || rightArray !== undefined) {
+          return leftArray !== undefined && rightArray !== undefined &&
+            leftArray.length === rightArray.length &&
+            match(leftArray.element, rightArray.element);
         }
         return rustTargetTypeRefEquals(left, right);
       }

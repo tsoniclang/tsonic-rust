@@ -87,6 +87,47 @@ on activation: an installed but unused capability contributes no
 dependencies. The `@acme/rust-superbunapi` fixture proves the mechanism
 is name-blind — no code in this package names any capability.
 
+Rust standard-library declarations are available through target-owned virtual
+modules. For example:
+
+```ts
+import type { int32 } from "@tsonic/core/types.js";
+import { HashMap } from "@tsonic/rust/std/collections.js";
+
+const values = new HashMap<string, int32>();
+values.insert("answer", 42);
+```
+
+TSTS selects the exact virtual `HashMap.insert` declaration. Rust semantic
+analysis then consumes that selected identity and its closed generic carriers;
+the backend emits `std::collections::HashMap` operations without matching the
+source spelling.
+
+Third-party Cargo libraries use a user-owned `Cargo.toml`. Set the Rust target
+option `projectFile` to that manifest and import a direct dependency by its
+Cargo alias:
+
+```toml
+[dependencies]
+widget_alias = { package = "acme-widget", version = "1.2.3" }
+```
+
+```ts
+import type { int32 } from "@tsonic/core/types.js";
+import { Widget } from "@tsonic/rust/crates/widget_alias/index.js";
+
+const widget = new Widget<int32>(42);
+```
+
+The isolated compiler-provider worker snapshots the resolved Cargo graph,
+materializes rustdoc JSON once for the selected dependency, and projects only
+requested public exports into provider declarations. The same exact provider
+identities and target carriers flow into Rust operation selection. Unsupported
+Rust signatures fail at the virtual import boundary. In `projectFile` mode,
+Tsonic emits source artifacts only and never creates or mutates `Cargo.toml`;
+the user-owned Cargo project controls dependencies, features, profiles, and
+the inclusion of generated source.
+
 ## Explicitly unsupported (fail-closed, classified)
 
 Each unsupported lane requires a contract that does not exist: discriminated

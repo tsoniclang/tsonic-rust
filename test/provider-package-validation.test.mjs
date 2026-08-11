@@ -346,6 +346,101 @@ test("cross-module provider refs require an explicit declared import", () => {
   })));
 });
 
+test("external source dependencies declare exact provider-reference imports", () => {
+  const externalType = {
+    kind: "provider-ref",
+    moduleSpecifier: "@external/types",
+    exportName: "External",
+  };
+  const exported = functionExport("@acme/validation");
+  exported.signatures[0].returnType = externalType;
+  const modules = [{
+    moduleSpecifier: "@acme/validation",
+    providerModuleId: "acme.validation",
+    imports: [{
+      moduleSpecifier: "@external/types",
+      namedImports: [{ exportedName: "External" }],
+    }],
+    exports: [exported],
+  }];
+  const sourceDependencies = [{
+    moduleSpecifier: "@external/types",
+    exportedNames: ["External"],
+  }];
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    sourceDependencies,
+    modules,
+  })));
+  assert.throws(
+    () => createRustProviderPackage(definition({ modules })),
+    /imports from undeclared module '@external\/types'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      sourceDependencies: [{ moduleSpecifier: "@external/types", exportedNames: ["Other"] }],
+      modules,
+    })),
+    /imports undeclared export 'External'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      sourceDependencies: [sourceDependencies[0], sourceDependencies[0]],
+      modules,
+    })),
+    /duplicate source dependency module '@external\/types'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      sourceDependencies: [{ moduleSpecifier: "@external/types", exportedNames: ["External", "External"] }],
+      modules,
+    })),
+    /repeats export 'External'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      sourceDependencies: [{ moduleSpecifier: "@external/types", exportedNames: [] }],
+      modules,
+    })),
+    /must declare at least one export/u,
+  );
+});
+
+test("operation type parameters are declared exactly when their carriers use them", () => {
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [{
+        exportId: "@acme/validation::run",
+        operationKind: "method",
+        target: { form: "call", path: "acme_validation::run" },
+        resultCarrier: { kind: "type-parameter", name: "T" },
+      }],
+    })),
+    /references undeclared operation type parameter 'T'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [{
+        exportId: "@acme/validation::run",
+        operationKind: "method",
+        target: { form: "call", path: "acme_validation::run" },
+        resultCarrier: int32Carrier,
+        typeParameters: ["T"],
+      }],
+    })),
+    /declares unused operation type parameter 'T'/u,
+  );
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: { kind: "type-parameter", name: "T" },
+      typeParameters: ["T"],
+    }],
+  })));
+});
+
 test("argument permutations and structured constants fail closed when malformed", () => {
   const exported = functionExport("@acme/validation");
   exported.signatures[0].parameters = [

@@ -138,7 +138,12 @@ import {
   rustTargetOperationText,
 } from "../rust-facts/target-operation.js";
 import { rustArgumentPassingMode } from "../rust-facts/parameter-passing.js";
-import { collectRustProviderSemantics } from "../provider-packages/index.js";
+import {
+  collectRustProviderSemantics,
+  collectRustProviderSemanticsFromDefinitions,
+  mergeRustProviderSemantics,
+} from "../provider-packages/index.js";
+import { rustStdProviderDefinition } from "../../providers/compiler/std-catalog.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
 import {
   isRustAssignmentOperator,
@@ -523,7 +528,13 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     return;
   }
   const allSourceFiles = rawSourceFiles as readonly SourceFile[];
-  const providerSemantics = collectRustProviderSemantics(context.backend);
+  const staticProviderSemantics = mergeRustProviderSemantics(
+    collectRustProviderSemanticsFromDefinitions([rustStdProviderDefinition()]),
+    collectRustProviderSemantics(context.backend),
+  );
+  const providerSemantics = context.compilerProviderSemantics === undefined
+    ? staticProviderSemantics
+    : mergeRustProviderSemantics(staticProviderSemantics, context.compilerProviderSemantics);
   const providerRows = providerSemantics.operations;
   const jsEnabled = context.backend.selectedSurfaces.some((surface) => surface.id === "js") ||
     readRustTypescriptCompatibilityMode(context.target) === "compat";

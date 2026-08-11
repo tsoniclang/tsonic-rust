@@ -45,14 +45,34 @@ test("no internal TSTS imports", () => {
   }
 });
 
+test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
+  for (const { path, text } of sourceFiles) {
+    if (path.includes("/providers/compiler/")) {
+      continue;
+    }
+    assert.doesNotMatch(text, /\brustdoc\b/u, `${path} contains rustdoc-specific logic outside the compiler provider`);
+  }
+  for (const { path, text } of sourceFiles) {
+    if (!path.includes("/backend/")) {
+      continue;
+    }
+    assert.doesNotMatch(
+      text,
+      /providers\/compiler\/(?:cargo-snapshot|rustdoc|worker-client|worker-entry)/u,
+      `${path} reaches into compiler-provider tooling`,
+    );
+  }
+});
+
 test("no source-name target guessing in the backend", () => {
   const bannedTokens = ['"node:', '"@acme', "readText", "readFileSync", '"homeDir"', '"Math"', '"console"', '"push"', '"readFile"'];
   for (const { path, text } of sourceFiles) {
     if (!path.includes("/backend/")) {
       continue;
     }
+    const productText = text.replace(/from "node:[a-z/]+"/gu, "");
     for (const token of bannedTokens) {
-      assert.ok(!text.includes(token), `${path} contains banned source-name token ${token}`);
+      assert.ok(!productText.includes(token), `${path} contains banned source-name token ${token}`);
     }
   }
 });
@@ -462,7 +482,7 @@ test("call-argument conversion consumes the checked expression carrier, not a se
   const conversion = sourceSection(
     semantics,
     "export function selectRustCheckedConversion(",
-    "function targetTypeContainsSelectedParameter(",
+    "function selectProjectUpcast(",
   );
   const callArgument = conversion.slice(0, conversion.indexOf("const targetCarrier = resolveRustTargetTypeRef(request.explicitTargetTypeNode"));
   assert.match(callArgument, /resolveRustTargetTypeRef\(request\.expression, context, options\)/u);

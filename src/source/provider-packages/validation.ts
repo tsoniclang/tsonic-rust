@@ -31,6 +31,7 @@ import {
   rustOptionTargetId,
   rustUndefinedTargetId,
   rustPrimitiveTypeName,
+  rustTargetTypeParameterNames,
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,
@@ -87,7 +88,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.displayName, "display name", fail);
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
-    "id", "displayName", "version", "requiredSurfaces", "modules", "types", "operations", "crates",
+    "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "modules", "types", "operations", "crates",
     "aliasImports", "carrierPaths",
   ], "package", fail);
 
@@ -98,12 +99,35 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   const signaturesById = new Map<string, SignatureRecord>();
   const exportNamesByModule = new Map<string, Set<string>>();
 
+  for (const dependency of definition.sourceDependencies ?? []) {
+    requireExactKeys(asRecord(dependency), ["moduleSpecifier", "exportedNames"], "source dependency", fail);
+    requireNonEmpty(dependency.moduleSpecifier, "source dependency module specifier", fail);
+    if (exportNamesByModule.has(dependency.moduleSpecifier)) {
+      fail(`duplicate source dependency module '${dependency.moduleSpecifier}'`);
+    }
+    if (dependency.exportedNames.length === 0) {
+      fail(`source dependency '${dependency.moduleSpecifier}' must declare at least one export`);
+    }
+    const names = new Set<string>();
+    for (const exportedName of dependency.exportedNames) {
+      requireNonEmpty(exportedName, `source dependency export in '${dependency.moduleSpecifier}'`, fail);
+      if (names.has(exportedName)) {
+        fail(`source dependency '${dependency.moduleSpecifier}' repeats export '${exportedName}'`);
+      }
+      names.add(exportedName);
+    }
+    exportNamesByModule.set(dependency.moduleSpecifier, names);
+  }
+
   for (const module of definition.modules) {
     requireExactKeys(asRecord(module), ["moduleSpecifier", "providerModuleId", "imports", "exports"], "module", fail);
     requireNonEmpty(module.moduleSpecifier, "module specifier", fail);
     requireNonEmpty(module.providerModuleId, `provider module id for '${module.moduleSpecifier}'`, fail);
     if (modulesBySpecifier.has(module.moduleSpecifier)) {
       fail(`duplicate module '${module.moduleSpecifier}'`);
+    }
+    if (exportNamesByModule.has(module.moduleSpecifier)) {
+      fail(`module '${module.moduleSpecifier}' conflicts with a source dependency of the same name`);
     }
     if (modulesByProviderId.has(module.providerModuleId)) {
       fail(`duplicate provider module id '${module.providerModuleId}'`);
@@ -137,7 +161,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   }
 
   for (const module of definition.modules) {
-    const importedExports = validateImports(module, modulesBySpecifier, exportNamesByModule, fail);
+    const importedExports = validateImports(module, exportNamesByModule, fail);
     for (const exported of module.exports) {
       walkExportTypes(exported, module.moduleSpecifier, importedExports, exportNamesByModule, fail);
     }
@@ -169,7 +193,6 @@ function recordSignatures(
 
 function validateImports(
   module: RustProviderPackageDefinition["modules"][number],
-  modulesBySpecifier: ReadonlyMap<string, RustProviderPackageDefinition["modules"][number]>,
   exportNamesByModule: ReadonlyMap<string, ReadonlySet<string>>,
   fail: Fail,
 ): ReadonlyMap<string, ReadonlySet<string>> {
@@ -177,7 +200,7 @@ function validateImports(
   for (const imported of module.imports ?? []) {
     requireExactKeys(asRecord(imported), ["moduleSpecifier", "namedImports"], `import in '${module.moduleSpecifier}'`, fail);
     requireNonEmpty(imported.moduleSpecifier, `import module specifier in '${module.moduleSpecifier}'`, fail);
-    if (!modulesBySpecifier.has(imported.moduleSpecifier)) {
+    if (!exportNamesByModule.has(imported.moduleSpecifier)) {
       fail(`module '${module.moduleSpecifier}' imports from undeclared module '${imported.moduleSpecifier}'`);
     }
     const names = importedExports.get(imported.moduleSpecifier) ?? new Set<string>();
@@ -295,7 +318,7 @@ function walkType(
       return;
     case "source-primitive":
       requireExactKeys(record, ["kind", "name"], where, fail);
-      if (rustPrimitiveTypeName(type.name) === undefined) {
+      if (!rustSourcePrimitiveHasCarrier(type.name)) {
         fail(`${where} uses source primitive '${type.name}' with no Rust source carrier`);
       }
       return;
@@ -521,7 +544,7 @@ function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "resultConversion", "isAsync", "isFallible",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -568,8 +591,35 @@ function validateOperationRows(
     }
     validateOperationParameters(row, exported, member, signature, fail);
     validateCarrier(row.resultCarrier, definition, `${label}.resultCarrier`, fail);
+    if (row.receiverCarrier !== undefined) {
+      validateCarrier(row.receiverCarrier, definition, `${label}.receiverCarrier`, fail);
+    }
+    const typeParameterNames = new Set<string>();
+    for (const [index, name] of (row.typeParameters ?? []).entries()) {
+      requireRustIdentifier(name, `${label}.typeParameters[${index}]`, fail);
+      if (typeParameterNames.has(name)) {
+        fail(`${label}.typeParameters contains duplicate '${name}'`);
+      }
+      typeParameterNames.add(name);
+    }
     for (const [index, carrier] of (row.parameterCarriers ?? []).entries()) {
       validateCarrier(carrier, definition, `${label}.parameterCarriers[${index}]`, fail);
+    }
+    const referencedTypeParameters = new Set([
+      ...rustTargetTypeParameterNames(row.resultCarrier),
+      ...(row.receiverCarrier === undefined ? [] : rustTargetTypeParameterNames(row.receiverCarrier)),
+      ...(row.parameterCarriers ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
+      ...operationFormCarriers(row.target).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
+    ]);
+    for (const name of referencedTypeParameters) {
+      if (!typeParameterNames.has(name)) {
+        fail(`${label} carrier references undeclared operation type parameter '${name}'`);
+      }
+    }
+    for (const name of typeParameterNames) {
+      if (!referencedTypeParameters.has(name)) {
+        fail(`${label}.typeParameters declares unused operation type parameter '${name}'`);
+      }
     }
     if (row.resultConversion !== undefined) {
       validateValueConversion(row.resultConversion, definition, `${label}.resultConversion`, undefined, row.resultCarrier, fail);
@@ -587,6 +637,21 @@ function validateOperationRows(
       fail(`${label}.target violates the closed Rust operation-form contract: ${operationFormContractViolation}`);
     }
   }
+}
+
+function operationFormCarriers(form: RustProviderOperationForm): readonly TargetTypeRef[] {
+  if (form.form === "call-value-slice" || form.form === "call-value-array" ||
+    form.form === "receiver-value-array") {
+    return [...form.leadingArguments.map((argument) => argument.carrier), form.elementCarrier];
+  }
+  if (form.form === "receiver-tagged-array") {
+    return [
+      ...form.leadingArguments.map((argument) => argument.carrier),
+      form.elementCarrier,
+      ...form.alternatives.map((alternative) => alternative.inputCarrier),
+    ];
+  }
+  return [];
 }
 
 function validateOperationParameters(
@@ -922,7 +987,7 @@ function validateCarrier(
   switch (carrier.kind) {
     case "source-primitive":
       requireExactKeys(record, ["kind", "name"], where, fail);
-      if (rustPrimitiveTypeName(carrier.name) === undefined) {
+      if (!rustSourcePrimitiveHasCarrier(carrier.name)) {
         fail(`${where} uses source primitive '${carrier.name}' with no Rust carrier`);
       }
       return;
@@ -1022,6 +1087,10 @@ function requireRustIdentifier(value: unknown, where: string, fail: Fail): asser
   if (typeof value !== "string" || !rustIdentifierPattern.test(value)) {
     fail(`${where} '${String(value)}' is not a Rust identifier`);
   }
+}
+
+function rustSourcePrimitiveHasCarrier(name: import("@tsonic/tsts").SourcePrimitiveKind): boolean {
+  return name === "native-int" || name === "native-uint" || rustPrimitiveTypeName(name) !== undefined;
 }
 
 function requireRustPath(value: unknown, where: string, fail: Fail): asserts value is string {

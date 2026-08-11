@@ -69,6 +69,9 @@ import {
   rustStringTargetType,
   rustUnitTargetType,
   rustCarrierSupportsClone,
+  inferRustTargetTypeParameterBindings,
+  rustTargetTypeContainsTypeParameter,
+  substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
 import {
   isRustBigIntCarrier,
@@ -1293,10 +1296,40 @@ function acceptSelectedCall(
     readonly providerDeclaration?: ProviderDeclarationIdentity;
   },
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const rawReceiverCarrier = selectedCallReceiverValueCarrier(
+    request,
+    context,
+    resolutionOptions,
+  );
+  const selectedParameterCarriers = request.sourceSelectedSignatureParameters.map((parameter) =>
+    resolveRustTargetTypeRef(parameter.selectedType, context, resolutionOptions));
+  const selectedResultCarrier = request.sourceReturnType === undefined
+    ? undefined
+    : resolveRustTargetTypeRef(request.sourceReturnType, context, resolutionOptions);
+  const directTypeArguments = new Map<string, TargetTypeRef>();
+  for (const argument of request.sourceSelectedMethodTypeArguments ?? []) {
+    const carrier = resolveRustTargetTypeRef(
+      argument.explicitTypeNode ?? argument.selectedType,
+      context,
+      resolutionOptions,
+    );
+    if (carrier !== undefined) {
+      directTypeArguments.set(argument.typeParameterName, carrier);
+    }
+  }
+  const instantiatedTemplate = instantiateProviderOperationTemplate(template, {
+    sourceReceiverCarrier: rawReceiverCarrier,
+    sourceParameterCarriers: selectedParameterCarriers,
+    sourceResultCarrier: selectedResultCarrier,
+    directTypeArguments,
+  });
+  if (instantiatedTemplate === undefined) {
+    return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${callIdentity.sourceName}' does not prove one closed instantiation of its Rust provider type parameters.`);
+  }
   const sourceArguments = selectedCallSourceCarriers(
     request,
-    template,
-    parameterCarriers,
+    instantiatedTemplate,
+    instantiatedTemplate.parameterCarriers ?? parameterCarriers,
     context,
     resolutionOptions,
   );
@@ -1313,14 +1346,14 @@ function acceptSelectedCall(
   }
   const selectedReceiverCarrier = selectedCallReceiverCarrier(
     request,
-    template.target,
+    instantiatedTemplate.target,
     context,
     resolutionOptions,
   );
-  if (providerFormRequiresSourceReceiver(template.target) && selectedReceiverCarrier === undefined) {
+  if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && selectedReceiverCarrier === undefined) {
     return rejectSelectedOperation(request.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver carrier.`);
   }
-  const fact = finalizeProviderOperationFact(template, sourceArguments.carriers, selectedReceiverCarrier);
+  const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier);
   if (fact === undefined) {
     return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
   }
@@ -1545,7 +1578,7 @@ function selectedCallReceiverValueCarrier(
     return undefined;
   }
   const sourceCarrier = resolveRustTargetTypeRef(
-    receiver.declaration ?? receiver.expression,
+    receiver.expression,
     context,
     options,
   );
@@ -1589,7 +1622,7 @@ function selectRustOptionalCallResult(
         options,
       )
     : resolveRustTargetTypeRef(
-        receiver.declaration ?? receiver.expression,
+        receiver.expression,
         context,
         options,
       );
@@ -1637,6 +1670,132 @@ function providerFormRequiresSourceReceiver(form: RustProviderOperationForm): bo
     form.form === "receiver-value-array" ||
     form.form === "receiver-tagged-array" ||
     form.form === "arg-receiver-method";
+}
+
+function instantiateProviderOperationTemplate(
+  template: RustProviderOperationTemplate,
+  evidence: {
+    readonly sourceReceiverCarrier?: TargetTypeRef;
+    readonly sourceParameterCarriers?: readonly (TargetTypeRef | undefined)[];
+    readonly sourceResultCarrier?: TargetTypeRef;
+    readonly directTypeArguments?: ReadonlyMap<string, TargetTypeRef>;
+  },
+): RustProviderOperationTemplate | undefined {
+  const parameterNames = new Set(template.typeParameters ?? []);
+  if (parameterNames.size === 0) {
+    return template;
+  }
+  const bindings = new Map<string, TargetTypeRef>();
+  for (const [name, carrier] of evidence.directTypeArguments ?? []) {
+    if (parameterNames.has(name) && !mergeTypeBinding(bindings, name, carrier)) {
+      return undefined;
+    }
+  }
+  if (!inferTemplateBindings(template.receiverCarrier, evidence.sourceReceiverCarrier, true) ||
+    !inferTemplateBindings(template.resultCarrier, evidence.sourceResultCarrier, false)) {
+    return undefined;
+  }
+  for (let index = 0; index < (template.parameterCarriers?.length ?? 0); index += 1) {
+    if (!inferTemplateBindings(
+      template.parameterCarriers?.[index],
+      evidence.sourceParameterCarriers?.[index],
+      false,
+    )) {
+      return undefined;
+    }
+  }
+  if ([...parameterNames].some((name) => !bindings.has(name))) {
+    return undefined;
+  }
+  return {
+    ...template,
+    target: substituteProviderOperationForm(template.target, bindings),
+    resultCarrier: substituteRustTargetTypeParameters(template.resultCarrier, bindings),
+    ...(template.parameterCarriers === undefined
+      ? {}
+      : { parameterCarriers: template.parameterCarriers.map((carrier) =>
+          carrier === undefined ? undefined : substituteRustTargetTypeParameters(carrier, bindings)) }),
+    ...(template.receiverCarrier === undefined
+      ? {}
+      : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
+    typeParameters: [],
+  };
+
+  function inferTemplateBindings(
+    pattern: TargetTypeRef | undefined,
+    actual: TargetTypeRef | undefined,
+    reconcileKnownBindings: boolean,
+  ): boolean {
+    if (pattern === undefined || !rustTargetTypeContainsTypeParameter(pattern, parameterNames)) {
+      return true;
+    }
+    const selectedNames = reconcileKnownBindings
+      ? parameterNames
+      : new Set([...parameterNames].filter((name) => !bindings.has(name)));
+    if (!rustTargetTypeContainsTypeParameter(pattern, selectedNames)) {
+      return true;
+    }
+    if (actual === undefined) {
+      return false;
+    }
+    const inferred = inferRustTargetTypeParameterBindings(pattern, actual, selectedNames);
+    if (inferred === undefined) {
+      return false;
+    }
+    for (const [name, carrier] of inferred) {
+      if (!mergeTypeBinding(bindings, name, carrier)) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
+function mergeTypeBinding(
+  bindings: Map<string, TargetTypeRef>,
+  name: string,
+  carrier: TargetTypeRef,
+): boolean {
+  const existing = bindings.get(name);
+  if (existing !== undefined) {
+    return rustTargetTypeRefEquals(existing, carrier);
+  }
+  bindings.set(name, carrier);
+  return true;
+}
+
+function substituteProviderOperationForm(
+  form: RustProviderOperationForm,
+  substitutions: ReadonlyMap<string, TargetTypeRef>,
+): RustProviderOperationForm {
+  switch (form.form) {
+    case "call-value-slice":
+    case "call-value-array":
+    case "receiver-value-array":
+      return {
+        ...form,
+        leadingArguments: form.leadingArguments.map((argument) => ({
+          ...argument,
+          carrier: substituteRustTargetTypeParameters(argument.carrier, substitutions),
+        })),
+        elementCarrier: substituteRustTargetTypeParameters(form.elementCarrier, substitutions),
+      };
+    case "receiver-tagged-array":
+      return {
+        ...form,
+        leadingArguments: form.leadingArguments.map((argument) => ({
+          ...argument,
+          carrier: substituteRustTargetTypeParameters(argument.carrier, substitutions),
+        })),
+        elementCarrier: substituteRustTargetTypeParameters(form.elementCarrier, substitutions),
+        alternatives: form.alternatives.map((alternative) => ({
+          ...alternative,
+          inputCarrier: substituteRustTargetTypeParameters(alternative.inputCarrier, substitutions),
+        })),
+      };
+    default:
+      return form;
+  }
 }
 
 function finalizeProviderOperationFact(
@@ -2306,7 +2465,7 @@ export function selectRustCheckedConversion(
       request.selectedSignature.sourceSelectedMethodTypeArguments?.map((argument) => argument.typeParameterName) ?? [],
     );
     if (selectedTypeParameterNames.size > 0 &&
-      targetTypeContainsSelectedParameter(targetCarrier, selectedTypeParameterNames)) {
+      rustTargetTypeContainsTypeParameter(targetCarrier, selectedTypeParameterNames)) {
       return acceptRustPolicy({}, [
         { message: "rust deferred the selected generic source-call argument carrier to post-check target substitution" },
       ]);
@@ -2457,32 +2616,6 @@ function selectProjectUpcast(
   return true;
 }
 
-function targetTypeContainsSelectedParameter(
-  type: TargetTypeRef,
-  selectedNames: ReadonlySet<string>,
-): boolean {
-  switch (type.kind) {
-    case "type-parameter":
-      return selectedNames.has(type.name);
-    case "target-named":
-      return type.typeArguments?.some((argument) => targetTypeContainsSelectedParameter(argument, selectedNames)) === true;
-    case "array":
-      return targetTypeContainsSelectedParameter(type.element, selectedNames);
-    case "tuple":
-      return type.elements.some((element) => targetTypeContainsSelectedParameter(element, selectedNames));
-    case "pointer":
-      return targetTypeContainsSelectedParameter(type.pointee, selectedNames);
-    case "function-pointer":
-    case "closure":
-      return type.args.some((argument) => targetTypeContainsSelectedParameter(argument, selectedNames)) ||
-        targetTypeContainsSelectedParameter(type.result, selectedNames);
-    case "associated-type":
-      return targetTypeContainsSelectedParameter(type.owner, selectedNames);
-    default:
-      return false;
-  }
-}
-
 function mapProviderCheckedOperation(
   expression: ExtensionFactSubject,
   identity: ProviderDeclarationIdentity,
@@ -2537,20 +2670,30 @@ function finalizeProviderOperationFromSubjects(
   options: RustOperationsProviderOptions,
   selectedReceiverCarrier?: TargetTypeRef,
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
+  const rawArgumentCarriers = sourceArguments.map((argument) =>
+    resolveRustTargetTypeRef(argument, context, options));
+  const rawReceiverCarrier = selectedReceiverCarrier ?? (sourceReceiver === undefined
+    ? undefined
+    : resolveRustTargetTypeRef(sourceReceiver, context, options));
+  const instantiatedTemplate = instantiateProviderOperationTemplate(template, {
+    sourceReceiverCarrier: rawReceiverCarrier,
+    sourceParameterCarriers: rawArgumentCarriers,
+  });
+  if (instantiatedTemplate === undefined) {
+    return undefined;
+  }
   const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
     const resolved = resolveRustTargetTypeRef(argument, context, options);
-    return normalizeSelectedLiteralCarrier(argument, resolved, template.parameterCarriers?.[index], context, options);
+    return normalizeSelectedLiteralCarrier(argument, resolved, instantiatedTemplate.parameterCarriers?.[index], context, options);
   });
   if (sourceArgumentCarriers.some((carrier) => carrier === undefined)) {
     return undefined;
   }
-  const sourceReceiverCarrier = selectedReceiverCarrier ?? (sourceReceiver === undefined
-    ? undefined
-    : resolveRustTargetTypeRef(sourceReceiver, context, options));
-  if (providerFormRequiresSourceReceiver(template.target) && sourceReceiverCarrier === undefined) {
+  const sourceReceiverCarrier = rawReceiverCarrier;
+  if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && sourceReceiverCarrier === undefined) {
     return undefined;
   }
-  return finalizeProviderOperationFact(template, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier);
+  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier);
 }
 
 function acceptRustOperation(
@@ -2583,7 +2726,7 @@ function selectedMemberReceiverCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const sourceCarrier = resolveRustTargetTypeRef(
-    request.sourceReceiverDeclaration ?? request.receiver,
+    request.receiver,
     context,
     options,
   );
@@ -2693,6 +2836,8 @@ function providerOperationFact(row: RustProviderOperationRow): RustProviderOpera
     target: row.target,
     resultCarrier: row.resultCarrier,
     ...(row.parameterCarriers === undefined ? {} : { parameterCarriers: row.parameterCarriers }),
+    ...(row.receiverCarrier === undefined ? {} : { receiverCarrier: row.receiverCarrier }),
+    ...(row.typeParameters === undefined ? {} : { typeParameters: row.typeParameters }),
     ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,

@@ -342,19 +342,7 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
       harness,
     };
   }
-  const contributionContext = harness.runtimeContributionContext;
-  const capabilityReferences = harness.runtimeActivatedCapabilities.flatMap((providerPackage) =>
-    providerPackage.runtimeContributions?.({
-      ...contributionContext,
-      targetPack: harness.pack,
-      capability: providerPackage,
-    }).references ?? []);
-  const runtimeReferences = [
-    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
-    ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
-      surface.runtimeContributions?.(contributionContext).references ?? []),
-    ...capabilityReferences,
-  ];
+  const runtimeReferences = runtimeReferencesForHarness(harness);
   const input = createRustCompileInputFromSession({
     source,
     project: harness.project,
@@ -371,6 +359,44 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
     translationContext,
     harness,
   };
+}
+
+export function compileRustThroughTargetPack({
+  files,
+  target = { id: "rust", options: {} },
+  packages = [],
+  capabilities = [],
+  surfaces = [],
+  entryPoint = "index.ts",
+}) {
+  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
+  const source = checkRustSession(harness);
+  const input = createRustCompileInputFromSession({
+    source,
+    project: harness.project,
+    target,
+    runtimeReferences: runtimeReferencesForHarness(harness),
+    paths: harness.paths,
+  });
+  const result = harness.pack.createBackend(harness.providerContext).compile(input);
+  attachBoundedDiagnosticInspection(result.diagnostics);
+  return { result, source, harness };
+}
+
+function runtimeReferencesForHarness(harness) {
+  const contributionContext = harness.runtimeContributionContext;
+  const capabilityReferences = harness.runtimeActivatedCapabilities.flatMap((providerPackage) =>
+    providerPackage.runtimeContributions?.({
+      ...contributionContext,
+      targetPack: harness.pack,
+      capability: providerPackage,
+    }).references ?? []);
+  return [
+    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
+    ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
+      surface.runtimeContributions?.(contributionContext).references ?? []),
+    ...capabilityReferences,
+  ];
 }
 
 export function assertRustTargetRejection(options, expectedDiagnostics) {

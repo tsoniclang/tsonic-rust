@@ -3,6 +3,7 @@ import {
 } from "@tsonic/tsts";
 import type {
   CompilerExtension,
+  SourceDeclarationProvider,
 } from "@tsonic/tsts";
 import {
   createSourceSemanticsVirtualModuleProvider,
@@ -14,7 +15,9 @@ import {
 export const rustSourceSemanticsExtensionId =
   "tsonic.rust.source-semantics";
 
-export function createRustSourceSemanticsExtension(): CompilerExtension {
+export function createRustSourceSemanticsExtension(
+  additionalProviders: readonly SourceDeclarationProvider[] = [],
+): CompilerExtension {
   return {
     identity: {
       id: rustSourceSemanticsExtensionId,
@@ -46,6 +49,9 @@ export function createRustSourceSemanticsExtension(): CompilerExtension {
           },
         }),
       );
+      for (const provider of additionalProviders) {
+        context.registerSourceDeclarationProvider(provider);
+      }
     },
   };
 }

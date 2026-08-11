@@ -54,6 +54,8 @@ export interface RustProviderOperationDefinition {
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly TargetTypeRef[];
+  readonly receiverCarrier?: TargetTypeRef;
+  readonly typeParameters?: readonly string[];
   readonly resultConversion?: RustValueConversion;
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
@@ -100,11 +102,17 @@ export interface RustProviderCrateDefinition {
   readonly registryPatch?: "crates-io";
 }
 
+export interface RustProviderSourceDependency {
+  readonly moduleSpecifier: string;
+  readonly exportedNames: readonly string[];
+}
+
 export interface RustProviderPackageDefinition {
   readonly id: string;
   readonly displayName: string;
   readonly version: string;
   readonly requiredSurfaces?: readonly string[];
+  readonly sourceDependencies?: readonly RustProviderSourceDependency[];
   readonly modules: readonly RustProviderModuleDefinition[];
   readonly types?: readonly RustProviderTypeDefinition[];
   readonly operations: readonly RustProviderOperationDefinition[];
@@ -216,15 +224,78 @@ export interface RustProviderSemantics {
   readonly types: readonly RustProviderTypeRow[];
 }
 
+export function mergeRustProviderSemantics(
+  ...inputs: readonly RustProviderSemantics[]
+): RustProviderSemantics {
+  const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
+  const operations = mergeExactRows(inputs.flatMap((input) => input.operations), providerOperationRowIdentity, "operation");
+  const types = mergeExactRows(inputs.flatMap((input) => input.types), providerTypeRowIdentity, "type");
+  const carrierPaths = new Map<string, string>();
+  for (const input of inputs) {
+    for (const [id, path] of input.carrierPaths) {
+      const existing = carrierPaths.get(id);
+      if (existing !== undefined && existing !== path) {
+        throw new Error(`Rust provider carrier '${id}' has conflicting target paths '${existing}' and '${path}'.`);
+      }
+      carrierPaths.set(id, path);
+    }
+  }
+  return Object.freeze({
+    exports,
+    operations,
+    types,
+    carrierPaths: new Map([...carrierPaths.entries()].sort(([left], [right]) => left.localeCompare(right, "en"))),
+  });
+}
+
+function mergeExactRows<T>(
+  rows: readonly T[],
+  identityOf: (row: T) => string,
+  kind: string,
+): readonly T[] {
+  const byIdentity = new Map<string, T>();
+  for (const row of rows) {
+    const identity = identityOf(row);
+    const existing = byIdentity.get(identity);
+    if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(row)) {
+      throw new Error(`Rust provider ${kind} '${identity}' has conflicting definitions.`);
+    }
+    byIdentity.set(identity, row);
+  }
+  return Object.freeze([...byIdentity.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, "en"))
+    .map(([, row]) => row));
+}
+
+function providerExportRowIdentity(row: Pick<RustProviderExportRow, "providerId" | "providerVersion" | "providerModuleId" | "moduleSpecifier" | "exportId">): string {
+  return `${row.providerId}\0${row.providerVersion}\0${row.providerModuleId}\0${row.moduleSpecifier}\0${row.exportId}`;
+}
+
+function providerOperationRowIdentity(row: RustProviderOperationRow): string {
+  return `${providerExportRowIdentity(row)}\0${row.memberId ?? ""}\0${row.signatureId ?? ""}\0${row.operationKind}`;
+}
+
+function providerTypeRowIdentity(row: RustProviderTypeRow): string {
+  return `${providerExportRowIdentity(row)}\0${row.targetTypeId}`;
+}
+
 export function collectRustProviderSemantics(
   context: TargetProviderContext,
+): RustProviderSemantics {
+  return collectRustProviderSemanticsFromDefinitions(
+    rustProviderPolicyContributionsOf(context).map((contribution) => contribution.definition),
+  );
+}
+
+export function collectRustProviderSemanticsFromDefinitions(
+  definitions: readonly RustProviderPackageDefinition[],
 ): RustProviderSemantics {
   const exports: RustProviderExportRow[] = [];
   const operations: RustProviderOperationRow[] = [];
   const carrierPaths = new Map<string, string>();
   const types: RustProviderTypeRow[] = [];
-  for (const contribution of rustProviderPolicyContributionsOf(context)) {
-    const definition = contribution.definition;
+  for (const definition of definitions) {
+    validateProviderPackageDefinition(definition);
     const providerId = rustProviderBindingProviderId(definition.id);
     const moduleByExportId = new Map(definition.modules.flatMap((module) =>
       module.exports.map((exported) => [exported.id, module] as const)));
@@ -297,6 +368,9 @@ function materializeProviderOperationRow(
     ...owner,
     target: materializeProviderOperationForm(row.target, aliases, carrierPaths),
     resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths),
+    ...(row.receiverCarrier === undefined
+      ? {}
+      : { receiverCarrier: materializeProviderCarrier(row.receiverCarrier, carrierPaths) }),
     ...(row.parameterCarriers === undefined
       ? {}
       : { parameterCarriers: row.parameterCarriers.map((carrier) => materializeProviderCarrier(carrier, carrierPaths)) }),
@@ -479,6 +553,6 @@ export function createRustProviderPackageSourceProvider(definition: RustProvider
   };
 }
 
-function rustProviderBindingProviderId(packageId: string): string {
+export function rustProviderBindingProviderId(packageId: string): string {
   return `tsonic.rust.provider-package.${packageId}.binding`;
 }

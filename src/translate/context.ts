@@ -26,6 +26,7 @@ import {
 import type {
   RustProjectTypePolicyRegistry,
 } from "../source/rust-target-semantics/project-type-policy.js";
+import type { RustProviderSemantics } from "../source/provider-packages/index.js";
 
 export interface RustTranslationContext extends TargetCompileInput {
   readonly backend: TargetBackendContext;
@@ -34,6 +35,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly facts: RustSemanticModel;
   readonly artifacts: RustTranslationArtifactGraph;
   readonly projectTypes: RustProjectTypePolicyRegistry;
+  readonly compilerProviderSemantics?: RustProviderSemantics;
   readonly diagnostics: TargetDiagnostic[];
   readonly analysis: {
     getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
@@ -45,6 +47,7 @@ export interface RustTranslationContext extends TargetCompileInput {
 export function createRustTranslationContext(
   backend: TargetBackendContext,
   input: TargetCompileInput,
+  compilerProviderSemantics?: RustProviderSemantics,
 ): RustTranslationContext {
   const ast = input.source.ast;
   const rawSourceFiles: readonly (SourceFile | undefined)[] = input.source.sourceFiles;
@@ -66,6 +69,7 @@ export function createRustTranslationContext(
     facts,
     artifacts,
     projectTypes,
+    ...(compilerProviderSemantics === undefined ? {} : { compilerProviderSemantics }),
     diagnostics,
     analysis: Object.freeze({
       getEnumMemberConstant(node: Node) {

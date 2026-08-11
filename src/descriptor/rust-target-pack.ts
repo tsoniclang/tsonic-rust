@@ -8,6 +8,7 @@ import type {
   TargetRuntimeContributionContext,
   TargetRuntimeContributions,
   TargetRuntimeReference,
+  TargetSelection,
   TargetSourceCompilerContributions,
   TargetToolchain,
   TargetToolchainContext,
@@ -34,6 +35,12 @@ import {
 import {
   rustSourceSemanticsModules,
 } from "../source/rust-source-semantics/source-modules.js";
+import {
+  createRustCompilerProviderSession,
+  rustCompilerProviderSpecifierPrefix,
+} from "../providers/compiler/session.js";
+import type { RustCompilerProviderSession } from "../providers/compiler/session.js";
+import { readRustUserProjectFile } from "../options/rust-target-options.js";
 
 export const rustTargetId = "rust";
 const require = createRequire(import.meta.url);
@@ -41,20 +48,27 @@ const require = createRequire(import.meta.url);
 // The pack declares only what is implemented; undeclared surfaces and
 // provider packages fail at the host.
 export function createRustTargetPack(): TargetPack {
+  const compilerSessions = new WeakMap<TargetSelection, RustCompilerProviderSession>();
   return {
     id: rustTargetId,
     displayName: "Rust",
     provider: {
       id: "rust-provider",
       displayName: "Rust target provider",
+      moduleOwnership: [
+        { specifierPrefix: "@tsonic/rust/std/" },
+        { specifierPrefix: rustCompilerProviderSpecifierPrefix },
+      ],
       sourceProfileContributions: rustSourceProfileContributions,
       sourceCompilerContributions(
         context: TargetProviderContext,
       ): TargetSourceCompilerContributions {
         validateRustTargetOptions(context.target);
+        const compilerSession = createRustCompilerProviderSession(context);
+        compilerSessions.set(context.target, compilerSession);
         return {
           semanticsModules: rustSourceSemanticsModules(),
-          extensions: [createRustSourceSemanticsExtension()],
+          extensions: [createRustSourceSemanticsExtension(compilerSession.sourceProviders)],
         };
       },
       runtimeContributions(context: TargetRuntimeContributionContext): TargetRuntimeContributions {
@@ -80,7 +94,12 @@ export function createRustTargetPack(): TargetPack {
     ],
     createBackend(context: TargetBackendContext): TargetBackend {
       validateRustTargetOptions(context.target);
-      return createRustBackend(context);
+      const compilerSession = compilerSessions.get(context.target);
+      if (readRustUserProjectFile(context.target) !== undefined && compilerSession === undefined) {
+        throw new Error("Rust user-owned Cargo mode requires source compilation to establish one immutable compiler-provider session before backend planning.");
+      }
+      compilerSessions.delete(context.target);
+      return createRustBackend(context, compilerSession?.semantics());
     },
     createToolchain(context: TargetToolchainContext): TargetToolchain {
       validateRustTargetOptions(context.target);

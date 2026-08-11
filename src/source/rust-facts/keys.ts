@@ -208,6 +208,8 @@ export interface RustProviderOperationTemplate {
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly receiverCarrier?: TargetTypeRef;
+  readonly typeParameters?: readonly string[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
