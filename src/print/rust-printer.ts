@@ -555,6 +555,11 @@ function printRustCompletionCaptureExpression(
       ? "rt::completion_region(|| Ok(rt::Completion::Normal))"
       : "rt::completion_region(|| rt::Completion::Normal)"];
   }
+  if (asynchronous && !terminates && body.statements.length === 0) {
+    return [fallible
+      ? "(async { Ok(rt::Completion::Normal) }).await"
+      : "(async { rt::Completion::Normal }).await"];
+  }
   if (!asynchronous && terminates && body.statements.length === 1) {
     const only = printRustStmt(body.statements[0]!, depth + 1).trim();
     if (!only.includes("\n") && !only.endsWith(";")) {

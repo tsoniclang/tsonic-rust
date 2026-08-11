@@ -40,6 +40,7 @@ import {
   planRustCallableParameters,
   type RustCallableParameterPlan,
 } from "./callable-parameters.js";
+import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -449,11 +450,24 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
   const generatorControllerName = generatorFact === undefined
     ? undefined
     : allocateRustSyntheticName(syntheticNames, "generator");
+  const bodyReturnType = resolveRustCallableBodyReturnType(
+    returnType,
+    generatorFact,
+    context,
+  );
+  if (bodyReturnType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, returnTypeNode ?? member),
+      "rust.backend.generator-return-carrier",
+      "Generator method body return type has no supported Rust carrier fact.",
+    ));
+    return undefined;
+  }
   const bodyContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
-    functionReturnType: returnType ?? { kind: "unit" },
+    functionReturnType: bodyReturnType,
     ...(sourceAsync && generatorFact === undefined ? { asyncContext: true } : {}),
     ...(generatorFact === undefined
       ? {}

@@ -30,6 +30,7 @@ import {
   planRustCallableParameterPrelude,
   planRustCallableParameters,
 } from "./callable-parameters.js";
+import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 
@@ -141,11 +142,24 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const generatorControllerName = generatorFact === undefined
     ? undefined
     : allocateRustSyntheticName(syntheticNames, "generator");
+  const bodyReturnType = resolveRustCallableBodyReturnType(
+    returnType,
+    generatorFact,
+    context,
+  );
+  if (bodyReturnType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, returnTypeNode ?? node),
+      "rust.backend.generator-return-carrier",
+      "Generator body return type has no supported Rust carrier fact.",
+    ));
+    return undefined;
+  }
   const bodyContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
-    functionReturnType: returnType ?? { kind: "unit" },
+    functionReturnType: bodyReturnType,
     ...(isAsync ? { asyncContext: true } : {}),
     ...(generatorFact === undefined
       ? {}

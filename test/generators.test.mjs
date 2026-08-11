@@ -71,6 +71,48 @@ export async function* asyncValues(seed: int32): AsyncGenerator<int32, int32, in
   validateGeneratedProject("generator-declarations", result.artifacts);
 });
 
+test("generator completion scopes use the exact TReturn carrier", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+${generatorTypes}
+
+function* guarded(): Generator<int32, string, int32> {
+  try {
+    yield 1;
+    return "free";
+  } finally {
+  }
+}
+
+class Values {
+  constructor() {}
+
+  static *items(): Generator<int32, string, int32> {
+    try {
+      yield 2;
+      return "method";
+    } finally {
+    }
+  }
+}
+
+export function run(): void {
+  const _values = new Values();
+  guarded().next();
+  Values.items().next();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.equal(source.match(/rt::Completion<String>/gu)?.length, 4);
+  assert.doesNotMatch(source, /rt::Completion<rt::Generator</u);
+  validateGeneratedProject("generator-completion-return-carrier", result.artifacts);
+});
+
 test("generator next values and explicit completion execute end to end", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
