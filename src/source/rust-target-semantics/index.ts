@@ -2863,6 +2863,15 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
   }
   for (const member of members) {
     const memberKind = ast.kindName(member);
+    if (memberKind === "KindPropertyDeclaration") {
+      const initializer = Node_Initializer(ast, member);
+      const fieldCarrier = walk.context.facts.get(member, rustRuntimeCarrierKey)?.carrier ??
+        resolveTypeNodeCarrier(walk, Node_Type(ast, member));
+      if (initializer !== undefined && fieldCarrier !== undefined) {
+        resolveExpressionCarrier(walk, initializer, sourceFile, fieldCarrier);
+      }
+      continue;
+    }
     if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration") {
       const asyncFact = walk.context.facts.get(member, rustAsyncFunctionFactKey);
       const generatorFact = walk.context.facts.get(member, rustGeneratorFactKey);

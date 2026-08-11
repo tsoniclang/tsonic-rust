@@ -1,4 +1,4 @@
-import type { Node } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -6,6 +6,7 @@ import {
   KindEqualsToken,
   KindIdentifier,
   Node_Expression,
+  Node_Initializer,
   Node_Name,
   Node_Type,
 } from "../../common/source-ast.js";
@@ -21,7 +22,7 @@ import type {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustSourceName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustMutatedBindingFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
@@ -42,6 +43,7 @@ interface PlannedProjectObjectField {
   readonly targetName: string;
   readonly storageIndex: number;
   readonly type: RustType;
+  readonly initializer?: Node;
 }
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
@@ -128,12 +130,14 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         failed = true;
         continue;
       }
+      const initializer = Node_Initializer(ast, member);
       fields.push({
         declaration: member,
         sourceName: layoutField.sourceName,
         targetName: fieldName,
         storageIndex: layoutField.storageIndex,
         type: fieldType,
+        ...(initializer === undefined ? {} : { initializer }),
       });
       continue;
     }
@@ -152,15 +156,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     failed = true;
   }
-  if (constructorMember === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.class",
-      "Classes require an explicit constructor for Rust struct lowering.",
-    ));
-    return undefined;
-  }
-  const constructorFn = planConstructor(constructorMember, className, fields, context);
+  const constructorFn = planConstructor(node, constructorMember, className, fields, context);
   if (failed || constructorFn === undefined) {
     return undefined;
   }
@@ -227,22 +223,20 @@ function planParams(member: Node, context: RustPlanContext): readonly RustFuncti
   return params;
 }
 
-// Constructor lane: the body must consist solely of `this.<field> = <expr>;`
-// statements covering each declared field exactly once, lowering to a struct
-// literal in `fn new`.
 function planConstructor(
-  member: Node,
+  classDeclaration: Node,
+  member: Node | undefined,
   className: string,
   fields: readonly PlannedProjectObjectField[],
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const { ast } = context.input;
-  const params = planParams(member, context);
+  const params = member === undefined ? [] : planParams(member, context);
   if (params === undefined) {
     return undefined;
   }
-  const body = ast.body(member);
-  if (body === undefined) {
+  const body = member === undefined ? undefined : ast.body(member);
+  if (member !== undefined && body === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, member),
       "rust.backend.constructor-body",
@@ -250,12 +244,51 @@ function planConstructor(
     ));
     return undefined;
   }
-  const assignments = new Map<string, RustExpr>();
-  const bodyStatements = ast.statements(body);
+  const syntheticNames = createRustSyntheticNameState(
+    ast,
+    body ?? classDeclaration,
+    params.map((parameter) => parameter.name),
+  );
+  const constructorContext: RustPlanContext = {
+    ...context,
+    emittedLocalNames: new Set(params.map((parameter) => parameter.name)),
+    syntheticNames,
+    controlFlow: { nextLoopId: 0 },
+    functionReturnType: { kind: "named", path: className },
+  };
+  const values = new Map<string, RustExpr>();
+  const statements: RustStmt[] = [];
+  const evaluateField = (field: PlannedProjectObjectField, expression: Node): boolean => {
+    if (sourceSubtreeContainsThis(expression, ast)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.class-field-initializer",
+        "Class field initialization cannot read `this` before the reference-backed Rust object state exists.",
+      ));
+      return false;
+    }
+    const value = planExpression(expression, constructorContext);
+    if (value === undefined) {
+      return false;
+    }
+    const valueName = allocateRustSyntheticName(
+      syntheticNames,
+      `field_${rustLocalBindingName(field.targetName)}`,
+    );
+    statements.push({ kind: "let", name: valueName, mutable: false, init: value });
+    values.set(field.sourceName, { kind: "path", path: valueName });
+    return true;
+  };
+  for (const field of fields) {
+    if (field.initializer !== undefined && !evaluateField(field, field.initializer)) {
+      return undefined;
+    }
+  }
+  const bodyStatements = body === undefined ? [] : ast.statements(body);
   for (const statement of bodyStatements) {
     if (statement === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, body),
+        diagnosticInput(context, body ?? classDeclaration),
         "rust.backend.constructor-statement",
         "Constructor body contains an undefined statement slot.",
       ));
@@ -278,45 +311,68 @@ function planConstructor(
       ast.kindName(left) === "KindPropertyAccessExpression" &&
       (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") &&
       field !== undefined &&
-      !assignments.has(sourceFieldName) &&
       right !== undefined;
     if (!isFieldInit) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, statement),
         "rust.backend.class",
-        "Constructors support only one `this.<field> = <expression>;` statement per declared field.",
+        "Constructors support field initialization statements whose exact target is `this.<field>`.",
       ));
       return undefined;
     }
-    const value = planExpression(right, context);
-    if (value === undefined) {
+    if (!evaluateField(field, right)) {
       return undefined;
     }
-    assignments.set(sourceFieldName, value);
   }
-  if (assignments.size !== fields.length) {
+  if (values.size !== fields.length) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, member),
+      diagnosticInput(context, member ?? classDeclaration),
       "rust.backend.class",
-      "Constructors must initialize every declared field.",
+      "Construction must initialize every declared field through a field initializer or constructor assignment.",
     ));
     return undefined;
   }
-  const literalText: RustStmt = {
+  const fieldValues: RustExpr[] = [];
+  for (const field of fields) {
+    const value = values.get(field.sourceName);
+    if (value === undefined) {
+      return undefined;
+    }
+    fieldValues.push(value);
+  }
+  statements.push({
     kind: "tail",
-    expr: createRustProjectObject(
-      className,
-      fields.map((field) => assignments.get(field.sourceName) ?? { kind: "path", path: field.targetName }),
-    ),
-  };
+    expr: createRustProjectObject(className, fieldValues),
+  });
   return {
     name: "new",
-    visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
+    visibility: member === undefined ||
+        (!ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"))
+      ? "public"
+      : "private",
     ...(params.length === 0 ? { attrs: ["#[allow(clippy::new_without_default)]"] } : {}),
     params,
     returnType: { kind: "named", path: className },
-    body: { statements: [literalText] },
+    body: { statements },
   };
+}
+
+function sourceSubtreeContainsThis(node: Node, ast: AstReader): boolean {
+  let found = false;
+  const visit = (candidate: Node): void => {
+    const kind = ast.kindName(candidate);
+    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
+      found = true;
+      return;
+    }
+    ast.forEachChild(candidate, (child) => {
+      if (!found && child !== undefined) {
+        visit(child);
+      }
+    });
+  };
+  visit(node);
+  return found;
 }
 
 function planMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {

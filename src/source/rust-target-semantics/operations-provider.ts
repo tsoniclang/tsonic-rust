@@ -597,6 +597,15 @@ export function selectRustCheckedCall(
   const calleeDeclaration = isProjectSourceDeclaration(context, request.sourceCalleeDeclaration)
     ? asNode(request.sourceCalleeDeclaration, context)
     : undefined;
+  const implicitConstructorClass = sourceDeclaration === undefined &&
+      calleeDeclaration !== undefined &&
+      checkedCallIsConstruction(request, context) &&
+      context.ast.kindName(calleeDeclaration) === "KindClassDeclaration"
+    ? calleeDeclaration
+    : undefined;
+  if (implicitConstructorClass !== undefined) {
+    return acceptProjectSourceCall(request, implicitConstructorClass, context, options);
+  }
   if (sourceDeclaration === undefined && calleeDeclaration !== undefined) {
     return rejectSelectedOperation(request.call, context, "RUST_SELECTED_PROJECT_DECLARATION_MISSING", "Checked project-source call has callee evidence but no exact selected callable declaration evidence.");
   }
@@ -1050,7 +1059,10 @@ function acceptProjectSourceCall(
   if (targetTypeArguments === undefined && (request.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
     return rejectSelectedOperation(request.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
   }
-  const parameters = ast.parameters(callableDeclaration).map((parameter, index) => {
+  const sourceParameters = selectedKind === "KindClassDeclaration"
+    ? []
+    : ast.parameters(callableDeclaration);
+  const parameters = sourceParameters.map((parameter, index) => {
     if (parameter === undefined) {
       return undefined;
     }

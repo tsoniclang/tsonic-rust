@@ -1259,7 +1259,7 @@ function printRustExprFitted(expression: RustExpr, depth: number, column: number
         const value = printRustExprFitted(
           field.value,
           depth + 1,
-          prefix.length,
+          prefix.length + 1,
         );
         return appendToLastLine(`${prefix}${value}`, ",");
       });
@@ -1437,7 +1437,7 @@ function printFittedMethodChain(
       `.${step.name}`,
       step.args,
       depth + 1,
-      continuationIndent.length,
+      continuationIndent.length + 1,
     );
     const inlineFirstMethod = !breakBeforeFirstMethod && !emittedCall &&
       !rendered.includes("\n") &&
@@ -1486,7 +1486,7 @@ function printFittedCall(
       `${prefix}${printRustExprFitted(
         arguments_[0],
         depth,
-        column + prefix.length,
+        column + prefix.length + 1,
       )}`,
       ")",
     );

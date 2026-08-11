@@ -45,13 +45,109 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32,\)>,\n\}/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
-  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(value,\)\)/u);
+  assert.match(text, /let __tsonic_field_value = value;/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(__tsonic_field_value,\)\)/u);
   assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
   assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value\)/u);
   assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
   assert.match(text, /let counter = Counter::new\(10\);/u);
   assert.match(text, /counter\.clone\(\)\.add\(5\);/u);
   assert.match(text, /counter\.clone\(\)\.current\(\)/u);
+});
+
+test("implicit constructors and class field initializers lower deterministically", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Initialized {
+  value: int32 = 42;
+}
+
+export class Empty {}
+
+export function create(): Initialized {
+  const empty = new Empty();
+  return new Initialized();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /impl Initialized \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Initialized/u);
+  assert.match(text, /let __tsonic_field_value = 42;/u);
+  assert.match(text, /impl Empty \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Empty/u);
+});
+
+test("class field and constructor assignment effects retain TypeScript order", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "constructor_order_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+let sequence: int32 = 0;
+
+function mark(value: int32): int32 {
+  sequence = sequence * 10 + value;
+  return value;
+}
+
+class Ordered {
+  first: int32 = mark(3);
+  second: int32;
+
+  constructor() {
+    this.second = mark(2);
+    this.first = mark(1);
+  }
+}
+
+class Implicit {
+  value: int32 = mark(4);
+}
+
+export function main(): void {
+  const ordered = new Ordered();
+  check(sequence === 321);
+  check(ordered.first === 1);
+  check(ordered.second === 2);
+  const implicit = new Implicit();
+  check(sequence === 3214);
+  check(implicit.value === 4);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("constructor-order-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("class field initializers requiring a pre-construction this fail closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Invalid {
+  first: int32 = 1;
+  second: int32 = this.first;
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+    diagnostic.message.includes("before the reference-backed Rust object state exists")));
 });
 
 test("enums lower with TSTS integer discriminants and fact-backed equality", () => {
