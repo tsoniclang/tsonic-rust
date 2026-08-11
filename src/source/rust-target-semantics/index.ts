@@ -3672,9 +3672,7 @@ function resolveFunctionExpressionCarrier(
       return undefined;
     }
     setCarrierFact(walk, parameter, argCarrier);
-    // JS collection callbacks hand elements by reference: primitive elements
-    // bind with |&x| copy patterns; accumulators pass by value.
-    byRefCopyParams.push(index === parameters.length - 1 && argCarrier.kind === "source-primitive");
+    byRefCopyParams.push(false);
   }
   const body = ast.body(expression);
   if (body === undefined) {

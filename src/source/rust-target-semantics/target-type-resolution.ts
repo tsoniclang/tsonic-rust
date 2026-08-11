@@ -682,12 +682,12 @@ function resolveSourceProfileCarrier(
         ? rustJsArrayTargetType(element)
         : rustVecTargetType(element);
   }
-  if (options.jsEnabled && name === "Map") {
+  if (options.jsEnabled && (name === "Map" || name === "ReadonlyMap")) {
     const key = resolveRustTargetType(arguments_[0], context, options, resolving);
     const value = resolveRustTargetType(arguments_[1], context, options, resolving);
     return key === undefined || value === undefined ? undefined : rustJsMapTargetType(key, value);
   }
-  if (options.jsEnabled && name === "Set") {
+  if (options.jsEnabled && (name === "Set" || name === "ReadonlySet")) {
     const value = resolveRustTargetType(arguments_[0], context, options, resolving);
     return value === undefined ? undefined : rustJsSetTargetType(value);
   }
@@ -730,11 +730,11 @@ function resolveSourceProfileCarrierFromArguments(
     }
     return options.jsEnabled ? rustJsArrayTargetType(element) : rustVecTargetType(element);
   }
-  if (options.jsEnabled && name === "Map") {
+  if (options.jsEnabled && (name === "Map" || name === "ReadonlyMap")) {
     const [key, value] = arguments_;
     return key === undefined || value === undefined ? undefined : rustJsMapTargetType(key, value);
   }
-  if (options.jsEnabled && name === "Set") {
+  if (options.jsEnabled && (name === "Set" || name === "ReadonlySet")) {
     const [value] = arguments_;
     return value === undefined ? undefined : rustJsSetTargetType(value);
   }

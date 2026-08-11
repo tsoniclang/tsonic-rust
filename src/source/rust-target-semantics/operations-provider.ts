@@ -41,7 +41,14 @@ import type {
 } from "../../policy/types.js";
 import {
   ElementAccessExpression_ArgumentExpression,
+  KindArrayLiteralExpression,
   KindBigIntLiteral,
+  KindCallExpression,
+  KindNewExpression,
+  KindNonNullExpression,
+  KindParenthesizedExpression,
+  KindSatisfiesExpression,
+  Node_Expression,
   Node_Type,
   VariableDeclarationList_Declarations,
 } from "../../common/source-ast.js";
@@ -51,12 +58,15 @@ import type {
 } from "../provider-packages/index.js";
 import {
   rustFixedArrayCarrierValue,
+  getRustJsMapTargetTypes,
+  getRustJsSetElementTargetType,
   rustJsArrayTargetType,
   rustJsValueTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
+  rustCarrierSupportsClone,
 } from "../rust-target-types.js";
 import {
   isRustBigIntCarrier,
@@ -1764,7 +1774,11 @@ export function selectRustCheckedIteration(
       `Selected ${source.iterationKind} iteration receiver is not a finalized supported Rust iterable carrier.`,
     );
   }
-  const lowering = selectRustIterationLowering(source, targetIteration);
+  const lowering = selectRustIterationLowering(
+    source,
+    targetIteration,
+    isFreshRustIterationValue(request.expression, context.ast),
+  );
   if (lowering === undefined) {
     return rejectSelectedOperation(
       request.statement,
@@ -1775,7 +1789,7 @@ export function selectRustCheckedIteration(
   }
   const fact: RustTargetOperationFact = {
     kind: "iteration",
-    operationId: `tsonic.rust.iteration.${source.iterationKind}.${lowering.kind}`,
+    operationId: `tsonic.rust.iteration.${source.iterationKind}.${lowering.kind}${lowering.kind === "receiver-method" ? `.${lowering.name}` : ""}`,
     iterationKind: source.iterationKind,
     elementCarrier: targetIteration.elementCarrier,
     lowering,
@@ -1811,25 +1825,49 @@ function rustPropertyKeyIterationLowering(
   return keys === undefined ? undefined : { kind: "static-keys", keys };
 }
 
-interface RustIterableTargetPolicy {
-  readonly kind: "borrowed" | "js-array" | "sync-generator" | "async-generator";
-  readonly elementCarrier: TargetTypeRef;
-}
+type RustIterableTargetPolicy =
+  | {
+      readonly kind: "borrowed";
+      readonly elementCarrier: TargetTypeRef;
+      readonly input: "direct" | "reference";
+    }
+  | {
+      readonly kind: "js-array" | "sync-generator" | "async-generator";
+      readonly elementCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "receiver-method";
+      readonly elementCarrier: TargetTypeRef;
+      readonly method: string;
+    };
 
 function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIterableTargetPolicy | undefined {
   if (iterable?.kind === "array") {
-    return { kind: "borrowed", elementCarrier: iterable.element };
+    return { kind: "borrowed", elementCarrier: iterable.element, input: "reference" };
   }
   if (iterable?.kind === "pointer" && iterable.pointee.kind === "array") {
-    return { kind: "borrowed", elementCarrier: iterable.pointee.element };
+    return { kind: "borrowed", elementCarrier: iterable.pointee.element, input: "direct" };
   }
   const fixed = rustFixedArrayCarrierValue(iterable);
   if (fixed !== undefined) {
-    return { kind: "borrowed", elementCarrier: fixed.element };
+    return { kind: "borrowed", elementCarrier: fixed.element, input: "reference" };
   }
   const jsElement = isRustJsArrayCarrier(iterable) ? iterable?.typeArguments?.[0] : undefined;
   if (jsElement !== undefined) {
     return { kind: "js-array", elementCarrier: jsElement };
+  }
+  const mapTypes = getRustJsMapTargetTypes(iterable);
+  if (mapTypes !== undefined && rustCarrierSupportsClone(mapTypes.key) &&
+    rustCarrierSupportsClone(mapTypes.value)) {
+    return {
+      kind: "receiver-method",
+      elementCarrier: { kind: "tuple", elements: [mapTypes.key, mapTypes.value] },
+      method: "entries",
+    };
+  }
+  const setElement = getRustJsSetElementTargetType(iterable);
+  if (setElement !== undefined && rustCarrierSupportsClone(setElement)) {
+    return { kind: "receiver-method", elementCarrier: setElement, method: "values" };
   }
   const generator = getRustGeneratorProtocol(iterable);
   return generator === undefined
@@ -1843,6 +1881,7 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
 function selectRustIterationLowering(
   source: Exclude<import("@tsonic/tsts").ResolvedSourceIterationInfo, { readonly iterationKind: "for-in" }>,
   target: RustIterableTargetPolicy,
+  consumeResult: boolean,
 ): Extract<
   RustTargetOperationFact,
   { readonly kind: "iteration"; readonly iterationKind: "for-of" | "for-await-of" }
@@ -1855,7 +1894,17 @@ function selectRustIterationLowering(
       return undefined;
     }
     if (target.kind === "borrowed") {
-      return { kind: "borrowed", style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned" };
+      if (consumeResult) {
+        return { kind: "owned" };
+      }
+      return {
+        kind: "borrowed",
+        style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned",
+        input: target.input,
+      };
+    }
+    if (target.kind === "receiver-method") {
+      return { kind: "receiver-method", name: target.method };
     }
     return target.kind === "js-array" ? { kind: "js-array" } : { kind: "owned" };
   }
@@ -1866,9 +1915,36 @@ function selectRustIterationLowering(
     return undefined;
   }
   if (target.kind === "borrowed") {
-    return { kind: "borrowed", style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned" };
+    if (consumeResult) {
+      return { kind: "owned" };
+    }
+    return {
+      kind: "borrowed",
+      style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned",
+      input: target.input,
+    };
+  }
+  if (target.kind === "receiver-method") {
+    return { kind: "receiver-method", name: target.method };
   }
   return target.kind === "js-array" ? { kind: "js-array" } : { kind: "owned" };
+}
+
+function isFreshRustIterationValue(
+  expression: Node,
+  ast: import("@tsonic/tsts").AstReader,
+): boolean {
+  const kind = ast.kindName(expression);
+  if (kind === KindCallExpression || kind === KindNewExpression || kind === KindArrayLiteralExpression) {
+    return true;
+  }
+  if (kind !== KindParenthesizedExpression && kind !== KindNonNullExpression &&
+    kind !== KindSatisfiesExpression && kind !== "KindAsExpression" &&
+    kind !== "KindTypeAssertionExpression" && kind !== "KindAwaitExpression") {
+    return false;
+  }
+  const inner = Node_Expression(ast, expression);
+  return inner !== undefined && isFreshRustIterationValue(inner, ast);
 }
 
 function recordIterationInitializerCarrier(
@@ -2354,7 +2430,7 @@ function selectedArgumentCompatibility(
     const kind = context.ast.kindName(node);
     if (expected.kind === "function-pointer" &&
       (kind === "KindArrowFunction" || kind === "KindFunctionExpression")) {
-      return 1;
+      return context.ast.parameters(node).length === expected.args.length ? 1 : undefined;
     }
     if (actual === undefined) {
       return 10;

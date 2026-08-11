@@ -342,6 +342,17 @@
   },
   {
     "area": "Map",
+    "lane": "Map empty constructor",
+    "classification": "implemented"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.size",
+    "classification": "implemented",
+    "rowMember": "size"
+  },
+  {
+    "area": "Map",
     "lane": "Map.prototype.get",
     "classification": "implemented",
     "rowMember": "get"
@@ -365,6 +376,52 @@
     "rowMember": "delete"
   },
   {
+    "area": "Map",
+    "lane": "Map.prototype.clear",
+    "classification": "implemented",
+    "rowMember": "clear"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.keys",
+    "classification": "implemented",
+    "rowMember": "keys"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.values",
+    "classification": "implemented",
+    "rowMember": "values"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.entries",
+    "classification": "implemented",
+    "rowMember": "entries"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.forEach",
+    "classification": "implemented",
+    "rowMember": "forEach"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map direct iteration",
+    "classification": "implemented"
+  },
+  {
+    "area": "Set",
+    "lane": "Set empty constructor",
+    "classification": "implemented"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.size",
+    "classification": "implemented",
+    "rowMember": "size"
+  },
+  {
     "area": "Set",
     "lane": "Set.prototype.add",
     "classification": "implemented",
@@ -381,6 +438,41 @@
     "lane": "Set.prototype.delete",
     "classification": "implemented",
     "rowMember": "delete"
+  },
+  {
+    "area": "Set",
+    "lane": "Set.prototype.clear",
+    "classification": "implemented",
+    "rowMember": "clear"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.keys",
+    "classification": "implemented",
+    "rowMember": "keys"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.values",
+    "classification": "implemented",
+    "rowMember": "values"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.entries",
+    "classification": "implemented",
+    "rowMember": "entries"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.forEach",
+    "classification": "implemented",
+    "rowMember": "forEach"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set direct iteration",
+    "classification": "implemented"
   },
   {
     "area": "Set",

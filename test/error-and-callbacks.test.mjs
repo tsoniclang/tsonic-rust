@@ -27,11 +27,11 @@ export function stats(xs: int32[]): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /xs\.map\(\|&x\| x \* 2\)/u);
-  assert.match(text, /doubled\.filter\(\|&x\| x % 2 == 0\)/u);
-  assert.match(text, /xs\.some\(\|&x\| x > 2\)/u);
-  assert.match(text, /xs\.every\(\|&x\| x > 0\)/u);
-  assert.match(text, /xs\.reduce\(0, \|acc, &x\| acc \+ x\)/u);
+  assert.match(text, /xs\.map\(\|x\| x \* 2\)/u);
+  assert.match(text, /doubled\.filter\(\|x\| x % 2 == 0\)/u);
+  assert.match(text, /xs\.some\(\|x\| x > 2\)/u);
+  assert.match(text, /xs\.every\(\|x\| x > 0\)/u);
+  assert.match(text, /xs\.reduce\(0, \|acc, x\| acc \+ x\)/u);
 });
 
 test("JSON round-trips through fallible rows in a throwing context", async () => {
@@ -323,7 +323,7 @@ export function safe(xs: int32[]): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /xs\.map\(\|&x\| x \* 2\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /xs\.map\(\|x\| x \* 2\)/u);
 });
 
 test("fallible provider rows are restricted to method, constructor, and property operations", async () => {

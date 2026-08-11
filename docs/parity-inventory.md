@@ -34,10 +34,12 @@ the blocked section with the contract each requires.
   coercion.
 - JSON: parse, stringify, stringify with null replacer and closed numeric
   or string space, over the closed JsValue carrier.
-- Map, Set: constructors, get/set/has/delete/add, size, SameValueZero.
+- Map, Set: empty constructors, mutable and read-only carriers,
+  get/set/has/delete/add/clear, size, keys/values/entries, direct iteration,
+  callbacks with every declared arity, insertion order, and SameValueZero.
   Set algebra rows (union, intersection, difference, symmetricDifference,
-  isSubsetOf, isSupersetOf, isDisjointFrom) are runtime-proven and lower
-  when project lib settings expose the declarations.
+  isSubsetOf, isSupersetOf, isDisjointFrom) are runtime-proven through the
+  active source profile.
 - Date: UTC carrier constructors, now, parse, UTC, getTime, valueOf,
   toISOString, toJSON, UTC getters.
 - Console: console.log, console.error, console.warn, console.info, and

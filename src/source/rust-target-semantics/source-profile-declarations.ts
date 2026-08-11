@@ -305,30 +305,44 @@ interface RegExpConstructor {
 }
 declare var RegExp: RegExpConstructor;
 
-interface Map<K, V> extends Iterable<[K, V]> {
+interface ReadonlyMap<K, V> extends Iterable<[K, V]> {
   readonly size: number;
   get(key: K): V | undefined;
-  set(key: K, value: V): this;
   has(key: K): boolean;
+  keys(): IterableIterator<K>;
+  values(): IterableIterator<V>;
+  entries(): IterableIterator<[K, V]>;
+  forEach(callbackfn: (value: V, key: K, map: ReadonlyMap<K, V>) => void): void;
+}
+interface Map<K, V> extends ReadonlyMap<K, V> {
+  set(key: K, value: V): this;
   delete(key: K): boolean;
+  clear(): void;
 }
 interface MapConstructor {
   new <K, V>(entries?: readonly (readonly [K, V])[] | Iterable<readonly [K, V]>): Map<K, V>;
 }
 declare var Map: MapConstructor;
 
-interface Set<T> extends Iterable<T> {
+interface ReadonlySet<T> extends Iterable<T> {
   readonly size: number;
-  add(value: T): this;
   has(value: T): boolean;
+  keys(): IterableIterator<T>;
+  values(): IterableIterator<T>;
+  entries(): IterableIterator<[T, T]>;
+  forEach(callbackfn: (value: T, key: T, set: ReadonlySet<T>) => void): void;
+  union(other: ReadonlySet<T>): Set<T>;
+  intersection(other: ReadonlySet<T>): Set<T>;
+  difference(other: ReadonlySet<T>): Set<T>;
+  symmetricDifference(other: ReadonlySet<T>): Set<T>;
+  isSubsetOf(other: ReadonlySet<T>): boolean;
+  isSupersetOf(other: ReadonlySet<T>): boolean;
+  isDisjointFrom(other: ReadonlySet<T>): boolean;
+}
+interface Set<T> extends ReadonlySet<T> {
+  add(value: T): this;
   delete(value: T): boolean;
-  union(other: Set<T>): Set<T>;
-  intersection(other: Set<T>): Set<T>;
-  difference(other: Set<T>): Set<T>;
-  symmetricDifference(other: Set<T>): Set<T>;
-  isSubsetOf(other: Set<T>): boolean;
-  isSupersetOf(other: Set<T>): boolean;
-  isDisjointFrom(other: Set<T>): boolean;
+  clear(): void;
 }
 interface SetConstructor {
   new <T>(values?: readonly T[] | Iterable<T>): Set<T>;

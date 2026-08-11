@@ -681,7 +681,10 @@ function printRustAssignment(
   const renderedTarget = printRustExprFitted(target, depth, indent.length);
   const inlinePrefix = `${indent}${renderedTarget} ${operator} `;
   const inlineValue = printRustExprFitted(value, depth, lastLineLength(inlinePrefix));
+  const multilineValueCanFollowAssignment = value.kind !== "binary" ||
+    value.operator === "&&" || value.operator === "||";
   if (!renderedTarget.includes("\n") &&
+    (!inlineValue.includes("\n") || multilineValueCanFollowAssignment) &&
     inlinePrefix.length + firstLine(inlineValue).length <= rustFormatWidth) {
     return `${inlinePrefix}${inlineValue};`;
   }
@@ -1210,11 +1213,12 @@ function printFittedLogicalChain(
   if (first === undefined) {
     return printRustExpr(expression);
   }
-  let rendered = printRustExprFitted(first, depth, column);
+  let rendered = printFittedLogicalOperand(first, operator, depth, column);
   const continuationIndent = indentText(depth + 1);
   for (const operand of operands.slice(1)) {
-    const right = printRustExprFitted(
+    const right = printFittedLogicalOperand(
       operand,
+      operator,
       depth + 1,
       continuationIndent.length + operator.length + 1,
     );
@@ -1225,6 +1229,21 @@ function printFittedLogicalChain(
     }
   }
   return rendered;
+}
+
+function printFittedLogicalOperand(
+  operand: RustExpr,
+  operator: "||" | "&&",
+  depth: number,
+  column: number,
+): string {
+  const parenthesized = expressionPrecedence(operand) < operatorPrecedence(operator);
+  const rendered = printRustExprFitted(
+    operand,
+    depth,
+    column + (parenthesized ? 1 : 0),
+  );
+  return parenthesized ? `(${rendered})` : rendered;
 }
 
 function collectLogicalOperands(

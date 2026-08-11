@@ -1770,15 +1770,21 @@ function planForOfStatement(
   const nonConsumingIterable = iterableNode === undefined
     ? iterable
     : planRustNonConsumingValue(iterableNode, iterable, context);
+  if (fact.lowering.kind === "borrowed") {
+    context.usedAliases?.add("rt");
+  }
   const targetIterable: RustExpr = fact.lowering.kind === "borrowed"
     ? {
-        kind: "method-call",
-        receiver: { kind: "method-call", receiver: nonConsumingIterable, method: "iter", args: [] },
-        method: fact.lowering.style,
-        args: [],
+        kind: "call",
+        path: `rt::iter_${fact.lowering.style}`,
+        args: [fact.lowering.input === "reference"
+          ? { kind: "reference", expr: nonConsumingIterable }
+          : nonConsumingIterable],
       }
     : fact.lowering.kind === "js-array"
       ? { kind: "method-call", receiver: nonConsumingIterable, method: "iter_values", args: [] }
+      : fact.lowering.kind === "receiver-method"
+        ? { kind: "method-call", receiver: nonConsumingIterable, method: fact.lowering.name, args: [] }
       : iterable;
   return [{
     kind: "for",

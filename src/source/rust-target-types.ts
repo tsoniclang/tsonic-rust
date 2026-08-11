@@ -365,6 +365,26 @@ export function rustJsSetTargetType(value: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustJsSetTargetId, typeArguments: [value] };
 }
 
+export function getRustJsMapTargetTypes(
+  carrier: TargetTypeRef | undefined,
+): { readonly key: TargetTypeRef; readonly value: TargetTypeRef } | undefined {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustJsMapTargetId ||
+    carrier.typeArguments?.length !== 2) {
+    return undefined;
+  }
+  const [key, value] = carrier.typeArguments;
+  return key === undefined || value === undefined ? undefined : { key, value };
+}
+
+export function getRustJsSetElementTargetType(
+  carrier: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  return carrier?.kind === "target-named" && carrier.id === rustJsSetTargetId &&
+    carrier.typeArguments?.length === 1
+    ? carrier.typeArguments[0]
+    : undefined;
+}
+
 export function rustJsDateTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsDateTargetId };
 }
@@ -429,6 +449,40 @@ export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined
   return carrier?.kind === "target-named" && rustJsStrictEqualityTargetIds.has(carrier.id);
 }
 
+export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): boolean {
+  if (carrier === undefined || carrier.kind === "type-parameter" ||
+    carrier.kind === "associated-type" || carrier.kind === "lifetime" ||
+    carrier.kind === "opaque" || carrier.kind === "pointer") {
+    return false;
+  }
+  if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer") {
+    return true;
+  }
+  if (carrier.kind === "array") {
+    return rustCarrierSupportsClone(carrier.element);
+  }
+  if (carrier.kind === "tuple") {
+    return carrier.elements.every(rustCarrierSupportsClone);
+  }
+  if (carrier.kind === "target-named") {
+    if (carrier.id === rustOptionTargetId) {
+      const [value] = carrier.typeArguments ?? [];
+      return value !== undefined && rustCarrierSupportsClone(value);
+    }
+    return rustUnconditionallyCloneTargetIds.has(carrier.id);
+  }
+  const fixedArray = rustFixedArrayCarrierValue(carrier);
+  return fixedArray !== undefined
+    ? rustCarrierSupportsClone(fixedArray.element)
+    : carrier.target === "rust" && carrier.name === "source-type";
+}
+
+export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "source-primitive" || isRustStringCarrier(carrier) ||
+    isRustBigIntCarrier(carrier) || isRustUndefinedCarrier(carrier) ||
+    isRustJsStrictEqualityCarrier(carrier);
+}
+
 const rustCloneOnReadTargetIds: ReadonlySet<string> = new Set([
   rustBigIntTargetId,
   rustLocationTargetId,
@@ -447,6 +501,20 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
   rustJsSetTargetId,
   rustJsDateTargetId,
   rustJsRegExpTargetId,
+]);
+
+const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
+  rustStringTargetId,
+  rustBigIntTargetId,
+  rustLocationTargetId,
+  rustUndefinedTargetId,
+  rustJsValueTargetId,
+  rustJsArrayTargetId,
+  rustJsMapTargetId,
+  rustJsSetTargetId,
+  rustJsDateTargetId,
+  rustJsRegExpTargetId,
+  rustJsRegExpMatchTargetId,
 ]);
 
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {

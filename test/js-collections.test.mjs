@@ -1,0 +1,178 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { selectJsSurfaceOperation } from "../dist/source/rust-target-semantics/js-surface-operations.js";
+import {
+  rustJsMapTargetType,
+  rustJsSetTargetType,
+  rustSourcePrimitiveTargetType,
+  rustStringTargetType,
+} from "../dist/source/rust-target-types.js";
+import {
+  acmeTestingPackage,
+  artifactText,
+  compileRust,
+} from "./helpers/rust-session.mjs";
+import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
+
+test("collection rows require exact carrier capabilities", () => {
+  const int32 = rustSourcePrimitiveTargetType("int32");
+  const string = rustStringTargetType();
+  const map = rustJsMapTargetType(string, int32);
+  const set = rustJsSetTargetType(int32);
+
+  assert.deepEqual(selectJsSurfaceOperation({
+    ownerName: "ReadonlyMap",
+    memberName: "entries",
+    operationKind: "call",
+    receiverCarrier: map,
+    argumentCarriers: [],
+  })?.fact.resultCarrier, {
+    kind: "array",
+    element: { kind: "tuple", elements: [string, int32] },
+  });
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "ReadonlySet",
+    memberName: "values",
+    operationKind: "call",
+    receiverCarrier: set,
+    argumentCarriers: [],
+  })?.fact.operationId, "tsonic.rust.js.ReadonlySet.values.call");
+
+  const unresolved = { kind: "type-parameter", name: "T" };
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "ReadonlyMap",
+    memberName: "keys",
+    operationKind: "call",
+    receiverCarrier: rustJsMapTargetType(unresolved, int32),
+    argumentCarriers: [],
+  }), undefined);
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "ReadonlySet",
+    memberName: "has",
+    operationKind: "call",
+    receiverCarrier: rustJsSetTargetType(unresolved),
+    argumentCarriers: [unresolved],
+  }), undefined);
+});
+
+test("generated Rust proves complete Map and Set collection operations", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_collections" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+function readonlyMapTotal(map: ReadonlyMap<string, int32>): int32 {
+  let total: int32 = 0;
+  for (const entry of map) {
+    total += entry[0].length + entry[1];
+  }
+  return total;
+}
+
+function readonlySetTotal(set: ReadonlySet<int32>): int32 {
+  let total: int32 = 0;
+  for (const value of set) {
+    total += value;
+  }
+  return total;
+}
+
+export function main(): void {
+  const map = new Map<string, int32>();
+  map.set("a", 1).set("bb", 2);
+  check(map.size === 2 && map.has("a") && map.get("bb") !== undefined);
+  let keyLength: int32 = 0;
+  for (const key of map.keys()) {
+    keyLength += key.length;
+  }
+  check(keyLength === 3);
+  const storedKeys = map.keys();
+  let storedKeyLength: int32 = 0;
+  for (const key of storedKeys) {
+    storedKeyLength += key.length;
+  }
+  check(storedKeyLength === 3);
+  let valueTotal: int32 = 0;
+  for (const value of map.values()) {
+    valueTotal += value;
+  }
+  check(valueTotal === 3);
+  let entryTotal: int32 = 0;
+  for (const entry of map.entries()) {
+    entryTotal += entry[0].length + entry[1];
+  }
+  check(entryTotal === 6);
+  map.forEach(() => check(true));
+  map.forEach((value) => check(value > 0));
+  map.forEach((value, key) => check(value > 0 && (key.startsWith("a") || key.startsWith("b"))));
+  map.forEach((value, key, owner) => check(value > 0 && owner.has(key)));
+  check(readonlyMapTotal(map) === 6);
+  let directMapTotal: int32 = 0;
+  for (const entry of map) {
+    directMapTotal += entry[1];
+  }
+  check(directMapTotal === 3);
+  map.delete("a");
+  map.clear();
+  check(map.size === 0);
+
+  const set = new Set<int32>();
+  set.add(1).add(2).add(2);
+  check(set.size === 2 && set.has(2));
+  let setKeyTotal: int32 = 0;
+  for (const key of set.keys()) {
+    setKeyTotal += key;
+  }
+  check(setKeyTotal === 3);
+  let setValueTotal: int32 = 0;
+  for (const value of set.values()) {
+    setValueTotal += value;
+  }
+  check(setValueTotal === 3);
+  for (const entry of set.entries()) {
+    check(entry[0] === entry[1]);
+  }
+  set.forEach(() => check(true));
+  set.forEach((value) => check(value > 0));
+  set.forEach((value, key) => check(value === key));
+  set.forEach((value, key, owner) => check(value === key && owner.has(value)));
+  check(readonlySetTotal(set) === 3);
+  const other = new Set<int32>();
+  other.add(2).add(3);
+  check(set.union(other).size === 3);
+  check(set.intersection(other).size === 1);
+  check(set.difference(other).has(1));
+  check(set.symmetricDifference(other).size === 2);
+  check(set.isSubsetOf(set.union(other)));
+  check(set.union(other).isSupersetOf(set));
+  check(set.isDisjointFrom(new Set<int32>()));
+  let directSetTotal: int32 = 0;
+  for (const value of set) {
+    directSetTotal += value;
+  }
+  check(directSetTotal === 3);
+  set.delete(1);
+  set.clear();
+  check(set.size === 0);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /for entry in map\.entries\(\)/u);
+  assert.match(source, /for value in set\.values\(\)/u);
+  assert.match(source, /for key in map\.keys\(\)/u);
+  assert.match(source, /for key in rt::iter_cloned\(&storedKeys\)/u);
+  assert.match(source, /map\.for_each_zero\(\|\|/u);
+  assert.match(source, /map\.for_each\(\|value, key, owner\|/u);
+  assert.match(source, /set\.for_each_zero\(\|\|/u);
+  assert.match(source, /set\.for_each\(\|value, key, owner\|/u);
+  assert.equal(validateGeneratedProject("js-collections", result.artifacts, { run: true }).status, 0);
+});

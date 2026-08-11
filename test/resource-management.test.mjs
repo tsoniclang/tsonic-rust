@@ -204,7 +204,7 @@ export function run(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /for resource in resources\.iter\(\)\.cloned\(\)/u);
+  assert.match(source, /for resource in rt::iter_cloned\(&resources\)/u);
   assert.match(source, /resource\.dispose\(\)/u);
   validateGeneratedProject("resource-management-for-of", result.artifacts);
 });

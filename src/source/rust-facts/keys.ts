@@ -271,8 +271,13 @@ export type RustTargetOperationFact =
       readonly iterationKind: "for-of" | "for-await-of";
       readonly elementCarrier: TargetTypeRef;
       readonly lowering:
-        | { readonly kind: "borrowed"; readonly style: "copied" | "cloned" }
+        | {
+            readonly kind: "borrowed";
+            readonly style: "copied" | "cloned";
+            readonly input: "direct" | "reference";
+          }
         | { readonly kind: "js-array" }
+        | { readonly kind: "receiver-method"; readonly name: string }
         | { readonly kind: "owned" }
         | { readonly kind: "async-generator" };
     }

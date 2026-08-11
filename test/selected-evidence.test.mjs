@@ -166,7 +166,7 @@ export function total(values: readonly int32[]): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /for value in values\.iter\(\)\.copied\(\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /for value in rt::iter_copied\(values\)/u);
   validateGeneratedProject("selected-for-of", result.artifacts);
 });
 

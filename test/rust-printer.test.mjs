@@ -448,6 +448,43 @@ test("long logical chains use rustfmt-compatible operand-per-line layout", () =>
   assert.match(text, /if fibonacci\(0\) != 0\n        \|\| fibonacci\(1\) != 1\n        \|\| fibonacci\(2\) != 2/u);
 });
 
+test("multiline mixed logical groups preserve source precedence", () => {
+  const call = (suffix) => ({
+    kind: "call",
+    path: `predicate_with_an_intentionally_long_name_${suffix}`,
+    args: [{ kind: "path", path: "value" }],
+  });
+  const condition = {
+    kind: "binary",
+    operator: "&&",
+    left: { kind: "path", path: "enabled" },
+    right: {
+      kind: "binary",
+      operator: "||",
+      left: call("left"),
+      right: call("right"),
+    },
+  };
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition,
+          then: { statements: [] },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /enabled\n        && \(predicate_with_an_intentionally_long_name_left\(value\)\n            \|\| predicate_with_an_intentionally_long_name_right\(value\)\)/u);
+});
+
 test("long assignments break after the assignment operator", () => {
   const conversion = {
     kind: "call",
@@ -483,6 +520,45 @@ test("long assignments break after the assignment operator", () => {
   });
 
   assert.match(text, /values\[tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\] =\n        values\[/u);
+});
+
+test("multiline arithmetic assignments break after the assignment operator", () => {
+  const value = {
+    kind: "binary",
+    operator: "+",
+    left: {
+      kind: "try",
+      expr: {
+        kind: "call",
+        path: "tsonic_rust_runtime::conversions::usize_to_i32",
+        args: [{
+          kind: "call",
+          path: "js_string::js_len",
+          args: [{ kind: "reference", expr: { kind: "path", path: "entry.0" } }],
+        }],
+      },
+    },
+    right: { kind: "path", path: "entry.1" },
+  };
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "assign",
+          target: { kind: "path", path: "entryTotal" },
+          operator: "+=",
+          value,
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /entryTotal \+=\n        tsonic_rust_runtime::conversions::usize_to_i32/u);
 });
 
 test("overflowing outer calls retain jointly fitting nested arguments", () => {

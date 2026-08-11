@@ -70,7 +70,7 @@ export async function main(): Promise<void> {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /for row in rows\(\)/u);
-  assert.match(source, /for value in values\.iter\(\)\.copied\(\)/u);
+  assert.match(source, /for value in rt::iter_copied\(&values\)/u);
   assert.doesNotMatch(source, /next_yield/u);
   assert.equal(validateGeneratedProject("sync-async-adaptation", result.artifacts, { run: true }).status, 0);
 });
