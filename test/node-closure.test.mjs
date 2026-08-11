@@ -3,27 +3,11 @@ import assert from "node:assert/strict";
 import {
   acmeTestingPackage,
   artifactText,
+  assertRustTargetRejection,
   compileRust,
-  createRustSession,
   nodejsCapability,
-  rustSourceDiagnostics,
 } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
-
-function assertSourceSemanticRejection(options, expectedMessages) {
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
-    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
-    assert.ok(match, `unexpected source diagnostic: ${line}`);
-    return match[1];
-  });
-  assert.deepEqual(actualMessages, expectedMessages);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-    "source diagnostics must block backend artifact handoff",
-  );
-}
 
 test("buffer, url, crypto, process, and util lower through provider rows", async () => {
   const { result } = compileRust({
@@ -208,8 +192,8 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn roundtrip\(dir: &str, file: String\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(dir, true\)\.await\?/u);
+  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir, true\)\.await\?/u);
   assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
@@ -230,10 +214,10 @@ export function bad(): void {
   });
   assert.deepEqual(result.artifacts, []);
   assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), [{
-    code: "RUST_CHECKED_OPERATION_NOT_FINALIZED",
-    message: "Checked Rust operation has no finalized target fact after post-check carrier closure.",
+    code: "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED",
+    message: "Checked assignment target has no finalized Rust write operation.",
     evidence: [
-      "target.capability=rust.operation.post-check-finalization",
+      "target.capability=rust.operation.assignment",
       "source.operatorKind=KindEqualsToken",
     ],
   }]);
@@ -284,8 +268,9 @@ export function bad(): void {
 `,
       },
     };
-    assertSourceSemanticRejection(options, [
-      `No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::${item.module}::${item.name}::${item.module}::${item.name}(...)' as method.`,
-    ]);
+    assertRustTargetRejection(options, [{
+      code: "RUST_PROVIDER_OPERATION_NOT_MAPPED",
+      message: `No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::${item.module}::${item.name}::${item.module}::${item.name}(...)' as method.`,
+    }]);
   }
 });

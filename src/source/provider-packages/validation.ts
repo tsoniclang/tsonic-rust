@@ -5,8 +5,9 @@ import type {
   ProviderSignatureDeclaration,
   ProviderTypeExpression,
   ProviderTypeParameterDeclaration,
-  TargetTypeRef,
 } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { RustProviderPackageDefinition } from "./index.js";
 import type {
   RustProviderConstantArgument,
@@ -19,18 +20,20 @@ import {
   rustBinaryOperatorTraitPath,
 } from "../../common/rust-syntax.js";
 import {
+  rustBigIntTargetId,
   rustFixedArrayCarrierValue,
   rustJsArrayTargetId,
+  rustJsArrayConcatItemTargetId,
   rustJsDateTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsValueTargetId,
   rustOptionTargetId,
+  rustUndefinedTargetId,
   rustPrimitiveTypeName,
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,
-  rustTargetTypeRefEquals,
 } from "../rust-target-types.js";
 import { rustProviderOperationFormContractViolation } from "../rust-facts/operation-form-contract.js";
 import { isClosedMetadata } from "../../common/closed-metadata.js";
@@ -54,12 +57,15 @@ interface SignatureRecord {
 }
 
 const builtInTargetCarrierIds = new Set([
+  rustBigIntTargetId,
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,
   rustOptionTargetId,
+  rustUndefinedTargetId,
   rustJsValueTargetId,
   rustJsArrayTargetId,
+  rustJsArrayConcatItemTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsDateTargetId,
@@ -81,7 +87,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.displayName, "display name", fail);
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
-    "id", "displayName", "version", "requiredSurfaces", "modules", "operations", "crates",
+    "id", "displayName", "version", "requiredSurfaces", "modules", "types", "operations", "crates",
     "aliasImports", "carrierPaths",
   ], "package", fail);
 
@@ -140,7 +146,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   validateCrates(definition, fail);
   validateAliases(definition, fail);
   validateCarrierPaths(definition, fail);
-  validateTargetIdentities(definition, exportsById, fail);
+  validateTypeRelations(definition, exportsById, fail);
   validateOperationRows(definition, exportsById, membersById, signaturesById, fail);
 }
 
@@ -293,6 +299,13 @@ function walkType(
         fail(`${where} uses source primitive '${type.name}' with no Rust source carrier`);
       }
       return;
+    case "source-global":
+      requireExactKeys(record, ["kind", "name", "typeArguments"], where, fail);
+      requireNonEmpty(type.name, `${where}.name`, fail);
+      for (const argument of type.typeArguments ?? []) {
+        walkType(argument, moduleSpecifier, importedExports, exportNamesByModule, `${where}.typeArgument`, fail);
+      }
+      return;
     case "type-parameter":
       requireExactKeys(record, ["kind", "name"], where, fail);
       requireNonEmpty(type.name, `${where}.name`, fail);
@@ -317,15 +330,6 @@ function walkType(
       }
       return;
     }
-    case "target-named":
-      requireExactKeys(record, ["kind", "target", "id", "displayName", "typeArguments", "sourceShape"], where, fail);
-      requireNonEmpty(type.target, `${where}.target`, fail);
-      requireNonEmpty(type.id, `${where}.id`, fail);
-      for (const argument of type.typeArguments ?? []) {
-        walkType(argument, moduleSpecifier, importedExports, exportNamesByModule, `${where}.typeArgument`, fail);
-      }
-      walkType(type.sourceShape, moduleSpecifier, importedExports, exportNamesByModule, `${where}.sourceShape`, fail);
-      return;
     case "array":
       requireExactKeys(record, ["kind", "elementType"], where, fail);
       walkType(type.elementType, moduleSpecifier, importedExports, exportNamesByModule, `${where}.elementType`, fail);
@@ -344,7 +348,8 @@ function walkType(
       }
       return;
     case "function":
-      requireExactKeys(record, ["kind", "parameters", "returnType", "typeParameters"], where, fail);
+      requireExactKeys(record, ["kind", "id", "parameters", "returnType", "typeParameters"], where, fail);
+      requireNonEmpty(type.id, `${where}.id`, fail);
       walkParameters(type.parameters, moduleSpecifier, importedExports, exportNamesByModule, where, fail);
       walkType(type.returnType, moduleSpecifier, importedExports, exportNamesByModule, `${where}.returnType`, fail);
       walkTypeParameters(type.typeParameters, moduleSpecifier, importedExports, exportNamesByModule, `${where}.typeParameters`, fail);
@@ -355,20 +360,15 @@ function walkType(
         fail(`${where}.value is not a supported provider literal`);
       }
       return;
-    case "opaque":
-      requireExactKeys(record, ["kind", "id", "displayName", "sourceShape"], where, fail);
-      requireNonEmpty(type.id, `${where}.id`, fail);
-      walkType(type.sourceShape, moduleSpecifier, importedExports, exportNamesByModule, `${where}.sourceShape`, fail);
-      return;
   }
 }
 
 function validateExportDeclaration(exported: ProviderExportDeclaration, fail: Fail): void {
   requireExactKeys(asRecord(exported), [
-    "id", "name", "exportName", "exportKind", "sourceTypeFamily", "kind", "targetIdentity", "type",
+    "id", "name", "exportName", "exportKind", "sourceTypeFamily", "kind", "type",
     "typeParameters", "heritage", "members", "signatures", "documentation",
   ], `export '${String((exported as { readonly id?: unknown }).id)}'`, fail);
-  if (!["type", "value", "namespace", "function", "class", "interface", "enum", "opaque"].includes(exported.kind)) {
+  if (!["type", "value", "namespace", "function", "class", "interface", "enum"].includes(exported.kind)) {
     fail(`export '${exported.id}' has unsupported declaration kind '${String(exported.kind)}'`);
   }
   if (exported.exportKind !== undefined && exported.exportKind !== "named" && exported.exportKind !== "default") {
@@ -380,11 +380,6 @@ function validateExportDeclaration(exported: ProviderExportDeclaration, fail: Fa
     if (!Number.isSafeInteger(exported.sourceTypeFamily.typeArgumentCount) || exported.sourceTypeFamily.typeArgumentCount < 0) {
       fail(`${exported.id}.sourceTypeFamily.typeArgumentCount must be a non-negative safe integer`);
     }
-  }
-  if (exported.targetIdentity !== undefined) {
-    requireExactKeys(asRecord(exported.targetIdentity), ["target", "id", "displayName", "packageName", "packageVersion"], `${exported.id}.targetIdentity`, fail);
-    requireNonEmpty(exported.targetIdentity.target, `${exported.id}.targetIdentity.target`, fail);
-    requireNonEmpty(exported.targetIdentity.id, `${exported.id}.targetIdentity.id`, fail);
   }
   for (const heritage of exported.heritage ?? []) {
     requireExactKeys(asRecord(heritage), ["kind", "type"], `${exported.id}.heritage`, fail);
@@ -492,21 +487,25 @@ function validateCarrierPaths(definition: RustProviderPackageDefinition, fail: F
   }
 }
 
-function validateTargetIdentities(
+function validateTypeRelations(
   definition: RustProviderPackageDefinition,
   exportsById: ReadonlyMap<string, ExportRecord>,
   fail: Fail,
 ): void {
-  for (const { declaration } of exportsById.values()) {
-    const identity = declaration.targetIdentity;
-    if (identity === undefined) {
-      continue;
+  const relatedExports = new Set<string>();
+  for (const relation of definition.types ?? []) {
+    requireExactKeys(asRecord(relation), ["exportId", "targetTypeId"], "type relation", fail);
+    requireNonEmpty(relation.exportId, "type relation export id", fail);
+    requireNonEmpty(relation.targetTypeId, `target type id for '${relation.exportId}'`, fail);
+    if (!exportsById.has(relation.exportId)) {
+      fail(`type relation targets undeclared exportId '${relation.exportId}'`);
     }
-    if (identity.target !== "rust") {
-      fail(`export '${declaration.id}' target identity belongs to '${identity.target}', expected 'rust'`);
+    if (relatedExports.has(relation.exportId)) {
+      fail(`export '${relation.exportId}' has more than one Rust target type relation`);
     }
-    if (!builtInTargetCarrierIds.has(identity.id) && definition.carrierPaths?.[identity.id] === undefined) {
-      fail(`export '${declaration.id}' target identity '${identity.id}' has no closed Rust carrier path`);
+    relatedExports.add(relation.exportId);
+    if (!builtInTargetCarrierIds.has(relation.targetTypeId) && definition.carrierPaths?.[relation.targetTypeId] === undefined) {
+      fail(`export '${relation.exportId}' target type '${relation.targetTypeId}' has no closed Rust carrier path`);
     }
   }
 }
@@ -542,6 +541,14 @@ function validateOperationRows(
       (row.memberId !== undefined && signature.memberId !== row.memberId))) {
       fail(`row '${label}' targets signatureId '${row.signatureId}' outside its selected declaration`);
     }
+    if (row.memberId === undefined && row.operationKind === "property" &&
+      exported?.declaration.kind !== "value") {
+      fail(`row '${label}' declares a provider value operation for non-value export kind '${String(exported?.declaration.kind)}'`);
+    }
+    if (row.memberId === undefined && exported?.declaration.kind === "value" &&
+      row.operationKind !== "property") {
+      fail(`row '${label}' must represent provider value export '${row.exportId}' as a property operation`);
+    }
     const rowKey = [row.exportId, row.memberId ?? "", row.signatureId ?? "", row.operationKind].join("\u0000");
     if (rowKeys.has(rowKey)) {
       fail(`duplicate operation selector row '${label}' for '${row.operationKind}'`);
@@ -571,7 +578,10 @@ function validateOperationRows(
     const operationFormContractViolation = rustProviderOperationFormContractViolation(
       row.operationKind,
       row.target,
-      row.parameterCarriers?.length ?? 0,
+      row.target.form === "call-value-slice" || row.target.form === "call-value-array" ||
+          row.target.form === "receiver-value-array" || row.target.form === "receiver-tagged-array"
+        ? row.target.leadingArguments.length
+        : row.parameterCarriers?.length ?? 0,
     );
     if (operationFormContractViolation !== undefined) {
       fail(`${label}.target violates the closed Rust operation-form contract: ${operationFormContractViolation}`);
@@ -586,7 +596,8 @@ function validateOperationParameters(
   signature: SignatureRecord | undefined,
   fail: Fail,
 ): void {
-  if (row.operationKind === "property" || row.target.form === "call-str-slice" || row.target.form === "call-jsvalue-slice") {
+  if (row.operationKind === "property" || row.target.form === "call-str-slice" ||
+    row.target.form === "free-call-str-slice") {
     return;
   }
   const ownerSignatures = signature === undefined
@@ -595,6 +606,14 @@ function validateOperationParameters(
       : member?.declaration.signatures ?? []
     : [signature.declaration];
   if (ownerSignatures.length === 0) {
+    return;
+  }
+  if (row.target.form === "call-value-slice" || row.target.form === "call-value-array" ||
+    row.target.form === "receiver-value-array" || row.target.form === "receiver-tagged-array") {
+    const leadingArgumentCount = row.target.leadingArguments.length;
+    if (ownerSignatures.some((candidate) => candidate.parameters.length < leadingArgumentCount)) {
+      fail(`row '${row.memberId ?? row.exportId}' declares ${leadingArgumentCount} leading target arguments but its selected source signature has fewer parameters`);
+    }
     return;
   }
   const counts = new Set(ownerSignatures.map((candidate) => candidate.parameters.length));
@@ -630,10 +649,64 @@ function validateOperationForm(
       validateChain(form.chain, label, fail);
       return;
     case "call-str-slice":
-    case "call-jsvalue-slice":
     case "path":
       requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
+      return;
+    case "free-call-str-slice":
+      requireExactKeys(record, ["form", "path", "receiverMode"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
+        fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
+      return;
+    case "call-value-slice":
+    case "call-value-array":
+      requireExactKeys(record, ["form", "path", "leadingArguments", "elementCarrier"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      validateValueSliceArguments(form, definition, label, fail);
+      return;
+    case "receiver-value-array":
+      requireExactKeys(record, ["form", "name", "receiverMode", "leadingArguments", "elementCarrier"], `${label}.target`, fail);
+      requireRustIdentifier(form.name, `${label}.target.name`, fail);
+      if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
+        fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
+      validateValueSliceArguments(form, definition, label, fail);
+      return;
+    case "receiver-tagged-array":
+      requireExactKeys(
+        record,
+        ["form", "name", "receiverMode", "leadingArguments", "elementCarrier", "alternatives"],
+        `${label}.target`,
+        fail,
+      );
+      requireRustIdentifier(form.name, `${label}.target.name`, fail);
+      if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
+        fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
+      validateValueSliceArguments(form, definition, label, fail);
+      if (!Array.isArray(form.alternatives) || form.alternatives.length === 0) {
+        fail(`${label}.target.alternatives must be a non-empty dense array`);
+      }
+      for (const [index, alternative] of form.alternatives.entries()) {
+        requireExactKeys(
+          alternative,
+          ["inputCarrier", "mode", "constructorPath"],
+          `${label}.target.alternatives[${index}]`,
+          fail,
+        );
+        validateCarrier(
+          alternative.inputCarrier,
+          definition,
+          `${label}.target.alternatives[${index}].inputCarrier`,
+          fail,
+        );
+        if (alternative.mode !== "value" && alternative.mode !== "ref" && alternative.mode !== "mut-ref") {
+          fail(`${label}.target.alternatives[${index}].mode contains unsupported mode '${String(alternative.mode)}'`);
+        }
+        requireRustPath(alternative.constructorPath, `${label}.target.alternatives[${index}].constructorPath`, fail);
+      }
       return;
     case "method":
     case "arg-method":
@@ -694,6 +767,27 @@ function validateOperationForm(
     default:
       fail(`${label}.target has unsupported operation form '${String((form as { readonly form?: unknown }).form)}'`);
   }
+}
+
+function validateValueSliceArguments(
+  form: Extract<RustProviderOperationForm, {
+    readonly form: "call-value-slice" | "call-value-array" | "receiver-value-array" | "receiver-tagged-array";
+  }>,
+  definition: RustProviderPackageDefinition,
+  label: string,
+  fail: Fail,
+): void {
+  if (!Array.isArray(form.leadingArguments)) {
+    fail(`${label}.target.leadingArguments must be a dense array`);
+  }
+  for (const [index, argument] of form.leadingArguments.entries()) {
+    requireExactKeys(argument, ["carrier", "mode"], `${label}.target.leadingArguments[${index}]`, fail);
+    validateCarrier(argument.carrier, definition, `${label}.target.leadingArguments[${index}].carrier`, fail);
+    if (argument.mode !== "value" && argument.mode !== "ref" && argument.mode !== "mut-ref") {
+      fail(`${label}.target.leadingArguments[${index}].mode contains unsupported mode '${String(argument.mode)}'`);
+    }
+  }
+  validateCarrier(form.elementCarrier, definition, `${label}.target.elementCarrier`, fail);
 }
 
 function expandValidationAlias(
@@ -870,6 +964,17 @@ function validateCarrier(
         return;
       }
       fail(`${where} is not a renderable Rust pointer carrier`);
+    case "function-pointer":
+      requireExactKeys(record, ["kind", "args", "result", "abi"], where, fail);
+      if ((carrier.abi?.length ?? 0) > 1 || carrier.abi?.some((entry) =>
+        entry !== "target-default" && entry !== "C" && entry !== "system")) {
+        fail(`${where}.abi must contain at most one supported Rust ABI name`);
+      }
+      for (const [index, argument] of carrier.args.entries()) {
+        validateCarrier(argument, definition, `${where}.args[${index}]`, fail);
+      }
+      validateCarrier(carrier.result, definition, `${where}.result`, fail);
+      return;
     case "target-specific": {
       requireExactKeys(record, ["kind", "target", "name", "value"], where, fail);
       const fixedArray = rustFixedArrayCarrierValue(carrier);
@@ -892,13 +997,16 @@ function validateValueConversion(
   expectedTarget: TargetTypeRef | undefined,
   fail: Fail,
 ): void {
-  requireExactKeys(asRecord(conversion), ["kind", "id"], where, fail);
-  if (conversion.kind !== "semantic-conversion") {
+  if (conversion.kind === "semantic-conversion") {
+    requireExactKeys(asRecord(conversion), ["kind", "id"], where, fail);
+  } else if (conversion.kind === "numeric-promotion") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
+  } else {
     fail(`${where}.kind '${String((conversion as { readonly kind?: unknown }).kind)}' is not supported`);
   }
   const contract = rustValueConversionContract(conversion);
   if (contract === undefined) {
-    fail(`${where}.id '${String((conversion as { readonly id?: unknown }).id)}' is not a supported Rust value conversion`);
+    fail(`${where} is not a supported Rust value conversion`);
   }
   validateCarrier(contract.source, definition, `${where}.source`, fail);
   validateCarrier(contract.target, definition, `${where}.target`, fail);

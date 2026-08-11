@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { acmeTestingPackage, acmeVectorsPackage, artifactText, compileRust, createRustSession, rustSourceDiagnostics } from "./helpers/rust-session.mjs";
+import {
+  acmeTestingPackage,
+  acmeVectorsPackage,
+  artifactText,
+  assertRustTargetRejection,
+  compileRust,
+  createRustSession,
+} from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 const counterSource = `
@@ -30,20 +37,117 @@ export function drive(): int32 {
 }
 `;
 
-test("classes lower to struct plus impl with fact-backed members", () => {
+test("classes lower to reference-backed object wrappers with fact-backed members", () => {
   const { result } = compileRust({ files: { "index.ts": counterSource } });
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[derive\(Clone, Copy, Debug, PartialEq\)\]\npub struct Counter \{\n    pub value: i32,\n\}/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32,\)>,\n\}/u);
+  assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
-  assert.match(text, /pub fn new\(value: i32\) -> Counter \{\n        Counter \{ value \}\n    \}/u);
-  assert.match(text, /pub fn add\(&mut self, delta: i32\) -> i32 \{/u);
-  assert.match(text, /self\.value \+= delta;/u);
+  assert.match(text, /let __tsonic_field_value = value;/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(__tsonic_field_value,\)\)/u);
+  assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
+  assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value(?:_[0-9]+)?\)/u);
   assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
-  assert.match(text, /let mut counter = Counter::new\(10\);/u);
-  assert.match(text, /counter\.add\(5\);/u);
-  assert.match(text, /counter\.current\(\) \+ counter\.value/u);
+  assert.match(text, /let counter = Counter::new\(10\);/u);
+  assert.match(text, /counter\.clone\(\)\.add\(5\);/u);
+  assert.match(text, /counter\.clone\(\)\.current\(\)/u);
+});
+
+test("implicit constructors and class field initializers lower deterministically", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Initialized {
+  value: int32 = 42;
+}
+
+export class Empty {}
+
+export function create(): Initialized {
+  const empty = new Empty();
+  return new Initialized();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /impl Initialized \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Initialized/u);
+  assert.match(text, /let __tsonic_field_value = 42;/u);
+  assert.match(text, /impl Empty \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Empty/u);
+});
+
+test("class field and constructor assignment effects retain TypeScript order", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "constructor_order_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+let sequence: int32 = 0;
+
+function mark(value: int32): int32 {
+  sequence = sequence * 10 + value;
+  return value;
+}
+
+class Ordered {
+  first: int32 = mark(3);
+  second: int32;
+
+  constructor() {
+    this.second = mark(2);
+    this.first = mark(1);
+  }
+}
+
+class Implicit {
+  value: int32 = mark(4);
+}
+
+export function main(): void {
+  const ordered = new Ordered();
+  check(sequence === 321);
+  check(ordered.first === 1);
+  check(ordered.second === 2);
+  const implicit = new Implicit();
+  check(sequence === 3214);
+  check(implicit.value === 4);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("constructor-order-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("class field initializers requiring a pre-construction this fail closed", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Invalid {
+  first: int32 = 1;
+  second: int32 = this.first;
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+    diagnostic.message.includes("before the reference-backed Rust object state exists")));
 });
 
 test("enums lower with TSTS integer discriminants and fact-backed equality", () => {
@@ -79,12 +183,16 @@ export function isGreen(color: Color): boolean {
   assert.match(text, /color == Color::Green/u);
 });
 
-test("class inheritance fails closed", () => {
+test("generic virtual methods fail closed at the Rust object-safety boundary", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
 export class Base {
   constructor() {}
+
+  identity<T>(value: T): T {
+    return value;
+  }
 }
 
 export class Derived extends Base {
@@ -98,7 +206,8 @@ export class Derived extends Base {
 
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("inheritance")));
+    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+    diagnostic.message.includes("object-safe non-generic synchronous Rust ABI")));
 });
 
 test("generated cargo binary proves class and enum lowering at runtime", { timeout: 300_000 }, () => {
@@ -125,9 +234,13 @@ export function pick_mode(flag: boolean): Mode {
 
 export function main(): void {
   const counter = new Counter(10);
-  check(counter.add(5) === 15);
+  const alias = counter;
+  check(alias === counter);
+  check(alias.add(5) === 15);
   check(counter.current() === 15);
   check(counter.value === 15);
+  const sameValue = new Counter(15);
+  check(sameValue !== counter);
   const mode = pick_mode(true);
   check(mode === Mode.On);
   check(mode !== Mode.Off);
@@ -186,7 +299,7 @@ export function drive(): int32 {
 });
 
 test("flow markers mismatching argument modes fail closed", () => {
-  const { result, extensionHost } = compileRust({
+  assertRustTargetRejection({
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
@@ -200,14 +313,14 @@ export function bad(): int32 {
 }
 `,
     },
-  });
-
-  assert.ok(extensionHost.diagnostics.all().some((diagnostic) =>
-    diagnostic.extensionCode === "RUST_FLOW_MARKER_MISMATCH"));
+  }, [{
+    code: "RUST_FLOW_MARKER_MISMATCH",
+    message: "Flow marker state 'borrowed-shared' does not match the finalized argument mode 'value' for this position.",
+  }]);
 });
 
 test("byref passing markers are rejected deterministically", () => {
-  const harness = createRustSession({
+  const options = {
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
@@ -221,15 +334,14 @@ export function bad(): int32 {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Rust does not support selected source marker 'read-write-reference' in this operation lane/u);
-  assert.ok(harness.session.extensionHost.diagnostics.all().some((diagnostic) =>
-    diagnostic.extensionCode === "RUST_SOURCE_MARKER_UNSUPPORTED"));
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_SOURCE_MARKER_UNSUPPORTED",
+    message: "Rust does not support selected source marker 'read-write-reference' in this operation lane.",
+  }]);
 });
 
-test("mutable array parameters take the &mut [T] lane with visible writes", () => {
+test("JS array parameters preserve shared identity with visible writes", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -251,12 +363,50 @@ export function drive(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn bump\(xs: &mut \[i32\]\)/u);
-  assert.match(text, /bump\(&mut values\);/u);
+  assert.match(text, /pub fn bump\(xs: js_abi::JsArray<i32>\)/u);
+  assert.match(text, /xs\.set\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?, 42\);/u);
+  assert.match(text, /bump\(values\.clone\(\)\)\?;/u);
 });
 
-test("push on borrowed slices fails closed; owned vectors keep push", () => {
-  const options = {
+test("native array parameters preserve caller storage through exact slice ABIs", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_array_parameter_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+function bump(values: int32[]): void {
+  values[0] = values[0] + 1;
+}
+
+function first(values: readonly int32[]): int32 {
+  return values[0];
+}
+
+export function main(): void {
+  const values: int32[] = [1, 2, 3];
+  bump(values);
+  check(first(values) === 2);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn bump\(values: &mut \[i32\]\)/u);
+  assert.match(text, /fn first\(values: &\[i32\]\)/u);
+  assert.match(text, /let mut values: Vec<i32> = vec!\[1, 2, 3\];/u);
+  assert.match(text, /bump\(&mut values\)\?;/u);
+  assert.match(text, /first\(&values\)\?/u);
+  const run = validateGeneratedProject("native-array-parameter-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("push mutates the canonical shared JS array carrier", () => {
+  const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
@@ -267,14 +417,11 @@ export function grow(xs: int32[]): void {
 }
 `,
     },
-  };
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-
-  assert.match(diagnostics, /The selected JavaScript call 'Array\.push' has no closed Rust operation row for the selected receiver and argument carriers/u);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-  );
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn grow\(xs: js_abi::JsArray<i32>\)/u);
+  assert.match(text, /xs\s*\.push_many\(\[tsonic_rust_runtime::conversions::f64_to_i32\(4\.0\)\?\]\)/u);
 });
 
 test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
@@ -377,8 +524,8 @@ export function some_value(): int32 {
   assert.match(text, /value_or_zero\(None\)/u);
 });
 
-test("undefined-typed unions stay fail-closed without an explicit lane", () => {
-  const harness = createRustSession({
+test("undefined-typed unions lower to Option in the native profile", () => {
+  const { result } = compileRust({
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -386,15 +533,22 @@ import type { int32 } from "@tsonic/core/types.js";
 export function value_or_zero(value: int32 | undefined): int32 {
   return value ?? 0;
 }
+
+export function some_value(): int32 {
+  return value_or_zero(5) + value_or_zero(undefined);
+}
 `,
     },
   });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Checked nullish coalescing requires an Option carrier and an exactly matching fallback carrier/u);
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32/u);
+  assert.match(text, /value_or_zero\(Some\(5\)\)/u);
+  assert.match(text, /value_or_zero\(None\)/u);
 });
 
-test("interfaces lower to record structs with annotated object literals", () => {
+test("interfaces lower to reference-backed object wrappers with annotated object literals", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -419,9 +573,61 @@ export function shift(p: Point, dx: int32): Point {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[derive\(Clone, Copy, Debug, PartialEq\)\]\npub struct Point \{\n    pub x: i32,\n    pub y: i32,\n\}/u);
-  assert.match(text, /let p: Point = Point \{ x: 0, y: 0 \};/u);
-  assert.match(text, /Point \{ x: p\.x \+ dx, y: p\.y \}/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32, i32\)>,\n\}/u);
+  assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(0, 0\)\)/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(/u);
+  assert.match(text, /p\.clone\(\)\.__tsonic_state\.with\(\|state\| state\.0\) \+ dx/u);
+});
+
+test("generated interface objects preserve aliases, identity, and single receiver evaluation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "interface_identity_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Cell {
+  value: int32;
+}
+
+class Holder {
+  item: Cell;
+  calls: int32;
+
+  constructor(item: Cell) {
+    this.item = item;
+    this.calls = 0;
+  }
+
+  current(): Cell {
+    this.calls += 1;
+    return this.item;
+  }
+}
+
+export function main(): void {
+  const cell: Cell = { value: 1 };
+  const alias = cell;
+  alias.value = 2;
+  check(cell.value === 2);
+  check(alias === cell);
+  const separate: Cell = { value: 2 };
+  check(separate !== cell);
+  const holder = new Holder(cell);
+  holder.current().value += 3;
+  check(holder.calls === 1);
+  check(cell.value === 5);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("interface-identity-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
 });
 
 test("unannotated object literals fail closed", () => {
@@ -466,7 +672,7 @@ export function first(entry: [int32, string]): int32 {
 });
 
 test("dynamic tuple indexing fails closed", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -476,11 +682,11 @@ export function pick(entry: [int32, int32], i: int32): int32 {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Fixed-array element access requires a TSTS-selected in-range fixed ordinal/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
+    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
+  }]);
 });
 
 test("closed string-literal unions lower to unit-variant enums", () => {
@@ -623,7 +829,7 @@ export async function drive(): Promise<int32> {
   assert.match(text, /fetch_value\(41\)\.await/u);
 });
 
-test("unawaited async calls and async binary entries fail closed", () => {
+test("future values remain first-class and async binary entries use block_on", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -640,8 +846,8 @@ export function bad(): int32 {
 `,
     },
   });
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /let stored = fetch_value\(\);/u);
 
   const asyncMain = compileRust({
     target: { id: "rust", options: { outputType: "bin", crateName: "async_main" } },
@@ -651,8 +857,11 @@ export async function main(): Promise<void> {}
 `,
     },
   });
-  assert.equal(asyncMain.result.artifacts.length, 0);
-  assert.ok(asyncMain.result.diagnostics.some((diagnostic) => diagnostic.code === "RUST_MISSING_ENTRYPOINT"));
+  assert.deepEqual(asyncMain.result.diagnostics, []);
+  assert.match(
+    artifactText(asyncMain.result, "src/main.rs"),
+    /tsonic_rust_runtime::block_on\(async_main::index::main\(\)\)/u,
+  );
 });
 
 test("throwing functions lower to TsonicResult with Err returns and Ok wrapping", () => {
@@ -686,9 +895,10 @@ export function caller(flag: boolean): int32 {
   assert.match(text, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
   assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::new\(/u);
   assert.match(text, /Ok\(7\)/u);
-  assert.match(text, /let __try: rt::TsonicResult<\(\)> = \(\|\| \{/u);
+  assert.match(text, /let __tsonic_try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
   assert.match(text, /outcome = risky\(flag\)\?;/u);
-  assert.match(text, /if let Err\(_error\) = __try \{/u);
+  assert.match(text, /let __tsonic_try_flow_\d+: rt::Completion<i32> = match __tsonic_try_body \{/u);
+  assert.match(text, /Err\(_error\) => rt::completion_region\(\|\| \{/u);
   assert.match(text, /use tsonic_rust_runtime as rt;/u);
 });
 
@@ -712,7 +922,8 @@ export function forwards(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn forwards\(\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /Ok\(risky\(\)\?\)/u);
+  assert.match(text, /pub fn forwards\(\) -> rt::TsonicResult<i32> \{\n    risky\(\)\n\}/u);
+  assert.doesNotMatch(text, /Ok\(risky\(\)\?\)/u);
 });
 
 test("fallible calls inside closures fail closed", () => {
@@ -732,13 +943,10 @@ export function bad(xs: int32[]): boolean {
 `,
     },
   };
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-
-  assert.match(diagnostics, /The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier/u);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-  );
+  assertRustTargetRejection(options, [{
+    code: "RUST_FALLIBLE_CLOSURE_UNSUPPORTED",
+    message: "Rust closures cannot contain fallible operations because the selected target callback ABI has an infallible result.",
+  }]);
 });
 
 test("string literals mentioning runtime aliases do not create imports", () => {

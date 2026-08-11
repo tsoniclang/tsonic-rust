@@ -4,7 +4,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRustBackend, planCargoManifest, printCargoManifest } from "../dist/index.js";
-import { fakeCompileInput, fakeSourceFile } from "./helpers/fake-compile-input.mjs";
+import {
+  fakeBackendContext,
+  fakeCompileInput,
+  fakeSourceFile,
+} from "./helpers/fake-compile-input.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const runtimeCrate = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
@@ -25,10 +29,7 @@ function materializedCrate(name, identity = name) {
   return root;
 }
 
-const backendContext = {
-  project: { entryPoint: "src/index.ts", targets: [] },
-  target: { id: "rust", options: {} },
-};
+const backendContext = fakeBackendContext();
 
 function runtimeReference(crate, path, { registryPatch } = {}) {
   return {

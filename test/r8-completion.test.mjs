@@ -3,27 +3,11 @@ import assert from "node:assert/strict";
 import {
   acmeTestingPackage,
   artifactText,
+  assertRustTargetRejection,
   compileRust,
-  createRustSession,
   nodejsCapability,
-  rustSourceDiagnostics,
 } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
-
-function assertSourceSemanticRejection(options, expectedMessages) {
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
-    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
-    assert.ok(match, `unexpected source diagnostic: ${line}`);
-    return match[1];
-  });
-  assert.deepEqual(actualMessages, expectedMessages);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-    "source diagnostics must block backend artifact handoff",
-  );
-}
 
 test("generated cargo binary proves string ABI, fixed arrays, and new node rows", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
@@ -65,9 +49,9 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn manifest_has\(path: &str, needle: &str\) -> rt::TsonicResult<bool>/u);
+  assert.match(text, /pub fn manifest_has\(path: String, needle: String\) -> rt::TsonicResult<bool>/u);
   assert.match(text, /let xs: \[i32; 3\] = \[10, 20, 30\];/u);
-  assert.match(text, /tsonic_rust_node::crypto::random_bytes\(16usize\)\?/u);
+  assert.match(text, /tsonic_rust_node::crypto::random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(\n\s+16,\n\s+\)\?\)\?/u);
   const run = validateGeneratedProject("r8-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -85,9 +69,10 @@ export function f(i: int32): int32 {
 `,
     },
   };
-  assertSourceSemanticRejection(options, [
-    "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
-  ]);
+  assertRustTargetRejection(options, [{
+    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
+    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
+  }]);
 });
 
 test("RegExp outside the oracle subset stays hard-rejected", async () => {
@@ -102,7 +87,10 @@ test("RegExp outside the oracle subset stays hard-rejected", async () => {
   for (const fixture of fixtures) {
     const options = { surfaces: ["js"], files: { "index.ts": fixture.source } };
     if (fixture.sourceMessage !== undefined) {
-      assertSourceSemanticRejection(options, [fixture.sourceMessage]);
+      assertRustTargetRejection(options, [{
+        code: "RUST_REGEXP_DYNAMIC_UNSUPPORTED",
+        message: fixture.sourceMessage,
+      }]);
       continue;
     }
     const { result } = compileRust(options);

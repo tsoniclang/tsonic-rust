@@ -12,10 +12,20 @@ export type RustType =
   | { readonly kind: "string" }
   | { readonly kind: "str-ref" }
   | { readonly kind: "unit" }
-  | { readonly kind: "named"; readonly path: string; readonly typeArguments?: readonly RustType[] }
+  | { readonly kind: "named"; readonly path: string; readonly lifetimeArguments?: readonly string[]; readonly typeArguments?: readonly RustType[] }
+  | { readonly kind: "trait-object"; readonly trait: RustType }
+  | { readonly kind: "reference"; readonly referent: RustType; readonly mutable: boolean }
   | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: number }
   | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean }
+  | { readonly kind: "function-pointer"; readonly parameters: readonly RustType[]; readonly result: RustType; readonly abi?: readonly string[] }
   | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
+
+export type RustPattern =
+  | {
+      readonly kind: "tuple-variant";
+      readonly path: string;
+      readonly bindings: readonly string[];
+    };
 
 export type RustExpr =
   | { readonly kind: "int-literal"; readonly text: string }
@@ -26,36 +36,132 @@ export type RustExpr =
   | { readonly kind: "str-literal"; readonly value: string }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "unary"; readonly operator: "-" | "!"; readonly operand: RustExpr }
+  | { readonly kind: "numeric-cast"; readonly expression: RustExpr; readonly target: RustPrimitiveTypeName }
   | { readonly kind: "binary"; readonly operator: RustBinaryOperator; readonly left: RustExpr; readonly right: RustExpr }
+  | { readonly kind: "range"; readonly start: RustExpr; readonly end: RustExpr }
+  | { readonly kind: "conditional"; readonly condition: RustExpr; readonly whenTrue: RustExpr; readonly whenFalse: RustExpr }
+  | {
+      readonly kind: "match";
+      readonly expression: RustExpr;
+      readonly arms: readonly {
+        readonly pattern: RustPattern;
+        readonly expression: RustExpr;
+      }[];
+    }
+  | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
   | { readonly kind: "call"; readonly path: string; readonly args: readonly RustExpr[] }
+  | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
+  | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "method-call"; readonly receiver: RustExpr; readonly method: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "field"; readonly receiver: RustExpr; readonly name: string }
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
-  | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly value: RustExpr }
+  | {
+      readonly kind: "block";
+      readonly bindings: readonly {
+        readonly name: string;
+        readonly value: RustExpr;
+        readonly attrs?: readonly string[];
+      }[];
+      readonly value: RustExpr;
+    }
+  | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly discard: "unit" | "value"; readonly value: RustExpr }
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "closure"; readonly params: readonly { readonly name: string; readonly byRefCopy: boolean }[]; readonly body: RustExpr }
+  | {
+      readonly kind: "closure-block";
+      readonly params: readonly { readonly name: string; readonly mutable: boolean; readonly byRefCopy?: boolean }[];
+      readonly move: boolean;
+      readonly async: boolean;
+      readonly body: RustBlock;
+    }
+  | { readonly kind: "await"; readonly expr: RustExpr }
   | { readonly kind: "try"; readonly expr: RustExpr }
+  | { readonly kind: "return-expression"; readonly expr?: RustExpr }
   | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 
 export type RustStmt =
-  | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init: RustExpr }
+  | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init?: RustExpr; readonly attrs?: readonly string[] }
   | { readonly kind: "expr"; readonly expr: RustExpr }
   | { readonly kind: "assign"; readonly target: RustExpr; readonly operator: RustAssignmentOperator; readonly value: RustExpr }
   | { readonly kind: "return"; readonly expr?: RustExpr }
   | { readonly kind: "tail"; readonly expr: RustExpr }
   | { readonly kind: "if"; readonly condition: RustExpr; readonly then: RustBlock; readonly else?: RustBlock }
-  | { readonly kind: "while"; readonly condition: RustExpr; readonly body: RustBlock }
-  | { readonly kind: "for"; readonly binding: string; readonly iterable: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "loop"; readonly label?: string; readonly body: RustBlock }
+  | { readonly kind: "while"; readonly label?: string; readonly condition: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "while-let-some"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly expression: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "for"; readonly label?: string; readonly binding: string; readonly bindingMutable?: boolean; readonly iterable: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "if-let-some"; readonly binding: string; readonly expression: RustExpr; readonly body: RustBlock }
+  | { readonly kind: "break"; readonly label?: string }
+  | { readonly kind: "continue"; readonly label?: string }
+  | {
+      readonly kind: "completion-exit";
+      readonly completion: "return" | "break" | "continue";
+      readonly resultWrapped: boolean;
+      readonly tail?: true;
+      readonly expr?: RustExpr;
+      readonly loopId?: number;
+    }
+  | {
+      readonly kind: "resource-scope";
+      readonly flowName: string;
+      readonly cleanupName: string;
+      readonly returnType: RustType;
+      readonly fallible: boolean;
+      readonly asynchronous: boolean;
+      readonly body: RustBlock;
+      readonly cleanup: RustBlock;
+      readonly propagate: boolean;
+      readonly dispatchReturn: boolean;
+      readonly dispatchTargets: readonly {
+        readonly kind: "loop" | "switch" | "label";
+        readonly id: number;
+        readonly label: string;
+        readonly continuePrelude?: readonly RustStmt[];
+      }[];
+      readonly terminates: boolean;
+    }
   | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
-  | { readonly kind: "scope"; readonly body: RustBlock }
-  | { readonly kind: "throw"; readonly message: RustExpr }
-  | { readonly kind: "try-catch"; readonly body: RustBlock; readonly catchBinding: string; readonly catchBody: RustBlock };
+  | { readonly kind: "scope"; readonly label?: string; readonly body: RustBlock }
+  | { readonly kind: "throw"; readonly message: RustExpr; readonly tail?: true }
+  | {
+      readonly kind: "try-scope";
+      readonly bodyName: string;
+      readonly flowName: string;
+      readonly finallyName?: string;
+      readonly returnType: RustType;
+      readonly fallible: boolean;
+      readonly asynchronous: boolean;
+      readonly body: RustBlock;
+      readonly bodyFallible: boolean;
+      readonly bodyTerminates: boolean;
+      readonly catchClause?: {
+        readonly binding: string;
+        readonly body: RustBlock;
+        readonly fallible: boolean;
+        readonly terminates: boolean;
+      };
+      readonly finallyClause?: {
+        readonly body: RustBlock;
+        readonly fallible: boolean;
+        readonly terminates: boolean;
+      };
+      readonly propagate: boolean;
+      readonly dispatchReturn: boolean;
+      readonly dispatchTargets: readonly {
+        readonly kind: "loop" | "switch" | "label";
+        readonly id: number;
+        readonly label: string;
+        readonly continuePrelude?: readonly RustStmt[];
+      }[];
+      readonly terminates: boolean;
+    };
 
 export interface RustBlock {
+  readonly innerAttrs?: readonly string[];
   readonly statements: readonly RustStmt[];
 }
 
@@ -65,18 +171,30 @@ export interface RustFunctionParam {
   readonly mutable?: boolean;
 }
 
-export type RustSelfParam = "ref" | "mut-ref";
+export type RustTypeBound =
+  | { readonly kind: "trait"; readonly path: string }
+  | { readonly kind: "lifetime"; readonly name: string };
+
+export interface RustTypeParameter {
+  readonly name: string;
+  readonly bounds: readonly RustTypeBound[];
+}
+
+export type RustSelfParam = "ref" | "mut-ref" | "rc";
+
+export type RustVisibility = "private" | "crate" | "public";
 
 export interface RustStructField {
   readonly name: string;
   readonly type: RustType;
-  readonly pub: boolean;
+  readonly visibility: RustVisibility;
 }
 
 export interface RustImplFunction {
   readonly name: string;
-  readonly pub: boolean;
+  readonly visibility: RustVisibility;
   readonly attrs?: readonly string[];
+  readonly isAsync?: boolean;
   readonly fallible?: boolean;
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];
@@ -84,15 +202,24 @@ export interface RustImplFunction {
   readonly body: RustBlock;
 }
 
+export interface RustTraitFunction {
+  readonly name: string;
+  readonly attrs?: readonly string[];
+  readonly fallible?: boolean;
+  readonly selfParam?: RustSelfParam;
+  readonly params: readonly RustFunctionParam[];
+  readonly returnType?: RustType;
+}
+
 export type RustItem =
   | {
       readonly kind: "function";
       readonly name: string;
-      readonly pub: boolean;
+      readonly visibility: RustVisibility;
       readonly attrs?: readonly string[];
       readonly isAsync?: boolean;
       readonly fallible?: boolean;
-      readonly typeParams?: readonly string[];
+      readonly typeParams?: readonly RustTypeParameter[];
       readonly params: readonly RustFunctionParam[];
       readonly returnType?: RustType;
       readonly body: RustBlock;
@@ -101,14 +228,23 @@ export type RustItem =
       readonly kind: "const";
       readonly attrs?: readonly string[];
       readonly name: string;
-      readonly pub: boolean;
+      readonly visibility: RustVisibility;
       readonly type: RustType;
       readonly value: RustExpr;
     }
-  | { readonly kind: "mod-decl"; readonly name: string; readonly pub: boolean }
-  | { readonly kind: "struct"; readonly name: string; readonly pub: boolean; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly fields: readonly RustStructField[] }
-  | { readonly kind: "impl"; readonly name: string; readonly functions: readonly RustImplFunction[] }
-  | { readonly kind: "enum"; readonly name: string; readonly pub: boolean; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string }[] }
+  | {
+      readonly kind: "thread-local";
+      readonly attrs?: readonly string[];
+      readonly name: string;
+      readonly visibility: RustVisibility;
+      readonly type: RustType;
+      readonly value: RustExpr;
+    }
+  | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility }
+  | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly fields: readonly RustStructField[] }
+  | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly superTraits?: readonly RustType[]; readonly functions: readonly RustTraitFunction[] }
+  | { readonly kind: "impl"; readonly typeParams?: readonly RustTypeParameter[]; readonly trait?: RustType; readonly target: RustType; readonly functions: readonly RustImplFunction[] }
+  | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string }[] }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string };
 
 export interface RustSourceFileModel {

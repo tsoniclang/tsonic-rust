@@ -10,25 +10,9 @@ import { fileURLToPath } from "node:url";
 import { rustRegExpSubsetViolation } from "../dist/source/rust-target-semantics/index.js";
 import {
   artifactText,
+  assertRustTargetRejection,
   compileRust,
-  createRustSession,
-  rustSourceDiagnostics,
 } from "./helpers/rust-session.mjs";
-
-function assertSourceSemanticRejection(options, expectedMessages) {
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-  const actualMessages = diagnostics.split("\n").filter((line) => line !== "").map((line) => {
-    const match = /: error TS0: \[TSEXT0\] (.*)$/u.exec(line);
-    assert.ok(match, `unexpected source diagnostic: ${line}`);
-    return match[1];
-  });
-  assert.deepEqual(actualMessages, expectedMessages);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-    "source diagnostics must block backend artifact handoff",
-  );
-}
 
 const corpusPath = fileURLToPath(
   new URL("../../rust-js/tests/oracle/regexp-acceptance-corpus.json", import.meta.url),
@@ -113,7 +97,10 @@ export function f(s: string): boolean {
     };
     const violation = rustRegExpSubsetViolation(probe, "");
     assert.notEqual(violation, undefined, `new RegExp(${literal}) must violate the runtime oracle contract`);
-    assertSourceSemanticRejection(options, [violation]);
+    assertRustTargetRejection(options, [{
+      code: "RUST_REGEXP_UNSUPPORTED",
+      message: violation,
+    }]);
   }
 });
 

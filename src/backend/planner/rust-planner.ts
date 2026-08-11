@@ -1,19 +1,13 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { SourceFile } from "@tsonic/tsts";
 import type {
   TargetArtifact,
-  TargetCompileInput,
   TargetCompileResult,
   TargetDiagnostic,
   TargetSourceFile,
 } from "@tsonic/target-api";
 import {
   KindFunctionDeclaration,
-  KindIdentifier,
-  KindImportDeclaration,
-  KindVariableStatement,
-  Node_Initializer,
   Node_Name,
-  Node_Type,
 } from "../../common/source-ast.js";
 import { readRustCrateName, readRustOutputType } from "../../options/rust-target-options.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
@@ -22,42 +16,29 @@ import type { RustItem } from "../rust-ast/nodes.js";
 import { printRustSourceFile } from "../../print/rust-printer.js";
 import { printCargoManifest } from "../../print/cargo-manifest-printer.js";
 import { planCargoManifest } from "./cargo-project.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic, unsupportedStatementDiagnostic } from "./diagnostics.js";
-import { planExpression } from "./expressions.js";
-import { planFunctionDeclaration } from "./functions.js";
-import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustReservedIdentifiers, rustRuntimeAliasImports } from "./plan-context.js";
-import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { isConstLiteralInitializer } from "./statements.js";
-import { rustFallibleFactKey } from "../../source/rust-facts/keys.js";
-import { planClassDeclaration, planEnumDeclaration, planInterfaceDeclaration, planUnionAliasDeclaration } from "./declarations-nominal.js";
+import { rustReservedIdentifiers } from "./plan-context.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
+import type { RustTranslationContext } from "../../translate/context.js";
+import { reconstructRustSourceFiles } from "./source-file-reconstruction.js";
+import {
+  diagnoseRustLibraryModuleInitialization,
+  planRustBinaryModuleInitializers,
+} from "./module-initialization.js";
 
-export function planRustArtifacts(input: TargetCompileInput): TargetCompileResult {
-  const diagnostics: TargetDiagnostic[] = [];
+export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
+  const diagnostics: TargetDiagnostic[] = [...input.diagnostics];
   const moduleNameByFileName = planModuleNames(input, diagnostics);
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
 
-  const moduleItems = new Map<string, readonly RustItem[]>();
-  const moduleAliases = new Map<string, ReadonlySet<string>>();
-  for (const sourceFile of input.sourceFiles) {
-    const fileName = input.ast.getFileName(sourceFile);
-    const moduleName = moduleNameByFileName.get(fileName);
-    if (moduleName === undefined) {
-      continue;
-    }
-    const context: RustPlanContext = {
-      input,
-      sourceFile,
-      moduleName,
-      moduleNameByFileName,
-      diagnostics,
-      awaitedCalls: new WeakSet(),
-      usedAliases: new Set<string>(),
-    };
-    moduleItems.set(moduleName, planModuleItems(context));
-    moduleAliases.set(moduleName, context.usedAliases ?? new Set());
+  const plannedSources = reconstructRustSourceFiles(
+    input,
+    moduleNameByFileName,
+    diagnostics,
+  );
+  if (plannedSources === undefined) {
+    return { artifacts: [], diagnostics };
   }
 
   // Activation: a runtime crate is a dependency only when planned code
@@ -72,12 +53,25 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
   const entryFunction = outputType === "bin"
     ? resolveBinaryEntry(input, moduleNameByFileName, diagnostics)
     : undefined;
+  if (outputType === "lib") {
+    diagnoseRustLibraryModuleInitialization(input, plannedSources, diagnostics);
+  }
+  const moduleInitializers = outputType === "bin" && entryFunction !== undefined
+    ? planRustBinaryModuleInitializers(
+        input,
+        plannedSources,
+        entryFunction.sourceFile,
+        diagnostics,
+      )
+    : [];
 
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
 
-  const sortedModuleNames = [...moduleItems.keys()].sort((left, right) => left.localeCompare(right, "en"));
+  const sortedSources = [...plannedSources].sort((left, right) =>
+    left.moduleName.localeCompare(right.moduleName, "en"));
+  const sortedModuleNames = sortedSources.map((source) => source.moduleName);
   const artifacts: TargetArtifact[] = [
     {
       kind: "project",
@@ -86,19 +80,14 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
     },
   ];
   const libraryModel = createRustSourceFile(
-    sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, pub: true })),
+    sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
   );
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
-  for (const moduleName of sortedModuleNames) {
-    const items = moduleItems.get(moduleName) ?? [];
-    // Structured import requirements collected during planning; never
-    // inferred from rendered text.
-    const aliases = [...(moduleAliases.get(moduleName) ?? new Set<string>())].sort((left, right) => left.localeCompare(right, "en"));
-    const useItems: RustItem[] = aliases
-      .map((alias) => rustRuntimeAliasImports.get(alias))
-      .filter((entry): entry is { path: string; alias: string } => entry !== undefined)
-      .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
-    artifacts.push(rustSourceArtifact(`src/${moduleName}.rs`, printRustSourceFile(createRustSourceFile([...useItems, ...items]))));
+  for (const source of sortedSources) {
+    artifacts.push(rustSourceArtifact(
+      `src/${source.moduleName}.rs`,
+      printRustSourceFile(source.model),
+    ));
   }
   if (outputType === "bin" && entryFunction !== undefined) {
     const crateName = readRustCrateName(input.target);
@@ -107,21 +96,58 @@ export function planRustArtifacts(input: TargetCompileInput): TargetCompileResul
       path: `${crateName}::${entryFunction.moduleName}::${entryFunction.functionName}`,
       args: [],
     };
+    const entryExecution = entryFunction.async
+      ? {
+          kind: "call" as const,
+          path: "tsonic_rust_runtime::block_on",
+          args: [entryCall],
+        }
+      : entryCall;
+    const initializationStatements = (moduleInitializers ?? []).map((initializer) => {
+      const call = {
+        kind: "call" as const,
+        path: `${crateName}::${initializer.moduleName}::${initializer.functionName}`,
+        args: [],
+      };
+      const execution = initializer.asynchronous
+        ? {
+            kind: "call" as const,
+            path: "tsonic_rust_runtime::block_on",
+            args: [call],
+          }
+        : call;
+      return {
+        kind: "expr" as const,
+        expr: initializer.fallible
+          ? { kind: "try" as const, expr: execution }
+          : execution,
+      };
+    });
+    const mainFallible = entryFunction.fallible ||
+      (moduleInitializers ?? []).some((initializer) => initializer.fallible);
+    const entryStatements = entryFunction.fallible
+      ? [{ kind: "tail" as const, expr: entryExecution }]
+      : mainFallible
+        ? [
+            { kind: "expr" as const, expr: entryExecution },
+            { kind: "tail" as const, expr: { kind: "path" as const, path: "Ok(())" } },
+          ]
+        : [{ kind: "expr" as const, expr: entryExecution }];
     const mainItem: RustItem = {
       kind: "function",
       name: "main",
-      pub: false,
+      visibility: "private",
       params: [],
-      ...(entryFunction.fallible
+      ...(mainFallible
         ? {
             returnType: {
               kind: "named" as const,
               path: "tsonic_rust_runtime::TsonicResult",
               typeArguments: [{ kind: "unit" as const }],
             },
-            body: { statements: [{ kind: "tail" as const, expr: entryCall }] },
+            body: { statements: [...initializationStatements, ...entryStatements] },
           }
-        : { body: { statements: [{ kind: "expr" as const, expr: entryCall }] } }),
+        : { body: { statements: [...initializationStatements, ...entryStatements] } }),
     };
     artifacts.push(rustSourceArtifact("src/main.rs", printRustSourceFile(createRustSourceFile([mainItem]))));
   }
@@ -133,16 +159,13 @@ function rustSourceArtifact(path: string, text: string): TargetSourceFile {
 }
 
 function planModuleNames(
-  input: TargetCompileInput,
+  input: RustTranslationContext,
   diagnostics: TargetDiagnostic[],
 ): ReadonlyMap<string, string> {
   const names = new Map<string, string>();
   const seen = new Map<string, string>();
   for (const sourceFile of input.sourceFiles) {
     const fileName = input.ast.getFileName(sourceFile);
-    if (fileName.endsWith(".d.ts")) {
-      continue;
-    }
     const moduleName = rustModuleNameForFile(fileName);
     if (moduleName === undefined) {
       diagnostics.push(moduleNameDiagnostic(input, sourceFile, `Source file '${fileName}' does not map to a valid Rust module name.`));
@@ -183,7 +206,7 @@ export function rustModuleNameForFile(fileName: string): string | undefined {
   return sanitized;
 }
 
-function moduleNameDiagnostic(input: TargetCompileInput, sourceFile: SourceFile, message: string): TargetDiagnostic {
+function moduleNameDiagnostic(input: RustTranslationContext, sourceFile: SourceFile, message: string): TargetDiagnostic {
   return {
     code: "RUST_MODULE_NAME",
     category: "error",
@@ -196,170 +219,16 @@ function moduleNameDiagnostic(input: TargetCompileInput, sourceFile: SourceFile,
   };
 }
 
-function planModuleItems(context: RustPlanContext): readonly RustItem[] {
-  const { ast } = context.input;
-  const items: RustItem[] = [];
-  for (const statement of ast.statements(context.sourceFile)) {
-    if (statement === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, context.sourceFile),
-        "rust.backend.top-level-statement",
-        "Source file contains an undefined top-level statement slot.",
-      ));
-      continue;
-    }
-    const kind = ast.kindName(statement);
-    if (kind === KindImportDeclaration || kind === "KindEndOfFile") {
-      continue;
-    }
-    if (kind === KindFunctionDeclaration) {
-      const diagnosticCount = context.diagnostics.length;
-      const item = planFunctionDeclaration(statement, context);
-      if (item !== undefined) {
-        items.push(item);
-      } else {
-        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "function");
-      }
-      continue;
-    }
-    if (kind === KindVariableStatement) {
-      const diagnosticCount = context.diagnostics.length;
-      const item = planTopLevelConst(statement, context);
-      if (item !== undefined) {
-        items.push(item);
-      } else {
-        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "const");
-      }
-      continue;
-    }
-    if (kind === "KindClassDeclaration") {
-      const diagnosticCount = context.diagnostics.length;
-      const planned = planClassDeclaration(statement, context);
-      if (planned !== undefined) {
-        items.push(...planned);
-      } else {
-        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "class");
-      }
-      continue;
-    }
-    if (kind === "KindInterfaceDeclaration") {
-      const diagnosticCount = context.diagnostics.length;
-      const planned = planInterfaceDeclaration(statement, context);
-      if (planned !== undefined) {
-        items.push(...planned);
-      } else {
-        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "interface");
-      }
-      continue;
-    }
-    if (kind === "KindTypeAliasDeclaration") {
-      const diagnosticCount = context.diagnostics.length;
-      const planned = planUnionAliasDeclaration(statement, context);
-      if (planned !== undefined) {
-        items.push(...planned);
-      } else {
-        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "type-alias");
-      }
-      continue;
-    }
-    if (kind === "KindEnumDeclaration") {
-      const diagnosticCount = context.diagnostics.length;
-      const planned = planEnumDeclaration(statement, context);
-      if (planned !== undefined) {
-        items.push(...planned);
-      } else {
-        ensureTopLevelPlanningDiagnostic(context, statement, diagnosticCount, "enum");
-      }
-      continue;
-    }
-    context.diagnostics.push(unsupportedStatementDiagnostic(
-      { ast, sourceFile: context.sourceFile, node: statement },
-      "rust.backend.statement",
-    ));
-  }
-  return items;
-}
-
-function ensureTopLevelPlanningDiagnostic(
-  context: RustPlanContext,
-  statement: Node,
-  diagnosticCount: number,
-  construct: string,
-): void {
-  if (context.diagnostics.length !== diagnosticCount) {
-    return;
-  }
-  context.diagnostics.push(missingFactDiagnostic(
-    { ast: context.input.ast, sourceFile: context.sourceFile, node: statement },
-    `rust.backend.${construct}-finalization`,
-    `Top-level ${construct} planning returned no Rust AST and no specific diagnostic.`,
-  ));
-}
-
-function planTopLevelConst(statement: Node, context: RustPlanContext): RustItem | undefined {
-  const { ast } = context.input;
-  const declarations: Node[] = [];
-  const visit = (candidate: Node): void => {
-    if (ast.kindName(candidate) === "KindVariableDeclaration") {
-      declarations.push(candidate);
-      return;
-    }
-    ast.forEachChild(candidate, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(statement);
-  const declaration = declarations.length === 1 ? declarations[0] : undefined;
-  const nameNode = declaration === undefined ? undefined : Node_Name(declaration);
-  const name = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const initializer = declaration === undefined ? undefined : Node_Initializer(declaration);
-  const typeNode = declaration === undefined ? undefined : Node_Type(declaration);
-  const carrier = typeNode === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
-  const rustType = rustTypeFromCarrierInContext(carrier, context);
-  if (
-    declaration === undefined ||
-    ast.variableDeclarationKind(statement) !== "const" ||
-    initializer === undefined ||
-    typeNode === undefined ||
-    rustType === undefined ||
-    rustType.kind === "string" ||
-    !isValidRustIdentifier(name) ||
-    !isConstLiteralInitializer(initializer, context) ||
-    ast.kindName(initializer) === "KindStringLiteral"
-  ) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      { ast, sourceFile: context.sourceFile, node: statement },
-      "rust.backend.const",
-      "Top-level declarations support only annotated const bindings with numeric or boolean literals.",
-    ));
-    return undefined;
-  }
-  const value = planExpression(initializer, context);
-  if (value === undefined) {
-    return undefined;
-  }
-  return {
-    kind: "const",
-    name,
-    pub: ast.hasModifierKind(statement, "export"),
-    // Authored const names are preserved verbatim; non-UPPER names carry a
-    // scoped lint allowance.
-    ...(isUpperSnakeName(name) ? {} : { attrs: ["#[allow(non_upper_case_globals)]"] }),
-    type: rustType,
-    value,
-  };
-}
-
 interface RustBinaryEntry {
+  readonly sourceFile: SourceFile;
   readonly moduleName: string;
   readonly functionName: string;
+  readonly async: boolean;
   readonly fallible: boolean;
 }
 
 function resolveBinaryEntry(
-  input: TargetCompileInput,
+  input: RustTranslationContext,
   moduleNameByFileName: ReadonlyMap<string, string>,
   diagnostics: TargetDiagnostic[],
 ): RustBinaryEntry | undefined {
@@ -384,21 +253,21 @@ function resolveBinaryEntry(
     if (statement === undefined || input.ast.kindName(statement) !== KindFunctionDeclaration) {
       continue;
     }
-    const nameNode = Node_Name(statement);
+    const nameNode = Node_Name(input.ast, statement);
     if (nameNode === undefined || input.ast.text(nameNode) !== "main") {
       continue;
     }
-    const returnTypeNode = Node_Type(statement);
-    const returnCarrier = returnTypeNode === undefined
-      ? undefined
-      : input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
-    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier) || input.ast.hasModifierKind(statement, "async")) {
-      // Async entry points would require an implicit executor selection.
+    const asyncFact = input.facts.getFact(statement, rustAsyncFunctionFactKey);
+    const returnCarrier = asyncFact?.outputCarrier ??
+      input.facts.getFact(statement, rustSourceCallableReturnFactKey)?.returnCarrier;
+    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier)) {
       break;
     }
     return {
+      sourceFile: entrySourceFile,
       moduleName,
       functionName: "main",
+      async: asyncFact !== undefined,
       fallible: input.facts.getFact(statement, rustFallibleFactKey) !== undefined,
     };
   }

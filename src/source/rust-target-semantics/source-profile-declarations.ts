@@ -24,6 +24,7 @@ interface IArguments {
 interface Boolean {}
 interface Number {}
 interface String {}
+interface RegExp {}
 
 interface Error {
   name: string;
@@ -62,27 +63,56 @@ declare var Promise: PromiseConstructor;
 interface SymbolConstructor {
   readonly iterator: unique symbol;
   readonly asyncIterator: unique symbol;
+  readonly dispose: unique symbol;
+  readonly asyncDispose: unique symbol;
 }
 declare var Symbol: SymbolConstructor;
 
-interface IteratorResult<T, TReturn = unknown> {
-  done?: boolean;
-  value: T | TReturn;
+interface IteratorYieldResult<TYield> {
+  done?: false;
+  value: TYield;
 }
+interface IteratorReturnResult<TReturn> {
+  done: true;
+  value: TReturn;
+}
+type IteratorResult<T, TReturn = unknown> = IteratorYieldResult<T> | IteratorReturnResult<TReturn>;
 interface Iterator<T, TReturn = unknown, TNext = unknown> {
-  next(...args: [] | [TNext]): IteratorResult<T, TReturn>;
+  next(): IteratorResult<T, TReturn>;
+  next(value: TNext): IteratorResult<T, TReturn>;
 }
-interface Iterable<T> {
-  [Symbol.iterator](): Iterator<T>;
+interface Iterable<T, TReturn = unknown, TNext = unknown> {
+  [Symbol.iterator](): Iterator<T, TReturn, TNext>;
 }
-interface IterableIterator<T> extends Iterator<T>, Iterable<T> {}
+interface IterableIterator<T, TReturn = unknown, TNext = unknown> extends Iterator<T, TReturn, TNext>, Iterable<T, TReturn, TNext> {}
 interface AsyncIterator<T, TReturn = unknown, TNext = unknown> {
-  next(...args: [] | [TNext]): Promise<IteratorResult<T, TReturn>>;
+  next(): Promise<IteratorResult<T, TReturn>>;
+  next(value: TNext): Promise<IteratorResult<T, TReturn>>;
 }
-interface AsyncIterable<T> {
-  [Symbol.asyncIterator](): AsyncIterator<T>;
+interface AsyncIterable<T, TReturn = unknown, TNext = unknown> {
+  [Symbol.asyncIterator](): AsyncIterator<T, TReturn, TNext>;
 }
-interface AsyncIterableIterator<T> extends AsyncIterator<T>, AsyncIterable<T> {}
+interface AsyncIterableIterator<T, TReturn = unknown, TNext = unknown> extends AsyncIterator<T, TReturn, TNext>, AsyncIterable<T, TReturn, TNext> {}
+interface Generator<T = unknown, TReturn = unknown, TNext = unknown> extends Iterator<T, TReturn, TNext> {
+  next(): IteratorResult<T, TReturn>;
+  next(value: TNext): IteratorResult<T, TReturn>;
+  return(value: TReturn): IteratorResult<T, TReturn>;
+  throw(error: unknown): IteratorResult<T, TReturn>;
+  [Symbol.iterator](): Generator<T, TReturn, TNext>;
+}
+interface AsyncGenerator<T = unknown, TReturn = unknown, TNext = unknown> extends AsyncIterator<T, TReturn, TNext> {
+  next(): Promise<IteratorResult<T, TReturn>>;
+  next(value: TNext): Promise<IteratorResult<T, TReturn>>;
+  return(value: TReturn): Promise<IteratorResult<T, TReturn>>;
+  throw(error: unknown): Promise<IteratorResult<T, TReturn>>;
+  [Symbol.asyncIterator](): AsyncGenerator<T, TReturn, TNext>;
+}
+interface Disposable {
+  [Symbol.dispose](): void;
+}
+interface AsyncDisposable {
+  [Symbol.asyncDispose](): void | PromiseLike<void>;
+}
 
 type Partial<T> = { [P in keyof T]?: T[P] };
 type Required<T> = { [P in keyof T]-?: T[P] };
@@ -142,9 +172,14 @@ interface Number {
   toPrecision(precision?: number): string;
 }
 interface NumberConstructor {
+  readonly MAX_VALUE: number;
+  readonly MIN_VALUE: number;
   readonly NaN: number;
   readonly NEGATIVE_INFINITY: number;
   readonly POSITIVE_INFINITY: number;
+  readonly MAX_SAFE_INTEGER: number;
+  readonly MIN_SAFE_INTEGER: number;
+  readonly EPSILON: number;
   new (value?: unknown): Number;
   (value?: unknown): number;
   isFinite(value: unknown): boolean;
@@ -156,6 +191,11 @@ interface NumberConstructor {
 }
 declare var Number: NumberConstructor;
 
+declare function parseInt(value: string, radix?: number): number;
+declare function parseFloat(value: string): number;
+declare function isNaN(value: number): boolean;
+declare function isFinite(value: number): boolean;
+
 interface String {
   readonly length: number;
   readonly [index: number]: string;
@@ -166,15 +206,26 @@ interface String {
   trim(): string;
   trimStart(): string;
   trimEnd(): string;
+  trimLeft(): string;
+  trimRight(): string;
   toString(): string;
   valueOf(): string;
   charAt(index: number): string;
+  charCodeAt(index: number): number;
+  codePointAt(index: number): number | undefined;
+  slice(start?: number, end?: number): string;
+  substring(start: number, end?: number): string;
+  substr(start: number, length?: number): string;
   indexOf(searchString: string, position?: number): number;
+  lastIndexOf(searchString: string, position?: number): number;
   at(index: number): string | undefined;
   match(regexp: RegExp): RegExpMatchArray | null;
   matchAll(regexp: RegExp): IterableIterator<RegExpMatchArray>;
   replace(searchValue: string | RegExp, replaceValue: string): string;
+  replaceAll(searchValue: string | RegExp, replaceValue: string): string;
   search(regexp: string | RegExp): number;
+  concat(...strings: string[]): string;
+  repeat(count: number): string;
   padStart(maxLength: number, fillString?: string): string;
   padEnd(maxLength: number, fillString?: string): string;
   toLowerCase(): string;
@@ -183,6 +234,8 @@ interface String {
 interface StringConstructor {
   new (value?: unknown): String;
   (value?: unknown): string;
+  fromCharCode(...codes: number[]): string;
+  fromCodePoint(...codes: number[]): string;
 }
 declare var String: StringConstructor;
 
@@ -190,9 +243,22 @@ interface Array<T> extends Iterable<T> {
   length: number;
   [index: number]: T;
   push(...items: T[]): number;
+  pop(): T | undefined;
+  shift(): T | undefined;
+  unshift(...items: T[]): number;
+  slice(start?: number, end?: number): T[];
+  splice(start: number, deleteCount?: number, ...items: T[]): T[];
+  concat(...items: (T | readonly T[])[]): T[];
+  join(separator?: string): string;
   at(index: number): T | undefined;
   includes(searchElement: T, fromIndex?: number): boolean;
   indexOf(searchElement: T, fromIndex?: number): number;
+  lastIndexOf(searchElement: T, fromIndex?: number): number;
+  reverse(): T[];
+  sort(compareFn?: (a: T, b: T) => number): T[];
+  fill(value: T, start?: number, end?: number): T[];
+  copyWithin(target: number, start: number, end?: number): T[];
+  forEach(callbackfn: (value: T, index: number, array: T[]) => void): void;
   filter(callbackfn: (value: T, index: number, array: T[]) => unknown): T[];
   find(callbackfn: (value: T, index: number, array: T[]) => unknown): T | undefined;
   findIndex(callbackfn: (value: T, index: number, array: T[]) => unknown): number;
@@ -201,17 +267,22 @@ interface Array<T> extends Iterable<T> {
   some(callbackfn: (value: T, index: number, array: T[]) => unknown): boolean;
   every(callbackfn: (value: T, index: number, array: T[]) => unknown): boolean;
   map<U>(callbackfn: (value: T, index: number, array: T[]) => U): U[];
-  reduce(callbackfn: (previousValue: T, currentValue: T) => T): T;
-  reduce(callbackfn: (previousValue: T, currentValue: T) => T, initialValue: T): T;
-  reduce<U>(callbackfn: (previousValue: U, currentValue: T) => U, initialValue: U): U;
+  reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T): T;
+  reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue: T): T;
+  reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 }
 
 interface ReadonlyArray<T> extends Iterable<T> {
   readonly length: number;
   readonly [index: number]: T;
   at(index: number): T | undefined;
+  slice(start?: number, end?: number): T[];
+  concat(...items: (T | readonly T[])[]): T[];
+  join(separator?: string): string;
   includes(searchElement: T, fromIndex?: number): boolean;
   indexOf(searchElement: T, fromIndex?: number): number;
+  lastIndexOf(searchElement: T, fromIndex?: number): number;
+  forEach(callbackfn: (value: T, index: number, array: readonly T[]) => void): void;
   filter(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): T[];
   find(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): T | undefined;
   findIndex(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): number;
@@ -226,6 +297,10 @@ interface ArrayConstructor {
   new <T>(...items: T[]): T[];
   <T>(...items: T[]): T[];
   isArray(value: unknown): value is unknown[];
+  from(arrayLike: string): string[];
+  from<T>(arrayLike: ArrayLike<T> | Iterable<T>): T[];
+  from<T, U>(arrayLike: ArrayLike<T> | Iterable<T>, mapfn: (value: T, index: number) => U): U[];
+  of<T>(...items: T[]): T[];
 }
 declare var Array: ArrayConstructor;
 
@@ -258,30 +333,44 @@ interface RegExpConstructor {
 }
 declare var RegExp: RegExpConstructor;
 
-interface Map<K, V> extends Iterable<[K, V]> {
+interface ReadonlyMap<K, V> extends Iterable<[K, V]> {
   readonly size: number;
   get(key: K): V | undefined;
-  set(key: K, value: V): this;
   has(key: K): boolean;
+  keys(): IterableIterator<K>;
+  values(): IterableIterator<V>;
+  entries(): IterableIterator<[K, V]>;
+  forEach(callbackfn: (value: V, key: K, map: ReadonlyMap<K, V>) => void): void;
+}
+interface Map<K, V> extends ReadonlyMap<K, V> {
+  set(key: K, value: V): this;
   delete(key: K): boolean;
+  clear(): void;
 }
 interface MapConstructor {
   new <K, V>(entries?: readonly (readonly [K, V])[] | Iterable<readonly [K, V]>): Map<K, V>;
 }
 declare var Map: MapConstructor;
 
-interface Set<T> extends Iterable<T> {
+interface ReadonlySet<T> extends Iterable<T> {
   readonly size: number;
-  add(value: T): this;
   has(value: T): boolean;
+  keys(): IterableIterator<T>;
+  values(): IterableIterator<T>;
+  entries(): IterableIterator<[T, T]>;
+  forEach(callbackfn: (value: T, key: T, set: ReadonlySet<T>) => void): void;
+  union(other: ReadonlySet<T>): Set<T>;
+  intersection(other: ReadonlySet<T>): Set<T>;
+  difference(other: ReadonlySet<T>): Set<T>;
+  symmetricDifference(other: ReadonlySet<T>): Set<T>;
+  isSubsetOf(other: ReadonlySet<T>): boolean;
+  isSupersetOf(other: ReadonlySet<T>): boolean;
+  isDisjointFrom(other: ReadonlySet<T>): boolean;
+}
+interface Set<T> extends ReadonlySet<T> {
+  add(value: T): this;
   delete(value: T): boolean;
-  union(other: Set<T>): Set<T>;
-  intersection(other: Set<T>): Set<T>;
-  difference(other: Set<T>): Set<T>;
-  symmetricDifference(other: Set<T>): Set<T>;
-  isSubsetOf(other: Set<T>): boolean;
-  isSupersetOf(other: Set<T>): boolean;
-  isDisjointFrom(other: Set<T>): boolean;
+  clear(): void;
 }
 interface SetConstructor {
   new <T>(values?: readonly T[] | Iterable<T>): Set<T>;
@@ -310,18 +399,60 @@ interface JSON {
 declare var JSON: JSON;
 
 interface Math {
+  readonly E: number;
+  readonly LN2: number;
+  readonly LN10: number;
+  readonly LOG2E: number;
+  readonly LOG10E: number;
+  readonly PI: number;
+  readonly SQRT1_2: number;
+  readonly SQRT2: number;
+  abs(x: number): number;
+  acos(x: number): number;
+  acosh(x: number): number;
+  asin(x: number): number;
+  asinh(x: number): number;
+  atan(x: number): number;
+  atanh(x: number): number;
+  atan2(y: number, x: number): number;
+  cbrt(x: number): number;
   floor(x: number): number;
   ceil(x: number): number;
+  clz32(x: number): number;
+  cos(x: number): number;
+  cosh(x: number): number;
+  exp(x: number): number;
+  expm1(x: number): number;
+  fround(x: number): number;
+  hypot(...values: number[]): number;
+  imul(x: number, y: number): number;
+  log(x: number): number;
+  log1p(x: number): number;
+  log10(x: number): number;
+  log2(x: number): number;
   trunc(x: number): number;
-  abs(x: number): number;
-  sqrt(x: number): number;
-  pow(x: number, y: number): number;
   round(x: number): number;
   max(...values: number[]): number;
   min(...values: number[]): number;
+  pow(x: number, y: number): number;
+  sign(x: number): number;
+  sin(x: number): number;
+  sinh(x: number): number;
+  sqrt(x: number): number;
+  tan(x: number): number;
+  tanh(x: number): number;
   random(): number;
 }
 declare var Math: Math;
+
+interface Console {
+  log(...data: unknown[]): void;
+  error(...data: unknown[]): void;
+  warn(...data: unknown[]): void;
+  info(...data: unknown[]): void;
+  debug(...data: unknown[]): void;
+}
+declare var console: Console;
 `.trim();
 
 export function rustSourceProfileContributions(

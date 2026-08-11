@@ -1,14 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compileRust, createRustSession, nodejsCapability, rustSourceDiagnostics } from "./helpers/rust-session.mjs";
+import { compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 
 // Capability ledger: every unsupported lane must diagnose deterministically.
 // Rows name the capability, a minimal repro, and the required behavior.
 const unsupportedLanes = [
-  {
-    capability: "rust.backend.statement (switch)",
-    files: { "index.ts": "export function f(x: number): number {\n  switch (x) {\n    default:\n      return x;\n  }\n}\n" },
-  },
   {
     capability: "discriminated object unions (require narrowing facts)",
     files: { "index.ts": "export type Shape = { kind: \"circle\"; radius: number } | { kind: \"square\"; size: number };\nexport function make(): Shape {\n  return { kind: \"circle\", radius: 1 };\n}\n" },
@@ -22,11 +18,6 @@ const unsupportedLanes = [
       message: "RegExp construct outside the oracle-proven subset: lookahead `(?=` is not supported.",
     },
   },
-  {
-    capability: "undefined unions without js surface",
-    files: { "index.ts": "import type { int32 } from \"@tsonic/core/types.js\";\nexport function f(value: int32 | undefined): int32 {\n  return value ?? 0;\n}\n" },
-    sourceDiagnostic: /Checked nullish coalescing requires an Option carrier/u,
-  },
 ];
 
 for (const lane of unsupportedLanes) {
@@ -38,16 +29,6 @@ for (const lane of unsupportedLanes) {
       });
       assert.deepEqual(result.artifacts, []);
       assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [lane.finalizedDiagnostic]);
-      return;
-    }
-    if (lane.sourceDiagnostic !== undefined) {
-      const options = {
-        files: lane.files,
-        ...(lane.surfaces === undefined ? {} : { surfaces: lane.surfaces }),
-      };
-      const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
-      assert.match(diagnostics, lane.sourceDiagnostic);
-      assert.throws(() => compileRust(options), /TypeScript diagnostics:/u);
       return;
     }
     const { result } = compileRust({

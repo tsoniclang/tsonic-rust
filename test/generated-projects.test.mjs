@@ -122,6 +122,18 @@ test("generated cargo binary proves JS surface lanes at runtime", { timeout: 300
 import type { int32 } from "@tsonic/core/types.js";
 import { check } from "@acme/testing";
 
+function append(values: int32[]): void {
+  values.push(5);
+}
+
+function populate(values: Map<int32, string>): void {
+  values.set(2, "two");
+}
+
+function extend(values: Set<int32>): void {
+  values.add(8);
+}
+
 export function main(): void {
   const xs: int32[] = [1, 2, 3];
   let total: int32 = 0;
@@ -132,6 +144,47 @@ export function main(): void {
   check(xs.length === 3);
   check(xs.includes(2));
   check(xs.indexOf(3) === 2);
+  const xsAlias = xs;
+  xsAlias.push(4);
+  append(xsAlias);
+  check(xs.length === 5);
+
+  const mutating: int32[] = [2];
+  check(mutating.push(3, 4) === 3);
+  check(mutating.join(",") === "2,3,4");
+  check(mutating.unshift(0, 1) === 5);
+  check(mutating.join(",") === "0,1,2,3,4");
+  const removed = mutating.splice(1, 2, 8, 9);
+  check(removed.join(",") === "1,2");
+  check(mutating.join(",") === "0,8,9,3,4");
+  mutating.fill(6);
+  check(mutating.join(",") === "6,6,6,6,6");
+  mutating.fill(5, 3);
+  check(mutating.join(",") === "6,6,6,5,5");
+  mutating.fill(7, 1, 3);
+  check(mutating.join(",") === "6,7,7,5,5");
+  mutating.copyWithin(3, 0, 2);
+  check(mutating.join(",") === "6,7,7,6,7");
+  check(mutating.reverse() === mutating);
+  check(mutating.join(",") === "7,6,7,7,6");
+  check(mutating.sort() === mutating);
+  check(mutating.join(",") === "6,6,7,7,7");
+  check((mutating.pop() ?? -1) === 7);
+  check((mutating.shift() ?? -1) === 6);
+  check(mutating.lastIndexOf(7) === 2);
+  check(mutating.lastIndexOf(7, -2) === 1);
+
+  const made = Array.of<int32>(10, 20, 30);
+  check(made.join("-") === "10-20-30");
+  check(Array.from("a😀").join("") === "a😀");
+  const unknownArray = JSON.parse("[1]");
+  check(Array.isArray(unknownArray));
+
+  const concatLeft: int32[] = [1, 2, 3];
+  const concatRight: int32[] = [5];
+  const concatenated = concatLeft.concat(4, concatRight);
+  check(concatenated.length === 5);
+  check(concatenated.join(",") === "1,2,3,4,5");
 
   const values = [1, , 3];
   values.length = 5;
@@ -151,17 +204,23 @@ export function main(): void {
   const m = new Map<int32, string>();
   m.set(1, "one");
   m.set(1, "uno");
-  check(m.size === 1);
+  const mAlias = m;
+  populate(mAlias);
+  check(m.size === 2);
   check(m.has(1));
-  check(m.get(2) === undefined);
+  check(m.has(2));
+  check(m.get(2) !== undefined);
   check(m.delete(1));
-  check(m.size === 0);
+  check(m.size === 1);
 
   const s = new Set<int32>();
   s.add(7);
   s.add(7);
-  check(s.size === 1);
+  const sAlias = s;
+  extend(sAlias);
+  check(s.size === 2);
   check(s.has(7));
+  check(s.has(8));
 
   const d = new Date(86400000);
   check(d.getTime() === 86400000);
@@ -260,4 +319,39 @@ export async function drive(): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("r4b-async-lib", result.artifacts);
+});
+
+test("generated cargo binary proves closed JavaScript string parity", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "string_parity_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+export function main(): void {
+  check("banana".lastIndexOf("ana") === 3);
+  check("abc".lastIndexOf("", 1.9) === 1);
+  check("abc".substring(2.9, 0) === "ab");
+  check("javascript".substr(-6.9, 3.9) === "scr");
+  check("abc".charCodeAt(1) === 98);
+  check(Number.isNaN("abc".charCodeAt(9)));
+  const pieces = "a,b,c".split(",", 2.9);
+  check(pieces.length === 2);
+  check((pieces[0] ?? "") === "a");
+  check("hello".replace("ll", "[$&][$\`][$']") === "he[ll][he][o]o");
+  check("banana".replaceAll("a", "$&$&") === "baanaanaa");
+  check("a".concat("b", "c") === "abc");
+  check(String.fromCharCode(65.9, 66) === "AB");
+  check(String.fromCodePoint(0x1f600) === "😀");
+  check("  value  ".trimLeft().trimRight().valueOf() === "value");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("string-parity-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
 });

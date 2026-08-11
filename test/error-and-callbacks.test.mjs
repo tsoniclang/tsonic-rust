@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
-test("array callbacks lower to Rust closures over dense helpers", async () => {
+test("array callbacks lower to Rust closures over the canonical JS array carrier", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -27,11 +27,11 @@ export function stats(xs: int32[]): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_abi::array_dense_map\(xs, \|&x\| x \* 2\)/u);
-  assert.match(text, /js_abi::array_dense_filter\(&doubled, \|&x\| x % 2 == 0\)/u);
-  assert.match(text, /js_abi::array_dense_some\(xs, \|&x\| x > 2\)/u);
-  assert.match(text, /js_abi::array_dense_every\(xs, \|&x\| x > 0\)/u);
-  assert.match(text, /js_abi::array_dense_reduce\(xs, 0, \|acc, &x\| acc \+ x\)/u);
+  assert.match(text, /xs\.map\(\|x\| x \* 2\)/u);
+  assert.match(text, /doubled\.filter\(\|x\| x % 2 == 0\)/u);
+  assert.match(text, /xs\.some\(\|x\| x > 2\)/u);
+  assert.match(text, /xs\.every\(\|x\| x > 0\)/u);
+  assert.match(text, /xs\.reduce\(0, \|acc, x\| acc \+ x\)/u);
 });
 
 test("JSON round-trips through fallible rows in a throwing context", async () => {
@@ -49,8 +49,8 @@ export function roundtrip(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(text: &str\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /js_abi::json_parse\(text\)\?/u);
+  assert.match(text, /pub fn roundtrip\(text: String\) -> rt::TsonicResult<String> \{/u);
+  assert.match(text, /js_abi::json_parse\(&text\)\?/u);
   assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
 });
 
@@ -71,8 +71,9 @@ export function load(path: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn load\(path: &str\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(path, "utf8"\)\?/u);
+  assert.match(text, /pub fn load\(path: String\) -> rt::TsonicResult<String> \{/u);
+  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(&path, "utf8"\)/u);
+  assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
 });
 
 test("caught provider failures do not make project-source callers fallible", () => {
@@ -100,8 +101,8 @@ export function forwards(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn catches\(text: &str\) -> String \{/u);
-  assert.match(text, /pub fn forwards\(text: &str\) -> String \{/u);
+  assert.match(text, /pub fn catches\(text: String\) -> String \{/u);
+  assert.match(text, /pub fn forwards\(text: String\) -> String \{/u);
   assert.match(text, /catches\(text\)/u);
   assert.doesNotMatch(text, /pub fn (?:catches|forwards)[^{]+TsonicResult/u);
   assert.doesNotMatch(text, /catches\(text\)\?/u);
@@ -131,7 +132,7 @@ export function inspectJson(): boolean {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let value = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
   assert.match(text, /let rendered = js_abi::json_stringify\(&value\)\?\.unwrap_or\(String::from\(""\)\);/u);
-  assert.match(text, /ok = js_string::includes\(&rendered, "tsonic", 0\);/u);
+  assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });
 
 test("awaited fallible project-source calls apply try after await", () => {
@@ -153,7 +154,8 @@ export async function forwards(): Promise<string> {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub async fn risky\(\) -> rt::TsonicResult<String>/u);
   assert.match(text, /pub async fn forwards\(\) -> rt::TsonicResult<String>/u);
-  assert.match(text, /risky\(\)\.await\?/u);
+  assert.match(text, /pub async fn forwards\(\) -> rt::TsonicResult<String> \{\n    risky\(\)\.await\n\}/u);
+  assert.doesNotMatch(text, /risky\(\)\.await\?/u);
   assert.doesNotMatch(text, /risky\(\)\?\.await/u);
 });
 
@@ -256,10 +258,11 @@ export function drive(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /Ok\(Machine::risky\(false\)\?\)/u);
+  assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32> \{\n    Machine::risky\(false\)\n\}/u);
+  assert.doesNotMatch(text, /Ok\(Machine::risky\(false\)\?\)/u);
 });
 
-test("catch bodies with returns wrap Ok inside fallible functions", async () => {
+test("catch returns propagate through exact completion state in fallible functions", async () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -288,8 +291,10 @@ export function fallback(flag: boolean): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn fallback\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /return Ok\(2\);/u);
-  assert.match(text, /return Ok\(risky\(\)\?\);/u);
+  assert.match(text, /Ok\(rt::Completion::Return\(2\)\)/u);
+  assert.match(text, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
+  assert.match(text, /return risky\(\);/u);
+  assert.doesNotMatch(text, /return Ok\(risky\(\)\?\);/u);
 });
 
 test("nested arrow returns do not trip the try escape scan", async () => {
@@ -318,7 +323,7 @@ export function safe(xs: int32[]): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /js_abi::array_dense_map/u);
+  assert.match(artifactText(result, "src/index.rs"), /xs\.map\(\|x\| x \* 2\)/u);
 });
 
 test("fallible provider rows are restricted to method, constructor, and property operations", async () => {

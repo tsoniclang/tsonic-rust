@@ -2,26 +2,35 @@
 // the Rust target extensions, then plans Rust artifacts via the backend.
 // Uses only public @tsonic packages — no @tsonic/host.
 import { fileURLToPath } from "node:url";
+import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import {
   createCompilerSessionFromFiles,
-  createExtensionConsumerQueries,
   formatDiagnostics,
-  runtimeCarrierFactKey,
 } from "@tsonic/tsts";
-import { createTsonicCoreSourceExtension } from "@tsonic/source-core";
 import {
-  normalizeTargetSourceProfileSegment,
-  tsonicSourceProfileVirtualDirectory,
+  createTargetSourceProgram,
+  sourceProjectFiles,
 } from "@tsonic/target-api";
+import {
+  collectTargetSourceProfileContributions,
+  createTargetSourceCompilerComposition,
+  getTargetRequiredProviderModules,
+} from "../../../tsonic/packages/host/dist/index.js";
+import {
+  collectImportActivatedTargetCapabilities,
+  collectRuntimeActivatedTargetCapabilities,
+} from "../../../tsonic/packages/host/dist/target/capability-activation.js";
 import {
   createRustBackend,
   createRustProviderPackage,
   composeRustCapabilities,
   createRustTargetPack,
+  planRustArtifacts,
 } from "../../dist/index.js";
+import { createRustTranslationContext } from "../../dist/translate/context.js";
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(testDirectory, "../..");
@@ -118,7 +127,6 @@ export function acmePlatformPackage({ includeHomeDir = true } = {}) {
           id: "@acme/platform::Store",
           name: "Store",
           kind: "class",
-          targetIdentity: { target: "rust", id: "acme.platform.Store" },
           members: [
             {
               id: "@acme/platform::Store.constructor",
@@ -141,6 +149,7 @@ export function acmePlatformPackage({ includeHomeDir = true } = {}) {
         },
       ],
     }],
+    types: [{ exportId: "@acme/platform::Store", targetTypeId: "acme.platform.Store" }],
     operations: [
       {
         exportId: "@acme/platform::Env",
@@ -180,6 +189,9 @@ export function acmePlatformPackage({ includeHomeDir = true } = {}) {
 
 export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" } = {}) {
   const pack = createRustTargetPack();
+  target = surfaces.length === 0 || target.surfaces !== undefined
+    ? target
+    : { ...target, surfaces };
   const project = { entryPoint, targets: [target] };
   const paths = {
     projectFilePath: "tsonic.json",
@@ -193,6 +205,7 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
   packages = composed.capabilities;
   const providerContext = {
     project,
+    projectDirectory: "/src",
     target,
     targetPack: pack,
     selectedSurfaces,
@@ -205,23 +218,22 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
     selectedCapabilities: packages,
     paths,
   };
-  const fileMap = new Map(Object.entries(files).map(([name, text]) => [`/src/${name}`, text]));
-  const appendSourceProfile = (ownerId, contributions) => {
-    const ownerSegment = normalizeTargetSourceProfileSegment(ownerId);
-    for (const declaration of contributions?.declarations ?? []) {
-      fileMap.set(
-        `/src/${tsonicSourceProfileVirtualDirectory}/${ownerSegment}/${declaration.fileName}`,
-        declaration.text,
-      );
-    }
-  };
-  appendSourceProfile(pack.provider.id, pack.provider.sourceProfileContributions?.(providerContext));
-  for (const surface of selectedSurfaces) {
-    appendSourceProfile(surface.id, surface.sourceProfileContributions?.({ ...providerContext, surface }));
+  const sourceProfile = collectTargetSourceProfileContributions({
+    project,
+    projectRoot: "/src",
+    target,
+    targetPack: pack,
+    selectedCapabilities: packages,
+    selectedSurfaces,
+  });
+  if (sourceProfile.diagnostics.length !== 0) {
+    throw new Error(sourceProfile.diagnostics.map((diagnostic) => diagnostic.message).join("\n"));
   }
-  for (const capability of packages) {
-    appendSourceProfile(capability.id, capability.sourceProfileContributions?.({ ...providerContext, capability }));
-  }
+  const fileMap = new Map([
+    ...Object.entries(files).map(([name, text]) => [`/src/${name}`, text]),
+    ...sourceProfile.files.map((file) => [file.path, file.text]),
+  ]);
+  const composition = createTargetSourceCompilerComposition(providerContext);
   const session = createCompilerSessionFromFiles({
     currentDirectory: "/src",
     files: fileMap,
@@ -233,13 +245,8 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
       target: "es2022",
     },
     extensionHostOptions: {
-      activeTarget: "rust",
-      extensions: [
-        createTsonicCoreSourceExtension(),
-        ...pack.provider.createExtensions(providerContext),
-        ...packages.flatMap((providerPackage) =>
-          providerPackage.createExtensions?.({ ...providerContext, package: providerPackage }) ?? []),
-      ],
+      extensions: composition.extensions,
+      requiredProviderModules: getTargetRequiredProviderModules(pack, target, packages),
     },
   });
   return {
@@ -263,58 +270,21 @@ function collectCapabilityActivation(files, candidates, targetId) {
     files: new Map(Object.entries(files).map(([name, text]) => [`/src/${name}`, text])),
     compilerOptions: { module: "esnext", moduleResolution: "bundler", noLib: true, target: "es2022" },
   });
-  const staticSpecifiers = new Set();
-  const valueSpecifiers = new Set();
-  for (const sourceFile of session.getSourceFiles()) {
-    if (sourceFile === undefined || !session.ast.getFileName(sourceFile).startsWith("/src/")) {
-      continue;
-    }
-    for (const statement of session.ast.statements(sourceFile)) {
-      const specifier = staticModuleSpecifier(session.ast, statement);
-      if (specifier === undefined) {
-        continue;
-      }
-      staticSpecifiers.add(specifier);
-      if (!isTypeOnlyModuleDeclaration(session.ast, statement)) {
-        valueSpecifiers.add(specifier);
-      }
-    }
-  }
-  const selected = candidates.filter((capability) => capability.targetId === targetId &&
-    capability.moduleOwnership.some((ownership) =>
-      [...staticSpecifiers].some((specifier) => moduleSpecifierMatchesOwnership(specifier, ownership.specifierPrefix))));
-  const runtimeIds = new Set(selected.filter((capability) =>
-    capability.moduleOwnership.some((ownership) =>
-      [...valueSpecifiers].some((specifier) => moduleSpecifierMatchesOwnership(specifier, ownership.specifierPrefix))))
-    .map((capability) => capability.id));
+  const source = session.checkSource();
+  const projectSourceFiles = sourceProjectFiles(source);
+  const target = { id: targetId, options: {} };
+  const selected = collectImportActivatedTargetCapabilities(
+    source.ast,
+    projectSourceFiles,
+    candidates,
+    target,
+  );
+  const runtimeIds = new Set(collectRuntimeActivatedTargetCapabilities(
+    source.ast,
+    projectSourceFiles,
+    selected,
+  ).map((capability) => capability.id));
   return { selected, runtimeIds };
-}
-
-function staticModuleSpecifier(ast, statement) {
-  const declaration = ast.is.IsImportDeclaration(statement)
-    ? ast.as.AsImportDeclaration(statement)
-    : ast.is.IsExportDeclaration(statement) ? ast.as.AsExportDeclaration(statement) : undefined;
-  const moduleSpecifier = declaration?.ModuleSpecifier;
-  if (moduleSpecifier === undefined) {
-    return undefined;
-  }
-  const text = ast.text(moduleSpecifier);
-  return text.length === 0 ? undefined : text;
-}
-
-function isTypeOnlyModuleDeclaration(ast, declaration) {
-  if (ast.isTypeOnlyImportOrExportDeclaration(declaration)) {
-    return true;
-  }
-  const importClause = ast.as.AsImportDeclaration(declaration)?.ImportClause;
-  const namedBindings = importClause === undefined ? undefined : ast.as.AsImportClause(importClause)?.NamedBindings;
-  return namedBindings !== undefined && ast.is.IsNamedImports(namedBindings) && ast.elements(namedBindings).length > 0 &&
-    ast.elements(namedBindings).every((element) => element !== undefined && ast.as.AsImportSpecifier(element)?.IsTypeOnly === true);
-}
-
-function moduleSpecifierMatchesOwnership(specifier, prefix) {
-  return specifier === prefix || specifier.startsWith(`${prefix}/`) ||
-    (/[:/]$/.test(prefix) && specifier.startsWith(prefix));
 }
 
 export function checkRustSession(harness, fileNames) {
@@ -322,56 +292,29 @@ export function checkRustSession(harness, fileNames) {
   if (diagnostics !== "") {
     throw new Error(`TypeScript diagnostics:\n${diagnostics}`);
   }
-  return harness.session.finalizeExtensions();
+  return checkedRustSource(harness);
 }
 
 export function rustSourceDiagnostics(harness, fileNames) {
-  const { session } = harness;
-  const checked = fileNames ?? [...session.getSourceFiles()]
-    .filter((sourceFile) => sourceFile !== undefined)
-    .map((sourceFile) => session.ast.getFileName(sourceFile))
-    .filter((fileName) => fileName.startsWith("/src/"));
-  return checked
-    .map((fileName) => formatDiagnostics(session.ensureChecked(session.getSourceFile(fileName))))
+  void fileNames;
+  const source = checkedRustSource(harness);
+  const sourceDiagnostics = formatDiagnostics(source.diagnostics);
+  const extensionDiagnostics = source.extensionDiagnostics
+    .map((diagnostic) => `TSEXT${diagnostic.numericCode}: ${diagnostic.message}`)
+    .join("\n");
+  return [sourceDiagnostics, extensionDiagnostics]
     .filter((diagnostics) => diagnostics !== "")
     .join("\n");
 }
 
-function createRustCompileInputFromSession({ session, extensionHost, project, target, runtimeReferences, paths }) {
-  const sourceFiles = session.getSourceFiles().filter((sourceFile) =>
-    sourceFile !== undefined && !session.ast.getFileName(sourceFile).endsWith(".d.ts"));
-  const facts = createExtensionConsumerQueries(extensionHost, "tsonic-rust-test-backend");
-  const resolveRuntimeCarrier = (subject) => {
-    if (subject === undefined) {
-      return { kind: "missing", reason: "No subject provided for carrier resolution.", evidence: [] };
-    }
-    const fact = extensionHost.facts.get(subject, runtimeCarrierFactKey) ??
-      extensionHost.factResolver.resolve(subject, runtimeCarrierFactKey);
-    return fact === undefined
-      ? { kind: "missing", reason: "No finalized Rust runtime carrier fact.", evidence: [] }
-      : { kind: "resolved", carrier: fact.carrier, evidence: [] };
-  };
+function checkedRustSource(harness) {
+  harness.checkedSource ??= harness.session.checkSource();
+  return harness.checkedSource;
+}
+
+function createRustCompileInputFromSession({ source, project, target, runtimeReferences, paths }) {
   return {
-    program: session.program,
-    ast: session.ast,
-    types: session.types,
-    sourceFiles,
-    facts,
-    analysis: {
-      getEnumMemberConstant(node) {
-        if (node === undefined) {
-          return undefined;
-        }
-        const value = session.checker.getConstantValue(node);
-        return typeof value === "number" || typeof value === "string" ? { value } : undefined;
-      },
-    },
-    targetFacts: {
-      resolveRuntimeCarrier,
-      resolveRuntimeCarrierForNode: resolveRuntimeCarrier,
-      resolveCallReturnRuntimeCarrier: resolveRuntimeCarrier,
-      resolveDeclarationReturnCarrier: resolveRuntimeCarrier,
-    },
+    source: createTargetSourceProgram(source),
     project,
     target,
     runtimeReferences,
@@ -381,8 +324,8 @@ function createRustCompileInputFromSession({ session, extensionHost, project, ta
 
 export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" }) {
   const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
-  const extensionHost = checkRustSession(harness);
-  const extensionDiagnostics = extensionHost.diagnostics.all()
+  const source = checkRustSession(harness);
+  const extensionDiagnostics = source.extensionDiagnostics
     .filter((diagnostic) => diagnostic.category === "error")
     .map((diagnostic) => ({
       code: diagnostic.extensionCode,
@@ -392,9 +335,10 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
       evidence: (diagnostic.evidence ?? []).map((entry) => entry.message),
     }));
   if (extensionDiagnostics.length > 0) {
+    attachBoundedDiagnosticInspection(extensionDiagnostics);
     return {
       result: { artifacts: [], diagnostics: extensionDiagnostics },
-      extensionHost,
+      source,
       harness,
     };
   }
@@ -412,15 +356,71 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
     ...capabilityReferences,
   ];
   const input = createRustCompileInputFromSession({
-    session: harness.session,
-    extensionHost,
+    source,
     project: harness.project,
     target,
     runtimeReferences,
     paths: harness.paths,
   });
-  const backend = createRustBackend({ project: harness.project, target });
-  return { result: backend.compile(input), extensionHost, harness };
+  const translationContext = createRustTranslationContext(harness.providerContext, input);
+  const result = planRustArtifacts(translationContext);
+  attachBoundedDiagnosticInspection(result.diagnostics);
+  return {
+    result,
+    source,
+    translationContext,
+    harness,
+  };
+}
+
+export function assertRustTargetRejection(options, expectedDiagnostics) {
+  const compilation = compileRust(options);
+  assert.equal(compilation.result.artifacts.length, 0);
+  assert.deepEqual(
+    compilation.result.diagnostics.map(({ code, message }) => ({ code, message })),
+    expectedDiagnostics,
+  );
+  return compilation;
+}
+
+const diagnosticInspection = Symbol.for("nodejs.util.inspect.custom");
+
+function attachBoundedDiagnosticInspection(diagnostics) {
+  for (const diagnostic of diagnostics) {
+    if (diagnostic !== null && typeof diagnostic === "object" &&
+      Object.prototype.hasOwnProperty.call(diagnostic, "sourceNode")) {
+      const sourceNode = diagnostic.sourceNode;
+      Object.defineProperty(diagnostic, "sourceNode", {
+        configurable: true,
+        enumerable: false,
+        value: sourceNode,
+      });
+    }
+  }
+  Object.defineProperty(diagnostics, diagnosticInspection, {
+    configurable: true,
+    enumerable: false,
+    value() {
+      return diagnostics.map((diagnostic) => ({
+        code: boundedDiagnosticText(diagnostic.code),
+        category: boundedDiagnosticText(diagnostic.category),
+        source: boundedDiagnosticText(diagnostic.source),
+        message: boundedDiagnosticText(diagnostic.message),
+        ...(diagnostic.sourceSpan === undefined ? {} : { sourceSpan: diagnostic.sourceSpan }),
+        evidence: Array.isArray(diagnostic.evidence)
+          ? diagnostic.evidence.slice(0, 32).map((entry) =>
+              boundedDiagnosticText(typeof entry === "string" ? entry : entry?.message))
+          : [],
+      }));
+    },
+  });
+}
+
+function boundedDiagnosticText(value) {
+  if (typeof value !== "string") {
+    return value;
+  }
+  return value.length <= 2_000 ? value : `${value.slice(0, 2_000)}…`;
 }
 
 export function artifactText(result, path) {
@@ -479,10 +479,23 @@ export function acmeVectorsPackage() {
           }],
         },
         {
+          id: "@acme/vectors::mutateBoth",
+          name: "mutateBoth",
+          kind: "function",
+          signatures: [{
+            id: "@acme/vectors::mutateBoth(left,right)",
+            name: "mutateBoth",
+            parameters: [
+              { name: "left", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } },
+              { name: "right", type: { kind: "provider-ref", moduleSpecifier: "@acme/vectors", exportName: "Vector" } },
+            ],
+            returnType: { kind: "void" },
+          }],
+        },
+        {
           id: "@acme/vectors::Vector",
           name: "Vector",
           kind: "class",
-          targetIdentity: { target: "rust", id: "acme.vectors.Vector" },
           members: [
             {
               id: "@acme/vectors::Vector.constructor",
@@ -516,6 +529,7 @@ export function acmeVectorsPackage() {
         },
       ],
     }],
+    types: [{ exportId: "@acme/vectors::Vector", targetTypeId: "acme.vectors.Vector" }],
     operations: [
       {
         exportId: "@acme/vectors::Vector",
@@ -552,6 +566,13 @@ export function acmeVectorsPackage() {
         target: { form: "call", path: "acme_vectors::scale", argModes: ["mut-ref", "value"] },
         resultCarrier: unitCarrier,
         parameterCarriers: [vectorCarrier, int32Carrier],
+      },
+      {
+        exportId: "@acme/vectors::mutateBoth",
+        operationKind: "method",
+        target: { form: "call", path: "acme_vectors::mutate_both", argModes: ["mut-ref", "mut-ref"] },
+        resultCarrier: unitCarrier,
+        parameterCarriers: [vectorCarrier, vectorCarrier],
       },
       {
         exportId: "@acme/vectors::consume",
@@ -602,7 +623,6 @@ export function acmeDbPackage() {
           id: "@acme/db::Db",
           name: "Db",
           kind: "class",
-          targetIdentity: { target: "rust", id: "acme.db.Db" },
           members: [
             {
               id: "@acme/db::Db.execute",
@@ -618,6 +638,7 @@ export function acmeDbPackage() {
         },
       ],
     }],
+    types: [{ exportId: "@acme/db::Db", targetTypeId: "acme.db.Db" }],
     operations: [
       {
         exportId: "@acme/db::connect",
@@ -808,7 +829,6 @@ export function acmeTelemetryCapability() {
           id: "telemetry::Meter",
           name: "Meter",
           kind: "class",
-          targetIdentity: { target: "rust", id: "acme.telemetry.Meter" },
           members: [
             {
               id: "telemetry::Meter.record",
@@ -830,6 +850,7 @@ export function acmeTelemetryCapability() {
         },
       ],
     }],
+    types: [{ exportId: "telemetry::Meter", targetTypeId: "acme.telemetry.Meter" }],
     operations: [
       { exportId: "telemetry::createMeter", operationKind: "method", target: { form: "call", path: "acme_telemetry::create_meter", argModes: ["ref"] }, resultCarrier: meterCarrier, parameterCarriers: [stringCarrier], isFallible: true },
       { exportId: "telemetry::Meter", memberId: "telemetry::Meter.record", operationKind: "method", target: { form: "receiver-method", name: "record", mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [{ kind: "source-primitive", name: "float64" }], isFallible: true, isAsync: true },
@@ -857,7 +878,6 @@ export function acmeLogsinkCapability() {
           id: "logsink::Sink",
           name: "Sink",
           kind: "class",
-          targetIdentity: { target: "rust", id: "acme.logsink.Sink" },
           members: [
             { id: "logsink::Sink.path", name: "path", kind: "property", readonly: true, type: { kind: "string" } },
             { id: "logsink::Sink.write", name: "write", kind: "method", signatures: [{ id: "logsink::Sink.write(line)", parameters: [{ name: "line", type: { kind: "string" } }], returnType: { kind: "source-primitive", name: "int32" } }] },
@@ -865,6 +885,7 @@ export function acmeLogsinkCapability() {
         },
       ],
     }],
+    types: [{ exportId: "logsink::Sink", targetTypeId: "acme.logsink.Sink" }],
     operations: [
       { exportId: "logsink::openSink", operationKind: "method", target: { form: "call", path: "acme_logsink::open_sink" }, resultCarrier: sinkCarrier },
       { exportId: "logsink::openSinkNamed", operationKind: "method", target: { form: "call", path: "acme_logsink::openSinkNamed", argModes: ["ref"] }, resultCarrier: sinkCarrier, parameterCarriers: [stringCarrier] },

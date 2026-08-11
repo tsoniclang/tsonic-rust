@@ -161,19 +161,51 @@ test("provider resolution requires the exact selected subject and uses broader f
   const selectedIdentity = identity({ signatureId: "acme.Store.get(string)" });
   const facts = new Map([[callee, selectedIdentity]]);
   const context = {
-    factResolver: {
-      resolve(subject) {
+    facts: {
+      get(subject) {
         return facts.get(subject);
       },
     },
   };
 
-  assert.deepEqual(resolveSelectedProviderDeclaration(context, selected, [callee]), { kind: "missing" });
+  const exactCallee = [{ subject: callee, precision: "exact" }];
+  assert.deepEqual(resolveSelectedProviderDeclaration(context, selected, exactCallee), { kind: "missing" });
   facts.set(selected, selectedIdentity);
-  assert.deepEqual(resolveSelectedProviderDeclaration(context, selected, [callee]), {
+  assert.deepEqual(resolveSelectedProviderDeclaration(context, selected, exactCallee), {
     kind: "selected",
     identity: selectedIdentity,
   });
   facts.set(callee, identity({ memberId: "acme.Store.other", memberName: "other" }));
-  assert.equal(resolveSelectedProviderDeclaration(context, selected, [callee]).kind, "conflict");
+  assert.equal(resolveSelectedProviderDeclaration(context, selected, exactCallee).kind, "conflict");
+});
+
+test("declaration corroboration cannot override the checker-selected overload", () => {
+  const selected = {};
+  const callee = {};
+  const selectedIdentity = identity({ signatureId: "acme.Store.get(string)" });
+  const facts = new Map([
+    [selected, selectedIdentity],
+    [callee, identity({ signatureId: "acme.Store.get(number)" })],
+  ]);
+  const context = {
+    facts: {
+      get(subject) {
+        return facts.get(subject);
+      },
+    },
+  };
+
+  assert.deepEqual(resolveSelectedProviderDeclaration(context, selected, [{
+    subject: callee,
+    precision: "declaration",
+  }]), {
+    kind: "selected",
+    identity: selectedIdentity,
+  });
+
+  facts.set(callee, identity({ exportId: "acme.Other", exportName: "Other", signatureId: "acme.Other.get(number)" }));
+  assert.equal(resolveSelectedProviderDeclaration(context, selected, [{
+    subject: callee,
+    precision: "declaration",
+  }]).kind, "conflict");
 });

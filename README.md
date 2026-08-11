@@ -52,9 +52,18 @@ and constant in-range indexing; dynamic indexing fails closed.
 The aliases are owned by `@tsonic/rust/lang.js`: `borrow` selects the neutral
 shared-borrow meaning, `borrowMut` selects mutable-borrow, and `move` selects
 move. Neutral code uses `sharedBorrow` and `mutableBorrow` from
-`@tsonic/core/lang.js`. Typed-location facts are converted at one Rust-owned
-policy boundary and currently reject deterministically; the backend never
-reads the neutral pointer fact or marker spelling.
+`@tsonic/core/lang.js`. Safe typed-location facts are converted once at the
+Rust-owned policy boundary and lower to the runtime-owned `Location<T>`
+carrier. Local, parameter, member, and index projections preserve stable
+alias identity; unsupported escape, root, and overlapping mutable-borrow
+shapes fail closed. The backend never reads neutral pointer facts or marker
+spellings.
+
+Generated source files participate in the shared target-artifact contract
+graph through Rust-owned public-surface and implementation facets. If Rust
+planning strengthens a callable contract—for example, `allocatePointer<T>`
+adds `T: Clone + 'static`—every exact source-call dependent is reconstructed
+to a fixed point before any Cargo project is published.
 
 JS surface (selected surface or compat mode): dense `Vec<T>` and sparse
 `JsArray<T>` lanes with callback iteration (map/filter/reduce/some/every as

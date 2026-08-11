@@ -49,20 +49,32 @@ test("Rust source modules expose only the approved native aliases", () => {
   );
 });
 
-test("Rust converts typed-location facts into one target-owned disposition", () => {
-  const operations = source(
+test("Rust converts typed-location facts into one target-owned selection", () => {
+  const operationRouter = source(
     "src/source/rust-target-semantics/operations-provider.ts",
   );
-  const disposition = source(
-    "src/source/rust-target-semantics/typed-location-disposition.ts",
+  const operations = source(
+    "src/source/rust-target-semantics/typed-location-operations.ts",
+  );
+  const selection = source(
+    "src/source/rust-target-semantics/typed-location-selection.ts",
   );
 
+  assert.match(operationRouter, /selectRustTypedLocationCall/u);
+  assert.doesNotMatch(operationRouter, /pointerOperationFactKey/u);
   assert.doesNotMatch(operations, /pointerOperationFactKey/u);
-  assert.match(operations, /selectRustTypedLocationDisposition/u);
-  assert.match(disposition, /pointerOperationFactKey/u);
-  assert.match(disposition, /kind:\s*"unsupported"/u);
+  assert.match(operations, /selectRustTypedLocationSourceOperation/u);
+  assert.match(operations, /rustTypedLocationPlanKey/u);
+  assert.match(selection, /pointerOperationFactKey/u);
+  assert.match(selection, /kind:\s*"selected"/u);
+  const neutralFactConsumers = sourceFiles(join(repositoryRoot, "src"))
+    .filter((path) => readFileSync(path, "utf8").includes("pointerOperationFactKey"))
+    .map((path) => path.slice(repositoryRoot.length + 1));
+  assert.deepEqual(neutralFactConsumers, [
+    "src/source/rust-target-semantics/typed-location-selection.ts",
+  ]);
   assert.doesNotMatch(
-    disposition,
+    selection,
     /\baddressOf\b|\ballocatePointer\b|\bequalPointer\b|\bloadPointer\b|\bstorePointer\b/u,
   );
 });

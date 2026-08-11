@@ -6,38 +6,63 @@ lane carries exactly one classification — implemented (positive runtime
 proof in the generated Cargo bank), hard-rejected (architecture;
 zero-artifact proof), or blocked by a named contract — and the guard test
 keeps this document and the lane list from drifting. C# lanes without
-Rust rows (Object helpers, Number helpers, console, node:assert, bare
+Rust rows (Object helpers, Number helpers, bare
 module aliases, Date extras, process and buffer extras) are enumerated in
 the blocked section with the contract each requires.
 
 ## Implemented
 
-- Array: literals, index/at, length, push, includes, indexOf, map,
-  filter, reduce, some, every, find, findIndex, findLast, findLastIndex;
-  sparse lane via JsArray.
+- Array: literals, index/at, length, variadic push/unshift, pop, shift,
+  splice, includes, indexOf, lastIndexOf, forEach, map, filter, reduce, some,
+  every, find, findIndex, findLast, findLastIndex, reverse, default sort,
+  fill, copyWithin, and concat over exact scalar/array alternatives; slice over closed Clone carriers and join over
+  exact stringifiable carriers; Array.of over an exact selected element type,
+  Array.from over strings, and Array.isArray over closed JsValue inputs;
+  callbacks receive every declared argument,
+  reduce supports both initial-value and first-present-element forms, and one
+  identity-preserving `JsArray<T>` carrier represents dense and sparse arrays.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
-  endsWith, indexOf, at, charAt, padStart, padEnd, trim, trimStart,
-  trimEnd, concat via +, split, replace, search,
-  match; String.matchAll call and fallibility lowering for constant
-  patterns (consuming the returned match list is a blocked lane below).
+  endsWith, indexOf, lastIndexOf, slice, substring, substr, at, charAt,
+  charCodeAt, codePointAt, repeat, padStart, padEnd, trim, trimStart,
+  trimEnd, trimLeft, trimRight, toString, valueOf, concat, split, replace,
+  replaceAll, search, and match; String.fromCharCode and
+  String.fromCodePoint; String.matchAll call and fallibility lowering for
+  constant patterns (consuming the returned match list is a blocked lane
+  below). UTF-16 results that Rust strings cannot represent fail closed.
 - RegExp: constant literals and new RegExp with literal arguments over the
   oracle-proven subset; test, replace, split, search, global match with
   null coalescing; regexp property reads.
-- Math: floor, ceil, trunc, abs, sqrt, pow (exact f64 semantics).
+- Math: all source-profile constants and functions, including trigonometric,
+  hyperbolic, logarithmic, rounding, bit-conversion, variadic hypot/min/max,
+  pow, and random operations; operations whose Rust primitives differ from
+  JavaScript use exact runtime rows.
+- Number.parseInt/parseFloat: exact prefix parsing; Number constants, valueOf,
+  decimal toString, integral-radix toString, toFixed, toExponential,
+  toPrecision, and non-coercive Number.isNaN/isFinite/isInteger/isSafeInteger
+  predicates. Decimal conversion uses the
+  ECMAScript Ryū algorithm; non-number unknown values and fractional
+  non-decimal radix calls fail closed.
 - JSON: parse, stringify, stringify with null replacer and closed numeric
   or string space, over the closed JsValue carrier.
-- Map, Set: constructors, get/set/has/delete/add, size, SameValueZero.
+- Map, Set: empty constructors, mutable and read-only carriers,
+  get/set/has/delete/add/clear, size, keys/values/entries, direct iteration,
+  callbacks with every declared arity, insertion order, and SameValueZero.
   Set algebra rows (union, intersection, difference, symmetricDifference,
-  isSubsetOf, isSupersetOf, isDisjointFrom) are runtime-proven and lower
-  when project lib settings expose the declarations.
+  isSubsetOf, isSupersetOf, isDisjointFrom) are runtime-proven through the
+  active source profile.
 - Date: UTC carrier constructors, now, parse, UTC, getTime, valueOf,
   toISOString, toJSON, UTC getters.
+- Console: console.log, console.error, console.warn, console.info, and
+  console.debug with exact string, number,
+  int32, and boolean arguments through one closed `JsValue` slice ABI;
+  empty variadic calls pass an explicit empty slice.
 - Node: path, os, fs, fs/promises (async signatures over synchronous file
   operations), process (cwd, exit, value exports, env with null-preserving
   reads, fallible execPath property), Buffer, URL, URLSearchParams, legacy
   url.parse/format with the UrlObject carrier, crypto (randomUUID,
   randomBytes, createHash, createHmac), util (closed string helpers,
-  inspect over closed JsValue, format with closed placeholders).
+  inspect over closed JsValue, format with closed placeholders), and
+  node:assert `ok` with optional string messages.
 - Error model, async/await, callbacks, tuples, fixed arrays, records,
   string-literal unions, generics, statics — see README.
 
@@ -48,7 +73,6 @@ the blocked section with the contract each requires.
   quantifiers, backreferences, lookaround, named groups, word-boundary
   assertions, unicode property escapes, flags d s u v y).
 - JSON replacer functions and custom toJSON dispatch.
-- Math lanes whose Rust semantics differ from JS (round, min, max, random).
 - Process termination side effects beyond exit(code).
 
 ## Blocked by named external contracts
@@ -69,22 +93,12 @@ the blocked section with the contract each requires.
   option-narrowing lanes for nullable object results.
 - String.matchAll result consumption: requires iterator carrier lanes
   (the call and fallibility lowering are implemented).
-- Object.keys/values/entries, Object.assign, Object.hasOwn, Object.is:
+- Object.keys/values/entries, Object.assign, Object.hasOwn:
   requires closed-shape reflection rows over the JsValue carrier.
-- Array.prototype.join: requires a separator-join row in the js runtime.
-- String.prototype.slice: requires an optional-end slice row contract.
-- String.prototype.codePointAt: requires a code-point numeric carrier row.
-- String.prototype.repeat: requires a fallible repeat row (range errors).
-- Number.isNaN, Number.isFinite, Number.isInteger, Number.isSafeInteger:
-  requires Number predicate rows in the js runtime.
-- Number.parseInt/parseFloat, isNaN/isFinite/isInteger/isSafeInteger,
-  toFixed and formatting: requires numeric parsing, predicate, and
-  formatting rows in the js runtime.
-- console.log/error/warn/info: requires a console/stdio carrier contract.
-- Date UTC setters, remaining string methods, and local-time getters and
-  setters:
-  requires date-mutation and tzdata contracts.
-- node:assert: requires an assertion-failure error-mapping contract.
+- Console calls with open or structural object arguments: requires exact
+  closed source-to-JsValue object conversion facts.
+- Date UTC setters and local-time getters and setters: requires
+  date-mutation and tzdata contracts.
 - bare module aliases (fs as an alias of node:fs): requires a
   module-alias ownership contract.
 - process extras (argv0, hrtime, memoryUsage, stdio) and buffer extras

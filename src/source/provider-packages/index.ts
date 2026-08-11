@@ -1,21 +1,22 @@
-import { TstsProviderContractVersion } from "@tsonic/tsts";
+import { TstsSourceProviderContractVersion } from "@tsonic/tsts";
 import type {
   CompilerExtension,
+  ProviderDeclarationKind,
   ProviderDeclarationModel,
   ProviderExportDeclaration,
   ProviderModuleResolution,
-  ProviderSymbolIdentity,
-  TargetBindingProvider,
-  TargetIdentity,
-  TargetTypeRef,
+  SourceDeclarationProvider,
 } from "@tsonic/tsts";
 import type {
-  TargetCapabilityOperationMapper,
+  TargetCapabilityContribution,
   TargetCapabilityImplementation,
+  TargetCapabilityContext,
+  TargetProviderContext,
   TargetRuntimeContributionContext,
   TargetRuntimeContributions,
   TargetRuntimeReference,
 } from "@tsonic/target-api";
+import type { TargetTypeRef } from "../../policy/types.js";
 import {
   cargoCrateAttributeName,
   cargoPathReferenceKind,
@@ -23,7 +24,10 @@ import {
 } from "../../backend/planner/cargo-project.js";
 import type { RustProviderOperationForm, RustValueConversion } from "../rust-facts/keys.js";
 import { validateProviderPackageDefinition } from "./validation.js";
-import { snapshotClosedMetadata } from "../../common/closed-metadata.js";
+import {
+  materializeClosedMetadata,
+  snapshotClosedMetadata,
+} from "../../common/closed-metadata.js";
 import {
   rustFixedArrayCarrierValue,
   rustFixedArrayTargetType,
@@ -59,7 +63,30 @@ export interface RustProviderOperationDefinition {
   readonly isFallible?: boolean;
 }
 
+export interface RustProviderTypeDefinition {
+  readonly exportId: string;
+  readonly targetTypeId: string;
+}
+
+export interface RustProviderTypeRow extends RustProviderTypeDefinition {
+  readonly providerPackageId: string;
+  readonly providerId: string;
+  readonly providerVersion: string;
+  readonly providerModuleId: string;
+  readonly moduleSpecifier: string;
+}
+
 export interface RustProviderOperationRow extends RustProviderOperationDefinition {
+  readonly providerPackageId: string;
+  readonly providerId: string;
+  readonly providerVersion: string;
+  readonly providerModuleId: string;
+  readonly moduleSpecifier: string;
+}
+
+export interface RustProviderExportRow {
+  readonly exportId: string;
+  readonly declarationKind: ProviderDeclarationKind;
   readonly providerPackageId: string;
   readonly providerId: string;
   readonly providerVersion: string;
@@ -79,6 +106,7 @@ export interface RustProviderPackageDefinition {
   readonly version: string;
   readonly requiredSurfaces?: readonly string[];
   readonly modules: readonly RustProviderModuleDefinition[];
+  readonly types?: readonly RustProviderTypeDefinition[];
   readonly operations: readonly RustProviderOperationDefinition[];
   readonly crates: readonly RustProviderCrateDefinition[];
   // Rust module aliases used by this capability's operation row paths
@@ -89,13 +117,10 @@ export interface RustProviderPackageDefinition {
   readonly carrierPaths?: Readonly<Record<string, string>>;
 }
 
-// Rust payload for the standard target-capability operation-mapper hook.
-// The host owns only the generic hook (createOperationMappers); this target
-// owns the payload schema and reads it by kind.
-export const rustProviderOperationsMapperKind = "rust-provider-operations";
+export const rustProviderPolicyContributionKind = "rust-provider-policy";
 
-export interface RustProviderOperationsMapper extends TargetCapabilityOperationMapper {
-  readonly kind: typeof rustProviderOperationsMapperKind;
+export interface RustProviderPolicyContribution extends TargetCapabilityContribution {
+  readonly kind: typeof rustProviderPolicyContributionKind;
   readonly contractVersion: 1;
   readonly definition: RustProviderPackageDefinition;
 }
@@ -121,8 +146,8 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
       specifierPrefix: module.moduleSpecifier,
       providerId: bindingProviderId,
     }))),
-    createExtensions(): readonly CompilerExtension[] {
-      return [createRustProviderPackageBindingExtension(closedDefinition)];
+    sourceCompilerContributions(): { readonly extensions: readonly CompilerExtension[] } {
+      return { extensions: [createRustProviderPackageSourceExtension(closedDefinition)] };
     },
     runtimeContributions(_context: TargetRuntimeContributionContext): TargetRuntimeContributions {
       return {
@@ -138,9 +163,9 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
         })),
       };
     },
-    createOperationMappers(): readonly RustProviderOperationsMapper[] {
+    createTargetContributions(): readonly RustProviderPolicyContribution[] {
       return [Object.freeze({
-        kind: rustProviderOperationsMapperKind,
+        kind: rustProviderPolicyContributionKind,
         contractVersion: 1 as const,
         definition: closedDefinition,
       })];
@@ -148,58 +173,74 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
   });
 }
 
-export function rustProviderOperationsMappersOf(
-  selectedCapabilities: readonly object[],
-  context: object = {},
-): readonly RustProviderOperationsMapper[] {
-  const mappers: RustProviderOperationsMapper[] = [];
-  for (const capability of selectedCapabilities) {
-    const createMappers = (capability as {
-      createOperationMappers?(context: object): readonly TargetCapabilityOperationMapper[];
-    }).createOperationMappers;
-    if (typeof createMappers !== "function") {
-      continue;
-    }
-    for (const mapper of createMappers.call(capability, context)) {
-      if (mapper.kind === rustProviderOperationsMapperKind) {
-        const candidate = mapper as RustProviderOperationsMapper;
+export function rustProviderPolicyContributionsOf(
+  context: TargetProviderContext,
+): readonly RustProviderPolicyContribution[] {
+  const contributions: RustProviderPolicyContribution[] = [];
+  for (const capability of context.selectedCapabilities) {
+    const capabilityContext: TargetCapabilityContext = {
+      project: context.project,
+      target: context.target,
+      targetPack: context.targetPack,
+      selectedCapabilities: context.selectedCapabilities,
+      selectedSurfaces: context.selectedSurfaces,
+      capability,
+    };
+    for (const contribution of capability.createTargetContributions?.(capabilityContext) ?? []) {
+      if (contribution.kind === rustProviderPolicyContributionKind) {
+        const candidate = contribution as RustProviderPolicyContribution;
         if (candidate.contractVersion !== 1 || candidate.definition === undefined) {
-          throw new Error(`Rust capability '${String((capability as { readonly id?: unknown }).id)}' contributed an invalid '${rustProviderOperationsMapperKind}' contract.`);
+          throw new Error(`Rust capability '${capability.id}' contributed an invalid '${rustProviderPolicyContributionKind}' contract.`);
         }
-        const capabilityId = (capability as { readonly id?: unknown }).id;
-        if (typeof capabilityId !== "string" || candidate.definition.id !== capabilityId) {
-          throw new Error(`Rust capability '${String(capabilityId)}' contributed provider metadata owned by '${candidate.definition.id}'.`);
+        if (candidate.definition.id !== capability.id) {
+          throw new Error(`Rust capability '${capability.id}' contributed provider metadata owned by '${candidate.definition.id}'.`);
         }
         validateProviderPackageDefinition(candidate.definition);
-        mappers.push(snapshotClosedMetadata(candidate));
+        contributions.push(snapshotClosedMetadata(candidate));
       }
     }
   }
-  return mappers;
+  return contributions;
 }
 
 export function collectRustProviderOperationRows(
-  selectedCapabilities: readonly object[],
+  context: TargetProviderContext,
 ): readonly RustProviderOperationRow[] {
-  return collectRustProviderSemantics(selectedCapabilities).operations;
+  return collectRustProviderSemantics(context).operations;
 }
 
 export interface RustProviderSemantics {
+  readonly exports: readonly RustProviderExportRow[];
   readonly operations: readonly RustProviderOperationRow[];
   readonly carrierPaths: ReadonlyMap<string, string>;
+  readonly types: readonly RustProviderTypeRow[];
 }
 
 export function collectRustProviderSemantics(
-  selectedCapabilities: readonly object[],
-  context: object = {},
+  context: TargetProviderContext,
 ): RustProviderSemantics {
+  const exports: RustProviderExportRow[] = [];
   const operations: RustProviderOperationRow[] = [];
   const carrierPaths = new Map<string, string>();
-  for (const mapper of rustProviderOperationsMappersOf(selectedCapabilities, context)) {
-    const definition = mapper.definition;
+  const types: RustProviderTypeRow[] = [];
+  for (const contribution of rustProviderPolicyContributionsOf(context)) {
+    const definition = contribution.definition;
     const providerId = rustProviderBindingProviderId(definition.id);
     const moduleByExportId = new Map(definition.modules.flatMap((module) =>
       module.exports.map((exported) => [exported.id, module] as const)));
+    for (const module of definition.modules) {
+      for (const exported of module.exports) {
+        exports.push(Object.freeze({
+          exportId: exported.id,
+          declarationKind: exported.kind,
+          providerPackageId: definition.id,
+          providerId,
+          providerVersion: definition.version,
+          providerModuleId: module.providerModuleId,
+          moduleSpecifier: module.moduleSpecifier,
+        }));
+      }
+    }
     const carrierPathRows = definition.carrierPaths ?? {};
     for (const [carrierId, path] of Object.entries(carrierPathRows)) {
       const existing = carrierPaths.get(carrierId);
@@ -207,6 +248,20 @@ export function collectRustProviderSemantics(
         throw new Error(`Rust provider carrier '${carrierId}' has conflicting target paths '${existing}' and '${path}'.`);
       }
       carrierPaths.set(carrierId, path);
+    }
+    for (const type of definition.types ?? []) {
+      const module = moduleByExportId.get(type.exportId);
+      if (module === undefined) {
+        throw new Error(`Rust provider package '${definition.id}' type relation '${type.exportId}' has no declaration owner.`);
+      }
+      types.push(Object.freeze({
+        ...type,
+        providerPackageId: definition.id,
+        providerId,
+        providerVersion: definition.version,
+        providerModuleId: module.providerModuleId,
+        moduleSpecifier: module.moduleSpecifier,
+      }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
     operations.push(...definition.operations.map((row) => {
@@ -223,7 +278,12 @@ export function collectRustProviderSemantics(
       });
     }));
   }
-  return { operations, carrierPaths };
+  return {
+    exports: Object.freeze(exports),
+    operations: Object.freeze(operations),
+    carrierPaths,
+    types: Object.freeze(types),
+  };
 }
 
 function materializeProviderOperationRow(
@@ -235,7 +295,7 @@ function materializeProviderOperationRow(
   return {
     ...row,
     ...owner,
-    target: materializeProviderOperationForm(row.target, aliases),
+    target: materializeProviderOperationForm(row.target, aliases, carrierPaths),
     resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths),
     ...(row.parameterCarriers === undefined
       ? {}
@@ -249,6 +309,7 @@ function materializeProviderOperationRow(
 function materializeProviderOperationForm(
   form: RustProviderOperationForm,
   aliases: ReadonlyMap<string, string>,
+  carrierPaths: Readonly<Record<string, string>>,
 ): RustProviderOperationForm {
   const argConversions = "argConversions" in form && form.argConversions !== undefined
     ? [...form.argConversions]
@@ -267,7 +328,36 @@ function materializeProviderOperationForm(
       ...(argConversions === undefined ? {} : { argConversions }),
     };
   }
-  if (form.form === "call-str-slice" || form.form === "call-jsvalue-slice" || form.form === "path") {
+  if (form.form === "call-value-slice" || form.form === "call-value-array" ||
+    form.form === "receiver-value-array") {
+    return {
+      ...form,
+      ...(form.form === "call-value-slice" || form.form === "call-value-array"
+        ? { path: expandProviderPath(form.path, aliases) }
+        : {}),
+      leadingArguments: form.leadingArguments.map((argument) => ({
+        ...argument,
+        carrier: materializeProviderCarrier(argument.carrier, carrierPaths),
+      })),
+      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths),
+    };
+  }
+  if (form.form === "receiver-tagged-array") {
+    return {
+      ...form,
+      leadingArguments: form.leadingArguments.map((argument) => ({
+        ...argument,
+        carrier: materializeProviderCarrier(argument.carrier, carrierPaths),
+      })),
+      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths),
+      alternatives: form.alternatives.map((alternative) => ({
+        ...alternative,
+        inputCarrier: materializeProviderCarrier(alternative.inputCarrier, carrierPaths),
+        constructorPath: expandProviderPath(alternative.constructorPath, aliases),
+      })),
+    };
+  }
+  if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }
   if (form.form === "binary-operator") {
@@ -327,29 +417,27 @@ export function materializeProviderCarrier(
     : rustFixedArrayTargetType(materializeProviderCarrier(fixedArray.element, carrierPaths), fixedArray.length);
 }
 
-function createRustProviderPackageBindingExtension(definition: RustProviderPackageDefinition): CompilerExtension {
+function createRustProviderPackageSourceExtension(definition: RustProviderPackageDefinition): CompilerExtension {
   return {
     identity: {
       id: `tsonic.rust.provider-package.${definition.id}`,
       version: definition.version,
-      capabilityNamespace: `tsonic.rust.provider-package.${definition.id}`,
     },
     initialize(context): void {
-      context.registerTargetBindingProvider(createRustProviderPackageBindingProvider(definition));
+      context.registerSourceDeclarationProvider(createRustProviderPackageSourceProvider(definition));
     },
   };
 }
 
-export function createRustProviderPackageBindingProvider(definition: RustProviderPackageDefinition): TargetBindingProvider {
+export function createRustProviderPackageSourceProvider(definition: RustProviderPackageDefinition): SourceDeclarationProvider {
   const modulesBySpecifier = new Map(definition.modules.map((module) => [module.moduleSpecifier, module]));
   return {
     identity: {
       id: rustProviderBindingProviderId(definition.id),
       version: definition.version,
-      target: "rust",
-      extensionContractVersion: TstsProviderContractVersion,
-      providerKind: "binding",
+      extensionContractVersion: TstsSourceProviderContractVersion,
     },
+    declarationMaterialization: "complete",
     ownsModule(specifier: string) {
       return modulesBySpecifier.has(specifier) ? { kind: "owned" as const } : { kind: "unowned" as const };
     },
@@ -381,21 +469,12 @@ export function createRustProviderPackageBindingProvider(definition: RustProvide
       if (resolution.providerModuleId !== module.providerModuleId) {
         throw new Error(`Provider package '${definition.id}' module '${resolution.moduleSpecifier}' was resolved with provider module id '${resolution.providerModuleId}', expected '${module.providerModuleId}'.`);
       }
-      return {
+      return materializeClosedMetadata({
         moduleSpecifier: module.moduleSpecifier,
         providerModuleId: module.providerModuleId,
         ...(module.imports === undefined ? {} : { imports: module.imports }),
         exports: module.exports,
-      };
-    },
-    getTargetIdentity(symbol: ProviderSymbolIdentity): TargetIdentity | undefined {
-      if (symbol.memberName !== undefined || symbol.exportName === undefined) {
-        return undefined;
-      }
-      const module = modulesBySpecifier.get(symbol.moduleSpecifier);
-      const exported = module?.exports.find((candidate) =>
-        (candidate.exportName ?? candidate.name) === symbol.exportName);
-      return exported?.targetIdentity;
+      });
     },
   };
 }

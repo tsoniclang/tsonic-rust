@@ -7,6 +7,54 @@
   },
   {
     "area": "Array",
+    "lane": "Array.prototype.pop",
+    "classification": "implemented",
+    "rowMember": "pop"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.shift",
+    "classification": "implemented",
+    "rowMember": "shift"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.unshift",
+    "classification": "implemented",
+    "rowMember": "unshift"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.splice",
+    "classification": "implemented",
+    "rowMember": "splice"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.reverse",
+    "classification": "implemented",
+    "rowMember": "reverse"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.sort",
+    "classification": "implemented",
+    "rowMember": "sort"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.fill",
+    "classification": "implemented",
+    "rowMember": "fill"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.copyWithin",
+    "classification": "implemented",
+    "rowMember": "copyWithin"
+  },
+  {
+    "area": "Array",
     "lane": "Array.prototype.includes",
     "classification": "implemented",
     "rowMember": "includes"
@@ -19,15 +67,33 @@
   },
   {
     "area": "Array",
+    "lane": "Array.prototype.lastIndexOf",
+    "classification": "implemented",
+    "rowMember": "lastIndexOf"
+  },
+  {
+    "area": "Array",
     "lane": "Array.prototype.join",
-    "classification": "blocked",
-    "contract": "requires a separator-join row in the js runtime"
+    "classification": "implemented",
+    "rowMember": "join"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.slice",
+    "classification": "implemented",
+    "rowMember": "slice"
   },
   {
     "area": "Array",
     "lane": "Array.prototype.map",
     "classification": "implemented",
     "rowMember": "map"
+  },
+  {
+    "area": "Array",
+    "lane": "Array.prototype.forEach",
+    "classification": "implemented",
+    "rowMember": "forEach"
   },
   {
     "area": "Array",
@@ -121,9 +187,15 @@
   },
   {
     "area": "String",
+    "lane": "String.prototype.lastIndexOf",
+    "classification": "implemented",
+    "rowMember": "lastIndexOf"
+  },
+  {
+    "area": "String",
     "lane": "String.prototype.slice",
-    "classification": "blocked",
-    "contract": "requires an optional-end slice row contract"
+    "classification": "implemented",
+    "rowMember": "slice"
   },
   {
     "area": "String",
@@ -139,9 +211,15 @@
   },
   {
     "area": "String",
+    "lane": "String.prototype.charCodeAt",
+    "classification": "implemented",
+    "rowMember": "charCodeAt"
+  },
+  {
+    "area": "String",
     "lane": "String.prototype.codePointAt",
-    "classification": "blocked",
-    "contract": "requires a code-point numeric carrier row"
+    "classification": "implemented",
+    "rowMember": "codePointAt"
   },
   {
     "area": "String",
@@ -158,8 +236,8 @@
   {
     "area": "String",
     "lane": "String.prototype.repeat",
-    "classification": "blocked",
-    "contract": "requires a fallible repeat row (range errors)"
+    "classification": "implemented",
+    "rowMember": "repeat"
   },
   {
     "area": "String",
@@ -181,6 +259,18 @@
   },
   {
     "area": "String",
+    "lane": "String.prototype.trimLeft / trimRight",
+    "classification": "implemented",
+    "rowMember": "trimLeft"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.substring / substr",
+    "classification": "implemented",
+    "rowMember": "substring"
+  },
+  {
+    "area": "String",
     "lane": "String.prototype.split",
     "classification": "implemented",
     "rowMember": "split"
@@ -190,6 +280,30 @@
     "lane": "String.prototype.replace",
     "classification": "implemented",
     "rowMember": "replace"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.replaceAll",
+    "classification": "implemented",
+    "rowMember": "replaceAll"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.concat",
+    "classification": "implemented",
+    "rowMember": "concat"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.valueOf",
+    "classification": "implemented",
+    "rowMember": "valueOf"
+  },
+  {
+    "area": "String",
+    "lane": "String.fromCharCode / String.fromCodePoint",
+    "classification": "implemented",
+    "rowMember": "fromCharCode"
   },
   {
     "area": "String",
@@ -234,6 +348,77 @@
   },
   {
     "area": "Math",
+    "lane": "Math constants",
+    "classification": "implemented"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.acos/acosh/asin/asinh/atan/atanh",
+    "classification": "implemented",
+    "rowMember": "acosh"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.atan2",
+    "classification": "implemented",
+    "rowMember": "atan2"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.cbrt",
+    "classification": "implemented",
+    "rowMember": "cbrt"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.clz32",
+    "classification": "implemented",
+    "rowMember": "clz32"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.cos/cosh/sin/sinh/tan/tanh",
+    "classification": "implemented",
+    "rowMember": "cosh"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.exp/expm1",
+    "classification": "implemented",
+    "rowMember": "expm1"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.fround",
+    "classification": "implemented",
+    "rowMember": "fround"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.hypot",
+    "classification": "implemented",
+    "rowMember": "hypot"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.imul",
+    "classification": "implemented",
+    "rowMember": "imul"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.log/log1p/log10/log2",
+    "classification": "implemented",
+    "rowMember": "log1p"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.sign",
+    "classification": "implemented",
+    "rowMember": "sign"
+  },
+  {
+    "area": "Math",
     "lane": "Math.sqrt",
     "classification": "implemented",
     "rowMember": "sqrt"
@@ -243,6 +428,30 @@
     "lane": "Math.pow",
     "classification": "implemented",
     "rowMember": "pow"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.round",
+    "classification": "implemented",
+    "rowMember": "round"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.min",
+    "classification": "implemented",
+    "rowMember": "min"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.max",
+    "classification": "implemented",
+    "rowMember": "max"
+  },
+  {
+    "area": "Math",
+    "lane": "Math.random",
+    "classification": "implemented",
+    "rowMember": "random"
   },
   {
     "area": "JSON",
@@ -255,6 +464,17 @@
     "lane": "JSON.stringify",
     "classification": "implemented",
     "rowMember": "stringify"
+  },
+  {
+    "area": "Map",
+    "lane": "Map empty constructor",
+    "classification": "implemented"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.size",
+    "classification": "implemented",
+    "rowMember": "size"
   },
   {
     "area": "Map",
@@ -281,6 +501,52 @@
     "rowMember": "delete"
   },
   {
+    "area": "Map",
+    "lane": "Map.prototype.clear",
+    "classification": "implemented",
+    "rowMember": "clear"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.keys",
+    "classification": "implemented",
+    "rowMember": "keys"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.values",
+    "classification": "implemented",
+    "rowMember": "values"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.entries",
+    "classification": "implemented",
+    "rowMember": "entries"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map.prototype.forEach",
+    "classification": "implemented",
+    "rowMember": "forEach"
+  },
+  {
+    "area": "Map",
+    "lane": "ReadonlyMap/Map direct iteration",
+    "classification": "implemented"
+  },
+  {
+    "area": "Set",
+    "lane": "Set empty constructor",
+    "classification": "implemented"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.size",
+    "classification": "implemented",
+    "rowMember": "size"
+  },
+  {
     "area": "Set",
     "lane": "Set.prototype.add",
     "classification": "implemented",
@@ -297,6 +563,41 @@
     "lane": "Set.prototype.delete",
     "classification": "implemented",
     "rowMember": "delete"
+  },
+  {
+    "area": "Set",
+    "lane": "Set.prototype.clear",
+    "classification": "implemented",
+    "rowMember": "clear"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.keys",
+    "classification": "implemented",
+    "rowMember": "keys"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.values",
+    "classification": "implemented",
+    "rowMember": "values"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.entries",
+    "classification": "implemented",
+    "rowMember": "entries"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set.prototype.forEach",
+    "classification": "implemented",
+    "rowMember": "forEach"
+  },
+  {
+    "area": "Set",
+    "lane": "ReadonlySet/Set direct iteration",
+    "classification": "implemented"
   },
   {
     "area": "Set",
@@ -436,11 +737,6 @@
     "classification": "hard-rejected"
   },
   {
-    "area": "Math",
-    "lane": "Math.round / Math.min / Math.max / Math.random",
-    "classification": "hard-rejected"
-  },
-  {
     "area": "JSON",
     "lane": "replacer functions and custom toJSON",
     "classification": "hard-rejected"
@@ -464,33 +760,44 @@
   },
   {
     "area": "Object",
-    "lane": "Object.hasOwn / Object.is",
+    "lane": "Object.hasOwn",
     "classification": "blocked",
     "contract": "requires closed-shape reflection rows over the JsValue carrier"
   },
   {
+    "area": "Object",
+    "lane": "Object.is",
+    "classification": "implemented",
+    "rowMember": "is"
+  },
+  {
     "area": "Number",
     "lane": "Number.parseInt / parseFloat",
-    "classification": "blocked",
-    "contract": "requires JS numeric-string parsing rows in the js runtime"
+    "classification": "implemented",
+    "rowMember": "parseInt"
   },
   {
     "area": "Number",
     "lane": "Number.isNaN / isFinite / isInteger / isSafeInteger",
-    "classification": "blocked",
-    "contract": "requires Number predicate rows in the js runtime"
+    "classification": "implemented"
   },
   {
     "area": "Number",
     "lane": "Number.prototype.toFixed and formatting",
-    "classification": "blocked",
-    "contract": "requires JS number-formatting rows in the js runtime"
+    "classification": "implemented",
+    "rowMember": "toFixed"
   },
   {
     "area": "console",
-    "lane": "console.log/error/warn/info",
+    "lane": "console.log/error/warn/info/debug with closed primitive arguments",
+    "classification": "implemented",
+    "rowMember": "log"
+  },
+  {
+    "area": "console",
+    "lane": "console methods with open or structural object arguments",
     "classification": "blocked",
-    "contract": "requires a console/stdio carrier contract"
+    "contract": "requires exact closed source-to-JsValue object conversion facts"
   },
   {
     "area": "Date",
@@ -537,8 +844,7 @@
   {
     "area": "Node",
     "lane": "node:assert",
-    "classification": "blocked",
-    "contract": "requires an assertion-failure error-mapping contract"
+    "classification": "implemented"
   },
   {
     "area": "Node",

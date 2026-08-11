@@ -1,7 +1,9 @@
-import type { TargetTypeRef } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
+import type { RustValueConversion } from "../rust-facts/keys.js";
 import type {
   RustAssignmentOperator,
   RustBinaryOperator,
+  RustOperatorToken,
 } from "../../common/rust-syntax.js";
 import {
   KindAmpersandAmpersandToken,
@@ -25,18 +27,24 @@ import {
   KindSlashToken,
 } from "../../common/source-ast.js";
 import {
+  isRustBigIntCarrier,
   isRustBoolCarrier,
+  isRustJsStrictEqualityCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
   rustSourcePrimitiveTargetType,
   sameRustPrimitiveCarrier,
 } from "../rust-target-types.js";
-import { rustSourceTypeCarrierValue } from "../rust-facts/keys.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
+import { rustSourceTypeCarrierValue } from "../rust-target-types.js";
+import { selectRustNumericBinaryPromotion } from "./numeric-promotion.js";
 
 export interface RustBinaryOperatorSelection {
   readonly kind: "operator-token" | "string-concat";
   readonly rustOperator: RustBinaryOperator;
   readonly resultCarrier: TargetTypeRef;
+  readonly leftConversion?: RustValueConversion;
+  readonly rightConversion?: RustValueConversion;
 }
 
 const arithmeticTokens: Readonly<Record<string, RustBinaryOperator>> = {
@@ -66,6 +74,37 @@ const logicalTokens: Readonly<Record<string, RustBinaryOperator>> = {
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 
+function sameRustArithmeticCarrier(left: TargetTypeRef, right: TargetTypeRef): boolean {
+  return (isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right)) ||
+    (isRustBigIntCarrier(left) && isRustBigIntCarrier(right));
+}
+
+function rustArithmeticOperatorHasDirectSemantics(
+  operator: RustOperatorToken,
+  left: TargetTypeRef,
+): boolean {
+  return !isRustBigIntCarrier(left) || (operator !== "/" && operator !== "%");
+}
+
+function compoundBinaryOperator(
+  operator: RustAssignmentOperator,
+): RustBinaryOperator | undefined {
+  switch (operator) {
+    case "+=":
+      return "+";
+    case "-=":
+      return "-";
+    case "*=":
+      return "*";
+    case "/=":
+      return "/";
+    case "%=":
+      return "%";
+    default:
+      return undefined;
+  }
+}
+
 const operatorKindByText: Readonly<Record<string, string>> = {
   "+": KindPlusToken,
   "-": KindMinusToken,
@@ -87,6 +126,13 @@ const operatorKindByText: Readonly<Record<string, string>> = {
   "%=": KindPercentEqualsToken,
 };
 
+export function rustBinaryResultCarrierIsIndependentOfOperands(
+  operatorKindOrText: string,
+): boolean {
+  const operatorKind = operatorKindByText[operatorKindOrText] ?? operatorKindOrText;
+  return comparisonTokens[operatorKind] !== undefined || equalityTokens[operatorKind] !== undefined;
+}
+
 export function selectRustBinaryOperator(
   operatorKindName: string,
   left: TargetTypeRef | undefined,
@@ -101,14 +147,36 @@ export function selectRustBinaryOperator(
     if (operatorKindName === KindPlusToken && isRustStringCarrier(left) && isRustStringCarrier(right)) {
       return { kind: "string-concat", rustOperator: "+", resultCarrier: left };
     }
-    if (isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right)) {
+    const promotion = selectRustNumericBinaryPromotion(left, right);
+    if (promotion !== undefined &&
+      rustArithmeticOperatorHasDirectSemantics(arithmetic, promotion.carrier)) {
+      return {
+        kind: "operator-token",
+        rustOperator: arithmetic,
+        resultCarrier: promotion.carrier,
+        leftConversion: promotion.leftConversion,
+        rightConversion: promotion.rightConversion,
+      };
+    }
+    if (isRustBigIntCarrier(left) && isRustBigIntCarrier(right) &&
+      rustArithmeticOperatorHasDirectSemantics(arithmetic, left)) {
       return { kind: "operator-token", rustOperator: arithmetic, resultCarrier: left };
     }
     return undefined;
   }
   const comparison = comparisonTokens[operatorKindName];
   if (comparison !== undefined) {
-    return isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right)
+    const promotion = selectRustNumericBinaryPromotion(left, right);
+    if (promotion !== undefined) {
+      return {
+        kind: "operator-token",
+        rustOperator: comparison,
+        resultCarrier: boolCarrier,
+        leftConversion: promotion.leftConversion,
+        rightConversion: promotion.rightConversion,
+      };
+    }
+    return isRustBigIntCarrier(left) && isRustBigIntCarrier(right)
       ? { kind: "operator-token", rustOperator: comparison, resultCarrier: boolCarrier }
       : undefined;
   }
@@ -119,13 +187,25 @@ export function selectRustBinaryOperator(
     const sameEnum = leftEnum !== undefined && rightEnum !== undefined &&
       leftEnum.shape === "enum" && rightEnum.shape === "enum" &&
       leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
+    const sameObject = leftEnum !== undefined && rightEnum !== undefined &&
+      leftEnum.shape === "object" && rightEnum.shape === "object" &&
+      leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
+    const numericPromotion = selectRustNumericBinaryPromotion(left, right);
     const comparable =
-      (isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right)) ||
+      numericPromotion !== undefined ||
+      (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) ||
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
       (isRustStringCarrier(left) && isRustStringCarrier(right)) ||
-      sameEnum;
+      (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
+      sameEnum || sameObject;
     return comparable
-      ? { kind: "operator-token", rustOperator: equality, resultCarrier: boolCarrier }
+      ? {
+          kind: "operator-token",
+          rustOperator: equality,
+          resultCarrier: boolCarrier,
+          leftConversion: numericPromotion?.leftConversion,
+          rightConversion: numericPromotion?.rightConversion,
+        }
       : undefined;
   }
   const logical = logicalTokens[operatorKindName];
@@ -160,7 +240,40 @@ export function selectRustCompoundAssignment(
   if (operator === undefined || left === undefined || right === undefined) {
     return undefined;
   }
-  return isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right) ? operator : undefined;
+  const binaryOperator = compoundBinaryOperator(operator);
+  if (operator === "+=" && isRustStringCarrier(left) && isRustStringCarrier(right)) {
+    return operator;
+  }
+  return binaryOperator !== undefined && sameRustArithmeticCarrier(left, right) &&
+      rustArithmeticOperatorHasDirectSemantics(binaryOperator, left)
+    ? operator
+    : undefined;
+}
+
+export function selectRustEquivalentAssignment(
+  operator: RustOperatorToken,
+  target: TargetTypeRef | undefined,
+  result: TargetTypeRef | undefined,
+): RustAssignmentOperator | undefined {
+  if (target === undefined || result === undefined ||
+    !sameRustArithmeticCarrier(target, result) ||
+    !rustArithmeticOperatorHasDirectSemantics(operator, target)) {
+    return undefined;
+  }
+  switch (operator) {
+    case "+":
+      return "+=";
+    case "-":
+      return "-=";
+    case "*":
+      return "*=";
+    case "/":
+      return "/=";
+    case "%":
+      return "%=";
+    default:
+      return undefined;
+  }
 }
 
 export function rustOperatorCarrierKey(carrier: TargetTypeRef): string {

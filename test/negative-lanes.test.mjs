@@ -1,28 +1,40 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compileRust, createRustSession, rustSourceDiagnostics } from "./helpers/rust-session.mjs";
+import { artifactText, assertRustTargetRejection, compileRust } from "./helpers/rust-session.mjs";
+import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
-test("unsupported AST fails closed with deterministic diagnostics", () => {
+test("top-level mutable declarations use initialized module cells", () => {
   const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "module_binding_proof" } },
     files: {
       "index.ts": `
-export function f(value: number): number {
-  switch (value) {
-    default:
-      return value;
+import type { int32 } from "@tsonic/core/types.js";
+
+export let value: int32 = 1;
+
+export function main(): void {
+  value += 2;
+  if (value !== 3) {
+    throw new Error("module binding mismatch");
   }
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
-  assert.ok(result.diagnostics.every((diagnostic) => diagnostic.code === "RUST_UNSUPPORTED_AST" || diagnostic.code === "RUST_MISSING_TARGET_FACT"));
-  assert.ok(result.diagnostics.some((diagnostic) => diagnostic.evidence.some((entry) => entry.startsWith("target.capability=rust.backend."))));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub static value: rt::ModuleCell<i32>/u);
+  assert.match(text, /pub fn __tsonic_module_init/u);
+  assert.match(
+    text,
+    /let (__tsonic_module_value_\d+) = 1;[\s\S]*?\.initialize\(\1\)/u,
+  );
+  assert.match(text, /\.location\(\)\)\s*\.update_with/u);
+  validateGeneratedProject("module-binding-proof", result.artifacts, { run: true });
 });
 
-test("mixed-kind numeric operators have no fact and fail closed", () => {
+test("mixed-kind numeric operators use exact target-owned promotion conversions", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -34,19 +46,13 @@ export function mix(a: int32, b: float64): float64 {
 `,
     },
   });
-  assert.deepEqual(result.artifacts, []);
-  assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), [{
-    code: "RUST_CHECKED_OPERATION_NOT_FINALIZED",
-    message: "Checked Rust operation has no finalized target fact after post-check carrier closure.",
-    evidence: [
-      "target.capability=rust.operation.post-check-finalization",
-      "source.operatorKind=KindPlusToken",
-    ],
-  }]);
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /a as f64 \+ b/u);
 });
 
 test("dynamic any member access fails closed in strict-native mode", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 declare const value: any;
@@ -56,15 +62,15 @@ export function read(): string {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Checked property access has no selected provider, source-profile, or project-source declaration evidence/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_SELECTED_EVIDENCE_MISSING",
+    message: "Checked property access has no selected provider, source-profile, or project-source declaration evidence.",
+  }]);
 });
 
 test("dynamic any calls fail closed without selected callable evidence", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 declare const invoke: any;
@@ -74,69 +80,85 @@ export function run(): void {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Checked project-source call has callee evidence but no exact selected callable declaration evidence/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_SELECTED_PROJECT_DECLARATION_MISSING",
+    message: "Checked project-source call has callee evidence but no exact selected callable declaration evidence.",
+  }]);
 });
 
 test("for-of over an unproven dynamic carrier fails closed", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
-export function walk(values: any): void {
+export function walk(): void {
+  const values: any = 1;
   for (const value of values) {
     value;
   }
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /TSEXT0/u);
-  assert.match(diagnostics, /Selected for-of iteration receiver is not a finalized supported Rust iterable carrier/u);
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_ITERATION_CARRIER_UNSUPPORTED",
+    message: "Selected for-of iteration receiver is not a finalized supported Rust iterable carrier.",
+  }]);
 });
 
-test("source-name guessing is impossible: unmapped module import fails closed", () => {
-  const options = {
+test("source-name guessing is impossible: a project Math class stays project-owned", () => {
+  const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
+class Math {
+  constructor() {}
+
+  static max(a: number, _b: number): number {
+    return a;
+  }
+}
+
 export function fallback(a: number, b: number): number {
   return Math.max(a, b);
 }
 `,
     },
-  };
-  const diagnostics = rustSourceDiagnostics(createRustSession(options), ["/src/index.ts"]);
+  });
 
-  assert.match(diagnostics, /The selected JavaScript call 'Math\.max' has no closed Rust operation row/u);
-  assert.throws(
-    () => compileRust(options),
-    (error) => error instanceof Error && error.message === `TypeScript diagnostics:\n${diagnostics}`,
-  );
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /Math::max\(a, b\)/u);
+  assert.doesNotMatch(text, /js_abi::math_max/u);
 });
 
-test("functions without return annotations fail closed", () => {
+test("functions and methods consume exact checker-inferred return carriers", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
 export function noAnnotation(a: number) {
   return a;
 }
+
+export class Box {
+  constructor() {}
+
+  value() {
+    return 42;
+  }
+}
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("explicit return type annotation")));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn noAnnotation\(a: f64\) -> f64/u);
+  assert.match(text, /pub fn value\(&self\) -> f64/u);
 });
 
 test("throw Error requires the exact selected one-message constructor shape", () => {
-  const harness = createRustSession({
+  const options = {
     files: {
       "index.ts": `
 export function invalid(): void {
@@ -144,12 +166,9 @@ export function invalid(): void {
 }
 `,
     },
-  });
-  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
-
-  assert.match(diagnostics, /requires one checked string message argument/u);
-  assert.throws(
-    () => compileRust({ files: { "index.ts": `export function invalid(): void { throw new Error(); }` } }),
-    /requires one checked string message argument/u,
-  );
+  };
+  assertRustTargetRejection(options, [{
+    code: "RUST_ERROR_MESSAGE_REQUIRED",
+    message: "Rust Error construction currently requires one checked string message argument.",
+  }]);
 });

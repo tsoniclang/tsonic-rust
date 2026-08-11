@@ -2,8 +2,8 @@ import type {
   AstReader,
   Node,
   SourceFile,
-  TargetTypeRef,
 } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import {
   KindStringLiteral,
   Node_Type,
@@ -12,7 +12,7 @@ import { isDenseDataArray } from "../../common/closed-metadata.js";
 import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
-} from "../rust-facts/keys.js";
+} from "../rust-target-types.js";
 
 export interface RustSourceEnumVariant {
   readonly name: string;
@@ -23,6 +23,7 @@ export interface RustSourceTypeRegistry {
   registerSourceFile(sourceFile: SourceFile, ast: AstReader): void;
   carrierForDeclaration(declaration: Node, ast: AstReader): TargetTypeRef | undefined;
   declarationForCarrier(carrier: TargetTypeRef): Node | undefined;
+  propertyKeysForCarrier(carrier: TargetTypeRef, ast: AstReader): readonly string[] | undefined;
   enumVariantsForDeclaration(declaration: Node): readonly RustSourceEnumVariant[] | undefined;
   enumVariantForLiteral(carrier: TargetTypeRef, literal: string): RustSourceEnumVariant | undefined;
 }
@@ -37,13 +38,14 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   };
 
   const carrierForDeclaration = (declaration: Node, ast: AstReader): TargetTypeRef | undefined => {
-    const fileName = ast.getFileName(ast.getSourceFile(declaration));
-    if (fileName.length === 0 || fileName.endsWith(".d.ts")) {
+    const sourceFile = ast.getSourceFile(declaration);
+    const fileName = ast.getFileName(sourceFile);
+    if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
       return undefined;
     }
     const kind = ast.kindName(declaration);
     const shape = kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration"
-      ? "struct"
+      ? "object"
       : kind === "KindEnumDeclaration" ||
           (kind === "KindTypeAliasDeclaration" && variantsByDeclaration.has(declaration))
         ? "enum"
@@ -57,7 +59,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   return {
     registerSourceFile(sourceFile, ast) {
       const fileName = ast.getFileName(sourceFile);
-      if (fileName.length === 0 || fileName.endsWith(".d.ts")) {
+      if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
         return;
       }
       const statements = ast.statements(sourceFile);
@@ -83,6 +85,47 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       const key = keyForCarrier(carrier);
       return key === undefined ? undefined : declarations.get(key);
     },
+    propertyKeysForCarrier(carrier, ast) {
+      const key = keyForCarrier(carrier);
+      const declaration = key === undefined ? undefined : declarations.get(key);
+      if (declaration === undefined ||
+        (ast.kindName(declaration) !== "KindInterfaceDeclaration" &&
+          ast.kindName(declaration) !== "KindClassDeclaration") ||
+        ast.extendsHeritageElements(declaration).length !== 0) {
+        return undefined;
+      }
+      const declarationKind = ast.kindName(declaration);
+      const members = denseNodes(ast.members(declaration));
+      if (members === undefined) {
+        return undefined;
+      }
+      const keys: string[] = [];
+      const seen = new Set<string>();
+      for (const member of members) {
+        const kind = ast.kindName(member);
+        if ((declarationKind === "KindInterfaceDeclaration" && kind === "KindPropertySignature") ||
+          (declarationKind === "KindClassDeclaration" && kind === "KindPropertyDeclaration")) {
+          if (ast.hasModifierKind(member, "static")) {
+            continue;
+          }
+          const nameNode = ast.name(member);
+          const name = nameNode === undefined ? "" : ast.text(nameNode);
+          if (name.length === 0 || seen.has(name)) {
+            return undefined;
+          }
+          seen.add(name);
+          keys.push(name);
+          continue;
+        }
+        if (declarationKind === "KindClassDeclaration" &&
+          (kind === "KindConstructor" || kind === "KindMethodDeclaration" ||
+            kind === "KindGetAccessor" || kind === "KindSetAccessor")) {
+          continue;
+        }
+        return undefined;
+      }
+      return Object.freeze(keys);
+    },
     enumVariantsForDeclaration(declaration) {
       return variantsByDeclaration.get(declaration);
     },
@@ -100,7 +143,7 @@ function closedStringUnionVariants(
   declaration: Node,
   ast: AstReader,
 ): readonly RustSourceEnumVariant[] | undefined {
-  const aliasType = Node_Type(declaration);
+  const aliasType = Node_Type(ast, declaration);
   if (aliasType === undefined || ast.kindName(aliasType) !== "KindUnionType") {
     return undefined;
   }

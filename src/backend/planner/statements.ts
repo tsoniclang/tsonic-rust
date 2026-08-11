@@ -1,10 +1,20 @@
-import type { Node, TargetTypeRef } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
+import type { TargetTypeRef } from "../../policy/types.js";
+import { isRustAssignmentOperator } from "../../common/rust-syntax.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
   BinaryExpression_Right,
+  BreakOrContinueStatement_Label,
   CatchClause_Block,
   CatchClause_VariableDeclaration,
+  CaseBlock_Clauses,
+  CaseOrDefaultClause_Expression,
+  CaseOrDefaultClause_Statements,
+  DoStatement_Statement,
+  LabeledStatement_Label,
+  LabeledStatement_Statement,
   ElementAccessExpression_ArgumentExpression,
   TryStatement_CatchClause,
   TryStatement_FinallyBlock,
@@ -12,6 +22,8 @@ import {
   ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
   IterationStatement_Statement,
+  SwitchStatement_CaseBlock,
+  SwitchStatement_Expression,
   KindAsteriskEqualsToken,
   KindMinusEqualsToken,
   KindPercentEqualsToken,
@@ -24,19 +36,32 @@ import {
   IfStatement_ThenStatement,
   KindBinaryExpression,
   KindBlock,
+  KindBreakStatement,
   KindCallExpression,
+  KindCaseClause,
+  KindContinueStatement,
+  KindDebuggerStatement,
+  KindDeleteExpression,
+  KindDoStatement,
+  KindEmptyStatement,
   KindEqualsToken,
   KindExpressionStatement,
   KindForStatement,
+  KindForInStatement,
   KindIdentifier,
+  KindArrayBindingPattern,
+  KindObjectBindingPattern,
   KindIfStatement,
+  KindLabeledStatement,
   KindNumericLiteral,
   KindPostfixUnaryExpression,
   KindPrefixUnaryExpression,
   KindReturnStatement,
   KindStringLiteral,
+  KindSwitchStatement,
   KindVariableDeclaration,
   KindVariableStatement,
+  KindVoidExpression,
   KindWhileStatement,
   Node_Expression,
   Node_Initializer,
@@ -44,23 +69,48 @@ import {
   Node_Type,
   Node_Operand,
 } from "../../common/source-ast.js";
-import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
-import { rustTypeFromCarrierInContext as renderRustTypeInContext } from "./render-types.js";
-import { isRustBoolCarrier, isRustUnitCarrier, rustTargetTypeRefEquals } from "../../source/rust-target-types.js";
+import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustResourceManagementFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import type { RustResourceManagementFact } from "../../source/rust-facts/keys.js";
+import {
+  isRustBigIntCarrier,
+  isRustBoolCarrier,
+  isRustStringCarrier,
+  isRustUnitCarrier,
+  rustLocationTargetType,
+} from "../../source/rust-target-types.js";
 import { validateRustFinalizedOperationAbi } from "../../source/rust-facts/finalized-operation-abi.js";
+import { rustTargetOperationIsDirectLocation } from "../../source/rust-facts/target-operation.js";
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import {
+  applyRustArgumentMode,
   expressionCarrier,
   planExpression,
   planFinalizedSourceInput,
   planFinalizedTargetInput,
   providerSelectedCallMatches,
   requireProviderArgumentPassingFacts,
+  sourceFieldSelectedOperationMatches,
 } from "./expressions.js";
-import { diagnosticInput, isValidRustIdentifier, rustSourceName } from "./plan-context.js";
-import type { RustPlanContext } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName } from "./plan-context.js";
+import type { RustCompletionBoundary, RustControlTarget, RustLoopTarget, RustPlanContext } from "./plan-context.js";
+import { allocateRustSyntheticName } from "./synthetic-names.js";
+import { planRustBindingPattern } from "./binding-patterns.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
+import {
+  planRustNonConsumingValue,
+  planRustPromotedStorageLocation,
+  planRustPromotedStorageWrite,
+  rustLocationStorageForDeclaration,
+} from "./typed-locations.js";
+import { requireRustLocationValueCarrier } from "./generic-requirements.js";
+import { planRustReturnExit } from "./completion-exits.js";
+import {
+  readRustProjectDispatchedField,
+  readRustProjectObjectField,
+  writeRustProjectDispatchedField,
+  writeRustProjectObjectField,
+} from "./project-objects.js";
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -83,12 +133,26 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return planVariableStatement(node, context);
     }
     case KindReturnStatement: {
-      const expression = Node_Expression(node);
-      if (expression === undefined) {
-        return [{ kind: "return" }];
+      const expression = Node_Expression(context.input.ast, node);
+      const planned = expression === undefined ? undefined : planExpression(expression, context);
+      if (expression !== undefined && planned === undefined) {
+        return undefined;
       }
-      const planned = planExpression(expression, context);
-      return planned === undefined ? undefined : [{ kind: "return", expr: planned }];
+      return [planRustReturnExit(planned, context)];
+    }
+    case KindBreakStatement:
+    case KindContinueStatement: {
+      return planLoopExitStatement(node, kind === KindBreakStatement ? "break" : "continue", context);
+    }
+    case KindEmptyStatement:
+    case KindDebuggerStatement: {
+      return [];
+    }
+    case KindLabeledStatement: {
+      return planLabeledStatement(node, context);
+    }
+    case KindSwitchStatement: {
+      return planSwitchStatement(node, context);
     }
     case KindExpressionStatement: {
       return planExpressionStatement(node, context);
@@ -99,8 +163,14 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
     case KindWhileStatement: {
       return planWhileStatement(node, context);
     }
+    case KindDoStatement: {
+      return planDoStatement(node, context);
+    }
     case KindForStatement: {
       return planForStatement(node, context);
+    }
+    case KindForInStatement: {
+      return planForInStatement(node, context);
     }
     case "KindForOfStatement": {
       return planForOfStatement(node, context);
@@ -128,18 +198,43 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
 
 export function planBlockLike(node: Node, context: RustPlanContext): RustBlock | undefined {
   const { ast } = context.input;
-  const statements: RustStmt[] = [];
   const children = ast.kindName(node) === KindBlock ? ast.statements(node) : [node];
+  return planStatementSequence(children, node, context);
+}
+
+function planStatementSequence(
+  children: readonly (Node | undefined)[],
+  diagnosticNode: Node,
+  context: RustPlanContext,
+): RustBlock | undefined {
+  const statements: RustStmt[] = [];
   let failed = false;
-  for (const child of children) {
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index];
     if (child === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
+        diagnosticInput(context, diagnosticNode),
         "rust.backend.block-statement",
         "Source block contains an undefined statement slot.",
       ));
       failed = true;
       continue;
+    }
+    const resourceDeclaration = directResourceDeclaration(child, context);
+    if (resourceDeclaration !== undefined) {
+      const planned = planResourceDeclarationScope(
+        child,
+        resourceDeclaration,
+        children.slice(index + 1),
+        diagnosticNode,
+        context,
+      );
+      if (planned === undefined) {
+        failed = true;
+      } else {
+        statements.push(...planned);
+      }
+      return failed ? undefined : { statements };
     }
     const planned = planStatement(child, context);
     if (planned === undefined) {
@@ -149,6 +244,24 @@ export function planBlockLike(node: Node, context: RustPlanContext): RustBlock |
     statements.push(...planned);
   }
   return failed ? undefined : { statements };
+}
+
+function directResourceDeclaration(
+  statement: Node,
+  context: RustPlanContext,
+): Node | undefined {
+  if (context.input.ast.kindName(statement) !== KindVariableStatement) {
+    return undefined;
+  }
+  const declarations = collectVariableDeclarations(statement, context);
+  if (declarations.length !== 1) {
+    return undefined;
+  }
+  const [declaration] = declarations;
+  const kind = context.input.ast.variableDeclarationKind(declaration);
+  return declaration !== undefined && (kind === "using" || kind === "await using")
+    ? declaration
+    : undefined;
 }
 
 function collectVariableDeclarations(node: Node, context: RustPlanContext): readonly Node[] {
@@ -169,22 +282,413 @@ function collectVariableDeclarations(node: Node, context: RustPlanContext): read
   return declarations;
 }
 
-export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const declarations = collectVariableDeclarations(node, context);
-  if (declarations.length !== 1) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.variable",
-      "Variable statements must declare exactly one binding.",
+function planResourceDeclarationScope(
+  statement: Node,
+  declaration: Node,
+  remainder: readonly (Node | undefined)[],
+  diagnosticNode: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const fact = resourceFactForPlanning(declaration, context);
+  if (fact === undefined) {
+    return undefined;
+  }
+  const declarations = planVariableStatement(statement, context);
+  const nameNode = Node_Name(context.input.ast, declaration);
+  const resourceName = nameNode === undefined
+    ? ""
+    : rustSourceName(context, context.input.ast.text(nameNode));
+  if (declarations === undefined || !isValidRustIdentifier(resourceName)) {
+    return undefined;
+  }
+  const scope = planResourceManagedBody(
+    declaration,
+    resourceName,
+    fact,
+    context,
+    (bodyContext) => planStatementSequence(remainder, diagnosticNode, bodyContext),
+  );
+  return scope === undefined ? undefined : [...declarations, scope];
+}
+
+function resourceFactForPlanning(
+  declaration: Node,
+  context: RustPlanContext,
+): RustResourceManagementFact | undefined {
+  const fact = context.input.facts.getFact(declaration, rustResourceManagementFactKey);
+  if (fact === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.resource-management",
+      "Resource declaration has no finalized exact Rust disposal fact.",
     ));
     return undefined;
   }
-  const declaration = declarations[0];
-  if (declaration === undefined) {
+  if (context.generator !== undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.generator-resource-management",
+      "Rust generators cannot preserve exact resource cleanup and suppressed-error semantics across suspension.",
+    ));
     return undefined;
   }
-  const nameNode = Node_Name(declaration);
+  if ((fact.declarationKind === "await using" || fact.disposal.kind === "async") &&
+    context.asyncContext !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.async-resource-management",
+      "Asynchronous resource management requires a finalized async callable context.",
+    ));
+    return undefined;
+  }
+  if (fact.disposal.fallible && context.fallibleContext !== true) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.resource-fallibility",
+      "A fallible disposer requires a finalized fallible enclosing callable.",
+    ));
+    return undefined;
+  }
+  return fact;
+}
+
+function planResourceManagedBody(
+  declaration: Node,
+  resourceName: string,
+  fact: RustResourceManagementFact,
+  context: RustPlanContext,
+  planBody: (context: RustPlanContext) => RustBlock | undefined,
+): Extract<RustStmt, { readonly kind: "resource-scope" }> | undefined {
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.resource-names",
+      "Resource management requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  if (!isValidRustIdentifier(resourceName)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.resource-binding",
+      "Resource management requires a plain finalized Rust binding name.",
+    ));
+    return undefined;
+  }
+  const boundary = createRustCompletionBoundary(
+    context,
+    context.fallibleContext === true,
+  );
+  const body = planBody({ ...context, completionBoundary: boundary });
+  const cleanupResourceName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "resource",
+  );
+  const cleanup = planResourceCleanup(
+    resourceName,
+    cleanupResourceName,
+    fact,
+    context,
+  );
+  if (body === undefined || cleanup === undefined) {
+    return undefined;
+  }
+  const terminates = rustBlockDefinitelyExits(body);
+  const finalizedBody = terminates ? tailCompletionExits(body) : body;
+  context.usedAliases?.add("rt");
+  return {
+    kind: "resource-scope",
+    flowName: allocateRustSyntheticName(context.syntheticNames, "resource_flow"),
+    cleanupName: allocateRustSyntheticName(context.syntheticNames, "resource_cleanup"),
+    returnType: boundary.returnType,
+    fallible: boundary.fallible,
+    asynchronous: boundary.asynchronous,
+    body: finalizedBody,
+    cleanup,
+    propagate: boundary.parent !== undefined,
+    dispatchReturn: boundary.dispatchReturn.value,
+    dispatchTargets: [...boundary.dispatchTargets.values()]
+      .sort((left, right) => left.id - right.id)
+      .map((target) => ({
+        kind: target.kind,
+        id: target.id,
+        label: target.label,
+        ...(target.kind === "loop" ? { continuePrelude: target.continuePrelude } : {}),
+      })),
+    terminates,
+  };
+}
+
+function createRustCompletionBoundary(
+  context: RustPlanContext,
+  fallible: boolean,
+): RustCompletionBoundary {
+  return {
+    ...(context.completionBoundary === undefined
+      ? {}
+      : { parent: context.completionBoundary }),
+    returnType: context.functionReturnType ?? { kind: "unit" },
+    fallible,
+    asynchronous: context.asyncContext === true || context.generator !== undefined,
+    dispatchReturn: { value: false },
+    dispatchTargets: new Map(),
+  };
+}
+
+function collectRustCompletionDispatch(
+  boundaries: readonly RustCompletionBoundary[],
+): {
+  readonly dispatchReturn: boolean;
+  readonly dispatchTargets: readonly RustControlTarget[];
+} {
+  const targets = new Map<number, RustControlTarget>();
+  let dispatchReturn = false;
+  for (const boundary of boundaries) {
+    dispatchReturn ||= boundary.dispatchReturn.value;
+    for (const [id, target] of boundary.dispatchTargets) {
+      targets.set(id, target);
+    }
+  }
+  return {
+    dispatchReturn,
+    dispatchTargets: [...targets.values()].sort((left, right) => left.id - right.id),
+  };
+}
+
+function planResourceCleanup(
+  resourceName: string,
+  cleanupResourceName: string,
+  fact: RustResourceManagementFact,
+  context: RustPlanContext,
+): RustBlock | undefined {
+  const receiverMode = resourceDisposalReceiverMode(fact);
+  if (receiverMode === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, context.sourceFile),
+      "rust.backend.resource-disposer",
+      "Finalized resource disposal target has no closed Rust receiver mode.",
+    ));
+    return undefined;
+  }
+  const receiver: RustExpr = {
+    kind: "path",
+    path: fact.nullable ? cleanupResourceName : resourceName,
+  };
+  let disposal = planResourceDisposalExpression(
+    receiver,
+    fact,
+    fact.nullable,
+    context,
+  );
+  if (disposal === undefined) {
+    return undefined;
+  }
+  if (fact.disposal.kind === "async") {
+    disposal = { kind: "await", expr: disposal };
+  }
+  if (fact.disposal.fallible) {
+    disposal = { kind: "try", expr: disposal };
+  }
+  const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };
+  if (!fact.nullable) {
+    return body;
+  }
+  return {
+    statements: [{
+      kind: "if-let-some",
+      binding: cleanupResourceName,
+      expression: {
+        kind: "method-call",
+        receiver: { kind: "path", path: resourceName },
+        method: receiverMode === "mut-ref" ? "as_mut" : "as_ref",
+        args: [],
+      },
+      body,
+    }],
+  };
+}
+
+function resourceDisposalReceiverMode(
+  fact: RustResourceManagementFact,
+): "ref" | "mut-ref" | undefined {
+  const target = fact.disposal.target;
+  if (target.form === "source-method") {
+    return target.receiverMode;
+  }
+  if (target.target.form === "free-call") {
+    return target.target.receiverMode === "value"
+      ? undefined
+      : target.target.receiverMode;
+  }
+  if (target.target.form === "receiver-method") {
+    return target.target.mutatesReceiver === true ? "mut-ref" : "ref";
+  }
+  return target.target.form === "method" ? "ref" : undefined;
+}
+
+function planResourceDisposalExpression(
+  receiver: RustExpr,
+  fact: RustResourceManagementFact,
+  alreadyBorrowed: boolean,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const target = fact.disposal.target;
+  if (target.form === "source-method") {
+    return { kind: "method-call", receiver, method: target.name, args: [] };
+  }
+  const operation = target.target;
+  if (operation.form === "method" || operation.form === "receiver-method") {
+    return { kind: "method-call", receiver, method: operation.name, args: [] };
+  }
+  if (operation.form === "free-call") {
+    registerAliasFromPath(context, operation.path);
+    const argument = alreadyBorrowed
+      ? receiver
+      : operation.receiverMode === "value"
+        ? receiver
+        : { kind: "reference" as const, expr: receiver, mutable: operation.receiverMode === "mut-ref" };
+    return { kind: "call", path: operation.path, args: [argument] };
+  }
+  context.diagnostics.push(missingFactDiagnostic(
+    diagnosticInput(context, context.sourceFile),
+    "rust.backend.resource-disposer",
+    "Finalized provider resource disposal target is not a closed Rust receiver operation.",
+  ));
+  return undefined;
+}
+
+function planLoopExitStatement(
+  node: Node,
+  completion: "break" | "continue",
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const sourceLabelNode = BreakOrContinueStatement_Label(context.input.ast, node);
+  const sourceLabel = sourceLabelNode === undefined
+    ? undefined
+    : context.input.ast.text(sourceLabelNode);
+  const target = [...(context.controlTargets ?? [])].reverse().find((candidate) =>
+    completion === "continue"
+      ? candidate.kind === "loop" &&
+        (sourceLabel === undefined || candidate.sourceLabel === sourceLabel)
+      : sourceLabel === undefined
+        ? candidate.kind !== "label"
+        : candidate.sourceLabel === sourceLabel);
+  if (target === undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.loop-exit",
+      sourceLabel === undefined
+        ? `${completion} has no enclosing Rust loop target.`
+        : `${completion} label '${sourceLabel}' has no finalized Rust loop target.`,
+    ));
+    return undefined;
+  }
+  target.used.value = true;
+  if (context.completionBoundary === target.resourceBoundary) {
+    return completion === "continue"
+      ? [...(target.kind === "loop" ? target.continuePrelude : []), { kind: "continue", label: target.label }]
+      : [{ kind: "break", label: target.label }];
+  }
+  let boundary = context.completionBoundary;
+  while (boundary !== undefined && boundary !== target.resourceBoundary) {
+    if (boundary.parent === target.resourceBoundary) {
+      boundary.dispatchTargets.set(target.id, target);
+    }
+    boundary = boundary.parent;
+  }
+  if (boundary !== target.resourceBoundary || context.completionBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.loop-resource-boundary",
+      "Loop exit cannot be reconciled with the finalized Rust resource boundary stack.",
+    ));
+    return undefined;
+  }
+  context.usedAliases?.add("rt");
+  return [{
+    kind: "completion-exit",
+    completion,
+    resultWrapped: context.completionBoundary.fallible,
+    loopId: target.id,
+  }];
+}
+
+function rustBlockDefinitelyExits(block: RustBlock): boolean {
+  const last = block.statements[block.statements.length - 1];
+  if (last === undefined) {
+    return false;
+  }
+  if (last.kind === "return" || last.kind === "tail" || last.kind === "throw" ||
+    last.kind === "break" || last.kind === "continue" ||
+    last.kind === "completion-exit") {
+    return true;
+  }
+  if (last.kind === "scope") {
+    return rustBlockDefinitelyExits(last.body);
+  }
+  if (last.kind === "resource-scope") {
+    return last.terminates;
+  }
+  return last.kind === "if" && last.else !== undefined &&
+    rustBlockDefinitelyExits(last.then) && rustBlockDefinitelyExits(last.else);
+}
+
+function tailCompletionExits(block: RustBlock): RustBlock {
+  const lastIndex = block.statements.length - 1;
+  if (lastIndex < 0) {
+    return block;
+  }
+  const last = block.statements[lastIndex]!;
+  let replacement = last;
+  if (last.kind === "completion-exit") {
+    replacement = { ...last, tail: true };
+  } else if (last.kind === "throw") {
+    replacement = { ...last, tail: true };
+  } else if (last.kind === "scope") {
+    replacement = { ...last, body: tailCompletionExits(last.body) };
+  } else if (last.kind === "if" && last.else !== undefined) {
+    replacement = {
+      ...last,
+      then: tailCompletionExits(last.then),
+      else: tailCompletionExits(last.else),
+    };
+  }
+  return replacement === last
+    ? block
+    : { statements: [...block.statements.slice(0, lastIndex), replacement] };
+}
+
+export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const declarations = collectVariableDeclarations(node, context);
+  if (declarations.length === 0) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.variable",
+      "Variable statement has no exact variable declaration.",
+    ));
+    return undefined;
+  }
+  const statements: RustStmt[] = [];
+  for (const declaration of declarations) {
+    const planned = planVariableDeclaration(declaration, context);
+    if (planned === undefined) {
+      return undefined;
+    }
+    statements.push(...planned);
+  }
+  return statements;
+}
+
+function planVariableDeclaration(
+  declaration: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const nameNode = Node_Name(context.input.ast, declaration);
+  const nameKind = nameNode === undefined ? "" : ast.kindName(nameNode);
+  if (nameNode !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern)) {
+    return planBindingVariableDeclaration(declaration, nameNode, context);
+  }
   const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const name = rustSourceName(context, sourceName);
   if (!isValidRustIdentifier(name)) {
@@ -195,30 +699,30 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     ));
     return undefined;
   }
-  const initializer = Node_Initializer(declaration);
-  if (initializer === undefined) {
+  const initializer = Node_Initializer(context.input.ast, declaration);
+  const locationStorage = rustLocationStorageForDeclaration(declaration, context);
+  if (initializer === undefined && locationStorage !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
-      "rust.backend.variable",
-      "Variable declarations require an initializer.",
+      "rust.backend.typed-location-storage",
+      "Promoted Rust location storage requires an initialized source binding.",
     ));
     return undefined;
   }
-  const initializerFact = context.input.facts.getFact(initializer, rustTargetOperationFactKey);
-  if (initializerFact !== undefined && initializerFact.kind === "array-literal" && initializerFact.lane === "sparse") {
-    return planSparseArrayLet(node, declaration, name, initializer, initializerFact, context);
-  }
-  const planned = planExpression(initializer, context);
-  if (planned === undefined) {
+  const planned = initializer === undefined ? undefined : planExpression(initializer, context);
+  if (initializer !== undefined && planned === undefined) {
     return undefined;
   }
-  const typeNode = Node_Type(declaration);
+  const typeNode = Node_Type(context.input.ast, declaration);
   const annotatedCarrier = typeNode === undefined
     ? undefined
     : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
   let rustType;
   if (typeNode !== undefined) {
-    rustType = rustTypeFromCarrierInContext(annotatedCarrier, context);
+    const renderedCarrier = locationStorage === undefined
+      ? annotatedCarrier
+      : rustLocationTargetType(locationStorage.valueCarrier);
+    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
     if (rustType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, typeNode),
@@ -227,17 +731,6 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
       ));
       return undefined;
     }
-  }
-  if (context.emittedLocalNames !== undefined) {
-    if (context.emittedLocalNames.has(name)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.naming",
-        `Binding '${sourceName}' collides with another binding in the same scope.`,
-      ));
-      return undefined;
-    }
-    context.emittedLocalNames.add(name);
   }
   const declarationCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
   if (declarationCarrier === undefined) {
@@ -248,16 +741,104 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
     ));
     return undefined;
   }
+  if (initializer === undefined && rustType === undefined) {
+    rustType = rustTypeFromCarrierInContext(declarationCarrier, context);
+    if (rustType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.variable",
+        "Uninitialized variable declaration has no renderable finalized Rust carrier.",
+      ));
+      return undefined;
+    }
+  }
+  if (locationStorage !== undefined &&
+    (!rustTargetTypeRefEquals(declarationCarrier, locationStorage.valueCarrier) ||
+      (annotatedCarrier !== undefined &&
+        !rustTargetTypeRefEquals(annotatedCarrier, locationStorage.valueCarrier)))) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.typed-location-storage-carrier",
+      "Promoted Rust storage conflicts with its finalized declaration carrier.",
+    ));
+    return undefined;
+  }
   const ownedBinding = declarationCarrier.kind !== "pointer";
-  const mutable = context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
-    (ownedBinding && context.input.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined);
+  const resourceFact = context.input.facts.getFact(declaration, rustResourceManagementFactKey);
+  const mutable = locationStorage === undefined &&
+    (context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
+      (ownedBinding && context.input.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
+      resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
+  let init: RustExpr | undefined;
+  if (initializer !== undefined) {
+    if (planned === undefined) {
+      return undefined;
+    }
+    if (locationStorage === undefined) {
+      init = planned;
+    } else {
+      if (!requireRustLocationValueCarrier(
+        locationStorage.valueCarrier,
+        declaration,
+        context,
+      )) {
+        return undefined;
+      }
+      context.usedAliases?.add("rt");
+      init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
+    }
+  }
+  if (initializer !== undefined && init === undefined) {
+    return undefined;
+  }
   return [{
     kind: "let",
     name,
     mutable,
     ...(rustType === undefined ? {} : { type: rustType }),
-    init: planned,
+    ...(init === undefined ? {} : { init }),
+    ...(initializer === undefined && mutable ? { attrs: ["#[allow(unused_mut)]"] } : {}),
   }];
+}
+
+function planBindingVariableDeclaration(
+  declaration: Node,
+  pattern: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const initializer = Node_Initializer(context.input.ast, declaration);
+  const sourceCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  if (initializer === undefined || sourceCarrier === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.binding-declaration",
+      "Binding-pattern declaration requires an initializer and one finalized source carrier.",
+    ));
+    return undefined;
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, pattern),
+      "rust.backend.binding-temporary",
+      "Binding-pattern declaration requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  const value = planExpression(initializer, context);
+  if (value === undefined) {
+    return undefined;
+  }
+  const temporary = allocateRustSyntheticName(context.syntheticNames, "binding");
+  const bindings = planRustBindingPattern(
+    pattern,
+    { kind: "path", path: temporary },
+    sourceCarrier,
+    context,
+    planExpression,
+  );
+  return bindings === undefined
+    ? undefined
+    : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
 }
 
 function planUpdateStatement(expression: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -279,8 +860,63 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
     ));
     return undefined;
   }
-  const operand = Node_Operand(expression);
-  if (operand === undefined || ast.kindName(operand) !== KindIdentifier) {
+  const operand = Node_Operand(context.input.ast, expression);
+  if (operand === undefined) {
+    return undefined;
+  }
+  const sourceField = context.input.facts.getFact(operand, rustTargetOperationFactKey);
+  if (sourceField?.kind === "source-field") {
+    if (!sourceFieldSelectedOperationMatches(operand, sourceField, context)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, operand),
+        "rust.backend.source-field-selected-evidence",
+        "Project-source field update conflicts with the TSTS-selected property fact.",
+      ));
+      return undefined;
+    }
+    const receiverNode = Node_Expression(ast, operand);
+    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+    if (receiver === undefined) {
+      return undefined;
+    }
+    const step: RustExpr = isRustBigIntCarrier(fact.resultCarrier)
+      ? {
+          kind: "call",
+          path: "rt::BigInt::from_decimal_literal",
+          args: [{ kind: "str-literal", value: "1" }],
+        }
+      : { kind: "int-literal", text: "1" };
+    if (isRustBigIntCarrier(fact.resultCarrier)) {
+      context.usedAliases?.add("rt");
+    }
+    if (sourceField.dispatch === undefined) {
+      return [{
+        kind: "expr",
+        expr: writeRustProjectObjectField(receiver, sourceField.storageIndex, fact.operator, step),
+      }];
+    }
+    const syntheticNames = context.syntheticNames;
+    if (syntheticNames === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, operand),
+        "rust.backend.project-dispatch-temporary",
+        "Dispatched project-source field update requires a finalized hygienic-name scope.",
+      ));
+      return undefined;
+    }
+    return [{
+      kind: "expr",
+      expr: writeRustProjectDispatchedField(
+        receiver,
+        allocateRustSyntheticName(syntheticNames, "dispatch_receiver"),
+        sourceField.dispatch.read,
+        sourceField.dispatch.write,
+        fact.operator,
+        step,
+      ),
+    }];
+  }
+  if (ast.kindName(operand) !== KindIdentifier) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, expression),
       "rust.backend.operator",
@@ -292,18 +928,44 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
   if (!isValidRustIdentifier(target)) {
     return undefined;
   }
-  return [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value: { kind: "int-literal", text: "1" } }];
+  const step: RustExpr = isRustBigIntCarrier(fact.resultCarrier)
+    ? {
+        kind: "call",
+        path: "rt::BigInt::from_decimal_literal",
+        args: [{ kind: "str-literal", value: "1" }],
+      }
+    : { kind: "int-literal", text: "1" };
+  if (isRustBigIntCarrier(fact.resultCarrier)) {
+    context.usedAliases?.add("rt");
+  }
+  const promoted = planRustPromotedStorageWrite(
+    operand,
+    fact.operator,
+    step,
+    context,
+    planExpression,
+  );
+  if (promoted.handled) {
+    return promoted.statement === undefined ? undefined : [promoted.statement];
+  }
+  return [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value: step }];
 }
 
 function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  const expression = Node_Expression(context.input.ast, node);
+  return expression === undefined
+    ? undefined
+    : planExpressionAsStatement(expression, context);
+}
+
+function planExpressionAsStatement(
+  expression: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
   const { ast } = context.input;
-  const expression = Node_Expression(node);
-  if (expression === undefined) {
-    return undefined;
-  }
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {
-    const operatorToken = BinaryExpression_OperatorToken(expression);
+    const operatorToken = BinaryExpression_OperatorToken(context.input.ast, expression);
     const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
     const compoundTokens = [
       KindPlusEqualsToken,
@@ -312,12 +974,17 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
       KindSlashEqualsToken,
       KindPercentEqualsToken,
     ];
+    let selectedAssignmentFact: Extract<
+      import("../../source/rust-facts/keys.js").RustTargetOperationFact,
+      { kind: "operator-token" }
+    > | undefined;
     if (operatorKind === KindEqualsToken) {
-      const runtimeSet = context.input.facts.getFact(expression, rustTargetOperationFactKey);
-      if (runtimeSet !== undefined && runtimeSet.kind === "runtime-set") {
-        return planRuntimeSetStatement(expression, runtimeSet, context);
+      const assignment = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+      if (assignment !== undefined && assignment.kind === "runtime-set") {
+        return planRuntimeSetStatement(expression, assignment, context);
       }
-      if (runtimeSet === undefined || runtimeSet.kind !== "operator-token" || runtimeSet.operator !== "=") {
+      if (assignment === undefined || assignment.kind !== "operator-token" ||
+        !["=", "+=", "-=", "*=", "/=", "%="].includes(assignment.operator)) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment",
@@ -325,7 +992,7 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         ));
         return undefined;
       }
-      if (!selectedOperatorMatches(expression, runtimeSet, context)) {
+      if (!selectedOperatorMatches(expression, assignment, context)) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment-selected-evidence",
@@ -333,104 +1000,270 @@ function planExpressionStatement(node: Node, context: RustPlanContext): readonly
         ));
         return undefined;
       }
+      selectedAssignmentFact = assignment;
     }
     if (operatorKind === KindEqualsToken || compoundTokens.includes(operatorKind)) {
-      const left = BinaryExpression_Left(expression);
-      const right = BinaryExpression_Right(expression);
-      if (left !== undefined && right !== undefined && ast.kindName(left) === "KindPropertyAccessExpression") {
-        const leftFact = context.input.facts.getFact(left, rustTargetOperationFactKey);
-        if (leftFact !== undefined && leftFact.kind === "source-field") {
-          const target = planExpression(left, context);
-          const value = planExpression(right, context);
-          if (target === undefined || value === undefined) {
-            return undefined;
-          }
-          if (operatorKind === KindEqualsToken) {
-            return [{ kind: "assign", target, operator: "=", value }];
-          }
-          const compoundFact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
-          if (compoundFact === undefined || compoundFact.kind !== "operator-token") {
-            context.diagnostics.push(missingFactDiagnostic(
-              diagnosticInput(context, expression),
-              "rust.backend.operator",
-              "Compound field assignment requires a finalized Rust operator fact.",
-            ));
-            return undefined;
-          }
-          if (!selectedOperatorMatches(expression, compoundFact, context)) {
-            context.diagnostics.push(missingFactDiagnostic(
-              diagnosticInput(context, expression),
-              "rust.backend.operator-selected-evidence",
-              "Compound field-assignment fact conflicts with the TSTS-selected operator fact.",
-            ));
-            return undefined;
-          }
-          const operator = compoundFact.operator;
-          if (operator !== "+=" && operator !== "-=" && operator !== "*=" && operator !== "/=" && operator !== "%=") {
-            return undefined;
-          }
-          return [{ kind: "assign", target, operator, value }];
-        }
+      const left = BinaryExpression_Left(context.input.ast, expression);
+      const right = BinaryExpression_Right(context.input.ast, expression);
+      if (left === undefined || right === undefined) {
+        return undefined;
       }
-      if (left === undefined || right === undefined || ast.kindName(left) !== KindIdentifier) {
+      const sourceField = context.input.facts.getFact(left, rustTargetOperationFactKey);
+      const target = ast.kindName(left) === KindIdentifier
+        ? (() => {
+            const path = rustSourceName(context, ast.text(left));
+            return isValidRustIdentifier(path) ? { kind: "path" as const, path } : undefined;
+          })()
+        : rustTargetOperationIsDirectLocation(
+            context.input.facts.getFact(left, rustTargetOperationFactKey),
+          )
+          ? planExpression(left, context)
+          : undefined;
+      if (target === undefined && sourceField?.kind !== "source-field") {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment",
-          "Assignments must target a plain identifier.",
+          "Assignments require a plain binding or a finalized direct Rust location.",
         ));
         return undefined;
       }
-      const target = rustSourceName(context, ast.text(left));
-      if (!isValidRustIdentifier(target)) {
+      const fact = selectedAssignmentFact ??
+        context.input.facts.getFact(expression, rustTargetOperationFactKey);
+      if (fact === undefined || fact.kind !== "operator-token") {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, expression),
+          "rust.backend.operator",
+          "Compound assignment requires a finalized Rust operator fact.",
+        ));
         return undefined;
       }
-      if (operatorKind !== KindEqualsToken) {
-        const fact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
-        if (fact === undefined || fact.kind !== "operator-token") {
+      if (!selectedOperatorMatches(expression, fact, context)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, expression),
+          "rust.backend.operator-selected-evidence",
+          "Compound assignment fact conflicts with the TSTS-selected operator fact.",
+        ));
+        return undefined;
+      }
+      const operator = fact.operator;
+      if (!isRustAssignmentOperator(operator)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, expression),
+          "rust.backend.assignment-operator",
+          "Finalized assignment fact does not contain a Rust assignment operator.",
+        ));
+        return undefined;
+      }
+      const valueNode = operatorKind === KindEqualsToken && operator !== "="
+        ? BinaryExpression_Right(context.input.ast, right)
+        : right;
+      if (valueNode === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, expression),
+          "rust.backend.assignment-shape",
+          "Finalized equivalent assignment requires the proven binary value operand.",
+        ));
+        return undefined;
+      }
+      if (sourceField?.kind === "source-field") {
+        if (!sourceFieldSelectedOperationMatches(left, sourceField, context)) {
           context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, expression),
-            "rust.backend.operator",
-            "Compound assignment requires a finalized Rust operator fact.",
+            diagnosticInput(context, left),
+            "rust.backend.source-field-selected-evidence",
+            "Project-source field assignment conflicts with the TSTS-selected property fact.",
           ));
           return undefined;
         }
-        if (!selectedOperatorMatches(expression, fact, context)) {
+        const receiverNode = Node_Expression(ast, left);
+        const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+        const value = planExpression(valueNode, context);
+        if (receiver === undefined || value === undefined) {
+          return undefined;
+        }
+        if (context.syntheticNames === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, expression),
-            "rust.backend.operator-selected-evidence",
-            "Compound assignment fact conflicts with the TSTS-selected operator fact.",
+            diagnosticInput(context, left),
+            "rust.backend.project-field-temporary",
+            "Project-source field assignment requires a finalized hygienic-name scope.",
           ));
           return undefined;
         }
-        const value = planExpression(right, context);
-        if (value === undefined) {
+        const receiverName = allocateRustSyntheticName(context.syntheticNames, "receiver");
+        const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
+        if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+          const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+          const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
+          const current = sourceField.dispatch === undefined
+            ? readRustProjectObjectField(
+                selectedReceiver,
+                sourceField.storageIndex,
+                fact.resultCarrier,
+              )
+            : readRustProjectDispatchedField(selectedReceiver, sourceField.dispatch.read);
+          const concatenated: RustExpr = {
+            kind: "string-concat",
+            parts: [
+              { kind: "path", path: currentName },
+              value,
+            ],
+          };
+          return [{
+            kind: "expr",
+            expr: {
+              kind: "block",
+              bindings: [
+                { name: receiverName, value: receiver },
+                { name: currentName, value: current },
+              ],
+              value: sourceField.dispatch === undefined
+                ? writeRustProjectObjectField(
+                    selectedReceiver,
+                    sourceField.storageIndex,
+                    "=",
+                    concatenated,
+                  )
+                : writeRustProjectDispatchedField(
+                    selectedReceiver,
+                    allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"),
+                    sourceField.dispatch.read,
+                    sourceField.dispatch.write,
+                    "=",
+                    concatenated,
+                  ),
+            },
+          }];
+        }
+        return [{
+          kind: "expr",
+          expr: {
+            kind: "block",
+            bindings: [
+              { name: receiverName, value: receiver },
+              { name: valueName, value },
+            ],
+            value: sourceField.dispatch === undefined
+              ? writeRustProjectObjectField(
+                  { kind: "path", path: receiverName },
+                  sourceField.storageIndex,
+                  operator,
+                  { kind: "path", path: valueName },
+                )
+              : writeRustProjectDispatchedField(
+                  { kind: "path", path: receiverName },
+                  allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"),
+                  sourceField.dispatch.read,
+                  sourceField.dispatch.write,
+                  operator,
+                  { kind: "path", path: valueName },
+                ),
+          },
+        }];
+      }
+      const value = planExpression(valueNode, context);
+      if (value === undefined || target === undefined) {
+        return undefined;
+      }
+      if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+        if (context.syntheticNames === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.string-append-temporary",
+            "String compound assignment requires one finalized hygienic-name scope.",
+          ));
           return undefined;
         }
-        const operator = fact.operator;
-        return operator === "+=" || operator === "-=" || operator === "*=" || operator === "/=" || operator === "%="
-          ? [{ kind: "assign", target: { kind: "path", path: target }, operator, value }]
+        const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+        const concatenated: RustExpr = {
+          kind: "string-concat",
+          parts: [
+            { kind: "path", path: currentName },
+            value,
+          ],
+        };
+        const promotedLocation = planRustPromotedStorageLocation(
+          left,
+          context,
+          planExpression,
+          false,
+        );
+        if (promotedLocation.kind === "promoted") {
+          if (promotedLocation.expression === undefined) {
+            return undefined;
+          }
+          const locationName = allocateRustSyntheticName(context.syntheticNames, "location");
+          const location: RustExpr = { kind: "path", path: locationName };
+          return [{
+            kind: "expr",
+            expr: {
+              kind: "block",
+              bindings: [
+                { name: locationName, value: promotedLocation.expression },
+                {
+                  name: currentName,
+                  value: { kind: "method-call", receiver: location, method: "load", args: [] },
+                },
+              ],
+              value: {
+                kind: "method-call",
+                receiver: location,
+                method: "store",
+                args: [concatenated],
+              },
+            },
+          }];
+        }
+        if (ast.kindName(left) !== KindIdentifier) {
+          context.diagnostics.push(unsupportedConstructDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.string-append-location",
+            "String compound assignment requires a binding or finalized Rust location plan.",
+          ));
+          return undefined;
+        }
+        return [{
+          kind: "expr",
+          expr: {
+            kind: "block",
+            bindings: [
+              {
+                name: currentName,
+                value: { kind: "method-call", receiver: target, method: "clone", args: [] },
+              },
+            ],
+            value: { kind: "assignment", operator: "=", target, value: concatenated },
+          },
+        }];
+      }
+      const promoted = planRustPromotedStorageWrite(
+        left,
+        operator,
+        value,
+        context,
+        planExpression,
+      );
+      if (promoted.handled) {
+        return promoted.statement === undefined ? undefined : [promoted.statement];
+      }
+      return operator === "+=" || operator === "-=" || operator === "*=" || operator === "/=" || operator === "%="
+        ? [{ kind: "assign", target, operator, value }]
+        : operator === "="
+          ? [{ kind: "assign", target, operator, value }]
           : undefined;
-      }
-      const value = planExpression(right, context);
-      if (value === undefined) {
-        return undefined;
-      }
-      return [{ kind: "assign", target: { kind: "path", path: target }, operator: "=", value }];
     }
   }
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
     return planUpdateStatement(expression, context);
   }
-  if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression") {
+  if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression" ||
+    expressionKind === "KindYieldExpression" || expressionKind === KindDeleteExpression ||
+    expressionKind === KindVoidExpression) {
     const planned = planExpression(expression, context);
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
-  context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, node),
-    "rust.backend.statement",
-    "Expression statements support only calls, assignments, and increments.",
-  ));
-  return undefined;
+  const planned = planExpression(expression, context);
+  return planned === undefined
+    ? undefined
+    : [{ kind: "let", name: "_", mutable: false, init: planned }];
 }
 
 function planCondition(condition: Node, context: RustPlanContext, construct: string) {
@@ -459,7 +1292,7 @@ function planEmbeddedBlock(node: Node | undefined, context: RustPlanContext): Ru
 }
 
 function planIfStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const condition = Node_Expression(node);
+  const condition = Node_Expression(context.input.ast, node);
   if (condition === undefined) {
     return undefined;
   }
@@ -467,8 +1300,8 @@ function planIfStatement(node: Node, context: RustPlanContext): readonly RustStm
   if (planned === undefined) {
     return undefined;
   }
-  const thenBlock = planEmbeddedBlock(IfStatement_ThenStatement(node), context);
-  const elseStatement = IfStatement_ElseStatement(node);
+  const thenBlock = planEmbeddedBlock(IfStatement_ThenStatement(context.input.ast, node), context);
+  const elseStatement = IfStatement_ElseStatement(context.input.ast, node);
   const elseBlock = elseStatement === undefined ? undefined : planEmbeddedBlock(elseStatement, context);
   if (thenBlock === undefined || (elseStatement !== undefined && elseBlock === undefined)) {
     return undefined;
@@ -481,8 +1314,201 @@ function planIfStatement(node: Node, context: RustPlanContext): readonly RustStm
   }];
 }
 
-function planWhileStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const condition = Node_Expression(node);
+function planLabeledStatement(
+  node: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const labelNode = LabeledStatement_Label(ast, node);
+  const bodyNode = LabeledStatement_Statement(ast, node);
+  const sourceLabel = labelNode === undefined ? "" : ast.text(labelNode);
+  if (bodyNode === undefined || sourceLabel.length === 0) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.labeled-statement-shape",
+      "Labeled statements require exact label and body nodes.",
+    ));
+    return undefined;
+  }
+  switch (ast.kindName(bodyNode)) {
+    case KindWhileStatement:
+      return planWhileStatement(bodyNode, context, sourceLabel);
+    case KindDoStatement:
+      return planDoStatement(bodyNode, context, sourceLabel);
+    case KindForStatement:
+      return planForStatement(bodyNode, context, sourceLabel);
+    case KindForInStatement:
+      return planForInStatement(bodyNode, context, sourceLabel);
+    case "KindForOfStatement":
+      return planForOfStatement(bodyNode, context, sourceLabel);
+    default: {
+      const target = createRustBreakTarget(context, "label", sourceLabel);
+      if (target === undefined) {
+        return undefined;
+      }
+      const body = planEmbeddedBlock(bodyNode, withRustControlTarget(context, target));
+      return body === undefined
+        ? undefined
+        : [{ kind: "scope", ...(target.used.value ? { label: target.label } : {}), body }];
+    }
+  }
+}
+
+function planSwitchStatement(
+  node: Node,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const discriminantNode = SwitchStatement_Expression(ast, node);
+  const clauseNodes = CaseBlock_Clauses(ast, SwitchStatement_CaseBlock(ast, node));
+  if (fact?.kind !== "switch" || discriminantNode === undefined || clauseNodes === undefined ||
+    clauseNodes.some((clause) => clause === undefined) || fact.clauses.length !== clauseNodes.length ||
+    fact.clauses.some((clause, index) => clause.clause !== clauseNodes[index])) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.switch-selection",
+      "Switch lowering requires one exact finalized discriminant and clause selection fact.",
+    ));
+    return undefined;
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.switch-names",
+      "Switch lowering requires finalized hygienic-name state.",
+    ));
+    return undefined;
+  }
+  const discriminant = planExpression(discriminantNode, context);
+  const target = createRustBreakTarget(context, "switch");
+  if (discriminant === undefined || target === undefined) {
+    return undefined;
+  }
+  const switchContext = withRustControlTarget(context, target);
+  const sections: { readonly expression?: RustExpr; readonly body: RustBlock }[] = [];
+  for (let index = 0; index < clauseNodes.length; index += 1) {
+    const clause = clauseNodes[index]!;
+    const selected = fact.clauses[index]!;
+    const sourceExpression = CaseOrDefaultClause_Expression(ast, clause);
+    const statements = CaseOrDefaultClause_Statements(ast, clause);
+    if (statements === undefined || statements.some((statement) => statement === undefined) ||
+      (ast.kindName(clause) === KindCaseClause &&
+        (sourceExpression === undefined || selected.expression !== sourceExpression ||
+          selected.carrier === undefined ||
+          !rustTargetTypeRefEquals(selected.carrier, fact.discriminantCarrier)))) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, clause),
+        "rust.backend.switch-clause",
+        "Switch clause conflicts with its finalized source selection fact.",
+      ));
+      return undefined;
+    }
+    if (statements.some((statement) =>
+      statement !== undefined && directResourceDeclaration(statement, context) !== undefined)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, clause),
+        "rust.backend.switch-resource-scope",
+        "A switch-clause resource declaration requires an explicit block so its lexical disposal boundary is exact.",
+      ));
+      return undefined;
+    }
+    const expression = sourceExpression === undefined
+      ? undefined
+      : planExpression(sourceExpression, context);
+    if (sourceExpression !== undefined && expression === undefined) {
+      return undefined;
+    }
+    const body = planStatementSequence(
+      statements,
+      clause,
+      switchContext,
+    );
+    if (body === undefined) {
+      return undefined;
+    }
+    sections.push({
+      ...(expression === undefined
+        ? {}
+        : { expression: switchCaseComparisonExpression(expression) }),
+      body,
+    });
+  }
+
+  const fallthroughBody = (start: number): RustBlock => {
+    const statements: RustStmt[] = [];
+    for (let index = start; index < sections.length; index += 1) {
+      const section = sections[index]!;
+      statements.push(...section.body.statements);
+      if (rustBlockDefinitelyExits(section.body)) {
+        break;
+      }
+    }
+    return { statements };
+  };
+  const defaultIndex = sections.findIndex((section) => section.expression === undefined);
+  let selection: RustBlock = defaultIndex < 0
+    ? { statements: [] }
+    : fallthroughBody(defaultIndex);
+  const discriminantName = allocateRustSyntheticName(context.syntheticNames, "switch_value");
+  for (let index = sections.length - 1; index >= 0; index -= 1) {
+    const section = sections[index]!;
+    if (section.expression === undefined) {
+      continue;
+    }
+    selection = {
+      statements: [{
+        kind: "if",
+        condition: switchGuardCondition(discriminantName, section.expression),
+        then: fallthroughBody(index),
+        else: selection,
+      }],
+    };
+  }
+  if (sections.every((section) => section.expression === undefined)) {
+    const body = target.used.value
+      ? [{ kind: "scope" as const, label: target.label, body: selection }]
+      : selection.statements;
+    return [
+      { kind: "let", name: "_", mutable: false, init: discriminant },
+      ...body,
+    ];
+  }
+  return [
+    { kind: "let", name: discriminantName, mutable: false, init: discriminant },
+    {
+      kind: "scope",
+      ...(target.used.value ? { label: target.label } : {}),
+      body: selection,
+    },
+  ];
+}
+
+function switchCaseComparisonExpression(expression: RustExpr): RustExpr {
+  return expression.kind === "string-literal"
+    ? { kind: "str-literal", value: expression.value }
+    : expression;
+}
+
+function switchGuardCondition(discriminantName: string, expression: RustExpr): RustExpr {
+  const discriminant: RustExpr = { kind: "path", path: discriminantName };
+  if (expression.kind === "bool-literal") {
+    return expression.value ? discriminant : negateRustCondition(discriminant);
+  }
+  return {
+    kind: "binary",
+    operator: "==",
+    left: discriminant,
+    right: expression,
+  };
+}
+
+function planWhileStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
+  const condition = Node_Expression(context.input.ast, node);
   if (condition === undefined) {
     return undefined;
   }
@@ -490,53 +1516,243 @@ function planWhileStatement(node: Node, context: RustPlanContext): readonly Rust
   if (planned === undefined) {
     return undefined;
   }
-  const body = planEmbeddedBlock(IterationStatement_Statement(node), context);
-  return body === undefined ? undefined : [{ kind: "while", condition: planned, body }];
-}
-
-function planForStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const initializer = ForStatement_Initializer(node);
-  const condition = ForStatement_Condition(node);
-  const incrementor = ForStatement_Incrementor(node);
-  if (initializer === undefined || condition === undefined || incrementor === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.loop",
-      "For statements require initializer, condition, and incrementor.",
-    ));
+  const target = createRustLoopTarget(context, [], sourceLabel);
+  if (target === undefined) {
     return undefined;
   }
-  const initStatements = planVariableStatement(initializer, context);
-  const conditionExpr = planCondition(condition, context, "for");
-  const incrementStatements = planIncrementor(incrementor, context);
-  const body = planEmbeddedBlock(IterationStatement_Statement(node), context);
-  if (initStatements === undefined || conditionExpr === undefined || incrementStatements === undefined || body === undefined) {
-    return undefined;
-  }
-  const loopBody: RustBlock = { statements: [...body.statements, ...incrementStatements] };
-  return [{
-    kind: "scope",
-    body: {
-      statements: [
-        ...initStatements,
-        { kind: "while", condition: conditionExpr, body: loopBody },
-      ],
-    },
+  const body = planEmbeddedBlock(
+    IterationStatement_Statement(context.input.ast, node),
+    withRustControlTarget(context, target),
+  );
+  return body === undefined ? undefined : [{
+    kind: "while",
+    ...(target.used.value ? { label: target.label } : {}),
+    condition: planned,
+    body,
   }];
 }
 
-function planIncrementor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const kind = ast.kindName(node);
-  if (kind === KindPostfixUnaryExpression || kind === KindPrefixUnaryExpression) {
-    return planUpdateStatement(node, context);
+function planDoStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
+  const condition = Node_Expression(context.input.ast, node);
+  const bodyNode = DoStatement_Statement(context.input.ast, node);
+  if (condition === undefined || bodyNode === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.do-while-shape",
+      "do-while requires concrete body and condition nodes.",
+    ));
+    return undefined;
   }
-  context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, node),
-    "rust.backend.loop",
-    "For incrementors support only increment/decrement of an identifier.",
-  ));
-  return undefined;
+  const plannedCondition = planCondition(condition, context, "do-while");
+  const baseTarget = createRustLoopTarget(context, [], sourceLabel);
+  if (plannedCondition === undefined || baseTarget === undefined) {
+    return undefined;
+  }
+  const conditionExit: RustStmt = {
+    kind: "if",
+    condition: negateRustCondition(plannedCondition),
+    then: { statements: [{ kind: "break" }] },
+  };
+  const target: RustLoopTarget = {
+    ...baseTarget,
+    continuePrelude: [conditionExit],
+  };
+  const body = planEmbeddedBlock(
+    bodyNode,
+    withRustControlTarget(context, target),
+  );
+  if (body === undefined) {
+    return undefined;
+  }
+  return [{
+    kind: "loop",
+    ...(target.used.value ? { label: target.label } : {}),
+    body: rustBlockDefinitelyExits(body)
+      ? body
+      : { statements: [...body.statements, conditionExit] },
+  }];
+}
+
+function negateRustCondition(condition: RustExpr): RustExpr {
+  if (condition.kind === "unary" && condition.operator === "!") {
+    return condition.operand;
+  }
+  if (condition.kind === "binary") {
+    const inverse = condition.operator === "==" ? "!="
+      : condition.operator === "!=" ? "=="
+        : condition.operator === "<" ? ">="
+          : condition.operator === "<=" ? ">"
+            : condition.operator === ">" ? "<="
+              : condition.operator === ">=" ? "<"
+                : undefined;
+    if (inverse !== undefined) {
+      return { ...condition, operator: inverse };
+    }
+    if (condition.operator === "&&" || condition.operator === "||") {
+      return {
+        kind: "binary",
+        operator: condition.operator === "&&" ? "||" : "&&",
+        left: negateRustCondition(condition.left),
+        right: negateRustCondition(condition.right),
+      };
+    }
+  }
+  return { kind: "unary", operator: "!", operand: condition };
+}
+
+function planForStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
+  const initializer = ForStatement_Initializer(context.input.ast, node);
+  const condition = ForStatement_Condition(context.input.ast, node);
+  const incrementor = ForStatement_Incrementor(context.input.ast, node);
+  const planLoop = (loopContext: RustPlanContext): RustBlock | undefined => {
+    const conditionExpr = condition === undefined
+      ? { kind: "bool-literal" as const, value: true }
+      : planCondition(condition, loopContext, "for");
+    const incrementStatements = incrementor === undefined
+      ? []
+      : planIncrementor(incrementor, loopContext);
+    if (conditionExpr === undefined || incrementStatements === undefined) {
+      return undefined;
+    }
+    const target = createRustLoopTarget(loopContext, incrementStatements, sourceLabel);
+    if (target === undefined) {
+      return undefined;
+    }
+    const body = planEmbeddedBlock(
+      IterationStatement_Statement(loopContext.input.ast, node),
+      withRustControlTarget(loopContext, target),
+    );
+    if (body === undefined) {
+      return undefined;
+    }
+    const loopBody: RustBlock = rustBlockDefinitelyExits(body)
+      ? body
+      : { statements: [...body.statements, ...incrementStatements] };
+    return {
+      statements: [{
+        kind: "while",
+        ...(target.used.value ? { label: target.label } : {}),
+        condition: conditionExpr,
+        body: loopBody,
+      }],
+    };
+  };
+
+  if (initializer === undefined) {
+    const loop = planLoop(context);
+    return loop?.statements;
+  }
+  const declarations = collectVariableDeclarations(initializer, context);
+  const resourceDeclaration = declarations.length === 1 &&
+      (context.input.ast.variableDeclarationKind(declarations[0]) === "using" ||
+        context.input.ast.variableDeclarationKind(declarations[0]) === "await using")
+    ? declarations[0]
+    : undefined;
+  const initStatements = planVariableStatement(initializer, context);
+  if (initStatements === undefined) {
+    return undefined;
+  }
+  if (resourceDeclaration === undefined) {
+    const loop = planLoop(context);
+    return loop === undefined
+      ? undefined
+      : [{ kind: "scope", body: { statements: [...initStatements, ...loop.statements] } }];
+  }
+  const fact = resourceFactForPlanning(resourceDeclaration, context);
+  const nameNode = Node_Name(context.input.ast, resourceDeclaration);
+  const resourceName = nameNode === undefined
+    ? ""
+    : rustSourceName(context, context.input.ast.text(nameNode));
+  if (fact === undefined || !isValidRustIdentifier(resourceName)) {
+    return undefined;
+  }
+  const scope = planResourceManagedBody(
+    resourceDeclaration,
+    resourceName,
+    fact,
+    context,
+    planLoop,
+  );
+  return scope === undefined
+    ? undefined
+    : [{ kind: "scope", body: { statements: [...initStatements, scope] } }];
+}
+
+function createRustLoopTarget(
+  context: RustPlanContext,
+  continuePrelude: readonly RustStmt[],
+  sourceLabel?: string,
+): RustLoopTarget | undefined {
+  if (context.syntheticNames === undefined || context.controlFlow === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, context.sourceFile),
+      "rust.backend.loop-control",
+      "Loop lowering requires finalized hygienic names and control-flow state.",
+    ));
+    return undefined;
+  }
+  const target: RustLoopTarget = {
+    kind: "loop",
+    id: context.controlFlow.nextLoopId,
+    label: allocateRustSyntheticName(context.syntheticNames, "loop"),
+    ...(sourceLabel === undefined ? {} : { sourceLabel }),
+    ...(context.completionBoundary === undefined
+      ? {}
+      : { resourceBoundary: context.completionBoundary }),
+    used: { value: false },
+    continuePrelude,
+  };
+  context.controlFlow.nextLoopId += 1;
+  return target;
+}
+
+function createRustBreakTarget(
+  context: RustPlanContext,
+  kind: "switch" | "label",
+  sourceLabel?: string,
+): RustControlTarget | undefined {
+  if (context.syntheticNames === undefined || context.controlFlow === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, context.sourceFile),
+      "rust.backend.control-target",
+      "Labeled control flow requires finalized hygienic names and control-flow state.",
+    ));
+    return undefined;
+  }
+  const target: RustControlTarget = {
+    kind,
+    id: context.controlFlow.nextLoopId,
+    label: allocateRustSyntheticName(context.syntheticNames, kind),
+    ...(sourceLabel === undefined ? {} : { sourceLabel }),
+    ...(context.completionBoundary === undefined
+      ? {}
+      : { resourceBoundary: context.completionBoundary }),
+    used: { value: false },
+  };
+  context.controlFlow.nextLoopId += 1;
+  return target;
+}
+
+function withRustControlTarget(
+  context: RustPlanContext,
+  target: RustControlTarget,
+): RustPlanContext {
+  return {
+    ...context,
+    controlTargets: [...(context.controlTargets ?? []), target],
+  };
+}
+
+function planIncrementor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  return planExpressionAsStatement(node, context);
 }
 
 
@@ -552,8 +1768,8 @@ function planRuntimeSetStatement(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input;
-  const left = BinaryExpression_Left(expression);
-  const right = BinaryExpression_Right(expression);
+  const left = BinaryExpression_Left(context.input.ast, expression);
+  const right = BinaryExpression_Right(context.input.ast, expression);
   if (left === undefined || right === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
@@ -569,7 +1785,7 @@ function planRuntimeSetStatement(
       ? "index-set"
       : undefined;
   const indexNode = leftKind === "KindElementAccessExpression"
-    ? ElementAccessExpression_ArgumentExpression(left)
+    ? ElementAccessExpression_ArgumentExpression(context.input.ast, left)
     : undefined;
   const sourceArgumentNodes = indexNode === undefined ? [right] : [indexNode, right];
   if (!validateRustFinalizedOperationAbi(fact.abi) ||
@@ -601,9 +1817,14 @@ function planRuntimeSetStatement(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(left);
+  const receiverNode = Node_Expression(context.input.ast, left);
+  const expectedReceiverMode = fact.abi.target.form === "index"
+    ? "mut-ref"
+    : fact.abi.target.form === "receiver-method"
+      ? fact.abi.target.mutatesReceiver === true ? "mut-ref" : "ref"
+      : undefined;
   if (receiverNode === undefined || fact.abi.targetReceiver.kind !== "input" ||
-    fact.abi.targetReceiver.input.mode !== "mut-ref") {
+    expectedReceiverMode === undefined || fact.abi.targetReceiver.input.mode !== expectedReceiverMode) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
       "rust.backend.runtime-set-receiver",
@@ -682,10 +1903,14 @@ function selectedOperatorIdentityMatches(
     selected.resultType !== undefined && rustTargetTypeRefEquals(selected.resultType, resultCarrier);
 }
 
-function planForOfStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+function planForOfStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
   const { ast } = context.input;
   const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
-  if (fact === undefined || fact.kind !== "for-of") {
+  if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind === "for-in") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.loop",
@@ -704,27 +1929,39 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
     ));
     return undefined;
   }
-  const initializer = ForInOrOfStatement_Initializer(node);
+  const initializer = ForInOrOfStatement_Initializer(context.input.ast, node);
+  const declarations = initializer === undefined
+    ? []
+    : collectVariableDeclarations(initializer, context);
+  const bindingDeclaration = declarations.length === 1 ? declarations[0] : undefined;
+  const bindingNameNode = bindingDeclaration === undefined
+    ? undefined
+    : Node_Name(context.input.ast, bindingDeclaration);
+  const bindingNameKind = bindingNameNode === undefined ? "" : ast.kindName(bindingNameNode);
+  const bindingPattern = bindingNameNode !== undefined &&
+      (bindingNameKind === KindArrayBindingPattern || bindingNameKind === KindObjectBindingPattern)
+    ? bindingNameNode
+    : undefined;
   let binding = "";
-  if (initializer !== undefined) {
-    const declarations = collectVariableDeclarations(initializer, context);
-    const nameNode = declarations.length === 1 ? Node_Name(declarations[0]) : undefined;
-    binding = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? rustSourceName(context, ast.text(nameNode)) : "";
+  if (bindingNameNode !== undefined && bindingNameKind === KindIdentifier) {
+    binding = rustSourceName(context, ast.text(bindingNameNode));
+  } else if (bindingPattern !== undefined && context.syntheticNames !== undefined) {
+    binding = allocateRustSyntheticName(context.syntheticNames, "binding_element");
   }
   if (!isValidRustIdentifier(binding)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.loop",
-      "for-of bindings require a plain identifier.",
+      "for-of bindings require an exact identifier or finalized binding pattern.",
     ));
     return undefined;
   }
-  const iterableNode = Node_Expression(node);
+  const iterableNode = Node_Expression(context.input.ast, node);
   const iterable = iterableNode === undefined ? undefined : planExpression(iterableNode, context);
   if (iterable === undefined) {
     return undefined;
   }
-  const bodyNode = ForInOrOfStatement_Statement(node);
+  const bodyNode = ForInOrOfStatement_Statement(context.input.ast, node);
   if (bodyNode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -733,71 +1970,336 @@ function planForOfStatement(node: Node, context: RustPlanContext): readonly Rust
     ));
     return undefined;
   }
-  const body = planBlockLike(bodyNode, context);
-  if (body === undefined) {
+  const target = createRustLoopTarget(context, [], sourceLabel);
+  if (target === undefined) {
     return undefined;
   }
-  const iterChain: RustExpr = {
-    kind: "method-call",
-    receiver: { kind: "method-call", receiver: iterable, method: "iter", args: [] },
-    method: fact.style,
-    args: [],
-  };
-  return [{ kind: "for", binding, iterable: iterChain, body }];
-}
-
-function planSparseArrayLet(
-  statement: Node,
-  declaration: Node,
-  name: string,
-  initializer: Node,
-  fact: Extract<import("../../source/rust-facts/keys.js").RustTargetOperationFact, { kind: "array-literal" }>,
-  context: RustPlanContext,
-): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const elementType = renderRustTypeInContext(fact.elementCarrier, context);
-  const arrayType = renderRustTypeInContext(fact.resultCarrier, context);
-  if (elementType === undefined || arrayType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.js.sparse-array",
-      "Sparse array lane carrier cannot be rendered.",
+  const resourceKind = bindingDeclaration === undefined
+    ? undefined
+    : ast.variableDeclarationKind(bindingDeclaration);
+  const resourceBinding = resourceKind === "using" || resourceKind === "await using";
+  if (resourceBinding && bindingPattern !== undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, bindingPattern),
+      "rust.backend.resource-binding-pattern",
+      "Resource-managed iteration binding patterns require an exact per-binding disposal contract.",
     ));
     return undefined;
   }
-  context.usedAliases?.add("js_abi");
-  const statements: RustStmt[] = [{
-    kind: "let",
-    name,
-    mutable: true,
-    type: arrayType,
-    init: {
-      kind: "call",
-      path: "js_abi::JsArray::with_length",
-      args: [{ kind: "int-literal", text: String(fact.length) }],
-    },
-  }];
-  const elements = ast.elements(initializer);
-  for (const [index, element] of elements.entries()) {
-    if (element === undefined || ast.kindName(element) === "KindOmittedExpression") {
-      continue;
-    }
-    const planned = planExpression(element, context);
-    if (planned === undefined) {
+  const resourceFact = resourceBinding && bindingDeclaration !== undefined
+    ? resourceFactForPlanning(bindingDeclaration, context)
+    : undefined;
+  if (resourceBinding && resourceFact === undefined) {
+    return undefined;
+  }
+  let body = resourceFact === undefined || bindingDeclaration === undefined
+    ? planBlockLike(
+        bodyNode,
+        withRustControlTarget(context, target),
+      )
+    : (() => {
+        const resourceScope = planResourceManagedBody(
+          bindingDeclaration,
+          binding,
+          resourceFact,
+          context,
+          (bodyContext) => planBlockLike(
+            bodyNode,
+            withRustControlTarget(bodyContext, target),
+          ),
+        );
+        return resourceScope === undefined
+          ? undefined
+          : { statements: [resourceScope] };
+      })();
+  if (body === undefined) {
+    return undefined;
+  }
+  if (bindingPattern !== undefined) {
+    const bindings = planRustBindingPattern(
+      bindingPattern,
+      { kind: "path", path: binding },
+      fact.elementCarrier,
+      context,
+      planExpression,
+    );
+    if (bindings === undefined) {
       return undefined;
     }
-    statements.push({
-      kind: "expr",
+    body = { statements: [...bindings, ...body.statements] };
+  }
+  const bindingMutable = resourceFact !== undefined &&
+    resourceDisposalReceiverMode(resourceFact) === "mut-ref";
+  if (fact.lowering.kind === "async-generator") {
+    if (context.asyncContext !== true || context.syntheticNames === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.async-iteration-context",
+        "Async generator iteration requires a finalized async function context and hygienic local-name state.",
+      ));
+      return undefined;
+    }
+    const iteratorName = allocateRustSyntheticName(context.syntheticNames, "async_iterator");
+    const next: RustExpr = {
+      kind: "await",
       expr: {
         kind: "method-call",
-        receiver: { kind: "path", path: name },
-        method: "set",
-        args: [{ kind: "int-literal", text: String(index) }, planned],
+        receiver: { kind: "path", path: iteratorName },
+        method: "next_yield",
+        args: [],
       },
-    });
+    };
+    return [{
+      kind: "scope",
+      body: {
+        statements: [
+          { kind: "let", name: iteratorName, mutable: false, init: iterable },
+          {
+            kind: "while-let-some",
+            ...(target.used.value ? { label: target.label } : {}),
+            binding,
+            ...(bindingMutable ? { bindingMutable: true } : {}),
+            expression: next,
+            body,
+          },
+        ],
+      },
+    }];
   }
-  void statement;
-  return statements;
+  const nonConsumingIterable = iterableNode === undefined
+    ? iterable
+    : planRustNonConsumingValue(iterableNode, iterable, context);
+  if (fact.lowering.kind === "borrowed") {
+    context.usedAliases?.add("rt");
+  }
+  const targetIterable: RustExpr = fact.lowering.kind === "borrowed"
+    ? {
+        kind: "call",
+        path: `rt::iter_${fact.lowering.style}`,
+        args: [fact.lowering.input === "reference"
+          ? applyRustArgumentMode(context, nonConsumingIterable, "ref", iterableNode)
+          : nonConsumingIterable],
+      }
+    : fact.lowering.kind === "js-array"
+      ? { kind: "method-call", receiver: nonConsumingIterable, method: "iter_values", args: [] }
+      : fact.lowering.kind === "receiver-method"
+        ? { kind: "method-call", receiver: nonConsumingIterable, method: fact.lowering.name, args: [] }
+      : iterable;
+  return [{
+    kind: "for",
+    ...(target.used.value ? { label: target.label } : {}),
+    binding,
+    ...(bindingMutable ? { bindingMutable: true } : {}),
+    iterable: targetIterable,
+    body,
+  }];
+}
+
+type PlannedForInBinding =
+  | { readonly kind: "declaration"; readonly name: string; readonly mutable: boolean }
+  | { readonly kind: "assignment"; readonly name: string };
+
+function planForInStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
+  const { ast } = context.input;
+  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind !== "for-in" ||
+    (fact.lowering.kind !== "dense-index-keys" && fact.lowering.kind !== "js-array-index-keys" &&
+      fact.lowering.kind !== "static-keys")) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.for-in",
+      "for-in statements require one finalized property-key iteration policy.",
+    ));
+    return undefined;
+  }
+  const selectedIteration = context.input.facts.getSelectedTargetIteration(node);
+  if (selectedIteration === undefined || selectedIteration.operationKind !== "iteration" ||
+    selectedIteration.operationId !== fact.operationId || selectedIteration.resultType === undefined ||
+    !rustTargetTypeRefEquals(selectedIteration.resultType, fact.elementCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.for-in-selected-key",
+      "Finalized Rust property-key iteration conflicts with the TSTS-selected key carrier.",
+    ));
+    return undefined;
+  }
+  const initializer = ForInOrOfStatement_Initializer(ast, node);
+  if (initializer === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.for-in-binding",
+      "for-in requires one exact binding initializer.",
+    ));
+    return undefined;
+  }
+  const binding = planForInBinding(initializer, fact.elementCarrier, context);
+  if (binding === undefined) {
+    return undefined;
+  }
+  const expressionNode = Node_Expression(ast, node);
+  const expression = expressionNode === undefined ? undefined : planExpression(expressionNode, context);
+  const bodyNode = ForInOrOfStatement_Statement(ast, node);
+  if (expression === undefined || bodyNode === undefined || context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.for-in-shape",
+      "for-in requires exact receiver, body, and hygienic-name evidence.",
+    ));
+    return undefined;
+  }
+  const target = createRustLoopTarget(context, [], sourceLabel);
+  if (target === undefined) {
+    return undefined;
+  }
+  const body = planBlockLike(bodyNode, withRustControlTarget(context, target));
+  if (body === undefined) {
+    return undefined;
+  }
+  if (fact.lowering.kind === "dense-index-keys") {
+    const lengthName = allocateRustSyntheticName(context.syntheticNames, "for_in_length");
+    const indexName = allocateRustSyntheticName(context.syntheticNames, "for_in_index");
+    const activation = activateForInBinding(binding, {
+      kind: "method-call",
+      receiver: { kind: "path", path: indexName },
+      method: "to_string",
+      args: [],
+    });
+    return [{
+      kind: "scope",
+      body: {
+        statements: [
+          {
+            kind: "let",
+            name: lengthName,
+            mutable: false,
+            init: {
+              kind: "method-call",
+              receiver: expression,
+              method: "len",
+              args: [],
+            },
+          },
+          {
+            kind: "for",
+            ...(target.used.value ? { label: target.label } : {}),
+            binding: indexName,
+            iterable: {
+              kind: "range",
+              start: { kind: "int-literal", text: "0" },
+              end: { kind: "path", path: lengthName },
+            },
+            body: { statements: [...activation, ...body.statements] },
+          },
+        ],
+      },
+    }];
+  }
+  const keyName = binding.kind === "declaration"
+    ? binding.name
+    : allocateRustSyntheticName(context.syntheticNames, "for_in_key");
+  const activation = binding.kind === "assignment"
+    ? activateForInBinding(binding, { kind: "path", path: keyName })
+    : [];
+  const iterable: RustExpr = fact.lowering.kind === "js-array-index-keys"
+    ? {
+        kind: "method-call",
+        receiver: expression,
+        method: "enumerable_own_keys",
+        args: [],
+      }
+    : {
+        kind: "slice-literal",
+        elements: fact.lowering.keys.map((key) => ({ kind: "string-literal", value: key })),
+      };
+  return [{
+    kind: "scope",
+    body: {
+      statements: [
+        ...(fact.lowering.kind === "static-keys"
+          ? [{ kind: "let" as const, name: "_", mutable: false, init: { kind: "reference" as const, expr: expression } }]
+          : []),
+        {
+          kind: "for",
+          ...(target.used.value ? { label: target.label } : {}),
+          binding: keyName,
+          ...(binding.kind === "declaration" && binding.mutable ? { bindingMutable: true } : {}),
+          iterable,
+          body: { statements: [...activation, ...body.statements] },
+        },
+      ],
+    },
+  }];
+}
+
+function planForInBinding(
+  initializer: Node,
+  elementCarrier: TargetTypeRef,
+  context: RustPlanContext,
+): PlannedForInBinding | undefined {
+  const declarations = collectVariableDeclarations(initializer, context);
+  if (declarations.length === 1) {
+    const declaration = declarations[0]!;
+    const nameNode = Node_Name(context.input.ast, declaration);
+    const sourceName = nameNode === undefined || context.input.ast.kindName(nameNode) !== KindIdentifier
+      ? ""
+      : context.input.ast.text(nameNode);
+    const directName = rustSourceName(context, sourceName);
+    const carrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+    const declarationKind = context.input.ast.variableDeclarationKind(declaration);
+    if (!isValidRustIdentifier(directName) || carrier === undefined ||
+      !rustTargetTypeRefEquals(carrier, elementCarrier) ||
+      declarationKind === "using" || declarationKind === "await using") {
+      return rejectForInBinding(declaration, context, "for-in declarations require one plain non-resource binding with the finalized String key carrier.");
+    }
+    return {
+      kind: "declaration",
+      name: directName,
+      mutable: context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined,
+    };
+  }
+  if (context.input.ast.kindName(initializer) !== KindIdentifier) {
+    return rejectForInBinding(initializer, context, "for-in assignment targets require one exact identifier location.");
+  }
+  const sourceName = context.input.ast.text(initializer);
+  const assignmentName = rustSourceName(context, sourceName);
+  const carrier = context.input.facts.getRuntimeCarrierFact(initializer)?.carrier;
+  if (!isValidRustIdentifier(assignmentName) || carrier === undefined ||
+    !rustTargetTypeRefEquals(carrier, elementCarrier)) {
+    return rejectForInBinding(initializer, context, "for-in assignment targets require one mutable String binding with exact source identity.");
+  }
+  return { kind: "assignment", name: assignmentName };
+}
+
+function activateForInBinding(
+  binding: PlannedForInBinding,
+  value: RustExpr,
+): readonly RustStmt[] {
+  if (binding.kind === "declaration") {
+    return [{ kind: "let", name: binding.name, mutable: binding.mutable, init: value }];
+  }
+  return [{
+    kind: "assign",
+    target: { kind: "path", path: binding.name },
+    operator: "=",
+    value,
+  }];
+}
+
+function rejectForInBinding(
+  node: Node,
+  context: RustPlanContext,
+  message: string,
+): undefined {
+  context.diagnostics.push(unsupportedConstructDiagnostic(
+    diagnosticInput(context, node),
+    "rust.backend.for-in-binding",
+    message,
+  ));
+  return undefined;
 }
 
 function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -819,7 +2321,7 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
     return undefined;
   }
   const { ast } = context.input;
-  const newExpression = Node_Expression(node);
+  const newExpression = Node_Expression(context.input.ast, node);
   const arguments_ = newExpression === undefined ? [] : ast.arguments(newExpression);
   const [messageNode] = arguments_;
   if (newExpression === undefined || ast.kindName(newExpression) !== "KindNewExpression" ||
@@ -854,79 +2356,139 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
 
 function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const { ast } = context.input;
-  const tryBlock = TryStatement_TryBlock(node);
-  const catchClause = TryStatement_CatchClause(node);
-  const catchBlock = CatchClause_Block(catchClause);
-  const finallyBlock = TryStatement_FinallyBlock(node);
-  if (tryBlock === undefined || catchBlock === undefined || finallyBlock !== undefined) {
+  const tryBlock = TryStatement_TryBlock(context.input.ast, node);
+  const catchClause = TryStatement_CatchClause(context.input.ast, node);
+  const catchBlock = CatchClause_Block(context.input.ast, catchClause);
+  const finallyBlock = TryStatement_FinallyBlock(context.input.ast, node);
+  if (tryBlock === undefined || (catchBlock === undefined && finallyBlock === undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.try",
-      "try statements require a catch clause and no finally block.",
+      "try statements require a finalized body and either catch or finally clause.",
     ));
     return undefined;
   }
-  // The try body lowers into a Result-returning closure; control flow that
-  // escapes the closure is unrepresentable.
-  let escapes = false;
-  const scan = (candidate: Node): void => {
-    if (escapes) {
-      return;
-    }
-    const kind = ast.kindName(candidate);
-    // Nested functions are their own control-flow boundary.
-    if (kind === "KindArrowFunction" || kind === "KindFunctionExpression" || kind === "KindFunctionDeclaration") {
-      return;
-    }
-    if (kind === KindReturnStatement || kind === "KindBreakStatement" || kind === "KindContinueStatement") {
-      escapes = true;
-      return;
-    }
-    ast.forEachChild(candidate, (child) => {
-      if (child !== undefined) {
-        scan(child);
-      }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.try-names",
+      "Try statement lowering requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+
+  const outwardFallible = context.fallibleContext === true;
+  const bodyFallible = catchBlock !== undefined || outwardFallible;
+  const bodyBoundary = createRustCompletionBoundary(context, bodyFallible);
+  const body = planBlockLike(tryBlock, {
+    ...context,
+    completionBoundary: bodyBoundary,
+    ...(bodyFallible ? { fallibleContext: true } : {}),
+  });
+  if (body === undefined) {
+    return undefined;
+  }
+
+  let plannedCatch: Extract<RustStmt, { readonly kind: "try-scope" }>["catchClause"];
+  let catchBoundary: RustCompletionBoundary | undefined;
+  if (catchBlock !== undefined) {
+    catchBoundary = createRustCompletionBoundary(context, outwardFallible);
+    const catchBody = planBlockLike(catchBlock, {
+      ...context,
+      completionBoundary: catchBoundary,
+      ...(outwardFallible ? { fallibleContext: true } : {}),
     });
-  };
-  scan(tryBlock);
-  if (escapes) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.error.try",
-      "try blocks must not contain return, break, or continue.",
-    ));
-    return undefined;
-  }
-  const tryContext: RustPlanContext = { ...context, fallibleContext: true };
-  const body = planBlockLike(tryBlock, tryContext);
-  const catchBody = planBlockLike(catchBlock, context);
-  if (body === undefined || catchBody === undefined) {
-    return undefined;
-  }
-  const bindingNode = Node_Name(CatchClause_VariableDeclaration(catchClause));
-  const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
-  let binding = bindingSource.length === 0 ? "_" : rustSourceName(context, bindingSource);
-  if (binding !== "_") {
-    let used = false;
-    const findUse = (candidate: Node): void => {
-      if (used) {
-        return;
-      }
-      if (ast.kindName(candidate) === KindIdentifier && ast.text(candidate) === bindingSource) {
-        used = true;
-        return;
-      }
-      ast.forEachChild(candidate, (child) => {
-        if (child !== undefined) {
-          findUse(child);
-        }
-      });
-    };
-    findUse(catchBlock);
-    if (!used) {
-      binding = `_${binding}`;
+    if (catchBody === undefined) {
+      return undefined;
     }
+    const bindingNode = Node_Name(
+      context.input.ast,
+      CatchClause_VariableDeclaration(context.input.ast, catchClause),
+    );
+    const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
+    let binding = bindingSource.length === 0 ? "_" : rustSourceName(context, bindingSource);
+    if (binding !== "_") {
+      let used = false;
+      const findUse = (candidate: Node): void => {
+        if (used) {
+          return;
+        }
+        if (ast.kindName(candidate) === KindIdentifier && ast.text(candidate) === bindingSource) {
+          used = true;
+          return;
+        }
+        ast.forEachChild(candidate, (child) => {
+          if (child !== undefined) {
+            findUse(child);
+          }
+        });
+      };
+      findUse(catchBlock);
+      if (!used) {
+        binding = `_${binding}`;
+      }
+    }
+    const terminates = rustBlockDefinitelyExits(catchBody);
+    plannedCatch = {
+      binding,
+      body: terminates ? tailCompletionExits(catchBody) : catchBody,
+      fallible: outwardFallible,
+      terminates,
+    };
   }
+
+  let plannedFinally: Extract<RustStmt, { readonly kind: "try-scope" }>["finallyClause"];
+  let finallyBoundary: RustCompletionBoundary | undefined;
+  if (finallyBlock !== undefined) {
+    finallyBoundary = createRustCompletionBoundary(context, outwardFallible);
+    const finallyBody = planBlockLike(finallyBlock, {
+      ...context,
+      completionBoundary: finallyBoundary,
+      ...(outwardFallible ? { fallibleContext: true } : {}),
+    });
+    if (finallyBody === undefined) {
+      return undefined;
+    }
+    const terminates = rustBlockDefinitelyExits(finallyBody);
+    plannedFinally = {
+      body: terminates ? tailCompletionExits(finallyBody) : finallyBody,
+      fallible: outwardFallible,
+      terminates,
+    };
+  }
+
+  const bodyTerminates = rustBlockDefinitelyExits(body);
+  const terminates = plannedFinally?.terminates === true ||
+    (plannedCatch === undefined
+      ? bodyTerminates
+      : bodyTerminates && plannedCatch.terminates);
+  const boundaries = [bodyBoundary, catchBoundary, finallyBoundary]
+    .filter((boundary): boundary is RustCompletionBoundary => boundary !== undefined);
+  const dispatch = collectRustCompletionDispatch(boundaries);
   context.usedAliases?.add("rt");
-  return [{ kind: "try-catch", body, catchBinding: binding, catchBody }];
+  return [{
+    kind: "try-scope",
+    bodyName: allocateRustSyntheticName(context.syntheticNames, "try_body"),
+    flowName: allocateRustSyntheticName(context.syntheticNames, "try_flow"),
+    ...(plannedFinally === undefined
+      ? {}
+      : { finallyName: allocateRustSyntheticName(context.syntheticNames, "finally_flow") }),
+    returnType: bodyBoundary.returnType,
+    fallible: outwardFallible,
+    asynchronous: bodyBoundary.asynchronous,
+    body: bodyTerminates ? tailCompletionExits(body) : body,
+    bodyFallible,
+    bodyTerminates,
+    ...(plannedCatch === undefined ? {} : { catchClause: plannedCatch }),
+    ...(plannedFinally === undefined ? {} : { finallyClause: plannedFinally }),
+    propagate: context.completionBoundary !== undefined,
+    dispatchReturn: dispatch.dispatchReturn,
+    dispatchTargets: dispatch.dispatchTargets.map((target) => ({
+      kind: target.kind,
+      id: target.id,
+      label: target.label,
+      ...(target.kind === "loop" ? { continuePrelude: target.continuePrelude } : {}),
+    })),
+    terminates,
+  }];
 }

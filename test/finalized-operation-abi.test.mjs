@@ -11,7 +11,7 @@ import {
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
-} from "../dist/source/rust-target-types.js";
+} from "../dist/policy/equality.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
@@ -146,6 +146,283 @@ test("variadic string slices are total for empty and nonempty calls and reject o
   assert.equal(wrong, undefined);
 });
 
+test("receiver string slices preserve the exact receiver and every variadic argument", () => {
+  const form = {
+    form: "free-call-str-slice",
+    path: "js_string::concat",
+    receiverMode: "ref",
+  };
+  const pair = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: string,
+    sourceArgumentCarriers: [string, string],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const empty = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: string,
+    sourceArgumentCarriers: [],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const wrong = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: string,
+    sourceArgumentCarriers: [int32],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.equal(pair?.targetArguments[0].source.kind, "receiver");
+  assert.equal(pair?.targetArguments[1].source.kind, "argument-slice");
+  assert.deepEqual(pair?.targetArguments[1].source.sourceIndexes, [0, 1]);
+  assert.deepEqual(empty?.targetArguments[1].source.sourceIndexes, []);
+  assert.equal(wrong, undefined);
+});
+
+test("variadic value slices convert each source value exactly and always pass one slice", () => {
+  const form = {
+    form: "call-value-slice",
+    path: "node_util::format",
+    leadingArguments: [{ carrier: string, mode: "ref" }],
+    elementCarrier: jsValue,
+  };
+  const values = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string, int32, bool],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const emptyTail = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const preserved = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string, string, jsValue],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const unsupported = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string, unit],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const compileTimeElement = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string, int32],
+    compileTimeSourceArgumentIndexes: [1],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(values);
+  assert.ok(emptyTail);
+  assert.ok(preserved);
+  assert.equal(values.targetArguments[0].mode, "ref");
+  assert.deepEqual(values.targetArguments[1].source, {
+    kind: "argument-slice",
+    sourceIndexes: [1, 2],
+  });
+  assert.deepEqual(
+    values.targetArguments[1].elements.map((element) => element.conversion),
+    [
+      {
+        kind: "semantic",
+        conversion: { kind: "semantic-conversion", id: "js-value-from-i32" },
+        sourceCarrier: int32,
+        targetCarrier: jsValue,
+        fallible: false,
+      },
+      {
+        kind: "semantic",
+        conversion: { kind: "semantic-conversion", id: "js-value-from-bool" },
+        sourceCarrier: bool,
+        targetCarrier: jsValue,
+        fallible: false,
+      },
+    ],
+  );
+  assert.deepEqual(emptyTail.targetArguments[1].source, {
+    kind: "argument-slice",
+    sourceIndexes: [],
+  });
+  assert.deepEqual(emptyTail.targetArguments[1].elements, []);
+  assert.deepEqual(
+    preserved.targetArguments[1].elements.map((element) => element.conversion.kind === "semantic"
+      ? element.conversion.conversion.id
+      : element.conversion.kind),
+    ["js-value-from-string", "js-value-clone"],
+  );
+  assert.equal(unsupported, undefined);
+  assert.equal(compileTimeElement, undefined);
+});
+
+test("variadic value arrays move each source value into one owned fixed Rust array", () => {
+  const form = {
+    form: "call-value-array",
+    path: "js_abi::array_of",
+    leadingArguments: [],
+    elementCarrier: int32,
+  };
+  const pair = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [int32, int32],
+    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    isAsync: false,
+    isFallible: false,
+  });
+  const empty = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [],
+    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    isAsync: false,
+    isFallible: false,
+  });
+  const wrong = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceArgumentCarriers: [string],
+    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.deepEqual(pair?.targetArguments[0], {
+    source: { kind: "argument-array", sourceIndexes: [0, 1] },
+    elements: pair.targetArguments[0].elements,
+    elementCarrier: int32,
+    mode: "value",
+  });
+  assert.deepEqual(empty?.targetArguments[0].source, {
+    kind: "argument-array",
+    sourceIndexes: [],
+  });
+  assert.equal(wrong, undefined);
+});
+
+test("receiver value arrays move every variadic source value into one fixed Rust array", () => {
+  const receiver = {
+    kind: "target-named",
+    id: "rust.js.JsArray",
+    typeArguments: [int32],
+  };
+  const form = {
+    form: "receiver-value-array",
+    name: "push_many",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: int32,
+  };
+  const pair = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: receiver,
+    sourceArgumentCarriers: [int32, int32],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+  });
+  const empty = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: receiver,
+    sourceArgumentCarriers: [],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+  });
+  const wrong = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: receiver,
+    sourceArgumentCarriers: [string],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(pair);
+  assert.ok(empty);
+  assert.equal(pair.targetReceiver.kind, "input");
+  assert.equal(pair.targetReceiver.input.mode, "ref");
+  assert.deepEqual(pair.targetArguments[0], {
+    source: { kind: "argument-array", sourceIndexes: [0, 1] },
+    elements: pair.targetArguments[0].elements,
+    elementCarrier: int32,
+    mode: "value",
+  });
+  assert.deepEqual(
+    pair.targetArguments[0].elements.map((element) => element.source.sourceIndex),
+    [0, 1],
+  );
+  assert.deepEqual(empty.targetArguments[0].source.sourceIndexes, []);
+  assert.equal(wrong, undefined);
+  assert.equal(validateRustFinalizedOperationAbi(pair), true);
+});
+
+test("tagged value arrays select one exact constructor for every variadic source value", () => {
+  const array = { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] };
+  const tagged = { kind: "target-named", id: "rust.js.JsArrayConcatItem", typeArguments: [int32] };
+  const form = {
+    form: "receiver-tagged-array",
+    name: "concat",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: tagged,
+    alternatives: [
+      { inputCarrier: int32, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Value" },
+      { inputCarrier: array, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Array" },
+    ],
+  };
+  const selected = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: array,
+    sourceArgumentCarriers: [int32, array],
+    resultCarrier: array,
+    isAsync: false,
+    isFallible: false,
+  });
+  const unsupported = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: array,
+    sourceArgumentCarriers: [bool],
+    resultCarrier: array,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.deepEqual(
+    selected?.targetArguments[0].elements.map((element) => element.constructorPath),
+    ["js_abi::JsArrayConcatItem::Value", "js_abi::JsArrayConcatItem::Array"],
+  );
+  assert.equal(unsupported, undefined);
+});
+
 test("async ABI separates invocation, await fallibility, and post-await conversion", () => {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",
@@ -208,6 +485,36 @@ test("runtime index setters finalize mutable receiver, index conversion, and val
     ...abi,
     operationKind: "property-set",
   }), false);
+});
+
+test("runtime method setters preserve the provider-declared receiver mode", () => {
+  const shared = finalizeRustProviderOperationAbi({
+    operationKind: "property-set",
+    form: { form: "receiver-method", name: "set_value" },
+    sourceReceiverCarrier: { kind: "target-named", id: "acme.SharedCell" },
+    sourceArgumentCarriers: [int32],
+    declaredSourceArgumentCarriers: [int32],
+    resultCarrier: unit,
+    isAsync: false,
+    isFallible: false,
+  });
+  const exclusive = finalizeRustProviderOperationAbi({
+    operationKind: "property-set",
+    form: { form: "receiver-method", name: "set_value", mutatesReceiver: true },
+    sourceReceiverCarrier: { kind: "target-named", id: "acme.ExclusiveCell" },
+    sourceArgumentCarriers: [int32],
+    declaredSourceArgumentCarriers: [int32],
+    resultCarrier: unit,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(shared);
+  assert.equal(shared.targetReceiver.kind, "input");
+  assert.equal(shared.targetReceiver.input.mode, "ref");
+  assert.ok(exclusive);
+  assert.equal(exclusive.targetReceiver.kind, "input");
+  assert.equal(exclusive.targetReceiver.input.mode, "mut-ref");
 });
 
 test("finalized ABI validation is total and rejects every mutated closed-contract field", () => {
@@ -361,6 +668,7 @@ test("target type references honor optional target-specific payloads and reject 
     { kind: "function-pointer", args: sparseTypes, result: unit },
     { kind: "target-specific", target: "rust", name: "opaque", value: () => undefined },
     { kind: "target-specific", target: "", name: "opaque" },
+    { kind: "target-specific", target: "csharp", name: "opaque" },
     { kind: "target-specific", target: "rust", name: "" },
   ];
   for (const candidate of malformed) {

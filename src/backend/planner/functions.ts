@@ -5,19 +5,41 @@ import {
   Node_Type,
 } from "../../common/source-ast.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
-import type { RustBlock, RustFunctionParam, RustItem, RustStmt } from "../rust-ast/nodes.js";
+import type { RustBlock, RustExpr, RustItem, RustStmt, RustTypeParameter } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustSourceName, rustPublicName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustMutatedBindingFactKey, rustSourceParameterAbiFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
+import {
+  applyRustGenericRequirements,
+  createRustGenericRequirementSet,
+  requireRustCarrierRequirements,
+} from "./generic-requirements.js";
+import {
+  publishRustSourceCallableContract,
+} from "./source-callable-contracts.js";
+import {
+  allocateRustSyntheticName,
+  createRustSyntheticNameState,
+} from "./synthetic-names.js";
+import { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
+import { planExpression } from "./expressions.js";
+import {
+  planRustCallableParameterPrelude,
+  planRustCallableParameters,
+} from "./callable-parameters.js";
+import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
+
+export { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 
 export function planFunctionDeclaration(node: Node, outerContext: RustPlanContext): RustItem | undefined {
   const { ast } = outerContext.input;
   const isAsync = ast.hasModifierKind(node, "async");
+  const generatorFact = outerContext.input.facts.getFact(node, rustGeneratorFactKey);
   const asyncFact = outerContext.input.facts.getFact(node, rustAsyncFunctionFactKey);
-  if (isAsync && asyncFact === undefined) {
+  if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(outerContext, node),
       "rust.backend.async",
@@ -25,7 +47,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
-  const nameNode = Node_Name(node);
+  const nameNode = Node_Name(ast, node);
   const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const isExported = ast.hasModifierKind(node, "export");
   // Naming policy: user-authored names are preserved verbatim; items with
@@ -33,7 +55,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const publicName = rustPublicName(sourceName);
   const name = publicName.name;
   const nonSnakeSeen = { value: publicName.needsAllow };
-  const context: RustPlanContext = { ...outerContext, nonSnakeSeen };
+  let context: RustPlanContext = { ...outerContext, nonSnakeSeen };
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -42,87 +64,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
-  const params: RustFunctionParam[] = [];
-  let paramsFailed = false;
-  for (const parameter of ast.parameters(node)) {
-    if (parameter === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.parameter",
-        "Function declaration contains an undefined parameter slot.",
-      ));
-      paramsFailed = true;
-      continue;
-    }
-    const parameterName = rustSourceName(context, ast.text(ast.name(parameter) ?? parameter));
-    const parameterCarrier = context.input.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier;
-    const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
-    if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, parameter),
-        "rust.backend.parameter",
-        `Parameter '${parameterName}' has no supported Rust carrier fact.`,
-      ));
-      paramsFailed = true;
-      continue;
-    }
-    params.push({
-      name: parameterName,
-      type: parameterType,
-      mutable: context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
-    });
-  }
-  const returnTypeNode = Node_Type(node);
-  if (returnTypeNode === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.function",
-      "Functions require an explicit return type annotation.",
-    ));
-    return undefined;
-  }
-  const returnCarrier = asyncFact?.outputCarrier ?? context.input.facts.getRuntimeCarrierFact(returnTypeNode)?.carrier;
-  const isUnit = isRustUnitCarrier(returnCarrier);
-  const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
-  if (!isUnit && returnType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, returnTypeNode),
-      "rust.backend.function",
-      "Function return type has no supported Rust carrier fact.",
-    ));
-    return undefined;
-  }
-  const bodyNode = ast.body(node);
-  if (bodyNode === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.function",
-      "Functions require a body.",
-    ));
-    return undefined;
-  }
-  const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
-  if (fallible) {
-    context.usedAliases?.add("rt");
-  }
-  const bodyContext: RustPlanContext = {
-    ...context,
-    emittedLocalNames: new Set(params.map((param) => param.name)),
-    ...(fallible ? { fallibleContext: true } : {}),
-  };
-  const body = planBlockLike(bodyNode, bodyContext);
-  if (paramsFailed || body === undefined) {
-    return undefined;
-  }
-  if (returnType !== undefined && !rustBlockTerminates(body)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, bodyNode),
-      "rust.backend.return-flow",
-      "Value-returning functions require finalized control flow that returns or throws on every path.",
-    ));
-    return undefined;
-  }
-  const typeParams: string[] = [];
+  const typeParams: RustTypeParameter[] = [];
   for (const typeParameter of ast.typeParameters(node)) {
     if (typeParameter === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -141,20 +83,193 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       ));
       return undefined;
     }
-    typeParams.push(typeParameterName);
+    typeParams.push({ name: typeParameterName, bounds: [] });
   }
-  return {
+  const genericRequirements = createRustGenericRequirementSet(
+    typeParams.map((parameter) => parameter.name),
+  );
+  context = { ...context, genericRequirements };
+  const syntheticNames = createRustSyntheticNameState(ast, node, []);
+  const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
+    requireStatic: generatorFact !== undefined,
+  });
+  if (parameterPlan === undefined) {
+    return undefined;
+  }
+  const params = parameterPlan.params;
+  const returnTypeNode = Node_Type(ast, node);
+  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
+    context.input.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
+  const isUnit = isRustUnitCarrier(returnCarrier);
+  const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
+  if (!isUnit && returnType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, returnTypeNode ?? node),
+      "rust.backend.function",
+      "Function return type has no supported Rust carrier fact.",
+    ));
+    return undefined;
+  }
+  const bodyNode = ast.body(node);
+  if (bodyNode === undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.function",
+      "Functions require a body.",
+    ));
+    return undefined;
+  }
+  const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  if (generatorFact !== undefined && ![
+    generatorFact.yieldType,
+    generatorFact.returnType,
+    generatorFact.nextType,
+  ].every((carrier) =>
+    requireRustCarrierRequirements(carrier, ["static"], node, context))) {
+    return undefined;
+  }
+  if (generatorFact !== undefined && fallible) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.generator-fallibility",
+      "Throwing generator bodies require a closed Rust generator error protocol.",
+    ));
+    return undefined;
+  }
+  if (fallible) {
+    context.usedAliases?.add("rt");
+  }
+  const generatorControllerName = generatorFact === undefined
+    ? undefined
+    : allocateRustSyntheticName(syntheticNames, "generator");
+  const bodyReturnType = resolveRustCallableBodyReturnType(
+    returnType,
+    generatorFact,
+    context,
+  );
+  if (bodyReturnType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, returnTypeNode ?? node),
+      "rust.backend.generator-return-carrier",
+      "Generator body return type has no supported Rust carrier fact.",
+    ));
+    return undefined;
+  }
+  const bodyContext: RustPlanContext = {
+    ...context,
+    syntheticNames,
+    controlFlow: { nextLoopId: 0 },
+    functionReturnType: bodyReturnType,
+    ...(isAsync ? { asyncContext: true } : {}),
+    ...(generatorFact === undefined
+      ? {}
+      : {
+          generator: {
+            declaration: node,
+            controllerName: generatorControllerName!,
+            protocol: generatorFact,
+          },
+        }),
+    ...(fallible || generatorFact !== undefined ? { fallibleContext: true } : {}),
+  };
+  const parameterStatements = planRustCallableParameterPrelude(
+    parameterPlan,
+    bodyContext,
+    planExpression,
+  );
+  if (parameterStatements === undefined) {
+    return undefined;
+  }
+  const plannedBody = planBlockLike(bodyNode, bodyContext);
+  if (plannedBody === undefined) {
+    return undefined;
+  }
+  const body: RustBlock = {
+    statements: plannedBody.statements,
+  };
+  if (generatorFact !== undefined) {
+    if (!isRustUnitCarrier(generatorFact.returnType) && !rustBlockTerminates(body)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, bodyNode),
+        "rust.backend.generator-return-flow",
+        "Value-returning generators require finalized control flow that returns on every path.",
+      ));
+      return undefined;
+    }
+    context.usedAliases?.add("rt");
+    const finalizedTypeParams = applyRustGenericRequirements(typeParams, genericRequirements);
+    const item: Extract<RustItem, { readonly kind: "function" }> = {
+      kind: "function",
+      name,
+      visibility: isExported ? "public" : "private",
+      ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+      ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
+      params,
+      ...(returnType === undefined ? {} : { returnType }),
+      body: {
+        ...(parameterPlan.bodyInnerAttrs.length === 0
+          ? {}
+          : { innerAttrs: parameterPlan.bodyInnerAttrs }),
+        statements: [...parameterStatements, {
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: generatorFact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new",
+            args: [{
+              kind: "closure-block",
+              params: [{ name: generatorControllerName!, mutable: false }],
+              move: true,
+              async: true,
+              body: applyFallibleShape(
+                applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
+                true,
+                !isRustUnitCarrier(generatorFact.returnType),
+              ),
+            }],
+          },
+        }],
+      },
+    };
+    return publishRustSourceCallableContract(node, item, context) ? item : undefined;
+  }
+  if (returnType !== undefined && !rustBlockTerminates(body)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, bodyNode),
+      "rust.backend.return-flow",
+      "Value-returning functions require finalized control flow that returns or throws on every path.",
+    ));
+    return undefined;
+  }
+  const finalizedTypeParams = applyRustGenericRequirements(
+    typeParams,
+    genericRequirements,
+  );
+  const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
-    pub: isExported,
+    visibility: isExported ? "public" : "private",
     ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
     ...(isAsync ? { isAsync: true } : {}),
     ...(fallible ? { fallible: true } : {}),
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    ...(finalizedTypeParams.length === 0
+      ? {}
+      : { typeParams: finalizedTypeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
-    body: applyFallibleShape(applyTailReturn(body, returnType !== undefined), fallible, returnType !== undefined),
+    body: {
+      ...applyFallibleShape(
+      applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
+      fallible,
+      returnType !== undefined,
+      ),
+      ...(parameterPlan.bodyInnerAttrs.length === 0
+        ? {}
+        : { innerAttrs: parameterPlan.bodyInnerAttrs }),
+    },
   };
+  return publishRustSourceCallableContract(node, item, context)
+    ? item
+    : undefined;
 }
 
 // Fallible lowering: returns wrap Ok, tails wrap Ok, and unit bodies end
@@ -163,15 +278,18 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
   if (!fallible) {
     return body;
   }
+  const resultExpression = (expression: RustExpr): RustExpr => expression.kind === "try"
+    ? expression.expr
+    : { kind: "call", path: "Ok", args: [expression] };
   const wrap = (statement: RustStmt): RustStmt => {
     if (statement.kind === "return" && statement.expr !== undefined) {
-      return { kind: "return", expr: { kind: "call", path: "Ok", args: [statement.expr] } };
+      return { kind: "return", expr: resultExpression(statement.expr) };
     }
     if (statement.kind === "return") {
       return { kind: "return", expr: { kind: "path", path: "Ok(())" } };
     }
     if (statement.kind === "tail") {
-      return { kind: "tail", expr: { kind: "call", path: "Ok", args: [statement.expr] } };
+      return { kind: "tail", expr: resultExpression(statement.expr) };
     }
     if (statement.kind === "if") {
       return {
@@ -180,51 +298,29 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
         ...(statement.else === undefined ? {} : { else: { statements: statement.else.statements.map(wrap) } }),
       };
     }
-    if (statement.kind === "while" || statement.kind === "for") {
+    if (statement.kind === "while" || statement.kind === "for" ||
+      statement.kind === "while-let-some" || statement.kind === "if-let-some") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
     if (statement.kind === "scope") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
-    if (statement.kind === "try-catch") {
-      // The try body is its own Result closure; catch bodies run in the
-      // enclosing fallible function.
-      return { ...statement, catchBody: { statements: statement.catchBody.statements.map(wrap) } };
+    if (statement.kind === "try-scope") {
+      return statement;
     }
     return statement;
   };
   const wrapped = body.statements.map(wrap);
   const last = wrapped[wrapped.length - 1];
-  const endsWithExit = last !== undefined && (last.kind === "tail" || last.kind === "return" || last.kind === "throw");
+  const endsWithExit = last !== undefined && (
+    last.kind === "tail" ||
+    last.kind === "return" ||
+    last.kind === "throw" ||
+    (last.kind === "resource-scope" && last.terminates) ||
+    (last.kind === "try-scope" && last.terminates)
+  );
   if (!hasReturnValue && !endsWithExit) {
     wrapped.push({ kind: "tail", expr: { kind: "path", path: "Ok(())" } });
   }
-  return { statements: wrapped };
-}
-
-export function rustBlockTerminates(block: RustBlock): boolean {
-  const last = block.statements[block.statements.length - 1];
-  if (last === undefined) {
-    return false;
-  }
-  if (last.kind === "return" || last.kind === "tail" || last.kind === "throw") {
-    return true;
-  }
-  if (last.kind === "scope") {
-    return rustBlockTerminates(last.body);
-  }
-  return last.kind === "if" && last.else !== undefined &&
-    rustBlockTerminates(last.then) && rustBlockTerminates(last.else);
-}
-
-function applyTailReturn(body: RustBlock, hasReturnValue: boolean): RustBlock {
-  if (!hasReturnValue || body.statements.length === 0) {
-    return body;
-  }
-  const last = body.statements[body.statements.length - 1];
-  if (last === undefined || last.kind !== "return" || last.expr === undefined) {
-    return body;
-  }
-  const tail: RustStmt = { kind: "tail", expr: last.expr };
-  return { statements: [...body.statements.slice(0, -1), tail] };
+  return { ...body, statements: wrapped };
 }

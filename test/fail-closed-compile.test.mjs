@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustBackend } from "../dist/index.js";
-import { fakeCompileInput, fakeSourceFile, fakeStatement } from "./helpers/fake-compile-input.mjs";
+import {
+  fakeBackendContext,
+  fakeCompileInput,
+  fakeSourceFile,
+  fakeStatement,
+} from "./helpers/fake-compile-input.mjs";
 
-const backendContext = {
-  project: { entryPoint: "src/index.ts", targets: [] },
-  target: { id: "rust", options: {} },
-};
+const backendContext = fakeBackendContext();
 
 test("any source statement fails closed with a deterministic diagnostic and no artifacts", () => {
   const backend = createRustBackend(backendContext);

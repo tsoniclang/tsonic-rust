@@ -1,6 +1,7 @@
-// Fake TargetCompileInput pieces for backend tests. Only the members the
-// planner actually reads are provided; anything else throwing keeps the tests
-// honest about what the backend consumes.
+import { createRustTargetPack } from "../../dist/index.js";
+
+// Canonical TargetCompileInput fixture for planner-only tests. It supplies a
+// closed empty semantic program rather than preserving the retired flat input.
 
 export function fakeSourceFile({ fileName = "src/index.ts", text = "", statements = [] } = {}) {
   return { fileName, text, statements };
@@ -10,22 +11,32 @@ export function fakeStatement({ pos = 0, end = 0, kindName = "ExpressionStatemen
   return { pos, end, kindName };
 }
 
-export function fakeAstReader() {
+export function fakeAstReader(sourceFiles = []) {
+  const sourceFileByNode = new Map();
+  for (const sourceFile of sourceFiles) {
+    sourceFileByNode.set(sourceFile, sourceFile);
+    for (const statement of sourceFile.statements ?? []) {
+      sourceFileByNode.set(statement, sourceFile);
+    }
+  }
   return {
     statements: (sourceFile) => sourceFile.statements ?? [],
     kindName: (node) => node.kindName,
     pos: (node) => node.pos,
     end: (node) => node.end,
-    getFileName: (sourceFile) => sourceFile.fileName,
-    getSourceFile: (node) => node.sourceFile ?? node,
+    getFileName: (sourceFile) => sourceFile?.fileName ?? "",
+    getPath: (sourceFile) => sourceFile?.fileName ?? "",
+    getSourceFile: (node) => sourceFileByNode.get(node) ?? node?.sourceFile ?? node,
     getSourceText: (sourceFile) => sourceFile.text ?? "",
+    isDeclarationFile: () => false,
     forEachChild: () => {},
     hasModifierKind: () => false,
     name: () => undefined,
     parameters: () => [],
     arguments: () => [],
     body: () => undefined,
-    text: (node) => node.text ?? "",
+    text: (node) => node?.text ?? "",
+    children: () => [],
   };
 }
 
@@ -34,21 +45,53 @@ export function fakeCompileInput({
   target = { id: "rust", options: {} },
   runtimeReferences = [],
 } = {}) {
-  return {
-    program: {},
-    ast: fakeAstReader(),
-    types: {},
+  const ast = fakeAstReader(sourceFiles);
+  const sourceFacts = { getFact: () => undefined };
+  const semanticsForFile = (sourceFile) => ({
+    sourceFile,
+    getAuthoredTypeFactSubjects: () => [],
+    getSelectedFactSubjects: () => [],
+    getTypeFactSubjects: () => [],
+  });
+  const source = {
+    ast,
     sourceFiles,
-    facts: {
-      getFact: () => undefined,
-      getRuntimeCarrierFact: () => undefined,
-      getSelectedTargetCall: () => undefined,
+    sourceFacts,
+    navigation: {
+      sourceFiles,
+      sourceReferenceFor: () => undefined,
+      referenceFor: () => undefined,
+      declarationFor: () => undefined,
+      moduleDependencies: () => [],
+      moduleReferences: () => [],
+      moduleHasTopLevelAwait: () => false,
+      memberDispatch: () => undefined,
+      classConstructors: () => ({ kind: "resolved", constructors: [] }),
+      declaredHeritage: () => ({ kind: "resolved", edges: [] }),
+      declaredHeritagePath: () => ({ kind: "unrelated" }),
+      bindingWritesWithin: () => [],
+      hasReferenceOutside: () => false,
+      isProjectShape: () => false,
+      isProjectConstructibleObject: () => false,
+      isProjectDeclaration: () => false,
     },
-    analysis: {
-      getSymbolName: () => undefined,
-      getProjectSourceReferenceForNode: () => undefined,
+    semantics: {
+      includes: (sourceFile) => sourceFiles.includes(sourceFile),
+      forFile: semanticsForFile,
+      forNode: (node) => semanticsForFile(ast.getSourceFile(node)),
+      selectValueTypeRefinement: () => ({ kind: "not-project-reference" }),
     },
-    targetFacts: {},
+    documents: {
+      all: [],
+      includes: () => false,
+      forFile: () => { throw new Error("Planner-only fixture has no source document."); },
+      forNode: () => { throw new Error("Planner-only fixture has no source document."); },
+      occurrenceFor: () => { throw new Error("Planner-only fixture has no source occurrence."); },
+      lookupAuthored: () => ({ kind: "missing" }),
+    },
+  };
+  return {
+    source,
     project: { entryPoint: "src/index.ts", targets: [target] },
     target,
     runtimeReferences,
@@ -73,5 +116,16 @@ export function fakeRuntimeContributionContext({ target = { id: "rust", options:
       outputRoot: "out",
       targetOutputRoot: "out/rust",
     },
+  };
+}
+
+export function fakeBackendContext({ target = { id: "rust", options: {} } } = {}) {
+  return {
+    project: { entryPoint: "src/index.ts", targets: [target] },
+    projectDirectory: ".",
+    target,
+    targetPack: createRustTargetPack(),
+    selectedCapabilities: [],
+    selectedSurfaces: [],
   };
 }

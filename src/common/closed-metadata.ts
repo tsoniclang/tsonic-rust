@@ -23,7 +23,11 @@ function closedMetadataEqualsValidated(left: unknown, right: unknown): boolean {
 }
 
 export function snapshotClosedMetadata<T>(value: T): T {
-  return cloneClosedMetadata(value, new WeakSet<object>(), "metadata") as T;
+  return cloneClosedMetadata(value, new WeakSet<object>(), "metadata", true) as T;
+}
+
+export function materializeClosedMetadata<T>(value: T): T {
+  return cloneClosedMetadata(value, new WeakSet<object>(), "metadata", false) as T;
 }
 
 export function isClosedMetadata(value: unknown): boolean {
@@ -65,7 +69,12 @@ function validateClosedMetadata(value: unknown, active: WeakSet<object>): boolea
   }
 }
 
-function cloneClosedMetadata(value: unknown, active: WeakSet<object>, path: string): unknown {
+function cloneClosedMetadata(
+  value: unknown,
+  active: WeakSet<object>,
+  path: string,
+  freeze: boolean,
+): unknown {
   if (value === null || value === undefined || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
@@ -87,8 +96,9 @@ function cloneClosedMetadata(value: unknown, active: WeakSet<object>, path: stri
       if (!isDenseDataArray(value)) {
         throw new Error(`${path} contains a sparse, accessor-backed, or custom-property array`);
       }
-      const clone = value.map((entry, index) => cloneClosedMetadata(entry, active, `${path}[${index}]`));
-      return Object.freeze(clone);
+      const clone = value.map((entry, index) =>
+        cloneClosedMetadata(entry, active, `${path}[${index}]`, freeze));
+      return freeze ? Object.freeze(clone) : clone;
     }
     if (!isMetadataRecord(value)) {
       throw new Error(`${path} contains a non-plain metadata object`);
@@ -102,9 +112,9 @@ function cloneClosedMetadata(value: unknown, active: WeakSet<object>, path: stri
       if (descriptor === undefined || descriptor.get !== undefined || descriptor.set !== undefined) {
         throw new Error(`${path}.${key} is not a data field`);
       }
-      clone[key] = cloneClosedMetadata(descriptor.value, active, `${path}.${key}`);
+      clone[key] = cloneClosedMetadata(descriptor.value, active, `${path}.${key}`, freeze);
     }
-    return Object.freeze(clone);
+    return freeze ? Object.freeze(clone) : clone;
   } finally {
     active.delete(value);
   }

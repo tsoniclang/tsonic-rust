@@ -1,205 +1,265 @@
-import { selectedTargetSignatureFactKey } from "@tsonic/tsts";
-import type {
-  ExtensionFactSubject,
-  Node,
-  SourceFile,
-  TargetTypeRef,
-} from "@tsonic/tsts";
-import {
-  createLazyTargetSourceAnalysis,
-} from "@tsonic/target-api";
-import type {
-  TargetLazySourceAnalysis,
-  TargetSourceUseRecord,
-} from "@tsonic/target-api";
-import { isDenseDataArray } from "../../common/closed-metadata.js";
+import type { Node, Symbol } from "@tsonic/tsts";
 import {
   isRustStringCarrier,
+  rustOptionElementCarrier,
+  rustOptionTargetType,
 } from "../rust-target-types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { RustArgumentMode } from "../rust-facts/keys.js";
+import type { TargetTypeRef } from "../../policy/types.js";
 import {
   resolveRustTargetTypeRef,
+  rustParameterLaneTargetType,
 } from "./target-type-resolution.js";
 import type {
   RustTargetTypeResolutionContext,
   RustTargetTypeResolutionOptions,
 } from "./target-type-resolution.js";
+import { Node_Initializer, Node_Type } from "../../common/source-ast.js";
 
 export interface RustSourceCallableAbiResolver {
   resolveParameterAbi(
     parameter: Node,
     context: RustTargetTypeResolutionContext,
     options: RustTargetTypeResolutionOptions,
-    analysis?: TargetLazySourceAnalysis,
   ): RustSourceParameterAbi | undefined;
 }
 
 export interface RustSourceParameterAbi {
+  readonly form: "required" | "optional" | "default" | "rest";
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
 }
 
-interface CachedAnalysis {
-  readonly sourceKey: string;
-  readonly analysis: TargetLazySourceAnalysis;
-}
-
 export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiResolver {
-  const analyses = new WeakMap<object, CachedAnalysis>();
+  const cache = new WeakMap<object, RustSourceParameterAbi | null>();
+
   return {
-    resolveParameterAbi(parameter, context, options, suppliedAnalysis) {
-      const base = resolveRustTargetTypeRef(parameter, context, options);
+    resolveParameterAbi(parameter, context, options) {
+      const cached = cache.get(parameter);
+      if (cached !== undefined) {
+        return cached ?? undefined;
+      }
+      const typeNode = Node_Type(context.ast, parameter);
+      const base = typeNode === undefined
+        ? undefined
+        : resolveRustTargetTypeRef(typeNode, context, options);
       if (base === undefined) {
+        cache.set(parameter, null);
         return undefined;
       }
-      if (!isRustStringCarrier(base)) {
-        return {
-          valueCarrier: base,
-          parameterCarrier: base,
-          mode: base.kind === "pointer"
-            ? base.mutability === "mut" ? "mut-ref" : "ref"
-            : "value",
-        };
+      const declaration = context.ast.as.AsParameterDeclaration(parameter);
+      if (declaration === undefined) {
+        cache.set(parameter, null);
+        return undefined;
       }
-      const analysis = suppliedAnalysis ?? analysisFor(context);
-      const borrows = analysis !== undefined && parameterOnlyBorrowsShared(
-        parameter,
-        analysis,
-        context,
-        options,
-        new Set<object>(),
-      );
-      return borrows
+      const form = declaration.DotDotDotToken !== undefined
+        ? "rest" as const
+        : Node_Initializer(context.ast, parameter) !== undefined
+          ? "default" as const
+          : context.ast.questionToken(parameter) !== undefined
+            ? "optional" as const
+            : "required" as const;
+      const requiredParameterCarrier = form === "required" && typeNode !== undefined
+        ? rustParameterLaneTargetType(base, typeNode, context, options)
+        : undefined;
+      const abi = form === "optional"
         ? {
-            valueCarrier: base,
-            parameterCarrier: { kind: "pointer", pointee: base, mutability: "const" },
-            mode: "ref",
+            form,
+            valueCarrier: rustOptionTargetType(base),
+            parameterCarrier: rustOptionTargetType(base),
+            mode: "value" as const,
           }
-        : { valueCarrier: base, parameterCarrier: base, mode: "value" };
+        : form === "default"
+          ? {
+              form,
+              valueCarrier: base,
+              parameterCarrier: rustOptionTargetType(base),
+              mode: "value" as const,
+            }
+          : form === "rest"
+            ? {
+                form,
+                valueCarrier: base,
+                parameterCarrier: base,
+                mode: "value" as const,
+              }
+            : requiredParameterCarrier?.kind === "pointer"
+              ? {
+                  form,
+                  valueCarrier: base,
+                  parameterCarrier: requiredParameterCarrier,
+                  mode: requiredParameterCarrier.mutability === "mut"
+                    ? "mut-ref" as const
+                    : "ref" as const,
+                }
+            : !isRustStringCarrier(base)
+        ? {
+            form,
+            valueCarrier: base,
+            parameterCarrier: base,
+            mode: base.kind === "pointer"
+              ? base.mutability === "mut" ? "mut-ref" as const : "ref" as const
+              : "value" as const,
+          }
+        : parameterOnlyReadsThroughReceiver(parameter, context)
+          ? {
+              form,
+              valueCarrier: base,
+              parameterCarrier: {
+                kind: "pointer" as const,
+                pointee: base,
+                mutability: "const" as const,
+              },
+              mode: "ref" as const,
+            }
+          : { form, valueCarrier: base, parameterCarrier: base, mode: "value" as const };
+      cache.set(parameter, abi);
+      return abi;
     },
   };
-
-  function analysisFor(context: RustTargetTypeResolutionContext): TargetLazySourceAnalysis | undefined {
-    const rawSourceFiles = context.compiler.getSourceFiles();
-    if (!isDenseDataArray(rawSourceFiles) || rawSourceFiles.some((sourceFile) => sourceFile === undefined)) {
-      return undefined;
-    }
-    const sourceFiles = (rawSourceFiles as readonly SourceFile[])
-      .filter((sourceFile) => !context.compiler.ast.getFileName(sourceFile).endsWith(".d.ts"))
-      .sort((left, right) => context.compiler.ast.getFileName(left).localeCompare(context.compiler.ast.getFileName(right)));
-    const sourceKey = sourceFiles.map((sourceFile) => context.compiler.ast.getFileName(sourceFile)).join("\u0000");
-    const checkerKey = context.compiler.checker as object;
-    const cached = analyses.get(checkerKey);
-    if (cached?.sourceKey === sourceKey) {
-      return cached.analysis;
-    }
-    const analysis = createLazyTargetSourceAnalysis(
-      context.compiler.ast,
-      context.compiler.checker,
-      sourceFiles,
-    );
-    analyses.set(checkerKey, { sourceKey, analysis });
-    return analysis;
-  }
 }
 
-function parameterOnlyBorrowsShared(
+export function resolveRustContextualParameterAbi(
   parameter: Node,
-  analysis: TargetLazySourceAnalysis,
+  selectedParameterCarrier: TargetTypeRef,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
-): boolean {
-  if (resolving.has(parameter)) {
-    return false;
+): RustSourceParameterAbi | undefined {
+  const declaration = context.ast.as.AsParameterDeclaration(parameter);
+  if (declaration === undefined) {
+    return undefined;
   }
-  const { ast } = context.compiler;
+  const form = declaration.DotDotDotToken !== undefined
+    ? "rest" as const
+    : Node_Initializer(context.ast, parameter) !== undefined
+      ? "default" as const
+      : context.ast.questionToken(parameter) !== undefined
+        ? "optional" as const
+        : "required" as const;
+  const selectedValueCarrier = form === "optional"
+    ? selectedParameterCarrier
+    : form === "default"
+      ? rustOptionElementCarrier(selectedParameterCarrier)
+      : selectedParameterCarrier.kind === "pointer"
+        ? selectedParameterCarrier.pointee
+        : selectedParameterCarrier;
+  if (selectedValueCarrier === undefined) {
+    return undefined;
+  }
+  const authoredType = Node_Type(context.ast, parameter);
+  const authoredCarrier = authoredType === undefined
+    ? undefined
+    : resolveRustTargetTypeRef(authoredType, context, options);
+  const authoredExpectation = form === "optional"
+    ? rustOptionElementCarrier(selectedParameterCarrier)
+    : selectedValueCarrier;
+  if (authoredType !== undefined &&
+    (authoredCarrier === undefined || authoredExpectation === undefined ||
+      !rustTargetTypeRefEquals(authoredCarrier, authoredExpectation))) {
+    return undefined;
+  }
+  return {
+    form,
+    valueCarrier: selectedValueCarrier,
+    parameterCarrier: selectedParameterCarrier,
+    mode: selectedParameterCarrier.kind === "pointer"
+      ? selectedParameterCarrier.mutability === "mut" ? "mut-ref" : "ref"
+      : "value",
+  };
+}
+
+function parameterOnlyReadsThroughReceiver(
+  parameter: Node,
+  context: RustTargetTypeResolutionContext,
+): boolean {
+  const { ast } = context;
   const name = ast.name(parameter);
-  if (name === undefined) {
+  const declarationReference = context.source.navigation.sourceReferenceFor(name);
+  if (name === undefined || declarationReference?.declaration !== parameter) {
     return false;
   }
-  const symbol = parameterSymbolForStructuralAnalysis(parameter, name, context);
-  if (symbol === undefined) {
+  const callable = enclosingCallable(ast.parent(parameter), context);
+  const body = ast.body(callable);
+  if (body === undefined) {
     return false;
   }
-  resolving.add(parameter);
-  try {
-    const uses = analysis.usesOf(symbol).filter((use) =>
-      use.node !== name && use.occurrence !== "type" && use.occurrence !== "namespace");
-    return uses.length > 0 && uses.every((use) => useOnlyBorrowsShared(
-      use,
-      analysis,
-      context,
-      options,
-      resolving,
-    ));
-  } finally {
-    resolving.delete(parameter);
+  let found = false;
+  let valid = true;
+  const visit = (node: Node | undefined): void => {
+    if (node === undefined || !valid) {
+      return;
+    }
+    if (node !== name && referenceMatches(node, declarationReference.symbol, context)) {
+      found = true;
+      valid = referenceOnlyReadsThroughReceiver(node, context);
+      if (!valid) {
+        return;
+      }
+    }
+    ast.forEachChild(node, visit);
+  };
+  visit(body);
+  return found && valid;
+}
+
+function enclosingCallable(
+  node: Node | undefined,
+  context: RustTargetTypeResolutionContext,
+): Node | undefined {
+  const { ast } = context;
+  let current = node;
+  while (current !== undefined) {
+    if (
+      ast.is.IsFunctionDeclaration(current) ||
+      ast.is.IsMethodDeclaration(current) ||
+      ast.is.IsConstructorDeclaration(current) ||
+      ast.is.IsGetAccessorDeclaration(current) ||
+      ast.is.IsSetAccessorDeclaration(current) ||
+      ast.is.IsFunctionExpression(current) ||
+      ast.is.IsArrowFunction(current)
+    ) {
+      return current;
+    }
+    current = ast.parent(current);
   }
+  return undefined;
 }
 
-function parameterSymbolForStructuralAnalysis(
-  parameter: Node,
-  name: Node,
+function referenceMatches(
+  node: Node,
+  symbol: Symbol,
   context: RustTargetTypeResolutionContext,
-) {
-  const sourceFile = context.compiler.ast.getSourceFile(parameter);
-  return context.compiler.checker.getSymbolAtLocation(name, { sourceFile });
-}
-
-function useOnlyBorrowsShared(
-  use: TargetSourceUseRecord,
-  analysis: TargetLazySourceAnalysis,
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
 ): boolean {
-  if (use.access !== "read") {
-    return false;
-  }
-  if (use.operation === "property" || use.operation === "element") {
-    return true;
-  }
-  if (use.operation === "call" && use.kind === "property-call" && use.base !== undefined) {
-    return true;
-  }
-  if (use.operation !== "argument" || use.call === undefined || use.argumentIndex === undefined) {
-    return false;
-  }
-  const selectedDeclaration = use.selectedSignatureDeclaration;
-  if (selectedDeclaration !== undefined && isProjectSourceDeclaration(selectedDeclaration, context)) {
-    const targetParameter = context.compiler.ast.parameters(selectedDeclaration)[use.argumentIndex];
-    if (targetParameter === undefined) {
+  return context.source.navigation.sourceReferenceFor(node)?.symbol === symbol;
+}
+
+function referenceOnlyReadsThroughReceiver(
+  reference: Node,
+  context: RustTargetTypeResolutionContext,
+): boolean {
+  const { ast } = context;
+  let current = reference;
+  for (;;) {
+    const parent = ast.parent(current);
+    if (parent === undefined) {
       return false;
     }
-    const targetCarrier = resolveRustTargetTypeRef(targetParameter, context, options);
-    return isRustStringCarrier(targetCarrier) && parameterOnlyBorrowsShared(
-      targetParameter,
-      analysis,
-      context,
-      options,
-      resolving,
-    );
+    if (ast.is.IsParenthesizedExpression(parent)) {
+      const expression = ast.as.AsParenthesizedExpression(parent)?.Expression;
+      if (expression !== current) {
+        return false;
+      }
+      current = parent;
+      continue;
+    }
+    if (ast.is.IsPropertyAccessExpression(parent)) {
+      return ast.as.AsPropertyAccessExpression(parent)?.Expression === current;
+    }
+    if (ast.is.IsElementAccessExpression(parent)) {
+      return ast.as.AsElementAccessExpression(parent)?.Expression === current;
+    }
+    return false;
   }
-  const selected = context.factResolver.resolve(
-    use.call as ExtensionFactSubject,
-    selectedTargetSignatureFactKey,
-  );
-  const targetParameter = selected?.member.parameters[use.argumentIndex];
-  return targetParameter?.passingMode === "borrow-shared" &&
-    selectedParameterAcceptsString(targetParameter.type);
-}
-
-function selectedParameterAcceptsString(carrier: TargetTypeRef): boolean {
-  return isRustStringCarrier(carrier) ||
-    (carrier.kind === "pointer" && carrier.mutability !== "mut" && isRustStringCarrier(carrier.pointee));
-}
-
-function isProjectSourceDeclaration(
-  declaration: Node,
-  context: RustTargetTypeResolutionContext,
-): boolean {
-  const fileName = context.compiler.ast.getFileName(context.compiler.ast.getSourceFile(declaration));
-  return fileName.length > 0 && !fileName.endsWith(".d.ts");
 }

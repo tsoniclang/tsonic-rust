@@ -1,21 +1,64 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { TargetCompileInput, TargetDiagnostic } from "@tsonic/target-api";
+import type { TargetDiagnostic } from "@tsonic/target-api";
+import type { RustTranslationContext } from "../../translate/context.js";
+import type { RustGenericRequirementSet } from "./generic-requirements.js";
+import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
+import type { TargetTypeRef } from "../../policy/types.js";
+import type { RustSyntheticNameState } from "./synthetic-names.js";
+import type { RustBlock, RustExpr, RustType } from "../rust-ast/nodes.js";
+
+export interface RustExpressionOverride {
+  readonly expression: RustExpr;
+  readonly carrier: TargetTypeRef;
+  readonly valueForm: "value" | "shared-reference";
+}
+
+interface RustControlTargetBase {
+  readonly id: number;
+  readonly label: string;
+  readonly sourceLabel?: string;
+  readonly resourceBoundary?: RustCompletionBoundary;
+  readonly used: { value: boolean };
+}
+
+export type RustControlTarget =
+  | (RustControlTargetBase & {
+      readonly kind: "loop";
+      readonly continuePrelude: readonly import("../rust-ast/nodes.js").RustStmt[];
+    })
+  | (RustControlTargetBase & { readonly kind: "switch" | "label" });
+
+export type RustLoopTarget = Extract<RustControlTarget, { readonly kind: "loop" }>;
+
+export interface RustCompletionBoundary {
+  readonly parent?: RustCompletionBoundary;
+  readonly returnType: RustType;
+  readonly fallible: boolean;
+  readonly asynchronous: boolean;
+  readonly dispatchReturn: { value: boolean };
+  readonly dispatchTargets: Map<number, RustControlTarget>;
+}
+
+export interface RustControlFlowState {
+  nextLoopId: number;
+}
 
 export interface RustPlanContext {
-  readonly input: TargetCompileInput;
+  readonly input: RustTranslationContext;
   readonly sourceFile: SourceFile;
   readonly moduleName: string;
   readonly moduleNameByFileName: ReadonlyMap<string, string>;
   readonly diagnostics: TargetDiagnostic[];
+  readonly planBlock: (node: Node, context: RustPlanContext) => RustBlock | undefined;
   // Identifier names with a proven write (assignment or increment) in the
   // enclosing function body. `let mut` is emitted only for proven writes.
   readonly mutatedNames?: ReadonlySet<string>;
-  // Binding names already emitted in the enclosing function scope, used to
-  // diagnose same-scope collisions.
-  readonly emittedLocalNames?: Set<string>;
-  // Call nodes appearing directly under an await expression; future-carrier
-  // calls anywhere else fail closed.
-  readonly awaitedCalls?: WeakSet<object>;
+  readonly syntheticNames?: RustSyntheticNameState;
+  readonly controlFlow?: RustControlFlowState;
+  readonly controlTargets?: readonly RustControlTarget[];
+  readonly completionBoundary?: RustCompletionBoundary;
+  readonly functionReturnType?: RustType;
+  readonly asyncContext?: boolean;
   // Inside a fallible lowering (Result-returning fn body or try closure):
   // fallible calls take `?`, throws lower to Err returns.
   readonly fallibleContext?: boolean;
@@ -24,6 +67,19 @@ export interface RustPlanContext {
   readonly usedAliases?: Set<string>;
   // Per-item flag: a non-snake_case user identifier was emitted.
   readonly nonSnakeSeen?: { value: boolean };
+  // Rust-native obligations discovered while planning one generic function.
+  // The finalized signature is rendered only after the complete body has been
+  // planned, so late requirements cannot produce an invalid partial contract.
+  readonly genericRequirements?: RustGenericRequirementSet;
+  readonly generator?: {
+    readonly declaration: Node;
+    readonly controllerName: string;
+    readonly protocol: RustGeneratorFact;
+  };
+  readonly expressionOverrides?: ReadonlyMap<Node, RustExpressionOverride>;
+  readonly capturedBindingPaths?: ReadonlyMap<Node, string>;
+  readonly projectDispatchRoot?: RustExpr;
+  readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../policy/types.js").TargetTypeRef>;
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS

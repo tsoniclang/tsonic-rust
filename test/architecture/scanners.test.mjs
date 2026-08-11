@@ -63,6 +63,17 @@ test("no C# target references in Rust target code", () => {
   }
 });
 
+test("Rust target-type validation and equality have one policy owner", () => {
+  const owners = sourceFiles.filter(({ text }) =>
+    /export function (?:isRustTargetTypeRef|rustTargetTypeRefEquals)\b/u.test(text));
+  assert.deepEqual(
+    owners.map(({ path }) => path.slice(sourceRoot.length + 1)),
+    ["policy/equality.ts"],
+  );
+  const carrierHelpers = readFileSync(join(sourceRoot, "source/rust-target-types.ts"), "utf8");
+  assert.doesNotMatch(carrierHelpers, /export function (?:isRustTargetTypeRef|rustTargetTypeRefEquals)\b/u);
+});
+
 test("no embedded JS engine or runtime interpretation dependencies", () => {
   const packageJson = readFileSync(join(repositoryRoot, "package.json"), "utf8");
   const banned = /quickjs|rquickjs|boa_engine|deno_core|"v8"/iu;
@@ -97,6 +108,13 @@ test("target builds delete stale dist artifacts before compilation", () => {
   assert.match(cleaner, /rmSync\(resolve\(repositoryRoot, "dist"\), \{ recursive: true, force: true \}\)/u);
 });
 
+test("bounded tests cap and report nested Cargo parallelism", () => {
+  const runner = readFileSync(join(repositoryRoot, "scripts/test.sh"), "utf8");
+  assert.match(runner, /cargo_build_jobs="\$\{CARGO_BUILD_JOBS:-2\}"/u);
+  assert.match(runner, /export CARGO_BUILD_JOBS="\$\{cargo_build_jobs\}"/u);
+  assert.match(runner, /nested Cargo jobs: %s per Cargo invocation/u);
+});
+
 test("no product dependency on analysis files", () => {
   for (const { path, text } of sourceFiles) {
     assert.ok(!text.includes(".analysis/") && !text.includes('".analysis"'), `${path} references .analysis`);
@@ -122,29 +140,8 @@ test("no fallback source emission: backend diagnostics never coexist with artifa
 
 test("JS operation rows are unique per owner/member/kind/lane/variant", async () => {
   const source = readFileSync(join(sourceRoot, "source/rust-target-semantics/js-surface-operations.ts"), "utf8");
-  const rowPattern = /owner: "([^"]+)", member: "([^"]+)", operationKind: "([^"]+)", lane: "([^"]+)"(?:, variant: "([^"]+)")?/gu;
-  const baseCounts = new Map();
-  const seen = new Set();
-  let match;
-  while ((match = rowPattern.exec(source)) !== null) {
-    const baseKey = match.slice(1, 5).join("|");
-    const variant = match[5] ?? "";
-    const key = `${baseKey}|${variant}`;
-    assert.ok(!seen.has(key), `duplicate JS operation row: ${key}`);
-    seen.add(key);
-    baseCounts.set(baseKey, (baseCounts.get(baseKey) ?? 0) + 1);
-  }
-  for (const [baseKey, count] of baseCounts) {
-    if (count <= 1) {
-      continue;
-    }
-    const variants = [...seen]
-      .filter((key) => key.startsWith(`${baseKey}|`))
-      .map((key) => key.slice(baseKey.length + 1));
-    assert.ok(variants.every((variant) => variant.length > 0), `multi-row JS operation lacks a variant: ${baseKey}`);
-    assert.equal(new Set(variants).size, count, `duplicate JS operation variant: ${baseKey}`);
-  }
-  assert.ok(seen.size > 20, "row scan should see the operation table");
+  assert.match(source, /const jsOperationRows = defineJsOperationRows\(\[/u);
+  await import("../../dist/source/rust-target-semantics/js-surface-operations.js");
 });
 
 test("rust target product source has no NodeJS capability coupling", () => {
@@ -198,7 +195,8 @@ test("source profile identity comes from the registered compiler SourceFile, nev
   }
   const registry = readFileSync(join(sourceRoot, "source/rust-target-semantics/source-profile-registry.ts"), "utf8");
   assert.doesNotMatch(registry, /\.includes\s*\(/u);
-  assert.match(registry, /files\.size === 1 && files\.has\(sourceFile\)/u);
+  assert.match(registry, /sourceFileByProfile\.get\(profile\) === sourceFile/u);
+  assert.match(registry, /ambiguousProfiles\.add\(profile\)/u);
 });
 
 test("selected source operation identity is never reconstructed through checker queries", () => {
@@ -221,17 +219,9 @@ test("selected source operation identity is never reconstructed through checker 
   }
 
   const allowed = new Set([
-    "index.ts|resolveIdentifierCarrier|getSymbolAtLocation",
-    "index.ts|resolveIdentifierCarrier|getSymbolValueDeclaration",
-    "index.ts|resolveIdentifierCarrier|getPrimarySymbolDeclaration",
-    "index.ts|recordBindingWrite|getResolvedSymbolOrNil",
-    "index.ts|recordBindingWrite|getSymbolValueDeclaration",
-    "index.ts|recordBindingWrite|getPrimarySymbolDeclaration",
-    "index.ts|recordBindingWrite|getSymbolDeclarations",
-    "source-callable-abi.ts|parameterSymbolForStructuralAnalysis|getSymbolAtLocation",
-    "target-type-resolution.ts|resolveRustTargetTypeRef|getTypeAtLocation",
+    "target-type-resolution.ts|resolveRustTargetTypeSyntax|getAuthoredTypeFactSubjects",
     "target-type-resolution.ts|resolveRustTargetTypeSyntax|getSymbolAtLocation",
-    "target-type-resolution.ts|resolveRustTargetTypeSyntax|getPrimarySymbolDeclaration",
+    "target-type-resolution.ts|resolveSourceTypeParameter|getPrimarySymbolDeclaration",
     "target-type-resolution.ts|resolveReferencedDeclarationType|getSymbolAtLocation",
     "target-type-resolution.ts|resolveReferencedDeclarationType|getSymbolDeclarations",
     "target-type-resolution.ts|sourceParameterTypeIsReadonlyArray|getSymbolAtLocation",
@@ -240,9 +230,14 @@ test("selected source operation identity is never reconstructed through checker 
     "target-type-resolution.ts|resolveSourcePrimitive|getTypeAliasSymbol",
     "target-type-resolution.ts|resolveSourcePrimitive|getTypeSymbol",
     "target-type-resolution.ts|resolveSourcePrimitive|getSymbolDeclarations",
-    "target-type-resolution.ts|resolveProviderTypeIdentity|getSymbolDeclarations",
     "target-type-resolution.ts|resolveOwnedSourceProfileTypeName|getSymbolDeclarations",
     "target-type-resolution.ts|resolveProjectSourceCarrier|getSymbolDeclarations",
+    "target-type-resolution.ts|resolveCallableType|getCallSignaturesOfType",
+    "target-type-resolution.ts|resolveCallableType|getReturnTypeOfSignature",
+    "target-type-resolution.ts|resolveCallableType|getSignatureDeclaration",
+    "target-type-resolution.ts|resolveCallableType|getSignatureParameters",
+    "target-type-resolution.ts|resolveCallableType|getSymbolDeclarations",
+    "target-type-resolution.ts|resolveCallableType|getTypeOfSymbol",
   ]);
   const observed = new Set();
   for (const { path, text } of semanticFiles) {
@@ -255,6 +250,22 @@ test("selected source operation identity is never reconstructed through checker 
     }
   }
   assert.deepEqual([...observed].sort(), [...allowed].sort());
+});
+
+test("runtime source classification uses compiler declaration-file facts", () => {
+  for (const file of [
+    "translate/context.ts",
+    "backend/planner/rust-planner.ts",
+    "source/rust-target-semantics/index.ts",
+    "source/rust-target-semantics/operations-provider.ts",
+    "source/rust-target-semantics/selected-evidence.ts",
+    "source/rust-target-semantics/source-type-registry.ts",
+  ]) {
+    const text = readFileSync(join(sourceRoot, file), "utf8");
+    assert.doesNotMatch(text, /endsWith\(["']\.d\.ts["']\)/u, `${file} infers declaration-file status from a suffix`);
+  }
+  const context = readFileSync(join(sourceRoot, "translate/context.ts"), "utf8");
+  assert.match(context, /ast\.isDeclarationFile\(sourceFile\)/u);
 });
 
 test("project-source calls trust the exact TSTS-selected declaration rather than reconstructing alias identity", () => {
@@ -315,30 +326,34 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
   assert.match(passingGate, /missingFactDiagnostic/u);
 });
 
-test("optional chains fail closed before normal member selection", () => {
+test("optional chains consume exact TSTS evidence through one finalized Option fact", () => {
+  const contracts = readFileSync(join(sourceRoot, "policy/operations/contracts.ts"), "utf8");
+  assert.match(contracts, /readonly optionalChain: ResolvedSourceCallInfo\["optionalChain"\]/u);
+  assert.match(contracts, /readonly sourceReceiver\?: ResolvedSourceCallInfo\["sourceReceiver"\]/u);
+  assert.match(contracts, /readonly sourceReceiverType\?: Type/u);
+
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/operations-provider.ts"), "utf8");
-  const property = sourceSection(
-    semantics,
-    "function mapRustCheckedPropertyAccess(",
-    "function mapRustCheckedElementAccess(",
+  assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
+  assert.match(semantics, /selectRustOptionalChain\(\{/u);
+  assert.match(semantics, /resolveRustTargetTypeRef\(receiver\.type, context, options\)/u);
+  assert.match(semantics, /rustOptionalChainFactKey/u);
+
+  const selector = readFileSync(join(sourceRoot, "source/rust-target-semantics/optional-chains.ts"), "utf8");
+  assert.match(selector, /rustOptionElementCarrier\(sourceGuardCarrier\)/u);
+  assert.match(selector, /rustTargetTypeRefEquals\(sourceElement, selectedGuardCarrier\)/u);
+  assert.doesNotMatch(selector, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
+  assert.doesNotMatch(selector, /memberName|propertyName|sourceName|targetName/u);
+
+  const backend = readFileSync(join(sourceRoot, "backend/planner/expressions.ts"), "utf8");
+  const planner = sourceSection(
+    backend,
+    "function planOptionalChainExpression(",
+    "function planPropertyAccess(",
   );
-  const element = sourceSection(
-    semantics,
-    "function mapRustCheckedElementAccess(",
-    "function mapRustCheckedIteration(",
-  );
-  for (const [kind, section] of [["property", property], ["element", element]]) {
-    assert.match(section, /if \(request\.optionalChain === true\) \{\s*return rejectSelectedOperation\([^;]+"RUST_OPTIONAL_CHAIN_UNSUPPORTED"/su, `${kind} optional chains must reject`);
-    assert.ok(
-      section.indexOf("request.optionalChain") < section.indexOf("resolveSelectedProviderDeclaration"),
-      `${kind} optional chains must reject before provider selection`,
-    );
-  }
-  for (const { path, text } of sourceFiles) {
-    if (path.includes("/backend/")) {
-      assert.doesNotMatch(text, /optionalChain/u, `${path} infers optional-chain semantics in the backend`);
-    }
-  }
+  assert.match(planner, /getFact\(node, rustOptionalChainFactKey\)/u);
+  assert.match(planner, /planExpression\(fact\.guard, context\)/u);
+  assert.match(planner, /overrides\.set\(fact\.guard/u);
+  assert.doesNotMatch(planner, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
 });
 
 test("plain identifier binding cannot become a provider-value identity workaround", () => {
@@ -420,7 +435,7 @@ test("operation target shape and source-call effects have one finalized owner", 
   const statements = readFileSync(join(sourceRoot, "backend/planner/statements.ts"), "utf8");
   const factUnion = sourceSection(keys, "export type RustTargetOperationFact =", "export const rustTargetOperationFactKey");
   const providerFact = sourceSection(factUnion, 'readonly kind: "provider-operation";', 'readonly kind: "array-literal";');
-  const runtimeSetFact = sourceSection(factUnion, 'readonly kind: "runtime-set";', 'readonly kind: "for-of";');
+  const runtimeSetFact = sourceSection(factUnion, 'readonly kind: "runtime-set";', 'readonly kind: "iteration";');
 
   assert.match(abi, /readonly operationKind: RustFinalizedOperationKind/u);
   assert.match(abi, /readonly target: RustProviderOperationForm/u);
@@ -446,7 +461,7 @@ test("call-argument conversion consumes the checked expression carrier, not a se
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/operations-provider.ts"), "utf8");
   const conversion = sourceSection(
     semantics,
-    "function mapRustCheckedConversion(",
+    "export function selectRustCheckedConversion(",
     "function targetTypeContainsSelectedParameter(",
   );
   const callArgument = conversion.slice(0, conversion.indexOf("const targetCarrier = resolveRustTargetTypeRef(request.explicitTargetTypeNode"));
@@ -458,8 +473,14 @@ test("call-argument conversion consumes the checked expression carrier, not a se
 test("backend assignment and nullish checks consume finalized fact details", () => {
   const statements = readFileSync(join(sourceRoot, "backend/planner/statements.ts"), "utf8");
   const expressions = readFileSync(join(sourceRoot, "backend/planner/expressions.ts"), "utf8");
-  assert.match(statements, /runtimeSet\.kind !== "operator-token" \|\| runtimeSet\.operator !== "="/u);
-  assert.match(statements, /selectedOperatorMatches\(expression, runtimeSet, context\)/u);
+  const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/index.ts"), "utf8");
+  const operators = readFileSync(join(sourceRoot, "source/rust-target-semantics/operator-rules.ts"), "utf8");
+  assert.match(statements, /assignment === undefined \|\| assignment\.kind !== "operator-token"/u);
+  assert.match(statements, /selectedOperatorMatches\(expression, assignment, context\)/u);
+  assert.doesNotMatch(statements, /sourceReferenceFor|selectRustEquivalentAssignment/u);
+  assert.match(semantics, /targetReference\.symbol !== valueReference\.symbol/u);
+  assert.match(semantics, /targetReference\.declaration !== valueReference\.declaration/u);
+  assert.match(operators, /export function selectRustEquivalentAssignment\(/u);
   assert.match(expressions, /fact\.optionOperand === "left" \? leftNode : rightNode/u);
   assert.doesNotMatch(expressions, /getRuntimeCarrierFact\(leftNode\)/u);
 });
@@ -496,7 +517,7 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
   const declarations = readFileSync(join(sourceRoot, "backend/planner/declarations-nominal.ts"), "utf8");
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/index.ts"), "utf8");
   assert.match(expressions, /Fixed-array literal contains a missing or omitted element slot/u);
-  assert.match(expressions, /Arrow function contains an undefined parameter slot/u);
+  assert.match(expressions, /Callable expression contains an undefined parameter slot/u);
   assert.match(declarations, /Constructor body contains an undefined statement slot/u);
   assert.match(declarations, /Enum declaration contains an undefined member slot/u);
   assert.match(declarations, /Interface declaration contains an undefined member slot/u);
@@ -519,12 +540,12 @@ test("project-source backend calls require the exact finalized selected member A
   assert.match(selectedGate, /member\.id === fact\.operationId/u);
   assert.match(selectedGate, /member\.kind === expectedKind/u);
   assert.match(selectedGate, /member\.targetName === expectedTargetName/u);
-  assert.match(selectedGate, /member\.parameters\.length === fact\.parameterCarriers\.length/u);
+  assert.match(selectedGate, /member\.parameters\.length === fact\.parameters\.length/u);
   assert.match(selectedGate, /sourceSelectedMethodTypeArguments/u);
   assert.match(selectedGate, /substituteRustTargetTypeParameters\(parameter\.type, substitutions\)/u);
   assert.match(selectedGate, /fact\.targetTypeArguments/u);
-  assert.match(selectedGate, /fact\.parameterCarriers\[index\]/u);
-  assert.match(selectedGate, /mode === fact\.argumentModes\[index\]/u);
+  assert.match(selectedGate, /fact\.parameters\[index\]\?\.parameterCarrier/u);
+  assert.match(selectedGate, /mode === fact\.parameters\[index\]\?\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);
 });
 
@@ -536,11 +557,13 @@ test("provider operation metadata contains only structured Rust forms", () => {
   }
 });
 
-test("backend Rust AST has no unchecked cast expression lane", () => {
+test("backend Rust AST exposes only fact-backed primitive numeric casts", () => {
   const nodes = readFileSync(join(sourceRoot, "backend/rust-ast/nodes.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/rust-printer.ts"), "utf8");
   assert.doesNotMatch(nodes, /readonly kind: "cast"/u);
-  assert.doesNotMatch(printer, /\sas\s\$\{target\}/u);
+  assert.match(nodes, /readonly kind: "numeric-cast"; readonly expression: RustExpr; readonly target: RustPrimitiveTypeName/u);
+  assert.match(printer, /case "numeric-cast"/u);
+  assert.doesNotMatch(nodes, /numeric-cast[^\n]+target: string/u);
 });
 
 test("value conversions use target-owned semantic ids, never arbitrary helper paths", () => {

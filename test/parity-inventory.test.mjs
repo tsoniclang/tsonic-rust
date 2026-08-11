@@ -15,7 +15,7 @@ test("inventory wording is timeless", () => {
 });
 
 test("implemented row members exist in the operation tables", () => {
-  const members = ["findLastIndex", "symmetricDifference", "isDisjointFrom", "matchAll", "exec", "lastIndex", "toJSON", "parse", "UTC"];
+  const members = ["findLastIndex", "symmetricDifference", "isDisjointFrom", "matchAll", "exec", "lastIndex", "toJSON", "parse", "UTC", "parseInt", "toFixed"];
   for (const member of members) {
     assert.ok(rows.includes(`member: "${member}"`), member);
   }

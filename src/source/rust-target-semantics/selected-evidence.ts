@@ -3,13 +3,13 @@ import {
 } from "@tsonic/tsts";
 import type {
   ExtensionFactSubject,
-  ExtensionObservationContext,
   Node,
   ProviderDeclarationIdentity,
-  TargetTypeRef,
+  ProviderMemberKey,
+  Symbol,
 } from "@tsonic/tsts";
-import { asSourceNode } from "../../common/source-ast.js";
-import { rustTargetTypeRefEquals } from "../rust-target-types.js";
+import type { RustSourcePolicyContext } from "../../policy/context.js";
+import { rustPolicyNode } from "../../policy/context.js";
 import type { RustSourceProfileRegistry } from "./source-profile-registry.js";
 
 export interface RustSelectedSourceMemberIdentity {
@@ -19,45 +19,61 @@ export interface RustSelectedSourceMemberIdentity {
   readonly declaration: Node;
 }
 
+export interface RustSelectedSourceMemberSet {
+  readonly profile: RustSelectedSourceMemberIdentity["profile"];
+  readonly members: readonly RustSelectedSourceMemberIdentity[];
+}
+
 export type RustSelectedProviderDeclarationResolution =
   | { readonly kind: "missing" }
   | { readonly kind: "selected"; readonly identity: ProviderDeclarationIdentity }
   | { readonly kind: "conflict"; readonly identities: readonly ProviderDeclarationIdentity[] };
 
+export interface RustProviderDeclarationCorroboration {
+  readonly subject: ExtensionFactSubject | undefined;
+  readonly precision: "exact" | "declaration";
+}
+
 export function resolveSelectedProviderDeclaration(
-  context: ExtensionObservationContext,
+  context: RustSourcePolicyContext,
   selectedSubject: ExtensionFactSubject | undefined,
-  corroboratingSubjects: readonly (ExtensionFactSubject | undefined)[] = [],
+  corroborations: readonly RustProviderDeclarationCorroboration[] = [],
 ): RustSelectedProviderDeclarationResolution {
   if (selectedSubject === undefined) {
     return { kind: "missing" };
   }
-  const selectedFact = context.factResolver.resolve(selectedSubject, providerVirtualDeclarationFactKey);
+  const selectedFact = context.facts.get(selectedSubject, providerVirtualDeclarationFactKey);
   if (selectedFact === undefined) {
     return { kind: "missing" };
   }
   if (!providerDeclarationIdentityIsClosed(selectedFact)) {
     return { kind: "conflict", identities: [selectedFact] };
   }
-  const identities: ProviderDeclarationIdentity[] = [];
+  const identities: ProviderDeclarationIdentity[] = [selectedFact];
   let selected: ProviderDeclarationIdentity = selectedFact;
-  identities.push(selectedFact);
-  for (const subject of corroboratingSubjects) {
-    if (subject === undefined) {
-      continue;
-    }
-    const fact = context.factResolver.resolve(subject, providerVirtualDeclarationFactKey);
+  for (const corroboration of corroborations) {
+    const fact = context.facts.get(corroboration.subject, providerVirtualDeclarationFactKey);
     if (fact === undefined) {
       continue;
     }
     identities.push(fact);
-    const merged = mergeProviderDeclarationIdentities(selected, fact);
+    const candidate = corroboration.precision === "declaration"
+      ? providerDeclarationIdentityWithoutSignature(fact)
+      : fact;
+    const merged = mergeProviderDeclarationIdentities(selected, candidate);
     if (merged === undefined) {
       return { kind: "conflict", identities };
     }
     selected = merged;
   }
   return { kind: "selected", identity: selected };
+}
+
+function providerDeclarationIdentityWithoutSignature(
+  identity: ProviderDeclarationIdentity,
+): ProviderDeclarationIdentity {
+  const { signatureId: _signatureId, ...declarationIdentity } = identity;
+  return declarationIdentity;
 }
 
 export function mergeProviderDeclarationIdentities(
@@ -74,18 +90,25 @@ export function mergeProviderDeclarationIdentities(
     return undefined;
   }
   const providerVersion = mergeOptionalIdentityValue(left.providerVersion, right.providerVersion);
+  const artifactFileName = mergeOptionalIdentityValue(left.artifactFileName, right.artifactFileName);
   const exportName = mergeOptionalIdentityValue(left.exportName, right.exportName);
   const exportId = mergeOptionalIdentityValue(left.exportId, right.exportId);
   const memberName = mergeOptionalIdentityValue(left.memberName, right.memberName);
   const memberId = mergeOptionalIdentityValue(left.memberId, right.memberId);
   const memberStatic = mergeOptionalIdentityValue(left.memberStatic, right.memberStatic);
   const signatureId = mergeOptionalIdentityValue(left.signatureId, right.signatureId);
-  if ([providerVersion, exportName, exportId, memberName, memberId, memberStatic, signatureId]
-    .some((value) => value === identityConflict)) {
-    return undefined;
-  }
-  const targetIdentity = mergeTargetIdentity(left.targetIdentity, right.targetIdentity);
-  if (targetIdentity === identityConflict) {
+  const memberKey = mergeMemberKey(left.memberKey, right.memberKey);
+  if (
+    providerVersion === identityConflict ||
+    artifactFileName === identityConflict ||
+    exportName === identityConflict ||
+    exportId === identityConflict ||
+    memberName === identityConflict ||
+    memberId === identityConflict ||
+    memberStatic === identityConflict ||
+    signatureId === identityConflict ||
+    memberKey === identityConflict
+  ) {
     return undefined;
   }
   return {
@@ -93,17 +116,15 @@ export function mergeProviderDeclarationIdentities(
     providerModuleId: left.providerModuleId,
     moduleSpecifier: left.moduleSpecifier,
     ...(providerVersion === undefined ? {} : { providerVersion }),
-    ...(left.virtualFileName === undefined && right.virtualFileName === undefined
-      ? {}
-      : { virtualFileName: left.virtualFileName ?? right.virtualFileName }),
+    ...(artifactFileName === undefined ? {} : { artifactFileName }),
     ...(exportName === undefined ? {} : { exportName }),
     ...(exportId === undefined ? {} : { exportId }),
     ...(memberName === undefined ? {} : { memberName }),
+    ...(memberKey === undefined ? {} : { memberKey }),
     ...(memberId === undefined ? {} : { memberId }),
     ...(memberStatic === undefined ? {} : { memberStatic }),
     ...(signatureId === undefined ? {} : { signatureId }),
-    ...(targetIdentity === undefined ? {} : { targetIdentity }),
-  } as ProviderDeclarationIdentity;
+  };
 }
 
 function providerDeclarationIdentityIsClosed(identity: ProviderDeclarationIdentity): boolean {
@@ -119,7 +140,7 @@ function identityLevelCoordinatesOverlap(
 ): boolean {
   const keys = level === "export"
     ? ["exportId", "exportName"] as const
-    : ["memberId", "memberName"] as const;
+    : ["memberId", "memberName", "memberKey"] as const;
   const leftHasCoordinate = keys.some((key) => left[key] !== undefined);
   const rightHasCoordinate = keys.some((key) => right[key] !== undefined);
   if (!leftHasCoordinate || !rightHasCoordinate) {
@@ -139,17 +160,20 @@ function mergeOptionalIdentityValue<T extends string | boolean>(
     : left ?? right;
 }
 
-function mergeTargetIdentity(
-  left: TargetTypeRef | undefined,
-  right: TargetTypeRef | undefined,
-): TargetTypeRef | undefined | typeof identityConflict {
-  return left !== undefined && right !== undefined && !rustTargetTypeRefEquals(left, right)
-    ? identityConflict
-    : left ?? right;
+function mergeMemberKey(
+  left: ProviderMemberKey | undefined,
+  right: ProviderMemberKey | undefined,
+): ProviderMemberKey | undefined | typeof identityConflict {
+  if (left === undefined || right === undefined) {
+    return left ?? right;
+  }
+  return left.kind === right.kind && left.name === right.name
+    ? left
+    : identityConflict;
 }
 
 export function resolveSelectedJsSourceMember(
-  context: ExtensionObservationContext,
+  context: RustSourcePolicyContext,
   declarationSubject: ExtensionFactSubject | undefined,
   sourceProfiles: RustSourceProfileRegistry,
 ): RustSelectedSourceMemberIdentity | undefined {
@@ -158,64 +182,108 @@ export function resolveSelectedJsSourceMember(
 }
 
 export function resolveSelectedSourceProfileMember(
-  context: ExtensionObservationContext,
+  context: RustSourcePolicyContext,
   declarationSubject: ExtensionFactSubject | undefined,
   sourceProfiles: RustSourceProfileRegistry,
 ): RustSelectedSourceMemberIdentity | undefined {
-  const declaration = asNode(declarationSubject, context);
+  const declaration = rustPolicyNode(context, declarationSubject);
   const profile = declaration === undefined
     ? undefined
-    : sourceProfiles.profileForNode(declaration, context.compiler.ast);
+    : sourceProfiles.profileForNode(declaration, context.ast);
   if (declaration === undefined || profile === undefined) {
     return undefined;
   }
-  const { ast } = context.compiler;
-  let owner = ast.parent(declaration);
-  while (owner !== undefined && !ast.is.IsInterfaceDeclaration(owner)) {
-    owner = ast.parent(owner);
+  if (context.ast.is.IsFunctionDeclaration(declaration)) {
+    const memberName = context.ast.text(context.ast.name(declaration));
+    return memberName.length === 0
+      ? undefined
+      : { profile, ownerName: "Global", memberName, declaration };
+  }
+  let owner = context.ast.parent(declaration);
+  while (owner !== undefined && !context.ast.is.IsInterfaceDeclaration(owner)) {
+    owner = context.ast.parent(owner);
   }
   if (owner === undefined) {
     return undefined;
   }
-  const ownerName = ast.text(ast.name(owner));
-  const memberName = ast.is.IsIndexSignatureDeclaration(declaration)
+  const ownerName = context.ast.text(context.ast.name(owner));
+  const memberName = context.ast.is.IsIndexSignatureDeclaration(declaration)
     ? "index"
-    : ast.is.IsConstructSignatureDeclaration(declaration)
+    : context.ast.is.IsConstructSignatureDeclaration(declaration)
       ? "constructor"
-      : ast.text(ast.name(declaration));
+      : context.ast.text(context.ast.name(declaration));
   return ownerName.length > 0 && memberName.length > 0
     ? { profile, ownerName, memberName, declaration }
     : undefined;
 }
 
+export function resolveSelectedSourceProfilePropertyMembers(
+  context: RustSourcePolicyContext,
+  expressionSubject: ExtensionFactSubject | undefined,
+  selectedSymbol: Symbol | undefined,
+  selectedDeclaration: Node | undefined,
+  sourceProfiles: RustSourceProfileRegistry,
+): RustSelectedSourceMemberSet | undefined {
+  if (selectedDeclaration !== undefined) {
+    const selected = resolveSelectedSourceProfileMember(
+      context,
+      selectedDeclaration,
+      sourceProfiles,
+    );
+    return selected === undefined
+      ? undefined
+      : { profile: selected.profile, members: Object.freeze([selected]) };
+  }
+  const expression = rustPolicyNode(context, expressionSubject);
+  if (expression === undefined || selectedSymbol === undefined) {
+    return undefined;
+  }
+  const declarations = context.semanticsFor(expression)
+    .getSymbolDeclarations(selectedSymbol);
+  const members = declarations.map((declaration) =>
+    resolveSelectedSourceProfileMember(context, declaration, sourceProfiles)
+  );
+  const first = members[0];
+  if (first === undefined || members.some((member) =>
+    member === undefined || member.profile !== first.profile)) {
+    return undefined;
+  }
+  return {
+    profile: first.profile,
+    members: Object.freeze(
+      members as readonly RustSelectedSourceMemberIdentity[],
+    ),
+  };
+}
+
 export function resolveSelectedJsSourceExportName(
-  context: ExtensionObservationContext,
+  context: RustSourcePolicyContext,
   declarationSubject: ExtensionFactSubject | undefined,
   sourceProfiles: RustSourceProfileRegistry,
 ): string | undefined {
-  const declaration = asNode(declarationSubject, context);
-  if (declaration === undefined || sourceProfiles.profileForNode(declaration, context.compiler.ast) !== "js") {
+  const declaration = rustPolicyNode(context, declarationSubject);
+  if (declaration === undefined || sourceProfiles.profileForNode(declaration, context.ast) !== "js") {
     return undefined;
   }
-  const name = context.compiler.ast.text(context.compiler.ast.name(declaration));
+  const name = context.ast.text(context.ast.name(declaration));
   return name.length === 0 ? undefined : name;
 }
 
 export function isProjectSourceDeclaration(
-  context: ExtensionObservationContext,
+  context: RustSourcePolicyContext,
   declarationSubject: ExtensionFactSubject | undefined,
 ): declarationSubject is Node {
-  const declaration = asNode(declarationSubject, context);
+  const declaration = rustPolicyNode(context, declarationSubject);
   if (declaration === undefined) {
     return false;
   }
-  const fileName = context.compiler.ast.getFileName(context.compiler.ast.getSourceFile(declaration));
-  return fileName.length > 0 && !fileName.endsWith(".d.ts");
+  const sourceFile = context.ast.getSourceFile(declaration);
+  return context.ast.getFileName(sourceFile).length > 0 && !context.ast.isDeclarationFile(sourceFile);
 }
 
 export function asNode(
   subject: ExtensionFactSubject | undefined,
-  context: Pick<ExtensionObservationContext, "compiler">,
+  context: RustSourcePolicyContext,
 ): Node | undefined {
-  return asSourceNode(subject, context.compiler.ast);
+  return rustPolicyNode(context, subject);
 }

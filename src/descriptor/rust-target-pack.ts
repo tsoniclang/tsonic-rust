@@ -13,7 +13,6 @@ import type {
   TargetToolchainContext,
 } from "@tsonic/target-api";
 import { createRustBackend } from "../backend/rust-backend.js";
-import { createRustTargetSemanticsExtension } from "../source/rust-target-semantics/index.js";
 import {
   cargoCrateAttributeName,
   cargoCratesIoRegistry,
@@ -55,10 +54,7 @@ export function createRustTargetPack(): TargetPack {
         validateRustTargetOptions(context.target);
         return {
           semanticsModules: rustSourceSemanticsModules(),
-          extensions: [
-            createRustSourceSemanticsExtension(),
-            createRustTargetSemanticsExtension(context),
-          ],
+          extensions: [createRustSourceSemanticsExtension()],
         };
       },
       runtimeContributions(context: TargetRuntimeContributionContext): TargetRuntimeContributions {

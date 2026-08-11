@@ -1,26 +1,43 @@
-import type { TargetTypeRef } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../policy/types.js";
 import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
-import { rustSourceTypeCarrierValue } from "../../source/rust-facts/keys.js";
+import { rustSourceTypeCarrierValue } from "../../source/rust-target-types.js";
 import {
+  rustBigIntTargetId,
   rustJsArrayTargetId,
+  rustJsArrayConcatItemTargetId,
   rustJsDateTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsValueTargetId,
+  rustLocationTargetId,
+  rustCallableTargetId,
+  rustGeneratorTargetId,
+  rustAsyncGeneratorTargetId,
+  rustIteratorResultTargetId,
+  rustUndefinedTargetId,
   rustFixedArrayCarrierValue,
   rustOptionTargetId,
   rustNamedTypeCarrierValue,
   rustPrimitiveTypeName,
+  substituteRustTargetTypeParameters,
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,
 } from "../../source/rust-target-types.js";
 
 const namedCarrierPaths: Readonly<Record<string, string>> = {
+  [rustBigIntTargetId]: "rt::BigInt",
   [rustOptionTargetId]: "Option",
+  [rustLocationTargetId]: "rt::Location",
+  [rustCallableTargetId]: "rt::Callable",
+  [rustGeneratorTargetId]: "rt::Generator",
+  [rustAsyncGeneratorTargetId]: "rt::AsyncGenerator",
+  [rustIteratorResultTargetId]: "rt::IteratorResult",
+  [rustUndefinedTargetId]: "rt::Undefined",
   [rustJsValueTargetId]: "js_abi::JsValue",
   [rustJsArrayTargetId]: "js_abi::JsArray",
+  [rustJsArrayConcatItemTargetId]: "js_abi::JsArrayConcatItem",
   [rustJsMapTargetId]: "js_abi::JsMap",
   [rustJsSetTargetId]: "js_abi::JsSet",
   [rustJsDateTargetId]: "js_abi::JsDate",
@@ -75,6 +92,19 @@ export function rustTypeFromCarrier(
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
   }
+  if (carrier.kind === "function-pointer") {
+    const parameters = carrier.args.map((argument) =>
+      rustTypeFromCarrier(argument, resolveSourceTypePath));
+    const result = rustTypeFromCarrier(carrier.result, resolveSourceTypePath);
+    return result === undefined || parameters.some((parameter) => parameter === undefined)
+      ? undefined
+      : {
+          kind: "function-pointer",
+          parameters: parameters as RustType[],
+          result,
+          ...(carrier.abi === undefined ? {} : { abi: carrier.abi }),
+        };
+  }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   if (fixedArray !== undefined) {
     const element = rustTypeFromCarrier(fixedArray.element, resolveSourceTypePath);
@@ -110,7 +140,17 @@ export function rustTypeFromCarrier(
     const value = rustSourceTypeCarrierValue(carrier);
     if (value !== undefined) {
       const path = resolveSourceTypePath(value);
-      return path === undefined ? undefined : { kind: "named", path };
+      const typeArguments = value.typeArguments.map((argument) =>
+        rustTypeFromCarrier(argument, resolveSourceTypePath));
+      return path === undefined || typeArguments.some((argument) => argument === undefined)
+        ? undefined
+        : {
+            kind: "named",
+            path,
+            ...(typeArguments.length === 0
+              ? {}
+              : { typeArguments: typeArguments as RustType[] }),
+          };
     }
   }
   return undefined;
@@ -126,9 +166,13 @@ export function rustTypeFromCarrierInContext(
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
     readonly usedAliases?: Set<string>;
+    readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
   },
 ): RustType | undefined {
-  const rendered = rustTypeFromCarrier(carrier, (value) => {
+  const selectedCarrier = carrier === undefined || context.typeParameterSubstitutions === undefined
+    ? carrier
+    : substituteRustTargetTypeParameters(carrier, context.typeParameterSubstitutions);
+  const rendered = rustTypeFromCarrier(selectedCarrier, (value) => {
     const moduleName = context.moduleNameByFileName.get(value.fileName);
     if (moduleName === undefined) {
       return undefined;
@@ -157,6 +201,17 @@ export function collectAliasesFromRustType(
   }
   if (type.kind === "slice-ref") {
     collectAliasesFromRustType(type.element, register);
+    return;
+  }
+  if (type.kind === "reference") {
+    collectAliasesFromRustType(type.referent, register);
+    return;
+  }
+  if (type.kind === "function-pointer") {
+    for (const parameter of type.parameters) {
+      collectAliasesFromRustType(parameter, register);
+    }
+    collectAliasesFromRustType(type.result, register);
     return;
   }
   if (type.kind === "fixed-array") {

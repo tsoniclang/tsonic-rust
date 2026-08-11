@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   collectRustProviderOperationRows,
+  collectRustProviderSemantics,
   createRustProviderPackage,
-  createRustProviderPackageBindingProvider,
+  createRustProviderPackageSourceProvider,
   rustInt32ToFloat64ValueConversion,
 } from "../dist/index.js";
 
@@ -41,6 +42,17 @@ function definition(overrides = {}) {
     }],
     crates: [],
     ...overrides,
+  };
+}
+
+function providerContext(selectedCapabilities) {
+  return {
+    project: { entryPoint: "src/index.ts", targets: [{ id: "rust" }] },
+    projectDirectory: "/src",
+    target: { id: "rust", options: {} },
+    targetPack: { id: "rust" },
+    selectedCapabilities,
+    selectedSurfaces: [],
   };
 }
 
@@ -187,11 +199,6 @@ test("provider operation carriers are closed and renderable", () => {
       carrier: { kind: "array", element: int32Carrier },
       cast: true,
       pattern: /resultConversion\.target does not match the selected operation result carrier/u,
-    },
-    {
-      label: "unsupported function-pointer carrier",
-      carrier: { kind: "function-pointer", args: [], result: int32Carrier },
-      pattern: /unsupported Rust carrier kind 'function-pointer'/u,
     },
   ];
 
@@ -405,6 +412,178 @@ test("provider operation variants and constants reject malformed runtime metadat
   );
 });
 
+test("generic value-slice forms require closed leading and element carriers", () => {
+  const exported = functionExport("@acme/validation");
+  exported.signatures[0].parameters = [{ name: "leading", type: { kind: "number" } }];
+  const withOperations = (operations) => definition({
+    modules: [{ moduleSpecifier: "@acme/validation", providerModuleId: "acme.validation", exports: [exported] }],
+    operations,
+  });
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: int32Carrier,
+  });
+  const base = {
+    form: "call-value-slice",
+    path: "acme_validation::run",
+    leadingArguments: [{ carrier: int32Carrier, mode: "value" }],
+    elementCarrier: int32Carrier,
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(withOperations([operation(base)])));
+  assert.throws(
+    () => createRustProviderPackage(withOperations([
+      operation({ ...base, leadingArguments: [{ carrier: int32Carrier, mode: "guess" }] }),
+    ])),
+    /unsupported mode 'guess'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(withOperations([
+      operation({ ...base, elementCarrier: { kind: "target-named", id: "acme.Missing" } }),
+    ])),
+    /without a Rust carrier path/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(withOperations([
+      operation({ ...base, leadingArguments: [{ carrier: int32Carrier, mode: "value", fallback: true }] }),
+    ])),
+    /unsupported field 'fallback'/u,
+  );
+});
+
+test("generic value-array forms require closed paths and element carriers", () => {
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: int32Carrier,
+  });
+  const base = {
+    form: "call-value-array",
+    path: "acme_validation::collect",
+    leadingArguments: [],
+    elementCarrier: int32Carrier,
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({ operations: [operation(base)] })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, path: "not-a-path" })],
+    })),
+    /not a closed Rust path/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, elementCarrier: { kind: "target-named", id: "acme.Missing" } })],
+    })),
+    /without a Rust carrier path/u,
+  );
+});
+
+test("tagged-array forms require unique exact alternatives and closed constructors", () => {
+  const arrayCarrier = { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32Carrier] };
+  const taggedCarrier = { kind: "target-named", id: "rust.js.JsArrayConcatItem", typeArguments: [int32Carrier] };
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: arrayCarrier,
+  });
+  const alternative = {
+    inputCarrier: int32Carrier,
+    mode: "value",
+    constructorPath: "acme_validation::Tagged::Value",
+  };
+  const base = {
+    form: "receiver-tagged-array",
+    name: "concat",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: taggedCarrier,
+    alternatives: [alternative],
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({ operations: [operation(base)] })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, alternatives: [alternative, alternative] })],
+    })),
+    /unique exact alternatives/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, alternatives: [{ ...alternative, constructorPath: "not-a-path" }] })],
+    })),
+    /not a closed Rust path/u,
+  );
+});
+
+test("receiver string-slice forms require an exact path and receiver mode", () => {
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: int32Carrier,
+  });
+  const base = {
+    form: "free-call-str-slice",
+    path: "acme_validation::concat",
+    receiverMode: "ref",
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({ operations: [operation(base)] })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, receiverMode: "guess" })],
+    })),
+    /unsupported mode 'guess'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, path: "not-a-path" })],
+    })),
+    /not a closed Rust path/u,
+  );
+});
+
+test("owned receiver value-array forms require exact method, receiver, and carrier metadata", () => {
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: int32Carrier,
+  });
+  const base = {
+    form: "receiver-value-array",
+    name: "append_many",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: int32Carrier,
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({ operations: [operation(base)] })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, receiverMode: "guess" })],
+    })),
+    /unsupported mode 'guess'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, name: "append-many" })],
+    })),
+    /not a Rust identifier/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, fallback: true })],
+    })),
+    /unsupported field 'fallback'/u,
+  );
+});
+
 test("provider crate registry replacement is explicit and schema-closed", () => {
   const accepted = createRustProviderPackage(definition({
     crates: [{
@@ -448,29 +627,29 @@ test("provider packages retain an immutable validated metadata snapshot", () => 
   input.operations[0].target.path = "mutated::after_validation";
   input.modules[0].exports[0].name = "mutated";
 
-  const [mapper] = providerPackage.createOperationMappers({});
-  assert.equal(mapper.definition.operations[0].target.path, "acme_validation::run");
-  assert.equal(mapper.definition.modules[0].exports[0].name, "run");
-  assert.equal(Object.isFrozen(mapper), true);
-  assert.equal(Object.isFrozen(mapper.definition), true);
-  assert.equal(Object.isFrozen(mapper.definition.operations), true);
+  const [contribution] = providerPackage.createTargetContributions({});
+  assert.equal(contribution.definition.operations[0].target.path, "acme_validation::run");
+  assert.equal(contribution.definition.modules[0].exports[0].name, "run");
+  assert.equal(Object.isFrozen(contribution), true);
+  assert.equal(Object.isFrozen(contribution.definition), true);
+  assert.equal(Object.isFrozen(contribution.definition.operations), true);
 });
 
 test("provider operation contributions are revalidated with exact owner identity", () => {
   const providerPackage = createRustProviderPackage(definition());
-  const [mapper] = providerPackage.createOperationMappers({});
+  const [contribution] = providerPackage.createTargetContributions({});
   assert.throws(
-    () => collectRustProviderOperationRows([{
+    () => collectRustProviderOperationRows(providerContext([{
       ...providerPackage,
-      createOperationMappers: () => [{ ...mapper, contractVersion: 2 }],
-    }]),
-    /invalid 'rust-provider-operations' contract/u,
+      createTargetContributions: () => [{ ...contribution, contractVersion: 2 }],
+    }])),
+    /invalid 'rust-provider-policy' contract/u,
   );
   assert.throws(
-    () => collectRustProviderOperationRows([{
+    () => collectRustProviderOperationRows(providerContext([{
       ...providerPackage,
       id: "other-owner",
-    }]),
+    }])),
     /contributed provider metadata owned by 'acme-validation'/u,
   );
 });
@@ -484,12 +663,11 @@ test("provider module identities are unique within one provider owner", () => {
   );
 });
 
-test("provider type identities are declared once on source exports and require closed Rust paths", () => {
+test("provider type relations remain target-owned and require closed Rust paths", () => {
   const valueExport = {
     id: "@acme/validation::Value",
     name: "Value",
     kind: "class",
-    targetIdentity: { target: "rust", id: "acme.validation.Value" },
     members: [],
   };
   const valid = definition({
@@ -498,28 +676,38 @@ test("provider type identities are declared once on source exports and require c
       providerModuleId: "acme.validation",
       exports: [valueExport],
     }],
+    types: [{ exportId: "@acme/validation::Value", targetTypeId: "acme.validation.Value" }],
     operations: [],
     carrierPaths: { "acme.validation.Value": "acme_validation::Value" },
   });
   const providerPackage = createRustProviderPackage(valid);
-  const provider = createRustProviderPackageBindingProvider(valid);
-  assert.deepEqual(provider.getDeclarationModel({
+  const provider = createRustProviderPackageSourceProvider(valid);
+  const model = provider.getDeclarationModel({
     moduleSpecifier: "@acme/validation",
     providerModuleId: "acme.validation",
-  }).exports[0].targetIdentity, { target: "rust", id: "acme.validation.Value" });
-  assert.deepEqual(provider.getTargetIdentity({
+  });
+  assert.deepEqual(model.exports, [valueExport]);
+  assert.equal(Object.hasOwn(model.exports[0], "targetIdentity"), false);
+  assert.deepEqual(collectRustProviderSemantics(providerContext([providerPackage])).types, [{
+    exportId: "@acme/validation::Value",
+    targetTypeId: "acme.validation.Value",
+    providerPackageId: "acme-validation",
+    providerId: "tsonic.rust.provider-package.acme-validation.binding",
+    providerVersion: "1.0.0",
+    providerModuleId: "acme.validation",
     moduleSpecifier: "@acme/validation",
-    exportName: "Value",
-  }), { target: "rust", id: "acme.validation.Value" });
-  assert.equal(providerPackage.createOperationMappers({})[0].definition.modules[0].exports[0].targetIdentity.id, "acme.validation.Value");
+  }]);
 
   assert.throws(
-    () => createRustProviderPackage({ ...valid, modules: [{ ...valid.modules[0], exports: [{ ...valueExport, targetIdentity: { target: "csharp", id: "Acme.Value" } }] }] }),
-    /target identity belongs to 'csharp', expected 'rust'/u,
+    () => createRustProviderPackage({
+      ...valid,
+      types: [{ exportId: "@acme/validation::Value", targetTypeId: "acme.validation.Value", target: "csharp" }],
+    }),
+    /type relation has unsupported field 'target'/u,
   );
   assert.throws(
     () => createRustProviderPackage({ ...valid, carrierPaths: {} }),
-    /target identity 'acme\.validation\.Value' has no closed Rust carrier path/u,
+    /target type 'acme\.validation\.Value' has no closed Rust carrier path/u,
   );
   assert.throws(
     () => createRustProviderPackage({ ...definition(), targetIdentities: { "@acme/validation::Value": "acme.validation.Value" } }),
@@ -533,7 +721,7 @@ test("module ownership and declaration rendering retain exact provider identity"
     specifierPrefix: "@acme/validation",
     providerId: "tsonic.rust.provider-package.acme-validation.binding",
   }]);
-  const provider = createRustProviderPackageBindingProvider(definition());
+  const provider = createRustProviderPackageSourceProvider(definition());
   assert.throws(
     () => provider.getDeclarationModel({
       moduleSpecifier: "@acme/other",
@@ -548,7 +736,7 @@ test("module ownership and declaration rendering retain exact provider identity"
     }),
     /resolved with provider module id 'acme\.wrong', expected 'acme\.validation'/u,
   );
-  const [row] = collectRustProviderOperationRows([providerPackage]);
+  const [row] = collectRustProviderOperationRows(providerContext([providerPackage]));
   assert.deepEqual({
     providerPackageId: row.providerPackageId,
     providerId: row.providerId,
