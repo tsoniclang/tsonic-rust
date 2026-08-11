@@ -136,3 +136,91 @@ test("field and closure method chains retain rustfmt vertical layout", () => {
     /__tsonic_receiver\n        \.__tsonic_state\n        \.with_mut/u,
   );
 });
+
+test("two-selector method arguments retain rustfmt vertical layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: { kind: "path", path: "values" },
+                method: "get",
+                args: [{
+                  kind: "try",
+                  expr: {
+                    kind: "call",
+                    path: "tsonic_rust_runtime::conversions::i32_to_usize",
+                    args: [{ kind: "int-literal", text: "1" }],
+                  },
+                }],
+              },
+              method: "is_none",
+              args: [],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /acme_testing::check\(\n        values\n            \.get/u);
+});
+
+test("selectors after multiline call bases align with the base", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "method-call",
+                receiver: {
+                  kind: "call",
+                  path: "read",
+                  args: [{
+                    kind: "struct-literal",
+                    path: "Box",
+                    fields: [
+                      { name: "left", value: { kind: "int-literal", text: "1" } },
+                      { name: "middle", value: { kind: "int-literal", text: "2" } },
+                      { name: "right", value: { kind: "int-literal", text: "3" } },
+                    ],
+                  }],
+                },
+                method: "unwrap_or",
+                args: [{ kind: "int-literal", text: "-1" }],
+              },
+              right: { kind: "int-literal", text: "7" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /\n        \.unwrap_or\(-1\)/u);
+  assert.doesNotMatch(source, /\n            \.unwrap_or\(-1\)/u);
+});

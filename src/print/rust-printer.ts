@@ -1508,6 +1508,9 @@ function printFittedMethodChain(
   let rendered = renderedFits(flatBase, column) && !rustExpressionContainsExpandedStructLiteral(chain.base)
     ? flatBase
     : printRustExprFitted(chain.base, depth, column);
+  const selectedContinuationIndent = rendered.includes("\n")
+    ? indentText(depth)
+    : continuationIndent;
   let emittedCall = false;
   for (const step of chain.steps) {
     if (step.kind === "try") {
@@ -1516,7 +1519,7 @@ function printFittedMethodChain(
     }
     if (step.kind === "field") {
       rendered = emittedCall || lastLineLength(rendered) + step.name.length + 1 > rustInlineFieldReceiverWidth
-        ? `${rendered}\n${continuationIndent}.${step.name}`
+        ? `${rendered}\n${selectedContinuationIndent}.${step.name}`
         : appendToLastLine(rendered, `.${step.name}`);
       continue;
     }
@@ -1524,14 +1527,14 @@ function printFittedMethodChain(
       `.${step.name}`,
       step.args,
       depth + 1,
-      continuationIndent.length + 1,
+      selectedContinuationIndent.length + 1,
     );
     const inlineFirstMethod = !breakBeforeFirstMethod && !emittedCall &&
       !rendered.includes("\n") &&
       lastLineLength(rendered) + firstLine(method).length <= rustInlineFieldReceiverWidth;
     rendered = inlineFirstMethod
       ? appendToLastLine(rendered, method)
-      : `${rendered}\n${continuationIndent}${method}`;
+      : `${rendered}\n${selectedContinuationIndent}${method}`;
     emittedCall = true;
   }
   return rendered;
@@ -1602,6 +1605,7 @@ function printFittedCall(
   }
   if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "method-call") {
     if (!flat.includes("\n") && renderedFits(flat, column) &&
+      !rustMethodChainPrefersVerticalLayout(arguments_[0]) &&
       !rustExpressionContainsStatementBlock(arguments_[0]) &&
       !rustExpressionContainsExpandedStructLiteral(arguments_[0])) {
       return flat;
