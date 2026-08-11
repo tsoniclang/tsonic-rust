@@ -133,29 +133,8 @@ test("no fallback source emission: backend diagnostics never coexist with artifa
 
 test("JS operation rows are unique per owner/member/kind/lane/variant", async () => {
   const source = readFileSync(join(sourceRoot, "source/rust-target-semantics/js-surface-operations.ts"), "utf8");
-  const rowPattern = /owner: "([^"]+)", member: "([^"]+)", operationKind: "([^"]+)", lane: "([^"]+)"(?:, variant: "([^"]+)")?/gu;
-  const baseCounts = new Map();
-  const seen = new Set();
-  let match;
-  while ((match = rowPattern.exec(source)) !== null) {
-    const baseKey = match.slice(1, 5).join("|");
-    const variant = match[5] ?? "";
-    const key = `${baseKey}|${variant}`;
-    assert.ok(!seen.has(key), `duplicate JS operation row: ${key}`);
-    seen.add(key);
-    baseCounts.set(baseKey, (baseCounts.get(baseKey) ?? 0) + 1);
-  }
-  for (const [baseKey, count] of baseCounts) {
-    if (count <= 1) {
-      continue;
-    }
-    const variants = [...seen]
-      .filter((key) => key.startsWith(`${baseKey}|`))
-      .map((key) => key.slice(baseKey.length + 1));
-    assert.ok(variants.every((variant) => variant.length > 0), `multi-row JS operation lacks a variant: ${baseKey}`);
-    assert.equal(new Set(variants).size, count, `duplicate JS operation variant: ${baseKey}`);
-  }
-  assert.ok(seen.size > 20, "row scan should see the operation table");
+  assert.match(source, /const jsOperationRows = defineJsOperationRows\(\[/u);
+  await import("../../dist/source/rust-target-semantics/js-surface-operations.js");
 });
 
 test("rust target product source has no NodeJS capability coupling", () => {

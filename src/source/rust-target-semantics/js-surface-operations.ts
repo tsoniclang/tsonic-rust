@@ -51,6 +51,7 @@ export interface JsOperationRequest {
   readonly receiverCarrier?: TargetTypeRef;
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly authoredMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly argumentCompatibility?: (
     expected: TargetTypeRef,
     actual: TargetTypeRef | undefined,
@@ -137,6 +138,27 @@ interface JsOperationRowData {
         readonly target: RustProviderOperationForm;
         readonly params: readonly JsCarrierRef[];
       };
+}
+
+function defineJsOperationRows(rows: readonly JsOperationRowData[]): readonly JsOperationRowData[] {
+  const identities = new Set<string>();
+  const variantsByOperation = new Map<string, string[]>();
+  for (const row of rows) {
+    const operation = `${row.owner}|${row.member}|${row.operationKind}|${row.lane}`;
+    const variant = row.variant ?? "";
+    const identity = `${operation}|${variant}`;
+    if (identities.has(identity)) {
+      throw new Error(`Duplicate JavaScript operation row '${identity}'.`);
+    }
+    identities.add(identity);
+    variantsByOperation.set(operation, [...(variantsByOperation.get(operation) ?? []), variant]);
+  }
+  for (const [operation, variants] of variantsByOperation) {
+    if (variants.length > 1 && variants.some((variant) => variant.length === 0)) {
+      throw new Error(`JavaScript operation rows for '${operation}' require explicit variants.`);
+    }
+  }
+  return Object.freeze([...rows]);
 }
 
 const zeroArgument = { kind: "integer", value: 0 } as const;
@@ -280,7 +302,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
   { owner, member: "join", operationKind: "call", lane: "js-array", variant: "separator", requirements: [{ carrier: { ref: "element" }, capability: "stringifiable" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
 ]);
 
-const jsOperationRows: readonly JsOperationRowData[] = [
+const jsOperationRows = defineJsOperationRows([
   { owner: "ObjectConstructor", member: "is", operationKind: "call", lane: "object", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::object_is", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "bool" } } },
   ...sharedArrayOperationRows,
   { owner: "ArrayConstructor", member: "isArray", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_is_array_value", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "jsvalue" }] } },
@@ -523,9 +545,9 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "int32-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end", receiverMode: "ref", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "int32-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end_with", receiverMode: "ref", argModes: ["value", "ref"], argConversions: [rustInt32ToFloat64ValueConversion, undefined] }, result: { ref: "string" }, params: [{ ref: "int32" }, { ref: "string" }] } },
   { owner: "String", member: "matchAll", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "match_all", argModes: ["ref"] }, result: { ref: "regexp-match-vec" }, params: [undefined] } },
-  { owner: "String", member: "replace", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [undefined, { ref: "string" }] } },
+  { owner: "String", member: "replace", operationKind: "call", lane: "string", variant: "regexp", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [undefined, { ref: "string" }] } },
   { owner: "String", member: "search", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "search", argModes: ["ref"] }, result: { ref: "int32" }, params: [undefined] } },
-  { owner: "String", member: "split", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "split", argModes: ["ref"] }, result: { ref: "string-array" }, params: [undefined] } },
+  { owner: "String", member: "split", operationKind: "call", lane: "string", variant: "regexp", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "split", argModes: ["ref"] }, result: { ref: "string-array" }, params: [undefined] } },
 
   // Set algebra.
   ...(["Set", "ReadonlySet"] as const).flatMap((owner): readonly JsOperationRowData[] => [
@@ -627,7 +649,7 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "DateConstructor", member: "now", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::now" }, result: { ref: "float64" } } },
   { owner: "Date", member: "toISOString", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_iso_string" }, result: { ref: "string" } } },
   { owner: "Date", member: "getTime", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
-];
+]);
 
 interface JsLaneBindings {
   readonly element?: TargetTypeRef;
@@ -636,6 +658,7 @@ interface JsLaneBindings {
   readonly setValue?: TargetTypeRef;
   readonly receiver?: TargetTypeRef;
   readonly selectedMethodTypeArguments?: readonly (TargetTypeRef | undefined)[];
+  readonly authoredMethodTypeArguments?: readonly (TargetTypeRef | undefined)[];
   readonly arguments?: readonly (TargetTypeRef | undefined)[];
 }
 
@@ -709,9 +732,11 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
     case "cb-array-predicate":
       return arrayCallbackCarrier(bindings, reference.arity, rustSourcePrimitiveTargetType("bool"));
     case "cb-array-map":
-      return bindings.selectedMethodTypeArguments?.[0] === undefined
-        ? undefined
-        : arrayCallbackCarrier(bindings, reference.arity, bindings.selectedMethodTypeArguments[0]);
+      return arrayCallbackCarrier(
+        bindings,
+        reference.arity,
+        bindings.authoredMethodTypeArguments?.[0] ?? rustInferCarrier,
+      );
     case "cb-array-for-each":
       return arrayCallbackCarrier(bindings, reference.arity, rustUnitTargetType());
     case "cb-array-reduce":
@@ -994,6 +1019,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
   const bindings: JsLaneBindings = {
     ...laneMatch.bindings,
     selectedMethodTypeArguments: request.selectedMethodTypeArgumentCarriers,
+    authoredMethodTypeArguments: request.authoredMethodTypeArgumentCarriers,
     arguments: request.argumentCarriers,
     ...(lane === "js-array" && laneMatch.bindings.element === undefined &&
         request.selectedMethodTypeArgumentCarriers?.length === 1 &&

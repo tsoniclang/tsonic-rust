@@ -44,7 +44,7 @@ test("multiline method-chain arguments use rustfmt-compatible outer-call layout"
     }],
   });
 
-  assert.match(text, /acme_testing::check\(\n        values\.get\(tsonic_rust_runtime::conversions::i32_to_usize\(1\)\?\)\.copied\(\)\.is_none\(\),\n    \);/u);
+  assert.match(text, /acme_testing::check\(\n        values\n            \.get\(tsonic_rust_runtime::conversions::i32_to_usize\(1\)\?\)\n            \.copied\(\)\n            \.is_none\(\),\n    \);/u);
 });
 
 test("fitted multi-argument calls stay horizontal inside assignments", () => {

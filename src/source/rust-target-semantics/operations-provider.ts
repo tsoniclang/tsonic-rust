@@ -546,6 +546,11 @@ export function selectRustCheckedCall(
           context,
           options,
         ));
+    const authoredMethodTypeArgumentCarriers =
+      (request.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
+        argument.explicitTypeNode === undefined
+          ? undefined
+          : resolveRustTargetTypeRef(argument.explicitTypeNode, context, options));
     const special = mapSelectedJsSpecialCall(
       request,
       selectedSourceMember.ownerName,
@@ -563,6 +568,7 @@ export function selectRustCheckedCall(
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
       selectedMethodTypeArgumentCarriers,
+      authoredMethodTypeArgumentCarriers,
       argumentCompatibility: selectedArgumentCompatibility(request.arguments, context, options),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {

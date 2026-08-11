@@ -132,7 +132,7 @@ export function inspectJson(): boolean {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let value = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
   assert.match(text, /let rendered = js_abi::json_stringify\(&value\)\?\.unwrap_or\(String::from\(""\)\);/u);
-  assert.match(text, /ok = js_string::includes\(&rendered, "tsonic", 0\);/u);
+  assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });
 
 test("awaited fallible project-source calls apply try after await", () => {

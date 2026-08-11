@@ -3589,6 +3589,10 @@ function resolveFunctionExpressionCarrier(
     if (argCarrier === undefined || (argCarrier.kind === "opaque" && argCarrier.id === "tsonic.rust.infer")) {
       return undefined;
     }
+    const authoredCarrier = resolveTypeNodeCarrier(walk, Node_Type(ast, parameter));
+    if (authoredCarrier !== undefined && !rustTargetTypeRefEquals(authoredCarrier, argCarrier)) {
+      return undefined;
+    }
     setCarrierFact(walk, parameter, argCarrier);
     byRefCopyParams.push(false);
   }
