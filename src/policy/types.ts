@@ -18,6 +18,7 @@ export type RustTargetTypeRef =
   | { readonly kind: "tuple"; readonly elements: readonly RustTargetTypeRef[] }
   | { readonly kind: "pointer"; readonly pointee: RustTargetTypeRef; readonly mutability?: "const" | "mut" | "target-defined" }
   | { readonly kind: "function-pointer"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef; readonly abi?: readonly string[] }
+  | { readonly kind: "closure"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef }
   | { readonly kind: "opaque"; readonly id: string }
   | { readonly kind: "associated-type"; readonly owner: RustTargetTypeRef; readonly name: string }
   | { readonly kind: "lifetime"; readonly name: string }

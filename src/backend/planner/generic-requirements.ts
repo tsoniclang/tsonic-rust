@@ -5,6 +5,7 @@ import {
   rustLocationTargetId,
   rustNamedTypeCarrierValue,
   rustOptionTargetId,
+  rustSourceTypeCarrierValue,
 } from "../../source/rust-target-types.js";
 import type { RustTypeParameter } from "../rust-ast/nodes.js";
 import { unsupportedConstructDiagnostic } from "./diagnostics.js";
@@ -136,11 +137,17 @@ function requireCarrier(
         return requireCarrier(fixedArray.element, required, requirements);
       }
       const named = rustNamedTypeCarrierValue(carrier);
-      return named === undefined || !named.typeArguments.some((argument) =>
+      if (named !== undefined) {
+        return !named.typeArguments.some((argument) =>
+          containsDeclaredTypeParameter(argument, requirements.declared));
+      }
+      const sourceType = rustSourceTypeCarrierValue(carrier);
+      return sourceType === undefined || !sourceType.typeArguments.some((argument) =>
         containsDeclaredTypeParameter(argument, requirements.declared));
     }
     case "pointer":
     case "function-pointer":
+    case "closure":
     case "associated-type":
       return !containsDeclaredTypeParameter(carrier, requirements.declared);
     default:
@@ -166,6 +173,10 @@ function containsDeclaredTypeParameter(
     case "pointer":
       return containsDeclaredTypeParameter(carrier.pointee, declared);
     case "function-pointer":
+      return carrier.args.some((argument) =>
+        containsDeclaredTypeParameter(argument, declared)) ||
+        containsDeclaredTypeParameter(carrier.result, declared);
+    case "closure":
       return carrier.args.some((argument) =>
         containsDeclaredTypeParameter(argument, declared)) ||
         containsDeclaredTypeParameter(carrier.result, declared);

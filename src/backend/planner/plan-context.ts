@@ -78,6 +78,8 @@ export interface RustPlanContext {
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustExpressionOverride>;
   readonly capturedBindingPaths?: ReadonlyMap<Node, string>;
+  readonly projectDispatchRoot?: RustExpr;
+  readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../policy/types.js").TargetTypeRef>;
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS

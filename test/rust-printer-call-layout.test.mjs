@@ -283,3 +283,99 @@ test("long multiline let initializers reflow from their continuation column", ()
     /let textFunction =\n        rt::Callable::<\(String,\), String>::new\(move \|__tsonic_callable_arguments_5\| \{/u,
   );
 });
+
+test("long expression closures use a vertical receiver before expanding the closure body", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: { kind: "bool-literal", value: true },
+          then: {
+            statements: [{
+              kind: "if",
+              condition: { kind: "bool-literal", value: true },
+              then: {
+                statements: [{
+                  kind: "expr",
+                  expr: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "__tsonic_capture_visits" },
+                    method: "update_with",
+                    args: [{
+                      kind: "closure",
+                      params: [{ name: "__tsonic_location_current", byRefCopy: false }],
+                      body: {
+                        kind: "binary",
+                        operator: "+",
+                        left: { kind: "path", path: "__tsonic_location_current" },
+                        right: { kind: "int-literal", text: "1" },
+                      },
+                    }],
+                  },
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /__tsonic_capture_visits\n                \.update_with\(\|__tsonic_location_current\| __tsonic_location_current \+ 1\);/u,
+  );
+});
+
+test("short optional chains stay attached when their fitted closure body expands", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "item" },
+              method: "as_ref",
+              args: [],
+            },
+            method: "map",
+            args: [{
+              kind: "closure",
+              params: [{ name: "__tsonic_optional_receiver", byRefCopy: false }],
+              body: {
+                kind: "method-call",
+                receiver: {
+                  kind: "field",
+                  receiver: { kind: "path", path: "__tsonic_optional_receiver" },
+                  name: "__tsonic_state",
+                },
+                method: "with",
+                args: [{
+                  kind: "closure",
+                  params: [{ name: "state", byRefCopy: false }],
+                  body: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /item\.as_ref\(\)\.map\(\|__tsonic_optional_receiver\| \{/u);
+});

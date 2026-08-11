@@ -51,6 +51,10 @@ import {
   planInterfaceDeclaration,
   planUnionAliasDeclaration,
 } from "./declarations-nominal.js";
+import {
+  planPolymorphicClassDeclaration,
+  planPolymorphicInterfaceDeclaration,
+} from "./project-polymorphism.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -183,7 +187,10 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
     if (kind === "KindClassDeclaration") {
       const diagnosticCount = context.diagnostics.length;
-      const planned = planClassDeclaration(statement, context);
+      const definition = context.input.projectTypes.definitionForDeclaration(statement);
+      const planned = definition !== undefined && context.input.projectTypes.isPolymorphic(definition)
+        ? planPolymorphicClassDeclaration(statement, context)
+        : planClassDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
       } else {
@@ -198,7 +205,10 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
     if (kind === "KindInterfaceDeclaration") {
       const diagnosticCount = context.diagnostics.length;
-      const planned = planInterfaceDeclaration(statement, context);
+      const definition = context.input.projectTypes.definitionForDeclaration(statement);
+      const planned = definition !== undefined && context.input.projectTypes.isPolymorphic(definition)
+        ? planPolymorphicInterfaceDeclaration(statement, context)
+        : planInterfaceDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
       } else {

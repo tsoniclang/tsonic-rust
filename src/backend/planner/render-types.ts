@@ -20,6 +20,7 @@ import {
   rustOptionTargetId,
   rustNamedTypeCarrierValue,
   rustPrimitiveTypeName,
+  substituteRustTargetTypeParameters,
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,
@@ -139,7 +140,17 @@ export function rustTypeFromCarrier(
     const value = rustSourceTypeCarrierValue(carrier);
     if (value !== undefined) {
       const path = resolveSourceTypePath(value);
-      return path === undefined ? undefined : { kind: "named", path };
+      const typeArguments = value.typeArguments.map((argument) =>
+        rustTypeFromCarrier(argument, resolveSourceTypePath));
+      return path === undefined || typeArguments.some((argument) => argument === undefined)
+        ? undefined
+        : {
+            kind: "named",
+            path,
+            ...(typeArguments.length === 0
+              ? {}
+              : { typeArguments: typeArguments as RustType[] }),
+          };
     }
   }
   return undefined;
@@ -155,9 +166,13 @@ export function rustTypeFromCarrierInContext(
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
     readonly usedAliases?: Set<string>;
+    readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
   },
 ): RustType | undefined {
-  const rendered = rustTypeFromCarrier(carrier, (value) => {
+  const selectedCarrier = carrier === undefined || context.typeParameterSubstitutions === undefined
+    ? carrier
+    : substituteRustTargetTypeParameters(carrier, context.typeParameterSubstitutions);
+  const rendered = rustTypeFromCarrier(selectedCarrier, (value) => {
     const moduleName = context.moduleNameByFileName.get(value.fileName);
     if (moduleName === undefined) {
       return undefined;
@@ -186,6 +201,10 @@ export function collectAliasesFromRustType(
   }
   if (type.kind === "slice-ref") {
     collectAliasesFromRustType(type.element, register);
+    return;
+  }
+  if (type.kind === "reference") {
+    collectAliasesFromRustType(type.referent, register);
     return;
   }
   if (type.kind === "function-pointer") {

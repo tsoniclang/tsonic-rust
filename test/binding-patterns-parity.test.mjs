@@ -197,7 +197,7 @@ export function total(values: [int32, int32][]): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /for __tsonic_binding_element in rt::iter_copied\(values\)/u);
+  assert.match(source, /for __tsonic_binding_element in rt::iter_copied\(&values\)/u);
   assert.match(source, /let left: i32 = __tsonic_binding_element\[0\];/u);
   assert.match(source, /let right: i32 = __tsonic_binding_element\[1\];/u);
   validateGeneratedProject("binding-for-of", result.artifacts);

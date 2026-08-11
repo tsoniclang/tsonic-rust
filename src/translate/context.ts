@@ -20,6 +20,12 @@ import {
 import type {
   RustTranslationArtifactGraph,
 } from "./artifacts/index.js";
+import {
+  createRustProjectTypePolicyRegistry,
+} from "../source/rust-target-semantics/project-type-policy.js";
+import type {
+  RustProjectTypePolicyRegistry,
+} from "../source/rust-target-semantics/project-type-policy.js";
 
 export interface RustTranslationContext extends TargetCompileInput {
   readonly backend: TargetBackendContext;
@@ -27,6 +33,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustSemanticModel;
   readonly artifacts: RustTranslationArtifactGraph;
+  readonly projectTypes: RustProjectTypePolicyRegistry;
   readonly diagnostics: TargetDiagnostic[];
   readonly analysis: {
     getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
@@ -49,6 +56,7 @@ export function createRustTranslationContext(
   );
   const facts = new RustSemanticModel(input.source.sourceFacts);
   const artifacts = createRustTranslationArtifactGraph(ast);
+  const projectTypes = createRustProjectTypePolicyRegistry();
   const diagnostics: TargetDiagnostic[] = [];
   const context: RustTranslationContext = {
     ...input,
@@ -57,6 +65,7 @@ export function createRustTranslationContext(
     sourceFiles,
     facts,
     artifacts,
+    projectTypes,
     diagnostics,
     analysis: Object.freeze({
       getEnumMemberConstant(node: Node) {

@@ -32,6 +32,7 @@ import {
   rustJsArrayTargetType,
   rustJsMapTargetType,
   rustJsSetTargetType,
+  rustClosureTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
@@ -749,13 +750,13 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
       const args = [bindings.mapValue, bindings.mapKey, bindings.receiver].slice(0, reference.arity);
       return args.some((argument) => argument === undefined)
         ? undefined
-        : { kind: "function-pointer", args: args as TargetTypeRef[], result: rustUnitTargetType() };
+        : rustClosureTargetType(args as TargetTypeRef[], rustUnitTargetType());
     }
     case "cb-set-for-each": {
       const args = [bindings.setValue, bindings.setValue, bindings.receiver].slice(0, reference.arity);
       return args.some((argument) => argument === undefined)
         ? undefined
-        : { kind: "function-pointer", args: args as TargetTypeRef[], result: rustUnitTargetType() };
+        : rustClosureTargetType(args as TargetTypeRef[], rustUnitTargetType());
     }
     case "int32":
       return rustSourcePrimitiveTargetType("int32");
@@ -831,7 +832,7 @@ export function finalizeJsCallbackOperation(
   }
   const callback = argumentCarriers[0];
   const callbackTemplate = selection.parameterCarriers?.[0];
-  if (callback?.kind !== "function-pointer" || callbackTemplate?.kind !== "function-pointer" ||
+  if (callback?.kind !== "closure" || callbackTemplate?.kind !== "closure" ||
     !rustCallbackCarrierMatchesTemplate(callbackTemplate, callback)) {
     return undefined;
   }
@@ -887,7 +888,7 @@ function arrayCallbackCarrier(
   const args = [bindings.element, rustSourcePrimitiveTargetType("float64"), bindings.receiver].slice(0, arity);
   return args.some((argument) => argument === undefined)
     ? undefined
-    : { kind: "function-pointer", args: args as TargetTypeRef[], result };
+    : rustClosureTargetType(args as TargetTypeRef[], result);
 }
 
 function arrayReduceCallbackCarrier(
@@ -903,7 +904,7 @@ function arrayReduceCallbackCarrier(
   ].slice(0, arity);
   return args.some((argument) => argument === undefined)
     ? undefined
-    : { kind: "function-pointer", args: args as TargetTypeRef[], result: accumulator };
+    : rustClosureTargetType(args as TargetTypeRef[], accumulator);
 }
 
 function rustCallbackCarrierMatchesTemplate(
@@ -916,7 +917,7 @@ function rustCallbackCarrierMatchesTemplate(
   if (template.kind !== actual.kind) {
     return false;
   }
-  if (template.kind !== "function-pointer" || actual.kind !== "function-pointer") {
+  if (template.kind !== "closure" || actual.kind !== "closure") {
     return rustTargetTypeRefEquals(template, actual);
   }
   return template.args.length === actual.args.length &&
@@ -993,6 +994,7 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
     case "pointer":
       return { ...carrier, pointee: materializeInferredCarrier(carrier.pointee, inferred) };
     case "function-pointer":
+    case "closure":
       return {
         ...carrier,
         args: carrier.args.map((argument) => materializeInferredCarrier(argument, inferred)),
@@ -1159,7 +1161,7 @@ function jsArgumentCarrierMatchScore(
   if (expected === undefined || (expected.kind === "opaque" && expected.id === "tsonic.rust.infer")) {
     return 0;
   }
-  if (expected.kind === "function-pointer" && actual.kind === "function-pointer") {
+  if (expected.kind === "closure" && actual.kind === "closure") {
     if (expected.args.length !== actual.args.length) {
       return compatibility?.(expected, actual, index);
     }

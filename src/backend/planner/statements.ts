@@ -101,7 +101,10 @@ import {
   rustLocationStorageForDeclaration,
 } from "./typed-locations.js";
 import { requireRustLocationValueCarrier } from "./generic-requirements.js";
-import { writeRustProjectObjectField } from "./project-objects.js";
+import {
+  writeRustProjectDispatchedField,
+  writeRustProjectObjectField,
+} from "./project-objects.js";
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -902,9 +905,31 @@ function planUpdateStatement(expression: Node, context: RustPlanContext): readon
     if (isRustBigIntCarrier(fact.resultCarrier)) {
       context.usedAliases?.add("rt");
     }
+    if (sourceField.dispatch === undefined) {
+      return [{
+        kind: "expr",
+        expr: writeRustProjectObjectField(receiver, sourceField.storageIndex, fact.operator, step),
+      }];
+    }
+    const syntheticNames = context.syntheticNames;
+    if (syntheticNames === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, operand),
+        "rust.backend.project-dispatch-temporary",
+        "Dispatched project-source field update requires a finalized hygienic-name scope.",
+      ));
+      return undefined;
+    }
     return [{
       kind: "expr",
-      expr: writeRustProjectObjectField(receiver, sourceField.storageIndex, fact.operator, step),
+      expr: writeRustProjectDispatchedField(
+        receiver,
+        allocateRustSyntheticName(syntheticNames, "dispatch_receiver"),
+        sourceField.dispatch.read,
+        sourceField.dispatch.write,
+        fact.operator,
+        step,
+      ),
     }];
   }
   if (ast.kindName(operand) !== KindIdentifier) {
@@ -1071,8 +1096,16 @@ function planExpressionAsStatement(
         if (receiver === undefined || value === undefined) {
           return undefined;
         }
-        const receiverName = "__tsonic_receiver";
-        const valueName = "__tsonic_value";
+        if (context.syntheticNames === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, left),
+            "rust.backend.project-field-temporary",
+            "Project-source field assignment requires a finalized hygienic-name scope.",
+          ));
+          return undefined;
+        }
+        const receiverName = allocateRustSyntheticName(context.syntheticNames, "receiver");
+        const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
         return [{
           kind: "expr",
           expr: {
@@ -1081,12 +1114,21 @@ function planExpressionAsStatement(
               { name: receiverName, value: receiver },
               { name: valueName, value },
             ],
-            value: writeRustProjectObjectField(
-              { kind: "path", path: receiverName },
-              sourceField.storageIndex,
-              operator,
-              { kind: "path", path: valueName },
-            ),
+            value: sourceField.dispatch === undefined
+              ? writeRustProjectObjectField(
+                  { kind: "path", path: receiverName },
+                  sourceField.storageIndex,
+                  operator,
+                  { kind: "path", path: valueName },
+                )
+              : writeRustProjectDispatchedField(
+                  { kind: "path", path: receiverName },
+                  allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"),
+                  sourceField.dispatch.read,
+                  sourceField.dispatch.write,
+                  operator,
+                  { kind: "path", path: valueName },
+                ),
           },
         }];
       }

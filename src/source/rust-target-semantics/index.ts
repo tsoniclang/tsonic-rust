@@ -112,6 +112,7 @@ import {
   isRustVecCarrier,
   rustBigIntTargetType,
   rustCallableProtocol,
+  rustClosureProtocol,
   rustCallableTargetType,
   rustJsArrayTargetType,
   rustNullishSourceTargetType,
@@ -124,7 +125,7 @@ import {
   rustSourceTypeCarrierValue,
 } from "../rust-target-types.js";
 import { parseSourceBigIntLiteral } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustProjectUpcastFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionVariantsFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -188,6 +189,7 @@ import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { selectRustResourceManagement } from "./resource-management.js";
+import { rustProjectMemberSlotName } from "./project-type-policy.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
 import { rustProjectObjectLayout } from "./project-object-layout.js";
 import { recordRustBindingPatternFacts } from "./binding-patterns.js";
@@ -214,6 +216,7 @@ interface RustFactWalk {
     >;
   }>;
   currentThisCarrier?: TargetTypeRef;
+  currentSuperCarrier?: TargetTypeRef;
   currentMethodDeclaration?: Node;
   currentCallableDeclaration?: Node;
   currentGeneratorDeclaration?: Node;
@@ -550,6 +553,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     sourceProfiles,
     sourceTypes,
     sourceCallableAbi,
+    projectTypes: context.projectTypes,
   };
   const walk: RustFactWalk = {
     context,
@@ -569,6 +573,32 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
   // binding works regardless of file order.
   for (const sourceFile of projectSourceFiles) {
     sourceTypes.registerSourceFile(sourceFile, ast);
+  }
+  const projectTypes = context.projectTypes.initialize({
+    ast,
+    navigation: context.source.navigation,
+    sourceFiles: projectSourceFiles,
+    resolveSelectedType(authoredTypeNode, selectedType, heritage) {
+      return resolveRustTargetTypeRef(
+        authoredTypeNode ?? selectedType,
+        rustResolutionContext(walk, heritage),
+        operationOptions,
+      );
+    },
+  });
+  for (const issue of projectTypes.issues) {
+    appendRustDiagnostic(
+      walk,
+      issue.code,
+      issue.message,
+      issue.node,
+      ["target.capability=rust.project-types.heritage"],
+    );
+  }
+  if (projectTypes.issues.length > 0) {
+    return;
+  }
+  for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
       if (kind === "KindInterfaceDeclaration") {
@@ -592,6 +622,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
         recordEnumFacts(walk, statement, sourceFile);
       }
     }
+    recordNestedCallableTypeSignatureFacts(walk, sourceFile);
   }
   if (context.diagnostics.length !== signatureDiagnosticCount) {
     return;
@@ -643,6 +674,10 @@ function promiseInnerCarrier(
 
 function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableSuspensionFacts(walk, declaration);
+  recordCallableTypeSignatureFacts(walk, declaration);
+}
+
+function recordCallableTypeSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableReturnFact(walk, declaration);
   const parameters = requireDenseSourceNodes(walk, walk.context.ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
   if (parameters === undefined) {
@@ -651,6 +686,21 @@ function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): vo
   for (const parameter of parameters) {
     recordParameterAbiFacts(walk, parameter);
   }
+}
+
+function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {
+  const { ast } = walk.context;
+  const visit = (node: Node | undefined): void => {
+    if (node === undefined) {
+      return;
+    }
+    const kind = ast.kindName(node);
+    if (kind === "KindFunctionType" || kind === "KindCallSignature") {
+      recordCallableTypeSignatureFacts(walk, node);
+    }
+    ast.forEachChild(node, visit);
+  };
+  visit(sourceFile);
 }
 
 function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): void {
@@ -1251,17 +1301,50 @@ function applyOptionLane(
   resolved: TargetTypeRef | undefined,
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
+  const target = expected === undefined
+    ? undefined
+    : rustOptionElementCarrier(expected) ?? expected;
+  let projected = resolved;
+  if (resolved !== undefined && target !== undefined &&
+    !rustTargetTypeRefEquals(resolved, target)) {
+    const targetDefinition = walk.context.projectTypes.definitionForCarrier(target);
+    const relation = targetDefinition === undefined
+      ? { kind: "unrelated" as const }
+      : walk.context.projectTypes.relationship(resolved, targetDefinition);
+    if (relation.kind === "ambiguous") {
+      appendRustDiagnostic(
+        walk,
+        "RUST_PROJECT_UPCAST_AMBIGUOUS",
+        "The selected project value has more than one exact target heritage instantiation.",
+        expression,
+        ["target.capability=rust.project-types.upcast"],
+      );
+      return undefined;
+    }
+    if (relation.kind === "related" && rustTargetTypeRefEquals(relation.targetType, target)) {
+      walk.context.facts.set(expression, rustProjectUpcastFactKey, {
+        sourceCarrier: resolved,
+        targetCarrier: target,
+      }, [{ message: "rust exact project-type upcast" }]);
+      projected = target;
+      if (!isRustOptionCarrier(expected)) {
+        walk.context.facts.set(expression, rustConversionKey, { convertedType: target }, [
+          { message: "rust project-type upcast conversion" },
+        ]);
+      }
+    }
+  }
   if (expected === undefined || !isRustOptionCarrier(expected)) {
-    return resolved;
+    return projected;
   }
   const inner = rustOptionElementCarrier(expected);
   if (inner === undefined) {
     return resolved;
   }
-  if (resolved !== undefined && isRustOptionCarrier(resolved)) {
-    return resolved;
+  if (projected !== undefined && isRustOptionCarrier(projected)) {
+    return projected;
   }
-  if (walk.context.ast.kindName(expression) === "KindNullKeyword" || isRustNullishSourceCarrier(resolved)) {
+  if (walk.context.ast.kindName(expression) === "KindNullKeyword" || isRustNullishSourceCarrier(projected)) {
     const existing = walk.context.facts.get(expression, rustTargetOperationFactKey);
     if (existing === undefined) {
       setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
@@ -1271,7 +1354,7 @@ function applyOptionLane(
     ]);
     return expected;
   }
-  if (resolved !== undefined && rustTargetTypeRefEquals(resolved, inner)) {
+  if (projected !== undefined && rustTargetTypeRefEquals(projected, inner)) {
     walk.context.facts.set(expression, rustOptionWrapFactKey, { wrap: true }, [{ message: "rust option wrap" }]);
     walk.context.facts.set(expression, rustConversionKey, { convertedType: expected }, [
       { message: "rust option some conversion" },
@@ -1375,6 +1458,10 @@ function resolveExpressionCarrierUncached(
     case "KindThisKeyword": {
       const thisCarrier = walk.currentThisCarrier;
       return thisCarrier === undefined ? undefined : setCarrierFact(walk, expression, thisCarrier);
+    }
+    case "KindSuperKeyword": {
+      const superCarrier = walk.currentSuperCarrier;
+      return superCarrier === undefined ? undefined : setCarrierFact(walk, expression, superCarrier);
     }
     case KindIdentifier: {
       return resolveIdentifierCarrier(walk, expression, sourceFile);
@@ -2099,22 +2186,21 @@ function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFi
         }, [{ message: "rust project-source binding" }]);
       }
     }
+    if (declarationKind === KindParameter) {
+      const parameterAbi = walk.context.facts.get(declaration, rustSourceParameterAbiFactKey) ??
+        walk.context.facts.resolve(declaration, rustSourceParameterAbiFactKey);
+      if (parameterAbi !== undefined) {
+        walk.context.facts.set(identifier, rustSourceParameterAbiFactKey, parameterAbi, [
+          { message: "rust project-source parameter ABI use" },
+        ]);
+      }
+    }
     const declarationCarrier = walk.context.facts.get(declaration, rustRuntimeCarrierKey);
     if (declarationCarrier !== undefined) {
       return setCarrierFact(walk, identifier, declarationCarrier.carrier);
     }
     if (declarationKind === KindParameter || declarationKind === KindVariableDeclaration ||
       declarationKind === KindBindingElement) {
-      const facts = walk.context.facts;
-      const parameterAbi = declarationKind === KindParameter
-        ? facts.get(declaration, rustSourceParameterAbiFactKey) ??
-          walk.context.facts.resolve(declaration, rustSourceParameterAbiFactKey)
-        : undefined;
-      if (parameterAbi !== undefined) {
-        facts.set(identifier, rustSourceParameterAbiFactKey, parameterAbi, [
-          { message: "rust project-source parameter ABI use" },
-        ]);
-      }
       const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
       if (annotated !== undefined) {
         setCarrierFact(walk, declaration, annotated);
@@ -2457,7 +2543,8 @@ function applySelectedProjectSourceCall(
   } else if (expressionKind === KindNewExpression || declarationKind === "KindConstructor") {
     target = { form: "constructor", typeCarrier: resultCarrier };
     operationKind = "constructor";
-  } else if (declarationKind === "KindMethodDeclaration") {
+  } else if (declarationKind === "KindMethodDeclaration" ||
+    declarationKind === "KindMethodSignature") {
     const methodName = rustProjectCallableTargetName(selectedDeclaration, walk.context);
     if (methodName === undefined) {
       return undefined;
@@ -2478,7 +2565,12 @@ function applySelectedProjectSourceCall(
       if (receiver === undefined) {
         return undefined;
       }
-      resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+      const receiverCarrier = resolveExpressionCarrier(
+        walk,
+        receiver,
+        sourceFile,
+        undefined,
+      );
       const selfMode = walk.context.facts.get(selectedDeclaration, rustSelfModeFactKey) ??
         walk.context.facts.resolve(selectedDeclaration, rustSelfModeFactKey);
       if (selfMode === undefined) {
@@ -2488,7 +2580,39 @@ function applySelectedProjectSourceCall(
       if (mutatesSelf) {
         recordBindingWrite(walk, receiver, "referent");
       }
-      target = { form: "method", name: methodName, mutatesSelf };
+      const owner = walk.context.projectTypes.definitionContainingDeclaration(selectedDeclaration);
+      const ownerRelationship = owner === undefined || receiverCarrier === undefined
+        ? undefined
+        : walk.context.projectTypes.relationship(receiverCarrier, owner);
+      const ownerCarrier = ownerRelationship?.kind === "related"
+        ? ownerRelationship.targetType
+        : undefined;
+      const virtualSlot = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner)
+        ? rustProjectMemberSlotName(ast, selectedDeclaration, "virtual")
+        : undefined;
+      const exactSlot = virtualSlot === undefined
+        ? undefined
+        : rustProjectMemberSlotName(ast, selectedDeclaration, "exact");
+      if (owner !== undefined && walk.context.projectTypes.isPolymorphic(owner) &&
+        (virtualSlot === undefined || exactSlot === undefined || ownerCarrier === undefined)) {
+        return undefined;
+      }
+      const receiverKind = ast.kindName(receiver);
+      target = {
+        form: "method",
+        name: methodName,
+        mutatesSelf,
+        ...(virtualSlot === undefined || exactSlot === undefined
+          ? {}
+          : {
+              dispatch: {
+                virtualSlot,
+                exactSlot,
+                selected: receiverKind === "KindSuperKeyword" ? "exact" : "virtual",
+                ownerCarrier: ownerCarrier!,
+              },
+            }),
+      };
     }
   } else if (declarationKind === KindFunctionDeclaration) {
     const name = ast.text(ast.name(selectedDeclaration));
@@ -3063,7 +3187,10 @@ function recordForOfFacts(
 // --- Project-source classes and enums --------------------------------------
 
 function sourceTypeCarrierForDeclaration(walk: RustFactWalk, declaration: Node): TargetTypeRef | undefined {
-  return walk.sourceTypes.carrierForDeclaration(declaration, walk.context.ast);
+  const definition = walk.context.projectTypes.definitionForDeclaration(declaration);
+  return definition === undefined
+    ? walk.sourceTypes.carrierForDeclaration(declaration, walk.context.ast)
+    : walk.context.projectTypes.openCarrier(definition);
 }
 
 function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
@@ -3132,10 +3259,17 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
     return;
   }
   const previousThis = walk.currentThisCarrier;
+  const previousSuper = walk.currentSuperCarrier;
   walk.currentThisCarrier = classCarrier;
+  const definition = walk.context.projectTypes.definitionForDeclaration(declaration);
+  walk.currentSuperCarrier = definition === undefined
+    ? undefined
+    : walk.context.projectTypes.heritageForDefinition(definition).find((edge) =>
+        edge.kind === "extends" && edge.target.kind === "class")?.targetType;
   const members = requireDenseSourceNodes(walk, ast.members(declaration), "Class declaration contains an undefined or non-data member slot.");
   if (members === undefined) {
     walk.currentThisCarrier = previousThis;
+    walk.currentSuperCarrier = previousSuper;
     return;
   }
   for (const member of members) {
@@ -3170,6 +3304,7 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
           walk.currentCallableDeclaration = previousCallable;
           walk.currentGeneratorDeclaration = previousGenerator;
           walk.currentThisCarrier = previousThis;
+          walk.currentSuperCarrier = previousSuper;
           return;
         }
         for (const statement of statements) {
@@ -3182,6 +3317,7 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
     }
   }
   walk.currentThisCarrier = previousThis;
+  walk.currentSuperCarrier = previousSuper;
 }
 
 function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): void {
@@ -3196,12 +3332,28 @@ function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): void {
     return;
   }
   for (const member of members) {
-    if (ast.kindName(member) !== "KindPropertySignature") {
-      continue;
-    }
-    const fieldCarrier = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member));
-    if (fieldCarrier !== undefined) {
-      setCarrierFact(walk, member, fieldCarrier);
+    const memberKind = ast.kindName(member);
+    if (memberKind === "KindPropertySignature") {
+      const fieldCarrier = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member));
+      if (fieldCarrier !== undefined) {
+        setCarrierFact(walk, member, fieldCarrier);
+      }
+    } else if (memberKind === "KindMethodSignature") {
+      walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
+        { message: "rust reference-backed project interface method self mode" },
+      ]);
+      recordCallableReturnFact(walk, member);
+      const parameters = requireDenseSourceNodes(
+        walk,
+        ast.parameters(member),
+        "Interface method contains an undefined or non-data parameter slot.",
+      );
+      if (parameters === undefined) {
+        return;
+      }
+      for (const parameter of parameters) {
+        recordParameterAbiFacts(walk, parameter);
+      }
     }
   }
 }
@@ -3989,6 +4141,7 @@ function resolveFunctionExpressionCarrier(
     walk.operationOptions,
   );
   if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
+    rustClosureProtocol(selectedExpected) === undefined &&
     rustCallableProtocol(selectedExpected) === undefined)) {
     return undefined;
   }
@@ -3997,12 +4150,13 @@ function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const callable = rustCallableProtocol(selectedExpected);
+  const closure = rustClosureProtocol(selectedExpected);
   const selectedParameters = selectedExpected.kind === "function-pointer"
     ? selectedExpected.args
-    : callable?.parameters;
+    : closure?.parameters ?? callable?.parameters;
   const selectedResult = selectedExpected.kind === "function-pointer"
     ? selectedExpected.result
-    : callable?.result;
+    : closure?.result ?? callable?.result;
   if (selectedParameters === undefined || selectedResult === undefined) {
     return undefined;
   }
@@ -4078,7 +4232,7 @@ function resolveFunctionExpressionCarrier(
       return undefined;
     }
   }
-  const closureCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer"
+  const closureCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
     ? { ...selectedExpected, result: bodyCarrier }
     : rustCallableTargetType(selectedParameters, bodyCarrier);
   const captures = collectRustClosureCaptures(walk, expression, body);

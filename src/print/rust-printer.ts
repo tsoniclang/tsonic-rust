@@ -54,7 +54,8 @@ export function printRustItem(item: RustItem): string {
     case "struct": {
       const structAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
-      const header = `${structAttrs}${derives}${printRustVisibility(item.visibility)}struct ${item.name} {`;
+      const generics = printRustTypeParameters(item.typeParams);
+      const header = `${structAttrs}${derives}${printRustVisibility(item.visibility)}struct ${item.name}${generics} {`;
       const fields = item.fields.map((field) => `    ${printRustVisibility(field.visibility)}${field.name}: ${printRustType(field.type)},`).join("\n");
       return fields.length === 0 ? `${header}}` : `${header}\n${fields}\n}`;
     }
@@ -65,26 +66,58 @@ export function printRustItem(item: RustItem): string {
         .join("\n");
       return `${derives}${printRustVisibility(item.visibility)}enum ${item.name} {\n${variants}\n}`;
     }
-    case "impl": {
-      const rendered = item.functions.map((fn) => {
-        const selfPrefix = fn.selfParam === undefined ? "" : fn.selfParam === "ref" ? "&self" : "&mut self";
+    case "trait": {
+      const attrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
+      const generics = printRustTypeParameters(item.typeParams);
+      const renderedSuperTraits = item.superTraits?.map(printRustType) ?? [];
+      const superTraits = renderedSuperTraits.length === 0
+        ? ""
+        : `: ${renderedSuperTraits.join(" + ")}`;
+      const functions = item.functions.map((fn) => {
+        const selfParam = printRustSelfParam(fn.selfParam);
         const params = fn.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`);
-        const allParams = selfPrefix.length === 0 ? params : [selfPrefix, ...params];
+        const allParams = selfParam === undefined ? params : [selfParam, ...params];
         const returnSuffix = fn.fallible === true
           ? ` -> rt::TsonicResult<${fn.returnType === undefined ? "()" : printRustType(fn.returnType)}>`
           : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
-        const header = `${fnAttrs}${printRustFunctionHeader(`    ${printRustVisibility(fn.visibility)}${fn.isAsync === true ? "async " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
+        return `${fnAttrs}${printRustFunctionSignature(`    fn `, fn.name, "", allParams, returnSuffix, 1)};`;
+      }).join("\n");
+      const declaration = `${printRustVisibility(item.visibility)}trait ${item.name}${generics}`;
+      const flatHeader = `${declaration}${superTraits}`;
+      const expandedHeader = renderedSuperTraits.length > 0 && flatHeader.length > rustFormatWidth
+        ? `${declaration}:\n    ${renderedSuperTraits.join(" + ")}\n{`
+        : `${flatHeader} {`;
+      return functions.length === 0
+        ? expandedHeader.includes("\n")
+          ? `${attrs}${expandedHeader}\n}`
+          : `${attrs}${flatHeader} {}`
+        : `${attrs}${expandedHeader}\n${functions}\n}`;
+    }
+    case "impl": {
+      const rendered = item.functions.map((fn) => {
+        const selfPrefix = printRustSelfParam(fn.selfParam);
+        const params = fn.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`);
+        const allParams = selfPrefix === undefined ? params : [selfPrefix, ...params];
+        const returnSuffix = fn.fallible === true
+          ? ` -> rt::TsonicResult<${fn.returnType === undefined ? "()" : printRustType(fn.returnType)}>`
+          : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
+        const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
+        const visibility = item.trait === undefined ? printRustVisibility(fn.visibility) : "";
+        const header = `${fnAttrs}${printRustFunctionHeader(`    ${visibility}${fn.isAsync === true ? "async " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
         const body = printRustBlockStatements(fn.body, 2);
         return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
       }).join("\n\n");
-      return `impl ${item.name} {\n${rendered}\n}`;
+      const generics = printRustTypeParameters(item.typeParams);
+      const target = printRustType(item.target);
+      const header = item.trait === undefined
+        ? `impl${generics} ${target}`
+        : `impl${generics} ${printRustType(item.trait)} for ${target}`;
+      return rendered.length === 0 ? `${header} {}` : `${header} {\n${rendered}\n}`;
     }
     case "function": {
       const params = item.params.map((param) => `${param.mutable === true ? "mut " : ""}${param.name}: ${printRustType(param.type)}`);
-      const generics = item.typeParams === undefined || item.typeParams.length === 0
-        ? ""
-        : `<${item.typeParams.map(printRustTypeParameter).join(", ")}>`;
+      const generics = printRustTypeParameters(item.typeParams);
       const returnSuffix = item.fallible === true
         ? ` -> rt::TsonicResult<${item.returnType === undefined ? "()" : printRustType(item.returnType)}>`
         : item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
@@ -101,6 +134,22 @@ export function printRustItem(item: RustItem): string {
       return body.length === 0 ? `${header}}` : `${header}\n${body}\n}`;
     }
   }
+}
+
+function printRustSelfParam(selfParam: import("../backend/rust-ast/nodes.js").RustSelfParam | undefined): string | undefined {
+  return selfParam === undefined
+    ? undefined
+    : selfParam === "ref"
+      ? "&self"
+      : selfParam === "mut-ref"
+        ? "&mut self"
+        : "self: std::rc::Rc<Self>";
+}
+
+function printRustTypeParameters(parameters: readonly import("../backend/rust-ast/nodes.js").RustTypeParameter[] | undefined): string {
+  return parameters === undefined || parameters.length === 0
+    ? ""
+    : `<${parameters.map(printRustTypeParameter).join(", ")}>`;
 }
 
 function printRustFunctionHeader(
@@ -121,6 +170,27 @@ function printRustFunctionHeader(
     `${prefix}${name}${generics}(`,
     ...parameters.map((parameter) => `${parameterIndent}${parameter},`),
     `${closingIndent})${returnSuffix} {`,
+  ].join("\n");
+}
+
+function printRustFunctionSignature(
+  prefix: string,
+  name: string,
+  generics: string,
+  parameters: readonly string[],
+  returnSuffix: string,
+  depth: number,
+): string {
+  const flat = `${prefix}${name}${generics}(${parameters.join(", ")})${returnSuffix}`;
+  if (flat.length <= rustFormatWidth || parameters.length === 0) {
+    return flat;
+  }
+  const parameterIndent = indentText(depth + 1);
+  const closingIndent = indentText(depth);
+  return [
+    `${prefix}${name}${generics}(`,
+    ...parameters.map((parameter) => `${parameterIndent}${parameter},`),
+    `${closingIndent})${returnSuffix}`,
   ].join("\n");
 }
 
@@ -155,6 +225,12 @@ export function printRustType(type: RustType): string {
       return args.length === 0
         ? type.path
         : `${type.path}<${args.join(", ")}>`;
+    }
+    case "trait-object": {
+      return `dyn ${printRustType(type.trait)}`;
+    }
+    case "reference": {
+      return `${type.mutable ? "&mut " : "&"}${printRustType(type.referent)}`;
     }
     case "fixed-array": {
       return `[${printRustType(type.element)}; ${type.length}]`;
@@ -895,14 +971,18 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.callee, RustPrecedence.Postfix, false)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "associated-call": {
-      return `${printRustAssociatedOwner(expression.owner)}::${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${printRustAssociatedCallOwner(expression)}::${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "method-call": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
       return `${receiver}.${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "field": {
-      return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}.${expression.name}`;
+      const tupleFieldSeparator = /^[0-9]+$/u.test(expression.name) &&
+          expression.receiver.kind === "field" && /^[0-9]+$/u.test(expression.receiver.name)
+        ? " ."
+        : ".";
+      return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}${tupleFieldSeparator}${expression.name}`;
     }
     case "index": {
       return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(expression.index)}]`;
@@ -1178,7 +1258,7 @@ function printRustExprFitted(
       );
     case "associated-call":
       return printFittedCall(
-        `${printRustAssociatedOwner(expression.owner)}::${expression.method}`,
+        `${printRustAssociatedCallOwner(expression)}::${expression.method}`,
         expression.args,
         depth,
         column,
@@ -1192,7 +1272,7 @@ function printRustExprFitted(
       }
       const hasClosure = expression.args.some((argument) =>
         argument.kind === "closure" || argument.kind === "closure-block");
-      if (hasClosure && rustMethodCallKeepsTrailingClosureAttached(expression)) {
+      if (hasClosure && rustMethodCallKeepsTrailingClosureAttached(expression, depth, column)) {
         const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
         return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
       }
@@ -1248,8 +1328,19 @@ function printRustExprFitted(
         ? `${rendered}\n${indentText(depth + 1)}.await`
         : appendToLastLine(rendered, ".await");
     }
-    case "try":
+    case "try": {
+      if (expression.expr.kind === "method-call" &&
+        rustMethodCallKeepsTrailingClosureAttached(expression.expr, depth, column + 1)) {
+        const receiver = printOperand(expression.expr.receiver, RustPrecedence.Postfix, false);
+        return appendToLastLine(printFittedCall(
+          `${receiver}.${expression.expr.method}`,
+          expression.expr.args,
+          depth,
+          column + 1,
+        ), "?");
+      }
       return appendToLastLine(printRustExprFitted(expression.expr, depth, column + 1), "?");
+    }
     case "reference": {
       const prefix = expression.mutable === true ? "&mut " : "&";
       return `${prefix}${printRustExprFitted(expression.expr, depth, column + prefix.length)}`;
@@ -1283,6 +1374,16 @@ function printRustExprFitted(
             expression.operator === ">" || expression.operator === ">=")
         ? `(${renderedLeft})`
         : renderedLeft;
+      if (!left.includes("\n") &&
+        (expression.right.kind === "block" || expression.right.kind === "evaluate-then")) {
+        const separator = ` ${expression.operator} `;
+        const right = printRustExprFitted(
+          expression.right,
+          depth,
+          column + left.length + separator.length,
+        );
+        return `${left}${separator}${right}`;
+      }
       const joined = appendToLastLine(
         left,
         ` ${expression.operator} ${printBinaryOperand(expression.right, expression.operator, true)}`,
@@ -1354,6 +1455,14 @@ function printRustExprFitted(
     default:
       return flat;
   }
+}
+
+function printRustAssociatedCallOwner(
+  expression: Extract<RustExpr, { readonly kind: "associated-call" }>,
+): string {
+  return expression.trait === undefined
+    ? printRustAssociatedOwner(expression.owner)
+    : `<${printRustType(expression.owner)} as ${printRustType(expression.trait)}>`;
 }
 
 function printRustLetInitializer(
@@ -1478,20 +1587,48 @@ function rustMethodChain(expression: RustExpr): RustMethodChain | undefined {
 function rustMethodChainRequiresVerticalLayout(expression: RustExpr): boolean {
   const chain = rustMethodChain(expression);
   return chain !== undefined &&
-    !rustMethodCallKeepsTrailingClosureAttached(expression) &&
+    !rustMethodCallKeepsTrailingClosureAttached(expression, 0, 0) &&
     printRustExpr(expression).length > rustMethodChainWidth &&
     chain.steps.filter((step) => step.kind === "method" || step.kind === "field").length > 1;
 }
 
-function rustMethodCallKeepsTrailingClosureAttached(expression: RustExpr): boolean {
+function rustMethodCallKeepsTrailingClosureAttached(
+  expression: RustExpr,
+  depth: number,
+  column: number,
+): boolean {
   if (expression.kind !== "method-call") {
     return false;
   }
   const trailing = expression.args[expression.args.length - 1];
-  return trailing?.kind === "closure" &&
-    printRustExpr(trailing.body).length > rustMethodChainWidth &&
-    printRustExpr(expression.receiver).length + expression.method.length + 3 <=
-      rustInlineFieldReceiverWidth;
+  if (trailing?.kind !== "closure" && trailing?.kind !== "closure-block") {
+    return false;
+  }
+  const preceding = expression.args.slice(0, -1).map(printRustExpr);
+  if (preceding.some((argument) => argument.includes("\n"))) {
+    return false;
+  }
+  const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
+  const prefix = `${receiver}.${expression.method}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
+  const renderedClosure = printRustExprFitted(
+    trailing,
+    depth,
+    column + prefix.length,
+  );
+  if (trailing.kind === "closure" && renderedClosure.includes("\n")) {
+    const flatClosure = printRustExpr(trailing);
+    const continuationWidth = indentText(depth + 1).length + expression.method.length +
+      (preceding.length === 0 ? 3 : preceding.join(", ").length + 5) + flatClosure.length;
+    if (!flatClosure.includes("\n") && continuationWidth <= rustFormatWidth) {
+      return false;
+    }
+  }
+  const closureOpening = firstLine(renderedClosure);
+  const openingWidth = prefix.length + closureOpening.length + 1;
+  const selectorCount = rustMethodChain(expression)?.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field").length ?? 1;
+  return column + openingWidth <= rustFormatWidth &&
+    (selectorCount === 1 || openingWidth <= rustMethodChainWidth);
 }
 
 function rustMethodChainPrefersVerticalLayout(expression: RustExpr): boolean {
@@ -1499,7 +1636,7 @@ function rustMethodChainPrefersVerticalLayout(expression: RustExpr): boolean {
   return rustMethodChainRequiresVerticalLayout(expression) ||
     chain !== undefined && printRustExpr(expression).length > rustNestedCallWidth &&
     chain.steps.some((step) => step.kind === "method" && step.args.some((argument) =>
-      argument.kind !== "closure" && argument.kind !== "closure-block" &&
+      argument.kind !== "closure" && argument.kind !== "closure-block" && argument.kind !== "block" &&
       rustExpressionContainsClosure(argument)));
 }
 
@@ -1508,7 +1645,7 @@ function rustMethodChainBreaksReceiverWhenExpanded(chain: RustMethodChain): bool
   const firstSelectorWidth = first?.kind === "method" || first?.kind === "field"
     ? first.name.length + 1
     : first?.kind === "try" ? 1 : 0;
-  return chain.steps.length > 1 ||
+  return chain.steps.filter((step) => step.kind === "method" || step.kind === "field").length > 1 ||
     printRustExpr(chain.base).length + firstSelectorWidth > rustInlineFieldReceiverWidth ||
     chain.steps.some((step, index) =>
       step.kind === "try" && chain.steps[index + 1]?.kind === "method");
@@ -1569,6 +1706,9 @@ function printFittedMethodChain(
       step.args,
       depth + 1,
       selectedContinuationIndent.length + 1,
+      false,
+      false,
+      depth,
     );
     const inlineFirstMethod = !breakBeforeFirstMethod && !emittedCall &&
       !rendered.includes("\n") &&
@@ -1588,6 +1728,7 @@ function printFittedCall(
   column: number,
   forceExpanded = false,
   preferNestedBreak = false,
+  inlineArgumentDepth = depth,
 ): string {
   const flat = `${callable}(${arguments_.map(printRustExpr).join(", ")})`;
   if (arguments_.length === 0) {
@@ -1627,7 +1768,7 @@ function printFittedCall(
     return appendToLastLine(
       `${prefix}${printRustExprFitted(
         arguments_[0],
-        depth,
+        inlineArgumentDepth,
         column + prefix.length,
       )}`,
       ")",
@@ -2022,7 +2163,7 @@ function printNestedCallArgument(
   }
   const flatArgument = printRustExpr(argument);
   if (!forceExpanded && argument.kind === "method-call" &&
-    rustMethodCallKeepsTrailingClosureAttached(argument)) {
+    rustMethodCallKeepsTrailingClosureAttached(argument, depth, column)) {
     return printRustExprFitted(argument, depth, column);
   }
   if (!forceExpanded && argument.kind === "method-call" &&

@@ -74,6 +74,13 @@ function publicItemSurface(item: RustItem): readonly string[] {
             item.name,
             ...item.attrs ?? [],
             ...item.derives,
+            ...(item.typeParams ?? []).map((parameter) =>
+              encodeRustContractParts([
+                "type-parameter",
+                parameter.name,
+                ...parameter.bounds.map((bound) =>
+                  bound.kind === "trait" ? bound.path : `'${bound.name}`),
+              ])),
             ...item.fields.map((field) =>
               encodeRustContractParts([
                 "field",
@@ -83,10 +90,15 @@ function publicItemSurface(item: RustItem): readonly string[] {
               ])),
           ])]
         : [];
+    case "trait":
+      return item.visibility === "public" ? [printRustItem(item)] : [];
     case "impl":
+      if (item.trait !== undefined) {
+        return [];
+      }
       return item.functions
         .filter((fn) => fn.visibility === "public")
-        .map((fn) => publicMethodSurface(item.name, fn));
+        .map((fn) => publicMethodSurface(printRustType(item.target), fn));
     case "mod-decl":
       return item.visibility === "public"
         ? [encodeRustContractParts(["module", item.name])]

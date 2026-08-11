@@ -219,11 +219,11 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /values\.for_each_zero\(\|\|/u);
-  assert.match(source, /values\.for_each\(\|value, index, array\|/u);
+  assert.match(source, /values\.for_each_zero\(\{[\s\S]*move \|\|/u);
+  assert.match(source, /values\.for_each\(\{[\s\S]*move \|value, index, array\|/u);
   assert.match(source, /values\.map_with_array\(\|value, index, array\|/u);
   assert.match(source, /values\.filter_with_array\(\|value, index, array\|/u);
   assert.match(source, /values\.reduce_with_array\(\s*0,\s*\|sum, value, current, array\|/u);
-  assert.match(source, /values\.reduce_from_first_with_array\(\|sum, value, current, array\|/u);
+  assert.match(source, /values\s*\.reduce_from_first_with_array\(\|sum, value, current, array\|/u);
   assert.equal(validateGeneratedProject("js-array-callbacks", result.artifacts, { run: true }).status, 0);
 });

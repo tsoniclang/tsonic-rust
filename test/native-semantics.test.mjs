@@ -48,7 +48,7 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /let __tsonic_field_value = value;/u);
   assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(__tsonic_field_value,\)\)/u);
   assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
-  assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value\)/u);
+  assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value(?:_[0-9]+)?\)/u);
   assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
   assert.match(text, /let counter = Counter::new\(10\);/u);
   assert.match(text, /counter\.clone\(\)\.add\(5\);/u);
@@ -183,12 +183,16 @@ export function isGreen(color: Color): boolean {
   assert.match(text, /color == Color::Green/u);
 });
 
-test("class inheritance fails closed", () => {
+test("generic virtual methods fail closed at the Rust object-safety boundary", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
 export class Base {
   constructor() {}
+
+  identity<T>(value: T): T {
+    return value;
+  }
 }
 
 export class Derived extends Base {
@@ -202,7 +206,8 @@ export class Derived extends Base {
 
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("inheritance")));
+    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+    diagnostic.message.includes("object-safe non-generic synchronous Rust ABI")));
 });
 
 test("generated cargo binary proves class and enum lowering at runtime", { timeout: 300_000 }, () => {

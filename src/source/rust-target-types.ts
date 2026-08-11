@@ -39,14 +39,21 @@ export interface RustSourceTypeCarrierValue {
   readonly fileName: string;
   readonly typeName: string;
   readonly shape: "object" | "enum";
+  readonly typeArguments: readonly TargetTypeRef[];
 }
 
 export function rustSourceTypeCarrier(
   fileName: string,
   typeName: string,
   shape: "object" | "enum",
+  typeArguments: readonly TargetTypeRef[] = [],
 ): TargetTypeRef {
-  return { kind: "target-specific", target: "rust", name: "source-type", value: { fileName, typeName, shape } };
+  return {
+    kind: "target-specific",
+    target: "rust",
+    name: "source-type",
+    value: { fileName, typeName, shape, typeArguments },
+  };
 }
 
 export function rustSourceTypeCarrierValue(
@@ -60,21 +67,26 @@ export function rustSourceTypeCarrierValue(
     return undefined;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 3 || keys[0] !== "fileName" || keys[1] !== "shape" || keys[2] !== "typeName") {
+  if (keys.length !== 4 || keys[0] !== "fileName" || keys[1] !== "shape" ||
+    keys[2] !== "typeArguments" || keys[3] !== "typeName") {
     return undefined;
   }
   const candidate = value as {
     readonly fileName?: unknown;
     readonly typeName?: unknown;
     readonly shape?: unknown;
+    readonly typeArguments?: unknown;
   };
   return typeof candidate.fileName === "string" && candidate.fileName.length > 0 &&
     typeof candidate.typeName === "string" && candidate.typeName.length > 0 &&
-    (candidate.shape === "object" || candidate.shape === "enum")
+    (candidate.shape === "object" || candidate.shape === "enum") &&
+    isDenseDataArray(candidate.typeArguments) &&
+    candidate.typeArguments.every((argument) => isRustTargetTypeRef(argument))
     ? {
         fileName: candidate.fileName,
         typeName: candidate.typeName,
         shape: candidate.shape,
+        typeArguments: candidate.typeArguments as readonly TargetTypeRef[],
       }
     : undefined;
 }
@@ -225,8 +237,42 @@ export function substituteRustTargetTypeParameters(
         args: type.args.map((argument) => substituteRustTargetTypeParameters(argument, substitutions)),
         result: substituteRustTargetTypeParameters(type.result, substitutions),
       };
+    case "closure":
+      return {
+        ...type,
+        args: type.args.map((argument) => substituteRustTargetTypeParameters(argument, substitutions)),
+        result: substituteRustTargetTypeParameters(type.result, substitutions),
+      };
     case "associated-type":
       return { ...type, owner: substituteRustTargetTypeParameters(type.owner, substitutions) };
+    case "target-specific": {
+      const sourceType = rustSourceTypeCarrierValue(type);
+      if (sourceType !== undefined) {
+        return rustSourceTypeCarrier(
+          sourceType.fileName,
+          sourceType.typeName,
+          sourceType.shape,
+          sourceType.typeArguments.map((argument) =>
+            substituteRustTargetTypeParameters(argument, substitutions)),
+        );
+      }
+      const namedType = rustNamedTypeCarrierValue(type);
+      if (namedType !== undefined) {
+        return rustNamedTargetType(
+          namedType.id,
+          namedType.path,
+          namedType.typeArguments.map((argument) =>
+            substituteRustTargetTypeParameters(argument, substitutions)),
+        );
+      }
+      const fixedArray = rustFixedArrayCarrierValue(type);
+      return fixedArray === undefined
+        ? type
+        : rustFixedArrayTargetType(
+            substituteRustTargetTypeParameters(fixedArray.element, substitutions),
+            fixedArray.length,
+          );
+    }
     default:
       return type;
   }
@@ -273,8 +319,29 @@ export function inferRustTargetTypeParameterBindings(
         return right.kind === "function-pointer" && stringListsEqual(left.abi, right.abi) &&
           left.args.length === right.args.length && left.args.every((argument, index) => match(argument, right.args[index]!)) &&
           match(left.result, right.result);
+      case "closure":
+        return right.kind === "closure" && left.args.length === right.args.length &&
+          left.args.every((argument, index) => match(argument, right.args[index]!)) &&
+          match(left.result, right.result);
       case "associated-type":
         return right.kind === "associated-type" && left.name === right.name && match(left.owner, right.owner);
+      case "target-specific": {
+        if (right.kind !== "target-specific") {
+          return false;
+        }
+        const leftSource = rustSourceTypeCarrierValue(left);
+        const rightSource = rustSourceTypeCarrierValue(right);
+        if (leftSource !== undefined || rightSource !== undefined) {
+          return leftSource !== undefined && rightSource !== undefined &&
+            leftSource.fileName === rightSource.fileName &&
+            leftSource.typeName === rightSource.typeName &&
+            leftSource.shape === rightSource.shape &&
+            leftSource.typeArguments.length === rightSource.typeArguments.length &&
+            leftSource.typeArguments.every((argument, index) =>
+              match(argument, rightSource.typeArguments[index]!));
+        }
+        return rustTargetTypeRefEquals(left, right);
+      }
       default:
         return rustTargetTypeRefEquals(left, right);
     }
@@ -319,6 +386,21 @@ export function rustCallableProtocol(
   const [argumentsCarrier, result] = carrier.typeArguments;
   return argumentsCarrier?.kind === "tuple" && result !== undefined
     ? { parameters: argumentsCarrier.elements, result }
+    : undefined;
+}
+
+export function rustClosureTargetType(
+  parameters: readonly TargetTypeRef[],
+  result: TargetTypeRef,
+): TargetTypeRef {
+  return { kind: "closure", args: parameters, result };
+}
+
+export function rustClosureProtocol(
+  carrier: TargetTypeRef | undefined,
+): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+  return carrier?.kind === "closure"
+    ? { parameters: carrier.args, result: carrier.result }
     : undefined;
 }
 
@@ -540,7 +622,7 @@ export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined
 export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined || carrier.kind === "type-parameter" ||
     carrier.kind === "associated-type" || carrier.kind === "lifetime" ||
-    carrier.kind === "opaque" || carrier.kind === "pointer") {
+    carrier.kind === "opaque" || carrier.kind === "pointer" || carrier.kind === "closure") {
     return false;
   }
   if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer") {

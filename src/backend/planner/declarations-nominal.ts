@@ -166,7 +166,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   }
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
-    const planned = planMethod(method, context);
+    const planned = planProjectMethod(method, context);
     if (planned === undefined) {
       return undefined;
     }
@@ -192,7 +192,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     derives: ["Clone", "Debug", "PartialEq"],
     fields: [stateField],
   };
-  return [structItem, { kind: "impl", name: className, functions: implFunctions }];
+  return [structItem, {
+    kind: "impl",
+    target: { kind: "named", path: className },
+    functions: implFunctions,
+  }];
 }
 
 function planConstructor(
@@ -362,7 +366,7 @@ function sourceSubtreeContainsThis(node: Node, ast: AstReader): boolean {
   return found;
 }
 
-function planMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
+export function planProjectMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
   const { ast } = context.input;
   const sourceMethodName = rustProjectCallableTargetName(member, context.input);
   const methodName = rustPublicName(sourceMethodName ?? "").name;
@@ -386,7 +390,7 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     return undefined;
   }
   const generatorFact = context.input.facts.getFact(member, rustGeneratorFactKey);
-  const syntheticNames = createRustSyntheticNameState(ast, member, []);
+  const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
     requireStatic: generatorFact !== undefined,
   });

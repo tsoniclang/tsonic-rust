@@ -43,6 +43,8 @@ import {
   rustOptionTargetType,
   rustSliceMutRefTargetType,
   rustSliceRefTargetType,
+  rustSourceTypeCarrier,
+  rustSourceTypeCarrierValue,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustTupleTargetType,
@@ -305,7 +307,12 @@ function resolveRustTargetTypeSyntax(
   if (sourceProfileName !== undefined) {
     return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options);
   }
-  const sourceType = resolveProjectSourceCarrier(symbol, context, options);
+  const sourceType = resolveProjectSourceCarrier(
+    symbol,
+    typeArguments as readonly TargetTypeRef[],
+    context,
+    options,
+  );
   if (sourceType !== undefined) {
     return sourceType;
   }
@@ -430,7 +437,18 @@ function resolveRustTargetType(
       }
     }
 
-    const sourceType = resolveProjectSourceCarrier(symbol, context, options);
+    const sourceTypeArguments = context.typeShape.getEffectiveTypeArguments(type);
+    const resolvedSourceTypeArguments = sourceTypeArguments?.map((argument) =>
+      resolveRustTargetType(argument, context, options, resolving));
+    const sourceType = resolvedSourceTypeArguments === undefined ||
+        resolvedSourceTypeArguments.some((argument) => argument === undefined)
+      ? undefined
+      : resolveProjectSourceCarrier(
+          symbol,
+          resolvedSourceTypeArguments as readonly TargetTypeRef[],
+          context,
+          options,
+        );
     if (sourceType !== undefined) {
       return sourceType;
     }
@@ -853,6 +871,7 @@ function resolveSourceProfileCarrierFromArguments(
 
 function resolveProjectSourceCarrier(
   symbol: Symbol | undefined,
+  typeArguments: readonly TargetTypeRef[],
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
@@ -865,8 +884,14 @@ function resolveProjectSourceCarrier(
   }
   for (const declaration of declarations) {
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
-    if (carrier !== undefined) {
-      return carrier;
+    const sourceType = rustSourceTypeCarrierValue(carrier);
+    if (sourceType !== undefined) {
+      return rustSourceTypeCarrier(
+        sourceType.fileName,
+        sourceType.typeName,
+        sourceType.shape,
+        typeArguments,
+      );
     }
   }
   return undefined;

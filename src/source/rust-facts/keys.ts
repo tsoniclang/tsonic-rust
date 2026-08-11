@@ -365,6 +365,11 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly storageIndex: number;
       readonly resultCarrier: TargetTypeRef;
+      readonly dispatch?: {
+        readonly read: string;
+        readonly write: string;
+        readonly ownerCarrier: TargetTypeRef;
+      };
     }
   | {
       // Exact TSTS-selected project-source callable. The source lifecycle
@@ -373,7 +378,17 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly target:
         | { readonly form: "function"; readonly fileName: string; readonly name: string }
-        | { readonly form: "method"; readonly name: string; readonly mutatesSelf: boolean }
+        | {
+            readonly form: "method";
+            readonly name: string;
+            readonly mutatesSelf: boolean;
+            readonly dispatch?: {
+              readonly virtualSlot: string;
+              readonly exactSlot: string;
+              readonly selected: "virtual" | "exact";
+              readonly ownerCarrier: TargetTypeRef;
+            };
+          }
         | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef }
         | { readonly form: "callable"; readonly carrier: TargetTypeRef }
         | { readonly form: "constructor"; readonly typeCarrier: TargetTypeRef };
@@ -655,6 +670,16 @@ function rustTypedLocationPlanEquals(
 
 export const rustOptionWrapFactKey: RustPlanKey<{ readonly wrap: boolean }> =
   defineRustPlanKey("optionWrap", (left, right) => left.wrap === right.wrap);
+
+export interface RustProjectUpcastFact {
+  readonly sourceCarrier: TargetTypeRef;
+  readonly targetCarrier: TargetTypeRef;
+}
+
+export const rustProjectUpcastFactKey: RustPlanKey<RustProjectUpcastFact> =
+  defineRustPlanKey("projectUpcast", (left, right) =>
+    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
+    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier));
 
 export interface RustSourceBindingFact {
   readonly sourceName: string;

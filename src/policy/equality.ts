@@ -179,6 +179,10 @@ function rustTargetTypeRefEqualsValidated(
         stringListsEqual(left.abi, right.abi) &&
         targetTypeRefListsEqual(left.args, right.args) &&
         rustTargetTypeRefEqualsValidated(left.result, right.result);
+    case "closure":
+      return right.kind === left.kind &&
+        targetTypeRefListsEqual(left.args, right.args) &&
+        rustTargetTypeRefEqualsValidated(left.result, right.result);
     case "associated-type":
       return right.kind === left.kind && left.name === right.name &&
         rustTargetTypeRefEqualsValidated(left.owner, right.owner);
@@ -231,6 +235,9 @@ function validateRustTargetTypeRef(
           validateChildren(value.args) && validateChild(value.result) &&
           (value.abi === undefined ||
             (isDenseDataArray(value.abi) && value.abi.every((part) => typeof part === "string")));
+      case "closure":
+        return hasExactKeys(value, ["kind", "args", "result"], ["kind", "args", "result"]) &&
+          validateChildren(value.args) && validateChild(value.result);
       case "opaque":
         return hasExactKeys(value, ["kind", "id"], ["kind", "id"]) &&
           typeof value.id === "string" && value.id.length > 0;
