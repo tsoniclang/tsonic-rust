@@ -1629,7 +1629,7 @@ function refShape(context: RustPlanContext, argument: RustExpr, node: Node | und
   const sourceParameterAbi = node === undefined
     ? undefined
     : context.input.facts.getFact(node, rustSourceParameterAbiFactKey);
-  if (sourceParameterAbi?.mode === "ref") {
+  if (sourceParameterAbi?.mode === "ref" || sourceParameterAbi?.mode === "mut-ref") {
     return argument;
   }
   if (argument.kind === "string-literal") {

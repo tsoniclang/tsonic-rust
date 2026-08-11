@@ -83,6 +83,7 @@ import { rustTargetOperationIsDirectLocation } from "../../source/rust-facts/tar
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import {
+  applyRustArgumentMode,
   expressionCarrier,
   planExpression,
   planFinalizedSourceInput,
@@ -2076,7 +2077,7 @@ function planForOfStatement(
         kind: "call",
         path: `rt::iter_${fact.lowering.style}`,
         args: [fact.lowering.input === "reference"
-          ? { kind: "reference", expr: nonConsumingIterable }
+          ? applyRustArgumentMode(context, nonConsumingIterable, "ref", iterableNode)
           : nonConsumingIterable],
       }
     : fact.lowering.kind === "js-array"
