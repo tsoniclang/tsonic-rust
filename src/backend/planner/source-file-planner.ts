@@ -127,7 +127,6 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
   const initializationContext: RustPlanContext = {
     ...context,
     nonSnakeSeen,
-    emittedLocalNames: new Set(),
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },

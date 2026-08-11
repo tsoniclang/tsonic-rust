@@ -727,17 +727,6 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
       return undefined;
     }
   }
-  if (context.emittedLocalNames !== undefined) {
-    if (context.emittedLocalNames.has(name)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.naming",
-        `Binding '${sourceName}' collides with another binding in the same scope.`,
-      ));
-      return undefined;
-    }
-    context.emittedLocalNames.add(name);
-  }
   const declarationCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
   if (declarationCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

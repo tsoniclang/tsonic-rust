@@ -251,7 +251,6 @@ function planConstructor(
   );
   const constructorContext: RustPlanContext = {
     ...context,
-    emittedLocalNames: new Set(params.map((parameter) => parameter.name)),
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "named", path: className },
@@ -453,7 +452,6 @@ function planMethod(member: Node, context: RustPlanContext): RustImplFunction | 
     : allocateRustSyntheticName(syntheticNames, "generator");
   const bodyContext: RustPlanContext = {
     ...context,
-    emittedLocalNames: new Set(params.map((param) => param.name)),
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: returnType ?? { kind: "unit" },

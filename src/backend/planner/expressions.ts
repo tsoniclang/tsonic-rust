@@ -404,7 +404,6 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       }
       const closureContext: RustPlanContext = {
         ...context,
-        emittedLocalNames: new Set(params.map((parameter) => parameter.name)),
         controlFlow: { nextLoopId: 0 },
         controlTargets: undefined,
         completionBoundary: undefined,

@@ -204,7 +204,6 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     : allocateRustSyntheticName(syntheticNames, "generator");
   const bodyContext: RustPlanContext = {
     ...context,
-    emittedLocalNames: new Set(params.map((param) => param.name)),
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: returnType ?? { kind: "unit" },

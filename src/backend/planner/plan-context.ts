@@ -46,9 +46,6 @@ export interface RustPlanContext {
   // Identifier names with a proven write (assignment or increment) in the
   // enclosing function body. `let mut` is emitted only for proven writes.
   readonly mutatedNames?: ReadonlySet<string>;
-  // Binding names already emitted in the enclosing function scope, used to
-  // diagnose same-scope collisions.
-  readonly emittedLocalNames?: Set<string>;
   readonly syntheticNames?: RustSyntheticNameState;
   readonly controlFlow?: RustControlFlowState;
   readonly controlTargets?: readonly RustControlTarget[];

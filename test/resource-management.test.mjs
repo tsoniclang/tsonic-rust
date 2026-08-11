@@ -118,6 +118,36 @@ export async function run(): Promise<void> {
   validateGeneratedProject("resource-management-async", result.artifacts);
 });
 
+test("resource bindings follow authored lexical block scope", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+${syncResource}
+class AsyncResource {
+  constructor() {}
+  async [Symbol.asyncDispose](): Promise<void> {}
+}
+
+export async function run(): Promise<void> {
+  {
+    using resource = new Resource();
+  }
+  {
+    await using resource = new AsyncResource();
+  }
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.equal([...source.matchAll(/let resource =/gu)].length, 2);
+  assert.match(source, /resource\.dispose\(\)/u);
+  assert.match(source, /resource\.dispose_async\(\)\.await/u);
+  validateGeneratedProject("resource-management-lexical-scope", result.artifacts);
+});
+
 test("using skips null resources through the exact Option carrier", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
