@@ -187,6 +187,12 @@
   },
   {
     "area": "String",
+    "lane": "String.prototype.lastIndexOf",
+    "classification": "implemented",
+    "rowMember": "lastIndexOf"
+  },
+  {
+    "area": "String",
     "lane": "String.prototype.slice",
     "classification": "implemented",
     "rowMember": "slice"
@@ -202,6 +208,12 @@
     "lane": "String.prototype.charAt",
     "classification": "implemented",
     "rowMember": "charAt"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.charCodeAt",
+    "classification": "implemented",
+    "rowMember": "charCodeAt"
   },
   {
     "area": "String",
@@ -247,6 +259,18 @@
   },
   {
     "area": "String",
+    "lane": "String.prototype.trimLeft / trimRight",
+    "classification": "implemented",
+    "rowMember": "trimLeft"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.substring / substr",
+    "classification": "implemented",
+    "rowMember": "substring"
+  },
+  {
+    "area": "String",
     "lane": "String.prototype.split",
     "classification": "implemented",
     "rowMember": "split"
@@ -256,6 +280,30 @@
     "lane": "String.prototype.replace",
     "classification": "implemented",
     "rowMember": "replace"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.replaceAll",
+    "classification": "implemented",
+    "rowMember": "replaceAll"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.concat",
+    "classification": "implemented",
+    "rowMember": "concat"
+  },
+  {
+    "area": "String",
+    "lane": "String.prototype.valueOf",
+    "classification": "implemented",
+    "rowMember": "valueOf"
+  },
+  {
+    "area": "String",
+    "lane": "String.fromCharCode / String.fromCodePoint",
+    "classification": "implemented",
+    "rowMember": "fromCharCode"
   },
   {
     "area": "String",

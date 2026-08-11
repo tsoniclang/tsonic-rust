@@ -653,6 +653,36 @@ function finalizeTargetInputs(
         }],
       };
     }
+    case "free-call-str-slice": {
+      const receiver = input.receiver(form.receiverMode);
+      const elements = indexes.map((index) => input.argument(index, "ref"));
+      if (receiver === undefined || elements.some((entry) => entry === undefined)) {
+        return undefined;
+      }
+      const closed = elements as RustFinalizedSourceInput[];
+      const stringCarrier = rustStringTargetType();
+      if (closed.some((entry) => !rustTargetTypeRefEquals(entry.sourceCarrier, stringCarrier))) {
+        return undefined;
+      }
+      const elementCarrier = closed[0]?.parameterCarrier ?? {
+        kind: "pointer",
+        pointee: stringCarrier,
+        mutability: "const",
+      } as const;
+      return {
+        targetReceiver: none,
+        targetArguments: [
+          receiver,
+          {
+            source: { kind: "argument-slice", sourceIndexes: indexes },
+            elements: closed,
+            elementCarrier,
+            mode: "ref",
+            parameterCarrier: rustSliceRefTargetType(elementCarrier),
+          },
+        ],
+      };
+    }
     case "call-value-slice": {
       const leading = form.leadingArguments.map((argument, sourceIndex) =>
         input.argumentTo(sourceIndex, argument.mode, argument.carrier));

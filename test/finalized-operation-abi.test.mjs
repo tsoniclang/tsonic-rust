@@ -146,6 +146,47 @@ test("variadic string slices are total for empty and nonempty calls and reject o
   assert.equal(wrong, undefined);
 });
 
+test("receiver string slices preserve the exact receiver and every variadic argument", () => {
+  const form = {
+    form: "free-call-str-slice",
+    path: "js_string::concat",
+    receiverMode: "ref",
+  };
+  const pair = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: string,
+    sourceArgumentCarriers: [string, string],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const empty = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: string,
+    sourceArgumentCarriers: [],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+  const wrong = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form,
+    sourceReceiverCarrier: string,
+    sourceArgumentCarriers: [int32],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.equal(pair?.targetArguments[0].source.kind, "receiver");
+  assert.equal(pair?.targetArguments[1].source.kind, "argument-slice");
+  assert.deepEqual(pair?.targetArguments[1].source.sourceIndexes, [0, 1]);
+  assert.deepEqual(empty?.targetArguments[1].source.sourceIndexes, []);
+  assert.equal(wrong, undefined);
+});
+
 test("variadic value slices convert each source value exactly and always pass one slice", () => {
   const form = {
     form: "call-value-slice",

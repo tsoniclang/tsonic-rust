@@ -300,8 +300,8 @@ export function probe(name: string): boolean {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn probe\(name: &str\) -> rt::TsonicResult<bool> \{/u);
   assert.match(text, /js_string::to_upper_case\(name\)/u);
-  assert.match(text, /js_string::starts_with\(&upper, "A", 0\)/u);
-  assert.match(text, /js_string::includes\(&upper, "B", 0\)/u);
+  assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
+  assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(\s*js_string::js_len\(name\),?\s*\)\? > 0/su);
 });
 
@@ -329,9 +329,49 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /pub fn probe\(text: &str, values: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
   assert.match(text, /values\.slice_to\(1\.0, 3\.0\)/u);
   assert.match(text, /copied\.join\("-"\)/u);
-  assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)/u);
+  assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)\?/u);
   assert.match(text, /js_string::repeat\(text, 2\.0\)\?/u);
   assert.match(text, /js_string::code_point_at\(text, 0\.0\)\.unwrap_or\(0\.0\)/u);
+});
+
+test("complete closed string rows consume selected overloads and preserve exact ABI shapes", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function probe(text: string, index: int32): string {
+  const pieces = text.split(",", 2);
+  const code = text.charCodeAt(index);
+  const found = text.lastIndexOf("a", index);
+  const section = text.substring(1, 3) + text.substr(-2, 1);
+  const replaced = text.replace("a", "[$&]").replaceAll("b", "B");
+  const joined = text.concat("-", section);
+  if (pieces.length === 2 && code >= 0 && found >= -1) {
+    return joined + replaced + String.fromCharCode(65, 66) +
+      String.fromCodePoint(0x1f600) + text.trimLeft().trimRight().valueOf();
+  }
+  return "";
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_string::split\(text, ",", 2\.0\)\?/u);
+  assert.match(text, /js_string::char_code_at\(text, tsonic_rust_runtime::conversions::i32_to_f64\(index\)\)/u);
+  assert.match(text, /js_string::last_index_of\([\s\S]*text,[\s\S]*"a",[\s\S]*i32_to_f64\(index\),[\s\S]*\)/u);
+  assert.match(text, /js_string::substring\(text, 1\.0, 3\.0\)\?/u);
+  assert.match(text, /js_string::substr\(text, -2\.0, 1\.0\)\?/u);
+  assert.match(text, /js_string::replace\(text, "a", "\[\$&\]"\)/u);
+  assert.match(text, /js_string::replace_all\(&js_string::replace\(text, "a", "\[\$&\]"\), "b", "B"\)\?/u);
+  assert.match(text, /js_string::concat\(text, &\["-", section\.as_str\(\)\]\)/u);
+  assert.match(text, /js_string::from_char_code\(&\[65\.0, 66\.0\]\)\?/u);
+  assert.match(text, /js_string::from_code_point\(&\[128512\.0\]\)\?/u);
+  assert.match(text, /js_string::trim_start\(text\)/u);
+  assert.match(text, /js_string::identity/u);
 });
 
 test("array copy and stringification rows reject unproven generic element traits", () => {

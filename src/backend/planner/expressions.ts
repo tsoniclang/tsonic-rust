@@ -1336,6 +1336,7 @@ function planProviderOperationExpression(
     }
     case "call-value-slice":
     case "call-str-slice":
+    case "free-call-str-slice":
     case "free-call": {
       registerAliasFromPath(context, form.path);
       return scoped({ kind: "call", path: form.path, args });

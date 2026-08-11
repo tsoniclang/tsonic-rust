@@ -308,3 +308,38 @@ export async function drive(): Promise<int32> {
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("r4b-async-lib", result.artifacts);
 });
+
+test("generated cargo binary proves closed JavaScript string parity", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "string_parity_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+export function main(): void {
+  check("banana".lastIndexOf("ana") === 3);
+  check("abc".lastIndexOf("", 1.9) === 1);
+  check("abc".substring(2.9, 0) === "ab");
+  check("javascript".substr(-6.9, 3.9) === "scr");
+  check("abc".charCodeAt(1) === 98);
+  check(Number.isNaN("abc".charCodeAt(9)));
+  const pieces = "a,b,c".split(",", 2.9);
+  check(pieces.length === 2);
+  check((pieces[0] ?? "") === "a");
+  check("hello".replace("ll", "[$&][$\`][$']") === "he[ll][he][o]o");
+  check("banana".replaceAll("a", "$&$&") === "baanaanaa");
+  check("a".concat("b", "c") === "abc");
+  check(String.fromCharCode(65.9, 66) === "AB");
+  check(String.fromCodePoint(0x1f600) === "😀");
+  check("  value  ".trimLeft().trimRight().valueOf() === "value");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("string-parity-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});

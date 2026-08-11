@@ -206,17 +206,25 @@ interface String {
   trim(): string;
   trimStart(): string;
   trimEnd(): string;
+  trimLeft(): string;
+  trimRight(): string;
   toString(): string;
   valueOf(): string;
   charAt(index: number): string;
+  charCodeAt(index: number): number;
   codePointAt(index: number): number | undefined;
   slice(start?: number, end?: number): string;
+  substring(start: number, end?: number): string;
+  substr(start: number, length?: number): string;
   indexOf(searchString: string, position?: number): number;
+  lastIndexOf(searchString: string, position?: number): number;
   at(index: number): string | undefined;
   match(regexp: RegExp): RegExpMatchArray | null;
   matchAll(regexp: RegExp): IterableIterator<RegExpMatchArray>;
   replace(searchValue: string | RegExp, replaceValue: string): string;
+  replaceAll(searchValue: string | RegExp, replaceValue: string): string;
   search(regexp: string | RegExp): number;
+  concat(...strings: string[]): string;
   repeat(count: number): string;
   padStart(maxLength: number, fillString?: string): string;
   padEnd(maxLength: number, fillString?: string): string;
@@ -226,6 +234,8 @@ interface String {
 interface StringConstructor {
   new (value?: unknown): String;
   (value?: unknown): string;
+  fromCharCode(...codes: number[]): string;
+  fromCodePoint(...codes: number[]): string;
 }
 declare var String: StringConstructor;
 

@@ -20,10 +20,13 @@ the blocked section with the contract each requires.
   reduce supports both initial-value and first-present-element forms, and one
   identity-preserving `JsArray<T>` carrier represents dense and sparse arrays.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
-  endsWith, indexOf, slice, at, charAt, codePointAt, repeat, padStart,
-  padEnd, trim, trimStart, trimEnd, concat via +, split, replace, search,
-  match; String.matchAll call and fallibility lowering for constant
-  patterns (consuming the returned match list is a blocked lane below).
+  endsWith, indexOf, lastIndexOf, slice, substring, substr, at, charAt,
+  charCodeAt, codePointAt, repeat, padStart, padEnd, trim, trimStart,
+  trimEnd, trimLeft, trimRight, toString, valueOf, concat, split, replace,
+  replaceAll, search, and match; String.fromCharCode and
+  String.fromCodePoint; String.matchAll call and fallibility lowering for
+  constant patterns (consuming the returned match list is a blocked lane
+  below). UTF-16 results that Rust strings cannot represent fail closed.
 - RegExp: constant literals and new RegExp with literal arguments over the
   oracle-proven subset; test, replace, split, search, global match with
   null coalescing; regexp property reads.
@@ -92,9 +95,8 @@ the blocked section with the contract each requires.
   requires closed-shape reflection rows over the JsValue carrier.
 - Console calls with open or structural object arguments: requires exact
   closed source-to-JsValue object conversion facts.
-- Date UTC setters, remaining string methods, and local-time getters and
-  setters:
-  requires date-mutation and tzdata contracts.
+- Date UTC setters and local-time getters and setters: requires
+  date-mutation and tzdata contracts.
 - bare module aliases (fs as an alias of node:fs): requires a
   module-alias ownership contract.
 - process extras (argv0, hrtime, memoryUsage, stdio) and buffer extras

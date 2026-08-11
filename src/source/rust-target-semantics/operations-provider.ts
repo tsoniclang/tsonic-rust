@@ -1303,7 +1303,7 @@ function selectedCallSourceCarriers(
   if (actual.some((carrier) => carrier === undefined)) {
     return { kind: "missing" };
   }
-  if (fact.target.form === "call-str-slice") {
+  if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {
     const stringCarrier = rustStringTargetType();
     return actual.every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, stringCarrier))
       ? { kind: "resolved", carriers: actual as TargetTypeRef[] }
@@ -1346,6 +1346,7 @@ function providerFormRequiresSourceReceiver(form: RustProviderOperationForm): bo
     form.form === "field" ||
     form.form === "index" ||
     form.form === "free-call" ||
+    form.form === "free-call-str-slice" ||
     form.form === "receiver-method" ||
     form.form === "receiver-value-array" ||
     form.form === "arg-receiver-method";

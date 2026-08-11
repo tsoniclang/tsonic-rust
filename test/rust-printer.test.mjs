@@ -718,6 +718,49 @@ test("nested single-argument wrappers stay attached to the expanded inner call",
   assert.match(text, /check\(js_abi::number_is_nan\(js_abi::math_pow\(\n        1\.0,\n        js_abi::NUMBER_POSITIVE_INFINITY,\n    \)\)\);/u);
 });
 
+test("fallible nested calls in comparisons use rustfmt-compatible wrapper layout", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      pub: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::conversions::isize_to_i32",
+                  args: [{
+                    kind: "call",
+                    path: "js_string::last_index_of_from_end",
+                    args: [
+                      { kind: "str-literal", value: "banana" },
+                      { kind: "str-literal", value: "ana" },
+                    ],
+                  }],
+                },
+              },
+              right: { kind: "int-literal", text: "3" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /isize_to_i32\(js_string::last_index_of_from_end\(\n            "banana", "ana",\n        \)\)\? == 3/u);
+});
+
 test("long borrowed slices use rustfmt-compatible element layout", () => {
   const text = printRustSourceFile({
     headerComment,

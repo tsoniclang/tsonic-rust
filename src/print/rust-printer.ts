@@ -1407,6 +1407,18 @@ function printFittedCall(
             (argument.expr.kind === "call" || argument.expr.kind === "associated-call")
           ? argument.expr.args
           : undefined;
+      if ((argument.kind === "call" || argument.kind === "associated-call") &&
+        !renderedFits(flat, column)) {
+        const nestedWrapper = printFittedNestedCallWrapper(
+          callable,
+          argument,
+          depth,
+          column,
+        );
+        if (nestedWrapper !== undefined) {
+          return nestedWrapper;
+        }
+      }
       if (nestedInvocationArguments !== undefined &&
         (nestedInvocationArguments.length === 1 || flatArgument.length > rustNestedCallWidth) &&
         !renderedFits(flat, column)) {
@@ -1529,6 +1541,36 @@ function printFittedCall(
     ...renderedArguments,
     `${indentText(depth)})`,
   ].join("\n");
+}
+
+function printFittedNestedCallWrapper(
+  outerCallable: string,
+  nested: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
+  depth: number,
+  column: number,
+): string | undefined {
+  if (nested.args.length !== 2 || printRustExpr(nested).length > rustNestedCallWidth ||
+    nested.args.some(rustExpressionContainsStatementBlock)) {
+    return undefined;
+  }
+  const nestedCallable = nested.kind === "call"
+    ? nested.path
+    : `${printRustAssociatedOwner(nested.owner)}::${nested.method}`;
+  const opening = `${outerCallable}(${nestedCallable}(`;
+  if (!renderedFits(opening, column)) {
+    return undefined;
+  }
+  const argumentIndent = indentText(depth + 1);
+  const arguments_ = nested.args.map(printRustExpr).join(", ");
+  if (arguments_.includes("\n") || !renderedFits(`${arguments_},`, argumentIndent.length)) {
+    return undefined;
+  }
+  const rendered = [
+    opening,
+    `${argumentIndent}${arguments_},`,
+    `${indentText(depth)}))`,
+  ].join("\n");
+  return renderedFits(rendered, column) ? rendered : undefined;
 }
 
 function printRustClosureParams(

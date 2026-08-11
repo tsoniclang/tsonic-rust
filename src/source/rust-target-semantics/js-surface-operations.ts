@@ -140,6 +140,13 @@ interface JsOperationRowData {
 const zeroArgument = { kind: "integer", value: 0 } as const;
 const noneArgument = { kind: "none" } as const;
 export const rustInferCarrier: TargetTypeRef = { kind: "opaque", id: "tsonic.rust.infer" };
+const jsNumberArgumentRows = [
+  { variant: "float64", carrier: { ref: "float64" } as const, conversion: undefined },
+  { variant: "int32", carrier: { ref: "int32" } as const, conversion: rustInt32ToFloat64ValueConversion },
+] as const;
+const jsNumberArgumentPairs = jsNumberArgumentRows.flatMap((first) =>
+  jsNumberArgumentRows.map((second) => ({ first, second }))
+);
 const mapForEachRows = [
   { arity: 0, variant: "zero", targetName: "for_each_zero" },
   { arity: 1, variant: "value", targetName: "for_each_value" },
@@ -342,17 +349,77 @@ const jsOperationRows: readonly JsOperationRowData[] = [
 
   // String lane (runtime string module through the js_string alias).
   { owner: "String", member: "length", operationKind: "property", lane: "string", shape: { op: "operation", operationKind: "property", target: { form: "free-call", path: "js_string::js_len", receiverMode: "ref" }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
-  { owner: "String", member: "includes", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::includes", receiverMode: "ref", argModes: ["ref"], trailingArguments: [zeroArgument] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
-  { owner: "String", member: "startsWith", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::starts_with", receiverMode: "ref", argModes: ["ref"], trailingArguments: [zeroArgument] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
-  { owner: "String", member: "endsWith", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::ends_with", receiverMode: "ref", argModes: ["ref"], trailingArguments: [noneArgument] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+  ...[
+    { member: "includes", target: "includes", defaultTarget: "includes_from_start", result: { ref: "bool" } as const },
+    { member: "startsWith", target: "starts_with", defaultTarget: "starts_with_from_start", result: { ref: "bool" } as const },
+    { member: "endsWith", target: "ends_with", defaultTarget: "ends_with_at_end", result: { ref: "bool" } as const },
+    { member: "indexOf", target: "index_of", defaultTarget: "index_of_from_start", result: { ref: "int32" } as const, resultConversion: rustIsizeToInt32ValueConversion },
+    { member: "lastIndexOf", target: "last_index_of", defaultTarget: "last_index_of_from_end", result: { ref: "int32" } as const, resultConversion: rustIsizeToInt32ValueConversion },
+  ].flatMap((row): readonly JsOperationRowData[] => [
+    {
+      owner: "String",
+      member: row.member,
+      operationKind: "call",
+      lane: "string",
+      variant: "default",
+      shape: {
+        op: "operation",
+        operationKind: "method",
+        target: { form: "free-call", path: `js_string::${row.defaultTarget}`, receiverMode: "ref", argModes: ["ref"] },
+        result: row.result,
+        ...("resultConversion" in row ? { resultConversion: row.resultConversion } : {}),
+        params: [{ ref: "string" }],
+      },
+    },
+    ...jsNumberArgumentRows.map(({ variant, carrier, conversion }): JsOperationRowData => ({
+      owner: "String",
+      member: row.member,
+      operationKind: "call",
+      lane: "string",
+      variant,
+      shape: {
+        op: "operation",
+        operationKind: "method",
+        target: {
+          form: "free-call",
+          path: `js_string::${row.target}`,
+          receiverMode: "ref",
+          argModes: ["ref", "value"],
+          argConversions: [undefined, conversion],
+        },
+        result: row.result,
+        ...("resultConversion" in row ? { resultConversion: row.resultConversion } : {}),
+        params: [{ ref: "string" }, carrier],
+      },
+    })),
+  ]),
   { owner: "String", member: "toUpperCase", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_upper_case", receiverMode: "ref" }, result: { ref: "string" } } },
   { owner: "String", member: "toLowerCase", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_lower_case", receiverMode: "ref" }, result: { ref: "string" } } },
   { owner: "String", member: "trim", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim", receiverMode: "ref" }, result: { ref: "string" } } },
-  { owner: "String", member: "slice", operationKind: "call", lane: "string", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice", receiverMode: "ref", trailingArguments: [zeroArgument, noneArgument] }, result: { ref: "string" } } },
-  { owner: "String", member: "slice", operationKind: "call", lane: "string", variant: "start", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice", receiverMode: "ref", trailingArguments: [noneArgument] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
-  { owner: "String", member: "slice", operationKind: "call", lane: "string", variant: "start-end", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice_to", receiverMode: "ref" }, result: { ref: "string" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
-  { owner: "String", member: "codePointAt", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::code_point_at", receiverMode: "ref" }, result: { ref: "option-of-float64" }, params: [{ ref: "float64" }] } },
-  { owner: "String", member: "repeat", operationKind: "call", lane: "string", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::repeat", receiverMode: "ref" }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  ...[{ member: "trimStart" }, { member: "trimLeft" }].map(({ member }): JsOperationRowData => ({ owner: "String", member, operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim_start", receiverMode: "ref" }, result: { ref: "string" } } })),
+  ...[{ member: "trimEnd" }, { member: "trimRight" }].map(({ member }): JsOperationRowData => ({ owner: "String", member, operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim_end", receiverMode: "ref" }, result: { ref: "string" } } })),
+  ...[{ member: "toString" }, { member: "valueOf" }].map(({ member }): JsOperationRowData => ({ owner: "String", member, operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::identity", receiverMode: "ref" }, result: { ref: "string" } } })),
+  { owner: "String", member: "slice", operationKind: "call", lane: "string", variant: "default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice", receiverMode: "ref", trailingArguments: [zeroArgument, noneArgument] }, result: { ref: "string" } } },
+  ...jsNumberArgumentRows.map(({ variant, carrier, conversion }): JsOperationRowData => ({ owner: "String", member: "slice", operationKind: "call", lane: "string", variant: `start-${variant}`, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice", receiverMode: "ref", argConversions: [conversion], trailingArguments: [noneArgument] }, result: { ref: "string" }, params: [carrier] } })),
+  ...jsNumberArgumentPairs.map(({ first, second }): JsOperationRowData => ({ owner: "String", member: "slice", operationKind: "call", lane: "string", variant: `start-${first.variant}-end-${second.variant}`, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::slice_to", receiverMode: "ref", argConversions: [first.conversion, second.conversion] }, result: { ref: "string" }, params: [first.carrier, second.carrier] } })),
+  ...[{ member: "substring" }, { member: "substr" }].flatMap(({ member }): readonly JsOperationRowData[] => [
+    ...jsNumberArgumentRows.map(({ variant, carrier, conversion }): JsOperationRowData => ({ owner: "String", member, operationKind: "call", lane: "string", variant: `start-${variant}`, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `js_string::${member}_from`, receiverMode: "ref", argConversions: [conversion] }, result: { ref: "string" }, params: [carrier] } })),
+    ...jsNumberArgumentPairs.map(({ first, second }): JsOperationRowData => ({ owner: "String", member, operationKind: "call", lane: "string", variant: `start-${first.variant}-end-${second.variant}`, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `js_string::${member}`, receiverMode: "ref", argConversions: [first.conversion, second.conversion] }, result: { ref: "string" }, params: [first.carrier, second.carrier] } })),
+  ]),
+  ...[
+    { member: "charAt", target: "char_at", result: { ref: "string" } as const, fallible: true },
+    { member: "charCodeAt", target: "char_code_at", result: { ref: "float64" } as const, fallible: false },
+    { member: "codePointAt", target: "code_point_at", result: { ref: "option-of-float64" } as const, fallible: false },
+    { member: "at", target: "at", result: { ref: "option-of-string" } as const, fallible: true },
+    { member: "repeat", target: "repeat", result: { ref: "string" } as const, fallible: true },
+  ].flatMap((row) => jsNumberArgumentRows.map(({ variant, carrier, conversion }): JsOperationRowData => ({ owner: "String", member: row.member, operationKind: "call", lane: "string", variant, ...(row.fallible ? { fallible: true } : {}), shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `js_string::${row.target}`, receiverMode: "ref", argConversions: [conversion] }, result: row.result, params: [carrier] } }))),
+  { owner: "String", member: "split", operationKind: "call", lane: "string", variant: "string-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::split_all", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
+  ...jsNumberArgumentRows.map(({ variant, carrier, conversion }): JsOperationRowData => ({ owner: "String", member: "split", operationKind: "call", lane: "string", variant: `string-limit-${variant}`, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::split", receiverMode: "ref", argModes: ["ref", "value"], argConversions: [undefined, conversion] }, result: { ref: "string-array" }, params: [{ ref: "string" }, carrier] } })),
+  { owner: "String", member: "replace", operationKind: "call", lane: "string", variant: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::replace", receiverMode: "ref", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [{ ref: "string" }, { ref: "string" }] } },
+  { owner: "String", member: "replaceAll", operationKind: "call", lane: "string", variant: "string", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::replace_all", receiverMode: "ref", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [{ ref: "string" }, { ref: "string" }] } },
+  { owner: "String", member: "concat", operationKind: "call", lane: "string", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call-str-slice", path: "js_string::concat", receiverMode: "ref" }, result: { ref: "string" } } },
+  { owner: "StringConstructor", member: "fromCharCode", operationKind: "call", lane: "string", variadic: true, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_string::from_char_code", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "string" } } },
+  { owner: "StringConstructor", member: "fromCodePoint", operationKind: "call", lane: "string", variadic: true, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_string::from_code_point", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "string" } } },
 
   // Map lane.
   ...(["Map", "ReadonlyMap"] as const).flatMap((owner): readonly JsOperationRowData[] => [
@@ -440,9 +507,6 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "RegExp", member: "ignoreCase", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "ignore_case" }, result: { ref: "bool" } } },
   { owner: "RegExp", member: "multiline", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "multiline" }, result: { ref: "bool" } } },
   { owner: "RegExp", member: "lastIndex", operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "last_index" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion } },
-  { owner: "String", member: "indexOf", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::index_of", receiverMode: "ref", argModes: ["ref"], trailingArguments: [zeroArgument] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "string" }] } },
-  { owner: "String", member: "charAt", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::char_at", receiverMode: "ref" }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
-  { owner: "String", member: "at", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::at", receiverMode: "ref" }, result: { ref: "option-of-string" }, params: [{ ref: "float64" }] } },
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "float64-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start", receiverMode: "ref", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "float64-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start_with", receiverMode: "ref", argModes: ["value", "ref"] }, result: { ref: "string" }, params: [{ ref: "float64" }, { ref: "string" }] } },
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "int32-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start", receiverMode: "ref", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
@@ -451,8 +515,6 @@ const jsOperationRows: readonly JsOperationRowData[] = [
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "float64-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end_with", receiverMode: "ref", argModes: ["value", "ref"] }, result: { ref: "string" }, params: [{ ref: "float64" }, { ref: "string" }] } },
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "int32-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end", receiverMode: "ref", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "int32-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end_with", receiverMode: "ref", argModes: ["value", "ref"], argConversions: [rustInt32ToFloat64ValueConversion, undefined] }, result: { ref: "string" }, params: [{ ref: "int32" }, { ref: "string" }] } },
-  { owner: "String", member: "trimStart", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim_start", receiverMode: "ref" }, result: { ref: "string" } } },
-  { owner: "String", member: "trimEnd", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim_end", receiverMode: "ref" }, result: { ref: "string" } } },
   { owner: "String", member: "matchAll", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "match_all", argModes: ["ref"] }, result: { ref: "regexp-match-vec" }, params: [undefined] } },
   { owner: "String", member: "replace", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [undefined, { ref: "string" }] } },
   { owner: "String", member: "search", operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "search", argModes: ["ref"] }, result: { ref: "int32" }, params: [undefined] } },
@@ -598,6 +660,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     return { lane: "number", bindings: { receiver: carrier } };
   }
   // Static owners have no receiver carrier; the lane comes from the owner row.
+  if (carrier === undefined && ownerName === "StringConstructor") {
+    return { lane: "string", bindings: {} };
+  }
   if (carrier === undefined && ownerName === "DateConstructor") {
     return { lane: "date", bindings: {} };
   }

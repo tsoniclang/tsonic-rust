@@ -593,7 +593,8 @@ function validateOperationParameters(
   signature: SignatureRecord | undefined,
   fail: Fail,
 ): void {
-  if (row.operationKind === "property" || row.target.form === "call-str-slice") {
+  if (row.operationKind === "property" || row.target.form === "call-str-slice" ||
+    row.target.form === "free-call-str-slice") {
     return;
   }
   const ownerSignatures = signature === undefined
@@ -647,6 +648,13 @@ function validateOperationForm(
     case "path":
       requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
+      return;
+    case "free-call-str-slice":
+      requireExactKeys(record, ["form", "path", "receiverMode"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
+        fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
       return;
     case "call-value-slice":
       requireExactKeys(record, ["form", "path", "leadingArguments", "elementCarrier"], `${label}.target`, fail);

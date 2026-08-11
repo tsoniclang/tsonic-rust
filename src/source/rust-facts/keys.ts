@@ -90,6 +90,13 @@ export type RustProviderOperationForm =
       readonly path: string;
     }
   | {
+      // Free function taking the selected source receiver followed by all
+      // source arguments as one &[&str] slice.
+      readonly form: "free-call-str-slice";
+      readonly path: string;
+      readonly receiverMode: RustArgumentMode;
+    }
+  | {
       readonly form: "call-value-slice";
       readonly path: string;
       readonly leadingArguments: readonly {

@@ -72,6 +72,11 @@ export function rustProviderOperationFormContractViolation(
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path)
         ? undefined
         : "slice-call form must contain one closed Rust path";
+    case "free-call-str-slice":
+      return hasExactKeys(form, ["form", "path", "receiverMode"], ["form", "path", "receiverMode"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode)
+        ? undefined
+        : "receiver slice-call form must contain one closed Rust path and receiver mode";
     case "call-value-slice":
       return hasExactKeys(
         form,

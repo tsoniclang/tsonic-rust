@@ -458,6 +458,34 @@ test("generic value-slice forms require closed leading and element carriers", ()
   );
 });
 
+test("receiver string-slice forms require an exact path and receiver mode", () => {
+  const operation = (target) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target,
+    resultCarrier: int32Carrier,
+  });
+  const base = {
+    form: "free-call-str-slice",
+    path: "acme_validation::concat",
+    receiverMode: "ref",
+  };
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({ operations: [operation(base)] })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, receiverMode: "guess" })],
+    })),
+    /unsupported mode 'guess'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [operation({ ...base, path: "not-a-path" })],
+    })),
+    /not a closed Rust path/u,
+  );
+});
+
 test("owned receiver value-array forms require exact method, receiver, and carrier metadata", () => {
   const operation = (target) => ({
     exportId: "@acme/validation::run",
