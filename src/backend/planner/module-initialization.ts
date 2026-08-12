@@ -17,22 +17,30 @@ export function planRustBinaryModuleInitializers(
   entrySourceFile: SourceFile,
   diagnostics: TargetDiagnostic[],
 ): readonly RustModuleInitializer[] | undefined {
-  if (!validateRuntimeModuleGraph(input, diagnostics)) {
-    return undefined;
-  }
   const plannedBySourceFile = new Map(
     plannedSources.map((source) => [source.sourceFile, source]),
   );
+  if (!validateRuntimeModuleGraph(
+    input,
+    plannedBySourceFile,
+    entrySourceFile,
+    diagnostics,
+  )) {
+    return undefined;
+  }
   const visited = new Set<SourceFile>();
+  const active = new Set<SourceFile>();
   const ordered: RustModuleInitializer[] = [];
   const visit = (sourceFile: SourceFile): void => {
-    if (visited.has(sourceFile)) {
+    if (visited.has(sourceFile) || active.has(sourceFile)) {
       return;
     }
-    visited.add(sourceFile);
+    active.add(sourceFile);
     for (const dependency of input.source.navigation.moduleDependencies(sourceFile)) {
       visit(dependency.sourceFile);
     }
+    active.delete(sourceFile);
+    visited.add(sourceFile);
     const planned = plannedBySourceFile.get(sourceFile);
     const initialization = planned?.moduleInitialization;
     if (planned !== undefined && initialization !== undefined) {
@@ -75,51 +83,119 @@ export function diagnoseRustLibraryModuleInitialization(
 
 function validateRuntimeModuleGraph(
   input: RustTranslationContext,
+  plannedBySourceFile: ReadonlyMap<SourceFile, PlannedRustSourceFile>,
+  entrySourceFile: SourceFile,
   diagnostics: TargetDiagnostic[],
 ): boolean {
-  const visited = new Set<SourceFile>();
-  const active = new Map<SourceFile, number>();
-  const stack: SourceFile[] = [];
-  const reported = new Set<string>();
-  for (const sourceFile of input.sourceFiles) {
-    visit(sourceFile);
+  const reachable = collectReachableSourceFiles(input, entrySourceFile);
+  const components = stronglyConnectedSourceFiles(input, reachable);
+  let valid = true;
+  for (const component of components) {
+    const cyclic = component.length > 1 || input.source.navigation
+      .moduleDependencies(component[0]!)
+      .some((dependency) => dependency.sourceFile === component[0]);
+    if (!cyclic) {
+      continue;
+    }
+    const initialized = component.filter((sourceFile) =>
+      plannedBySourceFile.get(sourceFile)?.moduleInitialization !== undefined);
+    if (initialized.length === 0) {
+      continue;
+    }
+    valid = false;
+    const files = component
+      .map((sourceFile) => input.ast.getFileName(sourceFile))
+      .sort((left, right) => left.localeCompare(right, "en"));
+    diagnostics.push({
+      code: "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE",
+      category: "error",
+      source: "tsonic-rust",
+      message:
+        `Runtime ES module dependency component '${files.join(" -> ")}' contains ${initialized.length} module initializer${initialized.length === 1 ? "" : "s"} and cannot be executed without finalized cyclic call, live-binding, and temporal-dead-zone evidence.`,
+      evidence: [
+        "target.capability=rust.backend.module-initialization",
+        ...initialized
+          .map((sourceFile) => input.ast.getFileName(sourceFile))
+          .sort((left, right) => left.localeCompare(right, "en"))
+          .map((fileName) => `runtime.initializer=${fileName}`),
+      ],
+    });
   }
-  return diagnostics.every((diagnostic) =>
-    diagnostic.code !== "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE");
+  return valid;
+}
 
-  function visit(sourceFile: SourceFile): void {
-    if (visited.has(sourceFile)) {
+function collectReachableSourceFiles(
+  input: RustTranslationContext,
+  entrySourceFile: SourceFile,
+): ReadonlySet<SourceFile> {
+  const reachable = new Set<SourceFile>();
+  const visit = (sourceFile: SourceFile): void => {
+    if (reachable.has(sourceFile)) {
       return;
     }
-    const activeIndex = active.get(sourceFile);
-    if (activeIndex !== undefined) {
-      const cycle = [...stack.slice(activeIndex), sourceFile];
-      const key = [...new Set(cycle.map((entry) => input.ast.getFileName(entry)))]
-        .sort((left, right) => left.localeCompare(right, "en"))
-        .join("\0");
-      if (!reported.has(key)) {
-        reported.add(key);
-        diagnostics.push({
-          code: "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE",
-          category: "error",
-          source: "tsonic-rust",
-          message:
-            `Runtime ES module dependency cycle '${cycle.map((entry) => input.ast.getFileName(entry)).join(" -> ")}' cannot be lowered without finalized live-binding and temporal-dead-zone support.`,
-          evidence: [
-            "target.capability=rust.backend.module-initialization",
-            "TSTS selected a runtime project-source import/export dependency cycle.",
-          ],
-        });
-      }
-      return;
-    }
-    active.set(sourceFile, stack.length);
-    stack.push(sourceFile);
+    reachable.add(sourceFile);
     for (const dependency of input.source.navigation.moduleDependencies(sourceFile)) {
       visit(dependency.sourceFile);
     }
-    stack.pop();
-    active.delete(sourceFile);
-    visited.add(sourceFile);
+  };
+  visit(entrySourceFile);
+  return reachable;
+}
+
+function stronglyConnectedSourceFiles(
+  input: RustTranslationContext,
+  sourceFiles: ReadonlySet<SourceFile>,
+): readonly (readonly SourceFile[])[] {
+  let nextIndex = 0;
+  const indexBySourceFile = new Map<SourceFile, number>();
+  const lowLinkBySourceFile = new Map<SourceFile, number>();
+  const stack: SourceFile[] = [];
+  const onStack = new Set<SourceFile>();
+  const components: SourceFile[][] = [];
+  const visit = (sourceFile: SourceFile): void => {
+    const index = nextIndex;
+    nextIndex += 1;
+    indexBySourceFile.set(sourceFile, index);
+    lowLinkBySourceFile.set(sourceFile, index);
+    stack.push(sourceFile);
+    onStack.add(sourceFile);
+    for (const dependency of input.source.navigation.moduleDependencies(sourceFile)) {
+      const target = dependency.sourceFile;
+      if (!sourceFiles.has(target)) {
+        continue;
+      }
+      const targetIndex = indexBySourceFile.get(target);
+      if (targetIndex === undefined) {
+        visit(target);
+        lowLinkBySourceFile.set(
+          sourceFile,
+          Math.min(lowLinkBySourceFile.get(sourceFile)!, lowLinkBySourceFile.get(target)!),
+        );
+      } else if (onStack.has(target)) {
+        lowLinkBySourceFile.set(
+          sourceFile,
+          Math.min(lowLinkBySourceFile.get(sourceFile)!, targetIndex),
+        );
+      }
+    }
+    if (lowLinkBySourceFile.get(sourceFile) !== index) {
+      return;
+    }
+    const component: SourceFile[] = [];
+    while (stack.length > 0) {
+      const member = stack.pop()!;
+      onStack.delete(member);
+      component.push(member);
+      if (member === sourceFile) {
+        break;
+      }
+    }
+    components.push(component);
+  };
+  for (const sourceFile of sourceFiles) {
+    if (!indexBySourceFile.has(sourceFile)) {
+      visit(sourceFile);
+    }
   }
+  return components;
 }
