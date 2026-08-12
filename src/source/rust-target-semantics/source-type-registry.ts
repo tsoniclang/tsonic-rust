@@ -85,6 +85,17 @@ export interface RustSourceTypeRegistry {
   ): readonly number[] | undefined;
 }
 
+export function isRustStructuralObjectFieldDeclaration(
+  declaration: Node,
+  ast: AstReader,
+): boolean {
+  const kind = ast.kindName(declaration);
+  return kind === "KindPropertySignature" ||
+    kind === "KindPropertyDeclaration" ||
+    kind === "KindPropertyAssignment" ||
+    kind === "KindShorthandPropertyAssignment";
+}
+
 export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   const declarations = new Map<string, Node>();
   const carriersByDeclaration = new WeakMap<Node, TargetTypeRef>();

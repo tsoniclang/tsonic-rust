@@ -783,7 +783,20 @@ export const rustSourceBindingFactKey: RustPlanKey<RustSourceBindingFact> =
   defineRustPlanKey("sourceBinding", closedMetadataEquals);
 
 export type RustBindingProjection =
-  | { readonly kind: "project-field"; readonly storageIndex: number }
+  | {
+      readonly kind: "object-field";
+      readonly storage: "project-object" | "object-handle";
+      readonly storageIndex: number;
+    }
+  | {
+      readonly kind: "object-rest";
+      readonly storage: "project-object" | "object-handle";
+      readonly fields: readonly {
+        readonly sourceStorageIndex: number;
+        readonly targetStorageIndex: number;
+        readonly carrier: TargetTypeRef;
+      }[];
+    }
   | { readonly kind: "tuple-element"; readonly index: number }
   | { readonly kind: "fixed-array-element"; readonly index: number }
   | { readonly kind: "vec-element"; readonly index: number; readonly checked: boolean }

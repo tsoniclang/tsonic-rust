@@ -1859,6 +1859,7 @@ function printRustLetInitializer(
   }
   if (!flat.includes("\n") && !renderedFits(flat, prefix.length + 1) &&
     renderedFits(flat, indentText(depth + 1).length + 1) &&
+    initializer.kind !== "struct-literal" &&
     !rustMethodChainPrefersVerticalLayout(initializer)) {
     return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
   }

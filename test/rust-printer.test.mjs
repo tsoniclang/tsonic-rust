@@ -586,6 +586,47 @@ test("one-field struct literals honor rustfmt's compact body limit", () => {
   assert.match(source, /Counter \{\n        value: value\.clone\(\),\n    \}/u);
 });
 
+test("typed bindings retain overflowing struct openings and expand their fields", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      visibility: "public",
+      name: "new_pair",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "pair",
+          mutable: false,
+          type: { kind: "named", path: "Pair", typeArguments: [{ kind: "named", path: "i32" }] },
+          init: {
+            kind: "struct-literal",
+            path: "Pair",
+            fields: [{
+              name: "__tsonic_state",
+              value: {
+                kind: "call",
+                path: "rt::ObjectHandle::new",
+                args: [{
+                  kind: "tuple-literal",
+                  elements: [
+                    { kind: "int-literal", text: "1" },
+                    { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "kept" }] },
+                    { kind: "int-literal", text: "2" },
+                  ],
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /let pair: Pair<i32> = Pair \{\n        __tsonic_state: rt::ObjectHandle::new/u);
+});
+
 test("optional closure chains and nested struct arguments stay rustfmt-stable", () => {
   const source = printRustSourceFile({
     headerComment,

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { artifactText, compileRust } from "./helpers/rust-session.mjs";
+import {
+  acmeTestingPackage,
+  artifactText,
+  compileRust,
+} from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 test("object and fixed-tuple bindings consume finalized projection facts", { timeout: 300_000 }, () => {
@@ -100,25 +104,36 @@ export function read(): int32 {
   validateGeneratedProject("binding-js-array", result.artifacts);
 });
 
-test("unsupported object-rest shapes fail closed before backend guessing", () => {
+test("closed object rest copies every non-extracted field into one exact structural carrier", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "binding_object_rest" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
-export interface Pair { left: int32; right: int32 }
+interface Pair<T> { left: T; label: string; right: T }
 
-export function rest(pair: Pair): int32 {
-  const { left, ...remaining } = pair;
-  return left + remaining.right;
+export function main(): void {
+  const pair: Pair<int32> = { left: 1, label: "kept", right: 2 };
+  const { left: extracted, ...remaining } = pair;
+  const { label: copiedLabel } = remaining;
+  check(extracted === 1);
+  check(copiedLabel === "kept");
+  check(remaining.label === "kept");
+  check(remaining.right === 2);
+  check(pair.label === "kept");
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.equal(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_BINDING_PATTERN_NOT_CLOSED"), true);
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let remaining: rt::ObjectHandle<\(String, i32\)> = rt::ObjectHandle::new/u);
+  assert.doesNotMatch(source, /\.with\(\|state\| state\.\d+\.clone\(\)\)\s*\.clone\(\)/u);
+  assert.equal(validateGeneratedProject("binding-object-rest", result.artifacts, { run: true }).status, 0);
 });
 
 test("function and class parameters bind through exact projected carriers", { timeout: 300_000 }, () => {

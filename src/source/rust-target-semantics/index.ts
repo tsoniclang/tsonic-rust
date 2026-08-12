@@ -3801,8 +3801,17 @@ function resolveRecordLiteralCarrier(
     const projectFields = layout.fields.map((field) => ({
       sourceName: field.sourceName,
       storageIndex: field.storageIndex,
-      carrier: walk.context.facts.get(field.declaration, rustRuntimeCarrierKey)?.carrier ??
-        resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration)),
+      carrier: (() => {
+        const declared = walk.context.facts.get(field.declaration, rustRuntimeCarrierKey)?.carrier ??
+          resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration));
+        return declared === undefined
+          ? undefined
+          : walk.context.projectTypes.instantiateMemberCarrier(
+              field.declaration,
+              selectedExpected,
+              declared,
+            );
+      })(),
     }));
     if (projectFields.some((field) => field.carrier === undefined)) {
       return undefined;
@@ -4122,12 +4131,28 @@ function recordBindingPatternFacts(
   return recordRustBindingPatternFacts(pattern, sourceCarrier, {
     ast: walk.context.ast,
     facts: walk.context.facts,
+    navigation: walk.context.source.navigation,
+    semanticsFor: walk.context.semanticsFor,
     sourceTypes: walk.sourceTypes,
     resolveCarrier: (subject) => resolveRustTargetTypeRef(
       subject,
       rustResolutionContext(walk, subject),
       walk.operationOptions,
     ),
+    resolveProjectFieldCarrier: (declaration, receiverCarrier) => {
+      const declaredCarrier = resolveRustTargetTypeRef(
+        declaration,
+        rustResolutionContext(walk, declaration),
+        walk.operationOptions,
+      );
+      return declaredCarrier === undefined
+        ? undefined
+        : walk.context.projectTypes.instantiateMemberCarrier(
+            declaration,
+            receiverCarrier,
+            declaredCarrier,
+          );
+    },
     resolveExpressionCarrier: (expression, expected) => resolveExpressionCarrier(
       walk,
       expression,

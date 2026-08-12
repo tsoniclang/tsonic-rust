@@ -20,10 +20,15 @@ import {
   isRustVecCarrier,
   rustCarrierSupportsClone,
   rustFixedArrayCarrierValue,
+  rustStructuralObjectCarrierValue,
   rustTupleTargetType,
 } from "../../source/rust-target-types.js";
 import type { RustExpr, RustStmt } from "../rust-ast/nodes.js";
-import { readRustProjectObjectField } from "./project-objects.js";
+import {
+  createRustStructuralObject,
+  readRustProjectObjectField,
+  readRustStructuralObjectField,
+} from "./project-objects.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import {
   diagnosticInput,
@@ -161,11 +166,15 @@ function planBindingProjection(
   context: RustPlanContext,
 ): RustExpr | undefined {
   switch (fact.projection.kind) {
-    case "project-field":
+    case "object-field":
       if (!isRustCopyCarrier(fact.projectedCarrier) && !rustCarrierSupportsClone(fact.projectedCarrier)) {
         return rejectClone(node, context);
       }
-      return readRustProjectObjectField(source, fact.projection.storageIndex, fact.projectedCarrier);
+      return (fact.projection.storage === "project-object"
+        ? readRustProjectObjectField
+        : readRustStructuralObjectField)(source, fact.projection.storageIndex, fact.projectedCarrier);
+    case "object-rest":
+      return planObjectRest(source, fact, node, context);
     case "tuple-element":
       return ownedProjection(
         { kind: "field", receiver: source, name: String(fact.projection.index) },
@@ -218,6 +227,41 @@ function planBindingProjection(
         args: [{ kind: "float-literal", text: `${fact.projection.start}.0` }],
       };
   }
+}
+
+function planObjectRest(
+  source: RustExpr,
+  fact: RustBindingProjectionFact,
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (fact.projection.kind !== "object-rest") {
+    return undefined;
+  }
+  const target = rustStructuralObjectCarrierValue(fact.bindingCarrier);
+  const fields = [...fact.projection.fields]
+    .sort((left, right) => left.targetStorageIndex - right.targetStorageIndex);
+  if (target === undefined || fields.length !== target.fields.length ||
+    fields.some((field, index) =>
+      field.targetStorageIndex !== index ||
+      !rustTargetTypeRefEquals(field.carrier, target.fields[index]!.type))) {
+    return rejectProjection(
+      node,
+      context,
+      "Object rest projection conflicts with its exact finalized structural carrier.",
+    );
+  }
+  const read = fact.projection.storage === "project-object"
+    ? readRustProjectObjectField
+    : readRustStructuralObjectField;
+  const values: RustExpr[] = [];
+  for (const field of fields) {
+    if (!isRustCopyCarrier(field.carrier) && !rustCarrierSupportsClone(field.carrier)) {
+      return rejectClone(node, context);
+    }
+    values.push(read(source, field.sourceStorageIndex, field.carrier));
+  }
+  return createRustStructuralObject(values);
 }
 
 function planTupleRest(

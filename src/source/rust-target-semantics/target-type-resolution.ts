@@ -61,7 +61,10 @@ import {
   mergeProviderDeclarationIdentities,
 } from "./selected-evidence.js";
 import type { RustSourceProfileRegistry } from "./source-profile-registry.js";
-import type { RustSourceTypeRegistry } from "./source-type-registry.js";
+import {
+  isRustStructuralObjectFieldDeclaration,
+  type RustSourceTypeRegistry,
+} from "./source-type-registry.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 
 export interface RustTargetTypeResolutionOptions {
@@ -537,7 +540,7 @@ function resolveStructuralObjectType(
     const declarations = denseDefined(checker.getSymbolDeclarations(property.symbol));
     const projectDeclarations = declarations?.filter((declaration) =>
       context.source.navigation.isProjectDeclaration(declaration) &&
-      isStructuralObjectFieldDeclaration(declaration, context));
+      isRustStructuralObjectFieldDeclaration(declaration, context.ast));
     const authoredTypeNodes = projectDeclarations?.map((declaration) =>
       Node_Type(context.ast, declaration)).filter((node) => node !== undefined) ?? [];
     const authoredCarriers = authoredTypeNodes.length === projectDeclarations?.length
@@ -591,17 +594,6 @@ function resolveStructuralObjectType(
   })
     ? carrier
     : undefined;
-}
-
-function isStructuralObjectFieldDeclaration(
-  declaration: Node,
-  context: RustTargetTypeResolutionContext,
-): boolean {
-  const kind = context.ast.kindName(declaration);
-  return kind === "KindPropertySignature" ||
-    kind === "KindPropertyDeclaration" ||
-    kind === "KindPropertyAssignment" ||
-    kind === "KindShorthandPropertyAssignment";
 }
 
 function resolveCallableType(

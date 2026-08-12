@@ -46,6 +46,7 @@ import {
   rustDeclarationRequiresUnsafe,
   rustSafetyAttributesForDeclaration,
 } from "./explicit-safety.js";
+import { rustProjectTypeParameters } from "./project-polymorphism-names.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -66,6 +67,7 @@ function renderType(context: RustPlanContext, node: Node | undefined) {
 
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
+  const definition = context.input.projectTypes.definitionForDeclaration(node);
   const nameNode = Node_Name(ast, node);
   const className = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (!isValidRustIdentifier(className)) {
@@ -84,6 +86,27 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
+  if (definition?.kind !== "class") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.class-definition",
+      "Class declaration has no exact project-type definition.",
+    ));
+    return undefined;
+  }
+  const openType = rustTypeFromCarrierInContext(
+    context.input.projectTypes.openCarrier(definition),
+    context,
+  );
+  if (openType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.class-carrier",
+      "Class declaration has no renderable open Rust carrier.",
+    ));
+    return undefined;
+  }
+  const typeParams = rustProjectTypeParameters(definition);
 
   const layout = rustProjectObjectLayout(node, ast);
   if (layout?.kind !== "class") {
@@ -224,11 +247,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
     visibility: exported ? "public" : "private",
     derives: ["Clone", "Debug", "PartialEq"],
+    ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [stateField],
   };
   return [structItem, {
     kind: "impl",
-    target: { kind: "named", path: className },
+    ...(typeParams.length === 0 ? {} : { typeParams }),
+    target: openType,
     functions: implFunctions,
   }];
 }
@@ -738,6 +763,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
 
 export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
+  const definition = context.input.projectTypes.definitionForDeclaration(node);
   const nameNode = Node_Name(ast, node);
   const interfaceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (!isValidRustIdentifier(interfaceName)) {
@@ -756,6 +782,15 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ));
     return undefined;
   }
+  if (definition?.kind !== "interface") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record-definition",
+      "Interface declaration has no exact project-type definition.",
+    ));
+    return undefined;
+  }
+  const typeParams = rustProjectTypeParameters(definition);
   const layout = rustProjectObjectLayout(node, ast);
   if (layout?.kind !== "interface") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -822,6 +857,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       : { attrs: structAttributes(interfaceName, fields.map((field) => ({ name: field.targetName }))) }),
     visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
     derives: ["Clone", "Debug", "PartialEq"],
+    ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [{
       name: rustProjectObjectStateField,
       type: rustProjectObjectType(fields.map((field) => field.type)),

@@ -1,4 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { isDenseDataArray } from "../../common/closed-metadata.js";
 import {
   BindingElement_IsRest,
   BindingElement_PropertyName,
@@ -27,17 +28,29 @@ import {
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustSourceTypeCarrierValue,
+  rustStructuralObjectCarrierValue,
+  rustStructuralObjectTargetType,
   rustTupleTargetType,
 } from "../rust-target-types.js";
 import type { RustTranslationContext } from "../../translate/context.js";
-import type { RustSourceTypeRegistry } from "./source-type-registry.js";
+import {
+  isRustStructuralObjectFieldDeclaration,
+  type RustSourceObjectField,
+  type RustSourceTypeRegistry,
+} from "./source-type-registry.js";
 import { rustProjectObjectLayout } from "./project-object-layout.js";
 
 export interface RustBindingPatternFactContext {
   readonly ast: AstReader;
   readonly facts: RustTranslationContext["facts"];
+  readonly navigation: RustTranslationContext["source"]["navigation"];
+  readonly semanticsFor: RustTranslationContext["semanticsFor"];
   readonly sourceTypes: RustSourceTypeRegistry;
   readonly resolveCarrier: (subject: Node) => TargetTypeRef | undefined;
+  readonly resolveProjectFieldCarrier: (
+    declaration: Node,
+    receiverCarrier: TargetTypeRef,
+  ) => TargetTypeRef | undefined;
   readonly resolveExpressionCarrier: (
     expression: Node,
     expected: TargetTypeRef,
@@ -56,6 +69,12 @@ export function recordRustBindingPatternFacts(
   }
   context.setCarrier(pattern, sourceCarrier);
   const elements = context.ast.elements(pattern);
+  const objectExtractedNames = kind === KindObjectBindingPattern
+    ? collectObjectExtractedNames(elements, context.ast)
+    : undefined;
+  if (kind === KindObjectBindingPattern && objectExtractedNames === undefined) {
+    return false;
+  }
   for (const [index, element] of elements.entries()) {
     if (element === undefined || context.ast.kindName(element) === KindOmittedExpression) {
       continue;
@@ -70,7 +89,13 @@ export function recordRustBindingPatternFacts(
     const hasDefault = Node_Initializer(context.ast, element) !== undefined;
     const selected = kind === KindArrayBindingPattern
       ? selectArrayProjection(sourceCarrier, index, BindingElement_IsRest(context.ast, element), hasDefault)
-      : selectObjectProjection(element, sourceCarrier, hasDefault, context);
+      : selectObjectProjection(
+          element,
+          sourceCarrier,
+          hasDefault,
+          objectExtractedNames!,
+          context,
+        );
     if (selected === undefined) {
       return false;
     }
@@ -169,23 +194,69 @@ function selectObjectProjection(
   element: Node,
   sourceCarrier: TargetTypeRef,
   hasDefault: boolean,
+  extractedSourceNames: ReadonlySet<string>,
   context: RustBindingPatternFactContext,
 ): SelectedBindingProjection | undefined {
-  if (BindingElement_IsRest(context.ast, element) || rustSourceTypeCarrierValue(sourceCarrier)?.shape !== "object") {
+  const sourceShape = resolveObjectBindingSource(sourceCarrier, context);
+  if (sourceShape === undefined) {
     return undefined;
   }
   const name = Node_Name(context.ast, element);
+  if (BindingElement_IsRest(context.ast, element)) {
+    if (hasDefault || name === undefined || context.ast.kindName(name) !== KindIdentifier) {
+      return undefined;
+    }
+    const remaining = sourceShape.fields.filter((field) =>
+      !extractedSourceNames.has(field.sourceName));
+    const bindingCarrier = resolveObjectRestBindingCarrier(
+      name,
+      remaining,
+      context,
+    );
+    const targetShape = bindingCarrier === undefined
+      ? undefined
+      : rustStructuralObjectCarrierValue(bindingCarrier);
+    if (bindingCarrier === undefined || targetShape === undefined ||
+      targetShape.fields.length !== remaining.length) {
+      return undefined;
+    }
+    const fields = targetShape.fields.map((targetField, targetStorageIndex) => {
+      const sourceField = remaining.find((field) =>
+        field.sourceName === targetField.sourceName);
+      return sourceField === undefined ||
+          !rustTargetTypeRefEquals(sourceField.carrier, targetField.type)
+        ? undefined
+        : {
+            sourceStorageIndex: sourceField.storageIndex,
+            targetStorageIndex,
+            carrier: sourceField.carrier,
+          };
+    });
+    return fields.some((field) => field === undefined)
+      ? undefined
+      : {
+          projectedCarrier: bindingCarrier,
+          bindingCarrier,
+          projection: {
+            kind: "object-rest",
+            storage: sourceShape.storage,
+            fields: fields as readonly {
+              readonly sourceStorageIndex: number;
+              readonly targetStorageIndex: number;
+              readonly carrier: TargetTypeRef;
+            }[],
+          },
+          normalization: "identity",
+        };
+  }
   const propertyName = BindingElement_PropertyName(context.ast, element) ?? name;
-  const propertyKind = propertyName === undefined ? "" : context.ast.kindName(propertyName);
-  if (propertyName === undefined ||
-    (propertyKind !== KindIdentifier && propertyKind !== KindStringLiteral && propertyKind !== KindNumericLiteral)) {
+  const sourceName = bindingPropertySourceName(propertyName, context.ast);
+  if (sourceName === undefined) {
     return undefined;
   }
-  const declaration = context.sourceTypes.declarationForCarrier(sourceCarrier);
-  const layout = declaration === undefined ? undefined : rustProjectObjectLayout(declaration, context.ast);
-  const sourceName = context.ast.text(propertyName);
-  const field = layout?.fields.find((candidate) => candidate.sourceName === sourceName);
-  const projectedCarrier = field === undefined ? undefined : context.resolveCarrier(field.declaration);
+  const field = sourceShape.fields.find((candidate) =>
+    candidate.sourceName === sourceName);
+  const projectedCarrier = field?.carrier;
   const bindingCarrier = projectedCarrier === undefined
     ? undefined
     : bindingCarrierForProjectedValue(projectedCarrier, hasDefault);
@@ -197,9 +268,172 @@ function selectObjectProjection(
     : {
         projectedCarrier,
         bindingCarrier,
-        projection: { kind: "project-field", storageIndex: field.storageIndex },
+        projection: {
+          kind: "object-field",
+          storage: sourceShape.storage,
+          storageIndex: field.storageIndex,
+        },
         normalization,
       };
+}
+
+interface ObjectBindingSource {
+  readonly storage: "project-object" | "object-handle";
+  readonly fields: readonly {
+    readonly sourceName: string;
+    readonly storageIndex: number;
+    readonly carrier: TargetTypeRef;
+  }[];
+}
+
+function resolveObjectBindingSource(
+  sourceCarrier: TargetTypeRef,
+  context: RustBindingPatternFactContext,
+): ObjectBindingSource | undefined {
+  const structural = rustStructuralObjectCarrierValue(sourceCarrier);
+  if (structural !== undefined) {
+    return {
+      storage: "object-handle",
+      fields: structural.fields.map((field, storageIndex) => ({
+        sourceName: field.sourceName,
+        storageIndex,
+        carrier: field.type,
+      })),
+    };
+  }
+  if (rustSourceTypeCarrierValue(sourceCarrier)?.shape !== "object") {
+    return undefined;
+  }
+  const declaration = context.sourceTypes.declarationForCarrier(sourceCarrier);
+  const layout = declaration === undefined
+    ? undefined
+    : rustProjectObjectLayout(declaration, context.ast);
+  if (declaration === undefined || layout === undefined ||
+    context.ast.extendsHeritageElements(declaration).length !== 0) {
+    return undefined;
+  }
+  const fields = layout.fields.map((field) => {
+    const carrier = context.resolveProjectFieldCarrier(
+      field.declaration,
+      sourceCarrier,
+    );
+    return carrier === undefined
+      ? undefined
+      : {
+          sourceName: field.sourceName,
+          storageIndex: field.storageIndex,
+          carrier,
+        };
+  });
+  return fields.some((field) => field === undefined)
+    ? undefined
+    : {
+        storage: "project-object",
+        fields: fields as readonly {
+          readonly sourceName: string;
+          readonly storageIndex: number;
+          readonly carrier: TargetTypeRef;
+        }[],
+      };
+}
+
+function resolveObjectRestBindingCarrier(
+  binding: Node,
+  fields: readonly {
+    readonly sourceName: string;
+    readonly carrier: TargetTypeRef;
+  }[],
+  context: RustBindingPatternFactContext,
+): TargetTypeRef | undefined {
+  const semantics = context.semanticsFor(binding);
+  const sourceType = semantics.getTypeAtLocation(binding);
+  if (sourceType === undefined) {
+    return undefined;
+  }
+  const properties = semantics.getPropertyInfos(sourceType);
+  if (properties.length !== fields.length ||
+    new Set(properties.map((property) => property.name)).size !== properties.length ||
+    new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
+    return undefined;
+  }
+  const carrier = rustStructuralObjectTargetType(fields.map((field) => ({
+    sourceName: field.sourceName,
+    type: field.carrier,
+  })));
+  const canonical = rustStructuralObjectCarrierValue(carrier);
+  if (canonical === undefined) {
+    return undefined;
+  }
+  const registeredFields = canonical.fields.map((field, storageIndex) => {
+    const property = properties.find((candidate) =>
+      candidate.name === field.sourceName);
+    const propertyType = property?.type;
+    const declarations = property === undefined
+      ? undefined
+      : semantics.getSymbolDeclarations(property.symbol);
+    if (property === undefined || propertyType === undefined ||
+      declarations === undefined || declarations.length === 0 ||
+      !isDenseDataArray(declarations) || declarations.some((declaration) => declaration === undefined) ||
+      declarations.some((declaration) =>
+        !context.navigation.isProjectDeclaration(declaration!) ||
+        !isRustStructuralObjectFieldDeclaration(declaration!, context.ast))) {
+      return undefined;
+    }
+    return {
+      declarations: Object.freeze([...declarations] as Node[]),
+      symbols: Object.freeze([property.symbol]),
+      sourceName: field.sourceName,
+      sourceType: propertyType,
+      storageIndex,
+      resultCarrier: field.type,
+    };
+  });
+  return registeredFields.some((field) => field === undefined) ||
+      !context.sourceTypes.registerStructuralObject({
+        sourceType,
+        carrier,
+        storage: "object-handle",
+        fields: registeredFields as readonly RustSourceObjectField[],
+      })
+    ? undefined
+    : carrier;
+}
+
+function collectObjectExtractedNames(
+  elements: readonly (Node | undefined)[],
+  ast: AstReader,
+): ReadonlySet<string> | undefined {
+  const names = new Set<string>();
+  for (const element of elements) {
+    if (element === undefined || ast.kindName(element) === KindOmittedExpression ||
+      ast.kindName(element) !== KindBindingElement || !ast.is.IsBindingElement(element)) {
+      return undefined;
+    }
+    if (BindingElement_IsRest(ast, element)) {
+      continue;
+    }
+    const name = Node_Name(ast, element);
+    const sourceName = bindingPropertySourceName(
+      BindingElement_PropertyName(ast, element) ?? name,
+      ast,
+    );
+    if (sourceName === undefined) {
+      return undefined;
+    }
+    names.add(sourceName);
+  }
+  return names;
+}
+
+function bindingPropertySourceName(
+  propertyName: Node | undefined,
+  ast: AstReader,
+): string | undefined {
+  const kind = propertyName === undefined ? "" : ast.kindName(propertyName);
+  return propertyName === undefined ||
+      (kind !== KindIdentifier && kind !== KindStringLiteral && kind !== KindNumericLiteral)
+    ? undefined
+    : ast.text(propertyName);
 }
 
 function bindingCarrierForArrayRest(
