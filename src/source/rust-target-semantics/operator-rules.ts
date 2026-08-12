@@ -33,6 +33,7 @@ import {
   isRustNumericCarrier,
   isRustStringCarrier,
   rustSourcePrimitiveTargetType,
+  rustStructuralObjectCarrierValue,
   sameRustPrimitiveCarrier,
 } from "../rust-target-types.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
@@ -190,6 +191,9 @@ export function selectRustBinaryOperator(
     const sameObject = leftEnum !== undefined && rightEnum !== undefined &&
       leftEnum.shape === "object" && rightEnum.shape === "object" &&
       leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
+    const sameStructuralObject = rustStructuralObjectCarrierValue(left) !== undefined &&
+      rustStructuralObjectCarrierValue(right) !== undefined &&
+      rustTargetTypeRefEquals(left, right);
     const numericPromotion = selectRustNumericBinaryPromotion(left, right);
     const comparable =
       numericPromotion !== undefined ||
@@ -197,7 +201,7 @@ export function selectRustBinaryOperator(
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
       (isRustStringCarrier(left) && isRustStringCarrier(right)) ||
       (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
-      sameEnum || sameObject;
+      sameEnum || sameObject || sameStructuralObject;
     return comparable
       ? {
           kind: "operator-token",

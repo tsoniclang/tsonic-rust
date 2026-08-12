@@ -664,19 +664,34 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("unannotated object literals fail closed", () => {
+test("unannotated object literals use their exact checked structural shape", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "inferred_object_proof" } },
     files: {
       "index.ts": `
-export function make(): void {
-  const p = { x: 1 };
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const point = { x: 1, label: "start" };
+  const alias = point;
+  alias.x += 2;
+  alias.label = "done";
+  check(point.x === 3);
+  check(point.label === "done");
+  check(alias === point);
+  const separate = { x: 3, label: "done" };
+  check(separate !== point);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /rt::ObjectHandle::new\(\(String::from\("start"\), 1\.0\)\)/u);
+  const run = validateGeneratedProject("inferred-object-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
 });
 
 test("tuple types lower to Rust tuples with literal construction and indexing", () => {

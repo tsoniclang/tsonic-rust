@@ -72,10 +72,10 @@ export interface RustSourceTypeRegistry {
   enumVariantForLiteral(carrier: TargetTypeRef, literal: string): RustSourceEnumVariant | undefined;
   registerStructuralObject(shape: RustSourceObjectShape): boolean;
   structuralObjectForType(type: Type): RustSourceObjectShape | undefined;
-  structuralFieldForDeclaration(
+  structuralFieldProjectionForDeclaration(
     declaration: Node,
     receiverCarrier: TargetTypeRef,
-  ): RustSourceObjectField | undefined;
+  ): RustStructuralFieldRegistration | undefined;
   declarationsForSelectedSymbol(symbol: Symbol): readonly Node[] | undefined;
   registerSourceUnion(union: RustSourceUnion): boolean;
   sourceUnionForCarrier(carrier: TargetTypeRef): RustSourceUnion | undefined;
@@ -266,10 +266,10 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
     structuralObjectForType(type) {
       return structuralObjectsByType.get(type);
     },
-    structuralFieldForDeclaration(declaration, receiverCarrier) {
+    structuralFieldProjectionForDeclaration(declaration, receiverCarrier) {
       const candidates = (structuralFieldsByDeclaration.get(declaration) ?? [])
         .filter((entry) => rustTargetTypeRefEquals(entry.shape.carrier, receiverCarrier));
-      return candidates.length === 1 ? candidates[0]!.field : undefined;
+      return candidates.length === 1 ? candidates[0] : undefined;
     },
     declarationsForSelectedSymbol(symbol) {
       return selectedDeclarationsBySymbol.get(symbol);

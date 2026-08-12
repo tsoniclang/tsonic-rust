@@ -2270,9 +2270,9 @@ function selectStructuralSourceProperty(
   }
   const matches = selectedDeclarations
     .map((declaration) =>
-      options.sourceTypes.structuralFieldForDeclaration(declaration, receiverCarrier))
-    .filter((field): field is NonNullable<typeof field> => field !== undefined);
-  const distinct = matches.filter((field, index) => matches.indexOf(field) === index);
+      options.sourceTypes.structuralFieldProjectionForDeclaration(declaration, receiverCarrier))
+    .filter((projection): projection is NonNullable<typeof projection> => projection !== undefined);
+  const distinct = matches.filter((projection, index) => matches.indexOf(projection) === index);
   if (distinct.length === 0) {
     return undefined;
   }
@@ -2284,18 +2284,7 @@ function selectStructuralSourceProperty(
       "Selected structural property evidence resolves to more than one Rust storage field.",
     );
   }
-  const field = distinct[0]!;
-  const shape = request.sourceReceiverType === undefined
-    ? undefined
-    : options.sourceTypes.structuralObjectForType(request.sourceReceiverType);
-  if (shape === undefined || !rustTargetTypeRefEquals(shape.carrier, receiverCarrier)) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_STRUCTURAL_RECEIVER_NOT_CLOSED",
-      "Selected structural property evidence has no exact Rust receiver shape.",
-    );
-  }
+  const { field, shape } = distinct[0]!;
   const resultCarrier = field.resultCarrier;
   const operationId = sourceDeclarationsOperationId(context, field.declarations, "field");
   if (operationId === undefined) {
@@ -2339,11 +2328,14 @@ function selectedPropertyDeclarations(
       request.sourceSelectedSymbol,
     );
     if (selected === undefined) {
-      return undefined;
-    }
-    for (const declaration of selected) {
-      if (isProjectSourceDeclaration(context, declaration) && !declarations.includes(declaration)) {
-        declarations.push(declaration);
+      if (declarations.length === 0) {
+        return undefined;
+      }
+    } else {
+      for (const declaration of selected) {
+        if (isProjectSourceDeclaration(context, declaration) && !declarations.includes(declaration)) {
+          declarations.push(declaration);
+        }
       }
     }
   }

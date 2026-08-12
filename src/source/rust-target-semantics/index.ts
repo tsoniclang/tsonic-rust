@@ -3697,7 +3697,12 @@ function resolveRecordLiteralCarrier(
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
-  if (expected === undefined) {
+  const selectedExpected = expected ?? resolveRustTargetTypeRef(
+    walk.context.semanticsFor(expression).getTypeAtLocation(expression),
+    rustResolutionContext(walk, expression),
+    walk.operationOptions,
+  );
+  if (selectedExpected === undefined) {
     return undefined;
   }
   const propertiesByName = new Map<string, Node>();
@@ -3720,9 +3725,9 @@ function resolveRecordLiteralCarrier(
     }
     propertiesByName.set(fieldName, property);
   }
-  const sourceValue = rustSourceTypeCarrierValue(expected);
-  const unionValue = rustSourceUnionCarrierValue(expected);
-  const structuralExpected = rustStructuralObjectCarrierValue(expected);
+  const sourceValue = rustSourceTypeCarrierValue(selectedExpected);
+  const unionValue = rustSourceUnionCarrierValue(selectedExpected);
+  const structuralExpected = rustStructuralObjectCarrierValue(selectedExpected);
   let resultCarrier: TargetTypeRef;
   let storage: "project-object" | "object-handle";
   let selectedFields: readonly {
@@ -3731,7 +3736,7 @@ function resolveRecordLiteralCarrier(
     readonly carrier: TargetTypeRef;
   }[];
   if (sourceValue?.shape === "object") {
-    const shapeDeclaration = walk.sourceTypes.declarationForCarrier(expected);
+    const shapeDeclaration = walk.sourceTypes.declarationForCarrier(selectedExpected);
     const layout = shapeDeclaration === undefined
       ? undefined
       : rustProjectObjectLayout(shapeDeclaration, ast);
@@ -3747,7 +3752,7 @@ function resolveRecordLiteralCarrier(
     if (projectFields.some((field) => field.carrier === undefined)) {
       return undefined;
     }
-    resultCarrier = expected;
+    resultCarrier = selectedExpected;
     storage = "project-object";
     selectedFields = projectFields as readonly {
       readonly sourceName: string;
@@ -3755,10 +3760,10 @@ function resolveRecordLiteralCarrier(
       readonly carrier: TargetTypeRef;
     }[];
   } else {
-    let structuralCarrier = structuralExpected === undefined ? undefined : expected;
+    let structuralCarrier = structuralExpected === undefined ? undefined : selectedExpected;
     let structuralValue = structuralExpected;
     if (unionValue !== undefined) {
-      const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(expected);
+      const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(selectedExpected);
       const selectedVariant = sourceUnion === undefined
         ? undefined
         : selectRustRecordLiteralUnionVariant(
