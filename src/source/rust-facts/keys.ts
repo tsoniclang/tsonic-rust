@@ -272,6 +272,14 @@ export type RustTargetOperationFact =
       readonly rightConversion?: RustValueConversion;
     }
   | {
+      readonly kind: "operator-call";
+      readonly operationId: string;
+      readonly operator: RustOperatorToken;
+      readonly path: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly fallible: boolean;
+    }
+  | {
       readonly kind: "string-concat";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
@@ -595,6 +603,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
   switch (fact.kind) {
     case "provider-operation":
     case "operator-token":
+    case "operator-call":
     case "string-concat":
     case "template-string":
     case "typeof":

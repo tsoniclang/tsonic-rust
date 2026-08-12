@@ -41,12 +41,19 @@ import { rustSourceTypeCarrierValue } from "../rust-target-types.js";
 import { selectRustNumericBinaryPromotion } from "./numeric-promotion.js";
 
 export interface RustBinaryOperatorSelection {
-  readonly kind: "operator-token" | "string-concat";
+  readonly kind: "operator-token" | "operator-call" | "string-concat";
   readonly rustOperator: RustBinaryOperator;
   readonly resultCarrier: TargetTypeRef;
+  readonly path?: string;
+  readonly fallible?: boolean;
   readonly leftConversion?: RustValueConversion;
   readonly rightConversion?: RustValueConversion;
 }
+
+const bigintArithmeticCallByOperator: Readonly<Partial<Record<RustBinaryOperator, string>>> = {
+  "/": "rt::BigInt::checked_div",
+  "%": "rt::BigInt::checked_rem",
+};
 
 const arithmeticTokens: Readonly<Record<string, RustBinaryOperator>> = {
   [KindPlusToken]: "+",
@@ -162,6 +169,18 @@ export function selectRustBinaryOperator(
     if (isRustBigIntCarrier(left) && isRustBigIntCarrier(right) &&
       rustArithmeticOperatorHasDirectSemantics(arithmetic, left)) {
       return { kind: "operator-token", rustOperator: arithmetic, resultCarrier: left };
+    }
+    if (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) {
+      const path = bigintArithmeticCallByOperator[arithmetic];
+      if (path !== undefined) {
+        return {
+          kind: "operator-call",
+          rustOperator: arithmetic,
+          resultCarrier: left,
+          path,
+          fallible: true,
+        };
+      }
     }
     return undefined;
   }

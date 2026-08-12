@@ -286,20 +286,43 @@ export function invalid(): int64 {
     diagnostic.code === "RUST_INTEGER_LITERAL_NOT_EXACT"));
 });
 
-test("bigint division fails closed until its catchable error ABI is selected", () => {
+test("bigint division and remainder use the catchable runtime ABI", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "bigint_division_proof" } },
     files: {
       "index.ts": `
-export function divide(left: bigint, right: bigint): bigint {
+import { check } from "@acme/testing";
+
+function divide(left: bigint, right: bigint): bigint {
   return left / right;
+}
+
+function remainder(left: bigint, right: bigint): bigint {
+  return left % right;
+}
+
+export function main(): void {
+  check(divide(7n, 3n) === 2n);
+  check(divide(-7n, 3n) === -2n);
+  check(remainder(-7n, 3n) === -1n);
+  let caught = false;
+  try {
+    divide(1n, 0n);
+  } catch (error) {
+    caught = true;
+  }
+  check(caught);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED"));
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::BigInt::checked_div\(left\.clone\(\), right\.clone\(\)\)/u);
+  assert.match(source, /rt::BigInt::checked_rem\(left\.clone\(\), right\.clone\(\)\)/u);
+  validateGeneratedProject("expression-bigint-division", result.artifacts, { run: true });
 });
 
 test("delete lowers only an exact mutable JS Array index selection", { timeout: 300_000 }, () => {

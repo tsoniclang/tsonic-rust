@@ -2293,11 +2293,11 @@ function planRustDirectUpdateTarget(
 
 function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
-  if ((fact?.kind === "operator-token" || fact?.kind === "string-concat") &&
+  if ((fact?.kind === "operator-token" || fact?.kind === "operator-call" || fact?.kind === "string-concat") &&
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.operator-carrier")) {
     return undefined;
   }
-  if ((fact?.kind === "operator-token" || fact?.kind === "string-concat") &&
+  if ((fact?.kind === "operator-token" || fact?.kind === "operator-call" || fact?.kind === "string-concat") &&
     !selectedOperationMatches(
       context.input.facts.getSelectedTargetOperator(node),
       fact.operationId,
@@ -2385,6 +2385,19 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       }
     }
     return { kind: "string-concat", parts };
+  }
+  if (fact.kind === "operator-call") {
+    registerAliasFromPath(context, fact.path);
+    if (fact.fallible && context.fallibleContext !== true) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, node),
+        "rust.error.operator",
+        "Fallible operator calls require a finalized fallible lowering context.",
+      ));
+      return undefined;
+    }
+    const call: RustExpr = { kind: "call", path: fact.path, args: [left, right] };
+    return fact.fallible ? { kind: "try", expr: call } : call;
   }
   if (fact.kind === "operator-token") {
     // Owned-String literals in comparison position lower as &str literals so

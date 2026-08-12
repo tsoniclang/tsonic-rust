@@ -2150,14 +2150,23 @@ function resolvePostCheckBinaryCarrier(
               operationId: "tsonic.rust.operator.concat.string",
               resultCarrier: binary.resultCarrier,
             }
-          : {
+          : binary.kind === "operator-call"
+            ? {
+                kind: "operator-call",
+                operationId: `tsonic.rust.operator.${binary.rustOperator}.${rustOperatorCarrierKey(binary.resultCarrier)}`,
+                operator: binary.rustOperator,
+                path: binary.path!,
+                resultCarrier: binary.resultCarrier,
+                fallible: binary.fallible === true,
+              }
+            : {
               kind: "operator-token",
               operationId: `tsonic.rust.operator.${binary.rustOperator}.${rustOperatorCarrierKey(binary.resultCarrier)}`,
               operator: binary.rustOperator,
               resultCarrier: binary.resultCarrier,
               leftConversion: binary.leftConversion,
               rightConversion: binary.rightConversion,
-            };
+              };
       }
     }
   }

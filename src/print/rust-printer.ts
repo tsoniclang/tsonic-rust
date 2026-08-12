@@ -834,14 +834,20 @@ function printRustStatementExpr(
   depth: number,
   column: number,
 ): string {
-  if (expression.kind === "try" && expression.expr.kind === "call") {
+  if (expression.kind === "try" &&
+    (expression.expr.kind === "call" || expression.expr.kind === "associated-call")) {
+    const callable = expression.expr.kind === "call"
+      ? expression.expr.path
+      : `${printRustAssociatedCallOwner(expression.expr)}::${expression.expr.method}`;
+    const forceExpanded = expression.expr.args.length > 1 &&
+      printRustExpr(expression.expr).length > rustNestedCallWidth;
     return appendToLastLine(
       printFittedCall(
-        expression.expr.path,
+        callable,
         expression.expr.args,
         depth,
         column + 1,
-        false,
+        forceExpanded,
         true,
       ),
       "?",
@@ -1604,6 +1610,11 @@ function printRustExprFitted(
         : appendToLastLine(rendered, ".await");
     }
     case "try": {
+      if ((expression.expr.kind === "call" || expression.expr.kind === "associated-call") &&
+        (!renderedFits(flat, column) ||
+          (expression.expr.args.length > 1 && printRustExpr(expression.expr).length > rustNestedCallWidth))) {
+        return printNestedCallArgument(expression, depth, column, true);
+      }
       if (expression.expr.kind === "method-call" &&
         rustMethodCallKeepsTrailingClosureAttached(expression.expr, depth, column + 1)) {
         const receiver = printOperand(expression.expr.receiver, RustPrecedence.Postfix, false);
@@ -1663,14 +1674,18 @@ function printRustExprFitted(
           grammarPosition,
         );
       }
-      const renderedLeft = printRustExprFitted(
-        expression.left,
-        depth,
-        column,
-        methodChainContinuationIndent ??
-          (column > indentText(depth).length ? indentText(depth + 1) : undefined),
-        grammarPosition,
-      );
+      const renderedLeft = expression.left.kind === "try" &&
+          (expression.left.expr.kind === "call" || expression.left.expr.kind === "associated-call") &&
+          expression.left.expr.args.length > 1
+        ? printNestedCallArgument(expression.left, depth, column, true)
+        : printRustExprFitted(
+            expression.left,
+            depth,
+            column,
+            methodChainContinuationIndent ??
+              (column > indentText(depth).length ? indentText(depth + 1) : undefined),
+            grammarPosition,
+          );
       const left = printFittedBinaryOperand(
         expression.left,
         renderedLeft,

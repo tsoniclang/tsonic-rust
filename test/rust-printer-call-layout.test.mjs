@@ -107,6 +107,59 @@ test("single projection calls keep a short receiver attached when closure argume
   assert.doesNotMatch(source, /let projected = pair\n\s+\.project_member/u);
 });
 
+test("fallible calls on the left of comparisons expand their arguments before the operator", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "divide",
+              args: [
+                { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "1" }] },
+                { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "0" }] },
+              ],
+            },
+          },
+        }, {
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "divide",
+                  args: [
+                    { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "7" }] },
+                    { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "3" }] },
+                  ],
+                },
+              },
+              right: { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "2" }] },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /divide\(\n {8}rt::BigInt::from_decimal_literal\("1"\),\n {8}rt::BigInt::from_decimal_literal\("0"\),\n {4}\)\?;/u);
+  assert.match(source, /divide\(\n {12}rt::BigInt::from_decimal_literal\("7"\),\n {12}rt::BigInt::from_decimal_literal\("3"\),\n {8}\)\? ==/u);
+});
+
 test("method chains inside expanded call comparisons use argument indentation", () => {
   const source = printRustSourceFile({
     headerComment,
