@@ -845,9 +845,9 @@ function printRustStatementExpr(
     const flat = printRustExpr(expression.expr);
     const forceExpanded = !renderedFits(flat, column) ||
       expression.expr.args.length > 1 && flat.length > rustNestedCallWidth &&
-        expression.expr.args.some((argument) =>
+        expression.expr.args.filter((argument) =>
           argument.kind === "call" || argument.kind === "associated-call" ||
-          argument.kind === "method-call" || argument.kind === "try");
+          argument.kind === "method-call" || argument.kind === "try").length > 1;
     return appendToLastLine(
       printFittedCall(
         callable,
