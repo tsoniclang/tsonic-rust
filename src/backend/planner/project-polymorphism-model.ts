@@ -34,6 +34,7 @@ import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { planRustCallableParameters } from "./callable-parameters.js";
 import { createRustSyntheticNameState } from "./synthetic-names.js";
 import { planProjectMethod } from "./declarations-nominal.js";
+import { rustDeclarationRequiresUnsafe } from "./explicit-safety.js";
 
 export interface ProjectFieldPlan {
   readonly declaration: Node;
@@ -48,6 +49,7 @@ export interface ProjectCallableShape {
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
   readonly fallible: boolean;
+  readonly isUnsafe: boolean;
 }
 
 export interface ProjectClassStateLayer {
@@ -168,6 +170,11 @@ export function projectCallableShape(
     params: parameterPlan.params,
     ...(returnType === undefined ? {} : { returnType }),
     fallible: context.input.facts.getFact(member, rustFallibleFactKey) !== undefined,
+    isUnsafe: rustDeclarationRequiresUnsafe(
+      member,
+      "declaration",
+      context.input,
+    ),
   };
 }
 
@@ -310,6 +317,9 @@ function rustTypeEquals(left: RustType | undefined, right: RustType | undefined)
     case "reference":
       return right.kind === "reference" && left.mutable === right.mutable &&
         rustTypeEquals(left.referent, right.referent);
+    case "raw-pointer":
+      return right.kind === "raw-pointer" && left.mutable === right.mutable &&
+        rustTypeEquals(left.pointee, right.pointee);
     case "fixed-array":
       return right.kind === "fixed-array" && left.length === right.length &&
         rustTypeEquals(left.element, right.element);
@@ -317,7 +327,8 @@ function rustTypeEquals(left: RustType | undefined, right: RustType | undefined)
       return right.kind === "slice-ref" && left.mutable === right.mutable &&
         rustTypeEquals(left.element, right.element);
     case "function-pointer":
-      return right.kind === "function-pointer" && sameStrings(left.abi, right.abi) &&
+      return right.kind === "function-pointer" && left.isUnsafe === right.isUnsafe &&
+        sameStrings(left.abi, right.abi) &&
         sameTypes(left.parameters, right.parameters) && rustTypeEquals(left.result, right.result);
     case "tuple":
       return right.kind === "tuple" && sameTypes(left.elements, right.elements);

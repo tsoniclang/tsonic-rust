@@ -48,9 +48,18 @@ export function rustStdProviderDefinition(): RustProviderPackageDefinition {
       }),
     ]),
     types: Object.freeze([
-      { exportId: collections.hashMapExportId, targetTypeId: "rust.std.collections.HashMap" },
-      { exportId: collections.hashSetExportId, targetTypeId: "rust.std.collections.HashSet" },
-      { exportId: vector.vecExportId, targetTypeId: "rust.std.vec.Vec" },
+      {
+        exportId: collections.hashMapExportId,
+        targetCarrier: targetNamed("rust.std.collections.HashMap", [typeParameter("K"), typeParameter("V")]),
+      },
+      {
+        exportId: collections.hashSetExportId,
+        targetCarrier: targetNamed("rust.std.collections.HashSet", [typeParameter("T")]),
+      },
+      {
+        exportId: vector.vecExportId,
+        targetCarrier: targetNamed("rust.std.vec.Vec", [typeParameter("T")]),
+      },
     ]),
     operations: Object.freeze([...collections.operations, ...vector.operations]),
     crates: Object.freeze([]),

@@ -753,6 +753,39 @@ test("multiline mixed logical groups preserve source precedence", () => {
   assert.match(text, /enabled\n        && \(predicate_with_an_intentionally_long_name_left\(value\)\n            \|\| predicate_with_an_intentionally_long_name_right\(value\)\)/u);
 });
 
+test("statement-valued expressions are parenthesized as binary operands", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      returnType: { kind: "primitive", name: "i32" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "binary",
+            operator: "+",
+            left: {
+              kind: "block",
+              bindings: [{
+                name: "selected",
+                value: { kind: "int-literal", text: "1" },
+              }],
+              value: { kind: "path", path: "selected" },
+            },
+            right: { kind: "int-literal", text: "1" },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /\(\{\n        let selected = 1;\n        selected\n    \}\) \+ 1/u);
+});
+
 test("long assignments break after the assignment operator", () => {
   const conversion = {
     kind: "call",

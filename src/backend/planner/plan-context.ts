@@ -59,6 +59,7 @@ export interface RustPlanContext {
   readonly completionBoundary?: RustCompletionBoundary;
   readonly functionReturnType?: RustType;
   readonly asyncContext?: boolean;
+  readonly explicitUnsafeContextDepth?: number;
   // Inside a fallible lowering (Result-returning fn body or try closure):
   // fallible calls take `?`, throws lower to Err returns.
   readonly fallibleContext?: boolean;

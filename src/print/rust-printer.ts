@@ -82,7 +82,7 @@ export function printRustItem(item: RustItem): string {
           ? ` -> rt::TsonicResult<${fn.returnType === undefined ? "()" : printRustType(fn.returnType)}>`
           : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
-        return `${fnAttrs}${printRustFunctionSignature(`    fn `, fn.name, "", allParams, returnSuffix, 1)};`;
+        return `${fnAttrs}${printRustFunctionSignature(`    ${fn.isUnsafe === true ? "unsafe " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)};`;
       }).join("\n");
       const declaration = `${printRustVisibility(item.visibility)}trait ${item.name}${generics}`;
       const flatHeader = `${declaration}${superTraits}`;
@@ -107,7 +107,7 @@ export function printRustItem(item: RustItem): string {
           : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
         const visibility = item.trait === undefined ? printRustVisibility(fn.visibility) : "";
-        const header = `${fnAttrs}${printRustFunctionHeader(`    ${visibility}${fn.isAsync === true ? "async " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
+        const header = `${fnAttrs}${printRustFunctionHeader(`    ${visibility}${fn.isAsync === true ? "async " : ""}${fn.isUnsafe === true ? "unsafe " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
         const body = printRustBlockStatements(fn.body, 2);
         return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
       }).join("\n\n");
@@ -126,7 +126,7 @@ export function printRustItem(item: RustItem): string {
         : item.returnType === undefined ? "" : ` -> ${printRustType(item.returnType)}`;
       const attrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
       const header = `${attrs}${printRustFunctionHeader(
-        `${printRustVisibility(item.visibility)}${item.isAsync === true ? "async " : ""}fn `,
+        `${printRustVisibility(item.visibility)}${item.isAsync === true ? "async " : ""}${item.isUnsafe === true ? "unsafe " : ""}fn `,
         item.name,
         generics,
         params,
@@ -235,6 +235,9 @@ export function printRustType(type: RustType): string {
     case "reference": {
       return `${type.mutable ? "&mut " : "&"}${printRustType(type.referent)}`;
     }
+    case "raw-pointer": {
+      return `${type.mutable ? "*mut " : "*const "}${printRustType(type.pointee)}`;
+    }
     case "fixed-array": {
       return `[${printRustType(type.element)}; ${type.length}]`;
     }
@@ -246,7 +249,7 @@ export function printRustType(type: RustType): string {
         ? type.abi[0]
         : undefined;
       const abi = abiName === undefined ? "" : `extern ${JSON.stringify(abiName)} `;
-      return `${abi}fn(${type.parameters.map(printRustType).join(", ")}) -> ${printRustType(type.result)}`;
+      return `${type.isUnsafe === true ? "unsafe " : ""}${abi}fn(${type.parameters.map(printRustType).join(", ")}) -> ${printRustType(type.result)}`;
     }
     case "tuple": {
       const elements = type.elements.map(printRustType).join(", ");
@@ -297,7 +300,13 @@ function printRustStmt(statement: RustStmt, depth: number): string {
         : `${indent}return ${printRustExprFitted(statement.expr, depth, indent.length + "return ".length + 1)};`;
     }
     case "tail": {
-      return `${indent}${printRustExprFitted(statement.expr, depth, indent.length)}`;
+      return `${indent}${printRustExprFitted(
+        statement.expr,
+        depth,
+        indent.length,
+        undefined,
+        "statement",
+      )}`;
     }
     case "if": {
       const rendered = printRustConditionalBlock("if", statement.condition, statement.then, depth);
@@ -374,6 +383,9 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return body.length === 0
         ? `${indent}${prefix}{}`
         : `${indent}${prefix}{\n${body}\n${indent}}`;
+    }
+    case "unsafe-scope": {
+      return printRustBlock(statement.body, depth, "unsafe");
     }
     case "throw": {
       return [
@@ -676,7 +688,8 @@ function rustBlockHasCompletionExit(block: RustBlock): boolean {
         (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
     }
     if (statement.kind === "loop" || statement.kind === "while" || statement.kind === "while-let-some" ||
-      statement.kind === "for" || statement.kind === "if-let-some" || statement.kind === "scope") {
+      statement.kind === "for" || statement.kind === "if-let-some" ||
+      statement.kind === "scope" || statement.kind === "unsafe-scope") {
       return rustBlockHasCompletionExit(statement.body);
     }
     if (statement.kind === "try-scope") {
@@ -826,7 +839,7 @@ function printRustStatementExpr(
       "?",
     );
   }
-  return printRustExprFitted(expression, depth, column);
+  return printRustExprFitted(expression, depth, column, undefined, "statement");
 }
 
 function printRustConditionalBlock(
@@ -900,6 +913,10 @@ function expressionPrecedence(expression: RustExpr): RustPrecedence {
   switch (expression.kind) {
     case "assignment":
     case "return-expression":
+    case "conditional":
+    case "match":
+    case "closure":
+    case "closure-block":
       return RustPrecedence.Assignment;
     case "range":
       return RustPrecedence.Or;
@@ -907,6 +924,7 @@ function expressionPrecedence(expression: RustExpr): RustPrecedence {
       return operatorPrecedence(expression.operator);
     case "unary":
     case "reference":
+    case "dereference":
       return RustPrecedence.Unary;
     case "numeric-cast":
       return RustPrecedence.Cast;
@@ -922,13 +940,40 @@ function expressionPrecedence(expression: RustExpr): RustPrecedence {
 }
 
 function printOperand(operand: RustExpr, parent: RustPrecedence, isRightSide: boolean): string {
-  const own = expressionPrecedence(operand);
-  const needsParens =
-    own < parent ||
-    (own === parent && (isRightSide || parent === RustPrecedence.Comparison));
   const text = printRustExpr(operand);
-  return needsParens ? `(${text})` : text;
+  return expressionNeedsParentheses(operand, parent, isRightSide)
+    ? `(${text})`
+    : text;
 }
+
+function expressionNeedsParentheses(
+  expression: RustExpr,
+  parent: RustPrecedence,
+  isRightSide: boolean,
+): boolean {
+  if (isRightSide && expressionIsRightHandBlock(expression)) {
+    return false;
+  }
+  const own = expressionPrecedence(expression);
+  return own < parent ||
+    (own === parent && (isRightSide || parent === RustPrecedence.Comparison));
+}
+
+function expressionIsRightHandBlock(expression: RustExpr): boolean {
+  return expression.kind === "conditional" ||
+    expression.kind === "match" ||
+    expression.kind === "block" ||
+    expression.kind === "unsafe" ||
+    expression.kind === "evaluate-then";
+}
+
+function expressionIsStatementBlockOperand(expression: RustExpr): boolean {
+  return expression.kind === "block" ||
+    expression.kind === "unsafe" ||
+    expression.kind === "evaluate-then";
+}
+
+type RustExpressionGrammarPosition = "expression" | "statement";
 
 function printBinaryOperand(
   operand: RustExpr,
@@ -940,6 +985,26 @@ function printBinaryOperand(
       (operator === "<" || operator === "<=" || operator === ">" || operator === ">=")
     ? `(${rendered})`
     : rendered;
+}
+
+function printFittedBinaryOperand(
+  operand: RustExpr,
+  rendered: string,
+  operator: string,
+  isRightSide: boolean,
+  forceParentheses = false,
+): string {
+  const grouped = forceParentheses || expressionNeedsParentheses(
+    operand,
+    operatorPrecedence(operator),
+    isRightSide,
+  )
+    ? `(${rendered})`
+    : rendered;
+  return operand.kind === "numeric-cast" &&
+      (operator === "<" || operator === "<=" || operator === ">" || operator === ">=")
+    ? `(${grouped})`
+    : grouped;
 }
 
 export function printRustExpr(expression: RustExpr): string {
@@ -965,6 +1030,9 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "unary": {
       return `${expression.operator}${printOperand(expression.operand, RustPrecedence.Unary, false)}`;
+    }
+    case "dereference": {
+      return `*${printOperand(expression.pointer, RustPrecedence.Unary, false)}`;
     }
     case "numeric-cast": {
       return `${printOperand(expression.expression, RustPrecedence.Cast, false)} as ${expression.target}`;
@@ -1013,6 +1081,9 @@ export function printRustExpr(expression: RustExpr): string {
         .map((binding) => `${binding.attrs?.join(" ") ?? ""}${binding.attrs === undefined ? "" : " "}let ${binding.name} = ${printRustExpr(binding.value)};`)
         .join(" ");
       return `{ ${bindings}${bindings.length === 0 ? "" : " "}${printRustExpr(expression.value)} }`;
+    }
+    case "unsafe": {
+      return `unsafe { ${printRustExpr(expression.expression)} }`;
     }
     case "evaluate-then": {
       return `{ let _ = ${printRustExpr(expression.effect)}; ${printRustExpr(expression.value)} }`;
@@ -1078,6 +1149,10 @@ function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
       return true;
     case "unary":
       return rustExpressionContainsStatementBlock(expression.operand);
+    case "dereference":
+      return rustExpressionContainsStatementBlock(expression.pointer);
+    case "unsafe":
+      return rustExpressionContainsStatementBlock(expression.expression);
     case "numeric-cast":
       return rustExpressionContainsStatementBlock(expression.expression);
     case "binary":
@@ -1134,6 +1209,10 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
       return true;
     case "unary":
       return rustExpressionContainsClosure(expression.operand);
+    case "dereference":
+      return rustExpressionContainsClosure(expression.pointer);
+    case "unsafe":
+      return rustExpressionContainsClosure(expression.expression);
     case "numeric-cast":
       return rustExpressionContainsClosure(expression.expression);
     case "binary":
@@ -1193,6 +1272,10 @@ function rustExpressionContainsPreferredVerticalMethodChain(expression: RustExpr
         expression.args.some(rustExpressionContainsPreferredVerticalMethodChain);
     case "unary":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.operand);
+    case "dereference":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.pointer);
+    case "unsafe":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
     case "numeric-cast":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
     case "binary":
@@ -1258,6 +1341,7 @@ function printRustExprFitted(
   depth: number,
   column: number,
   methodChainContinuationIndent?: string,
+  grammarPosition: RustExpressionGrammarPosition = "expression",
 ): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
@@ -1274,11 +1358,15 @@ function printRustExprFitted(
         expression.whenTrue,
         depth + 1,
         branchIndent.length,
+        undefined,
+        "statement",
       );
       const whenFalse = printRustExprFitted(
         expression.whenFalse,
         depth + 1,
         branchIndent.length,
+        undefined,
+        "statement",
       );
       return [
         `if ${condition} {`,
@@ -1301,6 +1389,8 @@ function printRustExprFitted(
         expression.value,
         depth + 1,
         statementIndent.length,
+        undefined,
+        "statement",
       );
       return [
         "{",
@@ -1315,11 +1405,36 @@ function printRustExprFitted(
         ? statementIndent
         : `${statementIndent}let _ = `;
       const effect = printRustExprFitted(expression.effect, depth + 1, effectPrefix.length);
-      const value = printRustExprFitted(expression.value, depth + 1, statementIndent.length);
+      const value = printRustExprFitted(
+        expression.value,
+        depth + 1,
+        statementIndent.length,
+        undefined,
+        "statement",
+      );
       return [
         "{",
         `${effectPrefix}${effect};`,
         `${statementIndent}${value}`,
+        `${indentText(depth)}}`,
+      ].join("\n");
+    }
+    case "unsafe": {
+      if (!rustExpressionContainsStatementBlock(expression.expression) &&
+        !flat.includes("\n") && renderedFits(flat, column)) {
+        return flat;
+      }
+      const expressionIndent = indentText(depth + 1);
+      const selected = printRustExprFitted(
+        expression.expression,
+        depth + 1,
+        expressionIndent.length,
+        undefined,
+        "statement",
+      );
+      return [
+        "unsafe {",
+        `${expressionIndent}${selected}`,
         `${indentText(depth)}}`,
       ].join("\n");
     }
@@ -1485,7 +1600,13 @@ function printRustExprFitted(
         return flat;
       }
       if (expression.operator === "||" || expression.operator === "&&") {
-        return printFittedLogicalChain(expression, expression.operator, depth, column);
+        return printFittedLogicalChain(
+          expression,
+          expression.operator,
+          depth,
+          column,
+          grammarPosition,
+        );
       }
       const renderedLeft = printRustExprFitted(
         expression.left,
@@ -1493,21 +1614,23 @@ function printRustExprFitted(
         column,
         methodChainContinuationIndent ??
           (column > indentText(depth).length ? indentText(depth + 1) : undefined),
+        grammarPosition,
       );
-      const left = expression.left.kind === "numeric-cast" &&
-          (expression.operator === "<" || expression.operator === "<=" ||
-            expression.operator === ">" || expression.operator === ">=")
-        ? `(${renderedLeft})`
-        : renderedLeft;
-      if (!left.includes("\n") &&
-        (expression.right.kind === "block" || expression.right.kind === "evaluate-then")) {
+      const left = printFittedBinaryOperand(
+        expression.left,
+        renderedLeft,
+        expression.operator,
+        false,
+        grammarPosition === "statement" && expressionIsStatementBlockOperand(expression.left),
+      );
+      if (!left.includes("\n") && expressionIsRightHandBlock(expression.right)) {
         const separator = ` ${expression.operator} `;
-        const right = printRustExprFitted(
+        const renderedRight = printRustExprFitted(
           expression.right,
           depth,
           column + left.length + separator.length,
         );
-        return `${left}${separator}${right}`;
+        return `${left}${separator}${renderedRight}`;
       }
       const joined = appendToLastLine(
         left,
@@ -1519,10 +1642,16 @@ function printRustExprFitted(
         return joined;
       }
       const continuationIndent = indentText(depth + 1);
-      const right = printRustExprFitted(
+      const renderedRight = printRustExprFitted(
         expression.right,
         depth + 1,
         continuationIndent.length + expression.operator.length + 1,
+      );
+      const right = printFittedBinaryOperand(
+        expression.right,
+        renderedRight,
+        expression.operator,
+        true,
       );
       const continuation = `${continuationIndent}${expression.operator} ${firstLine(right)}`;
       return remainingLines(right).length === 0
@@ -1640,6 +1769,7 @@ function printFittedLogicalChain(
   operator: "||" | "&&",
   depth: number,
   column: number,
+  grammarPosition: RustExpressionGrammarPosition,
 ): string {
   const operands: RustExpr[] = [];
   collectLogicalOperands(expression, operator, operands);
@@ -1647,7 +1777,13 @@ function printFittedLogicalChain(
   if (first === undefined) {
     return printRustExpr(expression);
   }
-  let rendered = printFittedLogicalOperand(first, operator, depth, column);
+  let rendered = printFittedLogicalOperand(
+    first,
+    operator,
+    depth,
+    column,
+    grammarPosition,
+  );
   const continuationIndent = indentText(depth + 1);
   for (const operand of operands.slice(1)) {
     const attachedToClosingBlock = lastLine(rendered).trim() === "}";
@@ -1659,6 +1795,7 @@ function printFittedLogicalChain(
       operator,
       operandDepth,
       continuationIndent.length + operator.length + 1,
+      "expression",
     );
     const continuation = `${operator} ${firstLine(right)}`;
     rendered = attachedToClosingBlock
@@ -1757,12 +1894,16 @@ function printFittedLogicalOperand(
   operator: "||" | "&&",
   depth: number,
   column: number,
+  grammarPosition: RustExpressionGrammarPosition,
 ): string {
-  const parenthesized = expressionPrecedence(operand) < operatorPrecedence(operator);
+  const parenthesized = expressionPrecedence(operand) < operatorPrecedence(operator) ||
+    grammarPosition === "statement" && expressionIsStatementBlockOperand(operand);
   const rendered = printRustExprFitted(
     operand,
     depth,
     column + (parenthesized ? 1 : 0),
+    undefined,
+    grammarPosition,
   );
   return parenthesized ? `(${rendered})` : rendered;
 }
@@ -2443,6 +2584,10 @@ function rustExpressionContainsExpandedStructLiteral(expression: RustExpr): bool
   switch (expression.kind) {
     case "unary":
       return rustExpressionContainsExpandedStructLiteral(expression.operand);
+    case "dereference":
+      return rustExpressionContainsExpandedStructLiteral(expression.pointer);
+    case "unsafe":
+      return rustExpressionContainsExpandedStructLiteral(expression.expression);
     case "numeric-cast":
       return rustExpressionContainsExpandedStructLiteral(expression.expression);
     case "binary":

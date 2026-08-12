@@ -7,7 +7,10 @@ import type {
   ProviderTypeParameterDeclaration,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../policy/types.js";
-import { rustTargetTypeRefEquals } from "../../policy/equality.js";
+import {
+  isRustTargetTypeRef,
+  rustTargetTypeRefEquals,
+} from "../../policy/equality.js";
 import type { RustProviderPackageDefinition } from "./index.js";
 import type {
   RustProviderConstantArgument,
@@ -517,19 +520,87 @@ function validateTypeRelations(
 ): void {
   const relatedExports = new Set<string>();
   for (const relation of definition.types ?? []) {
-    requireExactKeys(asRecord(relation), ["exportId", "targetTypeId"], "type relation", fail);
+    requireExactKeys(asRecord(relation), ["exportId", "targetCarrier"], "type relation", fail);
     requireNonEmpty(relation.exportId, "type relation export id", fail);
-    requireNonEmpty(relation.targetTypeId, `target type id for '${relation.exportId}'`, fail);
-    if (!exportsById.has(relation.exportId)) {
+    const exported = exportsById.get(relation.exportId)?.declaration;
+    if (exported === undefined) {
       fail(`type relation targets undeclared exportId '${relation.exportId}'`);
     }
     if (relatedExports.has(relation.exportId)) {
       fail(`export '${relation.exportId}' has more than one Rust target type relation`);
     }
     relatedExports.add(relation.exportId);
-    if (!builtInTargetCarrierIds.has(relation.targetTypeId) && definition.carrierPaths?.[relation.targetTypeId] === undefined) {
-      fail(`export '${relation.exportId}' target type '${relation.targetTypeId}' has no closed Rust carrier path`);
+    if (!isRustTargetTypeRef(relation.targetCarrier)) {
+      fail(`export '${relation.exportId}' has an invalid closed Rust target carrier`);
     }
+    const sourceTypeParameters = new Set(
+      (exported.typeParameters ?? []).map((parameter) => parameter.name),
+    );
+    for (const parameter of targetCarrierTypeParameters(relation.targetCarrier)) {
+      if (!sourceTypeParameters.has(parameter)) {
+        fail(`export '${relation.exportId}' target carrier references undeclared source type parameter '${parameter}'`);
+      }
+    }
+    for (const targetTypeId of targetCarrierNamedIds(relation.targetCarrier)) {
+      if (!builtInTargetCarrierIds.has(targetTypeId) && definition.carrierPaths?.[targetTypeId] === undefined) {
+        fail(`export '${relation.exportId}' target type '${targetTypeId}' has no closed Rust carrier path`);
+      }
+    }
+  }
+}
+
+function targetCarrierTypeParameters(carrier: TargetTypeRef): readonly string[] {
+  const names = new Set<string>();
+  walkTargetCarrier(carrier, (candidate) => {
+    if (candidate.kind === "type-parameter") {
+      names.add(candidate.name);
+    }
+  });
+  return [...names].sort();
+}
+
+function targetCarrierNamedIds(carrier: TargetTypeRef): readonly string[] {
+  const ids = new Set<string>();
+  walkTargetCarrier(carrier, (candidate) => {
+    if (candidate.kind === "target-named") {
+      ids.add(candidate.id);
+    }
+  });
+  return [...ids].sort();
+}
+
+function walkTargetCarrier(
+  carrier: TargetTypeRef,
+  visit: (carrier: TargetTypeRef) => void,
+): void {
+  visit(carrier);
+  switch (carrier.kind) {
+    case "target-named":
+      for (const argument of carrier.typeArguments ?? []) walkTargetCarrier(argument, visit);
+      return;
+    case "array":
+      walkTargetCarrier(carrier.element, visit);
+      return;
+    case "tuple":
+      for (const element of carrier.elements) walkTargetCarrier(element, visit);
+      return;
+    case "pointer":
+      walkTargetCarrier(carrier.pointee, visit);
+      return;
+    case "function-pointer":
+    case "closure":
+      for (const argument of carrier.args) walkTargetCarrier(argument, visit);
+      walkTargetCarrier(carrier.result, visit);
+      return;
+    case "associated-type":
+      walkTargetCarrier(carrier.owner, visit);
+      return;
+    case "source-primitive":
+    case "type-parameter":
+    case "opaque":
+    case "lifetime":
+    case "target-specific":
+      return;
   }
 }
 

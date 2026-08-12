@@ -26,7 +26,6 @@ import type {
   RustProviderOperationRow,
   RustProviderTypeRow,
 } from "../provider-packages/index.js";
-import { materializeProviderCarrier } from "../provider-packages/index.js";
 import {
   rustFutureTargetType,
   rustBigIntTargetType,
@@ -50,6 +49,7 @@ import {
   rustTupleTargetType,
   rustUnitTargetType,
   rustVecTargetType,
+  substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
 import { rustProviderOperationOwnerMatches } from "./provider-operation-selection.js";
 import {
@@ -300,8 +300,10 @@ function resolveRustTargetTypeSyntax(
     context,
   );
   if (provider !== undefined) {
-    const base = providerCarrierFromRelations(provider, options);
-    return base === undefined ? undefined : instantiateTargetTypeArguments(base, typeArguments as TargetTypeRef[]);
+    const relation = providerCarrierFromRelations(provider, options);
+    return relation === undefined
+      ? undefined
+      : instantiateProviderTargetType(relation, typeArguments as TargetTypeRef[]);
   }
   const sourceProfileName = resolveOwnedSourceProfileTypeName(symbol, context, options.sourceProfiles);
   if (sourceProfileName !== undefined) {
@@ -664,7 +666,7 @@ function resolveProviderTypeIdentity(
 function providerCarrierFromRelations(
   identity: ProviderDeclarationIdentity,
   options: RustTargetTypeResolutionOptions,
-): TargetTypeRef | undefined {
+): RustProviderTypeRow | undefined {
   if (identity.exportId === undefined) {
     return undefined;
   }
@@ -674,23 +676,16 @@ function providerCarrierFromRelations(
   if (relations.length !== 1) {
     return undefined;
   }
-  const relation = relations[0]!;
-  return materializeProviderCarrier(
-    { kind: "target-named", id: relation.targetTypeId },
-    options.providerCarrierPaths,
-  );
+  return relations[0];
 }
 
 function instantiateTargetType(
-  base: TargetTypeRef,
+  base: RustProviderTypeRow,
   type: Type,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  if (base.kind !== "target-named") {
-    return base;
-  }
   const rawArguments = context.typeShape.isTypeReference(type)
     ? context.typeShape.getTypeArguments(type)
     : [];
@@ -703,18 +698,20 @@ function instantiateTargetType(
   if (targetArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
-  return targetArguments.length === 0
-    ? base
-    : { ...base, typeArguments: targetArguments as TargetTypeRef[] };
+  return instantiateProviderTargetType(base, targetArguments as TargetTypeRef[]);
 }
 
-function instantiateTargetTypeArguments(
-  base: TargetTypeRef,
+function instantiateProviderTargetType(
+  relation: RustProviderTypeRow,
   arguments_: readonly TargetTypeRef[],
-): TargetTypeRef {
-  return base.kind === "target-named" && arguments_.length > 0
-    ? { ...base, typeArguments: arguments_ }
-    : base;
+): TargetTypeRef | undefined {
+  if (relation.sourceTypeParameters.length !== arguments_.length) {
+    return undefined;
+  }
+  const substitutions = new Map(
+    relation.sourceTypeParameters.map((name, index) => [name, arguments_[index]!] as const),
+  );
+  return substituteRustTargetTypeParameters(relation.targetCarrier, substitutions);
 }
 
 function resolveOwnedSourceProfileTypeName(

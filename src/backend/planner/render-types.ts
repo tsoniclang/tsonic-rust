@@ -92,6 +92,13 @@ export function rustTypeFromCarrier(
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
   }
+  if (carrier.kind === "pointer" &&
+    (carrier.mutability === "const" || carrier.mutability === "mut")) {
+    const pointee = rustTypeFromCarrier(carrier.pointee, resolveSourceTypePath);
+    return pointee === undefined
+      ? undefined
+      : { kind: "raw-pointer", pointee, mutable: carrier.mutability === "mut" };
+  }
   if (carrier.kind === "function-pointer") {
     const parameters = carrier.args.map((argument) =>
       rustTypeFromCarrier(argument, resolveSourceTypePath));

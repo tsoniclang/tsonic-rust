@@ -111,6 +111,11 @@ import {
   writeRustProjectDispatchedField,
   writeRustProjectObjectField,
 } from "./project-objects.js";
+import {
+  isErasedRustSafetyExpressionStatement,
+  isRustExplicitUnsafeBlockMarker,
+  withExplicitUnsafeContext,
+} from "./explicit-safety.js";
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -155,6 +160,9 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return planSwitchStatement(node, context);
     }
     case KindExpressionStatement: {
+      if (isErasedRustSafetyExpressionStatement(node, context.input)) {
+        return [];
+      }
       return planExpressionStatement(node, context);
     }
     case KindIfStatement: {
@@ -219,6 +227,18 @@ function planStatementSequence(
       ));
       failed = true;
       continue;
+    }
+    if (isRustExplicitUnsafeBlockMarker(child, context.input)) {
+      const body = planStatementSequence(
+        children.slice(index + 1),
+        diagnosticNode,
+        withExplicitUnsafeContext(context),
+      );
+      if (body === undefined) {
+        return undefined;
+      }
+      statements.push({ kind: "unsafe-scope", body });
+      return { statements };
     }
     const resourceDeclaration = directResourceDeclaration(child, context);
     if (resourceDeclaration !== undefined) {
@@ -623,7 +643,7 @@ function rustBlockDefinitelyExits(block: RustBlock): boolean {
     last.kind === "completion-exit") {
     return true;
   }
-  if (last.kind === "scope") {
+  if (last.kind === "scope" || last.kind === "unsafe-scope") {
     return rustBlockDefinitelyExits(last.body);
   }
   if (last.kind === "resource-scope") {
@@ -644,7 +664,7 @@ function tailCompletionExits(block: RustBlock): RustBlock {
     replacement = { ...last, tail: true };
   } else if (last.kind === "throw") {
     replacement = { ...last, tail: true };
-  } else if (last.kind === "scope") {
+  } else if (last.kind === "scope" || last.kind === "unsafe-scope") {
     replacement = { ...last, body: tailCompletionExits(last.body) };
   } else if (last.kind === "if" && last.else !== undefined) {
     replacement = {

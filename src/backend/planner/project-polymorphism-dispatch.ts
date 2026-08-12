@@ -147,6 +147,7 @@ export function planProjectDispatchTrait(
       params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
       ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
       ...(shape.fallible ? { fallible: true } : {}),
+      ...(shape.isUnsafe ? { isUnsafe: true } : {}),
     });
     functions.push(signature(virtual));
     if (exact !== undefined) {
@@ -338,6 +339,7 @@ function planRootMethod(
   });
   if (planned === undefined || contractShape === undefined ||
     (planned.fallible === true) !== contractShape.fallible ||
+    (planned.isUnsafe === true) !== contractShape.isUnsafe ||
     !rustFunctionTypesMatch(planned.params, planned.returnType, contractShape.params, contractShape.returnType)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, implementation),

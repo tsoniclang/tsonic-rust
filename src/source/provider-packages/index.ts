@@ -67,7 +67,7 @@ export interface RustProviderOperationDefinition {
 
 export interface RustProviderTypeDefinition {
   readonly exportId: string;
-  readonly targetTypeId: string;
+  readonly targetCarrier: TargetTypeRef;
 }
 
 export interface RustProviderTypeRow extends RustProviderTypeDefinition {
@@ -76,6 +76,7 @@ export interface RustProviderTypeRow extends RustProviderTypeDefinition {
   readonly providerVersion: string;
   readonly providerModuleId: string;
   readonly moduleSpecifier: string;
+  readonly sourceTypeParameters: readonly string[];
 }
 
 export interface RustProviderOperationRow extends RustProviderOperationDefinition {
@@ -276,7 +277,7 @@ function providerOperationRowIdentity(row: RustProviderOperationRow): string {
 }
 
 function providerTypeRowIdentity(row: RustProviderTypeRow): string {
-  return `${providerExportRowIdentity(row)}\0${row.targetTypeId}`;
+  return `${providerExportRowIdentity(row)}\0${row.sourceTypeParameters.join("\0")}\0${JSON.stringify(row.targetCarrier)}`;
 }
 
 export function collectRustProviderSemantics(
@@ -298,7 +299,7 @@ export function collectRustProviderSemanticsFromDefinitions(
     validateProviderPackageDefinition(definition);
     const providerId = rustProviderBindingProviderId(definition.id);
     const moduleByExportId = new Map(definition.modules.flatMap((module) =>
-      module.exports.map((exported) => [exported.id, module] as const)));
+      module.exports.map((exported) => [exported.id, { module, exported }] as const)));
     for (const module of definition.modules) {
       for (const exported of module.exports) {
         exports.push(Object.freeze({
@@ -321,31 +322,35 @@ export function collectRustProviderSemanticsFromDefinitions(
       carrierPaths.set(carrierId, path);
     }
     for (const type of definition.types ?? []) {
-      const module = moduleByExportId.get(type.exportId);
-      if (module === undefined) {
+      const owner = moduleByExportId.get(type.exportId);
+      if (owner === undefined) {
         throw new Error(`Rust provider package '${definition.id}' type relation '${type.exportId}' has no declaration owner.`);
       }
       types.push(Object.freeze({
         ...type,
+        targetCarrier: materializeProviderCarrier(type.targetCarrier, carrierPathRows),
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
-        providerModuleId: module.providerModuleId,
-        moduleSpecifier: module.moduleSpecifier,
+        providerModuleId: owner.module.providerModuleId,
+        moduleSpecifier: owner.module.moduleSpecifier,
+        sourceTypeParameters: Object.freeze(
+          (owner.exported.typeParameters ?? []).map((parameter) => parameter.name),
+        ),
       }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
     operations.push(...definition.operations.map((row) => {
-      const module = moduleByExportId.get(row.exportId);
-      if (module === undefined) {
+      const owner = moduleByExportId.get(row.exportId);
+      if (owner === undefined) {
         throw new Error(`Rust provider package '${definition.id}' operation '${row.memberId ?? row.exportId}' has no declaration owner.`);
       }
       return materializeProviderOperationRow(row, aliases, carrierPathRows, {
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
-        providerModuleId: module.providerModuleId,
-        moduleSpecifier: module.moduleSpecifier,
+        providerModuleId: owner.module.providerModuleId,
+        moduleSpecifier: owner.module.moduleSpecifier,
       });
     }));
   }

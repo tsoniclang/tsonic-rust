@@ -336,7 +336,7 @@ function providerOperationIdentity(row: RustProviderOperationDefinition): string
 }
 
 function providerTypeIdentity(row: RustProviderTypeDefinition): string {
-  return `${row.exportId}\0${row.targetTypeId}`;
+  return `${row.exportId}\0${JSON.stringify(row.targetCarrier)}`;
 }
 
 function providerDiagnostic(

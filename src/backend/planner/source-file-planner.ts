@@ -55,6 +55,9 @@ import {
   planPolymorphicClassDeclaration,
   planPolymorphicInterfaceDeclaration,
 } from "./project-polymorphism.js";
+import {
+  diagnoseRustSafetyApplications,
+} from "./explicit-safety.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -74,6 +77,7 @@ export function planRustSourceFile(
   input: RustTranslationContext,
   diagnostics: TargetDiagnostic[],
 ): PlannedRustSourceFile {
+  diagnoseRustSafetyApplications(sourceFile, input, diagnostics);
   const usedAliases = new Set<string>();
   const context: RustPlanContext = {
     input,

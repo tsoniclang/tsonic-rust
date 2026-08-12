@@ -27,6 +27,12 @@ import type {
   RustProjectTypePolicyRegistry,
 } from "../source/rust-target-semantics/project-type-policy.js";
 import type { RustProviderSemantics } from "../source/provider-packages/index.js";
+import {
+  createRustSafetyApplicationFactIndex,
+} from "./safety/application-fact-index.js";
+import type {
+  RustSafetyApplicationFactIndex,
+} from "./safety/application-fact-index.js";
 
 export interface RustTranslationContext extends TargetCompileInput {
   readonly backend: TargetBackendContext;
@@ -36,6 +42,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly artifacts: RustTranslationArtifactGraph;
   readonly projectTypes: RustProjectTypePolicyRegistry;
   readonly compilerProviderSemantics?: RustProviderSemantics;
+  readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly diagnostics: TargetDiagnostic[];
   readonly analysis: {
     getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
@@ -60,6 +67,12 @@ export function createRustTranslationContext(
   const facts = new RustSemanticModel(input.source.sourceFacts);
   const artifacts = createRustTranslationArtifactGraph(ast);
   const projectTypes = createRustProjectTypePolicyRegistry();
+  const safetyApplications = createRustSafetyApplicationFactIndex({
+    ast,
+    sourceFiles,
+    sourceFacts: input.source.sourceFacts,
+    navigation: input.source.navigation,
+  });
   const diagnostics: TargetDiagnostic[] = [];
   const context: RustTranslationContext = {
     ...input,
@@ -69,6 +82,7 @@ export function createRustTranslationContext(
     facts,
     artifacts,
     projectTypes,
+    safetyApplications,
     ...(compilerProviderSemantics === undefined ? {} : { compilerProviderSemantics }),
     diagnostics,
     analysis: Object.freeze({

@@ -120,11 +120,45 @@ import { planRustBindingPattern } from "./binding-patterns.js";
 import { rustTargetOperationIsFallible } from "../../source/rust-facts/target-operation.js";
 import { rustProjectDispatchTraitType } from "./project-polymorphism-names.js";
 import { planRustFallibleReturnExpression } from "./completion-exits.js";
+import {
+  rustSelectedCallRequiresUnsafe,
+  tryPlanRustExplicitSafetyExpression,
+} from "./explicit-safety.js";
+import {
+  tryPlanRustNativePointerOperation,
+} from "./expression-native-pointers.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   const diagnosticCount = context.diagnostics.length;
-  const planned = override?.expression ?? planExpressionInner(node, context);
+  const explicitSafety = tryPlanRustExplicitSafetyExpression(
+    node,
+    context,
+    planExpression,
+  );
+  const nativePointer = explicitSafety.handled
+    ? undefined
+    : tryPlanRustNativePointerOperation(node, context, planExpression);
+  let planned: RustExpr | undefined;
+  if (explicitSafety.handled) {
+    planned = explicitSafety.expression;
+  } else if (nativePointer?.handled === true) {
+    planned = nativePointer.expression;
+  } else if (
+    rustSelectedCallRequiresUnsafe(node, context.input) &&
+    (context.explicitUnsafeContextDepth ?? 0) === 0
+  ) {
+    context.diagnostics.push({
+      code: "RUST_UNSAFE_CALL_CONTEXT_REQUIRED",
+      category: "error",
+      source: "tsonic-rust",
+      message: "The selected Rust unsafe function requires an explicit unsafeContext() source region at this call site.",
+      sourceNode: node,
+    });
+    planned = undefined;
+  } else {
+    planned = override?.expression ?? planExpressionInner(node, context);
+  }
   if (planned === undefined) {
     if (context.diagnostics.length === diagnosticCount) {
       context.diagnostics.push(missingFactDiagnostic(

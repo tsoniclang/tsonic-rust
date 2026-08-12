@@ -783,6 +783,8 @@ const rustNumericPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, Ru
   uint64: "u64",
   float32: "f32",
   float64: "f64",
+  "native-int": "isize",
+  "native-uint": "usize",
 };
 
 const rustSignedPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
@@ -792,6 +794,7 @@ const rustSignedPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "int64",
   "float32",
   "float64",
+  "native-int",
 ]);
 
 const rustIntegerPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
@@ -803,6 +806,8 @@ const rustIntegerPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "uint32",
   "int64",
   "uint64",
+  "native-int",
+  "native-uint",
 ]);
 
 export function rustPrimitiveTypeName(kind: SourcePrimitiveKind): RustPrimitiveTypeName | undefined {

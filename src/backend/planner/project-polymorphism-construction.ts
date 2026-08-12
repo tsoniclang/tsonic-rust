@@ -59,6 +59,10 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "./synthetic-names.js";
+import {
+  rustDeclarationRequiresUnsafe,
+  rustSafetyAttributesForDeclaration,
+} from "./explicit-safety.js";
 
 export function planProjectClassConstructor(
   definition: RustProjectTypeDefinition,
@@ -102,6 +106,18 @@ export function planProjectClassConstructor(
     ));
     return undefined;
   }
+  const safetyDeclaration = constructor ?? definition.declaration;
+  const isUnsafe = rustDeclarationRequiresUnsafe(
+    definition.declaration,
+    "constructor",
+    context.input,
+    constructor,
+  );
+  const initializationSafetyAttributes = rustSafetyAttributesForDeclaration(
+    safetyDeclaration,
+    false,
+    context.input,
+  );
   const syntheticNames = createRustSyntheticNameState(
     context.input.ast,
     constructor ?? definition.declaration,
@@ -253,6 +269,9 @@ export function planProjectClassConstructor(
   const initialize: RustImplFunction = {
     name: constructorSignature.initializeName,
     visibility: "crate",
+    ...(initializationSafetyAttributes.length === 0
+      ? {}
+      : { attrs: initializationSafetyAttributes }),
     params: parameterPlan.params,
     returnType: stateType,
     body: {
@@ -266,6 +285,7 @@ export function planProjectClassConstructor(
   }));
   const construct: RustImplFunction = {
     name: constructorSignature.targetName,
+    ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: constructor === undefined ||
         (!context.input.ast.hasModifierKind(constructor, "private") &&
           !context.input.ast.hasModifierKind(constructor, "protected"))
@@ -274,6 +294,7 @@ export function planProjectClassConstructor(
     ...(() => {
       const attrs = [
         ...(parameterPlan.params.length === 0 ? ["#[allow(clippy::new_without_default)]"] : []),
+        ...(isUnsafe ? ["#[allow(clippy::missing_safety_doc)]"] : []),
         ...(context.input.ast.hasModifierKind(definition.declaration, "export")
           ? []
           : ["#[allow(dead_code)]"]),

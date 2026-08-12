@@ -222,7 +222,7 @@ function projectExport(
     operations: Object.freeze(operations),
     type: Object.freeze({
       exportId,
-      targetTypeId,
+      targetCarrier: typeCarrier,
     }),
   };
 }

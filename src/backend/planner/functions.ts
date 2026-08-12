@@ -31,6 +31,8 @@ import {
   planRustCallableParameters,
 } from "./callable-parameters.js";
 import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
+import { rustDeclarationRequiresUnsafe } from "./explicit-safety.js";
+import { rustSafetyAttributesForDeclaration } from "./explicit-safety.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 
@@ -38,6 +40,16 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const { ast } = outerContext.input;
   const isAsync = ast.hasModifierKind(node, "async");
   const generatorFact = outerContext.input.facts.getFact(node, rustGeneratorFactKey);
+  const isUnsafe = rustDeclarationRequiresUnsafe(
+    node,
+    "declaration",
+    outerContext.input,
+  );
+  const safetyAttributes = rustSafetyAttributesForDeclaration(
+    node,
+    isUnsafe,
+    outerContext.input,
+  );
   const asyncFact = outerContext.input.facts.getFact(node, rustAsyncFunctionFactKey);
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
@@ -202,7 +214,15 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       kind: "function",
       name,
       visibility: isExported ? "public" : "private",
-      ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+      ...(!nonSnakeSeen.value && safetyAttributes.length === 0
+        ? {}
+        : {
+            attrs: [
+              ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
+              ...safetyAttributes,
+            ],
+          }),
+      ...(isUnsafe ? { isUnsafe: true } : {}),
       ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
       params,
       ...(returnType === undefined ? {} : { returnType }),
@@ -248,8 +268,16 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     kind: "function",
     name,
     visibility: isExported ? "public" : "private",
-    ...(nonSnakeSeen.value ? { attrs: ["#[allow(non_snake_case)]"] } : {}),
+    ...(!nonSnakeSeen.value && safetyAttributes.length === 0
+      ? {}
+      : {
+          attrs: [
+            ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
+            ...safetyAttributes,
+          ],
+        }),
     ...(isAsync ? { isAsync: true } : {}),
+    ...(isUnsafe ? { isUnsafe: true } : {}),
     ...(fallible ? { fallible: true } : {}),
     ...(finalizedTypeParams.length === 0
       ? {}
@@ -302,7 +330,7 @@ export function applyFallibleShape(body: RustBlock, fallible: boolean, hasReturn
       statement.kind === "while-let-some" || statement.kind === "if-let-some") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
-    if (statement.kind === "scope") {
+    if (statement.kind === "scope" || statement.kind === "unsafe-scope") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }
     if (statement.kind === "try-scope") {

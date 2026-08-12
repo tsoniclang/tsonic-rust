@@ -480,6 +480,18 @@ export type RustTargetOperationFact =
       readonly pointeeCarrier: TargetTypeRef;
       readonly locationCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "native-pointer";
+      readonly operationId: string;
+      readonly operation: "load" | "store" | "offset";
+      readonly pointerExpression: Node;
+      readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "pointer" }>;
+      readonly pointeeCarrier: TargetTypeRef;
+      readonly valueExpression?: Node;
+      readonly offsetExpression?: Node;
+      readonly offsetCarrier?: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
     };
 
 export type RustTypedLocationOperationKind =
@@ -546,6 +558,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "source-conversion":
     case "nullish-identity":
     case "typed-location":
+    case "native-pointer":
       return fact.resultCarrier;
     case "iteration":
       return fact.elementCarrier;

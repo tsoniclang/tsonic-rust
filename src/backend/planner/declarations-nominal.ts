@@ -41,6 +41,10 @@ import {
   type RustCallableParameterPlan,
 } from "./callable-parameters.js";
 import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
+import {
+  rustDeclarationRequiresUnsafe,
+  rustSafetyAttributesForDeclaration,
+} from "./explicit-safety.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -208,6 +212,17 @@ function planConstructor(
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const { ast } = context.input;
+  const isUnsafe = rustDeclarationRequiresUnsafe(
+    classDeclaration,
+    "constructor",
+    context.input,
+    member,
+  );
+  const safetyAttributes = rustSafetyAttributesForDeclaration(
+    member ?? classDeclaration,
+    isUnsafe,
+    context.input,
+  );
   const body = member === undefined ? undefined : ast.body(member);
   if (member !== undefined && body === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -333,11 +348,19 @@ function planConstructor(
   });
   return {
     name: "new",
+    ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: member === undefined ||
         (!ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"))
       ? "public"
       : "private",
-    ...(params.length === 0 ? { attrs: ["#[allow(clippy::new_without_default)]"] } : {}),
+    ...(params.length > 0 && safetyAttributes.length === 0
+      ? {}
+      : {
+          attrs: [
+            ...(params.length === 0 ? ["#[allow(clippy::new_without_default)]"] : []),
+            ...safetyAttributes,
+          ],
+        }),
     params,
     returnType: { kind: "named", path: className },
     body: {
@@ -370,6 +393,16 @@ function sourceSubtreeContainsThis(node: Node, ast: AstReader): boolean {
 export function planProjectMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
   const { ast } = context.input;
   const sourceMethodName = rustProjectCallableTargetName(member, context.input);
+  const isUnsafe = rustDeclarationRequiresUnsafe(
+    member,
+    "declaration",
+    context.input,
+  );
+  const safetyAttributes = rustSafetyAttributesForDeclaration(
+    member,
+    isUnsafe,
+    context.input,
+  );
   const methodName = rustPublicName(sourceMethodName ?? "").name;
   const nonSnakeSeen = { value: rustPublicName(sourceMethodName ?? "").needsAllow };
   context = { ...context, nonSnakeSeen };
@@ -435,6 +468,7 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
   const methodAttributes = [
     ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
     ...(isStatic && methodName === "new" ? ["#[allow(clippy::new_ret_no_self)]"] : []),
+    ...safetyAttributes,
   ];
   if (generatorFact !== undefined && fallible) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -532,6 +566,7 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
     }
     return {
       name: methodName,
+      ...(isUnsafe ? { isUnsafe: true } : {}),
       visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
       ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
       ...(isStatic ? {} : { selfParam: "ref" as const }),
@@ -566,6 +601,7 @@ export function planProjectMethod(member: Node, context: RustPlanContext): RustI
   }
   return {
     name: methodName,
+    ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
     ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
     ...(fallible ? { fallible: true } : {}),

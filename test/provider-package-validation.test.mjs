@@ -771,7 +771,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
       providerModuleId: "acme.validation",
       exports: [valueExport],
     }],
-    types: [{ exportId: "@acme/validation::Value", targetTypeId: "acme.validation.Value" }],
+    types: [{ exportId: "@acme/validation::Value", targetCarrier: { kind: "target-named", id: "acme.validation.Value" } }],
     operations: [],
     carrierPaths: { "acme.validation.Value": "acme_validation::Value" },
   });
@@ -785,18 +785,28 @@ test("provider type relations remain target-owned and require closed Rust paths"
   assert.equal(Object.hasOwn(model.exports[0], "targetIdentity"), false);
   assert.deepEqual(collectRustProviderSemantics(providerContext([providerPackage])).types, [{
     exportId: "@acme/validation::Value",
-    targetTypeId: "acme.validation.Value",
+    targetCarrier: {
+      kind: "target-specific",
+      target: "rust",
+      name: "named-type",
+      value: {
+        id: "acme.validation.Value",
+        path: "acme_validation::Value",
+        typeArguments: [],
+      },
+    },
     providerPackageId: "acme-validation",
     providerId: "tsonic.rust.provider-package.acme-validation.binding",
     providerVersion: "1.0.0",
     providerModuleId: "acme.validation",
     moduleSpecifier: "@acme/validation",
+    sourceTypeParameters: [],
   }]);
 
   assert.throws(
     () => createRustProviderPackage({
       ...valid,
-      types: [{ exportId: "@acme/validation::Value", targetTypeId: "acme.validation.Value", target: "csharp" }],
+      types: [{ exportId: "@acme/validation::Value", targetCarrier: { kind: "target-named", id: "acme.validation.Value" }, target: "csharp" }],
     }),
     /type relation has unsupported field 'target'/u,
   );
