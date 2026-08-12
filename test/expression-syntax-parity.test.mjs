@@ -268,22 +268,21 @@ export function main(): void {
   validateGeneratedProject("expression-bigint", result.artifacts, { run: true });
 });
 
-test("inexact number literals cannot masquerade as fixed-width 64-bit values", () => {
-  const { result } = compileRust({
-    files: {
-      "index.ts": `
+test("wide integer aliases reject number literals during source checking", () => {
+  assert.throws(
+    () => compileRust({
+      files: {
+        "index.ts": `
 import type { int64 } from "@tsonic/core/types.js";
 
 export function invalid(): int64 {
   return 9007199254740993;
 }
 `,
-    },
-  });
-
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_INTEGER_LITERAL_NOT_EXACT"));
+      },
+    }),
+    /TS2322: Type 'number' is not assignable to type 'bigint'/u,
+  );
 });
 
 test("bigint division and remainder use the catchable runtime ABI", { timeout: 300_000 }, () => {

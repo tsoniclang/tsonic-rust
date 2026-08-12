@@ -209,8 +209,8 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(\)>,\n\}/u);
-  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(\)\)/u);
+  assert.match(text, /pub struct Empty \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<rt::EmptyObjectState>,\n\}/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(rt::EmptyObjectState\)/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
 

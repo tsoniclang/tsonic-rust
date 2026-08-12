@@ -18,7 +18,7 @@ test("project overloads, preconstruction fields, wide primitives, and bodyless s
     files: {
       "index.ts": `
 import { safety, unsafeContext } from "@tsonic/core/lang.js";
-import type { char, int32 } from "@tsonic/core/types.js";
+import type { char, int32, int64, uint64 } from "@tsonic/core/types.js";
 import type { i128, isize, u128, usize } from "@tsonic/rust/types.js";
 import { check } from "@acme/testing";
 
@@ -70,6 +70,8 @@ safety<UnsafeContract>().method(value => value.read).requiresUnsafe();
 safety<UnsafeImplementation>().method(value => value.read).requiresUnsafe();
 
 function letter(): char { return "A"; }
+function signed64Maximum(): int64 { return 9223372036854775807n; }
+function unsigned64Maximum(): uint64 { return 18446744073709551615n; }
 function signedMaximum(): i128 { return 170141183460469231731687303715884105727n; }
 function signedMinimum(): i128 { return -170141183460469231731687303715884105728n; }
 function unsignedMaximum(): u128 { return 340282366920938463463374607431768211455n; }
@@ -94,6 +96,8 @@ export function main(): void {
   const unsafeValue: UnsafeContract = new UnsafeImplementation();
   check(unsafeContext(unsafeValue.read(42)) === 42);
 
+  check(signed64Maximum() === 9223372036854775807n);
+  check(unsigned64Maximum() === 18446744073709551615n);
   check(signedMaximum() === 170141183460469231731687303715884105727n);
   check(signedMinimum() === -170141183460469231731687303715884105728n);
   check(unsignedMaximum() === 340282366920938463463374607431768211455n);
@@ -125,7 +129,15 @@ test("wide fixed-width literals reject exact boundary overflow", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
-import type { int128, uint128 } from "@tsonic/core/types.js";
+import type { int64, int128, uint64, uint128 } from "@tsonic/core/types.js";
+
+export function signed64(): int64 {
+  return 9223372036854775808n;
+}
+
+export function unsigned64(): uint64 {
+  return 18446744073709551616n;
+}
 
 export function signed(): int128 {
   return 170141183460469231731687303715884105728n;
@@ -142,14 +154,10 @@ export function unsigned(): uint128 {
   assert.deepEqual(
     result.diagnostics.map(({ code, message }) => ({ code, message })),
     [
-      {
+      ...Array.from({ length: 4 }, () => ({
         code: "RUST_INTEGER_LITERAL_NOT_EXACT",
         message: "BigInt literal cannot be proven exact for the finalized Rust fixed-width carrier.",
-      },
-      {
-        code: "RUST_INTEGER_LITERAL_NOT_EXACT",
-        message: "BigInt literal cannot be proven exact for the finalized Rust fixed-width carrier.",
-      },
+      })),
     ],
   );
 });
