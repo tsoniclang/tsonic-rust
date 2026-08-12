@@ -1,4 +1,5 @@
-import type { Node, Symbol } from "@tsonic/tsts";
+import { flowStateFactKey } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import {
   isRustStringCarrier,
   rustOptionElementCarrier,
@@ -61,8 +62,15 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           : context.ast.questionToken(parameter) !== undefined
             ? "optional" as const
             : "required" as const;
+      const requiresOwnedValue = parameterUsesFlowState(
+        parameter,
+        "moved",
+        context,
+      );
       const requiredParameterCarrier = form === "required" && typeNode !== undefined
-        ? rustParameterLaneTargetType(base, typeNode, context, options)
+        ? requiresOwnedValue
+          ? base
+          : rustParameterLaneTargetType(base, typeNode, context, options)
         : undefined;
       const abi = form === "optional"
         ? {
@@ -103,7 +111,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
               ? base.mutability === "mut" ? "mut-ref" as const : "ref" as const
               : "value" as const,
           }
-        : parameterOnlyReadsThroughReceiver(parameter, context)
+        : !requiresOwnedValue && parameterOnlyReadsThroughReceiver(parameter, context)
           ? {
               form,
               valueCarrier: base,
@@ -170,6 +178,31 @@ export function resolveRustContextualParameterAbi(
   };
 }
 
+function parameterUsesFlowState(
+  parameter: Node,
+  state: "borrowed-shared" | "borrowed-mut" | "moved",
+  context: RustTargetTypeResolutionContext,
+): boolean {
+  const { ast } = context;
+  const name = ast.name(parameter);
+  const declarationReference = context.source.navigation.sourceReferenceFor(name);
+  if (name === undefined || declarationReference?.declaration !== parameter) {
+    return false;
+  }
+  const callable = enclosingCallable(ast.parent(parameter), context);
+  const body = ast.body(callable);
+  if (body === undefined) {
+    return false;
+  }
+  return context.source.navigation
+    .referencesWithin(declarationReference.symbol, body)
+    .some((reference) => {
+      const flow = context.facts.resolve(reference, flowStateFactKey) ??
+        context.facts.get(reference, flowStateFactKey);
+      return flow?.state === state;
+    });
+}
+
 function parameterOnlyReadsThroughReceiver(
   parameter: Node,
   context: RustTargetTypeResolutionContext,
@@ -185,23 +218,12 @@ function parameterOnlyReadsThroughReceiver(
   if (body === undefined) {
     return false;
   }
-  let found = false;
-  let valid = true;
-  const visit = (node: Node | undefined): void => {
-    if (node === undefined || !valid) {
-      return;
-    }
-    if (node !== name && referenceMatches(node, declarationReference.symbol, context)) {
-      found = true;
-      valid = referenceOnlyReadsThroughReceiver(node, context);
-      if (!valid) {
-        return;
-      }
-    }
-    ast.forEachChild(node, visit);
-  };
-  visit(body);
-  return found && valid;
+  const references = context.source.navigation.referencesWithin(
+    declarationReference.symbol,
+    body,
+  );
+  return references.length > 0 && references.every((reference) =>
+    referenceOnlyReadsThroughReceiver(reference, context));
 }
 
 function enclosingCallable(
@@ -225,14 +247,6 @@ function enclosingCallable(
     current = ast.parent(current);
   }
   return undefined;
-}
-
-function referenceMatches(
-  node: Node,
-  symbol: Symbol,
-  context: RustTargetTypeResolutionContext,
-): boolean {
-  return context.source.navigation.sourceReferenceFor(node)?.symbol === symbol;
 }
 
 function referenceOnlyReadsThroughReceiver(

@@ -405,6 +405,40 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("native arrays moved into project objects retain owned Vec storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_array_constructor_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { move } from "@tsonic/rust/lang.js";
+import { check } from "@acme/testing";
+
+class Holder {
+  items: int32[];
+
+  constructor(items: int32[]) {
+    this.items = move(items);
+  }
+}
+
+export function main(): void {
+  const holder = new Holder([30, 40]);
+  check(holder.items[1] === 40);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn new\(items: Vec<i32>\)/u);
+  assert.match(text, /Holder::new\(vec!\[30, 40\]\)/u);
+  const run = validateGeneratedProject("native-array-constructor-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
 test("push mutates the canonical shared JS array carrier", () => {
   const { result } = compileRust({
     surfaces: ["js"],
