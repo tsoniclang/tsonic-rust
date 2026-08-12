@@ -1540,6 +1540,28 @@ function printRustExprFitted(
       }
       const params = printRustClosureParams(expression.params);
       const indent = indentText(depth + 1);
+      if (expression.body.kind === "block") {
+        const bindings = expression.body.bindings.flatMap((binding) => {
+          const prefix = `${indent}let ${binding.mutable === true ? "mut " : ""}${binding.name} = `;
+          return [
+            ...(binding.attrs ?? []).map((attribute) => `${indent}${attribute}`),
+            printRustLetInitializer(prefix, binding.value, depth + 1),
+          ];
+        });
+        const value = printRustExprFitted(
+          expression.body.value,
+          depth + 1,
+          indent.length,
+          undefined,
+          "statement",
+        );
+        return [
+          `|${params}| {`,
+          ...bindings,
+          `${indent}${value}`,
+          `${indentText(depth)}}`,
+        ].join("\n");
+      }
       const body = printRustExprFitted(
         expression.body,
         depth + 1,
@@ -1584,6 +1606,19 @@ function printRustExprFitted(
     case "reference": {
       const prefix = expression.mutable === true ? "&mut " : "&";
       return `${prefix}${printRustExprFitted(expression.expr, depth, column + prefix.length)}`;
+    }
+    case "index": {
+      if (!flat.includes("\n") && renderedFits(flat, column)) {
+        return flat;
+      }
+      const receiver = printRustExprFitted(expression.receiver, depth, column);
+      const continuationIndent = indentText(depth + 1);
+      const index = printRustExprFitted(
+        expression.index,
+        depth + 1,
+        continuationIndent.length + 1,
+      );
+      return `${receiver}\n${continuationIndent}${appendToLastLine(`[${index}`, "]")}`;
     }
     case "unary": {
       const operand = printRustExprFitted(expression.operand, depth, column + 1);
@@ -1636,8 +1671,18 @@ function printRustExprFitted(
         left,
         ` ${expression.operator} ${printBinaryOperand(expression.right, expression.operator, true)}`,
       );
+      if (left.includes("\n") && expressionIsStatementBlockOperand(expression.left) &&
+        !rustExpressionContainsStatementBlock(expression.right)) {
+        const renderedRight = printRustExprFitted(
+          expression.right,
+          depth,
+          lastLineLength(left) + expression.operator.length + 2,
+        );
+        return appendToLastLine(left, ` ${expression.operator} ${renderedRight}`);
+      }
       const multilineLeftRequiresOwnOperator = left.includes("\n") &&
-        (expression.left.kind === "binary" || expression.left.kind === "method-call");
+        (expression.left.kind === "binary" || expression.left.kind === "method-call" ||
+          expression.left.kind === "index");
       if (!multilineLeftRequiresOwnOperator && renderedFits(joined, column)) {
         return joined;
       }

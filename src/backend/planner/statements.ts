@@ -67,12 +67,10 @@ import {
   Node_Initializer,
   Node_Name,
   Node_Type,
-  Node_Operand,
 } from "../../common/source-ast.js";
 import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustResourceManagementFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import type { RustResourceManagementFact } from "../../source/rust-facts/keys.js";
 import {
-  isRustBigIntCarrier,
   isRustBoolCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
@@ -861,116 +859,6 @@ function planBindingVariableDeclaration(
     : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
 }
 
-function planUpdateStatement(expression: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const fact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
-  if (fact === undefined || fact.kind !== "operator-token" || (fact.operator !== "+=" && fact.operator !== "-=")) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.operator",
-      "Increment/decrement requires a finalized Rust update-operator fact.",
-    ));
-    return undefined;
-  }
-  if (!selectedOperatorMatches(expression, fact, context)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.operator-selected-evidence",
-      "Update operation fact conflicts with the TSTS-selected operator fact.",
-    ));
-    return undefined;
-  }
-  const operand = Node_Operand(context.input.ast, expression);
-  if (operand === undefined) {
-    return undefined;
-  }
-  const sourceField = context.input.facts.getFact(operand, rustTargetOperationFactKey);
-  if (sourceField?.kind === "source-field") {
-    if (!sourceFieldSelectedOperationMatches(operand, sourceField, context)) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, operand),
-        "rust.backend.source-field-selected-evidence",
-        "Project-source field update conflicts with the TSTS-selected property fact.",
-      ));
-      return undefined;
-    }
-    const receiverNode = Node_Expression(ast, operand);
-    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    if (receiver === undefined) {
-      return undefined;
-    }
-    const step: RustExpr = isRustBigIntCarrier(fact.resultCarrier)
-      ? {
-          kind: "call",
-          path: "rt::BigInt::from_decimal_literal",
-          args: [{ kind: "str-literal", value: "1" }],
-        }
-      : { kind: "int-literal", text: "1" };
-    if (isRustBigIntCarrier(fact.resultCarrier)) {
-      context.usedAliases?.add("rt");
-    }
-    if (sourceField.dispatch === undefined) {
-      return [{
-        kind: "expr",
-        expr: writeRustProjectObjectField(receiver, sourceField.storageIndex, fact.operator, step),
-      }];
-    }
-    const syntheticNames = context.syntheticNames;
-    if (syntheticNames === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, operand),
-        "rust.backend.project-dispatch-temporary",
-        "Dispatched project-source field update requires a finalized hygienic-name scope.",
-      ));
-      return undefined;
-    }
-    return [{
-      kind: "expr",
-      expr: writeRustProjectDispatchedField(
-        receiver,
-        allocateRustSyntheticName(syntheticNames, "dispatch_receiver"),
-        sourceField.dispatch.read,
-        sourceField.dispatch.write,
-        fact.operator,
-        step,
-      ),
-    }];
-  }
-  if (ast.kindName(operand) !== KindIdentifier) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.operator",
-      "Increment/decrement targets must be identifiers.",
-    ));
-    return undefined;
-  }
-  const target = rustSourceName(context, ast.text(operand));
-  if (!isValidRustIdentifier(target)) {
-    return undefined;
-  }
-  const step: RustExpr = isRustBigIntCarrier(fact.resultCarrier)
-    ? {
-        kind: "call",
-        path: "rt::BigInt::from_decimal_literal",
-        args: [{ kind: "str-literal", value: "1" }],
-      }
-    : { kind: "int-literal", text: "1" };
-  if (isRustBigIntCarrier(fact.resultCarrier)) {
-    context.usedAliases?.add("rt");
-  }
-  const promoted = planRustPromotedStorageWrite(
-    operand,
-    fact.operator,
-    step,
-    context,
-    planExpression,
-  );
-  if (promoted.handled) {
-    return promoted.statement === undefined ? undefined : [promoted.statement];
-  }
-  return [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value: step }];
-}
-
 function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.ast, node);
   return expression === undefined
@@ -1272,7 +1160,8 @@ function planExpressionAsStatement(
     }
   }
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
-    return planUpdateStatement(expression, context);
+    const planned = planExpression(expression, context);
+    return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression" ||
     expressionKind === "KindYieldExpression" || expressionKind === KindDeleteExpression ||

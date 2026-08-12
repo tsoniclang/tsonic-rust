@@ -148,6 +148,71 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("update expressions preserve result values and evaluate locations once", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "update_location_proof" },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Holder {
+  items: int32[] = [30, 40];
+  value: int32 = 50;
+
+  constructor() {}
+}
+
+let receiverCalls: int32 = 0;
+
+function select(holder: Holder): Holder {
+  receiverCalls++;
+  return holder;
+}
+
+export function main(): void {
+  let binding: int32 = 4;
+  check(binding++ === 4);
+  check(++binding === 6);
+
+  let values: int32[] = [10, 20];
+  let index: int32 = 0;
+  check(values[index++]++ === 10);
+  check(index === 1);
+  check(values[0] === 11);
+  check(++values[index] === 21);
+
+  const holder = new Holder();
+  index = 0;
+  check(holder.items[index++]++ === 30);
+  check(index === 1);
+  check(holder.items[0] === 31);
+  check(select(holder).value++ === 50);
+  check(receiverCalls === 1);
+  check(++select(holder).value === 52);
+  check(receiverCalls === 2);
+
+  let wide = 9007199254740993n;
+  check(wide++ === 9007199254740993n);
+  check(++wide === 9007199254740995n);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /let __tsonic_update_location/u);
+  assert.match(output, /let __tsonic_update_previous/u);
+  assert.match(output, /let __tsonic_update_next/u);
+  const run = validateGeneratedProject("update-location-proof-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
 test("module binding locations preserve one initialized identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

@@ -86,6 +86,31 @@ export function writeRustProjectObjectField(
   };
 }
 
+export function mutateRustProjectObjectField(
+  receiver: RustExpr,
+  storagePath: number | readonly number[],
+  mutation: (field: RustExpr) => RustExpr | undefined,
+): RustExpr | undefined {
+  const body = mutation(rustProjectObjectStatePath(storagePath));
+  if (body === undefined) {
+    return undefined;
+  }
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with_mut",
+    args: [{
+      kind: "closure",
+      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      body,
+    }],
+  };
+}
+
 function rustProjectObjectStatePath(
   storagePath: number | readonly number[],
 ): RustExpr {
