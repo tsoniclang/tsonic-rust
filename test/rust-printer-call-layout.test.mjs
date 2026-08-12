@@ -617,6 +617,32 @@ test("one supertrait header below rustfmt width remains on one line", () => {
   );
 });
 
+test("nonempty traits use rustfmt-compatible long supertrait headers", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_UnsafeImplementation",
+      visibility: "crate",
+      superTraits: [{
+        kind: "named",
+        path: "__TsonicDispatch_UnsafeContract",
+      }],
+      functions: [{
+        name: "read",
+        selfParam: "rc",
+        params: [{ name: "value", type: { kind: "primitive", name: "i32" } }],
+        returnType: { kind: "primitive", name: "i32" },
+      }],
+    }],
+  });
+
+  assert.match(
+    source,
+    /pub\(crate\) trait __TsonicDispatch_UnsafeImplementation:\n    __TsonicDispatch_UnsafeContract\n\{\n/u,
+  );
+});
+
 test("string concatenation preserves vertical chains inside trailing blocks", () => {
   const source = printRustSourceFile({
     headerComment,

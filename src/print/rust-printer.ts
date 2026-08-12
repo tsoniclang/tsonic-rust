@@ -96,7 +96,8 @@ export function printRustItem(item: RustItem): string {
       const flatHeader = `${declaration}${superTraits}`;
       const expandedHeader = renderedSuperTraits.length > 0 &&
           (`${flatHeader} {`.length >= rustFormatWidth ||
-            (renderedSuperTraits.length > 1 && flatHeader.length > 80))
+            (flatHeader.length > 80 &&
+              (renderedSuperTraits.length > 1 || functions.length > 0)))
         ? `${declaration}:\n    ${renderedSuperTraits.join(" + ")}\n{`
         : `${flatHeader} {`;
       return functions.length === 0
