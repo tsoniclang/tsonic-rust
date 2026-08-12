@@ -596,6 +596,27 @@ test("one long supertrait header uses rustfmt-compatible vertical layout", () =>
   );
 });
 
+test("one supertrait header below rustfmt width remains on one line", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_StringValue",
+      visibility: "crate",
+      superTraits: [{
+        kind: "named",
+        path: "__TsonicDispatch_GenericBase<String>",
+      }],
+      functions: [],
+    }],
+  });
+
+  assert.match(
+    source,
+    /pub\(crate\) trait __TsonicDispatch_StringValue: __TsonicDispatch_GenericBase<String> \{\}/u,
+  );
+});
+
 test("string concatenation preserves vertical chains inside trailing blocks", () => {
   const source = printRustSourceFile({
     headerComment,
