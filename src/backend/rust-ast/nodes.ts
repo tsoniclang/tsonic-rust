@@ -62,6 +62,7 @@ export type RustExpr =
       readonly bindings: readonly {
         readonly name: string;
         readonly value: RustExpr;
+        readonly mutable?: boolean;
         readonly attrs?: readonly string[];
       }[];
       readonly value: RustExpr;

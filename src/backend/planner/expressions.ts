@@ -33,6 +33,7 @@ import {
   KindPropertyAccessExpression,
   KindStringLiteral,
   KindSatisfiesExpression,
+  KindSpreadElement,
   KindTemplateExpression,
   KindTrueKeyword,
   KindTypeOfExpression,
@@ -89,7 +90,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -2292,11 +2293,28 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
     return argument;
   }
   if (fact !== undefined && fact.kind === "source-call") {
-    const args = planArguments(node, context);
-    if (args === undefined) {
+    const argumentPlan = planRustSourceCallArgumentEvaluation(
+      node,
+      fact,
+      context,
+    );
+    if (argumentPlan === undefined) {
       return undefined;
     }
-    return planSelectedSourceCall(node, callee, args, fact, context);
+    const planned = planSelectedSourceCall(
+      node,
+      callee,
+      argumentPlan.arguments,
+      fact,
+      context,
+    );
+    return planned === undefined || argumentPlan.bindings.length === 0
+      ? planned
+      : {
+          kind: "block",
+          bindings: argumentPlan.bindings,
+          value: planned,
+        };
   }
   if (fact !== undefined && fact.kind === "provider-operation") {
     if (fact.abi.operationKind !== "method") {
@@ -2412,7 +2430,6 @@ function planSelectedSourceCall(
     return undefined;
   }
   const shaped = shapeRustSourceCallParameters(
-    node,
     argumentNodes,
     args,
     fact,
@@ -2607,7 +2624,6 @@ function planSelectedSourceCall(
 }
 
 function shapeRustSourceCallParameters(
-  call: Node,
   argumentNodes: readonly Node[],
   arguments_: readonly RustExpr[],
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -2615,17 +2631,25 @@ function shapeRustSourceCallParameters(
 ): readonly RustExpr[] | undefined {
   const shaped: RustExpr[] = [];
   for (const [parameterIndex, parameter] of fact.parameters.entries()) {
-    if (parameter.inputs.some((input) => input.sourceForm !== "value")) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, call),
-        "rust.backend.source-call-spread",
-        "Selected project-source spread arguments require a finalized Rust spread evaluation plan.",
-      ));
-      return undefined;
-    }
     if (parameter.form === "rest") {
       if (parameter.mode !== "value") {
         return undefined;
+      }
+      const sequenceInputs = parameter.inputs.filter((input) =>
+        input.sourceForm === "spread-sequence");
+      if (sequenceInputs.length > 0) {
+        const composed = shapeRustRestSequenceInputs(
+          parameterIndex,
+          parameter,
+          argumentNodes,
+          arguments_,
+          context,
+        );
+        if (composed === undefined) {
+          return undefined;
+        }
+        shaped.push(composed);
+        continue;
       }
       const elements: RustExpr[] = [];
       for (const input of parameter.inputs) {
@@ -2672,6 +2696,124 @@ function shapeRustSourceCallParameters(
   return shaped;
 }
 
+function shapeRustRestSequenceInputs(
+  parameterIndex: number,
+  parameter: import("../../source/rust-facts/keys.js").RustSourceCallParameterPlan,
+  argumentNodes: readonly Node[],
+  arguments_: readonly RustExpr[],
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (parameter.inputs.length === 1) {
+    return shapeRustSourceCallInput(
+      parameterIndex,
+      parameter,
+      parameter.inputs[0]!,
+      argumentNodes,
+      arguments_,
+      context,
+    );
+  }
+  if (context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const collectionName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "spread_rest",
+  );
+  const collection: RustExpr = { kind: "path", path: collectionName };
+  const effects: RustExpr[] = [];
+  for (const input of parameter.inputs) {
+    const value = shapeRustSourceCallInput(
+      parameterIndex,
+      parameter,
+      input,
+      argumentNodes,
+      arguments_,
+      context,
+    );
+    if (value === undefined) {
+      return undefined;
+    }
+    effects.push({
+      kind: "method-call",
+      receiver: collection,
+      method: input.sourceForm === "spread-sequence" ? "extend" : "push",
+      args: [value],
+    });
+  }
+  let value: RustExpr = collection;
+  for (let index = effects.length - 1; index >= 0; index -= 1) {
+    value = {
+      kind: "evaluate-then",
+      effect: effects[index]!,
+      discard: "unit",
+      value,
+    };
+  }
+  return {
+    kind: "block",
+    bindings: [{
+      name: collectionName,
+      mutable: true,
+      value: { kind: "vec-literal", elements: [] },
+    }],
+    value,
+  };
+}
+
+function planRustSourceCallArgumentEvaluation(
+  call: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
+  context: RustPlanContext,
+): {
+  readonly arguments: readonly RustExpr[];
+  readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+} | undefined {
+  const rawArguments = context.input.ast.arguments(call);
+  if (!isDenseDataArray(rawArguments) || rawArguments.some((argument) => argument === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, call),
+      "rust.backend.source-call-arguments",
+      "Selected project-source call contains an undefined or non-data argument slot.",
+    ));
+    return undefined;
+  }
+  const argumentNodes = rawArguments as readonly Node[];
+  const hasSpread = fact.parameters.some((parameter) =>
+    parameter.inputs.some((input) => input.sourceForm !== "value"));
+  const planned = argumentNodes.map((argument) => {
+    const source = context.input.ast.kindName(argument) === KindSpreadElement
+      ? Node_Expression(context.input.ast, argument)
+      : argument;
+    return source === undefined ? undefined : planExpression(source, context);
+  });
+  if (planned.some((argument) => argument === undefined)) {
+    return undefined;
+  }
+  if (!hasSpread) {
+    return {
+      arguments: planned as readonly RustExpr[],
+      bindings: [],
+    };
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, call),
+      "rust.backend.source-call-spread-names",
+      "Project-source spread evaluation requires one finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  const bindings = (planned as readonly RustExpr[]).map((value) => ({
+    name: allocateRustSyntheticName(context.syntheticNames!, "spread_argument"),
+    value,
+  }));
+  return {
+    arguments: bindings.map((binding) => ({ kind: "path", path: binding.name })),
+    bindings,
+  };
+}
+
 export function planRustSelectedSourceCallArguments(
   call: Node,
   context: RustPlanContext,
@@ -2702,7 +2844,6 @@ export function planRustSelectedSourceCallArguments(
   return arguments_ === undefined
     ? undefined
     : shapeRustSourceCallParameters(
-        call,
         argumentNodes,
         arguments_,
         fact,
@@ -2735,8 +2876,13 @@ function shapeRustSourceCallInput(
   }
   const sourceCarrier = context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
   const convertedCarrier = context.input.facts.getTargetConversionFact(argumentNode)?.convertedType;
-  if (sourceCarrier === undefined ||
-    !rustFinalizedCarrierTransitionMatches(sourceCarrier, convertedCarrier, input.carrier)) {
+  const selectedInput = selectRustSpreadSourceInput(
+    input,
+    sourceCarrier,
+    convertedCarrier,
+    argument,
+  );
+  if (selectedInput === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, argumentNode),
       "rust.backend.source-call-argument-carrier",
@@ -2745,7 +2891,7 @@ function shapeRustSourceCallInput(
     return undefined;
   }
   if (parameter.mode === "value") {
-    return argument;
+    return selectedInput;
   }
   if (parameter.parameterCarrier.kind !== "pointer" ||
     !rustTargetTypeRefEquals(parameter.parameterCarrier.pointee, input.carrier)) {
@@ -2755,10 +2901,71 @@ function shapeRustSourceCallInput(
   const sourceParameterAbi = context.input.facts.getFact(argumentNode, rustSourceParameterAbiFactKey);
   return sourceParameterAbi?.mode === parameter.mode &&
       rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameter.parameterCarrier)
-    ? argument
-    : argument.kind === "string-literal" && !mutable
-      ? { kind: "str-literal", value: argument.value }
-      : { kind: "reference", expr: argument, ...(mutable ? { mutable: true } : {}) };
+    ? selectedInput
+    : selectedInput.kind === "string-literal" && !mutable
+      ? { kind: "str-literal", value: selectedInput.value }
+      : { kind: "reference", expr: selectedInput, ...(mutable ? { mutable: true } : {}) };
+}
+
+function selectRustSpreadSourceInput(
+  input: import("../../source/rust-facts/keys.js").RustSourceCallParameterPlan["inputs"][number],
+  sourceCarrier: TargetTypeRef | undefined,
+  convertedCarrier: TargetTypeRef | undefined,
+  sourceExpression: RustExpr,
+): RustExpr | undefined {
+  if (sourceCarrier === undefined) {
+    return undefined;
+  }
+  if (input.sourceForm === "value" || input.sourceForm === "spread-sequence") {
+    return rustFinalizedCarrierTransitionMatches(
+      sourceCarrier,
+      convertedCarrier,
+      input.carrier,
+    )
+      ? sourceExpression
+      : undefined;
+  }
+  if (convertedCarrier !== undefined || input.spreadElementIndex === undefined) {
+    return undefined;
+  }
+  const element = rustSpreadElementCarrier(
+    sourceCarrier,
+    input.spreadElementIndex,
+  );
+  if (element === undefined || !rustTargetTypeRefEquals(element, input.carrier)) {
+    return undefined;
+  }
+  const fixedArray = rustFixedArrayCarrierValue(sourceCarrier);
+  const selected: RustExpr = fixedArray === undefined
+    ? {
+        kind: "field",
+        receiver: sourceExpression,
+        name: String(input.spreadElementIndex),
+      }
+    : {
+        kind: "index",
+        receiver: sourceExpression,
+        index: { kind: "int-literal", text: String(input.spreadElementIndex) },
+      };
+  return fixedArray !== undefined && !isRustCopyCarrier(element)
+    ? { kind: "method-call", receiver: selected, method: "clone", args: [] }
+    : selected;
+}
+
+function rustSpreadElementCarrier(
+  sourceCarrier: TargetTypeRef,
+  index: number,
+): TargetTypeRef | undefined {
+  if (!Number.isSafeInteger(index) || index < 0) {
+    return undefined;
+  }
+  if (sourceCarrier.kind === "tuple") {
+    return sourceCarrier.elements[index];
+  }
+  const fixedArray = rustFixedArrayCarrierValue(sourceCarrier);
+  return fixedArray !== undefined && index < fixedArray.length
+    ? fixedArray.element
+    : undefined;
 }
 
 function planPromotedSourceMethodCall(

@@ -181,6 +181,61 @@ export function main(): void {
   validateGeneratedProject("callable-parameters", result.artifacts, { run: true });
 });
 
+test("project-source spread calls preserve exact bindings, single evaluation, and order", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "source_call_spread" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+let trace: int32 = 0;
+
+function first(): int32 {
+  trace = trace * 10 + 1;
+  return 1;
+}
+
+function pair(): [int32, int32] {
+  trace = trace * 10 + 2;
+  return [2, 3];
+}
+
+function sum3(firstValue: int32, secondValue: int32, thirdValue: int32): int32 {
+  return firstValue + secondValue + thirdValue;
+}
+
+function total(...values: int32[]): int32 {
+  let result: int32 = 0;
+  for (const value of values) {
+    result += value;
+  }
+  return result;
+}
+
+export function main(): void {
+  check(sum3(first(), ...pair()) === 6);
+  check(trace === 12);
+  const values: int32[] = [4, 5, 6];
+  check(total(...values) === 15);
+  const middle: int32[] = [5, 6];
+  check(total(4, ...middle, 7) === 22);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let __tsonic_spread_argument/u);
+  assert.match(
+    source,
+    /sum3\(\s*__tsonic_spread_argument,\s*__tsonic_spread_argument_1\[0\],\s*__tsonic_spread_argument_1\[1\],?\s*\)/u,
+  );
+  validateGeneratedProject("source-call-spread", result.artifacts, { run: true });
+});
+
 test("named function expressions retain recursive callable identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

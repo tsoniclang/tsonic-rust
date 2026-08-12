@@ -48,6 +48,7 @@ export const KindReturnStatement = "KindReturnStatement";
 export const KindStringKeyword = "KindStringKeyword";
 export const KindStringLiteral = "KindStringLiteral";
 export const KindSatisfiesExpression = "KindSatisfiesExpression";
+export const KindSpreadElement = "KindSpreadElement";
 export const KindSwitchStatement = "KindSwitchStatement";
 export const KindTemplateExpression = "KindTemplateExpression";
 export const KindTrueKeyword = "KindTrueKeyword";

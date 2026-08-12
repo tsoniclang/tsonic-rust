@@ -1078,7 +1078,7 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "block": {
       const bindings = expression.bindings
-        .map((binding) => `${binding.attrs?.join(" ") ?? ""}${binding.attrs === undefined ? "" : " "}let ${binding.name} = ${printRustExpr(binding.value)};`)
+        .map((binding) => `${binding.attrs?.join(" ") ?? ""}${binding.attrs === undefined ? "" : " "}let ${binding.mutable === true ? "mut " : ""}${binding.name} = ${printRustExpr(binding.value)};`)
         .join(" ");
       return `{ ${bindings}${bindings.length === 0 ? "" : " "}${printRustExpr(expression.value)} }`;
     }
@@ -1379,7 +1379,7 @@ function printRustExprFitted(
     case "block": {
       const statementIndent = indentText(depth + 1);
       const bindings = expression.bindings.flatMap((binding) => {
-        const prefix = `${statementIndent}let ${binding.name} = `;
+        const prefix = `${statementIndent}let ${binding.mutable === true ? "mut " : ""}${binding.name} = `;
         return [
           ...(binding.attrs ?? []).map((attribute) => `${statementIndent}${attribute}`),
           printRustLetInitializer(prefix, binding.value, depth + 1),

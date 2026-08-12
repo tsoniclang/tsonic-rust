@@ -80,6 +80,7 @@ import {
   KindReturnStatement,
   KindStringLiteral,
   KindSatisfiesExpression,
+  KindSpreadElement,
   KindSwitchStatement,
   KindTemplateExpression,
   KindTrueKeyword,
@@ -1682,6 +1683,15 @@ function resolveExpressionCarrierUncached(
       });
       return setCarrierFact(walk, expression, resultCarrier);
     }
+    case KindSpreadElement: {
+      const inner = Node_Expression(walk.context.ast, expression);
+      const carrier = inner === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, inner, sourceFile, expected);
+      return carrier === undefined
+        ? undefined
+        : setCarrierFact(walk, expression, carrier);
+    }
     case KindConditionalExpression: {
       const condition = ConditionalExpression_Condition(walk.context.ast, expression);
       const whenTrue = ConditionalExpression_WhenTrue(walk.context.ast, expression);
@@ -2749,10 +2759,12 @@ function applySelectedProjectSourceCall(
     }
     const bindingCarriers = parameters.flatMap((parameter) =>
       parameter.inputs.filter((input) => input.sourceArgumentIndex === index).map((input) => input.carrier));
-    const expected = bindingCarriers.length > 0 && bindingCarriers.every((carrier) =>
-      rustTargetTypeRefEquals(carrier, bindingCarriers[0]))
-      ? bindingCarriers[0]
-      : undefined;
+    const expected = ast.kindName(argument) === KindSpreadElement
+      ? undefined
+      : bindingCarriers.length > 0 && bindingCarriers.every((carrier) =>
+          rustTargetTypeRefEquals(carrier, bindingCarriers[0]))
+        ? bindingCarriers[0]
+        : undefined;
     resolveExpressionCarrier(walk, argument, sourceFile, expected);
     const parameterIndexes = [...new Set(argumentBindings.map((binding) => binding.sourceParameterIndex))];
     const modes = parameterIndexes.map((parameterIndex) => parameters[parameterIndex]?.mode);
