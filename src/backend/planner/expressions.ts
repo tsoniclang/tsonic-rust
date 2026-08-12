@@ -2387,17 +2387,7 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     return { kind: "string-concat", parts };
   }
   if (fact.kind === "operator-call") {
-    registerAliasFromPath(context, fact.path);
-    if (fact.fallible && context.fallibleContext !== true) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, node),
-        "rust.error.operator",
-        "Fallible operator calls require a finalized fallible lowering context.",
-      ));
-      return undefined;
-    }
-    const call: RustExpr = { kind: "call", path: fact.path, args: [left, right] };
-    return fact.fallible ? { kind: "try", expr: call } : call;
+    return planRustOperatorCallExpression(fact, left, right, node, context);
   }
   if (fact.kind === "operator-token") {
     // Owned-String literals in comparison position lower as &str literals so
@@ -2448,6 +2438,26 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     "Binary expression selected a non-operator Rust operation.",
   ));
   return undefined;
+}
+
+export function planRustOperatorCallExpression(
+  fact: Extract<RustTargetOperationFact, { readonly kind: "operator-call" }>,
+  left: RustExpr,
+  right: RustExpr,
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  registerAliasFromPath(context, fact.path);
+  if (fact.fallible && context.fallibleContext !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.operator",
+      "Fallible operator calls require a finalized fallible lowering context.",
+    ));
+    return undefined;
+  }
+  const call: RustExpr = { kind: "call", path: fact.path, args: [left, right] };
+  return fact.fallible ? { kind: "try", expr: call } : call;
 }
 
 function planBooleanLiteralComparison(

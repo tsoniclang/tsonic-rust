@@ -2135,12 +2135,21 @@ function resolvePostCheckBinaryCarrier(
   } else {
     const compound = selectRustCompoundAssignment(operatorKind, left, right);
     if (compound !== undefined && left !== undefined) {
-      fact = {
-        kind: "operator-token",
-        operationId: `tsonic.rust.operator.${compound}.${rustOperatorCarrierKey(left)}`,
-        operator: compound,
-        resultCarrier: left,
-      };
+      fact = compound.kind === "operator-call"
+        ? {
+            kind: "operator-call",
+            operationId: `tsonic.rust.operator.${compound.operator}.${rustOperatorCarrierKey(left)}`,
+            operator: compound.operator,
+            path: compound.path,
+            resultCarrier: compound.resultCarrier,
+            fallible: compound.fallible,
+          }
+        : {
+            kind: "operator-token",
+            operationId: `tsonic.rust.operator.${compound.operator}.${rustOperatorCarrierKey(left)}`,
+            operator: compound.operator,
+            resultCarrier: compound.resultCarrier,
+          };
     } else {
       const binary = selectRustBinaryOperator(operatorKind, left, right);
       if (binary !== undefined) {

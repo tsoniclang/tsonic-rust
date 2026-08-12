@@ -293,6 +293,7 @@ test("bigint division and remainder use the catchable runtime ABI", { timeout: 3
     files: {
       "index.ts": `
 import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
 
 function divide(left: bigint, right: bigint): bigint {
   return left / right;
@@ -302,10 +303,62 @@ function remainder(left: bigint, right: bigint): bigint {
   return left % right;
 }
 
+class BigCounter {
+  value: bigint;
+
+  constructor(value: bigint) {
+    this.value = value;
+  }
+}
+
+class BigAccessor {
+  private stored: bigint;
+  writes: int32 = 0;
+
+  constructor(value: bigint) {
+    this.stored = value;
+  }
+
+  get current(): bigint {
+    return this.stored;
+  }
+
+  set current(value: bigint) {
+    this.writes += 1;
+    this.stored = value;
+  }
+}
+
+class BigStatics {
+  static value: bigint = 20n;
+}
+
+const counter = new BigCounter(20n);
+const accessor = new BigAccessor(20n);
+let receiverCalls: int32 = 0;
+
+function selectedCounter(): BigCounter {
+  receiverCalls += 1;
+  return counter;
+}
+
 export function main(): void {
   check(divide(7n, 3n) === 2n);
   check(divide(-7n, 3n) === -2n);
   check(remainder(-7n, 3n) === -1n);
+  let changed = 20n;
+  changed /= 3n;
+  check(changed === 6n);
+  changed %= 4n;
+  check(changed === 2n);
+  selectedCounter().value /= 3n;
+  check(counter.value === 6n);
+  check(receiverCalls === 1);
+  accessor.current %= 6n;
+  check(accessor.current === 2n);
+  check(accessor.writes === 1);
+  BigStatics.value /= 4n;
+  check(BigStatics.value === 5n);
   let caught = false;
   try {
     divide(1n, 0n);
@@ -313,6 +366,20 @@ export function main(): void {
     caught = true;
   }
   check(caught);
+  let unchanged = 9n;
+  try {
+    unchanged /= 0n;
+  } catch (error) {
+    caught = true;
+  }
+  check(unchanged === 9n);
+  try {
+    accessor.current /= 0n;
+  } catch (error) {
+    caught = true;
+  }
+  check(accessor.current === 2n);
+  check(accessor.writes === 1);
 }
 `,
     },
@@ -322,6 +389,8 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::BigInt::checked_div\(left\.clone\(\), right\.clone\(\)\)/u);
   assert.match(source, /rt::BigInt::checked_rem\(left\.clone\(\), right\.clone\(\)\)/u);
+  assert.match(source, /rt::BigInt::checked_div\(__tsonic_current(?:_[0-9]+)?, __tsonic_value(?:_[0-9]+)?\)\?/u);
+  assert.match(source, /rt::BigInt::checked_rem\(\s*__tsonic_current(?:_[0-9]+)?,\s*__tsonic_value(?:_[0-9]+)?,?\s*\)\?/u);
   validateGeneratedProject("expression-bigint-division", result.artifacts, { run: true });
 });
 

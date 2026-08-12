@@ -50,6 +50,20 @@ export interface RustBinaryOperatorSelection {
   readonly rightConversion?: RustValueConversion;
 }
 
+export type RustCompoundAssignmentSelection =
+  | {
+      readonly kind: "operator-token";
+      readonly operator: RustAssignmentOperator;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "operator-call";
+      readonly operator: RustAssignmentOperator;
+      readonly path: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly fallible: boolean;
+    };
+
 const bigintArithmeticCallByOperator: Readonly<Partial<Record<RustBinaryOperator, string>>> = {
   "/": "rt::BigInt::checked_div",
   "%": "rt::BigInt::checked_rem",
@@ -257,7 +271,7 @@ export function selectRustCompoundAssignment(
   operatorKindName: string,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
-): RustAssignmentOperator | undefined {
+): RustCompoundAssignmentSelection | undefined {
   operatorKindName = operatorKindByText[operatorKindName] ?? operatorKindName;
   const operator = compoundAssignmentTokens[operatorKindName];
   if (operator === undefined || left === undefined || right === undefined) {
@@ -265,11 +279,17 @@ export function selectRustCompoundAssignment(
   }
   const binaryOperator = compoundBinaryOperator(operator);
   if (operator === "+=" && isRustStringCarrier(left) && isRustStringCarrier(right)) {
-    return operator;
+    return { kind: "operator-token", operator, resultCarrier: left };
   }
-  return binaryOperator !== undefined && sameRustArithmeticCarrier(left, right) &&
-      rustArithmeticOperatorHasDirectSemantics(binaryOperator, left)
-    ? operator
+  if (binaryOperator === undefined || !sameRustArithmeticCarrier(left, right)) {
+    return undefined;
+  }
+  if (rustArithmeticOperatorHasDirectSemantics(binaryOperator, left)) {
+    return { kind: "operator-token", operator, resultCarrier: left };
+  }
+  const path = bigintArithmeticCallByOperator[binaryOperator];
+  return isRustBigIntCarrier(left) && path !== undefined
+    ? { kind: "operator-call", operator, path, resultCarrier: left, fallible: true }
     : undefined;
 }
 

@@ -862,7 +862,7 @@ test("multiline arithmetic assignments break after the assignment operator", () 
   assert.match(text, /entryTotal \+=\n        tsonic_rust_runtime::conversions::usize_to_i32/u);
 });
 
-test("overflowing outer calls retain jointly fitting nested arguments", () => {
+test("overflowing nested calls retain attached wrappers and jointly fitting arguments", () => {
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -894,7 +894,7 @@ test("overflowing outer calls retain jointly fitting nested arguments", () => {
     }],
   });
 
-  assert.match(text, /isize_to_i32\(\n        example_runtime::canonical_array_index_of\(&values, &3, 0\),\n    \)\?/u);
+  assert.match(text, /isize_to_i32\(example_runtime::canonical_array_index_of\(\n        &values, &3, 0,\n    \)\)\?/u);
 });
 
 test("nested calls beyond rustfmt call width put each argument on its own line", () => {
