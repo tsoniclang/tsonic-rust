@@ -140,6 +140,28 @@ function projectExport(
   readonly type?: RustProviderTypeDefinition;
 } {
   const exportId = compilerExportId(context.dependency, context.modulePath, exported.name);
+  if (exported.kind === "constant") {
+    const sourceType = sourceTypeFor(exported.type, context, "result");
+    const targetCarrier = targetTypeFor(exported.type, context, "result");
+    return {
+      declaration: Object.freeze({
+        id: exportId,
+        name: exported.name,
+        exportName: exported.name,
+        kind: "value",
+        type: sourceType,
+      }),
+      operations: Object.freeze([operationRow({
+        exportId,
+        operationKind: "property",
+        target: {
+          form: "path",
+          path: rustPath(context.dependency.targetCrateName, context.modulePath, exported.name),
+        },
+        resultCarrier: targetCarrier,
+      })]),
+    };
+  }
   if (exported.kind === "function") {
     const projected = projectFunction(exported.function, context, exportId, false);
     return {
@@ -151,6 +173,25 @@ function projectExport(
         signatures: Object.freeze([projected.signature]),
       }),
       operations: Object.freeze([projected.operation]),
+    };
+  }
+  if (exported.kind === "type-alias") {
+    const typeParameterNames = exported.typeParameters.map((parameter) => parameter.name);
+    const sourceType = sourceTypeFor(exported.type, context, "result");
+    const targetCarrier = targetTypeFor(exported.type, context, "result");
+    return {
+      declaration: Object.freeze({
+        id: exportId,
+        name: exported.name,
+        exportName: exported.name,
+        kind: "type",
+        type: sourceType,
+        ...(typeParameterNames.length === 0
+          ? {}
+          : { typeParameters: Object.freeze(typeParameterNames.map((name) => Object.freeze({ name }))) }),
+      }),
+      operations: Object.freeze([]),
+      type: Object.freeze({ exportId, targetCarrier }),
     };
   }
   const typeParameterNames = exported.typeParameters.map((parameter) => parameter.name);
@@ -180,30 +221,90 @@ function projectExport(
       typeParameters: typeParameterNames,
     },
   };
+  const nativeEnumDeclaration = exported.kind === "enum" && typeParameterNames.length === 0 &&
+    exported.variants.every((variant) => variant.kind === "plain");
   const members: ProviderMemberDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
-  for (const field of exported.fields) {
-    const sourceFieldType = sourceTypeFor(field.type, typeContext, "result");
-    const targetFieldType = targetTypeFor(field.type, typeContext, "result");
-    const memberId = `${exportId}::field:${field.name}`;
-    members.push(Object.freeze({
-      id: memberId,
-      name: field.name,
-      kind: "field",
-      type: sourceFieldType,
-    }));
-    operations.push(operationRow({
-      exportId,
-      memberId,
-      operationKind: "property",
-      target: { form: "field", name: field.name },
-      resultCarrier: targetFieldType,
-      receiverCarrier: typeCarrier,
-      typeParameters: typeParameterNames,
-    }));
+  if (exported.kind === "struct") {
+    for (const field of exported.fields) {
+      const sourceFieldType = sourceTypeFor(field.type, typeContext, "result");
+      const targetFieldType = targetTypeFor(field.type, typeContext, "result");
+      const memberId = `${exportId}::field:${field.name}`;
+      members.push(Object.freeze({
+        id: memberId,
+        name: field.name,
+        kind: "field",
+        type: sourceFieldType,
+      }));
+      operations.push(operationRow({
+        exportId,
+        memberId,
+        operationKind: "property",
+        target: { form: "field", name: field.name },
+        resultCarrier: targetFieldType,
+        receiverCarrier: typeCarrier,
+        typeParameters: typeParameterNames,
+      }));
+    }
+  } else {
+    for (const variant of exported.variants) {
+      const memberId = `${exportId}::variant:${variant.name}`;
+      if (variant.kind === "plain") {
+        members.push(Object.freeze({
+          id: memberId,
+          name: variant.name,
+          kind: "field",
+          ...(nativeEnumDeclaration ? {} : { static: true, type: sourceType }),
+        }));
+        operations.push(operationRow({
+          exportId,
+          memberId,
+          operationKind: "property",
+          target: {
+            form: "path",
+            path: rustPath(context.dependency.targetCrateName, context.modulePath, exported.name, variant.name),
+          },
+          resultCarrier: typeCarrier,
+          typeParameters: typeParameterNames,
+        }));
+        continue;
+      }
+      const parameters = variant.fields.map((field, index): ProviderParameterDeclaration => Object.freeze({
+        name: `value${index}`,
+        type: sourceTypeFor(field, typeContext, "parameter"),
+      }));
+      const parameterCarriers = variant.fields.map((field) => targetTypeFor(field, typeContext, "parameter"));
+      const signatureId = `${memberId}::signature`;
+      members.push(Object.freeze({
+        id: memberId,
+        name: variant.name,
+        kind: "method",
+        static: true,
+        signatures: Object.freeze([Object.freeze({
+          id: signatureId,
+          name: variant.name,
+          parameters: Object.freeze(parameters),
+          returnType: sourceType,
+        })]),
+      }));
+      operations.push(operationRow({
+        exportId,
+        memberId,
+        signatureId,
+        operationKind: "method",
+        target: {
+          form: "call",
+          path: rustPath(context.dependency.targetCrateName, context.modulePath, exported.name, variant.name),
+        },
+        resultCarrier: typeCarrier,
+        parameterCarriers,
+        typeParameters: typeParameterNames,
+      }));
+    }
   }
   for (const method of exported.methods) {
-    const constructor = method.receiver === undefined && method.name === "new" && method.result.kind === "self";
+    const constructor = exported.kind === "struct" && method.receiver === undefined &&
+      method.name === "new" && method.result.kind === "self";
     const projected = projectFunction(method, typeContext, exportId, constructor);
     members.push(Object.freeze({
       id: projected.memberId!,
@@ -218,7 +319,7 @@ function projectExport(
     id: exportId,
     name: exported.name,
     exportName: exported.name,
-    kind: "class",
+    kind: nativeEnumDeclaration ? "enum" : "class",
     ...(typeParameterNames.length === 0
       ? {}
       : { typeParameters: Object.freeze(typeParameterNames.map((name) => Object.freeze({ name }))) }),
@@ -437,7 +538,10 @@ function targetTypeFor(
     case "array":
       return rustFixedArrayTargetType(targetTypeFor(type.element, context, position), type.length);
     case "slice":
-      throw new Error("Rust slice parameters require a dedicated slice carrier contract.");
+      if (position === "result") {
+        throw new Error("Borrowed Rust slice results require an explicit lifetime-bearing target carrier.");
+      }
+      return { kind: "array", element: targetTypeFor(type.element, context, position) };
     case "raw-pointer":
       return {
         kind: "pointer",

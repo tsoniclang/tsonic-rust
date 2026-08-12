@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import type {
   RustCompilerDependency,
+  RustCompilerEnumVariant,
   RustCompilerExport,
   RustCompilerField,
   RustCompilerFunction,
@@ -210,33 +211,57 @@ function normalizeModule(
   const moduleItem = findModule(document, options.modulePath);
   const moduleInner = requireInnerRecord(moduleItem, "module", "requested Rust module");
   const itemIds = requireArray(moduleInner.items, "requested Rust module items");
-  const requested = options.requestedExports === undefined
-    ? undefined
-    : new Set(options.requestedExports);
+  const publicItems = itemIds
+    .map((rawId) => itemById(document, rawId))
+    .filter((item) => item.visibility === "public" && typeof item.name === "string");
+  const publicItemsByName = new Map<string, Readonly<Record<string, unknown>>>();
+  const ambiguousNames = new Set<string>();
+  for (const item of publicItems) {
+    const name = item.name as string;
+    if (publicItemsByName.has(name)) {
+      publicItemsByName.delete(name);
+      ambiguousNames.add(name);
+    } else if (!ambiguousNames.has(name)) {
+      publicItemsByName.set(name, item);
+    }
+  }
+  const requested = new Set(options.requestedExports ?? publicItemsByName.keys());
   const exports: RustCompilerExport[] = [];
   const unsupported: RustCompilerUnsupportedExport[] = [];
-  const seenNames = new Set<string>();
-  for (const rawId of itemIds) {
-    const item = itemById(document, rawId);
-    const name = typeof item.name === "string" ? item.name : undefined;
-    if (name === undefined || item.visibility !== "public" || (requested !== undefined && !requested.has(name))) {
+  const pending = [...requested].sort(compareText);
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const name = pending.shift()!;
+    if (!visited.add(name)) {
       continue;
     }
-    seenNames.add(name);
+    if (ambiguousNames.has(name)) {
+      unsupported.push({ name, reason: `Rust module exports more than one public item named '${name}'.` });
+      continue;
+    }
+    const item = publicItemsByName.get(name);
+    if (item === undefined) {
+      unsupported.push({ name, reason: `Rust module does not export public item '${name}'.` });
+      continue;
+    }
     try {
-      exports.push(normalizeExport(document, item, options.dependency));
+      const normalized = normalizeExport(document, item, options.dependency);
+      exports.push(normalized);
+      for (const dependencyName of sameModuleExportDependencies(
+        normalized,
+        options.dependency,
+        options.modulePath,
+      )) {
+        if (!visited.has(dependencyName)) {
+          pending.push(dependencyName);
+        }
+      }
+      pending.sort(compareText);
     } catch (error) {
       unsupported.push({
         name,
         reason: error instanceof Error ? error.message : String(error),
       });
-    }
-  }
-  if (requested !== undefined) {
-    for (const name of [...requested].sort(compareText)) {
-      if (!seenNames.has(name)) {
-        unsupported.push({ name, reason: `Rust module does not export public item '${name}'.` });
-      }
     }
   }
   exports.sort((left, right) => compareText(left.name, right.name));
@@ -249,6 +274,71 @@ function normalizeModule(
     exports: Object.freeze(exports),
     unsupportedExports: Object.freeze(unsupported),
   });
+}
+
+function sameModuleExportDependencies(
+  exported: RustCompilerExport,
+  dependency: RustCompilerDependency,
+  modulePath: readonly string[],
+): readonly string[] {
+  const names = new Set<string>();
+  const visitType = (type: RustCompilerType): void => {
+    switch (type.kind) {
+      case "unit":
+      case "primitive":
+      case "generic":
+      case "self":
+        return;
+      case "tuple":
+        type.elements.forEach(visitType);
+        return;
+      case "array":
+      case "slice":
+        visitType(type.element);
+        return;
+      case "reference":
+      case "raw-pointer":
+        visitType(type.target);
+        return;
+      case "function-pointer":
+        type.parameters.forEach(visitType);
+        visitType(type.result);
+        return;
+      case "path":
+        type.typeArguments.forEach(visitType);
+        if (type.crateName === dependency.crateName &&
+          type.modulePath.length === modulePath.length &&
+          type.modulePath.every((segment, index) => segment === modulePath[index])) {
+          names.add(type.name);
+        }
+        return;
+    }
+  };
+  const visitFunction = (fn: RustCompilerFunction): void => {
+    fn.parameters.forEach((parameter) => visitType(parameter.type));
+    visitType(fn.result);
+  };
+  switch (exported.kind) {
+    case "constant":
+      visitType(exported.type);
+      break;
+    case "function":
+      visitFunction(exported.function);
+      break;
+    case "struct":
+      exported.fields.forEach((field) => visitType(field.type));
+      exported.methods.forEach(visitFunction);
+      break;
+    case "type-alias":
+      visitType(exported.type);
+      break;
+    case "enum":
+      exported.variants.forEach((variant) => variant.fields.forEach(visitType));
+      exported.methods.forEach(visitFunction);
+      break;
+  }
+  names.delete(exported.name);
+  return Object.freeze([...names].sort(compareText));
 }
 
 function findModule(document: RustdocDocument, modulePath: readonly string[]): Readonly<Record<string, unknown>> {
@@ -273,6 +363,15 @@ function normalizeExport(
 ): RustCompilerExport {
   const name = requireString(item.name, "Rust export name");
   const id = canonicalItemId(dependency, item);
+  if (hasInnerKind(item, "constant")) {
+    const constant = requireInnerRecord(item, "constant", `Rust constant '${name}'`);
+    return Object.freeze({
+      kind: "constant",
+      id,
+      name,
+      type: normalizeType(document, constant.type),
+    });
+  }
   if (hasInnerKind(item, "function")) {
     return Object.freeze({
       kind: "function",
@@ -297,7 +396,80 @@ function normalizeExport(
         .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
     });
   }
-  throw new Error(`Rust export '${name}' has no supported function or struct representation.`);
+  if (hasInnerKind(item, "type_alias")) {
+    const alias = requireInnerRecord(item, "type_alias", `Rust type alias '${name}'`);
+    const generics = requireRecord(alias.generics, `${name}.generics`);
+    if (requireArray(generics.where_predicates, `${name}.where_predicates`).length > 0 ||
+      genericParametersHaveBounds(generics)) {
+      throw new Error(`Rust type alias '${name}' has generic constraints that are not representable by the current source contract.`);
+    }
+    return Object.freeze({
+      kind: "type-alias",
+      id,
+      name,
+      typeParameters: normalizeTypeParameters(generics),
+      type: normalizeType(document, alias.type),
+    });
+  }
+  if (hasInnerKind(item, "enum")) {
+    const enum_ = requireInnerRecord(item, "enum", `Rust enum '${name}'`);
+    if (enum_.has_stripped_variants !== false) {
+      throw new Error(`Rust enum '${name}' does not expose one complete variant set.`);
+    }
+    const generics = requireRecord(enum_.generics, `${name}.generics`);
+    if (requireArray(generics.where_predicates, `${name}.where_predicates`).length > 0 ||
+      genericParametersHaveBounds(generics)) {
+      throw new Error(`Rust enum '${name}' has generic constraints that are not representable by the current source contract.`);
+    }
+    const methods = normalizeMethods(document, enum_, dependency);
+    return Object.freeze({
+      kind: "enum",
+      id,
+      name,
+      typeParameters: normalizeTypeParameters(generics),
+      variants: normalizeEnumVariants(document, enum_, dependency),
+      methods: methods.values,
+      unsupportedMembers: methods.unsupported,
+    });
+  }
+  throw new Error(`Rust export '${name}' has no supported provider representation.`);
+}
+
+function normalizeEnumVariants(
+  document: RustdocDocument,
+  enum_: Readonly<Record<string, unknown>>,
+  dependency: RustCompilerDependency,
+): readonly RustCompilerEnumVariant[] {
+  return Object.freeze(requireArray(enum_.variants, "Rust enum variants").map((variantId) => {
+    const item = itemById(document, variantId);
+    const name = requireString(item.name, "Rust enum variant name");
+    const variant = requireInnerRecord(item, "variant", `Rust enum variant '${name}'`);
+    if (variant.kind === "plain") {
+      return Object.freeze({
+        kind: "plain" as const,
+        id: canonicalItemId(dependency, item),
+        name,
+        fields: Object.freeze([]),
+      });
+    }
+    const kind = requireRecord(variant.kind, `Rust enum variant '${name}' kind`);
+    if (!Array.isArray(kind.tuple)) {
+      throw new Error(`Rust enum variant '${name}' has a struct payload with no canonical source-call contract.`);
+    }
+    const fields = kind.tuple.map((fieldId) => {
+      const field = itemById(document, fieldId);
+      return normalizeType(
+        document,
+        requireInnerRecord(field, "struct_field", `Rust enum variant '${name}' field`),
+      );
+    });
+    return Object.freeze({
+      kind: "tuple" as const,
+      id: canonicalItemId(dependency, item),
+      name,
+      fields: Object.freeze(fields),
+    });
+  }).sort((left, right) => compareText(left.name, right.name)));
 }
 
 function normalizeFields(
@@ -447,13 +619,6 @@ function normalizeFunction(
   if (result.kind === "reference" || result.kind === "slice") {
     throw new Error(`Rust function '${name}' returns a borrowed or unsized value with no closed target carrier.`);
   }
-  const unsupportedSliceParameter = parameters.find((parameter) => {
-    const type = parameter.type.kind === "reference" ? parameter.type.target : parameter.type;
-    return type.kind === "slice";
-  });
-  if (unsupportedSliceParameter !== undefined) {
-    throw new Error(`Rust function '${name}' parameter '${unsupportedSliceParameter.name}' requires a dedicated slice carrier contract.`);
-  }
   return Object.freeze({
     id: canonicalItemId(dependency, item),
     name,
@@ -498,7 +663,11 @@ function genericParametersHaveBounds(generics: Readonly<Record<string, unknown>>
   });
 }
 
-function normalizeType(document: RustdocDocument, raw: unknown): RustCompilerType {
+function normalizeType(
+  document: RustdocDocument,
+  raw: unknown,
+  resolvingAliases: ReadonlySet<string> = new Set(),
+): RustCompilerType {
   const type = requireRecord(raw, "Rust type");
   if (typeof type.primitive === "string") {
     return Object.freeze({ kind: "primitive", name: type.primitive });
@@ -509,30 +678,30 @@ function normalizeType(document: RustdocDocument, raw: unknown): RustCompilerTyp
       : { kind: "generic" as const, name: type.generic });
   }
   if (Array.isArray(type.tuple)) {
-    return Object.freeze({ kind: "tuple", elements: Object.freeze(type.tuple.map((element) => normalizeType(document, element))) });
+    return Object.freeze({ kind: "tuple", elements: Object.freeze(type.tuple.map((element) => normalizeType(document, element, resolvingAliases))) });
   }
   if (type.slice !== undefined) {
-    return Object.freeze({ kind: "slice", element: normalizeType(document, type.slice) });
+    return Object.freeze({ kind: "slice", element: normalizeType(document, type.slice, resolvingAliases) });
   }
   if (isRecord(type.array)) {
     const length = Number(type.array.len);
     if (!Number.isSafeInteger(length) || length < 0) {
       throw new Error(`Rust array length '${String(type.array.len)}' is not a non-negative integer.`);
     }
-    return Object.freeze({ kind: "array", element: normalizeType(document, type.array.type), length });
+    return Object.freeze({ kind: "array", element: normalizeType(document, type.array.type, resolvingAliases), length });
   }
   if (isRecord(type.borrowed_ref)) {
     return Object.freeze({
       kind: "reference",
       mutable: type.borrowed_ref.is_mutable === true,
-      target: normalizeType(document, type.borrowed_ref.type),
+      target: normalizeType(document, type.borrowed_ref.type, resolvingAliases),
     });
   }
   if (isRecord(type.raw_pointer)) {
     return Object.freeze({
       kind: "raw-pointer",
       mutable: type.raw_pointer.is_mutable === true,
-      target: normalizeType(document, type.raw_pointer.type),
+      target: normalizeType(document, type.raw_pointer.type, resolvingAliases),
     });
   }
   if (isRecord(type.function_pointer)) {
@@ -556,7 +725,7 @@ function normalizeType(document: RustdocDocument, raw: unknown): RustCompilerTyp
         if (!Array.isArray(input) || input.length !== 2) {
           throw new Error(`Rust function pointer input ${index} has an invalid rustdoc shape.`);
         }
-        return normalizeType(document, input[1]);
+        return normalizeType(document, input[1], resolvingAliases);
       },
     );
     return Object.freeze({
@@ -564,7 +733,7 @@ function normalizeType(document: RustdocDocument, raw: unknown): RustCompilerTyp
       parameters: Object.freeze(inputs),
       result: signature.output === null
         ? Object.freeze({ kind: "unit" as const })
-        : normalizeType(document, signature.output),
+        : normalizeType(document, signature.output, resolvingAliases),
       abi: normalizeAbi(header.abi, "Rust function pointer ABI"),
       unsafe: requireBoolean(
         header.is_unsafe,
@@ -579,7 +748,26 @@ function normalizeType(document: RustdocDocument, raw: unknown): RustCompilerTyp
     if (path.some((segment) => typeof segment !== "string") || path.length < 2) {
       throw new Error(`Rust resolved path '${id}' has no canonical crate-qualified path.`);
     }
-    const args = normalizePathArguments(document, type.resolved_path.args);
+    const args = normalizePathArguments(document, type.resolved_path.args, resolvingAliases);
+    const resolvedItem = document.index[id];
+    if (isRecord(resolvedItem) && hasInnerKind(resolvedItem, "type_alias")) {
+      if (resolvingAliases.has(id)) {
+        throw new Error(`Rust type alias '${id}' is recursively referenced while computing its canonical target type.`);
+      }
+      const alias = requireInnerRecord(resolvedItem, "type_alias", `Rust type alias '${id}'`);
+      const generics = requireRecord(alias.generics, `Rust type alias '${id}' generics`);
+      const parameters = normalizeTypeParameters(generics);
+      if (parameters.length !== args.length) {
+        throw new Error(`Rust type alias '${id}' received ${args.length} type arguments for ${parameters.length} parameters.`);
+      }
+      const nextResolving = new Set(resolvingAliases);
+      nextResolving.add(id);
+      const target = normalizeType(document, alias.type, nextResolving);
+      return substituteRustCompilerType(
+        target,
+        new Map(parameters.map((parameter, index) => [parameter.name, args[index]!])),
+      );
+    }
     return Object.freeze({
       kind: "path",
       crateName: path[0] as string,
@@ -591,7 +779,11 @@ function normalizeType(document: RustdocDocument, raw: unknown): RustCompilerTyp
   throw new Error(`Rust type has no supported closed representation.`);
 }
 
-function normalizePathArguments(document: RustdocDocument, raw: unknown): readonly RustCompilerType[] {
+function normalizePathArguments(
+  document: RustdocDocument,
+  raw: unknown,
+  resolvingAliases: ReadonlySet<string>,
+): readonly RustCompilerType[] {
   if (raw === null || raw === undefined) {
     return Object.freeze([]);
   }
@@ -606,12 +798,62 @@ function normalizePathArguments(document: RustdocDocument, raw: unknown): readon
     if (argument.type === undefined) {
       throw new Error(`Rust lifetime and const path arguments are not supported.`);
     }
-    result.push(normalizeType(document, argument.type));
+    result.push(normalizeType(document, argument.type, resolvingAliases));
   }
   if (requireArray(angle.constraints, "Rust path associated constraints").length > 0) {
     throw new Error(`Rust associated type constraints are not supported.`);
   }
   return Object.freeze(result);
+}
+
+function substituteRustCompilerType(
+  type: RustCompilerType,
+  bindings: ReadonlyMap<string, RustCompilerType>,
+): RustCompilerType {
+  switch (type.kind) {
+    case "unit":
+    case "primitive":
+    case "self":
+      return type;
+    case "generic":
+      return bindings.get(type.name) ?? type;
+    case "tuple":
+      return Object.freeze({
+        kind: "tuple",
+        elements: Object.freeze(type.elements.map((element) => substituteRustCompilerType(element, bindings))),
+      });
+    case "array":
+      return Object.freeze({
+        kind: "array",
+        element: substituteRustCompilerType(type.element, bindings),
+        length: type.length,
+      });
+    case "slice":
+      return Object.freeze({
+        kind: "slice",
+        element: substituteRustCompilerType(type.element, bindings),
+      });
+    case "reference":
+    case "raw-pointer":
+      return Object.freeze({
+        kind: type.kind,
+        mutable: type.mutable,
+        target: substituteRustCompilerType(type.target, bindings),
+      });
+    case "function-pointer":
+      return Object.freeze({
+        ...type,
+        parameters: Object.freeze(type.parameters.map((parameter) =>
+          substituteRustCompilerType(parameter, bindings))),
+        result: substituteRustCompilerType(type.result, bindings),
+      });
+    case "path":
+      return Object.freeze({
+        ...type,
+        typeArguments: Object.freeze(type.typeArguments.map((argument) =>
+          substituteRustCompilerType(argument, bindings))),
+      });
+  }
 }
 
 function canonicalItemId(dependency: RustCompilerDependency, item: Readonly<Record<string, unknown>>): string {

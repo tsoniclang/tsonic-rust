@@ -59,11 +59,83 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       snapshot,
       dependency,
       modulePath: [],
-      requestedExports: ["byte_ptr", "dangerous", "double", "featured", "first_byte"],
+      requestedExports: [
+        "ANSWER",
+        "Mode",
+        "Pair",
+        "byte_ptr",
+        "dangerous",
+        "double",
+        "featured",
+        "fill",
+        "first_byte",
+        "mode_code",
+        "pair_sum",
+        "sum",
+      ],
     });
     assert.deepEqual(
       functionModule.exports.map(({ name }) => name),
-      ["byte_ptr", "dangerous", "double", "featured", "first_byte"],
+      [
+        "ANSWER",
+        "Mode",
+        "Pair",
+        "byte_ptr",
+        "dangerous",
+        "double",
+        "featured",
+        "fill",
+        "first_byte",
+        "mode_code",
+        "pair_sum",
+        "sum",
+      ],
+    );
+    assert.equal(functionModule.exports.find(({ name }) => name === "ANSWER")?.kind, "constant");
+    assert.equal(functionModule.exports.find(({ name }) => name === "Pair")?.kind, "type-alias");
+    assert.deepEqual(
+      functionModule.exports.find(({ name }) => name === "Mode")?.variants.map(({ name, kind }) => ({ name, kind })),
+      [
+        { name: "Payload", kind: "tuple" },
+        { name: "Read", kind: "plain" },
+        { name: "Write", kind: "plain" },
+      ],
+    );
+    assert.deepEqual(
+      functionModule.exports.find(({ name }) => name === "pair_sum")?.function.parameters[0].type,
+      {
+        kind: "tuple",
+        elements: [
+          { kind: "primitive", name: "i32" },
+          { kind: "primitive", name: "i32" },
+        ],
+      },
+    );
+    const closedFunctionModule = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["mode_code"],
+    });
+    assert.deepEqual(closedFunctionModule.exports.map(({ name }) => name), ["Mode", "mode_code"]);
+    const unsupportedModule = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["GLOBAL_COUNT", "StructuredMode"],
+    });
+    assert.deepEqual(unsupportedModule.exports, []);
+    assert.deepEqual(
+      unsupportedModule.unsupportedExports.map(({ name }) => name),
+      ["GLOBAL_COUNT", "StructuredMode"],
+    );
+    assert.match(
+      unsupportedModule.unsupportedExports.find(({ name }) => name === "GLOBAL_COUNT")?.reason ?? "",
+      /no supported provider representation/u,
+    );
+    assert.match(
+      unsupportedModule.unsupportedExports.find(({ name }) => name === "StructuredMode")?.reason ?? "",
+      /struct payload/u,
     );
     const dangerous = functionModule.exports.find(({ name }) => name === "dangerous");
     assert.equal(dangerous?.kind, "function");
@@ -123,7 +195,8 @@ test("Cargo provider virtual imports compile, execute, and preserve the user-own
 import type { int32 } from "@tsonic/core/types.js";
 import { unsafeContext } from "@tsonic/core/lang.js";
 import type { mutPtr, u8 } from "@tsonic/rust/types.js";
-import { Widget, byte_ptr, dangerous, double, duplicate, featured, first_byte, identity, maybe_positive, singleton_map } from "@tsonic/rust/crates/widget_alias/index.js";
+import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
+import { ANSWER, Mode, Widget, byte_ptr, dangerous, double, duplicate, featured, fill, first_byte, identity, maybe_positive, mode_code, pair_sum, singleton_map, sum } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 
@@ -146,6 +219,19 @@ export function main(): void {
   }
   if (unsafeContext(first_byte(byte_ptr())) !== 23) {
     throw new Error("raw pointer mapping failed");
+  }
+  if (ANSWER !== 42 || mode_code(Mode.Read) !== 1 || mode_code(Mode.Payload(9)) !== 9) {
+    throw new Error("constant or enum mapping failed");
+  }
+  const pair: Pair<int32> = [4, 5];
+  if (pair_sum(pair) !== 9) {
+    throw new Error("type alias mapping failed");
+  }
+  const numbers: int32[] = [1, 2, 3];
+  const bytes: u8[] = [1, 2, 3];
+  fill(bytes, 7);
+  if (sum(numbers) !== 6 || bytes[0] !== 7 || bytes[2] !== 7) {
+    throw new Error("slice parameter mapping failed");
   }
   const nested = int_widget(11);
   if (nested.count !== 1 || nested.into_value() !== 11) {
@@ -186,6 +272,8 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::first_byte\(widget_alias::byte_ptr\(\)\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   assert.equal(readFileSync(project.manifestPath, "utf8"), manifestBefore);
   const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);

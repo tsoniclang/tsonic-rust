@@ -1,5 +1,21 @@
 use std::collections::HashMap;
 
+pub const ANSWER: i32 = 42;
+
+pub type Pair<T> = (T, T);
+
+pub enum Mode {
+    Read,
+    Write,
+    Payload(i32),
+}
+
+pub enum StructuredMode {
+    Named { value: i32 },
+}
+
+pub static GLOBAL_COUNT: i32 = 1;
+
 pub struct Widget<T> {
     pub count: i32,
     value: T,
@@ -60,6 +76,26 @@ static BYTE: u8 = 23;
 
 pub fn byte_ptr() -> *const u8 {
     &BYTE
+}
+
+pub fn mode_code(mode: Mode) -> i32 {
+    match mode {
+        Mode::Read => 1,
+        Mode::Write => 2,
+        Mode::Payload(value) => value,
+    }
+}
+
+pub fn pair_sum(value: Pair<i32>) -> i32 {
+    value.0 + value.1
+}
+
+pub fn sum(values: &[i32]) -> i32 {
+    values.iter().sum()
+}
+
+pub fn fill(values: &mut [u8], value: u8) {
+    values.fill(value);
 }
 
 pub mod math {

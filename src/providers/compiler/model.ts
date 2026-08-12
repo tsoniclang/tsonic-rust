@@ -88,6 +88,13 @@ export interface RustCompilerField {
   readonly type: RustCompilerType;
 }
 
+export interface RustCompilerEnumVariant {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: "plain" | "tuple";
+  readonly fields: readonly RustCompilerType[];
+}
+
 export interface RustCompilerUnsupportedMember {
   readonly kind: "field" | "method";
   readonly name: string;
@@ -95,6 +102,12 @@ export interface RustCompilerUnsupportedMember {
 }
 
 export type RustCompilerExport =
+  | {
+      readonly kind: "constant";
+      readonly id: string;
+      readonly name: string;
+      readonly type: RustCompilerType;
+    }
   | {
       readonly kind: "function";
       readonly id: string;
@@ -107,6 +120,22 @@ export type RustCompilerExport =
       readonly name: string;
       readonly typeParameters: readonly RustCompilerTypeParameter[];
       readonly fields: readonly RustCompilerField[];
+      readonly methods: readonly RustCompilerFunction[];
+      readonly unsupportedMembers: readonly RustCompilerUnsupportedMember[];
+    }
+  | {
+      readonly kind: "type-alias";
+      readonly id: string;
+      readonly name: string;
+      readonly typeParameters: readonly RustCompilerTypeParameter[];
+      readonly type: RustCompilerType;
+    }
+  | {
+      readonly kind: "enum";
+      readonly id: string;
+      readonly name: string;
+      readonly typeParameters: readonly RustCompilerTypeParameter[];
+      readonly variants: readonly RustCompilerEnumVariant[];
       readonly methods: readonly RustCompilerFunction[];
       readonly unsupportedMembers: readonly RustCompilerUnsupportedMember[];
     };
