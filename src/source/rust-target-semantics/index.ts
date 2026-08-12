@@ -4437,11 +4437,6 @@ function resolveFunctionExpressionCarrier(
   if (selectedParameters === undefined || selectedResult === undefined) {
     return undefined;
   }
-  const expressionName = Node_Name(ast, expression);
-  if (ast.kindName(expression) === KindFunctionExpression && expressionName !== undefined) {
-    setCarrierFact(walk, expression, selectedExpected);
-    setCarrierFact(walk, expressionName, selectedExpected);
-  }
   const parameters = ast.parameters(expression);
   if (parameters.length !== selectedParameters.length) {
     return undefined;
@@ -4485,6 +4480,18 @@ function resolveFunctionExpressionCarrier(
   const resultExpectation = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
     ? resolveTypeNodeCarrier(walk, Node_Type(ast, expression))
     : selectedResult;
+  const expressionName = Node_Name(ast, expression);
+  if (ast.kindName(expression) === KindFunctionExpression && expressionName !== undefined) {
+    if (resultExpectation === undefined) {
+      return undefined;
+    }
+    const recursiveCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" ||
+        selectedExpected.kind === "closure"
+      ? { ...selectedExpected, result: resultExpectation }
+      : rustCallableTargetType(selectedParameters, resultExpectation);
+    setCarrierFact(walk, expression, recursiveCarrier);
+    setCarrierFact(walk, expressionName, recursiveCarrier);
+  }
   let bodyCarrier = resultExpectation;
   if (ast.kindName(body) === KindBlock) {
     if (bodyCarrier === undefined) {

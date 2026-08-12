@@ -108,26 +108,39 @@ export function transform(values: int32[]): int32[] {
   validateGeneratedProject("expression-callable-blocks", result.artifacts);
 });
 
-test("named callable expressions fail closed instead of inventing recursive closure identity", () => {
+test("named callable expressions preserve exact callback and recursive identities", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "named_callable_expression_proof" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
-export function transform(values: int32[]): int32[] {
+function transform(values: int32[]): int32[] {
   return values.map(function recurse(value: int32): int32 {
-    return value;
+    return value + 1;
   });
+}
+
+const factorial: (value: int32) => int32 = function visit(value: int32): int32 {
+  return value <= 1 ? 1 : value * visit(value - 1);
+};
+
+export function main(): void {
+  check(transform([1, 2])[1] === 3);
+  check(factorial(5) === 120);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("closure") || diagnostic.message.includes("callable") ||
-    diagnostic.message.includes("callback")));
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /values\.map\(\|value\| value \+ 1\)/u);
+  assert.match(source, /Callable::<\(i32,\), i32>::recursive/u);
+  validateGeneratedProject("named-callable-expression", result.artifacts, { run: true });
 });
 
 test("substituted templates use exact source-string conversions", { timeout: 300_000 }, () => {
