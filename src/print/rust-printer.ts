@@ -1520,6 +1520,15 @@ function printRustExprFitted(
         const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
         return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
       }
+      if (chain !== undefined && hasClosure && !renderedFits(flat, column)) {
+        return printFittedMethodChain(
+          chain,
+          depth,
+          column,
+          true,
+          methodChainContinuationIndent,
+        );
+      }
       if (chain !== undefined && verticalLayout) {
         return printFittedMethodChain(
           chain,

@@ -112,12 +112,6 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     const memberKind = ast.kindName(member);
     if (memberKind === "KindPropertyDeclaration") {
       if (ast.hasModifierKind(member, "static")) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, member),
-          "rust.backend.class",
-          "Static class fields are not supported by the Rust target.",
-        ));
-        failed = true;
         continue;
       }
       const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
@@ -214,6 +208,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     return undefined;
   }
   context.usedAliases?.add("rt");
+  const exported = ast.hasModifierKind(node, "export");
+  const generatedStructAttributes = [
+    ...(structAttributes(className, fields.map((field) => ({ name: field.targetName }))) ?? []),
+    ...(exported ? [] : ["#[allow(dead_code)]"]),
+  ];
   const stateField: RustStructField = {
     name: rustProjectObjectStateField,
     type: rustProjectObjectType(fields.map((field) => field.type)),
@@ -222,10 +221,8 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const structItem: RustItem = {
     kind: "struct",
     name: className,
-    ...(structAttributes(className, fields.map((field) => ({ name: field.targetName }))) === undefined
-      ? {}
-      : { attrs: structAttributes(className, fields.map((field) => ({ name: field.targetName }))) }),
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
+    ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
+    visibility: exported ? "public" : "private",
     derives: ["Clone", "Debug", "PartialEq"],
     fields: [stateField],
   };
@@ -378,6 +375,11 @@ function planConstructor(
     kind: "tail",
     expr: createRustProjectObject(className, fieldValues),
   });
+  const constructorAttributes = [
+    ...(params.length === 0 ? ["#[allow(clippy::new_without_default)]"] : []),
+    ...(ast.hasModifierKind(classDeclaration, "export") ? [] : ["#[allow(dead_code)]"]),
+    ...safetyAttributes,
+  ];
   return {
     name: "new",
     ...(isUnsafe ? { isUnsafe: true } : {}),
@@ -385,14 +387,7 @@ function planConstructor(
         (!ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"))
       ? "public"
       : "private",
-    ...(params.length > 0 && safetyAttributes.length === 0
-      ? {}
-      : {
-          attrs: [
-            ...(params.length === 0 ? ["#[allow(clippy::new_without_default)]"] : []),
-            ...safetyAttributes,
-          ],
-        }),
+    ...(constructorAttributes.length === 0 ? {} : { attrs: constructorAttributes }),
     params,
     returnType: { kind: "named", path: className },
     body: {
@@ -508,6 +503,7 @@ export function planProjectMethod(
   const methodAttributes = [
     ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
     ...(isStatic && methodName === "new" ? ["#[allow(clippy::new_ret_no_self)]"] : []),
+    ...(ast.hasModifierKind(ast.parent(member) ?? member, "export") ? [] : ["#[allow(dead_code)]"]),
     ...safetyAttributes,
   ];
   if (generatorFact !== undefined && fallible) {

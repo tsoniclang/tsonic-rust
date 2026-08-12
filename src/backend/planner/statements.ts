@@ -93,6 +93,7 @@ import {
   requireProviderArgumentPassingFacts,
   sourceAccessorSelectedOperationMatches,
   sourceFieldSelectedOperationMatches,
+  sourceStaticFieldSelectedOperationMatches,
   sourceUnionFieldSelectedOperationMatches,
 } from "./expressions.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName } from "./plan-context.js";
@@ -123,6 +124,7 @@ import {
   withExplicitUnsafeContext,
 } from "./explicit-safety.js";
 import { planRustSourceUnionFieldProjection } from "./source-union-projection.js";
+import { rustSourceStaticFieldLocation } from "./static-field-storage.js";
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -937,6 +939,7 @@ function planExpressionAsStatement(
           ? planExpression(left, context)
           : undefined;
       if (target === undefined && sourceField?.kind !== "source-accessor" &&
+        sourceField?.kind !== "source-static-field" &&
         sourceField?.kind !== "source-field" &&
         sourceField?.kind !== "source-union-field") {
         context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -986,6 +989,15 @@ function planExpressionAsStatement(
       }
       if (sourceField?.kind === "source-accessor") {
         return planRustSourceAccessorAssignment(
+          left,
+          valueNode,
+          sourceField,
+          fact,
+          context,
+        );
+      }
+      if (sourceField?.kind === "source-static-field") {
+        return planRustSourceStaticFieldAssignment(
           left,
           valueNode,
           sourceField,
@@ -1272,6 +1284,123 @@ function planExpressionAsStatement(
   return planned === undefined
     ? undefined
     : [{ kind: "let", name: "_", mutable: false, init: planned }];
+}
+
+function planRustSourceStaticFieldAssignment(
+  target: Node,
+  valueNode: Node,
+  field: Extract<RustTargetOperationFact, { readonly kind: "source-static-field" }>,
+  assignment: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  if (!isRustAssignmentOperator(assignment.operator)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-static-field-operator",
+      "Project static-field assignment requires an exact Rust assignment operator.",
+    ));
+    return undefined;
+  }
+  if (!sourceStaticFieldSelectedOperationMatches(target, field, context)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-static-field-selected-evidence",
+      "Project static-field assignment conflicts with the TSTS-selected property fact.",
+    ));
+    return undefined;
+  }
+  const location = rustSourceStaticFieldLocation(field, context);
+  const value = planExpression(valueNode, context);
+  if (location === undefined || value === undefined || context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const locationName = allocateRustSyntheticName(context.syntheticNames, "static_field_location");
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "static_field_value");
+  const locationPath: RustExpr = { kind: "path", path: locationName };
+  const valuePath: RustExpr = { kind: "path", path: valueName };
+  if (assignment.operator === "=") {
+    return [{
+      kind: "expr",
+      expr: {
+        kind: "block",
+        bindings: [
+          { name: locationName, value: location },
+          { name: valueName, value },
+        ],
+        value: {
+          kind: "method-call",
+          receiver: locationPath,
+          method: "store",
+          args: [valuePath],
+        },
+      },
+    }];
+  }
+  const operator = rustBinaryOperatorForAssignment(assignment.operator);
+  if (operator === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-static-field-operator",
+      "Project static-field compound assignment has no exact Rust binary operator.",
+    ));
+    return undefined;
+  }
+  const currentName = allocateRustSyntheticName(context.syntheticNames, "static_field_current");
+  const nextName = allocateRustSyntheticName(context.syntheticNames, "static_field_next");
+  const nextValue: RustExpr = assignment.operator === "+=" && isRustStringCarrier(assignment.resultCarrier)
+    ? {
+        kind: "string-concat",
+        parts: [
+          { kind: "path", path: currentName },
+          valuePath,
+        ],
+      }
+    : {
+        kind: "binary",
+        operator,
+        left: { kind: "path", path: currentName },
+        right: valuePath,
+      };
+  return [{
+    kind: "expr",
+    expr: {
+      kind: "block",
+      bindings: [
+        { name: locationName, value: location },
+        {
+          name: currentName,
+          value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+        },
+        { name: valueName, value },
+        { name: nextName, value: nextValue },
+      ],
+      value: {
+        kind: "method-call",
+        receiver: locationPath,
+        method: "store",
+        args: [{ kind: "path", path: nextName }],
+      },
+    },
+  }];
+}
+
+function rustBinaryOperatorForAssignment(
+  operator: RustAssignmentOperator,
+): RustBinaryOperator | undefined {
+  switch (operator) {
+    case "+=":
+      return "+";
+    case "-=":
+      return "-";
+    case "*=":
+      return "*";
+    case "/=":
+      return "/";
+    case "%=":
+      return "%";
+    case "=":
+      return undefined;
+  }
 }
 
 function planRustSourceAccessorAssignment(

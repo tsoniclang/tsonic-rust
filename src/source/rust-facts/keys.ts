@@ -386,6 +386,13 @@ export type RustTargetOperationFact =
       };
     }
   | {
+      readonly kind: "source-static-field";
+      readonly operationId: string;
+      readonly storageFileName: string;
+      readonly storageName: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "source-accessor";
       readonly operationId: string;
       readonly accessMode: "read" | "write" | "read-write";
@@ -594,6 +601,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "void-expression":
     case "array-literal":
     case "source-field":
+    case "source-static-field":
     case "source-accessor":
     case "source-union-field":
     case "source-call":

@@ -106,7 +106,7 @@ export interface RustProjectTypePolicyHost {
 export function rustProjectMemberSlotName(
   ast: AstReader,
   declaration: Node,
-  role: "read" | "write" | "virtual" | "exact",
+  role: "read" | "write" | "virtual" | "exact" | "static",
 ): string | undefined {
   const sourceFile = ast.getSourceFile(declaration);
   const fileName = ast.getFileName(sourceFile);

@@ -408,6 +408,9 @@ function selectExpressionOperation(
       ...(source.receiver.declaration === undefined
         ? {}
         : { sourceReceiverDeclaration: source.receiver.declaration }),
+      ...(source.receiver.valueDeclaration === undefined
+        ? {}
+        : { sourceReceiverValueDeclaration: source.receiver.valueDeclaration }),
       accessMode: source.accessMode,
       ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
       ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
@@ -434,6 +437,9 @@ function selectExpressionOperation(
       expression,
       receiver: source.receiver.expression,
       sourceReceiverType: source.receiver.type,
+      ...(source.receiver.valueDeclaration === undefined
+        ? {}
+        : { sourceReceiverValueDeclaration: source.receiver.valueDeclaration }),
       accessMode: source.accessMode,
       argument: source.argument.expression,
       ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),

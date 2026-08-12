@@ -37,6 +37,7 @@ import {
   rustSourceName,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
+import { rustModuleCellAccess } from "./module-storage.js";
 import { requireRustLocationValueCarrier } from "./generic-requirements.js";
 import {
   readRustProjectObjectField,
@@ -130,7 +131,7 @@ export function planRustIdentifierValue(
   if (storage !== undefined) {
     context.usedAliases?.add("rt");
     return storage.storage === "module-cell"
-      ? moduleCellAccess(value, "load", [])
+      ? rustModuleCellAccess(value, "load", [])
       : { kind: "method-call", receiver: value, method: "load", args: [] };
   }
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
@@ -250,7 +251,7 @@ export function rustRawLocationRoot(
   const storage = rustLocationStorageForReference(expression, context);
   const value: RustExpr = { kind: "path", path };
   return storage?.storage === "module-cell"
-    ? moduleCellAccess(value, "location", [])
+    ? rustModuleCellAccess(value, "location", [])
     : value;
 }
 
@@ -262,29 +263,6 @@ function rustCapturedBindingPath(
   return declaration === undefined
     ? undefined
     : context.capturedBindingPaths?.get(declaration);
-}
-
-function moduleCellAccess(
-  cell: RustExpr,
-  method: "load" | "location",
-  args: readonly RustExpr[],
-): RustExpr {
-  const bindingName = "__tsonic_module_binding";
-  return {
-    kind: "method-call",
-    receiver: cell,
-    method: "with",
-    args: [{
-      kind: "closure",
-      params: [{ name: bindingName, byRefCopy: false }],
-      body: {
-        kind: "method-call",
-        receiver: { kind: "path", path: bindingName },
-        method,
-        args,
-      },
-    }],
-  };
 }
 
 export type RustPromotedStorageWritePlan =

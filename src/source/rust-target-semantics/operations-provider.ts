@@ -158,7 +158,10 @@ import {
   selectRustGeneratorSourceProperty,
 } from "./generator-source-profile.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
-import { rustProjectObjectField } from "./project-object-layout.js";
+import {
+  rustProjectObjectField,
+  rustProjectStaticFieldStorage,
+} from "./project-object-layout.js";
 import { selectRustOptionalChain } from "./optional-chains.js";
 import type { RustProjectTypePolicy } from "./project-type-policy.js";
 import { rustProjectMemberSlotName } from "./project-type-policy.js";
@@ -2068,6 +2071,47 @@ export function selectRustCheckedPropertyAccess(
     return projectAccessor;
   }
 
+  if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
+    const declaration = request.sourceSelectedDeclaration;
+    const storage = rustProjectStaticFieldStorage(declaration, context.ast);
+    if (storage !== undefined) {
+      const owner = options.projectTypes.definitionContainingDeclaration(declaration);
+      if (owner?.kind !== "class" || request.sourceReceiverValueDeclaration !== owner.declaration) {
+        return rejectSelectedOperation(
+          request.expression,
+          context,
+          "RUST_STATIC_FIELD_RECEIVER_NOT_EXACT",
+          "Project static-field access requires exact TSTS-selected receiver value evidence for the declaring class.",
+        );
+      }
+      const sourceFieldType = Node_Type(context.ast, declaration) ??
+        (request.optionalChain === true ? undefined : request.sourceResultType);
+      const resultCarrier = resolveRustTargetTypeRef(sourceFieldType, context, options);
+      if (resultCarrier === undefined) {
+        return rejectSelectedOperation(
+          request.expression,
+          context,
+          "RUST_STATIC_FIELD_RESULT_NOT_CLOSED",
+          "Selected project static field has no exact Rust result carrier.",
+        );
+      }
+      const operationId = sourceOperationId(context, declaration, "static-field");
+      return acceptRustMemberOperation(request, "property", {
+        kind: "source-static-field",
+        operationId,
+        storageFileName: storage.fileName,
+        storageName: storage.targetName,
+        resultCarrier,
+      }, context, options, {
+        sourceExpression: request.expression,
+        sourceReceiver: request.receiver,
+        sourceSelectedSymbol: request.sourceSelectedSymbol,
+        sourceSelectedDeclaration: declaration,
+        sourceResultType: request.sourceResultType,
+      });
+    }
+  }
+
   const structuralProperty = selectStructuralSourceProperty(
     request,
     selectedReceiverCarrier,
@@ -3407,6 +3451,7 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     case "fixed-index":
       return "indexer";
     case "source-field":
+    case "source-static-field":
     case "source-accessor":
     case "source-union-field":
     case "source-enum-member":

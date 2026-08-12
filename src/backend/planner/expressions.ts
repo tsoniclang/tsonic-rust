@@ -141,6 +141,10 @@ import {
 import {
   planRustSourceUnionFieldProjection,
 } from "./source-union-projection.js";
+import {
+  readRustSourceStaticField,
+  rustSourceStaticFieldLocation,
+} from "./static-field-storage.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
@@ -1581,6 +1585,31 @@ function planRustUpdateExpression(
       context,
     );
   }
+  const sourceStaticField = findRustUpdateSourceStaticField(operand, context);
+  if (sourceStaticField !== undefined) {
+    if (!sourceStaticFieldSelectedOperationMatches(
+        sourceStaticField.expression,
+        sourceStaticField.fact,
+        context,
+      )) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, sourceStaticField.expression),
+        "rust.backend.source-static-field-selected-evidence",
+        "Project static-field update conflicts with the TSTS-selected property fact.",
+      ));
+      return undefined;
+    }
+    const location = rustSourceStaticFieldLocation(sourceStaticField.fact, context);
+    return location === undefined
+      ? undefined
+      : planRustOwnedUpdateLocation(
+          location,
+          fact,
+          step,
+          returnsPrevious,
+          context,
+        );
+  }
   const sourceField = findRustUpdateProjectField(operand, context);
   if (sourceField !== undefined) {
     return sourceField.fact.kind === "source-union-field"
@@ -1635,6 +1664,27 @@ function planRustUpdateExpression(
     returnsPrevious,
     context,
   );
+}
+
+function findRustUpdateSourceStaticField(
+  operand: Node,
+  context: RustPlanContext,
+): {
+  readonly expression: Node;
+  readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-static-field" }>;
+} | undefined {
+  let current: Node | undefined = operand;
+  while (current !== undefined) {
+    const fact = context.input.facts.getFact(current, rustTargetOperationFactKey);
+    if (fact?.kind === "source-static-field") {
+      return { expression: current, fact };
+    }
+    if (context.input.ast.kindName(current) !== KindParenthesizedExpression) {
+      return undefined;
+    }
+    current = Node_Expression(context.input.ast, current);
+  }
+  return undefined;
 }
 
 function planRustSourceAccessorUpdate(
@@ -4172,6 +4222,30 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       ? undefined
       : finishRustSourceAccessorCall(node, "read", planned, context);
   }
+  if (fact !== undefined && fact.kind === "source-static-field") {
+    const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
+    if (resultCarrier === undefined ||
+      !requireExpressionCarrier(node, resultCarrier, context, "rust.backend.source-static-field-carrier")) {
+      return undefined;
+    }
+    if (!sourceStaticFieldSelectedOperationMatches(node, fact, context)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.source-static-field-selected-evidence",
+        "Project static-field read conflicts with the TSTS-selected property fact.",
+      ));
+      return undefined;
+    }
+    const value = readRustSourceStaticField(fact, context);
+    if (value === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.source-static-field-storage",
+        "Project static field has no exact generated Rust storage path.",
+      ));
+    }
+    return value;
+  }
   if (fact !== undefined && fact.kind === "source-field") {
     const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
     if (resultCarrier === undefined ||
@@ -4348,6 +4422,19 @@ function planRustSourceUnionFieldRead(
 export function sourceFieldSelectedOperationMatches(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>,
+  context: RustPlanContext,
+): boolean {
+  return selectedOperationMatches(
+    context.input.facts.getSelectedTargetProperty(node),
+    fact.operationId,
+    "property",
+    fact.resultCarrier,
+  );
+}
+
+export function sourceStaticFieldSelectedOperationMatches(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-static-field" }>,
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
