@@ -21,6 +21,7 @@ import type {
   TargetTypeRef,
 } from "../types.js";
 import type {
+  RustCallbackOperationTemplate,
   RustProviderOperationTemplate,
 } from "../../source/rust-facts/keys.js";
 
@@ -126,7 +127,7 @@ export type RustCheckedCallSelectionResult =
   | { readonly kind: "source" }
   | {
       readonly kind: "deferred-callback";
-      readonly callbackShape: "direct" | "map" | "reduce";
+      readonly callback: RustCallbackOperationTemplate;
       readonly sourceName: string;
       readonly template: RustProviderOperationTemplate;
       readonly parameterCarriers: readonly (TargetTypeRef | undefined)[];

@@ -227,6 +227,13 @@ export interface RustProviderOperationTemplate {
   readonly isUnsafe?: boolean;
 }
 
+export interface RustCallbackOperationTemplate {
+  readonly shape: "direct" | "map" | "reduce";
+  readonly sourceArgumentIndex: number;
+  readonly accumulatorArgumentIndex?: number;
+  readonly fallibleTarget: RustProviderOperationForm;
+}
+
 export interface RustRuntimeSetTemplate {
   readonly kind: "runtime-set";
   readonly operationId: string;

@@ -43,6 +43,7 @@ import {
   readRustProjectObjectField,
   writeRustProjectObjectField,
 } from "./project-objects.js";
+import { allocateRustSyntheticName } from "./synthetic-names.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -333,25 +334,46 @@ export function planRustPromotedStorageWrite(
   if (binaryOperator === undefined) {
     return { handled: true };
   }
-  const currentName = "__tsonic_location_current";
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, expression),
+      "rust.backend.compound-assignment-temporary",
+      "Promoted-location compound assignment requires a finalized hygienic-name scope.",
+    ));
+    return { handled: true };
+  }
+  const locationName = allocateRustSyntheticName(context.syntheticNames, "location");
+  const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
+  const locationPath: RustExpr = { kind: "path", path: locationName };
   return {
     handled: true,
     statement: {
       kind: "expr",
       expr: {
-        kind: "method-call",
-        receiver: location,
-        method: "update_with",
-        args: [{
-          kind: "closure",
-          params: [{ name: currentName, byRefCopy: false }],
-          body: {
+        kind: "block",
+        bindings: [
+          {
+            name: locationName,
+            value: { kind: "reference", expr: location },
+          },
+          {
+            name: currentName,
+            value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+          },
+          { name: valueName, value },
+        ],
+        value: {
+          kind: "method-call",
+          receiver: locationPath,
+          method: "store",
+          args: [{
             kind: "binary",
             operator: binaryOperator,
             left: { kind: "path", path: currentName },
-            right: value,
-          },
-        }],
+            right: { kind: "path", path: valueName },
+          }],
+        },
       },
     },
   };

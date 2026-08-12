@@ -25,7 +25,8 @@ import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPubli
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustUnionDeclarationFactKey } from "../../source/rust-facts/keys.js";
-import { applyFallibleShape, applyRustTailShape, rustBlockTerminates } from "./functions.js";
+import { applyRustTailShape, rustBlockTerminates } from "./functions.js";
+import { applyFallibleShape } from "./fallible-shape.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";

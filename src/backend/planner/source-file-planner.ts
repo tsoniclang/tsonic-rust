@@ -40,7 +40,7 @@ import {
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { planBlockLike, planStatement } from "./statements.js";
-import { applyFallibleShape } from "./functions.js";
+import { applyFallibleShape } from "./fallible-shape.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,

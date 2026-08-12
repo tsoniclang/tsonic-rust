@@ -160,6 +160,61 @@ test("fallible calls on the left of comparisons expand their arguments before th
   assert.match(source, /divide\(\n {12}rt::BigInt::from_decimal_literal\("7"\),\n {12}rt::BigInt::from_decimal_literal\("3"\),\n {8}\)\? ==/u);
 });
 
+test("fallible conversion wrappers own multiline callback method chains", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "method-call",
+                receiver: {
+                  kind: "try",
+                  expr: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "values" },
+                    method: "try_map_with_array",
+                    args: [{
+                      kind: "closure",
+                      params: [
+                        { name: "value", byRefCopy: false },
+                        { name: "index", byRefCopy: false },
+                        { name: "owner", byRefCopy: false },
+                      ],
+                      body: {
+                        kind: "call",
+                        path: "risky",
+                        args: [{ kind: "path", path: "value" }],
+                      },
+                    }],
+                  },
+                },
+                method: "len",
+                args: [],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /usize_to_i32\(\n {8}values\n {12}\.try_map_with_array\(\|value, index, owner\| risky\(value\)\)\?\n {12}\.len\(\),\n {4}\)\?;/u,
+  );
+});
+
 test("method chains inside expanded call comparisons use argument indentation", () => {
   const source = printRustSourceFile({
     headerComment,

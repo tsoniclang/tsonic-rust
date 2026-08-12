@@ -2338,7 +2338,8 @@ function printFittedCall(
           true,
         );
         const compact = appendToLastLine(`${prefix}${nested}`, ")");
-        if (renderedFits(compact, column)) {
+        if (!(argument.kind === "method-call" && nested.includes("\n")) &&
+          renderedFits(compact, column)) {
           return compact;
         }
       }

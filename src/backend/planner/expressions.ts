@@ -57,7 +57,7 @@ import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
 } from "../../common/source-literal-values.js";
-import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustOptionalChainFact,
@@ -118,6 +118,10 @@ import {
   applyRustProviderLocationScope,
   planRustProviderLocationScope,
 } from "./provider-location-scope.js";
+import {
+  applyFallibleShape,
+  applyRustFallibleResultExpression,
+} from "./fallible-shape.js";
 import type {
   RustFinalizedInputPlanOverrides,
 } from "./provider-location-scope.js";
@@ -771,12 +775,13 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
       if (bodyNode === undefined) {
         return undefined;
       }
+      const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
       const closureContext: RustPlanContext = {
         ...context,
         controlFlow: { nextLoopId: 0 },
         controlTargets: undefined,
         completionBoundary: undefined,
-        fallibleContext: false,
+        fallibleContext: fallible,
         asyncContext: false,
         generator: undefined,
       };
@@ -885,6 +890,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         if (body === undefined) {
           return undefined;
         }
+        const resultBody = fallible ? applyRustFallibleResultExpression(body) : body;
         const closure: RustExpr = bindingStatements.length === 0 && !closureMove &&
             closureParams.every((parameter) => !parameter.mutable)
           ? {
@@ -893,14 +899,14 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
                 name: parameter.name,
                 byRefCopy: parameter.byRefCopy === true,
               })),
-              body,
+              body: resultBody,
             }
           : {
               kind: "closure-block",
               params: closureParams,
               move: closureMove,
               async: false,
-              body: { statements: [...bindingStatements, { kind: "tail", expr: body }] },
+              body: { statements: [...bindingStatements, { kind: "tail", expr: resultBody }] },
             };
         if (callableProtocol === undefined) {
           return nativeClosureProtocol === undefined || captureBindings.length === 0
@@ -949,10 +955,10 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
         ));
         return undefined;
       }
-      const finalizedBlock = applyRustTailShape(
+      const finalizedBlock = applyFallibleShape(applyRustTailShape(
         { statements: [...bindingStatements, ...block.statements] },
         !isRustUnitCarrier(resultCarrier),
-      );
+      ), fallible, !isRustUnitCarrier(resultCarrier));
       const onlyStatement = finalizedBlock.statements.length === 1
         ? finalizedBlock.statements[0]
         : undefined;

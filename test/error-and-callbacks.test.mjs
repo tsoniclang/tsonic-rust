@@ -34,6 +34,84 @@ export function stats(xs: int32[]): int32 {
   assert.match(text, /xs\.reduce\(0, \|acc, x\| acc \+ x\)/u);
 });
 
+test("fallible JavaScript callbacks use explicit fallible ABIs across collection families", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "fallible_callbacks" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+function risky(value: int32): int32 {
+  if (value < 0) {
+    throw new Error("negative");
+  }
+  return value;
+}
+
+export function main(): void {
+  const values: int32[] = [1, 2, 3];
+  check(values.map((value, _index, _owner) => risky(value)).length === 3);
+  check(values.filter(() => risky(1) > 0).length === 3);
+  check(values.findIndex((value, _index) => risky(value) === 2) === 1);
+  check(values.some((value) => risky(value) === 2));
+  check(values.every(() => risky(1) > 0));
+
+  let total: int32 = 0;
+  values.forEach((value, _index, _owner) => {
+    total += risky(value);
+  });
+  check(total === 6);
+  check(values.reduce<int32>((sum, value, _index, _owner) => risky(sum + value), 0) === 6);
+  check(values.reduce((sum) => risky(sum * 2)) === 4);
+
+  const map = new Map<string, int32>();
+  map.set("a", 1).set("b", 2);
+  map.forEach((value, _key, _owner) => {
+    total += risky(value);
+  });
+
+  const set = new Set<int32>();
+  set.add(1).add(2);
+  set.forEach((value, _key) => {
+    total += risky(value);
+  });
+  check(total === 12);
+
+  const failing: int32[] = [1, -1, 3];
+  let visits: int32 = 0;
+  let caught = false;
+  try {
+    failing.some((value) => {
+      visits += 1;
+      return risky(value) > 10;
+    });
+  } catch (_error) {
+    caught = true;
+  }
+  check(caught && visits === 2);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /values\s*\.try_map_with_array/u);
+  assert.match(text, /values\s*\.try_filter_zero/u);
+  assert.match(text, /values\s*\.try_find_index_with_index/u);
+  assert.match(text, /values\s*\.try_some/u);
+  assert.match(text, /values\s*\.try_every_zero/u);
+  assert.match(text, /values\s*\.try_for_each/u);
+  assert.match(text, /values\s*\.try_reduce_with_array\(0,/u);
+  assert.match(text, /values\s*\.try_reduce_from_first_accumulator/u);
+  assert.match(text, /map\.try_for_each/u);
+  assert.match(text, /set\.try_for_each_value_key/u);
+  assert.equal(validateGeneratedProject("fallible-callbacks", result.artifacts, { run: true }).status, 0);
+});
+
 test("JSON round-trips through fallible rows in a throwing context", async () => {
   const { result } = compileRust({
     surfaces: ["js"],

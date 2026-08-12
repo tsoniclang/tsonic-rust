@@ -162,7 +162,8 @@ import {
 } from "./operator-rules.js";
 import { readRustTypescriptCompatibilityMode } from "../../options/rust-target-options.js";
 import {
-  finalizeRustDeferredCheckedCall,
+  finalizeRustPreparedCheckedCall,
+  prepareRustDeferredCheckedCall,
   selectRustCheckedCall,
   selectRustCheckedConversion,
   selectRustCheckedDelete,
@@ -172,7 +173,10 @@ import {
   selectRustCheckedPropertyAccess,
   selectRustCheckedValue,
 } from "./operations-provider.js";
-import type { RustOperationsProviderOptions } from "./operations-provider.js";
+import type {
+  RustOperationsProviderOptions,
+  RustPreparedDeferredCheckedCall,
+} from "./operations-provider.js";
 import { resolveRustTargetTypeRef } from "./target-type-resolution.js";
 import type { RustTargetTypeResolutionContext } from "./target-type-resolution.js";
 import { createRustSourceTypeRegistry } from "./source-type-registry.js";
@@ -240,6 +244,10 @@ interface RustFactWalk {
       import("../../policy/operations/contracts.js").RustCheckedCallSelectionResult,
       { readonly kind: "deferred-callback" }
     >;
+  }>;
+  readonly preparedCallbackCalls: Map<Node, {
+    readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput;
+    readonly prepared: RustPreparedDeferredCheckedCall;
   }>;
   currentThisCarrier?: TargetTypeRef;
   currentSuperCarrier?: TargetTypeRef;
@@ -620,6 +628,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     operationAttempts: new WeakSet<object>(),
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
     deferredCallbackCalls: new WeakMap(),
+    preparedCallbackCalls: new Map(),
   };
   // Pass 0: register every project type declaration so contextual record
   // binding works regardless of file order.
@@ -2427,7 +2436,7 @@ function resolveCallLikeCarrier(
   const deferred = walk.deferredCallbackCalls.get(expression);
   if (deferred !== undefined) {
     walk.deferredCallbackCalls.delete(expression);
-    const finalized = finalizeRustDeferredCheckedCall(
+    const prepared = prepareRustDeferredCheckedCall(
       deferred.request,
       deferred.selection,
       rustOperationContext(walk, expression),
@@ -2435,28 +2444,17 @@ function resolveCallLikeCarrier(
       (argument, argumentExpected) =>
         resolveExpressionCarrier(walk, argument, sourceFile, argumentExpected),
     );
-    if (finalized.kind === "reject") {
+    if (prepared.kind === "reject") {
       walk.context.diagnostics.push(
-        rustPolicyTargetDiagnostic(finalized.diagnostic),
+        rustPolicyTargetDiagnostic(prepared.diagnostic),
       );
       return undefined;
     }
-    const operation = walk.context.facts.get(
-      expression,
-      rustTargetOperationFactKey,
-    );
-    const resultCarrier = operation === undefined
-      ? undefined
-      : rustTargetOperationResultCarrier(operation);
-    recordSelectedOperationInputs(
-      walk,
-      expression,
-      sourceFile,
-      operation,
-    );
-    return resultCarrier === undefined
-      ? undefined
-      : setCarrierFact(walk, expression, resultCarrier);
+    walk.preparedCallbackCalls.set(expression, {
+      request: deferred.request,
+      prepared: prepared.value,
+    });
+    return setCarrierFact(walk, expression, prepared.value.resultCarrier);
   }
   const selectedSignature = walk.context.facts.get(expression, rustSelectedCallKey);
   const selectedSourceDeclaration = asSourceNode(
@@ -4451,7 +4449,23 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
     ].filter((declaration): declaration is Node => declaration !== undefined);
   };
 
-  const expressionRegionIsFallible = (root: Node): boolean => {
+  const callbackExpression = (
+    pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
+  ): Node | undefined => pending.request.arguments[pending.prepared.callback.sourceArgumentIndex];
+  const callbackExpressionIsFallible = (
+    pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
+  ): boolean => {
+    const expression = callbackExpression(pending);
+    const body = expression === undefined ? undefined : ast.body(expression);
+    return body !== undefined && expressionRegionIsFallible(body);
+  };
+  const preparedCallbackOperationIsFallible = (node: Node): boolean => {
+    const pending = walk.preparedCallbackCalls.get(node);
+    return pending !== undefined && (
+      pending.prepared.template.isFallible || callbackExpressionIsFallible(pending)
+    );
+  };
+  function expressionRegionIsFallible(root: Node): boolean {
     let found = false;
     const visit = (node: Node, insideTry: boolean): void => {
       if (found) {
@@ -4510,7 +4524,7 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
         }
         return;
       }
-      if (!insideTry && operationIsFallible(node)) {
+      if (!insideTry && (operationIsFallible(node) || preparedCallbackOperationIsFallible(node))) {
         found = true;
         return;
       }
@@ -4551,7 +4565,7 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
     };
     visit(root, false);
     return found;
-  };
+  }
   const bodyIsFallible = (declaration: Node): boolean => {
     const body = ast.body(declaration);
     return body !== undefined && expressionRegionIsFallible(body);
@@ -4565,6 +4579,44 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
         fallible.add(declaration);
         changed = true;
       }
+    }
+  }
+  const ownedCallbackClosures = new Set<Node>();
+  for (const [call, pending] of walk.preparedCallbackCalls) {
+    const callback = callbackExpression(pending);
+    if (callback !== undefined) {
+      ownedCallbackClosures.add(callback);
+    }
+    const sourceFile = ast.getSourceFile(call);
+    if (sourceFile === undefined) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_CALLBACK_SOURCE_FILE_MISSING",
+        "Prepared callback operation has no owning checked source file.",
+        call,
+        ["target.capability=rust.callback.exact-source"],
+      );
+      continue;
+    }
+    const callbackFallible = callbackExpressionIsFallible(pending);
+    const finalized = finalizeRustPreparedCheckedCall(
+      pending.request,
+      pending.prepared,
+      callbackFallible,
+      rustOperationContext(walk, call),
+      walk.operationOptions,
+    );
+    if (finalized.kind === "reject") {
+      walk.context.diagnostics.push(rustPolicyTargetDiagnostic(finalized.diagnostic));
+      continue;
+    }
+    const operation = walk.context.facts.get(call, rustTargetOperationFactKey) ??
+      walk.context.facts.resolve(call, rustTargetOperationFactKey);
+    recordSelectedOperationInputs(walk, call, sourceFile, operation);
+    if (callbackFallible && callback !== undefined) {
+      walk.context.facts.set(callback, rustFallibleFactKey, { fallible: true }, [
+        { message: "rust fallible callback ABI" },
+      ]);
     }
   }
   for (const declaration of fallible) {
@@ -4597,7 +4649,8 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const body = ast.body(node);
-        if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body)) {
+        if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body) &&
+          !ownedCallbackClosures.has(node)) {
           appendRustDiagnostic(
             walk,
             "RUST_FALLIBLE_CLOSURE_UNSUPPORTED",

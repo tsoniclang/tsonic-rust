@@ -4,7 +4,8 @@ import { acmeTelemetryCapability, artifactText, compileRust } from "./helpers/ru
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 import { rustTargetOperationFactKey } from "../dist/index.js";
 import { finalizeRustProviderOperationAbi } from "../dist/source/rust-facts/finalized-operation-abi.js";
-import { applyFallibleShape, rustBlockTerminates } from "../dist/backend/planner/functions.js";
+import { applyFallibleShape } from "../dist/backend/planner/fallible-shape.js";
+import { rustBlockTerminates } from "../dist/backend/planner/functions.js";
 import {
   requireProviderArgumentPassingFacts,
   sourceCallSelectedMemberMatches,

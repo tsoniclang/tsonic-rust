@@ -1126,8 +1126,8 @@ export function forwards(): int32 {
   assert.doesNotMatch(text, /Ok\(risky\(\)\?\)/u);
 });
 
-test("fallible calls inside closures fail closed", () => {
-  const options = {
+test("fallible calls inside callbacks use the explicit fallible callback ABI", () => {
+  const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
@@ -1142,11 +1142,11 @@ export function bad(xs: int32[]): boolean {
 }
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_FALLIBLE_CLOSURE_UNSUPPORTED",
-    message: "Rust closures cannot contain fallible operations because the selected target callback ABI has an infallible result.",
-  }]);
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn bad\(xs: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
+  assert.match(text, /xs\.try_some\(\|x\| Ok\(risky\(x\)\? == 1\)\)/u);
 });
 
 test("string literals mentioning runtime aliases do not create imports", () => {

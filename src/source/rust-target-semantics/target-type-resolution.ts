@@ -817,7 +817,17 @@ function resolveOwnedSourceProfileTypeName(
     if (sourceProfiles.profileForNode(declaration, context.ast) === undefined) {
       continue;
     }
-    const name = context.ast.text(context.ast.name(declaration));
+    if (!context.ast.is.IsClassDeclaration(declaration) &&
+      !context.ast.is.IsInterfaceDeclaration(declaration) &&
+      !context.ast.is.IsTypeAliasDeclaration(declaration) &&
+      !context.ast.is.IsEnumDeclaration(declaration)) {
+      continue;
+    }
+    const nameNode = context.ast.name(declaration);
+    if (!context.ast.is.IsIdentifier(nameNode)) {
+      continue;
+    }
+    const name = context.ast.text(nameNode);
     if (name.length > 0) {
       return name;
     }

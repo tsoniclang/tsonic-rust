@@ -601,12 +601,12 @@ export function selectRustCheckedCall(
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`);
     }
-    if (selection.callbackShape !== undefined) {
+    if (selection.callback !== undefined) {
       return selection.fact.kind !== "provider-operation"
         ? rejectSelectedOperation(request.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
         : acceptRustPolicy({
             kind: "deferred-callback",
-            callbackShape: selection.callbackShape,
+            callback: selection.callback,
             sourceName: selectedSourceMember.memberName,
             template: selection.fact,
             parameterCarriers: selection.parameterCarriers ?? [],
@@ -647,7 +647,15 @@ export function selectRustCheckedCall(
   );
 }
 
-export function finalizeRustDeferredCheckedCall(
+export interface RustPreparedDeferredCheckedCall {
+  readonly sourceName: string;
+  readonly callback: import("../rust-facts/keys.js").RustCallbackOperationTemplate;
+  readonly template: RustProviderOperationTemplate;
+  readonly parameterCarriers: readonly TargetTypeRef[];
+  readonly resultCarrier: TargetTypeRef;
+}
+
+export function prepareRustDeferredCheckedCall(
   request: RustCheckedCallSelectionInput,
   deferred: Extract<
     RustCheckedCallSelectionResult,
@@ -659,7 +667,7 @@ export function finalizeRustDeferredCheckedCall(
     argument: Node,
     expected: TargetTypeRef | undefined,
   ) => TargetTypeRef | undefined,
-): RustPolicySelection<RustCheckedCallSelectionResult> {
+): RustPolicySelection<RustPreparedDeferredCheckedCall> {
   const arguments_ = request.arguments;
   if (arguments_.length !== deferred.parameterCarriers.length) {
     return rejectSelectedOperation(
@@ -670,8 +678,11 @@ export function finalizeRustDeferredCheckedCall(
     );
   }
   const actual: (TargetTypeRef | undefined)[] = new Array(arguments_.length);
-  if (deferred.callbackShape === "reduce") {
-    const accumulatorArgument = arguments_[1];
+  if (deferred.callback.shape === "reduce") {
+    const accumulatorIndex = deferred.callback.accumulatorArgumentIndex;
+    const accumulatorArgument = accumulatorIndex === undefined
+      ? undefined
+      : arguments_[accumulatorIndex];
     if (accumulatorArgument === undefined) {
       return rejectSelectedOperation(
         request.call,
@@ -680,7 +691,9 @@ export function finalizeRustDeferredCheckedCall(
         "Selected reduce call has no exact accumulator source argument.",
       );
     }
-    const accumulatorExpectation = deferred.parameterCarriers[1];
+    const accumulatorExpectation = accumulatorIndex === undefined
+      ? undefined
+      : deferred.parameterCarriers[accumulatorIndex];
     const accumulator = resolveArgument(
       accumulatorArgument,
       accumulatorExpectation,
@@ -693,9 +706,9 @@ export function finalizeRustDeferredCheckedCall(
         "Selected reduce call has no closed target carrier for its exact accumulator argument.",
       );
     }
-    actual[1] = accumulator;
-    const callbackArgument = arguments_[0];
-    const callbackTemplate = deferred.parameterCarriers[0];
+    actual[accumulatorIndex!] = accumulator;
+    const callbackArgument = arguments_[deferred.callback.sourceArgumentIndex];
+    const callbackTemplate = deferred.parameterCarriers[deferred.callback.sourceArgumentIndex];
     if (callbackArgument === undefined || callbackTemplate === undefined) {
       return rejectSelectedOperation(
         request.call,
@@ -704,7 +717,7 @@ export function finalizeRustDeferredCheckedCall(
         "Selected reduce call has no exact callback argument or callback target template.",
       );
     }
-    actual[0] = resolveArgument(
+    actual[deferred.callback.sourceArgumentIndex] = resolveArgument(
       callbackArgument,
       replaceRustInferCarrier(callbackTemplate, accumulator),
     );
@@ -727,7 +740,7 @@ export function finalizeRustDeferredCheckedCall(
   const finalized = finalizeJsCallbackOperation({
     fact: deferred.template,
     parameterCarriers: deferred.parameterCarriers,
-    callbackShape: deferred.callbackShape,
+    callback: deferred.callback,
   }, actual as TargetTypeRef[]);
   if (finalized?.fact.kind !== "provider-operation") {
     return rejectSelectedOperation(
@@ -737,13 +750,59 @@ export function finalizeRustDeferredCheckedCall(
       `Selected JavaScript call '${deferred.sourceName}' has callback argument carriers incompatible with its exact target operation row.`,
     );
   }
-  return acceptSelectedCall(
+  const parameterCarriers = finalized.parameterCarriers;
+  if (parameterCarriers === undefined || parameterCarriers.some((carrier) => carrier === undefined)) {
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_SELECTED_CALLBACK_PARAMETER_CARRIER_MISSING",
+      `Selected JavaScript call '${deferred.sourceName}' did not finalize every callback parameter carrier.`,
+    );
+  }
+  const optionalResult = selectRustOptionalCallResult(
     request,
-    finalized.fact,
-    finalized.parameterCarriers,
+    finalized.fact.resultCarrier,
     context,
     options,
-    { sourceName: deferred.sourceName },
+  );
+  if (optionalResult.kind === "rejected") {
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_OPTIONAL_CALL_CONTRACT_INVALID",
+      optionalResult.message,
+    );
+  }
+  return acceptRustPolicy({
+    sourceName: deferred.sourceName,
+    callback: deferred.callback,
+    template: finalized.fact,
+    parameterCarriers: parameterCarriers as readonly TargetTypeRef[],
+    resultCarrier: optionalResult.resultCarrier,
+  });
+}
+
+export function finalizeRustPreparedCheckedCall(
+  request: RustCheckedCallSelectionInput,
+  prepared: RustPreparedDeferredCheckedCall,
+  callbackFallible: boolean,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const template = callbackFallible
+    ? {
+        ...prepared.template,
+        target: prepared.callback.fallibleTarget,
+        isFallible: true,
+      }
+    : prepared.template;
+  return acceptSelectedCall(
+    request,
+    template,
+    prepared.parameterCarriers,
+    context,
+    options,
+    { sourceName: prepared.sourceName },
   );
 }
 
