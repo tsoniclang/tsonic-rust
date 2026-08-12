@@ -1525,7 +1525,7 @@ function printRustExprFitted(
           chain,
           depth,
           column,
-          true,
+          rustMethodChainBreaksReceiverWhenExpanded(chain),
           methodChainContinuationIndent,
         );
       }
@@ -2154,10 +2154,10 @@ function printFittedMethodChain(
         : appendToLastLine(rendered, `.${step.name}`);
       continue;
     }
-    const method = printFittedCall(
+    const inlineMethod = printFittedCall(
       `.${step.name}`,
       step.args,
-      depth + 1,
+      depth,
       selectedContinuationIndent.length + 1,
       false,
       false,
@@ -2165,7 +2165,18 @@ function printFittedMethodChain(
     );
     const inlineFirstMethod = !breakBeforeFirstMethod && !emittedCall &&
       !rendered.includes("\n") &&
-      lastLineLength(rendered) + firstLine(method).length <= rustInlineFieldReceiverWidth;
+      lastLineLength(rendered) + firstLine(inlineMethod).length <= rustInlineFieldReceiverWidth;
+    const method = inlineFirstMethod
+      ? inlineMethod
+      : printFittedCall(
+          `.${step.name}`,
+          step.args,
+          depth + 1,
+          selectedContinuationIndent.length + 1,
+          false,
+          false,
+          depth,
+        );
     rendered = inlineFirstMethod
       ? appendToLastLine(rendered, method)
       : `${rendered}\n${selectedContinuationIndent}${method}`;

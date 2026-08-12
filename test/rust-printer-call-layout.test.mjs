@@ -41,6 +41,72 @@ test("fitting method-call arguments remain on one rustfmt line", () => {
   );
 });
 
+test("single projection calls keep a short receiver attached when closure arguments expand", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "projected",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "pair" },
+            method: "project_member",
+            args: [
+              { kind: "str-literal", value: "stable.member.identity" },
+              {
+                kind: "closure",
+                params: [{ name: "owner", byRefCopy: false }],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "field", receiver: { kind: "path", path: "owner" }, name: "state" },
+                  method: "with",
+                  args: [{
+                    kind: "closure",
+                    params: [{ name: "state", byRefCopy: false }],
+                    body: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
+                  }],
+                },
+              },
+              {
+                kind: "closure",
+                params: [
+                  { name: "owner", byRefCopy: false },
+                  { name: "value", byRefCopy: false },
+                ],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "field", receiver: { kind: "path", path: "owner" }, name: "state" },
+                  method: "with_mut",
+                  args: [{
+                    kind: "closure",
+                    params: [{ name: "state", byRefCopy: false }],
+                    body: {
+                      kind: "assignment",
+                      target: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
+                      value: { kind: "path", path: "value" },
+                    },
+                  }],
+                },
+              },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /let projected = pair\.project_member\(\n/u);
+  assert.match(source, /pair\.project_member\(\n {8}"stable\.member\.identity",/u);
+  assert.doesNotMatch(source, /let projected = pair\n\s+\.project_member/u);
+});
+
 test("method chains inside expanded call comparisons use argument indentation", () => {
   const source = printRustSourceFile({
     headerComment,
