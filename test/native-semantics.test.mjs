@@ -750,23 +750,62 @@ export function is_off(mode: Mode): boolean {
   assert.match(text, /mode == Mode::Off/u);
 });
 
-test("discriminated object unions fail closed: they require narrowing facts", () => {
+test("discriminated object unions lower to native enums and preserve narrowed behavior", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "discriminated_union_proof" } },
     files: {
       "index.ts": `
-export type Shape =
-  | { kind: "circle"; radius: number }
-  | { kind: "square"; size: number };
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
 
-export function make(): Shape {
-  return { kind: "circle", radius: 1 };
+export type Shape =
+  | { kind: "circle"; radius: int32 }
+  | { kind: "square"; size: int32 };
+
+export function circle(radius: int32): Shape {
+  return { kind: "circle", radius };
+}
+
+export function square(size: int32): Shape {
+  return { kind: "square", size };
+}
+
+export function area(shape: Shape): int32 {
+  if (shape.kind === "circle") {
+    return shape.radius * 3;
+  }
+  return shape.size * shape.size;
+}
+
+export function grow(shape: Shape): int32 {
+  if (shape.kind === "circle") {
+    shape.radius += 2;
+    const previous = shape.radius++;
+    return previous * 10 + shape.radius;
+  }
+  shape.size = shape.size + 1;
+  return ++shape.size;
+}
+
+export function main(): void {
+  const circleShape = circle(4);
+  const squareShape = square(5);
+  check(grow(circleShape) === 67);
+  check(grow(squareShape) === 7);
+  check(area(circleShape) === 21);
+  check(area(squareShape) === 49);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub enum Shape/u);
+  assert.match(text, /match &shape/u);
+  const run = validateGeneratedProject("discriminated-union-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
 });
 
 test("static class methods lower to associated functions", () => {

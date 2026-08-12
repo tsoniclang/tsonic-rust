@@ -47,6 +47,7 @@ import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
   Node_Operand,
+  ObjectLiteralProperty_Value,
   TemplateExpression_Head,
   TemplateExpression_TemplateSpans,
   TemplateSpan_Expression,
@@ -93,7 +94,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -104,9 +105,12 @@ import {
 } from "./typed-locations.js";
 import {
   createRustProjectObject,
+  createRustStructuralObject,
   mutateRustProjectObjectField,
+  mutateRustStructuralObjectField,
   readRustProjectDispatchedField,
   readRustProjectObjectField,
+  readRustStructuralObjectField,
   rustProjectObjectDispatchField,
   writeRustProjectDispatchedField,
 } from "./project-objects.js";
@@ -133,6 +137,9 @@ import {
 import {
   tryPlanRustNativePointerOperation,
 } from "./expression-native-pointers.js";
+import {
+  planRustSourceUnionFieldProjection,
+} from "./source-union-projection.js";
 
 export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
@@ -1546,15 +1553,25 @@ function planRustUpdateExpression(
   const returnsPrevious = context.input.ast.kindName(expression) === KindPostfixUnaryExpression;
   const sourceField = findRustUpdateProjectField(operand, context);
   if (sourceField !== undefined) {
-    return planRustProjectFieldUpdate(
-      operand,
-      sourceField.expression,
-      sourceField.fact,
-      fact,
-      step,
-      returnsPrevious,
-      context,
-    );
+    return sourceField.fact.kind === "source-union-field"
+      ? planRustSourceUnionFieldUpdate(
+          operand,
+          sourceField.expression,
+          sourceField.fact,
+          fact,
+          step,
+          returnsPrevious,
+          context,
+        )
+      : planRustSourceFieldUpdate(
+          operand,
+          sourceField.expression,
+          sourceField.fact,
+          fact,
+          step,
+          returnsPrevious,
+          context,
+        );
   }
   const promoted = planRustPromotedStorageLocation(
     operand,
@@ -1590,7 +1607,87 @@ function planRustUpdateExpression(
   );
 }
 
-function planRustProjectFieldUpdate(
+function planRustSourceUnionFieldUpdate(
+  operand: Node,
+  fieldExpression: Node,
+  field: Extract<RustTargetOperationFact, { readonly kind: "source-union-field" }>,
+  update: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>,
+  step: RustExpr,
+  returnsPrevious: boolean,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (!sourceUnionFieldSelectedOperationMatches(fieldExpression, field, context)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, fieldExpression),
+      "rust.backend.source-union-field-selected-evidence",
+      "Source-union field update conflicts with the TSTS-selected property fact.",
+    ));
+    return undefined;
+  }
+  const receiverNode = Node_Expression(context.input.ast, fieldExpression);
+  const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  if (receiver === undefined || context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(context.syntheticNames, "union_update_receiver");
+  const projection = planRustUpdateProjectionArguments(operand, fieldExpression, context);
+  if (projection === undefined) {
+    return undefined;
+  }
+  const projected = planRustSourceUnionFieldProjection(
+    fieldExpression,
+    { kind: "path", path: receiverName },
+    field,
+    context,
+    (payload, selectedField) => {
+      const overrides = new Map(context.expressionOverrides ?? []);
+      for (const override of projection.overrides) {
+        overrides.set(override.node, override.value);
+      }
+      const mutation = (selectedField.storage === "project-object"
+        ? mutateRustProjectObjectField
+        : mutateRustStructuralObjectField)(
+        payload,
+        selectedField.storageIndex,
+        (storage) => {
+          overrides.set(fieldExpression, {
+            expression: storage,
+            carrier: field.resultCarrier,
+            valueForm: "value",
+          });
+          const target = operand === fieldExpression
+            ? storage
+            : planRustDirectUpdateTarget(operand, {
+                ...context,
+                expressionOverrides: overrides,
+              }, projection.inputOverrides);
+          return target === undefined
+            ? undefined
+            : planRustBorrowedUpdateLocation(
+                target,
+                update,
+                step,
+                returnsPrevious,
+                context,
+              );
+        },
+      );
+      return mutation;
+    },
+  );
+  return projected === undefined
+    ? undefined
+    : {
+        kind: "block",
+        bindings: [
+          { name: receiverName, value: receiver },
+          ...projection.bindings,
+        ],
+        value: projected,
+      };
+}
+
+function planRustSourceFieldUpdate(
   operand: Node,
   fieldExpression: Node,
   field: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>,
@@ -1627,7 +1724,9 @@ function planRustProjectFieldUpdate(
     for (const override of projection.overrides) {
       overrides.set(override.node, override.value);
     }
-    const mutation = mutateRustProjectObjectField(
+    const mutation = (field.storage === "project-object"
+      ? mutateRustProjectObjectField
+      : mutateRustStructuralObjectField)(
       receiverPath,
       field.storageIndex,
       (storage) => {
@@ -1729,12 +1828,15 @@ function findRustUpdateProjectField(
   context: RustPlanContext,
 ): {
   readonly expression: Node;
-  readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
+  readonly fact: Extract<
+    RustTargetOperationFact,
+    { readonly kind: "source-field" | "source-union-field" }
+  >;
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
     const fact = context.input.facts.getFact(current, rustTargetOperationFactKey);
-    if (fact?.kind === "source-field") {
+    if (fact?.kind === "source-field" || fact?.kind === "source-union-field") {
       return { expression: current, fact };
     }
     const kind = context.input.ast.kindName(current);
@@ -2284,14 +2386,10 @@ export function applyRustValueConversion(
   const source = contract.sourceMode === "ref"
     ? applyRustArgumentMode(context, nonConsumingSource, "ref", node)
     : nonConsumingSource;
-  const converted: RustExpr = contract.lowering === "identity"
-    ? source
-    : contract.lowering === "call"
-      ? (() => {
-        registerAliasFromPath(context, contract.path);
-        return { kind: "call", path: contract.path, args: [source] } as const;
-      })()
-      : { kind: "numeric-cast", expression: source, target: contract.targetType };
+  const converted = lowerRustValueConversion(contract, source, context, node);
+  if (converted === undefined) {
+    return undefined;
+  }
   if (!contract.fallible) {
     return converted;
   }
@@ -2304,6 +2402,43 @@ export function applyRustValueConversion(
     return undefined;
   }
   return { kind: "try", expr: converted };
+}
+
+function lowerRustValueConversion(
+  contract: import("../../source/rust-facts/value-conversions.js").RustValueConversionContract,
+  source: RustExpr,
+  context: RustPlanContext,
+  node: Node | undefined,
+): RustExpr | undefined {
+  switch (contract.lowering) {
+    case "identity":
+      return source;
+    case "call":
+      registerAliasFromPath(context, contract.path);
+      return { kind: "call", path: contract.path, args: [source] };
+    case "numeric-cast":
+      return { kind: "numeric-cast", expression: source, target: contract.targetType };
+    case "source-union-variant": {
+      const union = rustSourceUnionCarrierValue(contract.target);
+      const typePath = union === undefined ? undefined : sourceTypePath(context, union);
+      if (union === undefined || typePath === undefined ||
+        union.variants.filter((variant) =>
+          variant.name === contract.variantName &&
+          rustTargetTypeRefEquals(variant.carrier, contract.source)).length !== 1) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node ?? context.sourceFile),
+          "rust.backend.source-union-conversion",
+          "Source-union conversion has no exact emitted variant contract.",
+        ));
+        return undefined;
+      }
+      return {
+        kind: "call",
+        path: `${typePath}::${contract.variantName}`,
+        args: [source],
+      };
+    }
+  }
 }
 
 function providerConstantExpression(argument: RustProviderConstantArgument): RustExpr {
@@ -3891,7 +4026,9 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     if (fact.dispatch === undefined) {
-      return readRustProjectObjectField(receiver, fact.storageIndex, fact.resultCarrier);
+      return (fact.storage === "project-object"
+        ? readRustProjectObjectField
+        : readRustStructuralObjectField)(receiver, fact.storageIndex, fact.resultCarrier);
     }
     if (context.syntheticNames === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -3913,6 +4050,9 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
         fact.dispatch.read,
       ),
     };
+  }
+  if (fact !== undefined && fact.kind === "source-union-field") {
+    return planRustSourceUnionFieldRead(node, fact, context);
   }
   if (fact !== undefined && fact.kind === "source-enum-member") {
     const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
@@ -3995,9 +4135,61 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
   return finishProviderOperationExpression(context, fact, planned, node);
 }
 
+function planRustSourceUnionFieldRead(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-union-field" }>,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
+  if (resultCarrier === undefined ||
+    !requireExpressionCarrier(node, resultCarrier, context, "rust.backend.source-union-field-carrier")) {
+    return undefined;
+  }
+  if (!selectedOperationMatches(
+    context.input.facts.getSelectedTargetProperty(node),
+    fact.operationId,
+    "property",
+    resultCarrier,
+  )) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-union-field-selected-evidence",
+      "Source-union field fact conflicts with the TSTS-selected property fact.",
+    ));
+    return undefined;
+  }
+  const receiverNode = Node_Expression(context.input.ast, node);
+  const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  if (receiverNode === undefined || receiver === undefined) {
+    return undefined;
+  }
+  return planRustSourceUnionFieldProjection(
+    node,
+    planRustNonConsumingValue(receiverNode, receiver, context),
+    fact,
+    context,
+    (payload, field) => (field.storage === "project-object"
+      ? readRustProjectObjectField
+      : readRustStructuralObjectField)(payload, field.storageIndex, fact.resultCarrier),
+  );
+}
+
 export function sourceFieldSelectedOperationMatches(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>,
+  context: RustPlanContext,
+): boolean {
+  return selectedOperationMatches(
+    context.input.facts.getSelectedTargetProperty(node),
+    fact.operationId,
+    "property",
+    fact.resultCarrier,
+  );
+}
+
+export function sourceUnionFieldSelectedOperationMatches(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-union-field" }>,
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
@@ -4245,9 +4437,11 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
   if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.record-literal-carrier")) {
     return undefined;
   }
-  const value = rustSourceTypeCarrierValue(fact.resultCarrier);
+  const value = fact.storage === "project-object"
+    ? rustSourceTypeCarrierValue(fact.resultCarrier)
+    : undefined;
   const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-  if (typePath === undefined) {
+  if (fact.storage === "project-object" && typePath === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.record",
@@ -4258,7 +4452,9 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
   const { ast } = context.input;
   const fieldsBySourceName = new Map<string, RustExpr>();
   for (const property of ast.properties(node)) {
-    if (property === undefined || ast.kindName(property) !== "KindPropertyAssignment") {
+    const kind = property === undefined ? undefined : ast.kindName(property);
+    if (property === undefined ||
+      (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment")) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, property ?? node),
         "rust.backend.record-fields",
@@ -4268,7 +4464,7 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     }
     const nameNode = ast.name(property);
     const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
-    const initializer = Node_Initializer(context.input.ast, property);
+    const initializer = ObjectLiteralProperty_Value(context.input.ast, property);
     const planned = initializer === undefined ? undefined : planExpression(initializer, context);
     if (sourceName.length === 0 || fieldsBySourceName.has(sourceName) || planned === undefined) {
       return undefined;
@@ -4295,5 +4491,7 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     values.push(value);
   }
   context.usedAliases?.add("rt");
-  return createRustProjectObject(typePath, values);
+  return fact.storage === "project-object"
+    ? createRustProjectObject(typePath!, values)
+    : createRustStructuralObject(values);
 }

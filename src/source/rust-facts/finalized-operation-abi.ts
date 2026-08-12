@@ -472,7 +472,13 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
       typeof value.conversion.source === "string" && typeof value.conversion.target === "string") ||
     (value.conversion.kind === "raw-pointer-mut-to-const" &&
       hasExactKeys(value.conversion, ["kind", "pointee"]) &&
-      isRustTargetTypeRef(value.conversion.pointee))) &&
+      isRustTargetTypeRef(value.conversion.pointee)) ||
+    (value.conversion.kind === "source-union-variant" &&
+      hasExactKeys(value.conversion, ["kind", "source", "target", "variantName"]) &&
+      isRustTargetTypeRef(value.conversion.source) &&
+      isRustTargetTypeRef(value.conversion.target) &&
+      typeof value.conversion.variantName === "string" &&
+      value.conversion.variantName.length > 0)) &&
     rustValueConversionContract(value.conversion as RustValueConversion) !== undefined &&
     typeof value.fallible === "boolean";
 }

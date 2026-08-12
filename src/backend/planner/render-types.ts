@@ -1,7 +1,11 @@
 import type { TargetTypeRef } from "../../policy/types.js";
 import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
-import { rustSourceTypeCarrierValue } from "../../source/rust-target-types.js";
+import {
+  rustSourceTypeCarrierValue,
+  rustSourceUnionCarrierValue,
+  rustStructuralObjectCarrierValue,
+} from "../../source/rust-target-types.js";
 import {
   rustBigIntTargetId,
   rustJsArrayTargetId,
@@ -128,6 +132,18 @@ export function rustTypeFromCarrier(
           kind: "named",
           path: namedType.path,
           ...(typeArguments.length === 0 ? {} : { typeArguments: typeArguments as RustType[] }),
+      };
+  }
+  const structuralObject = rustStructuralObjectCarrierValue(carrier);
+  if (structuralObject !== undefined) {
+    const fields = structuralObject.fields.map((field) =>
+      rustTypeFromCarrier(field.type, resolveSourceTypePath));
+    return fields.some((field) => field === undefined)
+      ? undefined
+      : {
+          kind: "named",
+          path: "rt::ObjectHandle",
+          typeArguments: [{ kind: "tuple", elements: fields as RustType[] }],
         };
   }
   if (carrier.kind === "array") {
@@ -159,6 +175,11 @@ export function rustTypeFromCarrier(
               ? {}
               : { typeArguments: typeArguments as RustType[] }),
           };
+    }
+    const union = rustSourceUnionCarrierValue(carrier);
+    if (union !== undefined) {
+      const path = resolveSourceTypePath(union);
+      return path === undefined ? undefined : { kind: "named", path };
     }
   }
   return undefined;

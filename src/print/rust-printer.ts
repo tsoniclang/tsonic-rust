@@ -63,7 +63,15 @@ export function printRustItem(item: RustItem): string {
     case "enum": {
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
       const variants = item.variants
-        .map((variant) => `    ${variant.name}${variant.discriminant === undefined ? "" : ` = ${variant.discriminant}`},`)
+        .map((variant) => {
+          const fields = variant.fields === undefined
+            ? ""
+            : `(${variant.fields.map(printRustType).join(", ")})`;
+          const discriminant = variant.discriminant === undefined
+            ? ""
+            : ` = ${variant.discriminant}`;
+          return `    ${variant.name}${fields}${discriminant},`;
+        })
         .join("\n");
       return `${derives}${printRustVisibility(item.visibility)}enum ${item.name} {\n${variants}\n}`;
     }
@@ -951,7 +959,7 @@ function expressionNeedsParentheses(
   parent: RustPrecedence,
   isRightSide: boolean,
 ): boolean {
-  if (isRightSide && expressionIsRightHandBlock(expression)) {
+  if (isRightSide && expression.kind !== "match" && expressionIsRightHandBlock(expression)) {
     return false;
   }
   const own = expressionPrecedence(expression);
@@ -1120,6 +1128,9 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "return-expression": {
       return expression.expr === undefined ? "return" : `return ${printRustExpr(expression.expr)}`;
+    }
+    case "unreachable": {
+      return `unreachable!("${escapeRustString(expression.message)}")`;
     }
     case "tuple-literal": {
       const elements = expression.elements.map(printRustExpr).join(", ");
@@ -1658,6 +1669,41 @@ function printRustExprFitted(
         false,
         grammarPosition === "statement" && expressionIsStatementBlockOperand(expression.left),
       );
+      if (expression.right.kind === "match") {
+        const separator = ` ${expression.operator} `;
+        const renderedRight = printRustExprFitted(
+          expression.right,
+          depth,
+          lastLineLength(left) + separator.length,
+        );
+        const inline = appendToLastLine(
+          left,
+          `${separator}${printFittedBinaryOperand(
+            expression.right,
+            renderedRight,
+            expression.operator,
+            true,
+          )}`,
+        );
+        if (expression.left.kind !== "binary" && renderedFits(inline, column)) {
+          return inline;
+        }
+        const continuationIndent = indentText(depth + 1);
+        const continuedRight = printFittedBinaryOperand(
+          expression.right,
+          printRustExprFitted(
+            expression.right,
+            depth + 1,
+            continuationIndent.length + expression.operator.length + 1,
+          ),
+          expression.operator,
+          true,
+        );
+        const continuation = `${continuationIndent}${expression.operator} ${firstLine(continuedRight)}`;
+        return remainingLines(continuedRight).length === 0
+          ? `${left}\n${continuation}`
+          : `${left}\n${continuation}\n${remainingLines(continuedRight).join("\n")}`;
+      }
       if (!left.includes("\n") && expressionIsRightHandBlock(expression.right)) {
         const separator = ` ${expression.operator} `;
         const renderedRight = printRustExprFitted(

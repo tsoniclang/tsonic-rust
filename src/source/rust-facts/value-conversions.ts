@@ -12,6 +12,7 @@ import {
   rustIsizeTargetType,
   rustJsValueTargetType,
   rustPrimitiveTypeName,
+  rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUsizeTargetType,
@@ -50,6 +51,10 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
   | {
       readonly lowering: "identity";
     }
+  | {
+      readonly lowering: "source-union-variant";
+      readonly variantName: string;
+    }
 );
 
 function conversion(id: RustValueConversionId): RustValueConversion {
@@ -76,6 +81,24 @@ export const rustJsValueCloneConversion = conversion("js-value-clone");
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "source-union-variant") {
+    const union = rustSourceUnionCarrierValue(value.target);
+    const matches = union?.variants.filter((variant) =>
+      variant.name === value.variantName &&
+      rustTargetTypeRefEquals(variant.carrier, value.source)) ?? [];
+    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+        matches.length === 1
+      ? {
+          category: "exact",
+          lowering: "source-union-variant",
+          sourceMode: "value",
+          source: value.source,
+          target: value.target,
+          variantName: value.variantName,
+          fallible: false,
+        }
+      : undefined;
+  }
   if (value.kind === "raw-pointer-mut-to-const") {
     if (!isRustTargetTypeRef(value.pointee)) {
       return undefined;
@@ -172,13 +195,26 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
     ? value.id
     : value.kind === "numeric-promotion"
       ? `numeric-promotion.${value.source}.${value.target}`
-      : `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`;
+      : value.kind === "raw-pointer-mut-to-const"
+        ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
+        : `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
 }
 
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustValueConversion | undefined {
+  const targetUnion = rustSourceUnionCarrierValue(target);
+  const matchingUnionVariants = targetUnion?.variants.filter((variant) =>
+    rustTargetTypeRefEquals(variant.carrier, source)) ?? [];
+  if (matchingUnionVariants.length === 1) {
+    return Object.freeze({
+      kind: "source-union-variant",
+      source,
+      target,
+      variantName: matchingUnionVariants[0]!.name,
+    });
+  }
   if (source.kind === "pointer" && target.kind === "pointer" &&
     source.mutability === "mut" && target.mutability === "const" &&
     rustTargetTypeRefEquals(source.pointee, target.pointee)) {

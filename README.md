@@ -30,7 +30,8 @@ Native semantics: classes to struct + impl (constructor lane, methods with
 fact-selected `&self`/`&mut self`, static methods as associated functions),
 enums with TSTS-evaluated discriminants, interfaces as record structs with
 contextual object literals, closed string-literal union aliases as
-unit-variant enums, tuples with constant indexing, `readonly T[]` as `&[T]`
+unit-variant enums, discriminated object unions as payload enums with
+TSTS-selected narrowing, tuples with constant indexing, `readonly T[]` as `&[T]`
 and mutable array parameters as `&mut [T]`, null-only unions as `Option<T>`
 with `??` coalescing, passthrough generic functions, Rust-flavoured
 `borrow`/`borrowMut`/`move` flow aliases validated against finalized
@@ -130,9 +131,7 @@ the inclusion of generated source.
 
 ## Explicitly unsupported (fail-closed, classified)
 
-Each unsupported lane requires a contract that does not exist: discriminated
-object unions (narrowing facts — see the exact repro pinned in
-`test/r8-completion.test.mjs`), and RegExp constructs outside the
+Each unsupported lane requires a contract that does not exist. RegExp constructs outside the
 oracle-proven subset (constant patterns with classes, quantifiers,
 anchors, alternation, and groups under flags i/g/m, proven against 217
 committed Node oracle vectors plus a 157-entry engine-generated

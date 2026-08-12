@@ -84,6 +84,12 @@ export type RustValueConversion =
   | {
       readonly kind: "raw-pointer-mut-to-const";
       readonly pointee: TargetTypeRef;
+    }
+  | {
+      readonly kind: "source-union-variant";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+      readonly variantName: string;
     };
 
 export type RustProviderOperationForm =
@@ -370,6 +376,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "source-field";
       readonly operationId: string;
+      readonly storage: "project-object" | "object-handle";
       readonly storageIndex: number;
       readonly resultCarrier: TargetTypeRef;
       readonly dispatch?: {
@@ -377,6 +384,21 @@ export type RustTargetOperationFact =
         readonly write: string;
         readonly ownerCarrier: TargetTypeRef;
       };
+    }
+  | {
+      readonly kind: "source-union-field";
+      readonly operationId: string;
+      readonly unionCarrier: TargetTypeRef;
+      readonly selectedVariantIndexes: readonly number[];
+      readonly variants: readonly {
+        readonly name: string;
+        readonly carrier: TargetTypeRef;
+        readonly field?: {
+          readonly storage: "project-object" | "object-handle";
+          readonly storageIndex: number;
+        };
+      }[];
+      readonly resultCarrier: TargetTypeRef;
     }
   | {
       // Exact TSTS-selected project-source callable. The source lifecycle
@@ -419,6 +441,7 @@ export type RustTargetOperationFact =
       // carriers come from the finalized shape declaration.
       readonly kind: "record-literal";
       readonly operationId: string;
+      readonly storage: "project-object" | "object-handle";
       readonly resultCarrier: TargetTypeRef;
       readonly fields: readonly {
         readonly sourceName: string;
@@ -553,6 +576,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "void-expression":
     case "array-literal":
     case "source-field":
+    case "source-union-field":
     case "source-call":
     case "source-enum-member":
     case "record-literal":
@@ -771,8 +795,25 @@ export const rustMutatedReferentFactKey: RustPlanKey<{ readonly mutated: true }>
 export const rustSelfModeFactKey: RustPlanKey<{ readonly mode: "ref" | "mut-ref" }> =
   defineRustPlanKey("selfMode", (left, right) => left.mode === right.mode);
 
-export const rustUnionVariantsFactKey: RustPlanKey<{ readonly variants: readonly { readonly name: string; readonly literal: string }[] }> =
-  defineRustPlanKey("unionVariants", closedMetadataEquals);
+export type RustUnionDeclarationFact =
+  | {
+      readonly kind: "string-literal";
+      readonly variants: readonly {
+        readonly name: string;
+        readonly literal: string;
+      }[];
+    }
+  | {
+      readonly kind: "runtime";
+      readonly variants: readonly {
+        readonly name: string;
+        readonly carrier: TargetTypeRef;
+      }[];
+    }
+  | { readonly kind: "erased" };
+
+export const rustUnionDeclarationFactKey: RustPlanKey<RustUnionDeclarationFact> =
+  defineRustPlanKey("unionDeclaration", closedMetadataEquals);
 
 export interface RustAsyncFunctionFact {
   readonly isAsync: true;

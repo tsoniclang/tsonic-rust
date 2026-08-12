@@ -24,7 +24,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustUnionVariantsFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustUnionDeclarationFactKey } from "../../source/rust-facts/keys.js";
 import { applyFallibleShape, applyRustTailShape, rustBlockTerminates } from "./functions.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
@@ -797,14 +797,29 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
 export function planUnionAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  const fact = context.input.facts.getFact(node, rustUnionVariantsFactKey);
+  const fact = context.input.facts.getFact(node, rustUnionDeclarationFactKey);
   const nameNode = Node_Name(ast, node);
   const aliasName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.union",
-      "Type aliases lower only as closed string-literal unions with finalized variant facts.",
+      "Type aliases require one finalized Rust alias representation.",
+    ));
+    return undefined;
+  }
+  if (fact.kind === "erased") {
+    return [];
+  }
+  const runtimeVariantTypes = fact.kind === "runtime"
+    ? fact.variants.map((variant) =>
+        rustTypeFromCarrierInContext(variant.carrier, context))
+    : [];
+  if (runtimeVariantTypes.some((type) => type === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.union-variant-carrier",
+      "Runtime union variants require renderable finalized Rust carriers.",
     ));
     return undefined;
   }
@@ -812,8 +827,15 @@ export function planUnionAliasDeclaration(node: Node, context: RustPlanContext):
     kind: "enum",
     name: aliasName,
     visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
-    derives: ["Clone", "Copy", "Debug", "PartialEq"],
-    variants: fact.variants.map((variant) => ({ name: variant.name })),
+    derives: fact.kind === "string-literal"
+      ? ["Clone", "Copy", "Debug", "PartialEq"]
+      : ["Clone", "Debug", "PartialEq"],
+    variants: fact.variants.map((variant, index) => ({
+      name: variant.name,
+      ...(fact.kind === "runtime"
+        ? { fields: [runtimeVariantTypes[index]!] }
+        : {}),
+    })),
   }];
 }
 

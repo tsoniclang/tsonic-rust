@@ -61,7 +61,8 @@ export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFac
 }
 
 export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationFact | undefined): boolean {
-  return fact?.kind === "source-field" || rustTargetOperationIsDirectLocation(fact);
+  return fact?.kind === "source-field" || fact?.kind === "source-union-field" ||
+    rustTargetOperationIsDirectLocation(fact);
 }
 
 export function rustTargetOperationIsFallible(fact: RustTargetOperationFact | undefined): boolean {

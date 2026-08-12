@@ -89,6 +89,7 @@ import {
   providerSelectedCallMatches,
   requireProviderArgumentPassingFacts,
   sourceFieldSelectedOperationMatches,
+  sourceUnionFieldSelectedOperationMatches,
 } from "./expressions.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName } from "./plan-context.js";
 import type { RustCompletionBoundary, RustControlTarget, RustLoopTarget, RustPlanContext } from "./plan-context.js";
@@ -106,14 +107,17 @@ import { planRustReturnExit } from "./completion-exits.js";
 import {
   readRustProjectDispatchedField,
   readRustProjectObjectField,
+  readRustStructuralObjectField,
   writeRustProjectDispatchedField,
   writeRustProjectObjectField,
+  writeRustStructuralObjectField,
 } from "./project-objects.js";
 import {
   isErasedRustSafetyExpressionStatement,
   isRustExplicitUnsafeBlockMarker,
   withExplicitUnsafeContext,
 } from "./explicit-safety.js";
+import { planRustSourceUnionFieldProjection } from "./source-union-projection.js";
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -927,7 +931,8 @@ function planExpressionAsStatement(
           )
           ? planExpression(left, context)
           : undefined;
-      if (target === undefined && sourceField?.kind !== "source-field") {
+      if (target === undefined && sourceField?.kind !== "source-field" &&
+        sourceField?.kind !== "source-union-field") {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment",
@@ -973,6 +978,79 @@ function planExpressionAsStatement(
         ));
         return undefined;
       }
+      if (sourceField?.kind === "source-union-field") {
+        if (!sourceUnionFieldSelectedOperationMatches(left, sourceField, context)) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, left),
+            "rust.backend.source-union-field-selected-evidence",
+            "Source-union field assignment conflicts with the TSTS-selected property fact.",
+          ));
+          return undefined;
+        }
+        const receiverNode = Node_Expression(ast, left);
+        const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+        const value = planExpression(valueNode, context);
+        if (receiver === undefined || value === undefined || context.syntheticNames === undefined) {
+          return undefined;
+        }
+        const syntheticNames = context.syntheticNames;
+        const receiverName = allocateRustSyntheticName(syntheticNames, "union_receiver");
+        const valueName = allocateRustSyntheticName(syntheticNames, "union_value");
+        const selectedValue: RustExpr = { kind: "path", path: valueName };
+        const projected = planRustSourceUnionFieldProjection(
+          left,
+          { kind: "path", path: receiverName },
+          sourceField,
+          context,
+          (payload, field) => {
+            const read = field.storage === "project-object"
+              ? readRustProjectObjectField
+              : readRustStructuralObjectField;
+            const write = field.storage === "project-object"
+              ? writeRustProjectObjectField
+              : writeRustStructuralObjectField;
+            if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+              const currentName = allocateRustSyntheticName(
+                syntheticNames,
+                "union_current",
+              );
+              return {
+                kind: "block",
+                bindings: [{
+                  name: currentName,
+                  value: read(payload, field.storageIndex, fact.resultCarrier),
+                }],
+                value: write(
+                  payload,
+                  field.storageIndex,
+                  "=",
+                  {
+                    kind: "string-concat",
+                    parts: [
+                      { kind: "path", path: currentName },
+                      selectedValue,
+                    ],
+                  },
+                ),
+              };
+            }
+            return write(payload, field.storageIndex, operator, selectedValue);
+          },
+        );
+        return projected === undefined
+          ? undefined
+          : [{
+              kind: "expr",
+              expr: {
+                kind: "block",
+                bindings: [
+                  { name: receiverName, value: receiver },
+                  { name: valueName, value },
+                ],
+                value: projected,
+              },
+            }];
+      }
       if (sourceField?.kind === "source-field") {
         if (!sourceFieldSelectedOperationMatches(left, sourceField, context)) {
           context.diagnostics.push(missingFactDiagnostic(
@@ -1002,7 +1080,9 @@ function planExpressionAsStatement(
           const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
           const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
           const current = sourceField.dispatch === undefined
-            ? readRustProjectObjectField(
+            ? (sourceField.storage === "project-object"
+              ? readRustProjectObjectField
+              : readRustStructuralObjectField)(
                 selectedReceiver,
                 sourceField.storageIndex,
                 fact.resultCarrier,
@@ -1024,7 +1104,9 @@ function planExpressionAsStatement(
                 { name: currentName, value: current },
               ],
               value: sourceField.dispatch === undefined
-                ? writeRustProjectObjectField(
+                ? (sourceField.storage === "project-object"
+                  ? writeRustProjectObjectField
+                  : writeRustStructuralObjectField)(
                     selectedReceiver,
                     sourceField.storageIndex,
                     "=",
@@ -1050,7 +1132,9 @@ function planExpressionAsStatement(
               { name: valueName, value },
             ],
             value: sourceField.dispatch === undefined
-              ? writeRustProjectObjectField(
+              ? (sourceField.storage === "project-object"
+                ? writeRustProjectObjectField
+                : writeRustStructuralObjectField)(
                   { kind: "path", path: receiverName },
                   sourceField.storageIndex,
                   operator,

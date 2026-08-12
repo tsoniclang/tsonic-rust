@@ -252,6 +252,7 @@ test("selected source operation identity is never reconstructed through checker 
     "target-type-resolution.ts|resolveSourcePrimitive|getSymbolDeclarations",
     "target-type-resolution.ts|resolveOwnedSourceProfileTypeName|getSymbolDeclarations",
     "target-type-resolution.ts|resolveProjectSourceCarrier|getSymbolDeclarations",
+    "target-type-resolution.ts|resolveStructuralObjectType|getSymbolDeclarations",
     "target-type-resolution.ts|resolveCallableType|getCallSignaturesOfType",
     "target-type-resolution.ts|resolveCallableType|getReturnTypeOfSignature",
     "target-type-resolution.ts|resolveCallableType|getSignatureDeclaration",

@@ -139,7 +139,10 @@ import {
 import {
   rustSourceSemanticsModules,
 } from "../rust-source-semantics/source-modules.js";
-import type { RustSourceTypeRegistry } from "./source-type-registry.js";
+import type {
+  RustSourceTypeRegistry,
+  RustSourceUnion,
+} from "./source-type-registry.js";
 import type { RustSourceProfileRegistry } from "./source-profile-registry.js";
 import {
   selectedSourceLiteralIsRepresentable,
@@ -2055,6 +2058,16 @@ export function selectRustCheckedPropertyAccess(
     });
   }
 
+  const structuralProperty = selectStructuralSourceProperty(
+    request,
+    selectedReceiverCarrier,
+    context,
+    options,
+  );
+  if (structuralProperty !== undefined) {
+    return structuralProperty;
+  }
+
   if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
     const declaration = request.sourceSelectedDeclaration;
     const memberName = context.ast.text(context.ast.name(declaration));
@@ -2123,6 +2136,7 @@ export function selectRustCheckedPropertyAccess(
       return acceptRustMemberOperation(request, "property", {
         kind: "source-field",
         operationId,
+        storage: "project-object",
         storageIndex: field.storageIndex,
         resultCarrier,
         ...(readSlot === undefined || writeSlot === undefined
@@ -2142,6 +2156,262 @@ export function selectRustCheckedPropertyAccess(
     return acceptDeclarationOperation("property");
   }
   return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_EVIDENCE_MISSING", "Checked property access has no selected provider, source-profile, or project-source declaration evidence.");
+}
+
+function selectStructuralSourceProperty(
+  request: RustCheckedPropertySelectionInput,
+  receiverCarrier: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  if (receiverCarrier === undefined) {
+    return undefined;
+  }
+  const selectedDeclarations = selectedPropertyDeclarations(request, context, options);
+  const sourceUnion = options.sourceTypes.sourceUnionForCarrier(receiverCarrier);
+  if (sourceUnion !== undefined) {
+    if (selectedDeclarations === undefined || selectedDeclarations.length === 0) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SOURCE_UNION_PROPERTY_IDENTITY_MISSING",
+        "Runtime-union property access requires exact selected source declarations.",
+      );
+    }
+    const selectedVariantIndexes = selectedSourceUnionVariantIndexes(
+      request,
+      sourceUnion,
+      context,
+      options,
+    );
+    if (selectedVariantIndexes === undefined || selectedVariantIndexes.length === 0) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SOURCE_UNION_REFINEMENT_MISSING",
+        "Runtime-union property access requires exact TSTS-selected receiver refinement.",
+      );
+    }
+    const selectedIndexes = new Set(selectedVariantIndexes);
+    const fields = sourceUnion.variants.map((variant, index) => {
+      if (!selectedIndexes.has(index)) {
+        return undefined;
+      }
+      const matches = variant.shape?.fields.filter((field) =>
+        field.declarations.some((declaration) => selectedDeclarations.includes(declaration))) ?? [];
+      return matches.length === 1 ? matches[0] : undefined;
+    });
+    if (selectedVariantIndexes.some((index) => fields[index] === undefined)) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SOURCE_UNION_PROPERTY_NOT_TOTAL",
+        "The exact selected source property is not represented by every selected runtime-union arm.",
+      );
+    }
+    const selectedFields = selectedVariantIndexes.map((index) => fields[index]!);
+    const resultCarrier = selectedFields[0]?.resultCarrier;
+    if (resultCarrier === undefined ||
+      selectedFields.some((field) =>
+        !rustTargetTypeRefEquals(field.resultCarrier, resultCarrier))) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SOURCE_UNION_PROPERTY_RESULT_NOT_CLOSED",
+        "The exact selected runtime-union property does not have one closed Rust result carrier.",
+      );
+    }
+    const operationId = sourceDeclarationsOperationId(
+      context,
+      selectedDeclarations,
+      "union-field",
+    );
+    if (operationId === undefined) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SOURCE_UNION_PROPERTY_IDENTITY_MISSING",
+        "Runtime-union property access has no deterministic declaration identity.",
+      );
+    }
+    return acceptRustMemberOperation(request, "property", {
+      kind: "source-union-field",
+      operationId,
+      unionCarrier: receiverCarrier,
+      selectedVariantIndexes,
+      variants: sourceUnion.variants.map((variant, index) => ({
+        name: variant.name,
+        carrier: variant.carrier,
+        ...(fields[index] === undefined
+          ? {}
+          : {
+              field: {
+                storage: variant.shape!.storage,
+                storageIndex: fields[index]!.storageIndex,
+              },
+            }),
+      })),
+      resultCarrier,
+    }, context, options, {
+      sourceExpression: request.expression,
+      sourceReceiver: request.receiver,
+      ...(request.sourceSelectedSymbol === undefined
+        ? {}
+        : { sourceSelectedSymbol: request.sourceSelectedSymbol }),
+      ...(request.sourceSelectedDeclaration === undefined
+        ? {}
+        : { sourceSelectedDeclaration: request.sourceSelectedDeclaration }),
+      sourceResultType: request.sourceResultType,
+    });
+  }
+
+  if (selectedDeclarations === undefined) {
+    return undefined;
+  }
+  const matches = selectedDeclarations
+    .map((declaration) =>
+      options.sourceTypes.structuralFieldForDeclaration(declaration, receiverCarrier))
+    .filter((field): field is NonNullable<typeof field> => field !== undefined);
+  const distinct = matches.filter((field, index) => matches.indexOf(field) === index);
+  if (distinct.length === 0) {
+    return undefined;
+  }
+  if (distinct.length !== 1) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_STRUCTURAL_PROPERTY_AMBIGUOUS",
+      "Selected structural property evidence resolves to more than one Rust storage field.",
+    );
+  }
+  const field = distinct[0]!;
+  const shape = request.sourceReceiverType === undefined
+    ? undefined
+    : options.sourceTypes.structuralObjectForType(request.sourceReceiverType);
+  if (shape === undefined || !rustTargetTypeRefEquals(shape.carrier, receiverCarrier)) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_STRUCTURAL_RECEIVER_NOT_CLOSED",
+      "Selected structural property evidence has no exact Rust receiver shape.",
+    );
+  }
+  const resultCarrier = field.resultCarrier;
+  const operationId = sourceDeclarationsOperationId(context, field.declarations, "field");
+  if (operationId === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_STRUCTURAL_PROPERTY_RESULT_NOT_CLOSED",
+      "Selected structural property evidence has no exact Rust result carrier.",
+    );
+  }
+  return acceptRustMemberOperation(request, "property", {
+    kind: "source-field",
+    operationId,
+    storage: shape.storage,
+    storageIndex: field.storageIndex,
+    resultCarrier,
+  }, context, options, {
+    sourceExpression: request.expression,
+    sourceReceiver: request.receiver,
+    ...(request.sourceSelectedSymbol === undefined
+      ? {}
+      : { sourceSelectedSymbol: request.sourceSelectedSymbol }),
+    ...(request.sourceSelectedDeclaration === undefined
+      ? {}
+      : { sourceSelectedDeclaration: request.sourceSelectedDeclaration }),
+    sourceResultType: request.sourceResultType,
+  });
+}
+
+function selectedPropertyDeclarations(
+  request: RustCheckedPropertySelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): readonly Node[] | undefined {
+  const declarations: Node[] = [];
+  if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
+    declarations.push(request.sourceSelectedDeclaration!);
+  }
+  if (request.sourceSelectedSymbol !== undefined) {
+    const selected = options.sourceTypes.declarationsForSelectedSymbol(
+      request.sourceSelectedSymbol,
+    );
+    if (selected === undefined) {
+      return undefined;
+    }
+    for (const declaration of selected) {
+      if (isProjectSourceDeclaration(context, declaration) && !declarations.includes(declaration)) {
+        declarations.push(declaration);
+      }
+    }
+  }
+  return Object.freeze(declarations);
+}
+
+function selectedSourceUnionVariantIndexes(
+  request: RustCheckedPropertySelectionInput,
+  union: RustSourceUnion,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): readonly number[] | undefined {
+  const all = Object.freeze(union.variants.map((_, index) => index));
+  const selectedReceiverType = request.sourceReceiverType;
+  if (selectedReceiverType !== undefined) {
+    const selectedRefinement = context.source.semantics
+      .forNode(request.receiver)
+      .selectTypeRefinement(union.sourceType, selectedReceiverType);
+    if (selectedRefinement.kind === "exact") {
+      return all;
+    }
+    if (selectedRefinement.kind === "members") {
+      const direct = options.sourceTypes.sourceUnionVariantIndexesForTypes(
+        union.carrier,
+        selectedRefinement.types,
+      );
+      if (direct !== undefined) {
+        return direct;
+      }
+    }
+  }
+  const refinement = context.source.semantics.selectValueTypeRefinement(request.receiver);
+  if (refinement.kind !== "resolved") {
+    return undefined;
+  }
+  if (refinement.refinement.kind === "exact" &&
+    refinement.declaredType === union.sourceType) {
+    return all;
+  }
+  return refinement.refinement.kind === "members"
+    ? options.sourceTypes.sourceUnionVariantIndexesForTypes(
+        union.carrier,
+        refinement.refinement.types,
+      )
+    : undefined;
+}
+
+function sourceDeclarationsOperationId(
+  context: RustOperationPolicyContext,
+  declarations: readonly Node[],
+  kind: "field" | "union-field",
+): string | undefined {
+  if (declarations.length === 0) {
+    return undefined;
+  }
+  const identities = declarations.map((declaration) => {
+    const fileName = context.ast.getFileName(context.ast.getSourceFile(declaration));
+    const start = context.ast.pos(declaration);
+    const end = context.ast.end(declaration);
+    return fileName.length === 0 || start < 0 || end < start
+      ? undefined
+      : `${fileName}:${start}:${end}`;
+  });
+  if (identities.some((identity) => identity === undefined)) {
+    return undefined;
+  }
+  const unique = [...new Set(identities as readonly string[])].sort();
+  return `tsonic.rust.source.${kind}:${JSON.stringify(unique)}`;
 }
 
 export function selectRustCheckedElementAccess(
@@ -2959,6 +3229,7 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     case "fixed-index":
       return "indexer";
     case "source-field":
+    case "source-union-field":
     case "source-enum-member":
       return "property";
     case "iteration":

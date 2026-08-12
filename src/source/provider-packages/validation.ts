@@ -1141,6 +1141,12 @@ function validateValueConversion(
     if (!isRustTargetTypeRef(conversion.pointee)) {
       fail(`${where}.pointee is not a closed Rust target type`);
     }
+  } else if (conversion.kind === "source-union-variant") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target", "variantName"], where, fail);
+    if (!isRustTargetTypeRef(conversion.source) || !isRustTargetTypeRef(conversion.target) ||
+      typeof conversion.variantName !== "string" || conversion.variantName.length === 0) {
+      fail(`${where} is not an exact closed source-union variant conversion`);
+    }
   } else {
     fail(`${where}.kind '${String((conversion as { readonly kind?: unknown }).kind)}' is not supported`);
   }
