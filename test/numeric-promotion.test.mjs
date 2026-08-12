@@ -4,7 +4,10 @@ import {
   rustNumericPromotionConversion,
   rustNumericPromotionKind,
 } from "../dist/source/rust-target-semantics/numeric-promotion.js";
-import { rustValueConversionContract } from "../dist/source/rust-facts/value-conversions.js";
+import {
+  rustValueConversionContract,
+  selectRustSourceValueConversion,
+} from "../dist/source/rust-facts/value-conversions.js";
 import { compileRust } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
@@ -69,6 +72,20 @@ test("numeric promotion conversions carry exact source and target primitive evid
   });
   assert.equal(rustNumericPromotionConversion("float64", "int32"), undefined);
   assert.equal(rustNumericPromotionConversion("bool", "int32"), undefined);
+  assert.deepEqual(
+    selectRustSourceValueConversion(
+      { kind: "source-primitive", name: "int32" },
+      { kind: "source-primitive", name: "int64" },
+    ),
+    { kind: "numeric-promotion", source: "int32", target: "int64" },
+  );
+  assert.equal(
+    selectRustSourceValueConversion(
+      { kind: "source-primitive", name: "float64" },
+      { kind: "source-primitive", name: "float64" },
+    ),
+    undefined,
+  );
 });
 
 test("generated Rust compiles representative mixed numeric operations", { timeout: 300_000 }, () => {

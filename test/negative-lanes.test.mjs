@@ -30,7 +30,11 @@ export function main(): void {
     text,
     /let (__tsonic_module_value_\d+) = 1;[\s\S]*?\.initialize\(\1\)/u,
   );
-  assert.match(text, /\.location\(\)\)\s*\.update_with/u);
+  assert.match(
+    text,
+    /let (__tsonic_location(?:_\d+)?) =[\s\S]*?let (__tsonic_current_\d+) = \1\.load\(\);[\s\S]*?let (__tsonic_value_\d+) = 2;[\s\S]*?\1\.store\(\2 \+ \3\)/u,
+  );
+  assert.doesNotMatch(text, /\.update_with/u);
   validateGeneratedProject("module-binding-proof", result.artifacts, { run: true });
 });
 
@@ -48,7 +52,7 @@ export function mix(a: int32, b: float64): float64 {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /a as f64 \+ b/u);
+  assert.match(text, /tsonic_rust_runtime::conversions::i32_to_f64\(a\) \+ b/u);
 });
 
 test("dynamic any member access fails closed in strict-native mode", () => {

@@ -482,8 +482,11 @@ function printRustTryScope(
             ...catchExpression.slice(1, -1),
             `${catchExpression[catchExpression.length - 1]},`,
           ];
+    const flowMatchPrefix = `${indent}let ${statement.flowName}: ${flowType} = match ${statement.bodyName}`;
     lines.push(
-      `${indent}let ${statement.flowName}: ${flowType} = match ${statement.bodyName} {`,
+      ...(renderedFits(`${flowMatchPrefix} {`, 0)
+        ? [`${flowMatchPrefix} {`]
+        : [flowMatchPrefix, `${indent}{`]),
       `${nested}Ok(completion) => ${catchClause.fallible ? "Ok(completion)" : "completion"},`,
       ...catchArm,
       `${indent}};`,
@@ -839,8 +842,7 @@ function printRustStatementExpr(
     const callable = expression.expr.kind === "call"
       ? expression.expr.path
       : `${printRustAssociatedCallOwner(expression.expr)}::${expression.expr.method}`;
-    const forceExpanded = expression.expr.args.length > 1 &&
-      printRustExpr(expression.expr).length > rustNestedCallWidth;
+    const forceExpanded = !renderedFits(printRustExpr(expression.expr), column);
     return appendToLastLine(
       printFittedCall(
         callable,
@@ -1363,7 +1365,7 @@ function printRustExprFitted(
   const flat = printRustExpr(expression);
   switch (expression.kind) {
     case "match":
-      return printRustMatchExpression(expression, depth);
+      return printRustMatchExpression(expression, depth, column);
     case "conditional": {
       const branchIndent = indentText(depth + 1);
       const condition = printRustExprFitted(
@@ -2270,6 +2272,27 @@ function printFittedCall(
       ")",
     );
   }
+  if (arguments_.length === 1 && arguments_[0]?.kind === "method-call") {
+    const prefix = `${callable}(`;
+    const directChain = rustMethodChain(arguments_[0]);
+    if (directChain?.steps.length === 1) {
+      const nested = printRustExprFitted(
+        arguments_[0],
+        depth,
+        column + prefix.length,
+      );
+      const nestedAtExpandedColumn = printRustExprFitted(
+        arguments_[0],
+        depth + 1,
+        indentText(depth + 1).length,
+      );
+      const attached = appendToLastLine(`${prefix}${nested}`, ")");
+      if (nested.includes("\n") && nestedAtExpandedColumn.includes("\n") &&
+        renderedFits(attached, column)) {
+        return attached;
+      }
+    }
+  }
   if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "method-call") {
     if (!flat.includes("\n") && renderedFits(flat, column) &&
       !rustMethodChainPrefersVerticalLayout(arguments_[0]) &&
@@ -2821,11 +2844,17 @@ function printRustPattern(pattern: RustPattern): string {
 function printRustMatchExpression(
   expression: Extract<RustExpr, { readonly kind: "match" }>,
   depth: number,
+  column = 0,
 ): string {
-  const matched = printRustExprFitted(expression.expression, depth, "match ".length);
-  const header = matched.includes("\n")
+  const matched = printRustExprFitted(
+    expression.expression,
+    depth,
+    column + "match ".length,
+  );
+  const inlineHeader = `match ${matched} {`;
+  const header = matched.includes("\n") || !renderedFits(inlineHeader, column)
     ? `match ${matched}\n${indentText(depth)}{`
-    : `match ${matched} {`;
+    : inlineHeader;
   const armIndent = indentText(depth + 1);
   const arms = expression.arms.flatMap((arm) => {
     const pattern = printRustPattern(arm.pattern);

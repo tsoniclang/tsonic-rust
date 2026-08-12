@@ -1228,3 +1228,75 @@ test("logical assignment keeps a fitting first operand beside the operator", () 
 
   assert.match(text, /passed = js_string::includes\(&rendered, "tsonic", 0\)\n        && digits\.test/u);
 });
+
+test("fitting fallible statement calls remain horizontal", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_node::fs::write_file_sync_string",
+              args: [
+                { kind: "reference", expr: { kind: "path", path: "file" } },
+                { kind: "str-literal", value: "payload" },
+                { kind: "str-literal", value: "utf8" },
+              ],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /write_file_sync_string\(&file, "payload", "utf8"\)\?;/u);
+});
+
+test("expanded method arguments stay attached to one outer conversion wrapper", () => {
+  const convertedElements = ["2.0", "3.0"].map((text) => ({
+    kind: "try",
+    expr: {
+      kind: "call",
+      path: "tsonic_rust_runtime::conversions::f64_to_i32",
+      args: [{ kind: "float-literal", text }],
+    },
+  }));
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "method-call",
+                receiver: { kind: "path", path: "values" },
+                method: "push_many",
+                args: [{ kind: "slice-literal", elements: convertedElements }],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /usize_to_i32\(values\.push_many\(\[\n[\s\S]*?\n\s+\]\)\)\?;/u);
+  assert.doesNotMatch(text, /usize_to_i32\(\n/u);
+});

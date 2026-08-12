@@ -150,7 +150,13 @@ import {
   rustSourceStaticFieldLocation,
 } from "./static-field-storage.js";
 
-export function planExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
+type RustExpressionResultUse = "value" | "discarded";
+
+export function planExpression(
+  node: Node,
+  context: RustPlanContext,
+  resultUse: RustExpressionResultUse = "value",
+): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   const diagnosticCount = context.diagnostics.length;
   const explicitSafety = tryPlanRustExplicitSafetyExpression(
@@ -179,7 +185,7 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
     });
     planned = undefined;
   } else {
-    planned = override?.expression ?? planExpressionInner(node, context);
+    planned = override?.expression ?? planExpressionInner(node, context, resultUse);
   }
   if (planned === undefined) {
     if (context.diagnostics.length === diagnosticCount) {
@@ -190,6 +196,9 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
       ));
     }
     return undefined;
+  }
+  if (resultUse === "discarded") {
+    return planned;
   }
   const upcast = context.input.facts.getFact(node, rustProjectUpcastFactKey);
   const converted = upcast === undefined
@@ -335,7 +344,11 @@ function planRustProjectUpcast(
   };
 }
 
-function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | undefined {
+function planExpressionInner(
+  node: Node,
+  context: RustPlanContext,
+  resultUse: RustExpressionResultUse,
+): RustExpr | undefined {
   const { ast } = context.input;
   const kind = ast.kindName(node);
   switch (kind) {
@@ -1126,7 +1139,7 @@ function planExpressionInner(node: Node, context: RustPlanContext): RustExpr | u
     }
     case KindPrefixUnaryExpression:
     case KindPostfixUnaryExpression: {
-      return planUnaryExpression(node, context);
+      return planUnaryExpression(node, context, resultUse);
     }
     case KindBinaryExpression: {
       return planBinaryExpression(node, context);
@@ -1484,7 +1497,11 @@ function planNumericLiteralWithCarrier(
   return undefined;
 }
 
-function planUnaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
+function planUnaryExpression(
+  node: Node,
+  context: RustPlanContext,
+  resultUse: RustExpressionResultUse,
+): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
   const operandNode = Node_Operand(context.input.ast, node);
   if (fact !== undefined && fact.kind === "source-conversion" && fact.conversion === undefined) {
@@ -1538,7 +1555,7 @@ function planUnaryExpression(node: Node, context: RustPlanContext): RustExpr | u
   }
   if (fact.operator !== "-" && fact.operator !== "!") {
     if ((fact.operator === "+=" || fact.operator === "-=") && operandNode !== undefined) {
-      return planRustUpdateExpression(node, operandNode, fact, context);
+      return planRustUpdateExpression(node, operandNode, fact, resultUse, context);
     }
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -1559,9 +1576,11 @@ function planRustUpdateExpression(
   expression: Node,
   operand: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>,
+  resultUse: RustExpressionResultUse,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (context.syntheticNames === undefined) {
+  if ((fact.operator !== "+=" && fact.operator !== "-=") ||
+    context.syntheticNames === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
       "rust.backend.update-name-state",
@@ -1579,7 +1598,8 @@ function planRustUpdateExpression(
   if (isRustBigIntCarrier(fact.resultCarrier)) {
     context.usedAliases?.add("rt");
   }
-  const returnsPrevious = context.input.ast.kindName(expression) === KindPostfixUnaryExpression;
+  const returnsPrevious = resultUse === "value" &&
+    context.input.ast.kindName(expression) === KindPostfixUnaryExpression;
   const sourceAccessor = findRustUpdateSourceAccessor(operand, context);
   if (sourceAccessor !== undefined) {
     return planRustSourceAccessorUpdate(
@@ -1662,6 +1682,15 @@ function planRustUpdateExpression(
       "Increment/decrement requires a finalized writable Rust location.",
     ));
     return undefined;
+  }
+  if (resultUse === "discarded" &&
+    context.input.ast.kindName(operand) === KindIdentifier) {
+    return {
+      kind: "assignment",
+      operator: fact.operator,
+      target,
+      value: step,
+    };
   }
   return planRustBorrowedUpdateLocation(
     target,

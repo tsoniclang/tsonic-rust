@@ -84,7 +84,7 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("util.inspect accepts closed JsValue and rejects other carriers", async () => {
+test("util.inspect accepts closed JsValue conversions and rejects open object carriers", async () => {
   const { nodejsCapability } = await import("./helpers/rust-session.mjs");
   const capability = await nodejsCapability();
   const good = compileRust({
@@ -98,11 +98,17 @@ export function f(text: string): string {
   const value = JSON.parse(text);
   return inspect(value);
 }
+
+export function primitive(name: string): string {
+  return inspect(name);
+}
 `,
     },
   });
   assert.deepEqual(good.result.diagnostics, []);
-  assert.match(artifactText(good.result, "src/index.rs"), /tsonic_rust_node::util::inspect\(&value\)/u);
+  const text = artifactText(good.result, "src/index.rs");
+  assert.match(text, /tsonic_rust_node::util::inspect\(&value\)/u);
+  assert.match(text, /tsonic_rust_node::util::inspect\(&tsonic_rust_js::abi::js_value_from_string\(&name\)\)/u);
 
   const badOptions = {
     surfaces: ["js"],
@@ -112,7 +118,7 @@ export function f(text: string): string {
 import { inspect } from "node:util";
 
 export function f(name: string): string {
-  return inspect(name);
+  return inspect({ name });
 }
 `,
     },

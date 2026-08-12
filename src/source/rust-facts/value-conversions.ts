@@ -262,5 +262,8 @@ export function selectRustSourceValueConversion(
   if (source.name === "uint64" && target.name === "float64") {
     return rustUint64ToFloat64ValueConversion;
   }
-  return undefined;
+  return source.name !== target.name &&
+      rustNumericPromotionKind(source.name, target.name) === target.name
+    ? { kind: "numeric-promotion", source: source.name, target: target.name }
+    : undefined;
 }

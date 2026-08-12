@@ -1951,33 +1951,34 @@ function resolveBinaryOperandCarriers(
     return undefined;
   }
   const operatorKind = walk.context.ast.kindName(operatorToken);
-  const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
-    operatorKind === KindExclamationEqualsEqualsToken;
-  const operandExpected = rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)
-    ? undefined
-    : expected;
-  if (strictEquality && expressionUsesContextualLiteralCarrier(walk.context.ast, leftNode)) {
-    const rightSemanticCarrier = resolveRustTargetTypeRef(
-      rightNode,
-      rustResolutionContext(walk, rightNode),
-      walk.operationOptions,
-    );
-    const right = resolveExpressionCarrier(
-      walk,
-      rightNode,
-      sourceFile,
-      isRustNullishSourceCarrier(rightSemanticCarrier)
-        ? undefined
-        : operandExpected ?? rightSemanticCarrier,
-    );
-    const left = resolveExpressionCarrier(
-      walk,
-      leftNode,
-      sourceFile,
-      isRustNullishSourceCarrier(rightSemanticCarrier) ? undefined : right ?? operandExpected,
-    );
+  if (rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)) {
+    const leftUsesContext = expressionUsesContextualLiteralCarrier(walk.context.ast, leftNode);
+    const rightUsesContext = expressionUsesContextualLiteralCarrier(walk.context.ast, rightNode);
+    let left: TargetTypeRef | undefined;
+    let right: TargetTypeRef | undefined;
+    if (leftUsesContext && !rightUsesContext) {
+      right = resolveExpressionCarrier(walk, rightNode, sourceFile, undefined);
+      left = resolveExpressionCarrier(
+        walk,
+        leftNode,
+        sourceFile,
+        isRustNullishSourceCarrier(right) ? undefined : right,
+      );
+    } else if (rightUsesContext && !leftUsesContext) {
+      left = resolveExpressionCarrier(walk, leftNode, sourceFile, undefined);
+      right = resolveExpressionCarrier(
+        walk,
+        rightNode,
+        sourceFile,
+        isRustNullishSourceCarrier(left) ? undefined : left,
+      );
+    } else {
+      left = resolveExpressionCarrier(walk, leftNode, sourceFile, undefined);
+      right = resolveExpressionCarrier(walk, rightNode, sourceFile, undefined);
+    }
     return { left, right, leftNode, rightNode, operatorKind };
   }
+  const operandExpected = expected;
   let left = resolveExpressionCarrier(
     walk,
     leftNode,
@@ -1997,19 +1998,10 @@ function resolveBinaryOperandCarriers(
       operandExpected ?? leftSemanticCarrier,
     );
   }
-  const rightSemanticCarrier = strictEquality
-    ? resolveRustTargetTypeRef(
-        rightNode,
-        rustResolutionContext(walk, rightNode),
-        walk.operationOptions,
-      )
-    : undefined;
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
     ? rustOptionElementCarrier(left) ?? expected
     : operatorKind === KindEqualsToken
       ? useAssignmentReadCarrier ? left ?? operandExpected : operandExpected
-    : strictEquality
-      ? isRustNullishSourceCarrier(rightSemanticCarrier) ? undefined : left ?? operandExpected
       : left ?? operandExpected;
   let right = resolveExpressionCarrier(
     walk,
@@ -2035,7 +2027,16 @@ function resolveBinaryOperandCarriers(
 
 function expressionUsesContextualLiteralCarrier(ast: AstReader, expression: Node): boolean {
   const kind = ast.kindName(expression);
-  return kind === KindNumericLiteral || kind === KindBigIntLiteral || kind === KindStringLiteral;
+  if (kind === KindNumericLiteral || kind === KindBigIntLiteral || kind === KindStringLiteral) {
+    return true;
+  }
+  if (kind === KindPrefixUnaryExpression || kind === KindParenthesizedExpression) {
+    const operand = kind === KindPrefixUnaryExpression
+      ? Node_Operand(ast, expression)
+      : Node_Expression(ast, expression);
+    return operand !== undefined && expressionUsesContextualLiteralCarrier(ast, operand);
+  }
+  return false;
 }
 
 function resolvePostCheckBinaryCarrier(

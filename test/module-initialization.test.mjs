@@ -53,7 +53,7 @@ export function main(): void {
   const firstInitialization = initializationBody.indexOf("crate::state::next()");
   const secondInitialization = initializationBody.indexOf("first.with(");
   const thirdInitialization = initializationBody.indexOf("second.with(");
-  const finalWrite = initializationBody.indexOf(".update_with(");
+  const finalWrite = initializationBody.lastIndexOf(".store(");
   assert.equal(firstInitialization >= 0, true);
   assert.equal(firstInitialization < secondInitialization, true);
   assert.equal(secondInitialization < thirdInitialization, true);

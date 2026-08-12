@@ -1378,7 +1378,7 @@ function planExpressionAsStatement(
     }
   }
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
-    const planned = planExpression(expression, context);
+    const planned = planExpression(expression, context, "discarded");
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression" ||
