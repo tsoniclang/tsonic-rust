@@ -131,7 +131,10 @@ import {
   rustSourceUnionTargetType,
   rustStructuralObjectCarrierValue,
 } from "../rust-target-types.js";
-import { parseSourceBigIntLiteral } from "../../common/source-literal-values.js";
+import {
+  parseSourceBigIntLiteral,
+  sourceCharCodeUnit,
+} from "../../common/source-literal-values.js";
 import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustProjectUpcastFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
@@ -187,7 +190,10 @@ import type {
 } from "./source-type-registry.js";
 import { createRustSourceProfileRegistry } from "./source-profile-registry.js";
 import type { RustSourceProfileRegistry } from "./source-profile-registry.js";
-import { selectedSourceLiteralIsRepresentable } from "./selected-numeric-literal.js";
+import {
+  selectedSourceLiteralIsRepresentable,
+  selectedSourceLiteralOperandIsRepresentable,
+} from "./selected-numeric-literal.js";
 import {
   createRustSourceCallableAbiResolver,
   resolveRustContextualParameterAbi,
@@ -1489,11 +1495,15 @@ function resolveExpressionCarrierUncached(
         : expected;
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&
         (!isRustIntegerCarrier(effectiveExpected) ||
-          selectedSourceLiteralIsRepresentable(
+          (selectedSourceLiteralIsRepresentable(
             expression,
             effectiveExpected.name,
             walk.context.ast,
-          ))) {
+          ) || selectedSourceLiteralOperandIsRepresentable(
+            expression,
+            effectiveExpected.name,
+            walk.context.ast,
+          )))) {
         return setCarrierFact(walk, expression, effectiveExpected);
       }
       if (effectiveExpected !== undefined && isRustIntegerCarrier(effectiveExpected)) {
@@ -1522,6 +1532,27 @@ function resolveExpressionCarrierUncached(
       const effectiveExpected = expected !== undefined && isRustOptionCarrier(expected)
         ? rustOptionElementCarrier(expected)
         : expected;
+      if (effectiveExpected !== undefined && isRustIntegerCarrier(effectiveExpected)) {
+        if (selectedSourceLiteralIsRepresentable(
+          expression,
+          effectiveExpected.name,
+          walk.context.ast,
+        ) || selectedSourceLiteralOperandIsRepresentable(
+          expression,
+          effectiveExpected.name,
+          walk.context.ast,
+        )) {
+          return setCarrierFact(walk, expression, effectiveExpected);
+        }
+        appendRustDiagnostic(
+          walk,
+          "RUST_INTEGER_LITERAL_NOT_EXACT",
+          "BigInt literal cannot be proven exact for the finalized Rust fixed-width carrier.",
+          expression,
+          [`target.carrier=${effectiveExpected.name}`],
+        );
+        return undefined;
+      }
       const carrier = effectiveExpected ?? rustBigIntTargetType();
       if (!isRustBigIntCarrier(carrier)) {
         appendRustDiagnostic(
@@ -1538,6 +1569,19 @@ function resolveExpressionCarrierUncached(
     case KindStringLiteral:
     case KindNoSubstitutionTemplateLiteral: {
       if (expected !== undefined) {
+        if (expected.kind === "source-primitive" && expected.name === "char") {
+          if (sourceCharCodeUnit(walk.context.ast.text(expression)) === undefined) {
+            appendRustDiagnostic(
+              walk,
+              "RUST_CHAR_LITERAL_NOT_EXACT",
+              "A neutral char literal must contain exactly one UTF-16 code unit.",
+              expression,
+              ["target.carrier=char"],
+            );
+            return undefined;
+          }
+          return setCarrierFact(walk, expression, expected);
+        }
         const value = rustSourceTypeCarrierValue(expected);
         if (value !== undefined && value.shape === "enum") {
           const literal = walk.context.ast.text(expression);
@@ -2756,16 +2800,20 @@ function applySelectedProjectSourceCall(
   const parameters: import("../rust-facts/keys.js").RustSourceCallParameterPlan[] = [];
   for (const [index, targetParameter] of selectedMember.parameters.entries()) {
     const selectedParameter = selectedParameters[index];
-    const parameterDeclaration = asSourceNode(
+    const parameterDeclaration = declarationParameters[index] ?? asSourceNode(
       selectedParameter?.parameterDeclaration,
       ast,
-    ) ?? declarationParameters[index];
+    );
     const parameterAbi = parameterDeclaration === undefined
       ? undefined
       : walk.context.facts.get(parameterDeclaration, rustSourceParameterAbiFactKey) ??
         walk.context.facts.resolve(parameterDeclaration, rustSourceParameterAbiFactKey);
-    if (selectedParameter === undefined || selectedParameter.parameterIndex !== index ||
-      parameterAbi === undefined) {
+    const parameterInputs = bindings.filter((binding) =>
+      binding.sourceParameterIndex === index);
+    if (parameterAbi === undefined ||
+      (selectedParameter !== undefined && selectedParameter.parameterIndex !== index) ||
+      (selectedParameter === undefined &&
+        (parameterInputs.length !== 0 || parameterAbi.form === "required"))) {
       appendRustDiagnostic(
         walk,
         "RUST_SOURCE_CALL_PARAMETER_MISSING",
@@ -2775,9 +2823,8 @@ function applySelectedProjectSourceCall(
       );
       return undefined;
     }
-    if ((parameterAbi.form === "rest") !== selectedParameter.rest ||
-      ((parameterAbi.form !== "required") !==
-        selectedParameter.acceptsOmission)) {
+    if (selectedParameter !== undefined &&
+      (parameterAbi.form === "rest") !== selectedParameter.rest) {
       appendRustDiagnostic(
         walk,
         "RUST_SOURCE_CALL_PARAMETER_FORM_CONFLICT",
@@ -2794,7 +2841,6 @@ function applySelectedProjectSourceCall(
       : targetParameter.passingMode === "borrow-shared"
         ? "ref" as const
         : "value" as const;
-    const parameterInputs = bindings.filter((binding) => binding.sourceParameterIndex === index);
     const inputs = parameterInputs.map((binding) => {
       const carrier = parameterAbi.form === "rest" &&
           binding.sourceParameterForm === "rest-element"
@@ -2889,6 +2935,14 @@ function applySelectedProjectSourceCall(
   let target: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>["target"] | undefined;
   let operationKind: "method" | "constructor" = "method";
   const calleeReferenceDeclaration = walk.context.source.navigation.sourceReferenceFor(callee)?.declaration;
+  const calleeImplementation = calleeReferenceDeclaration === undefined
+    ? undefined
+    : walk.context.source.navigation.callableImplementation(
+        calleeReferenceDeclaration,
+      );
+  const directCallableDeclaration = calleeReferenceDeclaration === selectedDeclaration ||
+    (calleeImplementation?.kind === "resolved" &&
+      calleeImplementation.implementation.declaration === selectedDeclaration);
   const callableCalleeCarrier = expressionKind === KindNewExpression
     ? undefined
     : resolveExpressionCarrier(walk, callee, sourceFile, undefined);
@@ -2898,7 +2952,7 @@ function applySelectedProjectSourceCall(
   const indirectCallable = selectedCallableCarrier !== undefined &&
     (selectedCallableCarrier.kind === "function-pointer" ||
       rustCallableProtocol(selectedCallableCarrier) !== undefined) &&
-    (calleeReferenceDeclaration !== selectedDeclaration ||
+    (!directCallableDeclaration ||
       ast.kindName(callee) === "KindArrowFunction" || ast.kindName(callee) === KindFunctionExpression);
   if (indirectCallable) {
     target = { form: "callable", carrier: selectedCallableCarrier };

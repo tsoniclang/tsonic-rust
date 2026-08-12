@@ -236,13 +236,13 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("class field initializers requiring a pre-construction this fail closed", () => {
+test("class field initializers read already-initialized fields from exact selected evidence", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 
-export class Invalid {
+export class Initialized {
   first: int32 = 1;
   second: int32 = this.first;
 }
@@ -250,10 +250,11 @@ export class Invalid {
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
-    diagnostic.message.includes("before the reference-backed Rust object state exists")));
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /let __tsonic_field_second(?:_[0-9]+)? = __tsonic_field_first(?:_[0-9]+)?;/u,
+  );
 });
 
 test("enums lower with TSTS integer discriminants and fact-backed equality", () => {

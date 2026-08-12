@@ -37,7 +37,7 @@ const expected = [
   ["float64", "float64", "float64", "float64", "float64", "float64", "float64", "float64", "float64", "float64"],
 ];
 
-test("numeric promotion is one symmetric closed policy over every Rust primitive pair", () => {
+test("numeric promotion preserves the established fixed-width primitive matrix", () => {
   for (const [leftIndex, left] of kinds.entries()) {
     for (const [rightIndex, right] of kinds.entries()) {
       assert.equal(
@@ -49,6 +49,46 @@ test("numeric promotion is one symmetric closed policy over every Rust primitive
         rustNumericPromotionKind(left, right),
         rustNumericPromotionKind(right, left),
         `symmetry for ${left} with ${right}`,
+      );
+    }
+  }
+});
+
+test("wide and pointer-width primitives extend one symmetric closed promotion policy", () => {
+  const allKinds = [
+    ...kinds,
+    "int128",
+    "uint128",
+    "native-int",
+    "native-uint",
+  ];
+  const expectedRows = new Map([
+    ["int128", [
+      "int128", "int128", "int128", "int128", "int128", "int128", "int128",
+      "int128", "float32", "float64", "int128", undefined, undefined, undefined,
+    ]],
+    ["uint128", [
+      undefined, "uint128", undefined, "uint128", undefined, "uint128", undefined,
+      "uint128", "float32", "float64", undefined, "uint128", undefined, undefined,
+    ]],
+    ["native-int", [
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, "float32", "float64", undefined, undefined, "native-int", undefined,
+    ]],
+    ["native-uint", [
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, "float32", "float64", undefined, undefined, undefined, "native-uint",
+    ]],
+  ]);
+
+  for (const [kind, row] of expectedRows) {
+    assert.equal(row.length, allKinds.length);
+    for (const [index, other] of allKinds.entries()) {
+      assert.equal(rustNumericPromotionKind(kind, other), row[index], `${kind} with ${other}`);
+      assert.equal(
+        rustNumericPromotionKind(kind, other),
+        rustNumericPromotionKind(other, kind),
+        `symmetry for ${kind} with ${other}`,
       );
     }
   }
@@ -98,22 +138,22 @@ import type {
   int8,
   int16,
   int32,
-  int64,
   uint8,
   uint16,
   uint32,
-  uint64,
 } from "@tsonic/core/types.js";
+import type { i128, isize, u128, u64, usize } from "@tsonic/rust/types.js";
 
 export function smallSignedUnsigned(a: int8, b: uint8): int32 { return a + b; }
 export function smallWide(a: int16, b: uint16): int32 { return a + b; }
-export function signedUnsigned(a: int32, b: uint32): int64 { return a + b; }
-export function unsignedWide(a: uint32, b: uint64): uint64 { return a + b; }
-export function signedWide(a: uint32, b: int64): int64 { return a + b; }
-export function singlePrecision(a: int64, b: float32): float32 { return a + b; }
-export function doublePrecision(a: uint64, b: float64): float64 { return a + b; }
+export function singlePrecision(a: int32, b: float32): float32 { return a + b; }
+export function doublePrecision(a: uint32, b: float64): float64 { return a + b; }
 export function compare(a: int32, b: float64): boolean { return a < b; }
 export function equal(a: uint16, b: int8): boolean { return a === b; }
+export function wideSigned(a: i128, b: u64): i128 { return a + b; }
+export function wideUnsigned(a: u128, b: u64): u128 { return a + b; }
+export function nativeSigned(a: isize, b: isize): isize { return a + b; }
+export function nativeUnsigned(a: usize, b: usize): usize { return a + b; }
 `,
     },
   });

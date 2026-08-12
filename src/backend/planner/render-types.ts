@@ -1,6 +1,7 @@
 import type { TargetTypeRef } from "../../policy/types.js";
 import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
+import { rustProjectObjectType } from "./project-objects.js";
 import {
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
@@ -140,11 +141,7 @@ export function rustTypeFromCarrier(
       rustTypeFromCarrier(field.type, resolveSourceTypePath));
     return fields.some((field) => field === undefined)
       ? undefined
-      : {
-          kind: "named",
-          path: "rt::ObjectHandle",
-          typeArguments: [{ kind: "tuple", elements: fields as RustType[] }],
-        };
+      : rustProjectObjectType(fields as RustType[]);
   }
   if (carrier.kind === "array") {
     const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath);

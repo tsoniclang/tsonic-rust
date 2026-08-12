@@ -74,7 +74,6 @@ interface ProjectionContext {
 
 const sourcePrimitiveByRustName = new Map<string, Parameters<typeof rustSourcePrimitiveTargetType>[0]>([
   ["bool", "bool"],
-  ["char", "char"],
   ["i8", "int8"],
   ["u8", "uint8"],
   ["i16", "int16"],

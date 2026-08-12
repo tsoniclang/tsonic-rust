@@ -8,12 +8,25 @@ export const rustProjectObjectIdentityField = "__tsonic_identity";
 export const rustProjectObjectDispatchField = "__tsonic_dispatch";
 
 const rustProjectObjectStateBinding = "state";
+const rustProjectEmptyObjectStatePath = "rt::EmptyObjectState";
+
+export function rustProjectObjectLayerType(fieldTypes: readonly RustType[]): RustType {
+  return fieldTypes.length === 0
+    ? { kind: "named", path: rustProjectEmptyObjectStatePath }
+    : { kind: "tuple", elements: fieldTypes };
+}
+
+export function createRustProjectObjectLayer(values: readonly RustExpr[]): RustExpr {
+  return values.length === 0
+    ? { kind: "path", path: rustProjectEmptyObjectStatePath }
+    : { kind: "tuple-literal", elements: values };
+}
 
 export function rustProjectObjectType(fieldTypes: readonly RustType[]): RustType {
   return {
     kind: "named",
     path: "rt::ObjectHandle",
-    typeArguments: [{ kind: "tuple", elements: fieldTypes }],
+    typeArguments: [rustProjectObjectLayerType(fieldTypes)],
   };
 }
 
@@ -29,7 +42,7 @@ export function createRustProjectObject(
       value: {
         kind: "call",
         path: "rt::ObjectHandle::new",
-        args: [{ kind: "tuple-literal", elements: values }],
+        args: [createRustProjectObjectLayer(values)],
       },
     }],
   };
@@ -39,7 +52,7 @@ export function createRustStructuralObject(values: readonly RustExpr[]): RustExp
   return {
     kind: "call",
     path: "rt::ObjectHandle::new",
-    args: [{ kind: "tuple-literal", elements: values }],
+    args: [createRustProjectObjectLayer(values)],
   };
 }
 

@@ -955,10 +955,11 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
     isRustUndefinedCarrier(carrier) || isRustBigIntCarrier(carrier) ||
-    carrier?.kind === "source-primitive";
+    (carrier?.kind === "source-primitive" && carrier.name !== "char");
 }
 
-const rustNumericPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
+const rustPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
+  char: "u16",
   int8: "i8",
   uint8: "u8",
   int16: "i16",
@@ -967,17 +968,37 @@ const rustNumericPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, Ru
   uint32: "u32",
   int64: "i64",
   uint64: "u64",
+  int128: "i128",
+  uint128: "u128",
   float32: "f32",
   float64: "f64",
   "native-int": "isize",
   "native-uint": "usize",
 };
 
+const rustNumericPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
+  "int8",
+  "uint8",
+  "int16",
+  "uint16",
+  "int32",
+  "uint32",
+  "int64",
+  "uint64",
+  "int128",
+  "uint128",
+  "float32",
+  "float64",
+  "native-int",
+  "native-uint",
+]);
+
 const rustSignedPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "int8",
   "int16",
   "int32",
   "int64",
+  "int128",
   "float32",
   "float64",
   "native-int",
@@ -992,6 +1013,8 @@ const rustIntegerPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "uint32",
   "int64",
   "uint64",
+  "int128",
+  "uint128",
   "native-int",
   "native-uint",
 ]);
@@ -1000,13 +1023,13 @@ export function rustPrimitiveTypeName(kind: SourcePrimitiveKind): RustPrimitiveT
   if (kind === "bool") {
     return "bool";
   }
-  return rustNumericPrimitiveNames[kind];
+  return rustPrimitiveNames[kind];
 }
 
 export function isRustNumericCarrier(
   carrier: TargetTypeRef | undefined,
 ): carrier is Extract<TargetTypeRef, { readonly kind: "source-primitive" }> {
-  return carrier?.kind === "source-primitive" && rustNumericPrimitiveNames[carrier.name] !== undefined;
+  return carrier?.kind === "source-primitive" && rustNumericPrimitiveKinds.has(carrier.name);
 }
 
 export function isRustSignedNumericCarrier(carrier: TargetTypeRef | undefined): boolean {

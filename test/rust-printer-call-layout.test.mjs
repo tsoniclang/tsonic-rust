@@ -575,6 +575,27 @@ test("long multi-supertrait headers use rustfmt-compatible vertical layout", () 
   );
 });
 
+test("one long supertrait header uses rustfmt-compatible vertical layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_ProjectObjectWithAnIntentionallyLongContractName",
+      visibility: "private",
+      superTraits: [{
+        kind: "named",
+        path: "__TsonicDispatch_ProjectObjectWithAnIntentionallyLongBaseContractName",
+      }],
+      functions: [],
+    }],
+  });
+
+  assert.match(
+    source,
+    /trait __TsonicDispatch_ProjectObjectWithAnIntentionallyLongContractName:\n    __TsonicDispatch_ProjectObjectWithAnIntentionallyLongBaseContractName\n\{\n\}/u,
+  );
+});
+
 test("string concatenation preserves vertical chains inside trailing blocks", () => {
   const source = printRustSourceFile({
     headerComment,

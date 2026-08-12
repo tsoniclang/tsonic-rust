@@ -56,6 +56,7 @@ import {
 import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
+  sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
 import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
@@ -371,6 +372,19 @@ function planExpressionInner(
           return undefined;
         }
         return { kind: "path", path: `${typePath}::${literalFact.name}` };
+      }
+      const carrier = expressionCarrier(node, context);
+      if (carrier?.kind === "source-primitive" && carrier.name === "char") {
+        const value = sourceCharCodeUnit(ast.text(node));
+        if (value === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node),
+            "rust.backend.char-literal",
+            "Neutral char lowering requires one exact UTF-16 code unit.",
+          ));
+          return undefined;
+        }
+        return { kind: "int-literal", text: String(value) };
       }
       return { kind: "string-literal", value: ast.text(node) };
     }
@@ -1451,6 +1465,9 @@ export function planNumericLiteral(node: Node, context: RustPlanContext): RustEx
 function planBigIntLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const carrier = expressionCarrier(node, context);
   const value = parseSourceBigIntLiteral(context.input.ast.text(node));
+  if (value !== undefined && isRustIntegerCarrier(carrier)) {
+    return { kind: "int-literal", text: value.toString(10) };
+  }
   if (!isRustBigIntCarrier(carrier) || value === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),

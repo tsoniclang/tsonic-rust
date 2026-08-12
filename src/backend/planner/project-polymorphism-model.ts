@@ -35,6 +35,7 @@ import { planRustCallableParameters } from "./callable-parameters.js";
 import { createRustSyntheticNameState } from "./synthetic-names.js";
 import { planProjectMethod } from "./declarations-nominal.js";
 import { rustDeclarationRequiresUnsafe } from "./explicit-safety.js";
+import { rustProjectObjectLayerType } from "./project-objects.js";
 
 export interface ProjectFieldPlan {
   readonly declaration: Node;
@@ -183,10 +184,6 @@ export function projectMemberImplementation(
   contractMember: Node,
   context: RustPlanContext,
 ): Node | undefined {
-  const owner = context.input.projectTypes.definitionContainingDeclaration(contractMember);
-  if (owner === concrete) {
-    return contractMember;
-  }
   const selected = context.input.projectTypes.memberImplementation(concrete, contractMember);
   if (selected.kind !== "resolved") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -226,10 +223,8 @@ export function projectFieldStoragePath(
 }
 
 export function projectStateType(layers: readonly ProjectClassStateLayer[]): RustType {
-  const types = layers.map((layer) => ({
-    kind: "tuple" as const,
-    elements: layer.fields.map((field) => field.type),
-  }));
+  const types = layers.map((layer) =>
+    rustProjectObjectLayerType(layer.fields.map((field) => field.type)));
   let state = types[0]!;
   for (const own of types.slice(1)) {
     state = { kind: "tuple", elements: [state, own] };
@@ -262,24 +257,6 @@ export function planProjectStaticMethods(
     methods.push(planned);
   }
   return methods;
-}
-
-export function sourceSubtreeContainsThis(node: Node, context: RustPlanContext): boolean {
-  let found = false;
-  const visit = (candidate: Node): void => {
-    const kind = context.input.ast.kindName(candidate);
-    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-      found = true;
-      return;
-    }
-    context.input.ast.forEachChild(candidate, (child) => {
-      if (!found && child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(node);
-  return found;
 }
 
 export function rustFunctionTypesMatch(

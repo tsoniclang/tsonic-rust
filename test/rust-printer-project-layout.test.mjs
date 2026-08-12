@@ -33,6 +33,21 @@ test("nested tuple fields use one edition-neutral rustfmt-stable form", () => {
   assert.doesNotMatch(text, /state\.0 \.1|state\.0\.1/u);
 });
 
+test("long tuple values use rustfmt-compatible element layout", () => {
+  const text = projectFunction({
+    kind: "tuple-literal",
+    elements: [
+      { kind: "path", path: "first_value_with_an_intentionally_long_identifier" },
+      { kind: "path", path: "second_value_with_an_intentionally_long_identifier" },
+    ],
+  });
+
+  assert.match(
+    text,
+    /\(\n        first_value_with_an_intentionally_long_identifier,\n        second_value_with_an_intentionally_long_identifier,\n    \)/u,
+  );
+});
+
 test("logical block operands keep the following operator on the closing brace", () => {
   const upcast = () => ({
     kind: "block",

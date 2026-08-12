@@ -158,6 +158,14 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       continue;
     }
     if (kind === KindFunctionDeclaration) {
+      if (ast.body(statement) === undefined) {
+        const implementation = context.input.source.navigation
+          .callableImplementation(statement);
+        if (implementation.kind === "resolved" &&
+          implementation.implementation.declaration !== statement) {
+          continue;
+        }
+      }
       const diagnosticCount = context.diagnostics.length;
       const item = planFunctionDeclaration(statement, context);
       if (item !== undefined) {

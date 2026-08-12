@@ -96,7 +96,7 @@ export function printRustItem(item: RustItem): string {
       const flatHeader = `${declaration}${superTraits}`;
       const expandedHeader = renderedSuperTraits.length > 0 &&
           (`${flatHeader} {`.length >= rustFormatWidth ||
-            (renderedSuperTraits.length > 1 && flatHeader.length > 80))
+            flatHeader.length > 80)
         ? `${declaration}:\n    ${renderedSuperTraits.join(" + ")}\n{`
         : `${flatHeader} {`;
       return functions.length === 0
@@ -1787,7 +1787,8 @@ function printRustExprFitted(
     case "vec-literal":
     case "slice-literal":
     case "tuple-literal": {
-      if (!flat.includes("\n") && renderedFits(flat, column)) {
+      if (!flat.includes("\n") && flat.length <= rustNestedCallWidth &&
+        renderedFits(flat, column)) {
         return flat;
       }
       const elementIndent = indentText(depth + 1);

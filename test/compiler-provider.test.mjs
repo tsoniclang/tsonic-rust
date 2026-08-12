@@ -18,6 +18,9 @@ import {
   projectRustCompilerModule,
 } from "../dist/providers/compiler/projection.js";
 import {
+  rustCompilerProviderProtocolVersion,
+} from "../dist/providers/compiler/model.js";
+import {
   compileRustThroughTargetPack,
   createRustSession,
   rustSourceDiagnostics,
@@ -27,6 +30,51 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureCrate = resolve(repositoryRoot, "test/fixtures/crates/acme_widget");
 const runtimeCrate = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
 const testRoot = resolve(repositoryRoot, ".temp/compiler-provider-tests");
+
+test("compiler provider rejects Rust scalar char instead of conflating it with neutral UTF-16 char", () => {
+  const module = {
+    protocolVersion: rustCompilerProviderProtocolVersion,
+    projectDigest: "char-contract",
+    dependency: {
+      alias: "char_contract",
+      packageId: "char-contract 1.0.0",
+      packageName: "char-contract",
+      packageVersion: "1.0.0",
+      crateName: "char_contract",
+      targetCrateName: "char_contract",
+      manifestPath: "/char-contract/Cargo.toml",
+      sourceRoot: "/char-contract",
+      sourceDigest: "char-contract",
+      closurePackageIds: ["char-contract 1.0.0"],
+      features: [],
+    },
+    modulePath: [],
+    exports: [{
+      kind: "function",
+      id: "char_contract::identity",
+      name: "identity",
+      function: {
+        id: "char_contract::identity",
+        name: "identity",
+        parameters: [{ name: "value", type: { kind: "primitive", name: "char" } }],
+        result: { kind: "primitive", name: "char" },
+        typeParameters: [],
+        asynchronous: false,
+        unsafe: false,
+        abi: "Rust",
+      },
+    }],
+    unsupportedExports: [],
+  };
+
+  assert.throws(
+    () => projectRustCompilerModule(module, {
+      providerModuleId: "char_contract",
+      moduleSpecifier: "@tsonic/rust/crates/char_contract/index.js",
+    }),
+    /Rust primitive 'char' has no source primitive contract/u,
+  );
+});
 
 test("compiler worker reflects exact Cargo aliases, features, slices, and one cached rustdoc artifact", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();

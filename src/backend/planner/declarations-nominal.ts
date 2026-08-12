@@ -1,4 +1,4 @@
-import type { AstReader, Node } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -48,22 +48,24 @@ import {
   rustSafetyAttributesForDeclaration,
 } from "./explicit-safety.js";
 import { rustProjectTypeParameters } from "./project-polymorphism-names.js";
+import type { TargetTypeRef } from "../../policy/types.js";
+import {
+  prepareRustPreconstructionExpression,
+  type RustPreconstructionFieldValue,
+} from "./preconstruction-fields.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
   readonly sourceName: string;
   readonly targetName: string;
   readonly storageIndex: number;
+  readonly carrier: TargetTypeRef;
   readonly type: RustType;
   readonly initializer?: Node;
 }
 
 function carrierOf(context: RustPlanContext, node: Node | undefined) {
   return node === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-}
-
-function renderType(context: RustPlanContext, node: Node | undefined) {
-  return rustTypeFromCarrierInContext(carrierOf(context, node), context);
 }
 
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
@@ -119,7 +121,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     return undefined;
   }
   const fields: PlannedProjectObjectField[] = [];
-  let constructorMember: Node | undefined;
+  const constructorMembers: Node[] = [];
   const methods: Node[] = [];
   const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
   let failed = false;
@@ -139,8 +141,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         continue;
       }
       const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
-      const fieldType = renderType(context, member) ?? renderType(context, Node_Type(ast, member));
-      if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
+      const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
+      const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
+      if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, member),
           "rust.backend.class",
@@ -165,16 +168,33 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         sourceName: layoutField.sourceName,
         targetName: fieldName,
         storageIndex: layoutField.storageIndex,
+        carrier: fieldCarrier,
         type: fieldType,
         ...(initializer === undefined ? {} : { initializer }),
       });
       continue;
     }
     if (memberKind === "KindConstructor") {
-      constructorMember = member;
+      constructorMembers.push(member);
       continue;
     }
     if (memberKind === "KindMethodDeclaration") {
+      if (ast.body(member) === undefined) {
+        const implementation = context.input.source.navigation
+          .callableImplementation(member);
+        if (implementation.kind !== "resolved" ||
+          implementation.implementation.declaration === member) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, member),
+            "rust.backend.method-implementation",
+            implementation.kind === "unresolved"
+              ? implementation.reason
+              : "Method overload declaration has no distinct concrete implementation.",
+          ));
+          failed = true;
+        }
+        continue;
+      }
       methods.push(member);
       continue;
     }
@@ -192,6 +212,18 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     failed = true;
   }
+  const constructorImplementations = constructorMembers.filter((member) =>
+    ast.body(member) !== undefined);
+  if (constructorImplementations.length > 1 ||
+    (constructorMembers.length > 0 && constructorImplementations.length !== 1)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.constructor-implementation",
+      "Class constructor signatures must resolve to one concrete implementation body.",
+    ));
+    failed = true;
+  }
+  const constructorMember = constructorImplementations[0];
   const constructorFn = planConstructor(node, constructorMember, className, fields, context);
   if (failed || constructorFn === undefined) {
     return undefined;
@@ -314,17 +346,18 @@ function planConstructor(
     return undefined;
   }
   const values = new Map<string, RustExpr>();
+  const availableFields: RustPreconstructionFieldValue[] = [];
   const statements: RustStmt[] = [...parameterStatements];
   const evaluateField = (field: PlannedProjectObjectField, expression: Node): boolean => {
-    if (sourceSubtreeContainsThis(expression, ast)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.class-field-initializer",
-        "Class field initialization cannot read `this` before the reference-backed Rust object state exists.",
-      ));
+    const expressionContext = prepareRustPreconstructionExpression(
+      expression,
+      availableFields,
+      constructorContext,
+    );
+    if (expressionContext === undefined) {
       return false;
     }
-    const value = planExpression(expression, constructorContext);
+    const value = planExpression(expression, expressionContext);
     if (value === undefined) {
       return false;
     }
@@ -333,7 +366,21 @@ function planConstructor(
       `field_${rustLocalBindingName(field.targetName)}`,
     );
     statements.push({ kind: "let", name: valueName, mutable: false, init: value });
-    values.set(field.sourceName, { kind: "path", path: valueName });
+    const fieldValue: RustExpr = { kind: "path", path: valueName };
+    values.set(field.sourceName, fieldValue);
+    const existing = availableFields.findIndex((candidate) =>
+      candidate.declaration === field.declaration);
+    const available = {
+      declaration: field.declaration,
+      storageIndex: field.storageIndex,
+      carrier: field.carrier,
+      expression: fieldValue,
+    };
+    if (existing < 0) {
+      availableFields.push(available);
+    } else {
+      availableFields[existing] = available;
+    }
     return true;
   };
   for (const field of fields) {
@@ -423,24 +470,6 @@ function planConstructor(
       statements,
     },
   };
-}
-
-function sourceSubtreeContainsThis(node: Node, ast: AstReader): boolean {
-  let found = false;
-  const visit = (candidate: Node): void => {
-    const kind = ast.kindName(candidate);
-    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-      found = true;
-      return;
-    }
-    ast.forEachChild(candidate, (child) => {
-      if (!found && child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(node);
-  return found;
 }
 
 export function planProjectMethod(
@@ -820,8 +849,9 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       return undefined;
     }
     const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
-    const fieldType = renderType(context, member) ?? renderType(context, Node_Type(ast, member));
-    if (!isValidRustIdentifier(fieldName) || fieldType === undefined) {
+    const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
+    const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
+    if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, member),
         "rust.backend.record",
@@ -843,6 +873,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       sourceName: layoutField.sourceName,
       targetName: fieldName,
       storageIndex: layoutField.storageIndex,
+      carrier: fieldCarrier,
       type: fieldType,
     });
   }

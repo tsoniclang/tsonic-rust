@@ -1168,7 +1168,36 @@ function acceptProjectSourceCall(
       "The selected constructor parameter evidence conflicts with the exact effective constructor signature.",
     );
   }
-  const callableDeclaration = selectedConstructor?.declaration ?? selectedDeclaration;
+  const selectedCallableDeclaration = selectedConstructor?.declaration ?? selectedDeclaration;
+  const selectedCallableKind = ast.kindName(selectedCallableDeclaration);
+  const callableImplementationRequired = selectedCallableKind === "KindFunctionDeclaration" ||
+    selectedCallableKind === "KindMethodDeclaration" ||
+    selectedCallableKind === "KindMethodSignature" ||
+    selectedCallableKind === "KindConstructor";
+  const callableImplementation = !callableImplementationRequired
+    ? undefined
+    : context.source.navigation.callableImplementation(selectedCallableDeclaration);
+  const callableOwner = options.projectTypes.definitionContainingDeclaration(
+    selectedCallableDeclaration,
+  );
+  const selectedContractHasNoBody = ast.body(selectedCallableDeclaration) === undefined &&
+    callableOwner !== undefined &&
+    (callableOwner.kind === "interface" || options.projectTypes.isPolymorphic(callableOwner));
+  if (callableImplementationRequired &&
+    callableImplementation?.kind !== "resolved" &&
+    !selectedContractHasNoBody) {
+    return rejectSelectedOperation(
+      request.call,
+      context,
+      "RUST_SOURCE_CALL_IMPLEMENTATION_MISSING",
+      callableImplementation?.kind === "unresolved"
+        ? callableImplementation.reason
+        : "The selected project-source callable has no exact concrete implementation.",
+    );
+  }
+  const callableDeclaration = callableImplementation?.kind === "resolved"
+    ? callableImplementation.implementation.declaration
+    : selectedCallableDeclaration;
   const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
   if (targetTypeArguments === undefined && (request.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
     return rejectSelectedOperation(request.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
@@ -1188,10 +1217,10 @@ function acceptProjectSourceCall(
       ? selectedOwnerRelationship.targetType
       : resolveRustTargetTypeRef(request.sourceReturnType, context, options)
     : resolveRustTargetTypeRef(request.sourceReceiver?.type, context, options);
-  const sourceParameters = selectedConstructor === undefined
-    ? ast.parameters(callableDeclaration)
-    : request.sourceSelectedSignatureParameters.map((parameter) =>
-        parameter.parameterDeclaration);
+  const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration"
+    ? request.sourceSelectedSignatureParameters.map((parameter) =>
+        parameter.parameterDeclaration)
+    : ast.parameters(callableDeclaration);
   const parameters = sourceParameters.map((parameter, index) => {
     if (parameter === undefined) {
       return undefined;
@@ -1267,7 +1296,8 @@ function acceptProjectSourceCall(
   }
   const sourceName = construction
     ? "constructor"
-    : selectedKind === "KindFunctionType" || selectedKind === "KindCallSignature"
+    : ast.kindName(callableDeclaration) === "KindFunctionType" ||
+        ast.kindName(callableDeclaration) === "KindCallSignature"
       ? "call"
       : rustProjectCallableTargetName(callableDeclaration, context) ?? "<anonymous>";
   const memberDeclaration = construction ? selectedOwner ?? callableDeclaration : callableDeclaration;

@@ -18,6 +18,10 @@ const rustPrimitiveAliases = [
   sourcePrimitive("u32", "uint32", "number", false, 32),
   sourcePrimitive("i64", "int64", "bigint", true, 64),
   sourcePrimitive("u64", "uint64", "bigint", false, 64),
+  sourcePrimitive("i128", "int128", "bigint", true, 128),
+  sourcePrimitive("u128", "uint128", "bigint", false, 128),
+  sourcePrimitive("isize", "native-int", "number", true),
+  sourcePrimitive("usize", "native-uint", "number", false),
   sourcePrimitive("f32", "float32", "number", true, 32),
   sourcePrimitive("f64", "float64", "number", true, 64),
 ] satisfies SourceSemanticsModule["exports"];

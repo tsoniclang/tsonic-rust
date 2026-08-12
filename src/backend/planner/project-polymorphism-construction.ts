@@ -34,6 +34,7 @@ import {
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import {
+  createRustProjectObjectLayer,
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
   rustProjectObjectStateField,
@@ -43,8 +44,8 @@ import {
   type ProjectClassStateLayer,
   type ProjectFieldPlan,
   projectMembers,
+  projectFieldStoragePath,
   projectStateType,
-  sourceSubtreeContainsThis,
 } from "./project-polymorphism-model.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
@@ -63,6 +64,11 @@ import {
   rustDeclarationRequiresUnsafe,
   rustSafetyAttributesForDeclaration,
 } from "./explicit-safety.js";
+import {
+  prepareRustPreconstructionExpression,
+  rustTupleFieldPath,
+  type RustPreconstructionFieldValue,
+} from "./preconstruction-fields.js";
 
 export function planProjectClassConstructor(
   definition: RustProjectTypeDefinition,
@@ -85,11 +91,11 @@ export function planProjectClassConstructor(
   }
   const constructors = members.filter((member) => context.input.ast.kindName(member) === "KindConstructor");
   const constructorSignatures = context.input.projectTypes.constructorsForDefinition(definition);
-  if (constructorSignatures.length !== 1) {
+  if (constructorSignatures.length === 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, definition.declaration),
       "rust.backend.project-constructor-overloads",
-      "Project construction currently requires one exact effective constructor signature.",
+      "Project construction requires at least one exact effective constructor signature.",
     ));
     return undefined;
   }
@@ -198,22 +204,80 @@ export function planProjectClassConstructor(
     return undefined;
   }
   const values = new Map<Node, RustExpr>();
+  const availableFields: RustPreconstructionFieldValue[] = [];
+  if (base !== undefined) {
+    const baseLayers = layers.slice(0, -1);
+    for (const layer of baseLayers) {
+      for (const field of layer.fields) {
+        const storagePath = projectFieldStoragePath(
+          field.declaration,
+          baseLayers,
+          context,
+        );
+        if (storagePath === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, field.declaration),
+            "rust.backend.preconstruction-base-field",
+            "An initialized base field has no exact preconstruction storage path.",
+          ));
+          return undefined;
+        }
+        availableFields.push({
+          declaration: field.declaration,
+          storageIndex: field.storageIndex,
+          carrier: field.carrier,
+          expression: rustTupleFieldPath(
+            { kind: "path", path: "__tsonic_base_state" },
+            storagePath,
+          ),
+        });
+      }
+    }
+  }
+  const resolveSelectedFieldDeclaration = (selected: Node): Node | undefined => {
+    if (availableFields.some((field) => field.declaration === selected) ||
+      ownLayer.fields.some((field) => field.declaration === selected)) {
+      return selected;
+    }
+    const resolved = context.input.projectTypes.memberImplementation(
+      definition,
+      selected,
+    );
+    return resolved.kind === "resolved"
+      ? resolved.implementation.declaration
+      : undefined;
+  };
   const evaluateField = (field: ProjectFieldPlan, expression: Node): boolean => {
-    if (sourceSubtreeContainsThis(expression, context)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.class-field-initializer",
-        "Class field initialization cannot read this before the reference-backed Rust object exists.",
-      ));
+    const expressionContext = prepareRustPreconstructionExpression(
+      expression,
+      availableFields,
+      initializationContext,
+      resolveSelectedFieldDeclaration,
+    );
+    if (expressionContext === undefined) {
       return false;
     }
-    const value = planExpression(expression, initializationContext);
+    const value = planExpression(expression, expressionContext);
     if (value === undefined) {
       return false;
     }
     const name = allocateRustSyntheticName(syntheticNames, `field_${field.sourceName}`);
     statements.push({ kind: "let", name, mutable: false, init: value });
-    values.set(field.declaration, { kind: "path", path: name });
+    const fieldValue: RustExpr = { kind: "path", path: name };
+    values.set(field.declaration, fieldValue);
+    const existing = availableFields.findIndex((candidate) =>
+      candidate.declaration === field.declaration);
+    const available = {
+      declaration: field.declaration,
+      storageIndex: field.storageIndex,
+      carrier: field.carrier,
+      expression: fieldValue,
+    };
+    if (existing < 0) {
+      availableFields.push(available);
+    } else {
+      availableFields[existing] = available;
+    }
     return true;
   };
   for (const field of ownLayer.fields) {
@@ -255,10 +319,9 @@ export function planProjectClassConstructor(
     ));
     return undefined;
   }
-  const ownState: RustExpr = {
-    kind: "tuple-literal",
-    elements: ownLayer.fields.map((field) => values.get(field.declaration)!),
-  };
+  const ownState = createRustProjectObjectLayer(
+    ownLayer.fields.map((field) => values.get(field.declaration)!),
+  );
   const state: RustExpr = base === undefined
     ? ownState
     : {
