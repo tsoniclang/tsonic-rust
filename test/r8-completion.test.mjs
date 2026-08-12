@@ -56,23 +56,26 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("dynamic fixed-array indexing fails closed", async () => {
-  const options = {
+test("dynamic fixed-array locations support checked read-modify-write", { timeout: 300_000 }, async () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "dynamic_fixed_array_update_proof" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
-export function f(i: int32): int32 {
-  const xs: [int32, int32] = [1, 2];
-  return xs[i];
+export function main(): void {
+  let xs: [int32, int32] = [1, 2];
+  const i: int32 = 1;
+  xs[i] += 3;
+  check(xs[i] === 5);
 }
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
-    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
-  }]);
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("dynamic-fixed-array-update", result.artifacts, { run: true }).status, 0);
 });
 
 test("RegExp outside the oracle subset stays hard-rejected", async () => {

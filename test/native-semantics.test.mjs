@@ -826,22 +826,28 @@ export function first(entry: [int32, string]): int32 {
   assert.match(text, /entry\.0/u);
 });
 
-test("dynamic tuple indexing fails closed", () => {
-  const options = {
+test("homogeneous tuple carriers support checked dynamic indexing", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "dynamic_tuple_index_proof" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
 export function pick(entry: [int32, int32], i: int32): int32 {
   return entry[i];
 }
+
+export function main(): void {
+  check(pick([10, 20], 1) === 20);
+}
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
-    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
-  }]);
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /entry\[tsonic_rust_runtime::conversions::i32_to_usize\(i\)\?\]/u);
+  assert.equal(validateGeneratedProject("dynamic-tuple-index", result.artifacts, { run: true }).status, 0);
 });
 
 test("closed string-literal unions lower to unit-variant enums", () => {
