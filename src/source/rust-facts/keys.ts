@@ -386,6 +386,23 @@ export type RustTargetOperationFact =
       };
     }
   | {
+      readonly kind: "source-accessor";
+      readonly operationId: string;
+      readonly accessMode: "read" | "write" | "read-write";
+      readonly receiver:
+        | { readonly kind: "instance" }
+        | { readonly kind: "static"; readonly typeCarrier: TargetTypeRef };
+      readonly read?: {
+        readonly method: string;
+        readonly resultCarrier: TargetTypeRef;
+      };
+      readonly write?: {
+        readonly method: string;
+        readonly valueCarrier: TargetTypeRef;
+      };
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "source-union-field";
       readonly operationId: string;
       readonly unionCarrier: TargetTypeRef;
@@ -517,6 +534,7 @@ export type RustTargetOperationFact =
       readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "pointer" }>;
       readonly pointeeCarrier: TargetTypeRef;
       readonly valueExpression?: Node;
+      readonly valueCarrier?: TargetTypeRef;
       readonly offsetExpression?: Node;
       readonly offsetCarrier?: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
@@ -576,6 +594,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "void-expression":
     case "array-literal":
     case "source-field":
+    case "source-accessor":
     case "source-union-field":
     case "source-call":
     case "source-enum-member":
@@ -915,6 +934,14 @@ export interface RustSourceCallEffectsFact {
 // Total post-fixpoint effects for an exact selected project-source call.
 export const rustSourceCallEffectsFactKey: RustPlanKey<RustSourceCallEffectsFact> =
   defineRustPlanKey("sourceCallEffects", closedMetadataEquals);
+
+export interface RustSourceAccessorEffectsFact {
+  readonly read?: "infallible" | "fallible";
+  readonly write?: "infallible" | "fallible";
+}
+
+export const rustSourceAccessorEffectsFactKey: RustPlanKey<RustSourceAccessorEffectsFact> =
+  defineRustPlanKey("sourceAccessorEffects", closedMetadataEquals);
 
 export interface RustFutureValueFact {
   readonly outputCarrier: TargetTypeRef;

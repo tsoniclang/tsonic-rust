@@ -132,7 +132,7 @@ import {
   rustStructuralObjectCarrierValue,
 } from "../rust-target-types.js";
 import { parseSourceBigIntLiteral } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustProjectUpcastFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustProjectUpcastFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -408,8 +408,17 @@ function selectExpressionOperation(
       ...(source.receiver.declaration === undefined
         ? {}
         : { sourceReceiverDeclaration: source.receiver.declaration }),
+      accessMode: source.accessMode,
       ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
       ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
+      ...(source.selectedReadDeclaration === undefined
+        ? {}
+        : { sourceSelectedReadDeclaration: source.selectedReadDeclaration }),
+      ...(source.selectedWriteDeclaration === undefined
+        ? {}
+        : { sourceSelectedWriteDeclaration: source.selectedWriteDeclaration }),
+      ...(source.sourceReadType === undefined ? {} : { sourceReadType: source.sourceReadType }),
+      ...(source.sourceWriteType === undefined ? {} : { sourceWriteType: source.sourceWriteType }),
       sourceResultType: source.sourceReadType ?? source.sourceWriteType,
       optionalChain: source.optionalChain,
     }, context, walk.operationOptions));
@@ -425,6 +434,7 @@ function selectExpressionOperation(
       expression,
       receiver: source.receiver.expression,
       sourceReceiverType: source.receiver.type,
+      accessMode: source.accessMode,
       argument: source.argument.expression,
       ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
       ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
@@ -2567,7 +2577,7 @@ function resolvedNativePointerCarrier(
       };
       break;
     case "store": {
-      const valueCarrier = resolveExpressionCarrier(
+      const valueCarrier = resolveExactNativePointerOperandCarrier(
         walk,
         source.valueExpression,
         sourceFile,
@@ -2592,13 +2602,14 @@ function resolvedNativePointerCarrier(
         pointerCarrier,
         pointeeCarrier: pointerCarrier.pointee,
         valueExpression: source.valueExpression,
+        valueCarrier,
         resultCarrier,
       };
       break;
     }
     case "offset": {
       const nativeIntCarrier = rustSourcePrimitiveTargetType("native-int");
-      const offsetCarrier = resolveExpressionCarrier(
+      const offsetCarrier = resolveExactNativePointerOperandCarrier(
         walk,
         source.offsetExpression,
         sourceFile,
@@ -2631,6 +2642,16 @@ function resolvedNativePointerCarrier(
   }
   setRustOperationFact(walk, expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
+}
+
+function resolveExactNativePointerOperandCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  contextualCarrier: TargetTypeRef,
+): TargetTypeRef | undefined {
+  return resolveExpressionCarrier(walk, expression, sourceFile, undefined) ??
+    resolveExpressionCarrier(walk, expression, sourceFile, contextualCarrier);
 }
 
 function selectedDeclarationIsProjectSource(walk: RustFactWalk, declaration: Node): boolean {
@@ -3511,7 +3532,9 @@ function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly Sou
         return;
       }
       for (const member of members) {
-        if (ast.kindName(member) === "KindMethodDeclaration" &&
+        if ((ast.kindName(member) === "KindMethodDeclaration" ||
+            ast.kindName(member) === "KindGetAccessor" ||
+            ast.kindName(member) === "KindSetAccessor") &&
           !ast.hasModifierKind(member, "static")) {
           walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
             { message: "rust reference-backed project object method self mode" },
@@ -3542,10 +3565,17 @@ function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node): void 
       }
       continue;
     }
-    if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration") {
-      if (memberKind === "KindMethodDeclaration") {
+    if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration" ||
+      memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
+      if (memberKind !== "KindConstructor") {
         recordCallableSuspensionFacts(walk, member);
         recordCallableReturnFact(walk, member);
+        if (memberKind === "KindSetAccessor" &&
+          walk.context.facts.get(member, rustSourceCallableReturnFactKey) === undefined) {
+          walk.context.facts.set(member, rustSourceCallableReturnFactKey, {
+            returnCarrier: rustUnitTargetType(),
+          }, [{ message: "rust setter unit return carrier" }]);
+        }
       }
       const parameters = requireDenseSourceNodes(walk, ast.parameters(member), "Class callable contains an undefined or non-data parameter slot.");
       if (parameters === undefined) {
@@ -3589,17 +3619,18 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
       }
       continue;
     }
-    if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration") {
+    if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration" ||
+      memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
       const asyncFact = walk.context.facts.get(member, rustAsyncFunctionFactKey);
       const generatorFact = walk.context.facts.get(member, rustGeneratorFactKey);
-      const returnCarrier = memberKind === "KindMethodDeclaration"
+      const returnCarrier = memberKind !== "KindConstructor"
         ? generatorFact?.returnType ?? asyncFact?.outputCarrier ??
           walk.context.facts.get(member, rustSourceCallableReturnFactKey)?.returnCarrier
         : undefined;
       const previousMethod = walk.currentMethodDeclaration;
       const previousCallable = walk.currentCallableDeclaration;
       const previousGenerator = walk.currentGeneratorDeclaration;
-      walk.currentMethodDeclaration = memberKind === "KindMethodDeclaration" ? member : undefined;
+      walk.currentMethodDeclaration = memberKind === "KindConstructor" ? undefined : member;
       walk.currentCallableDeclaration = member;
       walk.currentGeneratorDeclaration = generatorFact === undefined ? undefined : member;
       const body = ast.body(member);
@@ -4324,7 +4355,10 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
           return;
         }
         for (const member of members) {
-          if (ast.kindName(member) === "KindMethodDeclaration" || ast.kindName(member) === "KindConstructor") {
+          if (ast.kindName(member) === "KindMethodDeclaration" ||
+            ast.kindName(member) === "KindConstructor" ||
+            ast.kindName(member) === "KindGetAccessor" ||
+            ast.kindName(member) === "KindSetAccessor") {
             declarations.push(member);
           }
         }
@@ -4347,6 +4381,25 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
     const fact = walk.context.facts.get(node, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(node, rustTargetOperationFactKey);
     return rustTargetOperationIsFallible(fact);
+  };
+  const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
+    const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
+      walk.context.facts.resolve(node, rustTargetOperationFactKey);
+    if (operation?.kind !== "source-accessor") {
+      return [];
+    }
+    const selected = walk.context.facts.get(node, rustSelectedOperationKey) ??
+      walk.context.facts.resolve(node, rustSelectedOperationKey);
+    return [
+      asSourceNode(
+        selected?.provenance?.sourceSelectedReadDeclaration,
+        walk.context.ast,
+      ),
+      asSourceNode(
+        selected?.provenance?.sourceSelectedWriteDeclaration,
+        walk.context.ast,
+      ),
+    ].filter((declaration): declaration is Node => declaration !== undefined);
   };
 
   const expressionRegionIsFallible = (root: Node): boolean => {
@@ -4409,6 +4462,11 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
         return;
       }
       if (!insideTry && operationIsFallible(node)) {
+        found = true;
+        return;
+      }
+      if (!insideTry && selectedAccessorDeclarations(node).some((declaration) =>
+        fallible.has(declaration))) {
         found = true;
         return;
       }
@@ -4498,6 +4556,29 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
             node,
             ["target.capability=rust.closure.infallible-result"],
           );
+        }
+      } else if (kind === KindPropertyAccessExpression) {
+        const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
+          walk.context.facts.resolve(node, rustTargetOperationFactKey);
+        const selected = walk.context.facts.get(node, rustSelectedOperationKey) ??
+          walk.context.facts.resolve(node, rustSelectedOperationKey);
+        if (operation?.kind === "source-accessor") {
+          const readDeclaration = asSourceNode(
+            selected?.provenance?.sourceSelectedReadDeclaration,
+            walk.context.ast,
+          );
+          const writeDeclaration = asSourceNode(
+            selected?.provenance?.sourceSelectedWriteDeclaration,
+            walk.context.ast,
+          );
+          walk.context.facts.set(node, rustSourceAccessorEffectsFactKey, {
+            ...(operation.read === undefined || readDeclaration === undefined
+              ? {}
+              : { read: fallible.has(readDeclaration) ? "fallible" : "infallible" }),
+            ...(operation.write === undefined || writeDeclaration === undefined
+              ? {}
+              : { write: fallible.has(writeDeclaration) ? "fallible" : "infallible" }),
+          }, [{ message: "rust finalized selected project accessor effects" }]);
         }
       } else if (kind === KindCallExpression || kind === KindNewExpression) {
         const declaration = selectedProjectDeclaration(node);

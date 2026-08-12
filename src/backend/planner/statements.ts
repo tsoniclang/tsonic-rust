@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import { isRustAssignmentOperator } from "../../common/rust-syntax.js";
+import type { RustAssignmentOperator, RustBinaryOperator } from "../../common/rust-syntax.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -69,7 +70,7 @@ import {
   Node_Type,
 } from "../../common/source-ast.js";
 import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustResourceManagementFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
-import type { RustResourceManagementFact } from "../../source/rust-facts/keys.js";
+import type { RustResourceManagementFact, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import {
   isRustBoolCarrier,
   isRustStringCarrier,
@@ -86,8 +87,11 @@ import {
   planExpression,
   planFinalizedSourceInput,
   planFinalizedTargetInput,
+  finishRustSourceAccessorCall,
+  planRustSourceAccessorCall,
   providerSelectedCallMatches,
   requireProviderArgumentPassingFacts,
+  sourceAccessorSelectedOperationMatches,
   sourceFieldSelectedOperationMatches,
   sourceUnionFieldSelectedOperationMatches,
 } from "./expressions.js";
@@ -115,6 +119,7 @@ import {
 import {
   isErasedRustSafetyExpressionStatement,
   isRustExplicitUnsafeBlockMarker,
+  rustSelectedAccessorRequiresUnsafe,
   withExplicitUnsafeContext,
 } from "./explicit-safety.js";
 import { planRustSourceUnionFieldProjection } from "./source-union-projection.js";
@@ -931,7 +936,8 @@ function planExpressionAsStatement(
           )
           ? planExpression(left, context)
           : undefined;
-      if (target === undefined && sourceField?.kind !== "source-field" &&
+      if (target === undefined && sourceField?.kind !== "source-accessor" &&
+        sourceField?.kind !== "source-field" &&
         sourceField?.kind !== "source-union-field") {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, expression),
@@ -977,6 +983,15 @@ function planExpressionAsStatement(
           "Finalized equivalent assignment requires the proven binary value operand.",
         ));
         return undefined;
+      }
+      if (sourceField?.kind === "source-accessor") {
+        return planRustSourceAccessorAssignment(
+          left,
+          valueNode,
+          sourceField,
+          fact,
+          context,
+        );
       }
       if (sourceField?.kind === "source-union-field") {
         if (!sourceUnionFieldSelectedOperationMatches(left, sourceField, context)) {
@@ -1257,6 +1272,172 @@ function planExpressionAsStatement(
   return planned === undefined
     ? undefined
     : [{ kind: "let", name: "_", mutable: false, init: planned }];
+}
+
+function planRustSourceAccessorAssignment(
+  target: Node,
+  valueNode: Node,
+  accessor: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
+  assignment: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const operator = assignment.operator;
+  if (!isRustAssignmentOperator(operator)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-assignment-operator",
+      "Project accessor assignment requires a finalized Rust assignment operator.",
+    ));
+    return undefined;
+  }
+  if (!sourceAccessorSelectedOperationMatches(target, accessor, context)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-selected-evidence",
+      "Project accessor assignment conflicts with the TSTS-selected property fact.",
+    ));
+    return undefined;
+  }
+  const unsafeAccessor = rustSelectedAccessorRequiresUnsafe(
+    target,
+    "setter",
+    context.input,
+  ) || (operator !== "=" && rustSelectedAccessorRequiresUnsafe(
+    target,
+    "getter",
+    context.input,
+  ));
+  if (unsafeAccessor && (context.explicitUnsafeContextDepth ?? 0) === 0) {
+    context.diagnostics.push({
+      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
+      category: "error",
+      source: "tsonic-rust",
+      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      sourceNode: target,
+    });
+    return undefined;
+  }
+  const write = accessor.write;
+  const read = operator === "=" ? undefined : accessor.read;
+  if (write === undefined || (operator !== "=" && read === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-assignment",
+      "Project accessor assignment requires the exact selected setter and compound assignments also require the selected getter.",
+    ));
+    return undefined;
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-temporary",
+      "Project accessor assignment requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  const bindings: { name: string; value: RustExpr }[] = [];
+  let receiver: RustExpr | undefined;
+  if (accessor.receiver.kind === "instance") {
+    const receiverNode = Node_Expression(context.input.ast, target);
+    const plannedReceiver = receiverNode === undefined
+      ? undefined
+      : planExpression(receiverNode, context);
+    if (plannedReceiver === undefined) {
+      return undefined;
+    }
+    const receiverName = allocateRustSyntheticName(context.syntheticNames, "accessor_receiver");
+    bindings.push({ name: receiverName, value: plannedReceiver });
+    receiver = { kind: "path", path: receiverName };
+  }
+  let current: RustExpr | undefined;
+  if (read !== undefined) {
+    const plannedRead = planRustSourceAccessorCall(
+      target,
+      accessor,
+      read.method,
+      [],
+      context,
+      receiver,
+    );
+    const finalizedRead = plannedRead === undefined
+      ? undefined
+      : finishRustSourceAccessorCall(target, "read", plannedRead, context);
+    if (finalizedRead === undefined) {
+      return undefined;
+    }
+    const currentName = allocateRustSyntheticName(context.syntheticNames, "accessor_current");
+    bindings.push({ name: currentName, value: finalizedRead });
+    current = { kind: "path", path: currentName };
+  }
+  const plannedValue = planExpression(valueNode, context);
+  if (plannedValue === undefined) {
+    return undefined;
+  }
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "accessor_value");
+  bindings.push({ name: valueName, value: plannedValue });
+  const selectedValue: RustExpr = { kind: "path", path: valueName };
+  const next = operator === "="
+    ? selectedValue
+    : current === undefined
+      ? undefined
+      : planRustCompoundAccessorValue(
+          operator,
+          assignment.resultCarrier,
+          current,
+          selectedValue,
+        );
+  if (next === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-operator",
+      "Project accessor compound assignment has no exact Rust value operation.",
+    ));
+    return undefined;
+  }
+  const plannedWrite = planRustSourceAccessorCall(
+    target,
+    accessor,
+    write.method,
+    [next],
+    context,
+    receiver,
+  );
+  const finalizedWrite = plannedWrite === undefined
+    ? undefined
+    : finishRustSourceAccessorCall(target, "write", plannedWrite, context);
+  return finalizedWrite === undefined
+    ? undefined
+    : [{ kind: "expr", expr: { kind: "block", bindings, value: finalizedWrite } }];
+}
+
+function planRustCompoundAccessorValue(
+  operator: Exclude<RustAssignmentOperator, "=">,
+  carrier: TargetTypeRef,
+  current: RustExpr,
+  value: RustExpr,
+): RustExpr | undefined {
+  if (operator === "+=" && isRustStringCarrier(carrier)) {
+    return { kind: "string-concat", parts: [current, value] };
+  }
+  let binary: RustBinaryOperator;
+  switch (operator) {
+    case "+=":
+      binary = "+";
+      break;
+    case "-=":
+      binary = "-";
+      break;
+    case "*=":
+      binary = "*";
+      break;
+    case "/=":
+      binary = "/";
+      break;
+    case "%=":
+      binary = "%";
+      break;
+  }
+  return { kind: "binary", operator: binary, left: current, right: value };
 }
 
 function planCondition(condition: Node, context: RustPlanContext, construct: string) {

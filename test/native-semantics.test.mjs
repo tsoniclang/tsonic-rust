@@ -55,6 +55,112 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /counter\.clone\(\)\.current\(\)/u);
 });
 
+test("class accessors preserve exact read write and update semantics", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "class_accessor_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+let receiverCalls: int32 = 0;
+
+class Value {
+  private stored: int32;
+  private reads: int32 = 0;
+  private writes: int32 = 0;
+
+  constructor(initial: int32) {
+    this.stored = initial;
+  }
+
+  get current(): int32 {
+    this.reads += 1;
+    return this.stored;
+  }
+
+  set current(value: int32) {
+    this.writes += 1;
+    this.stored = value;
+  }
+
+  storedValue(): int32 {
+    return this.stored;
+  }
+
+  readCount(): int32 {
+    return this.reads;
+  }
+
+  writeCount(): int32 {
+    return this.writes;
+  }
+}
+
+const singleton = new Value(1);
+
+function selected(): Value {
+  receiverCalls += 1;
+  return singleton;
+}
+
+export function main(): void {
+  check(selected().current === 1);
+  selected().current = 2;
+  selected().current += 3;
+  const previous = selected().current++;
+  const current = ++selected().current;
+  check(previous === 5);
+  check(current === 7);
+  check(receiverCalls === 5);
+  check(singleton.storedValue() === 7);
+  check(singleton.readCount() === 4);
+  check(singleton.writeCount() === 4);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn __tsonic_read_[0-9]+_[0-9]+\(&self\) -> i32/u);
+  assert.match(text, /fn __tsonic_write_[0-9]+_[0-9]+\(&self, value: i32\)/u);
+  const run = validateGeneratedProject("class-accessor-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("fallible accessors propagate through exact getter and setter effects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Value {
+  get current(): int32 { throw new Error("read failed"); }
+  set current(_value: int32) { throw new Error("write failed"); }
+}
+
+export function read(value: Value): int32 {
+  return value.current;
+}
+
+export function write(value: Value, next: int32): void {
+  value.current = next;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn __tsonic_read_[0-9]+_[0-9]+\(&self\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn __tsonic_write_[0-9]+_[0-9]+\(&self, _value: i32\) -> rt::TsonicResult<\(\)>/u);
+  assert.match(text, /pub fn read\(value: Value\) -> rt::TsonicResult<i32>[\s\S]*__tsonic_read_[0-9]+_[0-9]+\(\)/u);
+  assert.match(text, /__tsonic_write_[0-9]+_[0-9]+\(__tsonic_accessor_value(?:_[0-9]+)?\)\?/u);
+  validateGeneratedProject("class-accessor-fallibility", result.artifacts);
+});
+
 test("implicit constructors and class field initializers lower deterministically", () => {
   const { result } = compileRust({
     files: {

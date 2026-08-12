@@ -29,6 +29,7 @@ import { applyFallibleShape, applyRustTailShape, rustBlockTerminates } from "./f
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";
+import { rustProjectMemberSlotName } from "../../source/rust-target-semantics/project-type-policy.js";
 import { rustProjectObjectLayout } from "../../source/rust-target-semantics/project-object-layout.js";
 import {
   createRustProjectObject,
@@ -96,6 +97,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const fields: PlannedProjectObjectField[] = [];
   let constructorMember: Node | undefined;
   const methods: Node[] = [];
+  const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
   let failed = false;
   for (const member of ast.members(node)) {
     if (member === undefined) {
@@ -158,6 +160,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       methods.push(member);
       continue;
     }
+    if (memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
+      accessors.push({
+        declaration: member,
+        role: memberKind === "KindGetAccessor" ? "read" : "write",
+      });
+      continue;
+    }
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
       "rust.backend.class",
@@ -172,6 +181,29 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
     const planned = planProjectMethod(method, context);
+    if (planned === undefined) {
+      return undefined;
+    }
+    implFunctions.push(planned);
+  }
+  for (const accessor of accessors) {
+    const targetName = rustProjectMemberSlotName(
+      ast,
+      accessor.declaration,
+      accessor.role,
+    );
+    if (targetName === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, accessor.declaration),
+        "rust.backend.accessor-slot",
+        "Class accessor has no deterministic Rust declaration slot.",
+      ));
+      return undefined;
+    }
+    const planned = planProjectMethod(accessor.declaration, context, {
+      targetName,
+      safetyPlacement: accessor.role === "read" ? "getter" : "setter",
+    });
     if (planned === undefined) {
       return undefined;
     }
@@ -390,12 +422,20 @@ function sourceSubtreeContainsThis(node: Node, ast: AstReader): boolean {
   return found;
 }
 
-export function planProjectMethod(member: Node, context: RustPlanContext): RustImplFunction | undefined {
+export function planProjectMethod(
+  member: Node,
+  context: RustPlanContext,
+  options?: {
+    readonly targetName: string;
+    readonly safetyPlacement: "getter" | "setter";
+  },
+): RustImplFunction | undefined {
   const { ast } = context.input;
-  const sourceMethodName = rustProjectCallableTargetName(member, context.input);
+  const sourceMethodName = options?.targetName ??
+    rustProjectCallableTargetName(member, context.input);
   const isUnsafe = rustDeclarationRequiresUnsafe(
     member,
-    "declaration",
+    options?.safetyPlacement ?? "declaration",
     context.input,
   );
   const safetyAttributes = rustSafetyAttributesForDeclaration(

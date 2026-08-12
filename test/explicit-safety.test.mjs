@@ -251,8 +251,8 @@ export function rejected(value: int32): int32 {
   assert.deepEqual(
     rejected.diagnostics.map(({ code, message }) => ({ code, message })),
     [{
-      code: "RUST_UNSAFE_CALL_CONTEXT_REQUIRED",
-      message: "The selected Rust unsafe function requires an explicit unsafeContext() source region at this call site.",
+      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
+      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
     }],
   );
 
@@ -416,6 +416,90 @@ safety<Box>().property(box => box.value).requiresUnsafe();
       message: "The selected source declaration has no emitted Rust function boundary that can carry an explicit unsafe contract.",
     }],
   );
+});
+
+test("accessor safety contracts remain independent at declarations and use sites", () => {
+  const rejectedRead = compileRust({
+    files: {
+      "index.ts": `
+import { safety } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Value {
+  private stored: int32 = 1;
+  get current(): int32 { return this.stored; }
+  set current(value: int32) { this.stored = value; }
+}
+safety<Value>().property(value => value.current).getter().requiresUnsafe();
+
+export function read(value: Value): int32 { return value.current; }
+`,
+    },
+  }).result;
+  assert.deepEqual(
+    rejectedRead.diagnostics.map(({ code, message }) => ({ code, message })),
+    [{
+      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
+      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+    }],
+  );
+
+  const rejectedWrite = compileRust({
+    files: {
+      "index.ts": `
+import { safety } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Value {
+  private stored: int32 = 1;
+  get current(): int32 { return this.stored; }
+  set current(value: int32) { this.stored = value; }
+}
+safety<Value>().property(value => value.current).setter().requiresUnsafe();
+
+export function write(value: Value, next: int32): void { value.current = next; }
+`,
+    },
+  }).result;
+  assert.deepEqual(
+    rejectedWrite.diagnostics.map(({ code, message }) => ({ code, message })),
+    [{
+      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
+      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+    }],
+  );
+
+  const accepted = compileRust({
+    files: {
+      "index.ts": `
+import { safety, unsafeContext } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Value {
+  private stored: int32 = 1;
+  get current(): int32 { return this.stored; }
+  set current(value: int32) { this.stored = value; }
+}
+safety<Value>().property(value => value.current).getter().requiresUnsafe();
+safety<Value>().property(value => value.current).setter().requiresUnsafe();
+
+export function read(value: Value): int32 {
+  return unsafeContext(value.current);
+}
+
+export function write(value: Value, next: int32): void {
+  unsafeContext();
+  value.current = next;
+}
+`,
+    },
+  }).result;
+  assert.deepEqual(accepted.diagnostics, []);
+  const text = artifactText(accepted, "src/index.rs");
+  assert.match(text, /unsafe fn __tsonic_read_[0-9]+_[0-9]+\(&self\) -> i32/u);
+  assert.match(text, /unsafe fn __tsonic_write_[0-9]+_[0-9]+\(&self, value: i32\)/u);
+  assert.match(text, /unsafe \{[\s\S]*__tsonic_read_/u);
+  assert.match(text, /unsafe \{[\s\S]*__tsonic_write_/u);
 });
 
 test("native-pointer source aliases that collapse in TypeScript remain exact in Rust", () => {

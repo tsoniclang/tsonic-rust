@@ -92,6 +92,8 @@ export interface RustSelectedTargetOperation {
     readonly sourceSelectedSignature?: ExtensionFactSubject;
     readonly sourceSelectedSymbol?: ExtensionFactSubject;
     readonly sourceSelectedDeclaration?: ExtensionFactSubject;
+    readonly sourceSelectedReadDeclaration?: Node;
+    readonly sourceSelectedWriteDeclaration?: Node;
     readonly sourceCalleeSymbol?: ExtensionFactSubject;
     readonly sourceCalleeDeclaration?: ExtensionFactSubject;
     readonly sourceResultType?: ExtensionFactSubject;

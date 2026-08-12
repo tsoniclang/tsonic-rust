@@ -94,6 +94,7 @@ import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
   rustProjectUpcastFactKey,
+  rustSourceCallableReturnFactKey,
 } from "../rust-facts/keys.js";
 import type {
   RustOperatorToken,
@@ -2058,6 +2059,15 @@ export function selectRustCheckedPropertyAccess(
     });
   }
 
+  const projectAccessor = selectProjectSourceAccessor(
+    request,
+    context,
+    options,
+  );
+  if (projectAccessor !== undefined) {
+    return projectAccessor;
+  }
+
   const structuralProperty = selectStructuralSourceProperty(
     request,
     selectedReceiverCarrier,
@@ -2156,6 +2166,182 @@ export function selectRustCheckedPropertyAccess(
     return acceptDeclarationOperation("property");
   }
   return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_EVIDENCE_MISSING", "Checked property access has no selected provider, source-profile, or project-source declaration evidence.");
+}
+
+function selectProjectSourceAccessor(
+  request: RustCheckedPropertySelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  const readDeclaration = isProjectAccessorDeclaration(
+    request.sourceSelectedReadDeclaration,
+    "KindGetAccessor",
+    context,
+  )
+    ? request.sourceSelectedReadDeclaration
+    : undefined;
+  const writeDeclaration = isProjectAccessorDeclaration(
+    request.sourceSelectedWriteDeclaration,
+    "KindSetAccessor",
+    context,
+  )
+    ? request.sourceSelectedWriteDeclaration
+    : undefined;
+  const selectedKind = request.sourceSelectedDeclaration === undefined
+    ? undefined
+    : context.ast.kindName(request.sourceSelectedDeclaration);
+  const selectedAccessor = isProjectSourceDeclaration(
+    context,
+    request.sourceSelectedDeclaration,
+  ) && (selectedKind === "KindGetAccessor" || selectedKind === "KindSetAccessor");
+  if (!selectedAccessor && readDeclaration === undefined && writeDeclaration === undefined) {
+    return undefined;
+  }
+  const needsRead = request.accessMode === "read" || request.accessMode === "read-write";
+  const needsWrite = request.accessMode === "write" || request.accessMode === "read-write";
+  if (request.accessMode === "delete" ||
+    (needsRead && readDeclaration === undefined) ||
+    (needsWrite && writeDeclaration === undefined)) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_ACCESSOR_EVIDENCE_MISSING",
+      "Project accessor operation requires the exact TSTS-selected getter and setter declarations for its checked access mode.",
+    );
+  }
+  const declarations = [readDeclaration, writeDeclaration].filter(
+    (declaration): declaration is Node => declaration !== undefined,
+  );
+  const owner = declarations[0] === undefined
+    ? undefined
+    : context.ast.parent(declarations[0]);
+  if (owner === undefined || declarations.some((declaration) =>
+    context.ast.parent(declaration) !== owner)) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_ACCESSOR_OWNER_CONFLICT",
+      "Selected accessor declarations do not belong to one exact project-source owner.",
+    );
+  }
+  const staticAccess = context.ast.hasModifierKind(declarations[0]!, "static");
+  if (declarations.some((declaration) =>
+    context.ast.hasModifierKind(declaration, "static") !== staticAccess)) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_ACCESSOR_STATIC_CONFLICT",
+      "Selected getter and setter declarations disagree on static ownership.",
+    );
+  }
+  const readCarrier = readDeclaration === undefined
+    ? undefined
+    : context.facts.get(readDeclaration, rustSourceCallableReturnFactKey)?.returnCarrier ??
+      resolveRustTargetTypeRef(Node_Type(context.ast, readDeclaration), context, options) ??
+      resolveRustTargetTypeRef(request.sourceReadType, context, options);
+  const writeParameters = writeDeclaration === undefined
+    ? undefined
+    : context.ast.parameters(writeDeclaration);
+  const writeParameter = writeParameters !== undefined &&
+      isDenseDataArray(writeParameters) && writeParameters.length === 1
+    ? writeParameters[0]
+    : undefined;
+  const writeCarrier = writeDeclaration === undefined || writeParameter === undefined
+    ? undefined
+    : options.sourceCallableAbi.resolveParameterAbi(
+        writeParameter,
+        context,
+        options,
+      )?.valueCarrier ??
+      resolveRustTargetTypeRef(Node_Type(context.ast, writeParameter), context, options) ??
+      resolveRustTargetTypeRef(request.sourceWriteType, context, options);
+  if ((needsRead && readCarrier === undefined) ||
+    (needsWrite && writeCarrier === undefined)) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_ACCESSOR_CARRIER_MISSING",
+      "Selected project accessor has no closed Rust carrier for its exact checked read or write type.",
+    );
+  }
+  const readMethod = readDeclaration === undefined
+    ? undefined
+    : rustProjectMemberSlotName(context.ast, readDeclaration, "read");
+  const writeMethod = writeDeclaration === undefined
+    ? undefined
+    : rustProjectMemberSlotName(context.ast, writeDeclaration, "write");
+  if ((needsRead && readMethod === undefined) ||
+    (needsWrite && writeMethod === undefined)) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_ACCESSOR_SLOT_MISSING",
+      "Selected project accessor has no deterministic Rust declaration slot.",
+    );
+  }
+  const typeDefinition = options.projectTypes.definitionContainingDeclaration(
+    declarations[0]!,
+  );
+  const staticCarrier = !staticAccess || typeDefinition === undefined
+    ? undefined
+    : options.projectTypes.openCarrier(typeDefinition);
+  if (staticAccess && staticCarrier === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_ACCESSOR_STATIC_CARRIER_MISSING",
+      "Static project accessor has no exact generated Rust owner carrier.",
+    );
+  }
+  const resultCarrier = readCarrier ?? writeCarrier;
+  if (resultCarrier === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_ACCESSOR_RESULT_MISSING",
+      "Selected project accessor has no exact Rust operation result carrier.",
+    );
+  }
+  const operationId = `tsonic.rust.source.accessor:${request.accessMode}:${[
+    readDeclaration === undefined
+      ? "-"
+      : sourceOperationId(context, readDeclaration, "accessor-read"),
+    writeDeclaration === undefined
+      ? "-"
+      : sourceOperationId(context, writeDeclaration, "accessor-write"),
+  ].join(":")}`;
+  return acceptRustMemberOperation(request, "property", {
+    kind: "source-accessor",
+    operationId,
+    accessMode: request.accessMode,
+    receiver: staticAccess
+      ? { kind: "static", typeCarrier: staticCarrier! }
+      : { kind: "instance" },
+    ...(readMethod === undefined || readCarrier === undefined
+      ? {}
+      : { read: { method: readMethod, resultCarrier: readCarrier } }),
+    ...(writeMethod === undefined || writeCarrier === undefined
+      ? {}
+      : { write: { method: writeMethod, valueCarrier: writeCarrier } }),
+    resultCarrier,
+  }, context, options, {
+    sourceExpression: request.expression,
+    sourceReceiver: request.receiver,
+    sourceSelectedSymbol: request.sourceSelectedSymbol,
+    sourceSelectedDeclaration: request.sourceSelectedDeclaration,
+    sourceSelectedReadDeclaration: readDeclaration,
+    sourceSelectedWriteDeclaration: writeDeclaration,
+    sourceResultType: request.sourceResultType,
+  });
+}
+
+function isProjectAccessorDeclaration(
+  declaration: Node | undefined,
+  kind: "KindGetAccessor" | "KindSetAccessor",
+  context: RustOperationPolicyContext,
+): declaration is Node {
+  return isProjectSourceDeclaration(context, declaration) &&
+    context.ast.kindName(declaration) === kind;
 }
 
 function selectStructuralSourceProperty(
@@ -3221,6 +3407,7 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     case "fixed-index":
       return "indexer";
     case "source-field":
+    case "source-accessor":
     case "source-union-field":
     case "source-enum-member":
       return "property";

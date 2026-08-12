@@ -357,7 +357,7 @@ export function rejected(value: int32): int32 { return dangerous(value); }
     },
   });
   assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some(({ code }) => code === "RUST_UNSAFE_CALL_CONTEXT_REQUIRED"));
+  assert.ok(result.diagnostics.some(({ code }) => code === "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED"));
 });
 
 test("dependency-closure mutation after snapshot is rejected before rustdoc reuse", { timeout: 300_000 }, () => {

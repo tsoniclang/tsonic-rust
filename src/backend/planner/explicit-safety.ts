@@ -141,6 +141,22 @@ export function rustSelectedCallRequiresUnsafe(
   );
 }
 
+export function rustSelectedAccessorRequiresUnsafe(
+  access: Node,
+  role: "getter" | "setter",
+  input: RustTranslationContext,
+): boolean {
+  const selected = input.facts.getSelectedTargetProperty(access);
+  const declaration = role === "getter"
+    ? selected?.provenance?.sourceSelectedReadDeclaration
+    : selected?.provenance?.sourceSelectedWriteDeclaration;
+  return declaration !== undefined && input.safetyApplications.forDeclaration(declaration).some(
+    (application) =>
+      application.contract === "requires-unsafe" &&
+      application.applicationPlacement === role,
+  );
+}
+
 export function rustSafetyAttributesForDeclaration(
   declaration: Node,
   isUnsafe: boolean,
@@ -247,6 +263,12 @@ function applicationHasRustUnsafeBoundary(
       return kind === "KindClassDeclaration" ||
         kind === "KindConstructor" ||
         kind === "KindConstructorDeclaration";
+    }
+    if (application.applicationPlacement === "getter") {
+      return kind === "KindGetAccessor";
+    }
+    if (application.applicationPlacement === "setter") {
+      return kind === "KindSetAccessor";
     }
     if (application.applicationPlacement !== "declaration") {
       return false;

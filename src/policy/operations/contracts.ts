@@ -28,6 +28,10 @@ type ResolvedSourceCallInfo = NonNullable<
   ReturnType<SourceFileSemantics["getResolvedCallInfo"]>
 >;
 
+type ResolvedSourcePropertyAccessInfo = NonNullable<
+  ReturnType<SourceFileSemantics["getResolvedPropertyAccessInfo"]>
+>;
+
 export type RustSourceSelectedMethodTypeArguments =
   ResolvedSourceCallInfo["sourceSelectedMethodTypeArguments"];
 
@@ -139,8 +143,13 @@ export interface RustCheckedPropertySelectionInput {
   readonly receiver: Node;
   readonly sourceReceiverType?: Type;
   readonly sourceReceiverDeclaration?: Node;
+  readonly accessMode: ResolvedSourcePropertyAccessInfo["accessMode"];
   readonly sourceSelectedSymbol?: Symbol;
   readonly sourceSelectedDeclaration?: Node;
+  readonly sourceSelectedReadDeclaration?: Node;
+  readonly sourceSelectedWriteDeclaration?: Node;
+  readonly sourceReadType?: Type;
+  readonly sourceWriteType?: Type;
   readonly sourceResultType?: Type;
   readonly optionalChain?: boolean;
 }

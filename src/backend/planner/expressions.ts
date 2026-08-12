@@ -57,7 +57,7 @@ import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
 } from "../../common/source-literal-values.js";
-import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustOptionalChainFact,
@@ -131,6 +131,7 @@ import { rustTargetOperationIsFallible } from "../../source/rust-facts/target-op
 import { rustProjectDispatchTraitType } from "./project-polymorphism-names.js";
 import { planRustFallibleReturnExpression } from "./completion-exits.js";
 import {
+  rustSelectedAccessorRequiresUnsafe,
   rustSelectedCallRequiresUnsafe,
   tryPlanRustExplicitSafetyExpression,
 } from "./explicit-safety.js";
@@ -158,14 +159,14 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
   } else if (nativePointer?.handled === true) {
     planned = nativePointer.expression;
   } else if (
-    rustExpressionRequiresUnsafe(node, context) &&
+    rustExpressionUnsafeRequirement(node, context) !== undefined &&
     (context.explicitUnsafeContextDepth ?? 0) === 0
   ) {
     context.diagnostics.push({
-      code: "RUST_UNSAFE_CALL_CONTEXT_REQUIRED",
+      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
       category: "error",
       source: "tsonic-rust",
-      message: "The selected Rust unsafe function requires an explicit unsafeContext() source region at this call site.",
+      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
       sourceNode: node,
     });
     planned = undefined;
@@ -230,16 +231,34 @@ function applyRustContextualValueConversion(
   return applyRustValueConversion(context, expression, fact.conversion, node);
 }
 
-function rustExpressionRequiresUnsafe(
+function rustExpressionUnsafeRequirement(
   node: Node,
   context: RustPlanContext,
-): boolean {
+): "call" | "accessor" | "provider-operation" | undefined {
   if (rustSelectedCallRequiresUnsafe(node, context.input)) {
-    return true;
+    return "call";
   }
   const operation = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  if (operation?.kind === "source-accessor" &&
+    rustSelectedAccessorRequiresUnsafe(node, "getter", context.input)) {
+    return "accessor";
+  }
+  const kind = context.input.ast.kindName(node);
+  if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
+    const operand = Node_Operand(context.input.ast, node);
+    const accessor = operand === undefined
+      ? undefined
+      : findRustUpdateSourceAccessor(operand, context);
+    if (accessor !== undefined &&
+      (rustSelectedAccessorRequiresUnsafe(accessor.expression, "getter", context.input) ||
+        rustSelectedAccessorRequiresUnsafe(accessor.expression, "setter", context.input))) {
+      return "accessor";
+    }
+  }
   return operation?.kind === "provider-operation" &&
-    operation.abi.effects.safety === "requires-unsafe";
+      operation.abi.effects.safety === "requires-unsafe"
+    ? "provider-operation"
+    : undefined;
 }
 
 function planRustProjectUpcast(
@@ -1551,6 +1570,17 @@ function planRustUpdateExpression(
     context.usedAliases?.add("rt");
   }
   const returnsPrevious = context.input.ast.kindName(expression) === KindPostfixUnaryExpression;
+  const sourceAccessor = findRustUpdateSourceAccessor(operand, context);
+  if (sourceAccessor !== undefined) {
+    return planRustSourceAccessorUpdate(
+      sourceAccessor.expression,
+      sourceAccessor.fact,
+      fact,
+      step,
+      returnsPrevious,
+      context,
+    );
+  }
   const sourceField = findRustUpdateProjectField(operand, context);
   if (sourceField !== undefined) {
     return sourceField.fact.kind === "source-union-field"
@@ -1605,6 +1635,112 @@ function planRustUpdateExpression(
     returnsPrevious,
     context,
   );
+}
+
+function planRustSourceAccessorUpdate(
+  accessorExpression: Node,
+  accessor: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
+  update: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>,
+  step: RustExpr,
+  returnsPrevious: boolean,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (!sourceAccessorSelectedOperationMatches(accessorExpression, accessor, context) ||
+    accessor.read === undefined || accessor.write === undefined ||
+    !rustTargetTypeRefEquals(accessor.read.resultCarrier, update.resultCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, accessorExpression),
+      "rust.backend.source-accessor-update",
+      "Project accessor update requires exact selected getter, setter, and update carriers.",
+    ));
+    return undefined;
+  }
+  if (context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const locationBindings: { name: string; value: RustExpr }[] = [];
+  let receiver: RustExpr | undefined;
+  if (accessor.receiver.kind === "instance") {
+    const receiverNode = Node_Expression(context.input.ast, accessorExpression);
+    const plannedReceiver = receiverNode === undefined
+      ? undefined
+      : planExpression(receiverNode, context);
+    if (plannedReceiver === undefined) {
+      return undefined;
+    }
+    const receiverName = allocateRustSyntheticName(
+      context.syntheticNames,
+      "accessor_update_receiver",
+    );
+    locationBindings.push({ name: receiverName, value: plannedReceiver });
+    receiver = { kind: "path", path: receiverName };
+  }
+  const plannedRead = planRustSourceAccessorCall(
+    accessorExpression,
+    accessor,
+    accessor.read.method,
+    [],
+    context,
+    receiver,
+  );
+  const read = plannedRead === undefined
+    ? undefined
+    : finishRustSourceAccessorCall(
+        accessorExpression,
+        "read",
+        plannedRead,
+        context,
+      );
+  if (read === undefined) {
+    return undefined;
+  }
+  return planRustUpdateValue({
+    locationBindings,
+    read,
+    write: (value) => {
+      const plannedWrite = planRustSourceAccessorCall(
+        accessorExpression,
+        accessor,
+        accessor.write!.method,
+        [value],
+        context,
+        receiver,
+      );
+      return plannedWrite === undefined
+        ? undefined
+        : finishRustSourceAccessorCall(
+            accessorExpression,
+            "write",
+            plannedWrite,
+            context,
+          );
+    },
+    update,
+    step,
+    returnsPrevious,
+    context,
+  });
+}
+
+function findRustUpdateSourceAccessor(
+  operand: Node,
+  context: RustPlanContext,
+): {
+  readonly expression: Node;
+  readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>;
+} | undefined {
+  let current: Node | undefined = operand;
+  while (current !== undefined) {
+    const fact = context.input.facts.getFact(current, rustTargetOperationFactKey);
+    if (fact?.kind === "source-accessor") {
+      return { expression: current, fact };
+    }
+    if (context.input.ast.kindName(current) !== KindParenthesizedExpression) {
+      return undefined;
+    }
+    current = Node_Expression(context.input.ast, current);
+  }
+  return undefined;
 }
 
 function planRustSourceUnionFieldUpdate(
@@ -1996,7 +2132,7 @@ function planRustBorrowedUpdateLocation(
 function planRustUpdateValue(options: {
   readonly locationBindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly read: RustExpr;
-  readonly write: (value: RustExpr) => RustExpr;
+  readonly write: (value: RustExpr) => RustExpr | undefined;
   readonly update: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>;
   readonly step: RustExpr;
   readonly returnsPrevious: boolean;
@@ -2020,6 +2156,10 @@ function planRustUpdateValue(options: {
     left: reusable(previous, options.returnsPrevious),
     right: options.step,
   };
+  const write = options.write(reusable(next, !options.returnsPrevious));
+  if (write === undefined) {
+    return undefined;
+  }
   return {
     kind: "block",
     bindings: [
@@ -2029,7 +2169,7 @@ function planRustUpdateValue(options: {
     ],
     value: {
       kind: "evaluate-then",
-      effect: options.write(reusable(next, !options.returnsPrevious)),
+      effect: write,
       discard: "unit",
       value: options.returnsPrevious ? previous : next,
     },
@@ -3959,8 +4099,13 @@ function planOptionalChainExpression(
     return undefined;
   }
   const sourceCallEffects = context.input.facts.getFact(node, rustSourceCallEffectsFactKey);
+  const sourceAccessorEffects = context.input.facts.getFact(
+    node,
+    rustSourceAccessorEffectsFactKey,
+  );
   const innerFallible = rustTargetOperationIsFallible(rustOperationFact(node, context)) ||
-    sourceCallEffects?.invocation === "fallible";
+    sourceCallEffects?.invocation === "fallible" ||
+    sourceAccessorEffects?.read === "fallible";
   const fallibleBody = body.kind === "try"
     ? body.expr
     : {
@@ -4001,6 +4146,32 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
 
 function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "source-accessor") {
+    const read = fact.read;
+    const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
+    if (read === undefined || resultCarrier === undefined ||
+      !rustTargetTypeRefEquals(read.resultCarrier, fact.resultCarrier) ||
+      !requireExpressionCarrier(node, resultCarrier, context, "rust.backend.source-accessor-carrier")) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.source-accessor-read",
+        "Project accessor read requires one exact getter and result carrier.",
+      ));
+      return undefined;
+    }
+    if (!sourceAccessorSelectedOperationMatches(node, fact, context)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.source-accessor-selected-evidence",
+        "Project accessor read conflicts with the TSTS-selected property fact.",
+      ));
+      return undefined;
+    }
+    const planned = planRustSourceAccessorCall(node, fact, read.method, [], context);
+    return planned === undefined
+      ? undefined
+      : finishRustSourceAccessorCall(node, "read", planned, context);
+  }
   if (fact !== undefined && fact.kind === "source-field") {
     const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
     if (resultCarrier === undefined ||
@@ -4185,6 +4356,73 @@ export function sourceFieldSelectedOperationMatches(
     "property",
     fact.resultCarrier,
   );
+}
+
+export function sourceAccessorSelectedOperationMatches(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
+  context: RustPlanContext,
+): boolean {
+  return selectedOperationMatches(
+    context.input.facts.getSelectedTargetProperty(node),
+    fact.operationId,
+    "property",
+    fact.resultCarrier,
+  );
+}
+
+export function planRustSourceAccessorCall(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
+  method: string,
+  args: readonly RustExpr[],
+  context: RustPlanContext,
+  receiverOverride?: RustExpr,
+): RustExpr | undefined {
+  if (fact.receiver.kind === "static") {
+    const value = rustSourceTypeCarrierValue(fact.receiver.typeCarrier);
+    const ownerPath = value === undefined ? undefined : sourceTypePath(context, value);
+    return ownerPath === undefined
+      ? undefined
+      : { kind: "call", path: `${ownerPath}::${method}`, args };
+  }
+  const receiverNode = Node_Expression(context.input.ast, node);
+  const receiver = receiverOverride ?? (receiverNode === undefined
+    ? undefined
+    : planExpression(receiverNode, context));
+  return receiver === undefined
+    ? undefined
+    : { kind: "method-call", receiver, method, args };
+}
+
+export function finishRustSourceAccessorCall(
+  node: Node,
+  role: "read" | "write",
+  expression: RustExpr,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const effects = context.input.facts.getFact(node, rustSourceAccessorEffectsFactKey);
+  const effect = effects?.[role];
+  if (effect === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-accessor-effects",
+      "Project accessor operation requires finalized post-fixpoint effects.",
+    ));
+    return undefined;
+  }
+  if (effect === "infallible") {
+    return expression;
+  }
+  if (context.fallibleContext !== true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.accessor",
+      "Fallible accessor operations require a throwing function or try block.",
+    ));
+    return undefined;
+  }
+  return { kind: "try", expr: expression };
 }
 
 export function sourceUnionFieldSelectedOperationMatches(

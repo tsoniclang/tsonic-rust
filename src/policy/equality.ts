@@ -79,6 +79,8 @@ function operationProvenanceEquals(
     left.sourceSelectedSignature === right.sourceSelectedSignature &&
     left.sourceSelectedSymbol === right.sourceSelectedSymbol &&
     left.sourceSelectedDeclaration === right.sourceSelectedDeclaration &&
+    left.sourceSelectedReadDeclaration === right.sourceSelectedReadDeclaration &&
+    left.sourceSelectedWriteDeclaration === right.sourceSelectedWriteDeclaration &&
     left.sourceCalleeSymbol === right.sourceCalleeSymbol &&
     left.sourceCalleeDeclaration === right.sourceCalleeDeclaration &&
     left.sourceResultType === right.sourceResultType &&

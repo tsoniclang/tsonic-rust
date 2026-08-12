@@ -120,7 +120,8 @@ function nativePointerFactIsClosed(
       ? undefined
       : context.input.facts.getRuntimeCarrierFact(fact.valueExpression)?.carrier;
     return fact.pointerCarrier.mutability === "mut" &&
-      rustTargetTypeRefEquals(valueCarrier, fact.pointeeCarrier) &&
+      rustTargetTypeRefEquals(fact.valueCarrier, fact.pointeeCarrier) &&
+      rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) &&
       fact.resultCarrier.kind === "tuple" &&
       fact.resultCarrier.elements.length === 0;
   }
