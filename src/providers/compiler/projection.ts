@@ -140,7 +140,7 @@ function projectExport(
   readonly type?: RustProviderTypeDefinition;
 } {
   const exportId = compilerExportId(context.dependency, context.modulePath, exported.name);
-  if (exported.kind === "constant") {
+  if (exported.kind === "constant" || exported.kind === "static") {
     const sourceType = sourceTypeFor(exported.type, context, "result");
     const targetCarrier = targetTypeFor(exported.type, context, "result");
     return {
@@ -159,6 +159,7 @@ function projectExport(
           path: rustPath(context.dependency.targetCrateName, context.modulePath, exported.name),
         },
         resultCarrier: targetCarrier,
+        ...(exported.kind === "static" && exported.unsafe ? { isUnsafe: true } : {}),
       })]),
     };
   }

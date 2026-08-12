@@ -15,6 +15,12 @@ pub enum StructuredMode {
 }
 
 pub static GLOBAL_COUNT: i32 = 1;
+pub static mut MUTABLE_COUNT: i32 = 1;
+
+pub enum SimpleMode {
+    Off,
+    On,
+}
 
 pub struct Widget<T> {
     pub count: i32,
@@ -96,6 +102,17 @@ pub fn sum(values: &[i32]) -> i32 {
 
 pub fn fill(values: &mut [u8], value: u8) {
     values.fill(value);
+}
+
+pub fn simple_mode_code(mode: SimpleMode) -> i32 {
+    match mode {
+        SimpleMode::Off => 0,
+        SimpleMode::On => 1,
+    }
+}
+
+pub fn apply(value: i32, callback: fn(i32) -> i32) -> i32 {
+    callback(value)
 }
 
 pub mod math {

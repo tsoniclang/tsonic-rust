@@ -61,8 +61,11 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       modulePath: [],
       requestedExports: [
         "ANSWER",
+        "GLOBAL_COUNT",
         "Mode",
         "Pair",
+        "SimpleMode",
+        "apply",
         "byte_ptr",
         "dangerous",
         "double",
@@ -71,6 +74,7 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
         "first_byte",
         "mode_code",
         "pair_sum",
+        "simple_mode_code",
         "sum",
       ],
     });
@@ -78,8 +82,11 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       functionModule.exports.map(({ name }) => name),
       [
         "ANSWER",
+        "GLOBAL_COUNT",
         "Mode",
         "Pair",
+        "SimpleMode",
+        "apply",
         "byte_ptr",
         "dangerous",
         "double",
@@ -88,10 +95,12 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
         "first_byte",
         "mode_code",
         "pair_sum",
+        "simple_mode_code",
         "sum",
       ],
     );
     assert.equal(functionModule.exports.find(({ name }) => name === "ANSWER")?.kind, "constant");
+    assert.equal(functionModule.exports.find(({ name }) => name === "GLOBAL_COUNT")?.kind, "static");
     assert.equal(functionModule.exports.find(({ name }) => name === "Pair")?.kind, "type-alias");
     assert.deepEqual(
       functionModule.exports.find(({ name }) => name === "Mode")?.variants.map(({ name, kind }) => ({ name, kind })),
@@ -111,6 +120,16 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
         ],
       },
     );
+    assert.deepEqual(
+      functionModule.exports.find(({ name }) => name === "apply")?.function.parameters[1].type,
+      {
+        kind: "function-pointer",
+        parameters: [{ kind: "primitive", name: "i32" }],
+        result: { kind: "primitive", name: "i32" },
+        abi: "Rust",
+        unsafe: false,
+      },
+    );
     const closedFunctionModule = worker.module({
       snapshot,
       dependency,
@@ -122,16 +141,16 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       snapshot,
       dependency,
       modulePath: [],
-      requestedExports: ["GLOBAL_COUNT", "StructuredMode"],
+      requestedExports: ["MUTABLE_COUNT", "StructuredMode"],
     });
     assert.deepEqual(unsupportedModule.exports, []);
     assert.deepEqual(
       unsupportedModule.unsupportedExports.map(({ name }) => name),
-      ["GLOBAL_COUNT", "StructuredMode"],
+      ["MUTABLE_COUNT", "StructuredMode"],
     );
     assert.match(
-      unsupportedModule.unsupportedExports.find(({ name }) => name === "GLOBAL_COUNT")?.reason ?? "",
-      /no supported provider representation/u,
+      unsupportedModule.unsupportedExports.find(({ name }) => name === "MUTABLE_COUNT")?.reason ?? "",
+      /explicit location and synchronization contract/u,
     );
     assert.match(
       unsupportedModule.unsupportedExports.find(({ name }) => name === "StructuredMode")?.reason ?? "",
@@ -162,10 +181,16 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
     }]);
     assert.deepEqual(
       functionProjection.declarationModel.imports,
-      [{
-        moduleSpecifier: "@tsonic/rust/types.js",
-        namedImports: [{ exportedName: "constPtr" }],
-      }],
+      [
+        {
+          moduleSpecifier: "@tsonic/core/types.js",
+          namedImports: [{ exportedName: "FunctionPointer" }],
+        },
+        {
+          moduleSpecifier: "@tsonic/rust/types.js",
+          namedImports: [{ exportedName: "constPtr" }],
+        },
+      ],
     );
     const nestedModule = worker.module({
       snapshot,
@@ -193,15 +218,23 @@ test("Cargo provider virtual imports compile, execute, and preserve the user-own
   const project = createUserCargoProject();
   const source = `
 import type { int32 } from "@tsonic/core/types.js";
+import type { FunctionPointer } from "@tsonic/core/types.js";
 import { unsafeContext } from "@tsonic/core/lang.js";
 import type { mutPtr, u8 } from "@tsonic/rust/types.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
-import { ANSWER, Mode, Widget, byte_ptr, dangerous, double, duplicate, featured, fill, first_byte, identity, maybe_positive, mode_code, pair_sum, singleton_map, sum } from "@tsonic/rust/crates/widget_alias/index.js";
+import { ANSWER, GLOBAL_COUNT, Mode, SimpleMode, Widget, apply, byte_ptr, dangerous, double, duplicate, featured, fill, first_byte, identity, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 
 function readMutablePointer(pointer: mutPtr<u8>): u8 {
   return unsafeContext(first_byte(pointer));
+}
+
+export function invokePointer(
+  callback: FunctionPointer<[int32], int32>,
+  value: int32,
+): int32 {
+  return apply(value, callback);
 }
 
 export function main(): void {
@@ -222,6 +255,9 @@ export function main(): void {
   }
   if (ANSWER !== 42 || mode_code(Mode.Read) !== 1 || mode_code(Mode.Payload(9)) !== 9) {
     throw new Error("constant or enum mapping failed");
+  }
+  if (GLOBAL_COUNT !== 1 || simple_mode_code(SimpleMode.On) !== 1) {
+    throw new Error("static or unit enum mapping failed");
   }
   const pair: Pair<int32> = [4, 5];
   if (pair_sum(pair) !== 9) {
@@ -274,6 +310,7 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   assert.equal(readFileSync(project.manifestPath, "utf8"), manifestBefore);
   const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);

@@ -320,6 +320,7 @@ function sameModuleExportDependencies(
   };
   switch (exported.kind) {
     case "constant":
+    case "static":
       visitType(exported.type);
       break;
     case "function":
@@ -370,6 +371,23 @@ function normalizeExport(
       id,
       name,
       type: normalizeType(document, constant.type),
+    });
+  }
+  if (hasInnerKind(item, "static")) {
+    const static_ = requireInnerRecord(item, "static", `Rust static '${name}'`);
+    if (requireBoolean(static_.is_mutable, `${name}.static.is_mutable`)) {
+      throw new Error(`Mutable Rust static '${name}' requires an explicit location and synchronization contract.`);
+    }
+    const type = normalizeType(document, static_.type);
+    if (!rustStaticValueCanBeCopied(type)) {
+      throw new Error(`Rust static '${name}' has a value type that is not structurally proven Copy.`);
+    }
+    return Object.freeze({
+      kind: "static",
+      id,
+      name,
+      type,
+      unsafe: requireBoolean(static_.is_unsafe, `${name}.static.is_unsafe`),
     });
   }
   if (hasInnerKind(item, "function")) {
@@ -853,6 +871,27 @@ function substituteRustCompilerType(
         typeArguments: Object.freeze(type.typeArguments.map((argument) =>
           substituteRustCompilerType(argument, bindings))),
       });
+  }
+}
+
+function rustStaticValueCanBeCopied(type: RustCompilerType): boolean {
+  switch (type.kind) {
+    case "unit":
+    case "primitive":
+    case "raw-pointer":
+    case "function-pointer":
+      return type.kind !== "primitive" || type.name !== "str";
+    case "tuple":
+      return type.elements.every(rustStaticValueCanBeCopied);
+    case "array":
+      return rustStaticValueCanBeCopied(type.element);
+    case "reference":
+      return type.mutable === false;
+    case "generic":
+    case "self":
+    case "slice":
+    case "path":
+      return false;
   }
 }
 

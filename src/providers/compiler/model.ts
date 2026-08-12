@@ -109,6 +109,13 @@ export type RustCompilerExport =
       readonly type: RustCompilerType;
     }
   | {
+      readonly kind: "static";
+      readonly id: string;
+      readonly name: string;
+      readonly type: RustCompilerType;
+      readonly unsafe: boolean;
+    }
+  | {
       readonly kind: "function";
       readonly id: string;
       readonly name: string;
