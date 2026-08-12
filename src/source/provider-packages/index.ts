@@ -63,6 +63,9 @@ export interface RustProviderOperationDefinition {
   // Method, constructor, and property operations support fallibility;
   // package creation rejects other kinds.
   readonly isFallible?: boolean;
+  // Exact target invocation safety. This does not grant a lexical unsafe
+  // context; source code must still select an explicit unsafeContext region.
+  readonly isUnsafe?: boolean;
 }
 
 export interface RustProviderTypeDefinition {

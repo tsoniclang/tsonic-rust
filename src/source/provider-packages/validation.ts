@@ -615,7 +615,7 @@ function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible", "isUnsafe",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -1091,17 +1091,16 @@ function validateCarrier(
       return;
     case "pointer":
       requireExactKeys(record, ["kind", "pointee", "mutability"], where, fail);
-      if (carrier.pointee.kind === "target-named" && carrier.pointee.id === rustStringTargetId && carrier.mutability === "const") {
-        validateCarrier(carrier.pointee, definition, `${where}.pointee`, fail);
-        return;
-      }
-      if (carrier.pointee.kind === "array" && (carrier.mutability === "const" || carrier.mutability === "mut")) {
+      if (carrier.mutability === "const" || carrier.mutability === "mut") {
         validateCarrier(carrier.pointee, definition, `${where}.pointee`, fail);
         return;
       }
       fail(`${where} is not a renderable Rust pointer carrier`);
     case "function-pointer":
-      requireExactKeys(record, ["kind", "args", "result", "abi"], where, fail);
+      requireExactKeys(record, ["kind", "args", "result", "abi", "isUnsafe"], where, fail);
+      if (carrier.isUnsafe !== undefined && typeof carrier.isUnsafe !== "boolean") {
+        fail(`${where}.isUnsafe must be boolean when present`);
+      }
       if ((carrier.abi?.length ?? 0) > 1 || carrier.abi?.some((entry) =>
         entry !== "target-default" && entry !== "C" && entry !== "system")) {
         fail(`${where}.abi must contain at most one supported Rust ABI name`);
@@ -1137,6 +1136,11 @@ function validateValueConversion(
     requireExactKeys(asRecord(conversion), ["kind", "id"], where, fail);
   } else if (conversion.kind === "numeric-promotion") {
     requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
+  } else if (conversion.kind === "raw-pointer-mut-to-const") {
+    requireExactKeys(asRecord(conversion), ["kind", "pointee"], where, fail);
+    if (!isRustTargetTypeRef(conversion.pointee)) {
+      fail(`${where}.pointee is not a closed Rust target type`);
+    }
   } else {
     fail(`${where}.kind '${String((conversion as { readonly kind?: unknown }).kind)}' is not supported`);
   }

@@ -416,9 +416,8 @@ function normalizeFunction(
     throw new Error(`Rust function '${name}' is variadic and has no closed source signature.`);
   }
   const header = requireRecord(fn.header, `${name}.header`);
-  if (header.is_unsafe !== false) {
-    throw new Error(`Rust function '${name}' is unsafe and requires an explicit unsafe-operation contract.`);
-  }
+  const unsafe = requireBoolean(header.is_unsafe, `${name}.header.is_unsafe`);
+  const abi = normalizeAbi(header.abi, `${name}.header.abi`);
   const generics = requireRecord(fn.generics, `${name}.generics`);
   if (requireArray(generics.where_predicates, `${name}.where_predicates`).length > 0 || genericParametersHaveBounds(generics)) {
     throw new Error(`Rust function '${name}' has generic constraints that are not representable by the current source contract.`);
@@ -463,7 +462,8 @@ function normalizeFunction(
     typeParameters: normalizeTypeParameters(generics),
     ...(receiver === undefined ? {} : { receiver }),
     asynchronous: header.is_async === true,
-    unsafe: false,
+    unsafe,
+    abi,
   });
 }
 
@@ -526,6 +526,50 @@ function normalizeType(document: RustdocDocument, raw: unknown): RustCompilerTyp
       kind: "reference",
       mutable: type.borrowed_ref.is_mutable === true,
       target: normalizeType(document, type.borrowed_ref.type),
+    });
+  }
+  if (isRecord(type.raw_pointer)) {
+    return Object.freeze({
+      kind: "raw-pointer",
+      mutable: type.raw_pointer.is_mutable === true,
+      target: normalizeType(document, type.raw_pointer.type),
+    });
+  }
+  if (isRecord(type.function_pointer)) {
+    const signature = requireRecord(type.function_pointer.sig, "Rust function pointer signature");
+    if (signature.is_c_variadic !== false) {
+      throw new Error("Variadic Rust function-pointer types have no closed source signature.");
+    }
+    const genericParameters = requireArray(
+      type.function_pointer.generic_params,
+      "Rust function pointer generic parameters",
+    );
+    if (genericParameters.length !== 0) {
+      throw new Error("Generic Rust function-pointer types have no closed source signature.");
+    }
+    const header = requireRecord(
+      type.function_pointer.header,
+      "Rust function pointer header",
+    );
+    const inputs = requireArray(signature.inputs, "Rust function pointer inputs").map(
+      (input, index) => {
+        if (!Array.isArray(input) || input.length !== 2) {
+          throw new Error(`Rust function pointer input ${index} has an invalid rustdoc shape.`);
+        }
+        return normalizeType(document, input[1]);
+      },
+    );
+    return Object.freeze({
+      kind: "function-pointer",
+      parameters: Object.freeze(inputs),
+      result: signature.output === null
+        ? Object.freeze({ kind: "unit" as const })
+        : normalizeType(document, signature.output),
+      abi: normalizeAbi(header.abi, "Rust function pointer ABI"),
+      unsafe: requireBoolean(
+        header.is_unsafe,
+        "Rust function pointer safety",
+      ),
     });
   }
   if (isRecord(type.resolved_path)) {
@@ -618,6 +662,34 @@ function requireArray(value: unknown, where: string): readonly unknown[] {
     throw new Error(`${where} is not an array.`);
   }
   return value;
+}
+
+function requireBoolean(value: unknown, where: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${where} is not boolean.`);
+  }
+  return value;
+}
+
+function normalizeAbi(value: unknown, where: string): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!isRecord(value)) {
+    throw new Error(`${where} has no supported ABI representation.`);
+  }
+  const entries = Object.entries(value);
+  const entry = entries[0];
+  const options = entry?.[1];
+  if (entries.length !== 1 || entry === undefined || !isRecord(options)) {
+    throw new Error(`${where} has no unique ABI representation.`);
+  }
+  const [name] = entry;
+  if (Object.keys(options).some((key) => key !== "unwind") ||
+    (options.unwind !== undefined && typeof options.unwind !== "boolean")) {
+    throw new Error(`${where} has unsupported ABI options.`);
+  }
+  return options.unwind === true ? `${name}-unwind` : name;
 }
 
 function requireString(value: unknown, where: string): string {

@@ -45,6 +45,14 @@ export type RustCompilerType =
   | { readonly kind: "array"; readonly element: RustCompilerType; readonly length: number }
   | { readonly kind: "slice"; readonly element: RustCompilerType }
   | { readonly kind: "reference"; readonly mutable: boolean; readonly target: RustCompilerType }
+  | { readonly kind: "raw-pointer"; readonly mutable: boolean; readonly target: RustCompilerType }
+  | {
+      readonly kind: "function-pointer";
+      readonly parameters: readonly RustCompilerType[];
+      readonly result: RustCompilerType;
+      readonly abi: string;
+      readonly unsafe: boolean;
+    }
   | {
       readonly kind: "path";
       readonly crateName: string;
@@ -71,6 +79,7 @@ export interface RustCompilerFunction {
   readonly receiver?: "value" | "shared" | "mutable";
   readonly asynchronous: boolean;
   readonly unsafe: boolean;
+  readonly abi: string;
 }
 
 export interface RustCompilerField {

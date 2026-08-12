@@ -119,6 +119,7 @@ export interface RustFinalizedOperationAbi {
   readonly effects: {
     readonly invocation: "infallible" | "fallible";
     readonly awaiting: "not-applicable" | "infallible" | "fallible";
+    readonly safety: "safe" | "requires-unsafe";
   };
 }
 
@@ -141,6 +142,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly isUnsafe?: boolean;
 }
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
@@ -158,7 +160,8 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
         new Set(options.compileTimeSourceArgumentIndexes).size !== options.compileTimeSourceArgumentIndexes.length ||
         options.compileTimeSourceArgumentIndexes.some((index) =>
           !Number.isSafeInteger(index) || index < 0 || index >= options.sourceArgumentCarriers.length))) ||
-    typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean") {
+    typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
+    (options.isUnsafe !== undefined && typeof options.isUnsafe !== "boolean")) {
     return undefined;
   }
   const compileTimeIndexes = new Set(options.compileTimeSourceArgumentIndexes ?? []);
@@ -232,6 +235,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       awaiting: options.isAsync
         ? options.isFallible ? "fallible" : "infallible"
         : "not-applicable",
+      safety: options.isUnsafe ? "requires-unsafe" : "safe",
     },
   };
   return validateRustFinalizedOperationAbi(abi) ? abi : undefined;
@@ -249,7 +253,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex),
   ) !== undefined ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
-    (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible")) {
+    (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
+    (abi.effects.safety !== "safe" && abi.effects.safety !== "requires-unsafe")) {
     return false;
   }
   if (abi.sourceArguments.some((argument, index) => {
@@ -464,7 +469,10 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
       hasExactKeys(value.conversion, ["kind", "id"]) && typeof value.conversion.id === "string") ||
     (value.conversion.kind === "numeric-promotion" &&
       hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
-      typeof value.conversion.source === "string" && typeof value.conversion.target === "string")) &&
+      typeof value.conversion.source === "string" && typeof value.conversion.target === "string") ||
+    (value.conversion.kind === "raw-pointer-mut-to-const" &&
+      hasExactKeys(value.conversion, ["kind", "pointee"]) &&
+      isRustTargetTypeRef(value.conversion.pointee))) &&
     rustValueConversionContract(value.conversion as RustValueConversion) !== undefined &&
     typeof value.fallible === "boolean";
 }
@@ -503,9 +511,10 @@ function isOperationResult(value: unknown): value is RustFinalizedOperationResul
 }
 
 function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"] {
-  return isRecord(value) && hasExactKeys(value, ["invocation", "awaiting"]) &&
+  return isRecord(value) && hasExactKeys(value, ["invocation", "awaiting", "safety"]) &&
     (value.invocation === "infallible" || value.invocation === "fallible") &&
-    (value.awaiting === "not-applicable" || value.awaiting === "infallible" || value.awaiting === "fallible");
+    (value.awaiting === "not-applicable" || value.awaiting === "infallible" || value.awaiting === "fallible") &&
+    (value.safety === "safe" || value.safety === "requires-unsafe");
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

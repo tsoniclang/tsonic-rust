@@ -88,6 +88,50 @@ export function pass(pointer: NativePointer<int32>): NativePointer<int32> {
   validateGeneratedProject("explicit-safety-pointer-shape", result.artifacts);
 });
 
+test("Rust const and mutable pointer aliases preserve independent raw-pointer mutability", { timeout: 300_000 }, () => {
+  const accepted = compileRust({
+    files: {
+      "index.ts": `
+import type { constPtr, mutPtr, u8 } from "@tsonic/rust/types.js";
+
+export function preserveConst(pointer: constPtr<u8>): constPtr<u8> {
+  return pointer;
+}
+
+export function preserveMut(pointer: mutPtr<u8>): mutPtr<u8> {
+  return pointer;
+}
+
+export function widen(pointer: mutPtr<u8>): constPtr<u8> {
+  return pointer;
+}
+`,
+    },
+  });
+  assert.deepEqual(accepted.result.diagnostics, []);
+  const source = artifactText(accepted.result, "src/index.rs");
+  assert.match(source, /pub fn preserveConst\(pointer: \*const u8\) -> \*const u8/u);
+  assert.match(source, /pub fn preserveMut\(pointer: \*mut u8\) -> \*mut u8/u);
+  assert.match(source, /pub fn widen\(pointer: \*mut u8\) -> \*const u8/u);
+  validateGeneratedProject("explicit-safety-rust-pointer-mutability", accepted.result.artifacts);
+
+  const rejected = compileRust({
+    files: {
+      "index.ts": `
+import type { constPtr, mutPtr, u8 } from "@tsonic/rust/types.js";
+
+export function narrow(pointer: constPtr<u8>): mutPtr<u8> {
+  return pointer;
+}
+`,
+    },
+  }).result;
+  assert.equal(rejected.artifacts.length, 0);
+  assert.ok(rejected.diagnostics.some(({ code }) =>
+    code === "RUST_RETURN_CARRIER_MISMATCH" ||
+    code === "RUST_CONVERSION_UNSUPPORTED"));
+});
+
 test("native pointer operations fail closed without an explicit unsafe context", () => {
   const { result } = compileRust({
     files: {

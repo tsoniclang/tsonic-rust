@@ -80,6 +80,10 @@ export type RustValueConversion =
       readonly kind: "numeric-promotion";
       readonly source: SourcePrimitiveKind;
       readonly target: SourcePrimitiveKind;
+    }
+  | {
+      readonly kind: "raw-pointer-mut-to-const";
+      readonly pointee: TargetTypeRef;
     };
 
 export type RustProviderOperationForm =
@@ -214,6 +218,7 @@ export interface RustProviderOperationTemplate {
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly isUnsafe?: boolean;
 }
 
 export interface RustRuntimeSetTemplate {
@@ -689,6 +694,15 @@ function rustTypedLocationPlanEquals(
 
 export const rustOptionWrapFactKey: RustPlanKey<{ readonly wrap: boolean }> =
   defineRustPlanKey("optionWrap", (left, right) => left.wrap === right.wrap);
+
+export interface RustContextualValueConversionFact {
+  readonly sourceCarrier: TargetTypeRef;
+  readonly targetCarrier: TargetTypeRef;
+  readonly conversion: RustValueConversion;
+}
+
+export const rustContextualValueConversionFactKey: RustPlanKey<RustContextualValueConversionFact> =
+  defineRustPlanKey("contextualValueConversion", closedMetadataEquals);
 
 export interface RustProjectUpcastFact {
   readonly sourceCarrier: TargetTypeRef;

@@ -110,6 +110,7 @@ export function rustTypeFromCarrier(
           parameters: parameters as RustType[],
           result,
           ...(carrier.abi === undefined ? {} : { abi: carrier.abi }),
+          ...(carrier.isUnsafe === true ? { isUnsafe: true } : {}),
         };
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);

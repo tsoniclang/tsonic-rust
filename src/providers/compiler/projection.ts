@@ -14,6 +14,13 @@ import type {
   RustProviderTypeDefinition,
 } from "../../source/provider-packages/index.js";
 import {
+  rustConstPointerExport,
+  rustMutPointerExport,
+} from "../../source/rust-source-semantics/source-extension.js";
+import {
+  rustTypesModule,
+} from "../../source/rust-source-semantics/source-modules.js";
+import {
   rustFixedArrayTargetType,
   rustIsizeTargetType,
   rustOptionTargetId,
@@ -237,9 +244,6 @@ function projectFunction(
   readonly signature: ProviderSignatureDeclaration;
   readonly operation: RustProviderOperationDefinition;
 } {
-  if (fn.unsafe) {
-    throw new Error(`Rust function '${fn.name}' is unsafe and has no safe provider projection.`);
-  }
   const memberId = context.currentType === undefined
     ? undefined
     : `${exportId}::${constructor ? "constructor" : fn.receiver === undefined ? "static" : "method"}:${fn.name}`;
@@ -304,6 +308,7 @@ function projectFunction(
         : { receiverCarrier: context.currentType.carrier }),
       ...(allTypeParameters.length === 0 ? {} : { typeParameters: allTypeParameters }),
       ...(fn.asynchronous ? { isAsync: true } : {}),
+      ...(fn.unsafe ? { isUnsafe: true } : {}),
     }),
   };
 }
@@ -351,6 +356,19 @@ function sourceTypeFor(
         throw new Error("Borrowed Rust slice results require an explicit lifetime-bearing source contract.");
       }
       return { kind: "array", elementType: sourceTypeFor(type.element, context, position) };
+    case "raw-pointer":
+      return importedSourceType(
+        context,
+        rustTypesModule,
+        type.mutable ? rustMutPointerExport : rustConstPointerExport,
+        [sourceTypeFor(type.target, context, position)],
+      );
+    case "function-pointer":
+      return importedSourceType(context, "@tsonic/core/types.js", "FunctionPointer", [{
+          kind: "tuple",
+          elementTypes: type.parameters.map((parameter) =>
+            sourceTypeFor(parameter, context, position)),
+        }, sourceTypeFor(type.result, context, position)]);
     case "path": {
       if (isRustStringPath(type)) {
         return { kind: "string" };
@@ -420,6 +438,21 @@ function targetTypeFor(
       return rustFixedArrayTargetType(targetTypeFor(type.element, context, position), type.length);
     case "slice":
       throw new Error("Rust slice parameters require a dedicated slice carrier contract.");
+    case "raw-pointer":
+      return {
+        kind: "pointer",
+        pointee: targetTypeFor(type.target, context, position),
+        mutability: type.mutable ? "mut" : "const",
+      };
+    case "function-pointer":
+      return {
+        kind: "function-pointer",
+        args: type.parameters.map((parameter) =>
+          targetTypeFor(parameter, context, position)),
+        result: targetTypeFor(type.result, context, position),
+        abi: [providerFunctionPointerAbi(type.abi)],
+        ...(type.unsafe ? { isUnsafe: true } : {}),
+      };
     case "path": {
       if (isRustStringPath(type)) {
         return rustStringTargetType();
@@ -527,6 +560,33 @@ function rustPath(crateName: string, modulePath: readonly string[], ...tail: rea
 
 function functionSignatureDigest(fn: RustCompilerFunction): string {
   return digestText(JSON.stringify(fn)).slice(0, 24);
+}
+
+function providerFunctionPointerAbi(abi: string): string {
+  if (abi === "Rust") {
+    return "target-default";
+  }
+  if (abi === "C" || abi === "system") {
+    return abi;
+  }
+  throw new Error(`Rust function pointer ABI '${abi}' has no source contract.`);
+}
+
+function importedSourceType(
+  context: ProjectionContext,
+  moduleSpecifier: string,
+  exportName: string,
+  typeArguments: readonly ProviderTypeExpression[],
+): ProviderTypeExpression {
+  const names = context.imports.get(moduleSpecifier) ?? new Set<string>();
+  names.add(exportName);
+  context.imports.set(moduleSpecifier, names);
+  return {
+    kind: "provider-ref",
+    moduleSpecifier,
+    exportName,
+    typeArguments,
+  };
 }
 
 function digestText(text: string): string {

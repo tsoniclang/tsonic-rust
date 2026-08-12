@@ -177,6 +177,7 @@ function rustTargetTypeRefEqualsValidated(
     case "function-pointer":
       return right.kind === left.kind &&
         stringListsEqual(left.abi, right.abi) &&
+        left.isUnsafe === right.isUnsafe &&
         targetTypeRefListsEqual(left.args, right.args) &&
         rustTargetTypeRefEqualsValidated(left.result, right.result);
     case "closure":
@@ -231,8 +232,9 @@ function validateRustTargetTypeRef(
           (value.mutability === undefined || value.mutability === "const" || value.mutability === "mut" ||
             value.mutability === "target-defined");
       case "function-pointer":
-        return hasExactKeys(value, ["kind", "args", "result", "abi"], ["kind", "args", "result"]) &&
+        return hasExactKeys(value, ["kind", "args", "result", "abi", "isUnsafe"], ["kind", "args", "result"]) &&
           validateChildren(value.args) && validateChild(value.result) &&
+          (value.isUnsafe === undefined || typeof value.isUnsafe === "boolean") &&
           (value.abi === undefined ||
             (isDenseDataArray(value.abi) && value.abi.every((part) => typeof part === "string")));
       case "closure":

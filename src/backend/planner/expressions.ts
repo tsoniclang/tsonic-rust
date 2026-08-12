@@ -54,7 +54,7 @@ import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
 } from "../../common/source-literal-values.js";
-import { rustClosureCaptureFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustOptionalChainFact,
@@ -145,7 +145,7 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
   } else if (nativePointer?.handled === true) {
     planned = nativePointer.expression;
   } else if (
-    rustSelectedCallRequiresUnsafe(node, context.input) &&
+    rustExpressionRequiresUnsafe(node, context) &&
     (context.explicitUnsafeContextDepth ?? 0) === 0
   ) {
     context.diagnostics.push({
@@ -176,8 +176,57 @@ export function planExpression(node: Node, context: RustPlanContext): RustExpr |
   if (converted === undefined) {
     return undefined;
   }
+  const contextualConversion = context.input.facts.getFact(
+    node,
+    rustContextualValueConversionFactKey,
+  );
+  const contextuallyConverted = contextualConversion === undefined
+    ? converted
+    : applyRustContextualValueConversion(
+        node,
+        converted,
+        contextualConversion,
+        context,
+      );
+  if (contextuallyConverted === undefined) {
+    return undefined;
+  }
   const wrap = context.input.facts.getFact(node, rustOptionWrapFactKey);
-  return wrap?.wrap === true ? { kind: "call", path: "Some", args: [converted] } : converted;
+  return wrap?.wrap === true
+    ? { kind: "call", path: "Some", args: [contextuallyConverted] }
+    : contextuallyConverted;
+}
+
+function applyRustContextualValueConversion(
+  node: Node,
+  expression: RustExpr,
+  fact: import("../../source/rust-facts/keys.js").RustContextualValueConversionFact,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const sourceCarrier = expressionCarrier(node, context);
+  const convertedCarrier = context.input.facts.getTargetConversionFact(node)?.convertedType;
+  if (!rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier) ||
+    !rustTargetTypeRefEquals(convertedCarrier, fact.targetCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.contextual-value-conversion",
+      "Contextual Rust value conversion conflicts with its finalized source and target carriers.",
+    ));
+    return undefined;
+  }
+  return applyRustValueConversion(context, expression, fact.conversion, node);
+}
+
+function rustExpressionRequiresUnsafe(
+  node: Node,
+  context: RustPlanContext,
+): boolean {
+  if (rustSelectedCallRequiresUnsafe(node, context.input)) {
+    return true;
+  }
+  const operation = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  return operation?.kind === "provider-operation" &&
+    operation.abi.effects.safety === "requires-unsafe";
 }
 
 function planRustProjectUpcast(
@@ -1746,12 +1795,14 @@ export function applyRustValueConversion(
   const source = contract.sourceMode === "ref"
     ? applyRustArgumentMode(context, nonConsumingSource, "ref", node)
     : nonConsumingSource;
-  const converted: RustExpr = contract.lowering === "call"
-    ? (() => {
+  const converted: RustExpr = contract.lowering === "identity"
+    ? source
+    : contract.lowering === "call"
+      ? (() => {
         registerAliasFromPath(context, contract.path);
         return { kind: "call", path: contract.path, args: [source] } as const;
       })()
-    : { kind: "numeric-cast", expression: source, target: contract.targetType };
+      : { kind: "numeric-cast", expression: source, target: contract.targetType };
   if (!contract.fallible) {
     return converted;
   }

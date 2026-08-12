@@ -1,5 +1,8 @@
 import type { TargetTypeRef } from "../../policy/types.js";
-import { rustTargetTypeRefEquals } from "../../policy/equality.js";
+import {
+  isRustTargetTypeRef,
+  rustTargetTypeRefEquals,
+} from "../../policy/equality.js";
 import type {
   RustValueConversion,
   RustValueConversionId,
@@ -44,6 +47,9 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "numeric-cast";
       readonly targetType: RustPrimitiveTypeName;
     }
+  | {
+      readonly lowering: "identity";
+    }
 );
 
 function conversion(id: RustValueConversionId): RustValueConversion {
@@ -70,6 +76,27 @@ export const rustJsValueCloneConversion = conversion("js-value-clone");
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "raw-pointer-mut-to-const") {
+    if (!isRustTargetTypeRef(value.pointee)) {
+      return undefined;
+    }
+    return {
+      category: "exact",
+      lowering: "identity",
+      sourceMode: "value",
+      source: {
+        kind: "pointer",
+        pointee: value.pointee,
+        mutability: "mut",
+      },
+      target: {
+        kind: "pointer",
+        pointee: value.pointee,
+        mutability: "const",
+      },
+      fallible: false,
+    };
+  }
   if (value.kind === "numeric-promotion") {
     const source = rustSourcePrimitiveTargetType(value.source);
     const target = rustSourcePrimitiveTargetType(value.target);
@@ -143,13 +170,23 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 export function rustValueConversionIdentity(value: RustValueConversion): string {
   return value.kind === "semantic-conversion"
     ? value.id
-    : `numeric-promotion.${value.source}.${value.target}`;
+    : value.kind === "numeric-promotion"
+      ? `numeric-promotion.${value.source}.${value.target}`
+      : `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`;
 }
 
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustValueConversion | undefined {
+  if (source.kind === "pointer" && target.kind === "pointer" &&
+    source.mutability === "mut" && target.mutability === "const" &&
+    rustTargetTypeRefEquals(source.pointee, target.pointee)) {
+    return Object.freeze({
+      kind: "raw-pointer-mut-to-const",
+      pointee: source.pointee,
+    });
+  }
   if (rustTargetTypeRefEquals(target, jsValueCarrier)) {
     if (rustTargetTypeRefEquals(source, jsValueCarrier)) {
       return rustJsValueCloneConversion;

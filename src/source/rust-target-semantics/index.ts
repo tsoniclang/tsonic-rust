@@ -198,6 +198,10 @@ import { selectRustResourceManagement } from "./resource-management.js";
 import { rustProjectMemberSlotName } from "./project-type-policy.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
 import { rustProjectObjectLayout } from "./project-object-layout.js";
+import {
+  recordRustValueCarrierReconciliation,
+  selectRustValueCarrierReconciliation,
+} from "./value-carrier-reconciliation.js";
 import { recordRustBindingPatternFacts } from "./binding-patterns.js";
 import { rustBuiltInSourceTypeSemantics } from "./built-in-source-types.js";
 import {
@@ -906,7 +910,22 @@ function recordStatementFacts(
   if (kind === KindReturnStatement) {
     const expression = Node_Expression(walk.context.ast, statement);
     if (expression !== undefined) {
-      resolveExpressionCarrier(walk, expression, sourceFile, returnCarrier);
+      const resolved = resolveExpressionCarrier(
+        walk,
+        expression,
+        sourceFile,
+        returnCarrier,
+      );
+      if (returnCarrier !== undefined && resolved !== undefined &&
+        !reconcileRequiredCarrier(walk, expression, resolved, returnCarrier)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_RETURN_CARRIER_MISMATCH",
+          "The returned source value cannot be represented by the callable's exact Rust return carrier.",
+          expression,
+          ["target.capability=rust.return-carrier"],
+        );
+      }
     }
     return;
   }
@@ -1384,6 +1403,29 @@ function applyOptionLane(
     return expected;
   }
   return resolved;
+}
+
+function reconcileRequiredCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceCarrier: TargetTypeRef,
+  targetCarrier: TargetTypeRef,
+): boolean {
+  const reconciliation = selectRustValueCarrierReconciliation(
+    sourceCarrier,
+    targetCarrier,
+  );
+  if (reconciliation.kind === "incompatible") {
+    return false;
+  }
+  if (reconciliation.kind === "conversion") {
+    recordRustValueCarrierReconciliation(
+      walk.context.facts,
+      expression,
+      reconciliation,
+    );
+  }
+  return true;
 }
 
 function resolveExpressionCarrierUncached(

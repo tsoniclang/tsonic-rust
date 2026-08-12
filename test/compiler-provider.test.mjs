@@ -59,9 +59,42 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       snapshot,
       dependency,
       modulePath: [],
-      requestedExports: ["double", "featured"],
+      requestedExports: ["byte_ptr", "dangerous", "double", "featured", "first_byte"],
     });
-    assert.deepEqual(functionModule.exports.map(({ name }) => name), ["double", "featured"]);
+    assert.deepEqual(
+      functionModule.exports.map(({ name }) => name),
+      ["byte_ptr", "dangerous", "double", "featured", "first_byte"],
+    );
+    const dangerous = functionModule.exports.find(({ name }) => name === "dangerous");
+    assert.equal(dangerous?.kind, "function");
+    assert.equal(dangerous.function.unsafe, true);
+    const firstByte = functionModule.exports.find(({ name }) => name === "first_byte");
+    assert.equal(firstByte?.kind, "function");
+    assert.deepEqual(firstByte.function.parameters[0].type, {
+      kind: "raw-pointer",
+      mutable: false,
+      target: { kind: "primitive", name: "u8" },
+    });
+    const functionProjection = projectRustCompilerModule(functionModule, {
+      providerModuleId: compilerProviderModuleId(dependency, []),
+      moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
+    });
+    const firstByteOperation = functionProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::first_byte"),
+    );
+    assert.equal(firstByteOperation?.isUnsafe, true);
+    assert.deepEqual(firstByteOperation?.parameterCarriers, [{
+      kind: "pointer",
+      pointee: { kind: "source-primitive", name: "uint8" },
+      mutability: "const",
+    }]);
+    assert.deepEqual(
+      functionProjection.declarationModel.imports,
+      [{
+        moduleSpecifier: "@tsonic/rust/types.js",
+        namedImports: [{ exportedName: "constPtr" }],
+      }],
+    );
     const nestedModule = worker.module({
       snapshot,
       dependency,
@@ -88,9 +121,15 @@ test("Cargo provider virtual imports compile, execute, and preserve the user-own
   const project = createUserCargoProject();
   const source = `
 import type { int32 } from "@tsonic/core/types.js";
-import { Widget, double, duplicate, featured, identity, maybe_positive, singleton_map } from "@tsonic/rust/crates/widget_alias/index.js";
+import { unsafeContext } from "@tsonic/core/lang.js";
+import type { mutPtr, u8 } from "@tsonic/rust/types.js";
+import { Widget, byte_ptr, dangerous, double, duplicate, featured, first_byte, identity, maybe_positive, singleton_map } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
+
+function readMutablePointer(pointer: mutPtr<u8>): u8 {
+  return unsafeContext(first_byte(pointer));
+}
 
 export function main(): void {
   const widget = new Widget<int32>(7);
@@ -101,6 +140,12 @@ export function main(): void {
   }
   if (double(4) !== 8 || identity<int32>(5) !== 5 || featured(1) !== 101 || triple(3) !== 9) {
     throw new Error("function mapping failed");
+  }
+  if (unsafeContext(dangerous(12)) !== 12) {
+    throw new Error("unsafe function mapping failed");
+  }
+  if (unsafeContext(first_byte(byte_ptr())) !== 23) {
+    throw new Error("raw pointer mapping failed");
   }
   const nested = int_widget(11);
   if (nested.count !== 1 || nested.into_value() !== 11) {
@@ -138,18 +183,18 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.equal(result.artifacts.some(({ path }) => path === "Cargo.toml"), false);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::new\(7\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::first_byte\(widget_alias::byte_ptr\(\)\) \}/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   assert.equal(readFileSync(project.manifestPath, "utf8"), manifestBefore);
   const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
   assert.equal(run.status, 0, run.stderr);
 });
 
-test("unsupported and missing Cargo exports fail closed at the selected source import", { timeout: 300_000 }, () => {
+test("missing Cargo exports fail closed at the selected source import", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
-  for (const [importName, expected] of [
-    ["dangerous", /unsafe/u],
-    ["missing_export", /does not export public item/u],
-  ]) {
+  for (const [importName, expected] of [["missing_export", /does not export public item/u]]) {
     const harness = createRustSession({
       target: { id: "rust", options: { projectFile: project.manifestPath } },
       files: {
@@ -172,6 +217,22 @@ export function invalid(widget: Widget<int32>): int32 {
     },
   });
   assert.match(rustSourceDiagnostics(unsupportedMember), /Property 'value' does not exist on type 'Widget<number>'/u);
+});
+
+test("unsafe Cargo provider calls fail closed without an explicit source unsafe region", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const { result } = compileRustThroughTargetPack({
+    target: { id: "rust", options: { projectFile: project.manifestPath } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { dangerous } from "@tsonic/rust/crates/widget_alias/index.js";
+export function rejected(value: int32): int32 { return dangerous(value); }
+`,
+    },
+  });
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(result.diagnostics.some(({ code }) => code === "RUST_UNSAFE_CALL_CONTEXT_REQUIRED"));
 });
 
 test("dependency-closure mutation after snapshot is rejected before rustdoc reuse", { timeout: 300_000 }, () => {

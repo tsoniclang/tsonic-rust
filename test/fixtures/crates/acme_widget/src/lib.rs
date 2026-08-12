@@ -52,6 +52,16 @@ pub unsafe fn dangerous(value: i32) -> i32 {
     value
 }
 
+pub unsafe fn first_byte(pointer: *const u8) -> u8 {
+    unsafe { *pointer }
+}
+
+static BYTE: u8 = 23;
+
+pub fn byte_ptr() -> *const u8 {
+    &BYTE
+}
+
 pub mod math {
     pub fn triple(value: i32) -> i32 {
         value * 3

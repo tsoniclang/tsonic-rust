@@ -3,17 +3,26 @@ import {
 } from "@tsonic/tsts";
 import type {
   CompilerExtension,
+  ProviderDeclarationModel,
   SourceDeclarationProvider,
 } from "@tsonic/tsts";
 import {
   createSourceSemanticsVirtualModuleProvider,
+  nativePointerProviderDeclaration,
+  providerExportDeclarationsForSemanticsModule,
 } from "@tsonic/source-core";
 import {
   rustSourceSemanticsModules,
+  rustTypesModule,
 } from "./source-modules.js";
 
 export const rustSourceSemanticsExtensionId =
   "tsonic.rust.source-semantics";
+export const rustSourceVirtualModulesProviderId =
+  "tsonic.rust.source-virtual-modules";
+export const rustSourceProviderVersion = "0.0.1";
+export const rustConstPointerExport = "constPtr";
+export const rustMutPointerExport = "mutPtr";
 
 export function createRustSourceSemanticsExtension(
   additionalProviders: readonly SourceDeclarationProvider[] = [],
@@ -30,11 +39,12 @@ export function createRustSourceSemanticsExtension(
     initialize(context): void {
       context.registerSourceDeclarationProvider(
         createSourceSemanticsVirtualModuleProvider({
-          id: "tsonic.rust.source-virtual-modules",
-          version: "0.0.1",
+          id: rustSourceVirtualModulesProviderId,
+          version: rustSourceProviderVersion,
           displayName: "Tsonic Rust source alias modules",
           virtualDirectory: "rust-source",
           modules: rustSourceSemanticsModules(),
+          exportsForModule: rustProviderExportsForModule,
           evidenceMessage:
             "Rust target supplies source alias semantics as a complete virtual module.",
           diagnostics: {
@@ -54,4 +64,17 @@ export function createRustSourceSemanticsExtension(
       }
     },
   };
+}
+
+function rustProviderExportsForModule(
+  module: ReturnType<typeof rustSourceSemanticsModules>[number],
+): ProviderDeclarationModel["exports"] {
+  const semantics = providerExportDeclarationsForSemanticsModule(module);
+  return module.moduleSpecifier === rustTypesModule
+    ? [
+        ...semantics,
+        nativePointerProviderDeclaration(rustConstPointerExport),
+        nativePointerProviderDeclaration(rustMutPointerExport),
+      ]
+    : semantics;
 }
