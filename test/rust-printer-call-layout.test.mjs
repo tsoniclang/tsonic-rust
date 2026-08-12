@@ -643,6 +643,32 @@ test("nonempty traits use rustfmt-compatible long supertrait headers", () => {
   );
 });
 
+test("nonempty traits retain rustfmt-compatible fitted supertrait headers", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_StringValue",
+      visibility: "crate",
+      superTraits: [{
+        kind: "named",
+        path: "__TsonicDispatch_GenericBase<String>",
+      }],
+      functions: [{
+        name: "read",
+        selfParam: "rc",
+        params: [],
+        returnType: { kind: "named", path: "String" },
+      }],
+    }],
+  });
+
+  assert.match(
+    source,
+    /pub\(crate\) trait __TsonicDispatch_StringValue: __TsonicDispatch_GenericBase<String> \{\n/u,
+  );
+});
+
 test("string concatenation preserves vertical chains inside trailing blocks", () => {
   const source = printRustSourceFile({
     headerComment,
