@@ -67,11 +67,25 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
         "moved",
         context,
       );
-      const requiredParameterCarrier = form === "required" && typeNode !== undefined
+      const parameterLaneCarrier = form === "required" && typeNode !== undefined
         ? requiresOwnedValue
           ? base
           : rustParameterLaneTargetType(base, typeNode, context, options)
         : undefined;
+      const requiredParameterCarrier = parameterLaneCarrier !== undefined &&
+          rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
+          isRustStringCarrier(base) &&
+          !requiresOwnedValue &&
+          parameterOnlyReadsThroughReceiver(parameter, context)
+        ? {
+            kind: "pointer" as const,
+            pointee: base,
+            mutability: "const" as const,
+          }
+        : parameterLaneCarrier;
+      const requiredMode = requiredParameterCarrier === undefined
+        ? undefined
+        : rustParameterModeForCarriers(base, requiredParameterCarrier);
       const abi = form === "optional"
         ? {
             form,
@@ -93,36 +107,18 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
                 parameterCarrier: base,
                 mode: "value" as const,
               }
-            : requiredParameterCarrier?.kind === "pointer"
+          : requiredParameterCarrier !== undefined && requiredMode !== undefined
               ? {
                   form,
                   valueCarrier: base,
                   parameterCarrier: requiredParameterCarrier,
-                  mode: requiredParameterCarrier.mutability === "mut"
-                    ? "mut-ref" as const
-                    : "ref" as const,
+                  mode: requiredMode,
                 }
-            : !isRustStringCarrier(base)
-        ? {
-            form,
-            valueCarrier: base,
-            parameterCarrier: base,
-            mode: base.kind === "pointer"
-              ? base.mutability === "mut" ? "mut-ref" as const : "ref" as const
-              : "value" as const,
-          }
-        : !requiresOwnedValue && parameterOnlyReadsThroughReceiver(parameter, context)
-          ? {
-              form,
-              valueCarrier: base,
-              parameterCarrier: {
-                kind: "pointer" as const,
-                pointee: base,
-                mutability: "const" as const,
-              },
-              mode: "ref" as const,
-            }
-          : { form, valueCarrier: base, parameterCarrier: base, mode: "value" as const };
+              : undefined;
+      if (abi === undefined) {
+        cache.set(parameter, null);
+        return undefined;
+      }
       cache.set(parameter, abi);
       return abi;
     },
@@ -146,20 +142,20 @@ export function resolveRustContextualParameterAbi(
       : context.ast.questionToken(parameter) !== undefined
         ? "optional" as const
         : "required" as const;
+  const authoredType = Node_Type(context.ast, parameter);
+  const authoredCarrier = authoredType === undefined
+    ? resolveRustTargetTypeRef(parameter, context, options)
+    : resolveRustTargetTypeRef(authoredType, context, options);
   const selectedValueCarrier = form === "optional"
     ? selectedParameterCarrier
     : form === "default"
       ? rustOptionElementCarrier(selectedParameterCarrier)
       : selectedParameterCarrier.kind === "pointer"
-        ? selectedParameterCarrier.pointee
+        ? authoredCarrier
         : selectedParameterCarrier;
   if (selectedValueCarrier === undefined) {
     return undefined;
   }
-  const authoredType = Node_Type(context.ast, parameter);
-  const authoredCarrier = authoredType === undefined
-    ? undefined
-    : resolveRustTargetTypeRef(authoredType, context, options);
   const authoredExpectation = form === "optional"
     ? rustOptionElementCarrier(selectedParameterCarrier)
     : selectedValueCarrier;
@@ -168,14 +164,32 @@ export function resolveRustContextualParameterAbi(
       !rustTargetTypeRefEquals(authoredCarrier, authoredExpectation))) {
     return undefined;
   }
+  const mode = form === "required"
+    ? rustParameterModeForCarriers(selectedValueCarrier, selectedParameterCarrier)
+    : "value" as const;
+  if (mode === undefined) {
+    return undefined;
+  }
   return {
     form,
     valueCarrier: selectedValueCarrier,
     parameterCarrier: selectedParameterCarrier,
-    mode: selectedParameterCarrier.kind === "pointer"
-      ? selectedParameterCarrier.mutability === "mut" ? "mut-ref" : "ref"
-      : "value",
+    mode,
   };
+}
+
+function rustParameterModeForCarriers(
+  valueCarrier: TargetTypeRef,
+  parameterCarrier: TargetTypeRef,
+): RustArgumentMode | undefined {
+  if (rustTargetTypeRefEquals(valueCarrier, parameterCarrier)) {
+    return "value";
+  }
+  if (parameterCarrier.kind !== "pointer" ||
+    !rustTargetTypeRefEquals(parameterCarrier.pointee, valueCarrier)) {
+    return undefined;
+  }
+  return parameterCarrier.mutability === "mut" ? "mut-ref" : "ref";
 }
 
 function parameterUsesFlowState(

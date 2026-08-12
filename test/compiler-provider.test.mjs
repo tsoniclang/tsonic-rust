@@ -220,13 +220,17 @@ test("Cargo provider virtual imports compile, execute, and preserve the user-own
 import type { int32 } from "@tsonic/core/types.js";
 import type { FunctionPointer } from "@tsonic/core/types.js";
 import { unsafeContext } from "@tsonic/core/lang.js";
-import type { mutPtr, u8 } from "@tsonic/rust/types.js";
+import type { constPtr, mutPtr, u8 } from "@tsonic/rust/types.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
 import { ANSWER, GLOBAL_COUNT, Mode, SimpleMode, Widget, apply, byte_ptr, dangerous, double, duplicate, featured, fill, first_byte, identity, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 
 function readMutablePointer(pointer: mutPtr<u8>): u8 {
+  return unsafeContext(first_byte(pointer));
+}
+
+function readConstPointer(pointer: constPtr<u8>): u8 {
   return unsafeContext(first_byte(pointer));
 }
 
@@ -252,6 +256,9 @@ export function main(): void {
   }
   if (unsafeContext(first_byte(byte_ptr())) !== 23) {
     throw new Error("raw pointer mapping failed");
+  }
+  if (readConstPointer(byte_ptr()) !== 23) {
+    throw new Error("raw pointer source-call mapping failed");
   }
   if (ANSWER !== 42 || mode_code(Mode.Read) !== 1 || mode_code(Mode.Payload(9)) !== 9) {
     throw new Error("constant or enum mapping failed");
@@ -308,6 +315,7 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::first_byte\(widget_alias::byte_ptr\(\)\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /readConstPointer\(widget_alias::byte_ptr\(\)\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);

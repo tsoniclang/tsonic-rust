@@ -105,6 +105,14 @@ export function preserveMut(pointer: mutPtr<u8>): mutPtr<u8> {
 export function widen(pointer: mutPtr<u8>): constPtr<u8> {
   return pointer;
 }
+
+export function passConst(pointer: constPtr<u8>): constPtr<u8> {
+  return preserveConst(pointer);
+}
+
+export function passMut(pointer: mutPtr<u8>): mutPtr<u8> {
+  return preserveMut(pointer);
+}
 `,
     },
   });
@@ -113,6 +121,8 @@ export function widen(pointer: mutPtr<u8>): constPtr<u8> {
   assert.match(source, /pub fn preserveConst\(pointer: \*const u8\) -> \*const u8/u);
   assert.match(source, /pub fn preserveMut\(pointer: \*mut u8\) -> \*mut u8/u);
   assert.match(source, /pub fn widen\(pointer: \*mut u8\) -> \*const u8/u);
+  assert.match(source, /pub fn passConst\(pointer: \*const u8\) -> \*const u8 \{\s*preserveConst\(pointer\)\s*\}/u);
+  assert.match(source, /pub fn passMut\(pointer: \*mut u8\) -> \*mut u8 \{\s*preserveMut\(pointer\)\s*\}/u);
   validateGeneratedProject("explicit-safety-rust-pointer-mutability", accepted.result.artifacts);
 
   const rejected = compileRust({
