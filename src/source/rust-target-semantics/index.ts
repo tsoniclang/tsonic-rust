@@ -1952,6 +1952,8 @@ function resolveBinaryOperandCarriers(
   }
   const operatorKind = walk.context.ast.kindName(operatorToken);
   if (rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)) {
+    const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
+      operatorKind === KindExclamationEqualsEqualsToken;
     const leftUsesContext = expressionUsesContextualLiteralCarrier(walk.context.ast, leftNode);
     const rightUsesContext = expressionUsesContextualLiteralCarrier(walk.context.ast, rightNode);
     let left: TargetTypeRef | undefined;
@@ -1975,6 +1977,20 @@ function resolveBinaryOperandCarriers(
     } else {
       left = resolveExpressionCarrier(walk, leftNode, sourceFile, undefined);
       right = resolveExpressionCarrier(walk, rightNode, sourceFile, undefined);
+    }
+    if (strictEquality && left !== undefined && right !== undefined &&
+      selectRustBinaryOperator(operatorKind, left, right) === undefined) {
+      const rightAsLeft = resolveExpressionCarrier(walk, rightNode, sourceFile, left);
+      if (rightAsLeft !== undefined &&
+        selectRustBinaryOperator(operatorKind, left, rightAsLeft) !== undefined) {
+        right = rightAsLeft;
+      } else {
+        const leftAsRight = resolveExpressionCarrier(walk, leftNode, sourceFile, right);
+        if (leftAsRight !== undefined &&
+          selectRustBinaryOperator(operatorKind, leftAsRight, right) !== undefined) {
+          left = leftAsRight;
+        }
+      }
     }
     return { left, right, leftNode, rightNode, operatorKind };
   }

@@ -842,7 +842,12 @@ function printRustStatementExpr(
     const callable = expression.expr.kind === "call"
       ? expression.expr.path
       : `${printRustAssociatedCallOwner(expression.expr)}::${expression.expr.method}`;
-    const forceExpanded = !renderedFits(printRustExpr(expression.expr), column);
+    const flat = printRustExpr(expression.expr);
+    const forceExpanded = !renderedFits(flat, column) ||
+      expression.expr.args.length > 1 && flat.length > rustNestedCallWidth &&
+        expression.expr.args.some((argument) =>
+          argument.kind === "call" || argument.kind === "associated-call" ||
+          argument.kind === "method-call" || argument.kind === "try");
     return appendToLastLine(
       printFittedCall(
         callable,
@@ -2275,7 +2280,10 @@ function printFittedCall(
   if (arguments_.length === 1 && arguments_[0]?.kind === "method-call") {
     const prefix = `${callable}(`;
     const directChain = rustMethodChain(arguments_[0]);
-    if (directChain?.steps.length === 1) {
+    const expandedAggregateArgument = arguments_[0].args.some((argument) =>
+      (argument.kind === "slice-literal" || argument.kind === "vec-literal") &&
+      argument.elements.length > 1);
+    if (directChain?.steps.length === 1 && expandedAggregateArgument) {
       const nested = printRustExprFitted(
         arguments_[0],
         depth,
@@ -2326,6 +2334,24 @@ function printFittedCall(
       const rendered = chain === undefined
         ? printRustExprFitted(arguments_[0], depth + 1, argumentIndent.length)
         : printFittedMethodChain(chain, depth + 1, argumentIndent.length, true);
+      return [
+        `${callable}(`,
+        appendToLastLine(`${argumentIndent}${rendered}`, ","),
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
+  }
+  if (forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "method-call") {
+    const chain = rustMethodChain(arguments_[0]);
+    if (chain !== undefined && chain.steps.length > 1 &&
+      printRustExpr(arguments_[0]).length > rustMethodChainWidth) {
+      const argumentIndent = indentText(depth + 1);
+      const rendered = printFittedMethodChain(
+        chain,
+        depth + 1,
+        argumentIndent.length,
+        true,
+      );
       return [
         `${callable}(`,
         appendToLastLine(`${argumentIndent}${rendered}`, ","),
