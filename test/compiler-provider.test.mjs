@@ -189,6 +189,17 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       requestedExports: ["mode_code"],
     });
     assert.deepEqual(closedFunctionModule.exports.map(({ name }) => name), ["Mode", "mode_code"]);
+    const explicitlyRequestedClosureModule = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["Mode", "mode_code"],
+    });
+    assert.deepEqual(
+      explicitlyRequestedClosureModule.exports.map(({ name }) => name),
+      ["Mode", "mode_code"],
+      "an explicitly requested export is emitted once when another requested export also depends on it",
+    );
     const unsupportedModule = worker.module({
       snapshot,
       dependency,

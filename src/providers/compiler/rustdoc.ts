@@ -232,9 +232,10 @@ function normalizeModule(
   const visited = new Set<string>();
   while (pending.length > 0) {
     const name = pending.shift()!;
-    if (!visited.add(name)) {
+    if (visited.has(name)) {
       continue;
     }
+    visited.add(name);
     if (ambiguousNames.has(name)) {
       unsupported.push({ name, reason: `Rust module exports more than one public item named '${name}'.` });
       continue;
