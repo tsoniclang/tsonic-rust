@@ -1221,7 +1221,11 @@ function resolveExpressionCarrier(
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const facts = walk.context.facts;
-  const contextualExpected = rustOptionElementCarrier(expected) ?? expected;
+  const contextualExpected = rustExpressionResolutionExpectation(
+    walk.context.ast,
+    expression,
+    expected,
+  );
   const finalize = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined =>
     applyOptionLane(
       walk,
@@ -1308,6 +1312,23 @@ function resolveExpressionCarrier(
     recordExpressionBindingEffects(walk, expression);
     walk.resolving.delete(expression);
   }
+}
+
+function rustExpressionResolutionExpectation(
+  ast: AstReader,
+  expression: Node,
+  expected: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  if (!isRustOptionCarrier(expected)) {
+    return expected;
+  }
+  const kind = ast.kindName(expression);
+  if (kind === KindConditionalExpression || kind === KindParenthesizedExpression ||
+    kind === KindSatisfiesExpression || kind === "KindAsExpression" ||
+    kind === "KindTypeAssertionExpression") {
+    return expected;
+  }
+  return rustOptionElementCarrier(expected);
 }
 
 function expressionIsPlainAssignment(ast: AstReader, expression: Node): boolean {

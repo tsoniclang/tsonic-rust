@@ -22,6 +22,45 @@ export function choose(condition: boolean, left: int32, right: int32): int32 {
   validateGeneratedProject("expression-conditional", result.artifacts);
 });
 
+test("conditional expressions own exact Option branch projections", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export class Value {
+  kind: string;
+
+  constructor(kind: string) {
+    this.kind = kind;
+  }
+}
+
+export class TextValue extends Value {
+  value: string;
+
+  constructor(value: string) {
+    super("text");
+    this.value = value;
+  }
+}
+
+export function read(value: Value): string | undefined {
+  return value instanceof TextValue ? value.value : undefined;
+}
+
+export function parenthesized(value: string, present: boolean): string | undefined {
+  return (present ? value : undefined);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /if[\s\S]*Some\([\s\S]*\)[\s\S]*else[\s\S]*None/u);
+  validateGeneratedProject("expression-conditional-option", result.artifacts);
+});
+
 test("no-substitution templates retain their exact string value", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
