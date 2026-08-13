@@ -114,6 +114,7 @@ import {
   isRustUnitCarrier,
   isRustUndefinedCarrier,
   rustOptionElementCarrier,
+  rustOptionTargetType,
   isRustVecCarrier,
   rustBigIntTargetType,
   rustCallableProtocol,
@@ -138,7 +139,7 @@ import {
   parseSourceBigIntLiteral,
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustProjectUpcastFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustProjectUpcastFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -219,7 +220,9 @@ import { rustProjectMemberSlotName } from "./project-type-policy.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
 import { rustProjectObjectLayout } from "./project-object-layout.js";
 import {
+  recordRustFlowReadProjection,
   recordRustValueCarrierReconciliation,
+  selectRustFlowReadProjection,
   selectRustValueCarrierReconciliation,
 } from "./value-carrier-reconciliation.js";
 import { recordRustBindingPatternFacts } from "./binding-patterns.js";
@@ -1204,12 +1207,19 @@ function resolveExpressionCarrier(
 ): TargetTypeRef | undefined {
   const facts = walk.context.facts;
   const contextualExpected = rustOptionElementCarrier(expected) ?? expected;
+  const finalize = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined =>
+    applyOptionLane(
+      walk,
+      expression,
+      applyFlowReadLane(walk, expression, carrier),
+      expected,
+    );
   const existing = facts.get(expression, rustRuntimeCarrierKey) ??
     walk.context.facts.resolve(expression, rustRuntimeCarrierKey);
   if (walk.resolving.has(expression)) {
     return existing === undefined
       ? undefined
-      : applyOptionLane(walk, expression, existing.carrier, expected);
+      : finalize(existing.carrier);
   }
   walk.resolving.add(expression);
   try {
@@ -1217,14 +1227,14 @@ function resolveExpressionCarrier(
       const operation = facts.get(expression, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(expression, rustTargetOperationFactKey);
       recordSelectedOperationInputs(walk, expression, sourceFile, operation);
-      return applyOptionLane(walk, expression, existing.carrier, expected);
+      return finalize(existing.carrier);
     }
     resolveExpressionOperationDependencies(walk, expression, sourceFile, contextualExpected);
     selectExpressionOperation(walk, expression, sourceFile);
     const selectedCarrier = facts.get(expression, rustRuntimeCarrierKey) ??
       walk.context.facts.resolve(expression, rustRuntimeCarrierKey);
     if (selectedCarrier !== undefined) {
-      return applyOptionLane(walk, expression, selectedCarrier.carrier, expected);
+      return finalize(selectedCarrier.carrier);
     }
     const selectedOperation = facts.get(expression, rustSelectedOperationKey) ??
       walk.context.facts.resolve(expression, rustSelectedOperationKey);
@@ -1260,12 +1270,7 @@ function resolveExpressionCarrier(
         );
         return finalizedResult === undefined
           ? undefined
-          : applyOptionLane(
-              walk,
-              expression,
-              setCarrierFact(walk, expression, finalizedResult),
-              expected,
-            );
+          : finalize(setCarrierFact(walk, expression, finalizedResult));
       }
     }
     const resolved = resolveExpressionCarrierUncached(
@@ -1274,11 +1279,210 @@ function resolveExpressionCarrier(
       sourceFile,
       contextualExpected,
     );
-    return applyOptionLane(walk, expression, resolved, expected);
+    return finalize(resolved);
   } finally {
     recordExpressionBindingEffects(walk, expression);
     walk.resolving.delete(expression);
   }
+}
+
+function applyFlowReadLane(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceCarrier: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  if (sourceCarrier === undefined) {
+    return undefined;
+  }
+  const existing = walk.context.facts.get(expression, rustFlowReadProjectionFactKey) ??
+    walk.context.facts.resolve(expression, rustFlowReadProjectionFactKey);
+  if (existing !== undefined) {
+    if (!rustTargetTypeRefEquals(existing.sourceCarrier, sourceCarrier)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_FLOW_READ_SOURCE_CONFLICT",
+        "The finalized Rust flow-read projection conflicts with the expression's raw runtime carrier.",
+        expression,
+        ["target.capability=rust.flow-read.exact-source"],
+      );
+      return undefined;
+    }
+    return existing.selectedCarrier;
+  }
+  const selectedSource = selectedFlowReadSource(walk, expression);
+  if (selectedSource === undefined) {
+    return sourceCarrier;
+  }
+  const selectedCarrier = resolveSelectedFlowReadCarrier(
+    walk,
+    expression,
+    selectedSource.declaration,
+    selectedSource.type,
+    sourceCarrier,
+  );
+  if (selectedCarrier === undefined) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_FLOW_READ_SELECTED_CARRIER_MISSING",
+      "The exact checker-selected source value has no closed Rust flow-read carrier.",
+      expression,
+      ["target.capability=rust.flow-read.exact-result"],
+    );
+    return undefined;
+  }
+  const selection = selectRustFlowReadProjection(
+    sourceCarrier,
+    selectedCarrier,
+    walk.context.projectTypes,
+  );
+  if (selection.kind === "identity") {
+    return sourceCarrier;
+  }
+  if (selection.kind === "incompatible") {
+    appendRustDiagnostic(
+      walk,
+      "RUST_FLOW_READ_PROJECTION_UNSUPPORTED",
+      "The raw Rust value cannot be projected to the exact checker-selected flow carrier.",
+      expression,
+      [
+        "target.capability=rust.flow-read.closed-projection",
+        `source=${JSON.stringify(sourceCarrier)}`,
+        `selected=${JSON.stringify(selectedCarrier)}`,
+      ],
+    );
+    return undefined;
+  }
+  recordRustFlowReadProjection(
+    walk.context.facts,
+    expression,
+    selection.fact,
+  );
+  return selection.fact.selectedCarrier;
+}
+
+function selectedFlowReadSource(
+  walk: RustFactWalk,
+  expression: Node,
+): { readonly declaration?: Node; readonly type: Type } | undefined {
+  const semantics = walk.context.source.semantics.forNode(expression);
+  const kind = walk.context.ast.kindName(expression);
+  if (kind === KindPropertyAccessExpression) {
+    const selected = semantics.getResolvedPropertyAccessInfo(expression);
+    return selected?.callCallee === true || selected?.sourceReadType === undefined
+      ? undefined
+      : {
+          ...(selected.selectedDeclaration === undefined
+            ? {}
+            : { declaration: selected.selectedDeclaration }),
+          type: selected.sourceReadType,
+        };
+  }
+  if (kind === KindElementAccessExpression) {
+    const selected = semantics.getResolvedElementAccessInfo(expression);
+    return selected?.callCallee === true || selected?.sourceReadType === undefined
+      ? undefined
+      : {
+          ...(selected.selectedDeclaration === undefined
+            ? {}
+            : { declaration: selected.selectedDeclaration }),
+          type: selected.sourceReadType,
+        };
+  }
+  const refinement = walk.context.source.semantics.selectValueTypeRefinement(expression);
+  return refinement.kind === "resolved" && refinement.refinement.kind === "members"
+    ? { declaration: refinement.reference.declaration, type: refinement.selectedType }
+    : undefined;
+}
+
+function resolveSelectedFlowReadCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  declaration: Node | undefined,
+  selectedType: Type,
+  sourceCarrier: TargetTypeRef,
+): TargetTypeRef | undefined {
+  const typeNode = Node_Type(walk.context.ast, declaration);
+  if (typeNode !== undefined) {
+    const semantics = walk.context.source.semantics.forNode(typeNode);
+    const authored = semantics.selectAuthoredType(typeNode, selectedType);
+    if (authored.kind === "ambiguous") {
+      return undefined;
+    }
+    if (authored.kind === "authored-members") {
+      if (authored.nodes.length === 1 && authored.nodes[0] === typeNode &&
+        authored.selectedNullishTypes.length === 0) {
+        return sourceCarrier;
+      }
+      const selectedMembers = authored.nodes.map((node) =>
+        resolveRustTargetTypeRef(
+          node,
+          rustResolutionContext(walk, node),
+          walk.operationOptions,
+        ));
+      const optionalElement = rustOptionElementCarrier(sourceCarrier);
+      if (selectedMembers.length === 1 &&
+        selectedMembers[0]?.kind === "type-parameter" &&
+        optionalElement !== undefined &&
+        authored.selectedNullishTypes.length === 0) {
+        return optionalElement;
+      }
+      if (selectedMembers.some((member) => member === undefined)) {
+        return undefined;
+      }
+      return combineSelectedFlowReadCarriers(
+        selectedMembers as readonly TargetTypeRef[],
+        authored.selectedNullishTypes.length > 0,
+        walk,
+      );
+    }
+    return sourceCarrier;
+  }
+  const semanticCarrier = resolveRustTargetTypeRef(
+    selectedType,
+    rustResolutionContext(walk, expression),
+    walk.operationOptions,
+  );
+  const optionalElement = rustOptionElementCarrier(sourceCarrier);
+  if (optionalElement === undefined) {
+    return semanticCarrier !== undefined &&
+        walk.context.projectTypes.definitionForCarrier(sourceCarrier) !== undefined &&
+        walk.context.projectTypes.definitionForCarrier(semanticCarrier) !== undefined
+      ? semanticCarrier
+      : sourceCarrier;
+  }
+  const selectedMembers = walk.context.semanticsFor(expression).isUnion(selectedType)
+    ? walk.context.semanticsFor(expression).getUnionOrIntersectionTypes(selectedType)
+    : [selectedType];
+  if (selectedMembers.some((member) => member === undefined)) {
+    return undefined;
+  }
+  const includesNullish = selectedMembers.some((member) =>
+    member !== undefined && walk.context.semanticsFor(expression).isNullish(member));
+  if (includesNullish) {
+    return sourceCarrier;
+  }
+  return semanticCarrier !== undefined &&
+      walk.context.projectTypes.definitionForCarrier(semanticCarrier) !== undefined
+    ? semanticCarrier
+    : optionalElement;
+}
+
+function combineSelectedFlowReadCarriers(
+  members: readonly TargetTypeRef[],
+  includesNullish: boolean,
+  walk: RustFactWalk,
+): TargetTypeRef | undefined {
+  const distinct = members.filter((member, index) =>
+    members.findIndex((candidate) => rustTargetTypeRefEquals(candidate, member)) === index);
+  const valueCarrier = distinct.length === 1
+    ? distinct[0]
+    : walk.context.projectTypes.commonSupertype(distinct);
+  if (valueCarrier === undefined) {
+    return includesNullish && distinct.length === 0
+      ? rustNullishSourceTargetType()
+      : undefined;
+  }
+  return includesNullish ? rustOptionTargetType(valueCarrier) : valueCarrier;
 }
 
 function recordExpressionBindingEffects(walk: RustFactWalk, expression: Node): void {

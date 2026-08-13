@@ -1224,7 +1224,10 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "reference": {
       const prefix = expression.mutable === true ? "&mut " : "&";
-      return `${prefix}${printOperand(expression.expr, RustPrecedence.Unary, false)}`;
+      const operand = expressionIsRightHandBlock(expression.expr)
+        ? printRustExpr(expression.expr)
+        : printOperand(expression.expr, RustPrecedence.Unary, false);
+      return `${prefix}${operand}`;
     }
     case "vec-literal": {
       return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;
@@ -1576,7 +1579,7 @@ function printRustExprFitted(
     }
     case "string-concat": {
       if (expression.parts.length <= rustFormatMacroInlineArgumentLimit &&
-        renderedFits(flat, column)) {
+        !flat.includes("\n") && renderedFits(flat, column)) {
         return flat;
       }
       const trailingPart = expression.parts[expression.parts.length - 1];
@@ -1775,7 +1778,14 @@ function printRustExprFitted(
     }
     case "reference": {
       const prefix = expression.mutable === true ? "&mut " : "&";
-      return `${prefix}${printRustExprFitted(expression.expr, depth, column + prefix.length)}`;
+      const parenthesized = !expressionIsRightHandBlock(expression.expr) &&
+        expressionNeedsParentheses(expression.expr, RustPrecedence.Unary, false);
+      const rendered = printRustExprFitted(
+        expression.expr,
+        depth,
+        column + prefix.length + (parenthesized ? 1 : 0),
+      );
+      return `${prefix}${parenthesized ? `(${rendered})` : rendered}`;
     }
     case "index": {
       if (!flat.includes("\n") && renderedFits(flat, column)) {
@@ -1904,8 +1914,8 @@ function printRustExprFitted(
         return appendToLastLine(left, ` ${expression.operator} ${renderedRight}`);
       }
       const multilineLeftRequiresOwnOperator = left.includes("\n") &&
-        (expression.left.kind === "binary" || expression.left.kind === "method-call" ||
-          expression.left.kind === "index");
+        (expression.left.kind === "binary" || expression.left.kind === "index" ||
+          rustMethodChain(expression.left) !== undefined);
       if (!multilineLeftRequiresOwnOperator && renderedFits(joined, column)) {
         return joined;
       }
@@ -2203,7 +2213,12 @@ function printRustFormatArgument(
       column + prefix.length,
     );
     if (renderedArgument.includes("\n")) {
-      return appendToLastLine(`${prefix}${renderedArgument}`, ",)");
+      const attached = appendToLastLine(`${prefix}${renderedArgument}`, ",)");
+      if (firstLine(attached).length <= rustNestedCallWidth &&
+        renderedFits(attached, column)) {
+        return attached;
+      }
+      return printFittedCall(callable, [argument], depth, column, true);
     }
     const borrowedNested = printBorrowedNestedRustFormatArgument(
       callable,
@@ -2520,7 +2535,7 @@ function printFittedCall(
       ")",
     );
   }
-  if (arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
+  if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
     rustExpressionContainsStatementBlock(arguments_[0])) {
     const prefix = `${callable}(`;
     const rendered = printRustExprFitted(

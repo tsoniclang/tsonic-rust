@@ -4,18 +4,84 @@ import type { RustSemanticModel } from "../../policy/model.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
   rustContextualValueConversionFactKey,
+  rustFlowReadProjectionFactKey,
   rustOptionProjectionFactKey,
   rustProjectUpcastFactKey,
 } from "../rust-facts/keys.js";
 import type {
   RustContextualValueConversionFact,
+  RustFlowReadProjectionFact,
 } from "../rust-facts/keys.js";
+import {
+  rustCarrierSupportsClone,
+  rustOptionElementCarrier,
+} from "../rust-target-types.js";
+import type { RustProjectTypePolicy } from "./project-type-policy.js";
 import { selectRustSourceValueConversion } from "../rust-facts/value-conversions.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
   | { readonly kind: "conversion"; readonly fact: RustContextualValueConversionFact }
   | { readonly kind: "incompatible" };
+
+export type RustFlowReadProjectionSelection =
+  | { readonly kind: "identity" }
+  | { readonly kind: "projection"; readonly fact: RustFlowReadProjectionFact }
+  | { readonly kind: "incompatible" };
+
+export function selectRustFlowReadProjection(
+  sourceCarrier: TargetTypeRef,
+  selectedCarrier: TargetTypeRef,
+  projectTypes: RustProjectTypePolicy,
+): RustFlowReadProjectionSelection {
+  if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
+    return { kind: "identity" };
+  }
+  const optionalElement = rustOptionElementCarrier(sourceCarrier);
+  if (optionalElement !== undefined &&
+    rustTargetTypeRefEquals(optionalElement, selectedCarrier)) {
+    return rustCarrierSupportsClone(selectedCarrier)
+      ? {
+          kind: "projection",
+          fact: { kind: "option-value", sourceCarrier, selectedCarrier },
+        }
+      : { kind: "incompatible" };
+  }
+  const dispatchCarrier = optionalElement ?? sourceCarrier;
+  const sourceDefinition = projectTypes.definitionForCarrier(dispatchCarrier);
+  const targetDefinition = projectTypes.definitionForCarrier(selectedCarrier);
+  const relationship = sourceDefinition === undefined || targetDefinition === undefined
+    ? { kind: "unrelated" as const }
+    : projectTypes.relationship(selectedCarrier, sourceDefinition);
+  const route = sourceDefinition === undefined
+    ? undefined
+    : projectTypes.downcastRoute(sourceDefinition, selectedCarrier);
+  if (relationship.kind !== "related" ||
+    !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
+    route === undefined ||
+    (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier))) {
+    return { kind: "incompatible" };
+  }
+  return {
+    kind: "projection",
+    fact: {
+      kind: "project-downcast",
+      sourceCarrier,
+      dispatchCarrier,
+      selectedCarrier,
+    },
+  };
+}
+
+export function recordRustFlowReadProjection(
+  facts: RustSemanticModel,
+  subject: ExtensionFactSubject,
+  fact: RustFlowReadProjectionFact,
+): void {
+  facts.set(subject, rustFlowReadProjectionFactKey, fact, [
+    { message: `rust exact ${fact.kind} flow-read projection` },
+  ]);
+}
 
 export function selectRustValueCarrierReconciliation(
   sourceCarrier: TargetTypeRef,
@@ -49,6 +115,7 @@ export function rustValueCarrierBeforeContextualConversion(
 ): TargetTypeRef | undefined {
   return facts.getFact(subject, rustProjectUpcastFactKey)?.targetCarrier ??
     facts.getTargetConversionFact(subject)?.convertedType ??
+    facts.getFact(subject, rustFlowReadProjectionFactKey)?.selectedCarrier ??
     facts.getRuntimeCarrierFact(subject)?.carrier;
 }
 

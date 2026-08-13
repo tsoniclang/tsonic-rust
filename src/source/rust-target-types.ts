@@ -869,12 +869,27 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (carrier.kind === "tuple") {
     return carrier.elements.every(isRustCopyCarrier);
   }
+  if (carrier.kind === "target-named") {
+    if (carrier.id === rustOptionTargetId) {
+      const [value] = carrier.typeArguments ?? [];
+      return value !== undefined && isRustCopyCarrier(value);
+    }
+    if (rustUnconditionallyCopyTargetIds.has(carrier.id)) {
+      return true;
+    }
+  }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   if (fixedArray !== undefined) {
     return isRustCopyCarrier(fixedArray.element);
   }
   return rustSourceTypeCarrierValue(carrier)?.shape === "enum";
 }
+
+const rustUnconditionallyCopyTargetIds: ReadonlySet<string> = new Set([
+  rustUndefinedTargetId,
+  rustUsizeTargetId,
+  rustIsizeTargetId,
+]);
 
 export function rustValueCarrierRequiresCloneOnRead(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "target-named" && rustCloneOnReadTargetIds.has(carrier.id) ||

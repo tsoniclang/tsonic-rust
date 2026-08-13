@@ -795,6 +795,28 @@ export type RustOptionProjectionFact =
 export const rustOptionProjectionFactKey: RustPlanKey<RustOptionProjectionFact> =
   defineRustPlanKey("optionProjection", closedMetadataEquals);
 
+export type RustFlowReadProjectionFact =
+  | {
+      readonly kind: "option-value";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "project-downcast";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly dispatchCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+    };
+
+export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFact> =
+  defineRustPlanKey("flowReadProjection", (left, right) =>
+    left.kind === right.kind &&
+    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
+    rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier) &&
+    (left.kind !== "project-downcast" ||
+      (right.kind === "project-downcast" &&
+        rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier))));
+
 export interface RustContextualValueConversionFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;

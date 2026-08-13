@@ -126,7 +126,6 @@ import {
 } from "./explicit-safety.js";
 import { planRustSourceUnionFieldProjection } from "./source-union-projection.js";
 import { rustSourceStaticFieldLocation } from "./static-field-storage.js";
-import { planRustFlowSelectedValue } from "./flow-read-projections.js";
 
 type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -1128,15 +1127,7 @@ function planExpressionAsStatement(
         const plannedReceiver = receiverNode === undefined
           ? undefined
           : planExpression(receiverNode, context);
-        const receiver = receiverNode === undefined || plannedReceiver === undefined
-          ? undefined
-          : planRustFlowSelectedValue(
-              left,
-              receiverNode,
-              plannedReceiver,
-              sourceField.receiverCarrier,
-              context,
-            );
+        const receiver = plannedReceiver;
         if (receiver === undefined) {
           return undefined;
         }

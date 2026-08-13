@@ -171,6 +171,54 @@ export function main(): void {
   validateGeneratedProject("expression-substituted-template", result.artifacts, { run: true });
 });
 
+test("flow-selected optional values project before direct template and arithmetic use", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "flow_read_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+class Diagnostic {
+  file: string | undefined;
+  line: int32 | undefined;
+
+  constructor(file: string | undefined, line: int32 | undefined) {
+    this.file = file;
+    this.line = line;
+  }
+
+  format(): string {
+    if (this.file === undefined) return "";
+    if (this.line === undefined) return \`${"${this.file}"}: \`;
+    return \`${"${this.file}"}:${"${this.line + 1}"}\`;
+  }
+}
+
+function direct(value: string | undefined): string {
+  if (value === undefined) return "missing";
+  return \`value=${"${value}"}\`;
+}
+
+export function main(): void {
+  check(new Diagnostic(undefined, undefined).format() === "");
+  check(new Diagnostic("index.ts", undefined).format() === "index.ts: ");
+  check(new Diagnostic("index.ts", 4).format() === "index.ts:5");
+  check(direct(undefined) === "missing");
+  check(direct("ready") === "value=ready");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /match .*\.as_ref\(\)/su);
+  assert.match(source, /checked flow selected a missing optional value/u);
+  validateGeneratedProject("flow-read-projection", result.artifacts, { run: true });
+});
+
 test("typeof consumes exact carriers and preserves operand evaluation without moves", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
@@ -420,7 +468,10 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /values\.delete_at\(/u);
+  assert.match(
+    source,
+    /values\.delete_number\(tsonic_rust_runtime::conversions::i32_to_f64\(1\)\)/u,
+  );
   validateGeneratedProject("expression-delete-js-array", result.artifacts, { run: true });
 });
 

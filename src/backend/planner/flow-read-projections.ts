@@ -1,33 +1,37 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
-import type { TargetTypeRef } from "../../policy/types.js";
 import {
+  isRustCopyCarrier,
   rustCarrierSupportsClone,
-  rustOptionElementCarrier,
 } from "../../source/rust-target-types.js";
+import type { RustFlowReadProjectionFact } from "../../source/rust-facts/keys.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { planRustProjectDowncastValue } from "./project-downcasts.js";
 
-export function planRustFlowSelectedValue(
-  operation: Node,
-  sourceValue: Node,
+export function planRustFlowReadProjection(
+  node: Node,
   expression: RustExpr,
-  selectedCarrier: TargetTypeRef,
+  fact: RustFlowReadProjectionFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const storedCarrier = context.expressionOverrides?.get(sourceValue)?.carrier ??
-    context.input.facts.getRuntimeCarrierFact(sourceValue)?.carrier;
-  if (storedCarrier !== undefined && rustTargetTypeRefEquals(storedCarrier, selectedCarrier)) {
-    return expression;
+  const sourceCarrier = context.expressionOverrides?.get(node)?.carrier ??
+    context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  if (sourceCarrier === undefined ||
+    !rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.flow-read-source",
+      "The finalized flow-read projection conflicts with the expression's raw Rust carrier.",
+    ));
+    return undefined;
   }
-  const optionalElement = rustOptionElementCarrier(storedCarrier);
-  if (optionalElement !== undefined && rustTargetTypeRefEquals(optionalElement, selectedCarrier)) {
-    if (!rustCarrierSupportsClone(selectedCarrier)) {
+  if (fact.kind === "option-value") {
+    if (!rustCarrierSupportsClone(fact.selectedCarrier)) {
       context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, operation),
+        diagnosticInput(context, node),
         "rust.backend.flow-read-projection-clone",
         "A narrowed optional Rust value requires a selected carrier with a proven non-consuming clone contract.",
       ));
@@ -48,12 +52,17 @@ export function planRustFlowSelectedValue(
             path: "Some",
             elements: [{ kind: "binding", name: "__tsonic_flow_value" }],
           },
-          expression: {
-            kind: "method-call",
-            receiver: { kind: "path", path: "__tsonic_flow_value" },
-            method: "clone",
-            args: [],
-          },
+          expression: isRustCopyCarrier(fact.selectedCarrier)
+            ? {
+                kind: "dereference",
+                pointer: { kind: "path", path: "__tsonic_flow_value" },
+              }
+            : {
+                kind: "method-call",
+                receiver: { kind: "path", path: "__tsonic_flow_value" },
+                method: "clone",
+                args: [],
+              },
         },
         {
           pattern: { kind: "path", path: "None" },
@@ -65,29 +74,12 @@ export function planRustFlowSelectedValue(
       ],
     };
   }
-  const dispatchCarrier = optionalElement ?? storedCarrier;
-  const sourceDefinition = context.input.projectTypes.definitionForCarrier(dispatchCarrier);
-  const targetDefinition = context.input.projectTypes.definitionForCarrier(selectedCarrier);
-  const relationship = sourceDefinition === undefined || targetDefinition === undefined
-    ? { kind: "unrelated" as const }
-    : context.input.projectTypes.relationship(selectedCarrier, sourceDefinition);
-  if (storedCarrier !== undefined && dispatchCarrier !== undefined && sourceDefinition !== undefined &&
-    relationship.kind === "related" &&
-    rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) &&
-    context.input.projectTypes.downcastRoute(sourceDefinition, selectedCarrier) !== undefined) {
-    return planRustProjectDowncastValue(
-      operation,
-      expression,
-      storedCarrier,
-      dispatchCarrier,
-      selectedCarrier,
-      context,
-    );
-  }
-  context.diagnostics.push(missingFactDiagnostic(
-    diagnosticInput(context, operation),
-    "rust.backend.flow-read-projection",
-    "The stored Rust value cannot be projected to the exact checker-selected flow carrier.",
-  ));
-  return undefined;
+  return planRustProjectDowncastValue(
+    node,
+    expression,
+    fact.sourceCarrier,
+    fact.dispatchCarrier,
+    fact.selectedCarrier,
+    context,
+  );
 }
