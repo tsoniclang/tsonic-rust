@@ -96,8 +96,8 @@ export function fakeCompileInput({
     target,
     runtimeReferences,
     paths: {
-      projectFilePath: "tsonic.json",
-      projectRoot: ".",
+      projectFilePath: "src/tsonic.json",
+      projectRoot: "src",
       outputRoot: "out",
       targetOutputRoot: "out/rust",
     },

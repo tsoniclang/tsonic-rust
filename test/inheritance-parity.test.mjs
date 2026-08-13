@@ -5,6 +5,7 @@ import {
   artifactText,
   compileRust,
 } from "./helpers/rust-session.mjs";
+import { rustModuleNameForSourcePath } from "../dist/index.js";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 function compileExecutable(files, crateName) {
@@ -195,6 +196,10 @@ export class Derived extends Base<string> {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/z_models.rs"), /struct Derived/u);
-  assert.match(artifactText(result, "src/a_consumer.rs"), /Derived::new/u);
+  const modelsModule = rustModuleNameForSourcePath("z-models.ts");
+  const consumerModule = rustModuleNameForSourcePath("a-consumer.ts");
+  assert.notEqual(modelsModule, undefined);
+  assert.notEqual(consumerModule, undefined);
+  assert.match(artifactText(result, `src/${modelsModule}.rs`), /struct Derived/u);
+  assert.match(artifactText(result, `src/${consumerModule}.rs`), /Derived::new/u);
 });

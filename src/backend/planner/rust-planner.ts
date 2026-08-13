@@ -17,7 +17,6 @@ import type { RustItem } from "../rust-ast/nodes.js";
 import { printRustSourceFile } from "../../print/rust-printer.js";
 import { printCargoManifest } from "../../print/cargo-manifest-printer.js";
 import { planRustCargoProject } from "./cargo-project.js";
-import { rustReservedIdentifiers } from "./plan-context.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
 import type { RustTranslationContext } from "../../translate/context.js";
 import { reconstructRustSourceFiles } from "./source-file-reconstruction.js";
@@ -25,10 +24,17 @@ import {
   diagnoseRustLibraryModuleInitialization,
   planRustBinaryModuleInitializers,
 } from "./module-initialization.js";
+import { planRustSourceOutputIdentities } from "../../translate/artifacts/source-output-identities.js";
 
 export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [...input.diagnostics];
-  const moduleNameByFileName = planModuleNames(input, diagnostics);
+  const identityPlan = planRustSourceOutputIdentities(input);
+  if (identityPlan.kind === "rejected") {
+    return { artifacts: [], diagnostics: [...diagnostics, ...identityPlan.diagnostics] };
+  }
+  const moduleNameByFileName = new Map(
+    [...identityPlan.identities].map(([fileName, identity]) => [fileName, identity.moduleName] as const),
+  );
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
@@ -85,10 +91,24 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   );
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
   for (const source of sortedSources) {
+    const identity = identityPlan.identities.get(input.ast.getFileName(source.sourceFile));
+    if (identity === undefined) {
+      diagnostics.push({
+        code: "RUST_SOURCE_OUTPUT_IDENTITY_MISSING",
+        category: "error",
+        source: "tsonic-rust",
+        message: `Planned Rust source module '${source.moduleName}' has no prepared output identity.`,
+        evidence: ["target.capability=rust.backend.source-output-identity"],
+      });
+      continue;
+    }
     artifacts.push(rustSourceArtifact(
-      `src/${source.moduleName}.rs`,
+      identity.artifactPath,
       printRustSourceFile(source.model),
     ));
+  }
+  if (diagnostics.length > 0) {
+    return { artifacts: [], diagnostics };
   }
   if (outputType === "bin" && entryFunction !== undefined) {
     const crateName = readRustCrateName(input.target);
@@ -174,67 +194,6 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
 
 function rustSourceArtifact(path: string, text: string): TargetSourceFile {
   return { kind: "source", path, language: "rust", text };
-}
-
-function planModuleNames(
-  input: RustTranslationContext,
-  diagnostics: TargetDiagnostic[],
-): ReadonlyMap<string, string> {
-  const names = new Map<string, string>();
-  const seen = new Map<string, string>();
-  for (const sourceFile of input.sourceFiles) {
-    const fileName = input.ast.getFileName(sourceFile);
-    const moduleName = rustModuleNameForFile(fileName);
-    if (moduleName === undefined) {
-      diagnostics.push(moduleNameDiagnostic(input, sourceFile, `Source file '${fileName}' does not map to a valid Rust module name.`));
-      continue;
-    }
-    const existing = seen.get(moduleName);
-    if (existing !== undefined) {
-      diagnostics.push(moduleNameDiagnostic(input, sourceFile, `Source files '${existing}' and '${fileName}' both map to Rust module '${moduleName}'.`));
-      continue;
-    }
-    seen.set(moduleName, fileName);
-    names.set(fileName, moduleName);
-  }
-  return names;
-}
-
-// Module-path policy (distinct from identifier naming): generated Rust
-// module names derive from source FILE names, which are filesystem paths,
-// not user identifiers. File stems normalize to snake_case module names so
-// module paths stay valid and predictable across platforms; user-authored
-// identifiers inside modules are never recased.
-export function rustModuleNameForFile(fileName: string): string | undefined {
-  const base = fileName.split("/").pop() ?? "";
-  const stem = base.replace(/\.(ts|mts|cts|tsx)$/u, "");
-  if (stem.length === 0) {
-    return undefined;
-  }
-  const sanitized = stem
-    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/gu, "_");
-  if (!/^[a-z_][a-z0-9_]*$/u.test(sanitized)) {
-    return undefined;
-  }
-  if (sanitized === "main" || sanitized === "lib" || rustReservedIdentifiers.has(sanitized)) {
-    return undefined;
-  }
-  return sanitized;
-}
-
-function moduleNameDiagnostic(input: RustTranslationContext, sourceFile: SourceFile, message: string): TargetDiagnostic {
-  return {
-    code: "RUST_MODULE_NAME",
-    category: "error",
-    source: "tsonic-rust",
-    message,
-    evidence: [
-      "target.capability=rust.backend.module-name",
-      `source.file=${input.ast.getFileName(sourceFile)}`,
-    ],
-  };
 }
 
 interface RustBinaryEntry {

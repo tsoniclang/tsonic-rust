@@ -217,10 +217,10 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
     : { ...target, surfaces };
   const project = { entryPoint, targets: [target] };
   const paths = {
-    projectFilePath: "tsonic.json",
-    projectRoot: ".",
-    outputRoot: "out",
-    targetOutputRoot: "out/rust",
+    projectFilePath: "/src/tsonic.json",
+    projectRoot: "/src",
+    outputRoot: "/src/out",
+    targetOutputRoot: "/src/out/rust",
   };
   const activation = collectCapabilityActivation(files, [...packages, ...capabilities], target.id);
   const selectedSurfaces = (pack.surfaces ?? []).filter((surface) => surfaces.includes(surface.id));
