@@ -2578,14 +2578,29 @@ function printFittedCall(
     (arguments_[0]?.kind === "block" || arguments_[0]?.kind === "match" ||
       arguments_[0]?.kind === "conditional")) {
     const prefix = `${callable}(`;
-    return appendToLastLine(
-      `${prefix}${printRustExprFitted(
-        arguments_[0],
-        inlineArgumentDepth,
-        column + prefix.length,
-      )}`,
-      ")",
+    const renderedArgument = printRustExprFitted(
+      arguments_[0],
+      inlineArgumentDepth,
+      column + prefix.length,
     );
+    const attached = appendToLastLine(`${prefix}${renderedArgument}`, ")");
+    if (renderedFits(attached, column) &&
+      !(arguments_[0].kind === "match" &&
+        (firstLine(attached).length > rustNestedCallWidth ||
+          !firstLine(renderedArgument).trimEnd().endsWith("{")))) {
+      return attached;
+    }
+    const argumentIndent = indentText(depth + 1);
+    const expanded = printRustExprFitted(
+      arguments_[0],
+      depth + 1,
+      argumentIndent.length,
+    );
+    return [
+      `${callable}(`,
+      appendToLastLine(`${argumentIndent}${expanded}`, ","),
+      `${indentText(depth)})`,
+    ].join("\n");
   }
   if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
     rustExpressionContainsStatementBlock(arguments_[0])) {

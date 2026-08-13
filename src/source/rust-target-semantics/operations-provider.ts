@@ -669,6 +669,11 @@ function selectedValueCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const stored = resolveRustTargetTypeRef(expression, context, options);
+  const effective = rustEffectiveValueCarrier(context.facts, expression);
+  if (effective !== undefined &&
+    (stored === undefined || !rustTargetTypeRefEquals(effective, stored))) {
+    return effective;
+  }
   const selected = resolveRustTargetTypeRef(selectedType, context, options);
   if (stored === undefined || selected === undefined ||
     rustTargetTypeRefEquals(stored, selected)) {

@@ -156,11 +156,18 @@ export function pick(pair: [int32, int32], flag: boolean): int32 {
 
 test("flow-narrowed indexes consume the exact selected argument type", () => {
   const { result } = compileRust({
+    surfaces: ["js"],
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 
-export function read(values: readonly int32[], index: int32 | undefined): int32 {
+function parseIndex(text: string): int32 | undefined {
+  if (text.length === 0) return undefined;
+  return 0;
+}
+
+export function read(values: readonly int32[], text: string): int32 {
+  const index = parseIndex(text);
   if (index !== undefined) {
     return values[index];
   }
@@ -173,7 +180,7 @@ export function read(values: readonly int32[], index: int32 | undefined): int32 
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /i32_to_usize\(match index\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => \*__tsonic_flow_value/u,
+    /i32_to_f64\(\s*match index\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => \*__tsonic_flow_value/u,
   );
   validateGeneratedProject("selected-flow-narrowed-index", result.artifacts);
 });
