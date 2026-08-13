@@ -92,7 +92,6 @@ import {
   finishRustSourceAccessorCall,
   planRustSourceAccessorCall,
   providerSelectedCallMatches,
-  requireProviderArgumentPassingFacts,
   sourceAccessorSelectedOperationMatches,
   sourceFieldSelectedOperationMatches,
   sourceStaticFieldSelectedOperationMatches,
@@ -127,6 +126,7 @@ import {
 } from "./explicit-safety.js";
 import { planRustSourceUnionFieldProjection } from "./source-union-projection.js";
 import { rustSourceStaticFieldLocation } from "./static-field-storage.js";
+import { planRustFlowSelectedValue } from "./flow-read-projections.js";
 
 type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -1125,7 +1125,18 @@ function planExpressionAsStatement(
           return undefined;
         }
         const receiverNode = Node_Expression(ast, left);
-        const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+        const plannedReceiver = receiverNode === undefined
+          ? undefined
+          : planExpression(receiverNode, context);
+        const receiver = receiverNode === undefined || plannedReceiver === undefined
+          ? undefined
+          : planRustFlowSelectedValue(
+              left,
+              receiverNode,
+              plannedReceiver,
+              sourceField.receiverCarrier,
+              context,
+            );
         if (receiver === undefined) {
           return undefined;
         }
@@ -2819,7 +2830,7 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.error.throw",
-      "throw supports only `throw new Error(message)` with a finalized throw fact.",
+      "throw requires one finalized runtime, project-error, or exact rethrow fact.",
     ));
     return undefined;
   }
@@ -2831,38 +2842,42 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
     ));
     return undefined;
   }
-  const { ast } = context.input;
-  const newExpression = Node_Expression(context.input.ast, node);
-  const arguments_ = newExpression === undefined ? [] : ast.arguments(newExpression);
-  const [messageNode] = arguments_;
-  if (newExpression === undefined || ast.kindName(newExpression) !== "KindNewExpression" ||
-    messageNode === undefined || arguments_.length !== 1) {
+  const expression = Node_Expression(context.input.ast, node);
+  if (expression === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.throw-shape",
-      "Finalized throw fact must correspond to exactly `throw new Error(message)`.",
+      "Finalized throw fact has no exact source expression.",
     ));
     return undefined;
   }
-  const constructor = context.input.facts.getFact(newExpression, rustTargetOperationFactKey);
-  if (constructor === undefined || constructor.kind !== "provider-operation" ||
-    constructor.operationId !== fact.constructorOperationId || constructor.abi.operationKind !== "constructor" ||
-    !providerSelectedCallMatches(newExpression, constructor, context)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, newExpression),
-      "rust.backend.throw-constructor",
-      "Finalized throw fact conflicts with the selected provider Error constructor ABI.",
-    ));
+  if (fact.error.kind === "runtime") {
+    const constructor = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+    if (constructor === undefined || constructor.kind !== "provider-operation" ||
+      constructor.operationId !== fact.error.constructorOperationId ||
+      constructor.abi.operationKind !== "constructor" ||
+      !providerSelectedCallMatches(expression, constructor, context)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.throw-constructor",
+        "Finalized runtime throw fact conflicts with the selected provider Error constructor ABI.",
+      ));
+      return undefined;
+    }
+  }
+  const value = planExpression(expression, context);
+  if (value === undefined) {
     return undefined;
   }
-  if (!requireProviderArgumentPassingFacts(context, constructor, arguments_)) {
-    return undefined;
-  }
-  const message = planExpression(messageNode, context);
-  if (message !== undefined) {
-    context.usedAliases?.add("rt");
-  }
-  return message === undefined ? undefined : [{ kind: "throw", message }];
+  context.usedAliases?.add("rt");
+  const error: RustExpr = fact.error.kind === "program"
+    ? value
+    : {
+        kind: "call",
+        path: "rt::TsonicError::from",
+        args: [value],
+      };
+  return [{ kind: "throw", error }];
 }
 
 function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {

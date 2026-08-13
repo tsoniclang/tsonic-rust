@@ -1,10 +1,11 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
-import { rustConversionKey } from "../../policy/model.js";
 import type { RustSemanticModel } from "../../policy/model.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
   rustContextualValueConversionFactKey,
+  rustOptionProjectionFactKey,
+  rustProjectUpcastFactKey,
 } from "../rust-facts/keys.js";
 import type {
   RustContextualValueConversionFact,
@@ -40,7 +41,41 @@ export function recordRustValueCarrierReconciliation(
   facts.set(subject, rustContextualValueConversionFactKey, reconciliation.fact, [
     { message: "rust exact contextual value conversion" },
   ]);
-  facts.set(subject, rustConversionKey, {
-    convertedType: reconciliation.fact.targetCarrier,
-  }, [{ message: "rust contextual target carrier" }]);
+}
+
+export function rustValueCarrierBeforeContextualConversion(
+  facts: RustSemanticModel,
+  subject: ExtensionFactSubject | undefined,
+): TargetTypeRef | undefined {
+  return facts.getFact(subject, rustProjectUpcastFactKey)?.targetCarrier ??
+    facts.getTargetConversionFact(subject)?.convertedType ??
+    facts.getRuntimeCarrierFact(subject)?.carrier;
+}
+
+export function rustValueCarrierBeforeOptionProjection(
+  facts: RustSemanticModel,
+  subject: ExtensionFactSubject | undefined,
+): TargetTypeRef | undefined {
+  return facts.getFact(subject, rustContextualValueConversionFactKey)?.targetCarrier ??
+    rustValueCarrierBeforeContextualConversion(facts, subject);
+}
+
+export function rustEffectiveValueCarrier(
+  facts: RustSemanticModel,
+  subject: ExtensionFactSubject | undefined,
+): TargetTypeRef | undefined {
+  return facts.getFact(subject, rustOptionProjectionFactKey)?.resultCarrier ??
+    rustValueCarrierBeforeOptionProjection(facts, subject);
+}
+
+export function rustValueCarrierTransitionTarget(
+  facts: RustSemanticModel,
+  subject: ExtensionFactSubject | undefined,
+): TargetTypeRef | undefined {
+  const source = facts.getRuntimeCarrierFact(subject)?.carrier;
+  const effective = rustEffectiveValueCarrier(facts, subject);
+  return source === undefined || effective === undefined ||
+      rustTargetTypeRefEquals(source, effective)
+    ? undefined
+    : effective;
 }

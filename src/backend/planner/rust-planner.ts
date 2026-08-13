@@ -25,6 +25,7 @@ import {
   planRustBinaryModuleInitializers,
 } from "./module-initialization.js";
 import { planRustSourceOutputIdentities } from "../../translate/artifacts/source-output-identities.js";
+import { planRustProgramErrorModule } from "./program-errors.js";
 
 export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [...input.diagnostics];
@@ -79,6 +80,14 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const sortedSources = [...plannedSources].sort((left, right) =>
     left.moduleName.localeCompare(right.moduleName, "en"));
   const sortedModuleNames = sortedSources.map((source) => source.moduleName);
+  const programErrorModel = planRustProgramErrorModule(
+    input,
+    moduleNameByFileName,
+    diagnostics,
+  );
+  if (diagnostics.length > 0) {
+    return { artifacts: [], diagnostics };
+  }
   const artifacts: TargetArtifact[] = cargoProject.project.kind === "generated"
     ? [{
         kind: "project",
@@ -87,9 +96,25 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
       }]
     : [];
   const libraryModel = createRustSourceFile(
-    sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
+    [
+      ...(programErrorModel === undefined
+        ? []
+        : [{
+            kind: "mod-decl" as const,
+            name: "__tsonic_program",
+            visibility: "public" as const,
+            attrs: ["#[doc(hidden)]"],
+          }]),
+      ...sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
+    ],
   );
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
+  if (programErrorModel !== undefined) {
+    artifacts.push(rustSourceArtifact(
+      "src/__tsonic_program.rs",
+      printRustSourceFile(programErrorModel),
+    ));
+  }
   for (const source of sortedSources) {
     const identity = identityPlan.identities.get(input.ast.getFileName(source.sourceFile));
     if (identity === undefined) {
@@ -180,7 +205,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
         ? {
             returnType: {
               kind: "named" as const,
-              path: "tsonic_rust_runtime::TsonicResult",
+              path: programErrorModel === undefined
+                ? "tsonic_rust_runtime::TsonicResult"
+                : `${crateName}::__tsonic_program::TsonicResult`,
               typeArguments: [{ kind: "unit" as const }],
             },
             body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },

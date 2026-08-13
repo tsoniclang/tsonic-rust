@@ -197,6 +197,37 @@ export function length(value: string | null): int32 | undefined {
   validateGeneratedProject("selected-optional-property", result.artifacts);
 });
 
+test("project property access consumes the checker-selected narrowed receiver", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Counter {
+  value: int32 = 1;
+}
+
+export function read(value: Counter | undefined): int32 {
+  if (value === undefined) return 0;
+  return value.value + value.value;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(
+    source,
+    /value\s*\.as_ref\(\)\s*\.unwrap\(\)\s*\.clone\(\)\s*\.__tsonic_state/su,
+  );
+  assert.equal(
+    source.match(/value\s*\.as_ref\(\)\s*\.unwrap\(\)\s*\.clone\(\)/gsu)?.length,
+    2,
+  );
+  validateGeneratedProject("selected-narrowed-project-property", result.artifacts);
+});
+
 test("optional-chain selection fails closed without every exact carrier", () => {
   const expression = {};
   const guard = {};

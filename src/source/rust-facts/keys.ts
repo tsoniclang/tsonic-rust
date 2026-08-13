@@ -393,6 +393,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "source-field";
       readonly operationId: string;
+      readonly receiverCarrier: TargetTypeRef;
       readonly storage: "project-object" | "object-handle";
       readonly storageIndex: number;
       readonly resultCarrier: TargetTypeRef;
@@ -512,10 +513,12 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
-      // `throw new Error(message)` lowering to an Err return.
       readonly kind: "throw-op";
       readonly operationId: string;
-      readonly constructorOperationId: string;
+      readonly error:
+        | { readonly kind: "runtime"; readonly constructorOperationId: string }
+        | { readonly kind: "project"; readonly carrier: TargetTypeRef; readonly variant: string }
+        | { readonly kind: "program" };
     }
   | {
       // Compile-validated constant RegExp construction (literal or
@@ -761,8 +764,21 @@ function rustTypedLocationPlanEquals(
 }
 
 
-export const rustOptionWrapFactKey: RustPlanKey<{ readonly wrap: boolean }> =
-  defineRustPlanKey("optionWrap", (left, right) => left.wrap === right.wrap);
+export type RustOptionProjectionFact =
+  | {
+      readonly kind: "none";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "some";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly elementCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    };
+
+export const rustOptionProjectionFactKey: RustPlanKey<RustOptionProjectionFact> =
+  defineRustPlanKey("optionProjection", closedMetadataEquals);
 
 export interface RustContextualValueConversionFact {
   readonly sourceCarrier: TargetTypeRef;

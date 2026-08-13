@@ -38,6 +38,7 @@ import {
   rustJsDateTargetType,
   rustJsMapTargetType,
   rustJsSetTargetType,
+  rustJsErrorTargetType,
   rustLocationTargetType,
   rustNullishSourceTargetType,
   rustOptionTargetType,
@@ -74,6 +75,9 @@ export interface RustTargetTypeResolutionOptions {
   readonly providerCarrierPaths: ReadonlyMap<string, string>;
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
+  readonly resolveProjectUnionCarrier: (
+    memberCarriers: readonly TargetTypeRef[],
+  ) => TargetTypeRef | undefined;
 }
 
 export interface RustTargetTypeResolutionContext extends RustSourcePolicyContext {
@@ -284,7 +288,12 @@ function resolveRustTargetTypeSyntax(
         return rustOptionTargetType(valueCarrier);
       }
     }
-    return undefined;
+    return resolveRustTargetType(
+      context.semanticsFor(node).getTypeAtLocation(node),
+      context,
+      options,
+      resolving,
+    );
   }
   if (kind !== "KindTypeReference") {
     return undefined;
@@ -321,6 +330,9 @@ function resolveRustTargetTypeSyntax(
     typeArguments as readonly TargetTypeRef[],
     context,
     options,
+    typeName === undefined
+      ? undefined
+      : context.source.navigation.sourceReferenceFor(typeName)?.declaration,
   );
   if (sourceType !== undefined) {
     return sourceType;
@@ -724,6 +736,13 @@ function resolveUnion(
   if (members.length > 0 && members.every((member) => context.typeShape.isBooleanLike(member))) {
     return rustSourcePrimitiveTargetType("bool");
   }
+  const memberCarriers = members.map((member) =>
+    resolveRustTargetType(member, context, options, resolving));
+  if (memberCarriers.length > 1 && memberCarriers.every((carrier) => carrier !== undefined)) {
+    return options.resolveProjectUnionCarrier(
+      memberCarriers as readonly TargetTypeRef[],
+    );
+  }
   return undefined;
 }
 
@@ -915,6 +934,9 @@ function resolveSourceProfileCarrierFromArguments(
   if (name === "String") {
     return rustStringTargetType();
   }
+  if (name === "Error" && arguments_.length === 0) {
+    return rustJsErrorTargetType();
+  }
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;
     return output === undefined ? undefined : rustFutureTargetType(output);
@@ -968,14 +990,20 @@ function resolveProjectSourceCarrier(
   typeArguments: readonly TargetTypeRef[],
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
+  selectedDeclaration?: Node,
 ): TargetTypeRef | undefined {
-  if (symbol === undefined) {
+  const symbolDeclarations = symbol === undefined
+    ? []
+    : denseDefined(context.checker.getSymbolDeclarations(symbol));
+  if (symbolDeclarations === undefined) {
     return undefined;
   }
-  const declarations = denseDefined(context.checker.getSymbolDeclarations(symbol));
-  if (declarations === undefined) {
-    return undefined;
-  }
+  const declarations = selectedDeclaration === undefined
+    ? symbolDeclarations
+    : [
+        selectedDeclaration,
+        ...symbolDeclarations.filter((declaration) => declaration !== selectedDeclaration),
+      ];
   for (const declaration of declarations) {
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
     const sourceType = rustSourceTypeCarrierValue(carrier);

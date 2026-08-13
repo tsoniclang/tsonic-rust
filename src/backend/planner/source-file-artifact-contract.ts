@@ -66,6 +66,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
     case "const":
     case "thread-local":
     case "enum":
+    case "type-alias":
       return item.visibility === "public" ? [printRustItem(item)] : [];
     case "struct":
       return item.visibility === "public"

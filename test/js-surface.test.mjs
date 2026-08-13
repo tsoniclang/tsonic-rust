@@ -365,7 +365,7 @@ test("sparse arrays lower to JsArray with holes, length writes, and at()", () =>
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let values = js_abi::JsArray::from_sparse\(3, vec!\[\(0, 1\.0\), \(2, 3\.0\)\]\);/u);
   assert.match(text, /values\.set_len\(tsonic_rust_runtime::conversions::i32_to_usize\(5\)\?\);/u);
-  assert.match(text, /values\.set\(tsonic_rust_runtime::conversions::i32_to_usize\(3\)\?, 4\.0\);/u);
+  assert.match(text, /values\.set_number\(3\.0, 4\.0\);/u);
   assert.match(text, /values\.at\(-1\.0\)\.is_none\(\)/u);
   assert.match(text, /use tsonic_rust_js::abi as js_abi;/u);
 });
@@ -390,7 +390,7 @@ export function update(): void {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let dense: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
   assert.match(text, /let sparse = js_abi::JsArray::from_sparse/u);
-  assert.match(text, /sparse\.set\(tsonic_rust_runtime::conversions::i32_to_usize\(3\)\?, 4\.0\);/u);
+  assert.match(text, /sparse\.set_number\(3\.0, 4\.0\);/u);
 });
 
 test("string members lower to the runtime string module by declaration identity", () => {

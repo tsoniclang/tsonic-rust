@@ -37,10 +37,18 @@ export function printRustSourceFile(model: RustSourceFileModel): string {
 export function printRustItem(item: RustItem): string {
   switch (item.kind) {
     case "mod-decl": {
-      return `${printRustVisibility(item.visibility)}mod ${item.name};`;
+      const attrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
+      return `${attrs}${printRustVisibility(item.visibility)}mod ${item.name};`;
     }
     case "use": {
-      return item.alias === undefined ? `use ${item.path};` : `use ${item.path} as ${item.alias};`;
+      const visibility = printRustVisibility(item.visibility ?? "private");
+      return item.alias === undefined
+        ? `${visibility}use ${item.path};`
+        : `${visibility}use ${item.path} as ${item.alias};`;
+    }
+    case "type-alias": {
+      const generics = printRustTypeParameters(item.typeParams);
+      return `${printRustVisibility(item.visibility)}type ${item.name}${generics} = ${printRustType(item.target)};`;
     }
     case "const": {
       const constAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
@@ -61,6 +69,7 @@ export function printRustItem(item: RustItem): string {
       return fields.length === 0 ? `${header}}` : `${header}\n${fields}\n}`;
     }
     case "enum": {
+      const attrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
       const variants = item.variants
         .map((variant) => {
@@ -73,7 +82,7 @@ export function printRustItem(item: RustItem): string {
           return `    ${variant.name}${fields}${discriminant},`;
         })
         .join("\n");
-      return `${derives}${printRustVisibility(item.visibility)}enum ${item.name} {\n${variants}\n}`;
+      return `${attrs}${derives}${printRustVisibility(item.visibility)}enum ${item.name} {\n${variants}\n}`;
     }
     case "trait": {
       const attrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
@@ -116,7 +125,8 @@ export function printRustItem(item: RustItem): string {
           : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
         const visibility = item.trait === undefined ? printRustVisibility(fn.visibility) : "";
-        const header = `${fnAttrs}${printRustFunctionHeader(`    ${visibility}${fn.isAsync === true ? "async " : ""}${fn.isUnsafe === true ? "unsafe " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
+        const generics = printRustTypeParameters(fn.typeParams);
+        const header = `${fnAttrs}${printRustFunctionHeader(`    ${visibility}${fn.isAsync === true ? "async " : ""}${fn.isUnsafe === true ? "unsafe " : ""}fn `, fn.name, generics, allParams, returnSuffix, 1)}`;
         const body = printRustBlockStatements(fn.body, 2);
         return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
       }).join("\n\n");
@@ -397,12 +407,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return printRustBlock(statement.body, depth, "unsafe");
     }
     case "throw": {
-      return [
-        `${indent}${statement.tail === true ? "" : "return "}Err(rt::TsonicError::from(rt::JsError::new(`,
-        `${indent}    rt::JsErrorKind::Error,`,
-        `${indent}    ${printRustExpr(statement.message)},`,
-        `${indent})))${statement.tail === true ? "" : ";"}`,
-      ].join("\n");
+      return `${indent}${statement.tail === true ? "" : "return "}Err(${printRustExpr(statement.error)})${statement.tail === true ? "" : ";"}`;
     }
     case "try-scope": {
       return printRustTryScope(statement, depth);
@@ -1113,6 +1118,12 @@ export function printRustExpr(expression: RustExpr): string {
     case "string-concat": {
       const placeholders = expression.parts.map(() => "{}").join("");
       return `format!("${placeholders}", ${expression.parts.map(printRustExpr).join(", ")})`;
+    }
+    case "format-write": {
+      const args = expression.args.length === 0
+        ? ""
+        : `, ${expression.args.map(printRustExpr).join(", ")}`;
+      return `write!(${printRustExpr(expression.writer)}, "${escapeRustString(expression.format)}"${args})`;
     }
     case "reference": {
       const prefix = expression.mutable === true ? "&mut " : "&";
@@ -2994,8 +3005,18 @@ function rustExpressionContainsExpandedStructLiteral(expression: RustExpr): bool
 
 function printRustPattern(pattern: RustPattern): string {
   switch (pattern.kind) {
+    case "wildcard":
+      return "_";
+    case "binding":
+      return pattern.name;
+    case "path":
+      return pattern.path;
+    case "tuple": {
+      const elements = pattern.elements.map(printRustPattern).join(", ");
+      return `(${elements}${pattern.elements.length === 1 ? "," : ""})`;
+    }
     case "tuple-variant":
-      return `${pattern.path}(${pattern.bindings.join(", ")})`;
+      return `${pattern.path}(${pattern.elements.map(printRustPattern).join(", ")})`;
   }
 }
 

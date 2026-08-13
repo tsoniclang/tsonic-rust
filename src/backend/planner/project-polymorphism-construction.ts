@@ -6,7 +6,6 @@ import {
   KindCallExpression,
   KindEqualsToken,
   Node_Expression,
-  Node_Name,
 } from "../../common/source-ast.js";
 import type {
   RustProjectConstructorSignature,
@@ -158,6 +157,37 @@ export function planProjectClassConstructor(
   }
   const base = context.input.projectTypes.heritageForDefinition(definition).find((edge) =>
     edge.kind === "extends" && edge.target.kind === "class");
+  const externalBase = context.input.projectTypes.externalBaseForDefinition(definition);
+  const ownLayer = layers[layers.length - 1];
+  if (ownLayer === undefined || ownLayer.definition !== definition ||
+    (base !== undefined && externalBase !== undefined)) {
+    return undefined;
+  }
+  const values = new Map<Node, RustExpr>();
+  const availableFields: RustPreconstructionFieldValue[] = [];
+  const bindInitializedField = (
+    field: ProjectFieldPlan,
+    value: RustExpr,
+    nameHint: string = `field_${field.sourceName}`,
+  ): void => {
+    const name = allocateRustSyntheticName(syntheticNames, nameHint);
+    statements.push({ kind: "let", name, mutable: false, init: value });
+    const fieldValue: RustExpr = { kind: "path", path: name };
+    values.set(field.declaration, fieldValue);
+    const existing = availableFields.findIndex((candidate) =>
+      candidate.declaration === field.declaration);
+    const available = {
+      declaration: field.declaration,
+      storageIndex: field.storageIndex,
+      carrier: field.carrier,
+      expression: fieldValue,
+    };
+    if (existing < 0) {
+      availableFields.push(available);
+    } else {
+      availableFields[existing] = available;
+    }
+  };
   let bodyIndex = 0;
   if (base !== undefined) {
     const explicitBase = constructor === undefined
@@ -198,13 +228,55 @@ export function planProjectClassConstructor(
       },
     });
     bodyIndex = constructor === undefined ? 0 : 1;
+  } else if (externalBase !== undefined) {
+    const externalCall = constructor === undefined
+      ? undefined
+      : selectedExplicitExternalBaseConstructor(
+          constructor,
+          bodyStatements as readonly Node[],
+          externalBase.constructorOperationId,
+          context,
+        );
+    const baseError = externalCall === undefined
+      ? undefined
+      : planExpression(externalCall, initializationContext);
+    if (baseError === undefined) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, constructor ?? definition.declaration),
+        "rust.backend.external-project-constructor",
+        "An external source-profile base requires one exact checked super(...) call as the first constructor statement.",
+      ));
+      return undefined;
+    }
+    const baseName = allocateRustSyntheticName(syntheticNames, "external_base");
+    statements.push({ kind: "let", name: baseName, mutable: false, init: baseError });
+    const basePath: RustExpr = { kind: "path", path: baseName };
+    for (const externalField of externalBase.fields) {
+      const field = ownLayer.fields.find((candidate) =>
+        candidate.origin === "external" &&
+        candidate.declaration === externalField.declaration);
+      if (field === undefined) {
+        return undefined;
+      }
+      const value: RustExpr = externalField.initializer.kind === "none"
+        ? { kind: "none" }
+        : {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: basePath,
+              method: externalField.initializer.kind === "error-kind-string"
+                ? "kind"
+                : "message",
+              args: [],
+            },
+            method: "to_string",
+            args: [],
+          };
+      bindInitializedField(field, value, `external_${field.sourceName}`);
+    }
+    bodyIndex = 1;
   }
-  const ownLayer = layers[layers.length - 1];
-  if (ownLayer === undefined || ownLayer.definition !== definition) {
-    return undefined;
-  }
-  const values = new Map<Node, RustExpr>();
-  const availableFields: RustPreconstructionFieldValue[] = [];
   if (base !== undefined) {
     const baseLayers = layers.slice(0, -1);
     for (const layer of baseLayers) {
@@ -261,23 +333,7 @@ export function planProjectClassConstructor(
     if (value === undefined) {
       return false;
     }
-    const name = allocateRustSyntheticName(syntheticNames, `field_${field.sourceName}`);
-    statements.push({ kind: "let", name, mutable: false, init: value });
-    const fieldValue: RustExpr = { kind: "path", path: name };
-    values.set(field.declaration, fieldValue);
-    const existing = availableFields.findIndex((candidate) =>
-      candidate.declaration === field.declaration);
-    const available = {
-      declaration: field.declaration,
-      storageIndex: field.storageIndex,
-      carrier: field.carrier,
-      expression: fieldValue,
-    };
-    if (existing < 0) {
-      availableFields.push(available);
-    } else {
-      availableFields[existing] = available;
-    }
+    bindInitializedField(field, value);
     return true;
   };
   for (const field of ownLayer.fields) {
@@ -293,9 +349,11 @@ export function planProjectClassConstructor(
     const left = expression === undefined ? undefined : BinaryExpression_Left(context.input.ast, expression);
     const right = expression === undefined ? undefined : BinaryExpression_Right(context.input.ast, expression);
     const receiver = left === undefined ? undefined : Node_Expression(context.input.ast, left);
-    const name = left === undefined ? undefined : Node_Name(context.input.ast, left);
+    const selectedDeclaration = left === undefined
+      ? undefined
+      : context.input.facts.getSelectedTargetProperty(left)?.provenance?.sourceSelectedDeclaration;
     const field = ownLayer.fields.find((candidate) =>
-      name !== undefined && candidate.sourceName === context.input.ast.text(name));
+      candidate.declaration === selectedDeclaration);
     if (expression === undefined || operator === undefined ||
       context.input.ast.kindName(operator) !== KindEqualsToken ||
       left === undefined || context.input.ast.kindName(left) !== "KindPropertyAccessExpression" ||
@@ -496,6 +554,32 @@ function selectedImplicitBaseConstructor(
     return undefined;
   }
   return matches[0];
+}
+
+function selectedExplicitExternalBaseConstructor(
+  constructor: Node,
+  statements: readonly Node[],
+  operationId: string,
+  context: RustPlanContext,
+): Node | undefined {
+  const first = statements[0];
+  const call = first === undefined ? undefined : Node_Expression(context.input.ast, first);
+  const callee = call === undefined ? undefined : Node_Expression(context.input.ast, call);
+  const fact = call === undefined
+    ? undefined
+    : context.input.facts.getFact(call, rustTargetOperationFactKey);
+  if (call === undefined || context.input.ast.kindName(call) !== KindCallExpression ||
+    callee === undefined || context.input.ast.kindName(callee) !== "KindSuperKeyword" ||
+    fact?.kind !== "provider-operation" || fact.operationId !== operationId ||
+    fact.abi.operationKind !== "constructor") {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, constructor),
+      "rust.backend.external-project-super-constructor",
+      "External project heritage requires the exact selected source-profile constructor as the first super(...) statement.",
+    ));
+    return undefined;
+  }
+  return call;
 }
 
 function selectedExplicitBaseConstructor(

@@ -58,7 +58,7 @@ import {
   parseSourceIntegerLiteral,
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
-import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionWrapFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustOptionalChainFact,
@@ -150,6 +150,12 @@ import {
   readRustSourceStaticField,
   rustSourceStaticFieldLocation,
 } from "./static-field-storage.js";
+import {
+  rustValueCarrierBeforeContextualConversion,
+  rustValueCarrierBeforeOptionProjection,
+  rustValueCarrierTransitionTarget,
+} from "../../source/rust-target-semantics/value-carrier-reconciliation.js";
+import { planRustFlowSelectedValue } from "./flow-read-projections.js";
 
 type RustExpressionResultUse = "value" | "discarded";
 
@@ -223,9 +229,11 @@ export function planExpression(
   if (contextuallyConverted === undefined) {
     return undefined;
   }
-  const wrap = context.input.facts.getFact(node, rustOptionWrapFactKey);
-  return wrap?.wrap === true
+  const projection = context.input.facts.getFact(node, rustOptionProjectionFactKey);
+  return projection?.kind === "some"
     ? { kind: "call", path: "Some", args: [contextuallyConverted] }
+    : projection?.kind === "none"
+      ? { kind: "path", path: "None" }
     : contextuallyConverted;
 }
 
@@ -235,10 +243,11 @@ function applyRustContextualValueConversion(
   fact: import("../../source/rust-facts/keys.js").RustContextualValueConversionFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const sourceCarrier = expressionCarrier(node, context);
-  const convertedCarrier = context.input.facts.getTargetConversionFact(node)?.convertedType;
-  if (!rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier) ||
-    !rustTargetTypeRefEquals(convertedCarrier, fact.targetCarrier)) {
+  const sourceCarrier = rustValueCarrierBeforeContextualConversion(
+    context.input.facts,
+    node,
+  );
+  if (!rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.contextual-value-conversion",
@@ -1249,14 +1258,14 @@ function planGeneratorResumeExpression(
       pattern: {
         kind: "tuple-variant",
         path: "rt::GeneratorResume::Next",
-        bindings: [nextName],
+        elements: [{ kind: "binding", name: nextName }],
       },
       expression: { kind: "path", path: nextName },
     }, {
       pattern: {
         kind: "tuple-variant",
         path: "rt::GeneratorResume::Return",
-        bindings: [returnName],
+        elements: [{ kind: "binding", name: returnName }],
       },
       expression: planRustFallibleReturnExpression(
         { kind: "path", path: returnName },
@@ -1266,7 +1275,7 @@ function planGeneratorResumeExpression(
       pattern: {
         kind: "tuple-variant",
         path: "rt::GeneratorResume::Throw",
-        bindings: [errorName],
+        elements: [{ kind: "binding", name: errorName }],
       },
       expression: {
         kind: "try",
@@ -1493,9 +1502,7 @@ function planSourceConversion(node: Node, context: RustPlanContext): RustExpr | 
 }
 
 export function planNumericLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = context.input.facts.getFact(node, rustOptionWrapFactKey)?.wrap === true
-    ? expressionCarrier(node, context)
-    : context.input.facts.getTargetConversionFact(node)?.convertedType ?? expressionCarrier(node, context);
+  const carrier = rustValueCarrierBeforeOptionProjection(context.input.facts, node);
   if (carrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -1656,7 +1663,10 @@ function planRustUpdateExpression(
         path: "rt::BigInt::from_decimal_literal",
         args: [{ kind: "str-literal", value: "1" }],
       }
-    : { kind: "int-literal", text: "1" };
+    : fact.resultCarrier.kind === "source-primitive" &&
+        (fact.resultCarrier.name === "float32" || fact.resultCarrier.name === "float64")
+      ? { kind: "float-literal", text: "1.0" }
+      : { kind: "int-literal", text: "1" };
   if (isRustBigIntCarrier(fact.resultCarrier)) {
     context.usedAliases?.add("rt");
   }
@@ -1988,7 +1998,16 @@ function planRustSourceFieldUpdate(
     return undefined;
   }
   const receiverNode = Node_Expression(context.input.ast, fieldExpression);
-  const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  const receiver = receiverNode === undefined || plannedReceiver === undefined
+    ? undefined
+    : planRustFlowSelectedValue(
+        fieldExpression,
+        receiverNode,
+        plannedReceiver,
+        field.receiverCarrier,
+        context,
+      );
   if (receiver === undefined || context.syntheticNames === undefined) {
     return undefined;
   }
@@ -3112,7 +3131,7 @@ export function planFinalizedSourceInput(
   const sourceCarrier = expressionOverride?.carrier ??
     context.input.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
   const convertedCarrier = expressionOverride === undefined
-    ? context.input.facts.getTargetConversionFact(sourceNode)?.convertedType
+    ? rustValueCarrierTransitionTarget(context.input.facts, sourceNode)
     : undefined;
   if (sourceCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -3289,7 +3308,9 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
         };
   }
   if (fact !== undefined && fact.kind === "provider-operation") {
-    if (fact.abi.operationKind !== "method") {
+    const superConstruction = fact.abi.operationKind === "constructor" &&
+      callee !== undefined && ast.kindName(callee) === "KindSuperKeyword";
+    if (fact.abi.operationKind !== "method" && !superConstruction) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
         "rust.provider.call-kind",
@@ -3849,7 +3870,10 @@ function shapeRustSourceCallInput(
     return undefined;
   }
   const sourceCarrier = context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
-  const convertedCarrier = context.input.facts.getTargetConversionFact(argumentNode)?.convertedType;
+  const convertedCarrier = rustValueCarrierTransitionTarget(
+    context.input.facts,
+    argumentNode,
+  );
   const selectedInput = selectRustSpreadSourceInput(
     input,
     sourceCarrier,
@@ -4076,7 +4100,10 @@ export function requireProviderArgumentPassingFacts(
       }
     }
     const sourceCarrier = context.input.facts.getRuntimeCarrierFact(argument)?.carrier;
-    const convertedCarrier = context.input.facts.getTargetConversionFact(argument)?.convertedType;
+    const convertedCarrier = rustValueCarrierTransitionTarget(
+      context.input.facts,
+      argument,
+    );
     if (sourceCarrier === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, argument),
@@ -4386,7 +4413,16 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     const receiverNode = Node_Expression(context.input.ast, node);
-    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+    const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+    const receiver = receiverNode === undefined || plannedReceiver === undefined
+      ? undefined
+      : planRustFlowSelectedValue(
+          node,
+          receiverNode,
+          plannedReceiver,
+          fact.receiverCarrier,
+          context,
+        );
     if (receiver === undefined) {
       return undefined;
     }

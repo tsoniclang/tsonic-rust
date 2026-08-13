@@ -33,6 +33,14 @@ export interface RustSourceParameterAbi {
   readonly mode: RustArgumentMode;
 }
 
+export function rustSourceParameterContractCarrier(
+  abi: RustSourceParameterAbi,
+): TargetTypeRef {
+  return abi.parameterCarrier.kind === "pointer"
+    ? abi.parameterCarrier.pointee
+    : abi.parameterCarrier;
+}
+
 export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiResolver {
   const cache = new WeakMap<object, RustSourceParameterAbi | null>();
 
@@ -44,7 +52,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
       }
       const typeNode = Node_Type(context.ast, parameter);
       const base = typeNode === undefined
-        ? undefined
+        ? resolveRustTargetTypeRef(parameter, context, options)
         : resolveRustTargetTypeRef(typeNode, context, options);
       if (base === undefined) {
         cache.set(parameter, null);

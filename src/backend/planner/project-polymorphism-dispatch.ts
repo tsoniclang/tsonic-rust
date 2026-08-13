@@ -227,7 +227,9 @@ function planRootContractFunctions(
     return undefined;
   }
   for (const field of fields) {
-    const implementation = projectMemberImplementation(concrete, field.declaration, context);
+    const implementation = field.origin === "external"
+      ? field.declaration
+      : projectMemberImplementation(concrete, field.declaration, context);
     const storagePath = implementation === undefined
       ? undefined
       : projectFieldStoragePath(implementation, layers, context);

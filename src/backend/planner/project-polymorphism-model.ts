@@ -43,6 +43,7 @@ export interface ProjectFieldPlan {
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
+  readonly origin: "project" | "external";
   readonly initializer?: Node;
 }
 
@@ -93,6 +94,22 @@ export function projectOwnFields(
     return undefined;
   }
   const fields: ProjectFieldPlan[] = [];
+  const externalBase = context.input.projectTypes.externalBaseForDefinition(definition);
+  for (const field of externalBase?.fields ?? []) {
+    const type = rustTypeFromCarrierInContext(field.carrier, context);
+    if (type === undefined) {
+      return undefined;
+    }
+    fields.push({
+      declaration: field.declaration,
+      sourceName: field.sourceName,
+      storageIndex: field.storageIndex,
+      carrier: field.carrier,
+      type,
+      origin: "external",
+    });
+  }
+  const externalFieldCount = fields.length;
   for (const layoutField of layout.fields) {
     const declared = context.input.facts.getRuntimeCarrierFact(layoutField.declaration)?.carrier ??
       context.input.facts.getRuntimeCarrierFact(Node_Type(context.input.ast, layoutField.declaration))?.carrier;
@@ -111,9 +128,10 @@ export function projectOwnFields(
     fields.push({
       declaration: layoutField.declaration,
       sourceName: layoutField.sourceName,
-      storageIndex: layoutField.storageIndex,
+      storageIndex: externalFieldCount + layoutField.storageIndex,
       carrier,
       type,
+      origin: "project",
       ...(initializer === undefined ? {} : { initializer }),
     });
   }
@@ -201,16 +219,16 @@ export function projectMemberImplementation(
 export function projectFieldStoragePath(
   implementation: Node,
   layers: readonly ProjectClassStateLayer[],
-  context: RustPlanContext,
+  _context: RustPlanContext,
 ): readonly number[] | undefined {
-  const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
-  const ownerIndex = layers.findIndex((layer) => layer.definition === owner);
-  const field = ownerIndex < 0
-    ? undefined
-    : layers[ownerIndex]!.fields.find((candidate) => candidate.declaration === implementation);
-  if (field === undefined) {
+  const matches = layers.flatMap((layer, ownerIndex) =>
+    layer.fields
+      .filter((candidate) => candidate.declaration === implementation)
+      .map((field) => ({ ownerIndex, field })));
+  if (matches.length !== 1) {
     return undefined;
   }
+  const { ownerIndex, field } = matches[0]!;
   const path: number[] = [];
   for (let depth = layers.length - 1; depth > ownerIndex; depth -= 1) {
     path.push(0);

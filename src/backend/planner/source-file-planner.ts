@@ -94,7 +94,9 @@ export function planRustSourceFile(
   const aliases = Object.freeze(new Set(usedAliases));
   const useItems: RustItem[] = [...aliases]
     .sort((left, right) => left.localeCompare(right, "en"))
-    .map((alias) => rustRuntimeAliasImports.get(alias))
+    .map((alias) => alias === "rt" && input.projectTypes.programErrorDefinitions.length > 0
+      ? { path: "crate::__tsonic_program", alias: "rt" }
+      : rustRuntimeAliasImports.get(alias))
     .filter((entry): entry is { path: string; alias: string } =>
       entry !== undefined)
     .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));

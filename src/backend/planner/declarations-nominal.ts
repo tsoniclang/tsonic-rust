@@ -345,7 +345,7 @@ function planConstructor(
   if (parameterStatements === undefined) {
     return undefined;
   }
-  const values = new Map<string, RustExpr>();
+  const values = new Map<Node, RustExpr>();
   const availableFields: RustPreconstructionFieldValue[] = [];
   const statements: RustStmt[] = [...parameterStatements];
   const evaluateField = (field: PlannedProjectObjectField, expression: Node): boolean => {
@@ -367,7 +367,7 @@ function planConstructor(
     );
     statements.push({ kind: "let", name: valueName, mutable: false, init: value });
     const fieldValue: RustExpr = { kind: "path", path: valueName };
-    values.set(field.sourceName, fieldValue);
+    values.set(field.declaration, fieldValue);
     const existing = availableFields.findIndex((candidate) =>
       candidate.declaration === field.declaration);
     const available = {
@@ -404,9 +404,10 @@ function planConstructor(
     const right = expression === undefined ? undefined : BinaryExpression_Right(ast, expression);
     const receiver = left === undefined ? undefined : Node_Expression(ast, left);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
-    const fieldNameNode = left === undefined ? undefined : Node_Name(ast, left);
-    const sourceFieldName = fieldNameNode === undefined ? "" : ast.text(fieldNameNode);
-    const field = fields.find((candidate) => candidate.sourceName === sourceFieldName);
+    const selectedDeclaration = left === undefined
+      ? undefined
+      : context.input.facts.getSelectedTargetProperty(left)?.provenance?.sourceSelectedDeclaration;
+    const field = fields.find((candidate) => candidate.declaration === selectedDeclaration);
     const isFieldInit =
       expression !== undefined &&
       operatorToken !== undefined &&
@@ -438,7 +439,7 @@ function planConstructor(
   }
   const fieldValues: RustExpr[] = [];
   for (const field of fields) {
-    const value = values.get(field.sourceName);
+    const value = values.get(field.declaration);
     if (value === undefined) {
       return undefined;
     }

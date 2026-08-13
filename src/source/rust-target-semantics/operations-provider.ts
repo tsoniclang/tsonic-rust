@@ -62,6 +62,7 @@ import {
   getRustJsSetElementTargetType,
   rustJsArrayTargetType,
   rustJsValueTargetType,
+  rustJsErrorTargetType,
   rustOptionTargetType,
   rustCallableProtocol,
   rustSourceTypeCarrier,
@@ -78,7 +79,6 @@ import {
   isRustBoolCarrier,
   isRustCopyCarrier,
   getRustGeneratorProtocol,
-  isRustIntegerCarrier,
   isRustJsArrayCarrier,
   isRustNullishSourceCarrier,
   isRustNumericCarrier,
@@ -136,6 +136,7 @@ import {
 import {
   resolveRustTargetTypeRef,
 } from "./target-type-resolution.js";
+import type { RustTargetTypeResolutionOptions } from "./target-type-resolution.js";
 import {
   tsonicCoreSourceSemanticsModules,
 } from "@tsonic/source-core";
@@ -169,6 +170,7 @@ import type { RustProjectTypePolicy } from "./project-type-policy.js";
 import { rustProjectMemberSlotName } from "./project-type-policy.js";
 import {
   recordRustValueCarrierReconciliation,
+  rustEffectiveValueCarrier,
   selectRustValueCarrierReconciliation,
 } from "./value-carrier-reconciliation.js";
 import type {
@@ -197,6 +199,7 @@ export interface RustOperationsProviderOptions {
   readonly regExpSubsetViolation: (pattern: string, flags: string) => string | undefined;
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
+  readonly resolveProjectUnionCarrier: RustTargetTypeResolutionOptions["resolveProjectUnionCarrier"];
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly projectTypes: RustProjectTypePolicy;
 }
@@ -285,7 +288,7 @@ function mapSelectedUnaryOperator(
     targetOperator = "-";
     resultCarrier = operand;
   } else if ((request.operator === "++" || request.operator === "--") &&
-    (isRustIntegerCarrier(operand) || isRustBigIntCarrier(operand))) {
+    (isRustNumericCarrier(operand) || isRustBigIntCarrier(operand))) {
     targetOperator = request.operator === "++" ? "+=" : "-=";
     resultCarrier = operand;
   } else if (request.operator === "+" && operand !== undefined && isRustNumericCarrier(operand)) {
@@ -649,7 +652,7 @@ export function selectRustCheckedCall(
         "Rust Error construction currently requires one checked string message argument.",
       );
     }
-    const resultCarrier: TargetTypeRef = { kind: "target-named", id: "rust.runtime.JsError" };
+    const resultCarrier = rustJsErrorTargetType();
     return acceptSelectedCall(request, {
       kind: "provider-operation",
       operationId: "tsonic.rust.error.constructor",
@@ -1809,7 +1812,7 @@ function selectedCallSourceCarriers(
     const expected = declaredBySourceIndex.get(index);
     const resolved = resolveRustTargetTypeRef(argument, context, options);
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
-    const converted = context.facts.getTargetConversionFact(argument)?.convertedType;
+    const converted = rustEffectiveValueCarrier(context.facts, argument);
     let effective = converted ?? normalized;
     if (converted === undefined && normalized !== undefined && expected !== undefined &&
       !rustTargetTypeRefEquals(normalized, expected)) {
@@ -2177,7 +2180,12 @@ function checkedCallIsConstruction(
   context: RustOperationPolicyContext,
 ): boolean {
   const call = asNode(request.call, context);
-  return call !== undefined && context.ast.kindName(call) === "KindNewExpression";
+  const callee = asNode(request.callee, context);
+  return call !== undefined && (
+    context.ast.kindName(call) === "KindNewExpression" ||
+    (context.ast.kindName(call) === "KindCallExpression" &&
+      callee !== undefined && context.ast.kindName(callee) === "KindSuperKeyword")
+  );
 }
 
 export function selectRustCheckedDelete(
@@ -2416,6 +2424,51 @@ export function selectRustCheckedPropertyAccess(
     return structuralProperty;
   }
 
+  const externalField = options.projectTypes.externalFieldForReceiver(
+    request.sourceSelectedDeclaration,
+    selectedReceiverCarrier,
+  );
+  if (externalField !== undefined && selectedReceiverCarrier !== undefined) {
+    const operationId = sourceOperationId(context, externalField.field.declaration, "external-field");
+    const readSlot = rustProjectMemberSlotName(
+      context.ast,
+      externalField.field.declaration,
+      "read",
+    );
+    const writeSlot = rustProjectMemberSlotName(
+      context.ast,
+      externalField.field.declaration,
+      "write",
+    );
+    if (readSlot === undefined || writeSlot === undefined) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_EXTERNAL_PROJECT_FIELD_SLOT_IDENTITY_MISSING",
+        "Selected external project field has no deterministic Rust dispatch-slot identity.",
+      );
+    }
+    return acceptRustMemberOperation(request, "property", {
+      kind: "source-field",
+      operationId,
+      receiverCarrier: selectedReceiverCarrier,
+      storage: "project-object",
+      storageIndex: externalField.field.storageIndex,
+      resultCarrier: externalField.field.carrier,
+      dispatch: {
+        read: readSlot,
+        write: writeSlot,
+        ownerCarrier: externalField.ownerCarrier,
+      },
+    }, context, options, {
+      sourceExpression: request.expression,
+      sourceReceiver: request.receiver,
+      sourceSelectedSymbol: request.sourceSelectedSymbol,
+      sourceSelectedDeclaration: externalField.field.declaration,
+      sourceResultType: request.sourceResultType,
+    });
+  }
+
   if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
     const declaration = request.sourceSelectedDeclaration;
     const memberName = context.ast.text(context.ast.name(declaration));
@@ -2457,9 +2510,13 @@ export function selectRustCheckedPropertyAccess(
           selectedReceiverCarrier,
           declaredCarrier,
         );
-    if (field !== undefined && resultCarrier !== undefined) {
+    if (field !== undefined && resultCarrier !== undefined && selectedReceiverCarrier !== undefined) {
       const operationId = sourceOperationId(context, declaration, "field");
       const owner = options.projectTypes.definitionContainingDeclaration(declaration);
+      const storageIndex = field.storageIndex +
+        (owner === undefined
+          ? 0
+          : options.projectTypes.externalBaseForDefinition(owner)?.fields.length ?? 0);
       const ownerRelationship = owner === undefined || selectedReceiverCarrier === undefined
         ? undefined
         : options.projectTypes.relationship(selectedReceiverCarrier, owner);
@@ -2484,8 +2541,9 @@ export function selectRustCheckedPropertyAccess(
       return acceptRustMemberOperation(request, "property", {
         kind: "source-field",
         operationId,
+        receiverCarrier: selectedReceiverCarrier,
         storage: "project-object",
-        storageIndex: field.storageIndex,
+        storageIndex,
         resultCarrier,
         ...(readSlot === undefined || writeSlot === undefined
           ? {}
@@ -2822,6 +2880,7 @@ function selectStructuralSourceProperty(
   return acceptRustMemberOperation(request, "property", {
     kind: "source-field",
     operationId,
+    receiverCarrier,
     storage: shape.storage,
     storageIndex: field.storageIndex,
     resultCarrier,
@@ -3606,25 +3665,42 @@ function selectedMemberReceiverCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
+  const receiver = asNode(request.receiver, context);
   const sourceCarrier = resolveRustTargetTypeRef(
     request.receiver,
     context,
     options,
   );
-  if (request.optionalChain !== true) {
-    return sourceCarrier;
-  }
-  if (request.sourceReceiverType === undefined) {
+  if (receiver === undefined || sourceCarrier === undefined ||
+    request.sourceReceiverType === undefined) {
     return undefined;
+  }
+  const selectedCarrier = resolveRustTargetTypeRef(
+    request.sourceReceiverType,
+    context,
+    options,
+  );
+  if (selectedCarrier === undefined) {
+    return undefined;
+  }
+  if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
+    return sourceCarrier;
   }
   const optionElement = rustOptionElementCarrier(sourceCarrier);
   if (optionElement !== undefined) {
-    return optionElement;
+    return rustTargetTypeRefEquals(optionElement, selectedCarrier)
+      ? optionElement
+      : undefined;
   }
-  const selectedCarrier = resolveRustTargetTypeRef(request.sourceReceiverType, context, options);
-  return rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)
-    ? selectedCarrier
-    : undefined;
+  const refinement = context.source.semantics.selectValueTypeRefinement(receiver);
+  if (refinement.kind === "resolved" && refinement.refinement.kind === "exact") {
+    return sourceCarrier;
+  }
+  if (refinement.kind === "resolved" && refinement.refinement.kind === "members" &&
+    options.sourceTypes.sourceUnionForCarrier(sourceCarrier) !== undefined) {
+    return sourceCarrier;
+  }
+  return undefined;
 }
 
 function acceptRustMemberOperation(

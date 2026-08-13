@@ -23,6 +23,8 @@ export const rustGeneratorTargetId = "rust.runtime.Generator";
 export const rustAsyncGeneratorTargetId = "rust.runtime.AsyncGenerator";
 export const rustIteratorResultTargetId = "rust.runtime.IteratorResult";
 export const rustUndefinedTargetId = "rust.runtime.Undefined";
+export const rustJsErrorTargetId = "rust.runtime.JsError";
+export const rustProgramErrorTargetId = "rust.program.TsonicError";
 export const rustJsValueTargetId = "rust.js.JsValue";
 export const rustJsArrayTargetId = "rust.js.JsArray";
 export const rustJsArrayConcatItemTargetId = "rust.js.JsArrayConcatItem";
@@ -757,6 +759,18 @@ export function rustJsValueTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsValueTargetId };
 }
 
+export function rustJsErrorTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsErrorTargetId };
+}
+
+export function rustProgramErrorTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustProgramErrorTargetId };
+}
+
+export function isRustProgramErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && carrier.id === rustProgramErrorTargetId;
+}
+
 export function rustJsArrayTargetType(element: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustJsArrayTargetId, typeArguments: [element] };
 }
@@ -926,6 +940,8 @@ const rustCloneOnReadTargetIds: ReadonlySet<string> = new Set([
   rustJsSetTargetId,
   rustJsDateTargetId,
   rustJsRegExpTargetId,
+  rustJsErrorTargetId,
+  rustProgramErrorTargetId,
 ]);
 
 const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
@@ -950,11 +966,14 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustJsDateTargetId,
   rustJsRegExpTargetId,
   rustJsRegExpMatchTargetId,
+  rustJsErrorTargetId,
+  rustProgramErrorTargetId,
 ]);
 
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
     isRustUndefinedCarrier(carrier) || isRustBigIntCarrier(carrier) ||
+    (carrier?.kind === "target-named" && carrier.id === rustProgramErrorTargetId) ||
     (carrier?.kind === "source-primitive" && carrier.name !== "char");
 }
 

@@ -22,10 +22,14 @@ export type RustType =
   | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
 
 export type RustPattern =
+  | { readonly kind: "wildcard" }
+  | { readonly kind: "binding"; readonly name: string }
+  | { readonly kind: "path"; readonly path: string }
+  | { readonly kind: "tuple"; readonly elements: readonly RustPattern[] }
   | {
       readonly kind: "tuple-variant";
       readonly path: string;
-      readonly bindings: readonly string[];
+      readonly elements: readonly RustPattern[];
     };
 
 export type RustExpr =
@@ -70,6 +74,12 @@ export type RustExpr =
   | { readonly kind: "unsafe"; readonly expression: RustExpr }
   | { readonly kind: "evaluate-then"; readonly effect: RustExpr; readonly discard: "unit" | "value"; readonly value: RustExpr }
   | { readonly kind: "string-concat"; readonly parts: readonly RustExpr[] }
+  | {
+      readonly kind: "format-write";
+      readonly writer: RustExpr;
+      readonly format: string;
+      readonly args: readonly RustExpr[];
+    }
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
@@ -132,7 +142,7 @@ export type RustStmt =
   | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
   | { readonly kind: "scope"; readonly label?: string; readonly body: RustBlock }
   | { readonly kind: "unsafe-scope"; readonly body: RustBlock }
-  | { readonly kind: "throw"; readonly message: RustExpr; readonly tail?: true }
+  | { readonly kind: "throw"; readonly error: RustExpr; readonly tail?: true }
   | {
       readonly kind: "try-scope";
       readonly bodyName: string;
@@ -203,6 +213,7 @@ export interface RustImplFunction {
   readonly isAsync?: boolean;
   readonly isUnsafe?: boolean;
   readonly fallible?: boolean;
+  readonly typeParams?: readonly RustTypeParameter[];
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
@@ -249,12 +260,13 @@ export type RustItem =
       readonly type: RustType;
       readonly value: RustExpr;
     }
-  | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility }
+  | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[] }
   | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly fields: readonly RustStructField[] }
   | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly superTraits?: readonly RustType[]; readonly functions: readonly RustTraitFunction[] }
   | { readonly kind: "impl"; readonly typeParams?: readonly RustTypeParameter[]; readonly trait?: RustType; readonly target: RustType; readonly functions: readonly RustImplFunction[] }
-  | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
-  | { readonly kind: "use"; readonly path: string; readonly alias?: string };
+  | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
+  | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly typeParams?: readonly RustTypeParameter[]; readonly target: RustType }
+  | { readonly kind: "use"; readonly path: string; readonly alias?: string; readonly visibility?: RustVisibility };
 
 export interface RustSourceFileModel {
   readonly headerComment: string;
