@@ -136,7 +136,7 @@ export function resolveRustTargetTypeRef(
     if (parameterType === undefined) {
       return undefined;
     }
-    const carrier = resolveRustTargetTypeSyntax(parameterType, context, options, new Set<object>());
+    const carrier = resolveRustAuthoredTargetType(parameterType, context, options, new Set<object>());
     return rustParameterLaneTargetType(carrier, parameterType, context, options);
   }
   const syntax = node === undefined
@@ -167,8 +167,8 @@ function resolveRustTargetTypeSyntax(
     context.facts.get(node, functionPointerFactKey);
   if (functionPointer !== undefined) {
     const parameters = functionPointer.parameters.map((parameter) =>
-      resolveRustTargetTypeSyntax(parameter, context, options, resolving));
-    const result = resolveRustTargetTypeSyntax(functionPointer.result, context, options, resolving);
+      resolveRustAuthoredTargetType(parameter, context, options, resolving));
+    const result = resolveRustAuthoredTargetType(functionPointer.result, context, options, resolving);
     return result === undefined || parameters.some((parameter) => parameter === undefined)
       ? undefined
       : {
@@ -223,13 +223,13 @@ function resolveRustTargetTypeSyntax(
     const inner = ast.as.AsParenthesizedTypeNode(node)?.Type;
     return inner === undefined
       ? undefined
-      : resolveRustTargetTypeSyntax(inner, context, options, resolving);
+      : resolveRustAuthoredTargetType(inner, context, options, resolving);
   }
   if (kind === "KindArrayType") {
     const elementNode = ArrayTypeNode_ElementType(ast, node);
     const element = elementNode === undefined
       ? undefined
-      : resolveRustTargetTypeSyntax(elementNode, context, options, resolving);
+      : resolveRustAuthoredTargetType(elementNode, context, options, resolving);
     return element === undefined
       ? undefined
       : options.jsEnabled
@@ -240,14 +240,14 @@ function resolveRustTargetTypeSyntax(
     const inner = TypeOperatorNode_Type(ast, node);
     return inner === undefined
       ? undefined
-      : resolveRustTargetTypeSyntax(inner, context, options, resolving);
+      : resolveRustAuthoredTargetType(inner, context, options, resolving);
   }
   if (kind === "KindTupleType") {
     const elementNodes = denseDefined(ast.elements(node));
     if (elementNodes === undefined) {
       return undefined;
     }
-    const elements = elementNodes.map((element) => resolveRustTargetTypeSyntax(element, context, options, resolving));
+    const elements = elementNodes.map((element) => resolveRustAuthoredTargetType(element, context, options, resolving));
     return elements.length > 0 && elements.every((element) => element !== undefined)
       ? rustTupleTargetType(elements as TargetTypeRef[])
       : undefined;
@@ -285,7 +285,7 @@ function resolveRustTargetTypeSyntax(
       const value = semanticMembers.find((member) => member !== nullish);
       const valueCarrier = nullish === undefined || value === undefined
         ? undefined
-        : resolveRustTargetTypeSyntax(value, context, options, resolving);
+        : resolveRustAuthoredTargetType(value, context, options, resolving);
       if (valueCarrier !== undefined) {
         return rustOptionTargetType(valueCarrier);
       }
@@ -305,7 +305,7 @@ function resolveRustTargetTypeSyntax(
     return undefined;
   }
   const typeArguments = typeArgumentNodes.map((argument) =>
-    resolveRustTargetTypeSyntax(argument, context, options, resolving));
+    resolveRustAuthoredTargetType(argument, context, options, resolving));
   if (typeArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
@@ -346,6 +346,21 @@ function resolveRustTargetTypeSyntax(
   return undefined;
 }
 
+function resolveRustAuthoredTargetType(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  return resolveRustTargetTypeSyntax(node, context, options, resolving) ??
+    resolveRustTargetType(
+      context.semanticsFor(node).getTypeAtLocation(node),
+      context,
+      options,
+      resolving,
+    );
+}
+
 function resolveReferencedDeclarationType(
   node: Node,
   context: RustTargetTypeResolutionContext,
@@ -368,7 +383,7 @@ function resolveReferencedDeclarationType(
       }
       const typeNode = Node_Type(ast, declaration);
       if (typeNode !== undefined) {
-        const target = resolveRustTargetTypeSyntax(typeNode, context, options, new Set<object>());
+        const target = resolveRustAuthoredTargetType(typeNode, context, options, new Set<object>());
         if (target !== undefined) {
           return ast.kindName(declaration) === "KindParameter"
             ? rustParameterLaneTargetType(target, typeNode, context, options)
@@ -562,7 +577,7 @@ function resolveStructuralObjectType(
       Node_Type(context.ast, declaration)).filter((node) => node !== undefined) ?? [];
     const authoredCarriers = authoredTypeNodes.length === projectDeclarations?.length
       ? authoredTypeNodes.map((node) =>
-          resolveRustTargetTypeSyntax(node, context, options, resolving))
+          resolveRustAuthoredTargetType(node, context, options, resolving))
       : [];
     const authoredCarrier = authoredCarriers.length > 0 &&
         authoredCarriers.every((carrier) =>
@@ -647,7 +662,7 @@ function resolveCallableType(
           options,
           resolving,
         )
-      : resolveRustTargetTypeSyntax(authoredType, context, options, resolving);
+      : resolveRustAuthoredTargetType(authoredType, context, options, resolving);
     if (selected === undefined || parameterDeclaration === undefined ||
       context.ast.as.AsParameterDeclaration(parameterDeclaration)?.DotDotDotToken !== undefined) {
       return selected;
@@ -664,7 +679,7 @@ function resolveCallableType(
   const authoredReturn = Node_Type(context.ast, declaration);
   const result = authoredReturn === undefined
     ? resolveRustTargetType(returnType, context, options, resolving)
-    : resolveRustTargetTypeSyntax(authoredReturn, context, options, resolving);
+    : resolveRustAuthoredTargetType(authoredReturn, context, options, resolving);
   return result === undefined
     ? undefined
     : rustCallableTargetType(parameterCarriers as TargetTypeRef[], result);

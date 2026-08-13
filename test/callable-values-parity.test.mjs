@@ -164,6 +164,40 @@ export function main(): void {
   validateGeneratedProject("callable-alias", result.artifacts, { run: true });
 });
 
+test("computed authored type syntax closes callable signatures", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "computed_type_syntax" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class Box {
+  value: string;
+
+  constructor(value: string) {
+    this.value = value;
+  }
+}
+
+const makeBox = (value: string): Box => new Box(value);
+const describe = (
+  box: ReturnType<typeof makeBox>,
+  suffix: Box["value"],
+): { text: string } => ({ text: box.value + suffix });
+
+export function main(): void {
+  check(describe(makeBox("rust"), "!").text === "rust!");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("computed-type-syntax", result.artifacts, { run: true });
+});
+
 test("escaping closures preserve shared mutable captures", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

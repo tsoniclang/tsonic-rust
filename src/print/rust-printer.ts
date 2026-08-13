@@ -1745,7 +1745,17 @@ function printRustExprFitted(
       );
     case "associated-call":
       {
-        const owner = printRustAssociatedCallOwnerFitted(expression, depth, column);
+        const trailingArgument = expression.args[expression.args.length - 1];
+        const flatOwner = printRustAssociatedCallOwner(expression);
+        const trailingClosureWidth = flatOwner.length > rustNestedCallWidth &&
+            (trailingArgument?.kind === "closure" || trailingArgument?.kind === "closure-block")
+          ? firstLine(printRustExpr(trailingArgument)).length
+          : 0;
+        const owner = printRustAssociatedCallOwnerFitted(
+          expression,
+          depth,
+          column + `::${expression.method}(`.length + trailingClosureWidth,
+        );
         if (owner.includes("\n") && expression.args.length === 1 &&
           (expression.args[0]?.kind === "closure" || expression.args[0]?.kind === "closure-block")) {
           const callable = appendToLastLine(owner, `::${expression.method}(`);
@@ -2099,6 +2109,11 @@ function printRustExprFitted(
         return flat;
       }
       const onlyElement = expression.elements[0];
+      if (expression.kind === "tuple-literal" && expression.elements.length === 1 &&
+        onlyElement !== undefined) {
+        const rendered = printRustExprFitted(onlyElement, depth, column + 1);
+        return appendToLastLine(`(${rendered}`, ",)");
+      }
       if (expression.kind !== "tuple-literal" && expression.elements.length === 1 &&
         onlyElement !== undefined && rustExpressionContainsStatementBlock(onlyElement)) {
         const opening = expression.kind === "vec-literal" ? "vec![" : "[";
