@@ -40,6 +40,7 @@ import {
   rustJsSetTargetType,
   rustJsErrorTargetType,
   rustLocationTargetType,
+  rustNullTargetType,
   rustNullishSourceTargetType,
   rustNeverTargetType,
   rustOptionTargetType,
@@ -52,6 +53,7 @@ import {
   rustStringTargetType,
   rustTupleTargetType,
   rustUnitTargetType,
+  rustUndefinedTargetType,
   rustVecTargetType,
   substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
@@ -190,8 +192,17 @@ function resolveRustTargetTypeSyntax(
   }
   const { ast, checker } = context;
   const kind = ast.kindName(node);
-  if (kind === "KindNullKeyword" || kind === "KindUndefinedKeyword") {
-    return rustNullishSourceTargetType();
+  if (kind === "KindNullKeyword") {
+    return rustNullTargetType();
+  }
+  if (kind === "KindUndefinedKeyword") {
+    return rustUndefinedTargetType();
+  }
+  if (kind === "KindLiteralType") {
+    const literal = ast.as.AsLiteralTypeNode(node)?.Literal;
+    if (literal !== undefined && ast.kindName(literal) === "KindNullKeyword") {
+      return rustNullTargetType();
+    }
   }
   if (kind === "KindStringKeyword") {
     return rustStringTargetType();
@@ -743,9 +754,12 @@ function resolveUnion(
   }
   const valueMembers = members.filter((member) => !context.typeShape.isNullish(member));
   const nullishMembers = members.filter((member) => context.typeShape.isNullish(member));
-  if (valueMembers.length === 1 && nullishMembers.length > 0) {
+  if (valueMembers.length === 1 && nullishMembers.length === 1) {
     const value = resolveRustTargetType(valueMembers[0], context, options, resolving);
     return value === undefined ? undefined : rustOptionTargetType(value);
+  }
+  if (valueMembers.length === 1 && nullishMembers.length > 1) {
+    return undefined;
   }
   if (members.length > 0 && members.every((member) => context.typeShape.isStringLike(member))) {
     return rustStringTargetType();

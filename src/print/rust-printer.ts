@@ -1246,6 +1246,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "invoke": {
       return `${printOperand(expression.callee, RustPrecedence.Postfix, false)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
+    case "associated-value": {
+      return `${printRustAssociatedOwner(expression.owner)}::${expression.name}`;
+    }
     case "associated-call": {
       return `${printRustAssociatedCallOwner(expression)}::${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
     }
@@ -1711,7 +1714,8 @@ function printRustExprFitted(
     }
     case "string-concat": {
       if (expression.parts.length <= rustFormatMacroInlineArgumentLimit &&
-        !flat.includes("\n") && renderedFits(flat, column)) {
+        flat.length <= rustNestedCallWidth && !flat.includes("\n") &&
+        renderedFits(flat, column)) {
         return flat;
       }
       const trailingPart = expression.parts[expression.parts.length - 1];
@@ -2347,6 +2351,21 @@ function printFittedLogicalChain(
   const continuationIndent = indentText(depth + 1);
   for (const operand of operands.slice(1)) {
     const attachedToClosingBlock = lastLine(rendered).trim() === "}";
+    if (!rendered.includes("\n") && expressionIsRightHandBlock(operand)) {
+      const separator = ` ${operator} `;
+      const attachedRight = printFittedLogicalOperand(
+        operand,
+        operator,
+        depth,
+        column + rendered.length + separator.length,
+        "expression",
+      );
+      if (column + rendered.length + separator.length + firstLine(attachedRight).length <=
+        rustFormatWidth) {
+        rendered = `${rendered}${separator}${attachedRight}`;
+        continue;
+      }
+    }
     const operandDepth = rustExpressionContainsStatementBlock(operand) && attachedToClosingBlock
       ? depth
       : depth + 1;

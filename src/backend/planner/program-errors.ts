@@ -40,6 +40,7 @@ const runtimeReexports = [
   "JsErrorKind",
   "Location",
   "ModuleCell",
+  "Null",
   "ObjectHandle",
   "ObjectIdentity",
   "ToSourceString",

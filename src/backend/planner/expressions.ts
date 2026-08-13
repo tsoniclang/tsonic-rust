@@ -95,7 +95,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -221,11 +221,21 @@ export function planExpression(
     return undefined;
   }
   const projection = context.input.facts.getFact(node, rustOptionProjectionFactKey);
+  if (projection?.kind === "none") {
+    const optionType = rustTypeFromCarrierInContext(projection.resultCarrier, context);
+    if (optionType === undefined || rustOptionElementCarrier(projection.resultCarrier) === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.option-none-carrier",
+        "An exact Option projection requires a renderable finalized Option result carrier.",
+      ));
+      return undefined;
+    }
+    return { kind: "associated-value", owner: optionType, name: "None" };
+  }
   return projection?.kind === "some"
     ? { kind: "call", path: "Some", args: [contextuallyConverted] }
-    : projection?.kind === "none"
-      ? { kind: "path", path: "None" }
-      : contextuallyConverted;
+    : contextuallyConverted;
 }
 
 function planRawExpression(
@@ -447,15 +457,19 @@ function planExpressionInner(
     }
     case "KindNullKeyword": {
       const fact = rustOperationFact(node, context);
-      if (fact === undefined || fact.kind !== "option-none") {
+      if (fact?.kind === "option-none") {
+        return { kind: "none" };
+      }
+      if (!isRustNullCarrier(expressionCarrier(node, context))) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.nullish",
-          "null literals require a finalized Option lane fact.",
+          "null literals require an exact Null carrier or finalized Option lane fact.",
         ));
         return undefined;
       }
-      return { kind: "none" };
+      context.usedAliases?.add("rt");
+      return { kind: "path", path: "rt::Null" };
     }
     case KindIdentifier: {
       const identifierFact = rustOperationFact(node, context);
@@ -901,7 +915,7 @@ function planExpressionInner(
         generator: undefined,
       };
       const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
-      const capturedBindingPaths = new Map(context.capturedBindingPaths);
+      const capturedBindings = new Map(context.capturedBindings);
       for (const capture of captureFact.captures) {
         if (context.syntheticNames === undefined || !requireRustCarrierRequirements(
           capture.carrier,
@@ -928,7 +942,11 @@ function planExpressionInner(
           name,
           value: planRustCaptureValue(capture.reference, sourcePath, context),
         });
-        capturedBindingPaths.set(capture.declaration, name);
+        capturedBindings.set(capture.declaration, {
+          path: name,
+          storage: capture.storage,
+          valueCarrier: capture.carrier,
+        });
       }
       let recursiveName: string | undefined;
       if (captureFact.recursiveDeclaration !== undefined) {
@@ -936,11 +954,15 @@ function planExpressionInner(
           return undefined;
         }
         recursiveName = allocateRustSyntheticName(context.syntheticNames, "recursive_callable");
-        capturedBindingPaths.set(captureFact.recursiveDeclaration, recursiveName);
+        capturedBindings.set(captureFact.recursiveDeclaration, {
+          path: recursiveName,
+          storage: "value",
+          valueCarrier: closureFact.resultCarrier,
+        });
       }
       const callableClosureContext: RustPlanContext = {
         ...closureContext,
-        capturedBindingPaths,
+        capturedBindings,
       };
       const bindingStatements: RustStmt[] = [];
       let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];

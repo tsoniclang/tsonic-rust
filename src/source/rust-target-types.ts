@@ -22,6 +22,7 @@ export const rustCallableTargetId = "rust.runtime.Callable";
 export const rustGeneratorTargetId = "rust.runtime.Generator";
 export const rustAsyncGeneratorTargetId = "rust.runtime.AsyncGenerator";
 export const rustIteratorResultTargetId = "rust.runtime.IteratorResult";
+export const rustNullTargetId = "rust.runtime.Null";
 export const rustUndefinedTargetId = "rust.runtime.Undefined";
 export const rustJsErrorTargetId = "rust.runtime.JsError";
 export const rustProgramErrorTargetId = "rust.program.TsonicError";
@@ -247,6 +248,10 @@ export function rustNeverTargetType(): TargetTypeRef {
 
 export function rustUndefinedTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustUndefinedTargetId };
+}
+
+export function rustNullTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustNullTargetId };
 }
 
 export function rustVecTargetType(element: TargetTypeRef): TargetTypeRef {
@@ -865,6 +870,10 @@ export function isRustUndefinedCarrier(carrier: TargetTypeRef | undefined): bool
   return carrier?.kind === "target-named" && carrier.id === rustUndefinedTargetId;
 }
 
+export function isRustNullCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && carrier.id === rustNullTargetId;
+}
+
 export function isRustBoolCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "source-primitive" && carrier.name === "bool";
 }
@@ -896,6 +905,7 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
 }
 
 const rustUnconditionallyCopyTargetIds: ReadonlySet<string> = new Set([
+  rustNullTargetId,
   rustUndefinedTargetId,
   rustUsizeTargetId,
   rustIsizeTargetId,
@@ -951,7 +961,8 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
 
 export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "source-primitive" || isRustStringCarrier(carrier) ||
-    isRustBigIntCarrier(carrier) || isRustUndefinedCarrier(carrier) ||
+    isRustBigIntCarrier(carrier) || isRustNullCarrier(carrier) ||
+    isRustUndefinedCarrier(carrier) ||
     isRustJsStrictEqualityCarrier(carrier);
 }
 
@@ -970,6 +981,8 @@ const rustCloneOnReadTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
+  rustNullTargetId,
+  rustUndefinedTargetId,
   rustJsValueTargetId,
   rustJsArrayTargetId,
   rustJsMapTargetId,
@@ -983,6 +996,7 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustBigIntTargetId,
   rustCallableTargetId,
   rustLocationTargetId,
+  rustNullTargetId,
   rustUndefinedTargetId,
   rustJsValueTargetId,
   rustJsArrayTargetId,
@@ -997,7 +1011,8 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
 
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
-    isRustUndefinedCarrier(carrier) || isRustBigIntCarrier(carrier) ||
+    isRustNullCarrier(carrier) || isRustUndefinedCarrier(carrier) ||
+    isRustBigIntCarrier(carrier) ||
     (carrier?.kind === "target-named" && carrier.id === rustProgramErrorTargetId) ||
     (carrier?.kind === "source-primitive" && carrier.name !== "char");
 }
@@ -1123,7 +1138,8 @@ export function isRustNullishSourceCarrier(carrier: TargetTypeRef | undefined): 
 }
 
 export function isRustDefinitelyNullishCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return isRustNullishSourceCarrier(carrier) || isRustUndefinedCarrier(carrier);
+  return isRustNullishSourceCarrier(carrier) || isRustNullCarrier(carrier) ||
+    isRustUndefinedCarrier(carrier);
 }
 
 export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {

@@ -341,6 +341,94 @@ export function main(): void {
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });
 
+test("exact null values remain closed inside project polymorphic state", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "project_null_state" },
+    },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class Value {}
+
+class NullValue extends Value {
+  value: null;
+
+  constructor() {
+    super();
+    this.value = null;
+  }
+}
+
+function isNull(value: Value): boolean {
+  return value instanceof NullValue && value.value === null;
+}
+
+function isExactlyUndefined(value: string | undefined): boolean {
+  return value === undefined && value !== null;
+}
+
+function isExactlyNull(value: string | null): boolean {
+  return value === null && value !== undefined;
+}
+
+export function main(): void {
+  check(isNull(new NullValue()));
+  check(isExactlyUndefined(undefined));
+  check(isExactlyNull(null));
+  check(\`value=\${null}\` === "value=null");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value: rt::Null/u);
+  assert.match(source, /rt::Null/u);
+  assert.equal(validateGeneratedProject("project-null-state", result.artifacts, { run: true }).status, 0);
+});
+
+test("recursive project calls consume their finalized selected signature", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "project_recursion" },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+function sumTo(value: int32): int32 {
+  if (value <= 0) return 0;
+  return value + sumTo(value - 1);
+}
+
+const sumToArrow = (value: int32): int32 => {
+  if (value <= 0) return 0;
+  return value + sumToArrow(value - 1);
+};
+
+export function main(): void {
+  check(sumTo(4) === 10);
+  check(sumToArrow(4) === 10);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /sumTo\(value - 1\)/u);
+  assert.match(source, /sumToArrow/u);
+  assert.equal(validateGeneratedProject("project-recursion", result.artifacts, { run: true }).status, 0);
+});
+
 test("generic project downcasts fail closed without a closed target carrier", () => {
   const { result } = compileRust({
     files: {

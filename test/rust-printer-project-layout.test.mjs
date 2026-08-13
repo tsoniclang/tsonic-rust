@@ -117,6 +117,36 @@ test("logical block operands keep the following operator on the closing brace", 
   assert.doesNotMatch(text, /\n            let value/u);
 });
 
+test("logical chains attach a fitting trailing block to the first operand", () => {
+  const text = projectFunction({
+    kind: "binary",
+    operator: "&&",
+    left: { kind: "path", path: "ready" },
+    right: {
+      kind: "evaluate-then",
+      effect: { kind: "path", path: "source" },
+      discard: "value",
+      value: { kind: "bool-literal", value: true },
+    },
+  });
+
+  assert.match(text, /ready && \{\n        let _ = source;\n        true\n    \}/u);
+});
+
+test("associated values preserve their exact generic owner", () => {
+  const text = projectFunction({
+    kind: "associated-value",
+    owner: {
+      kind: "named",
+      path: "Option",
+      typeArguments: [{ kind: "string" }],
+    },
+    name: "None",
+  });
+
+  assert.match(text, /Option::<String>::None/u);
+});
+
 test("detached logical block operands use the continuation indentation", () => {
   const selectedValue = (receiver) => ({
     kind: "block",

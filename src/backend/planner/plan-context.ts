@@ -13,6 +13,12 @@ export interface RustEffectiveExpressionOverride {
   readonly valueForm: "value" | "shared-reference";
 }
 
+export interface RustCapturedBinding {
+  readonly path: string;
+  readonly storage: "value" | "location";
+  readonly valueCarrier: import("../../policy/types.js").TargetTypeRef;
+}
+
 interface RustControlTargetBase {
   readonly id: number;
   readonly label: string;
@@ -78,7 +84,7 @@ export interface RustPlanContext {
     readonly protocol: RustGeneratorFact;
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
-  readonly capturedBindingPaths?: ReadonlyMap<Node, string>;
+  readonly capturedBindings?: ReadonlyMap<Node, RustCapturedBinding>;
   readonly projectDispatchRoot?: RustExpr;
   readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../policy/types.js").TargetTypeRef>;
 }
