@@ -259,6 +259,41 @@ export function main(): void {
   validateGeneratedProject("callable-parameters", result.artifacts, { run: true });
 });
 
+test("project-source optional and default parameters compose exact value conversions before Option wrapping", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "source_call_optional_conversion" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+function optional(value?: number): number {
+  return value ?? 0;
+}
+
+function defaulted(value: number = 3.5): number {
+  return value;
+}
+
+export function main(): void {
+  const value: int32 = 8;
+  check(optional(value) === 8);
+  check(defaulted(value) === 8);
+  check(optional() === 0);
+  check(defaulted() === 3.5);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /optional\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
+  assert.match(source, /defaulted\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
+  validateGeneratedProject("source-call-optional-conversion", result.artifacts, { run: true });
+});
+
 test("project-source spread calls preserve exact bindings, single evaluation, and order", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

@@ -1694,30 +1694,14 @@ function applyOptionLane(
       );
       return undefined;
     }
-    if (reconciliation.kind === "project-upcast") {
+    if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
       recordRustValueCarrierReconciliation(walk.context.facts, expression, reconciliation);
       projected = target;
-      if (!isRustOptionCarrier(expected)) {
+      if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
         walk.context.facts.set(expression, rustConversionKey, { convertedType: target }, [
           { message: "rust project-type upcast conversion" },
         ]);
       }
-    }
-  }
-  if (projected !== undefined && target !== undefined &&
-    !rustTargetTypeRefEquals(projected, target) && !isRustOptionCarrier(expected)) {
-    const reconciliation = selectRustValueCarrierReconciliation(
-      projected,
-      target,
-      walk.context.projectTypes,
-    );
-    if (reconciliation.kind === "conversion") {
-      recordRustValueCarrierReconciliation(
-        walk.context.facts,
-        expression,
-        reconciliation,
-      );
-      projected = target;
     }
   }
   if (expected === undefined || !isRustOptionCarrier(expected)) {
