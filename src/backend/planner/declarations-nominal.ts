@@ -23,11 +23,11 @@ import { planExpression } from "./expressions.js";
 import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrierInContext } from "./render-types.js";
+import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustUnionDeclarationFactKey } from "../../source/rust-facts/keys.js";
 import { applyRustTailShape, rustBlockTerminates } from "./functions.js";
 import { applyFallibleShape } from "./fallible-shape.js";
-import { isRustUnitCarrier } from "../../source/rust-target-types.js";
+import { isRustNeverCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";
 import { rustProjectMemberSlotName } from "../../source/rust-target-semantics/project-type-policy.js";
@@ -544,9 +544,13 @@ export function planProjectMethod(
     ));
     return undefined;
   }
+  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const isUnit = isRustUnitCarrier(returnCarrier);
-  const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
-  if (!isUnit && returnType === undefined) {
+  const isNever = isRustNeverCarrier(returnCarrier);
+  const returnType = isUnit || fallible && isNever
+    ? undefined
+    : rustReturnTypeFromCarrierInContext(returnCarrier, context);
+  if (!isUnit && !(fallible && isNever) && returnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode ?? member),
       "rust.backend.class",
@@ -554,7 +558,6 @@ export function planProjectMethod(
     ));
     return undefined;
   }
-  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const isStatic = ast.hasModifierKind(member, "static");
   const methodAttributes = [
     ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
@@ -618,7 +621,7 @@ export function planProjectMethod(
   if (body === undefined) {
     return undefined;
   }
-  if (generatorFact === undefined && returnType !== undefined && !rustBlockTerminates(body)) {
+  if (generatorFact === undefined && !isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
       "rust.backend.return-flow",

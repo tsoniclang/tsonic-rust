@@ -1,9 +1,25 @@
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 
 export function applyRustFallibleResultExpression(expression: RustExpr): RustExpr {
+  if (expression.kind === "bottom") {
+    return expression;
+  }
   return expression.kind === "try"
     ? expression.expr
     : { kind: "call", path: "Ok", args: [expression] };
+}
+
+export function rustBottomExpression(expression: RustExpr): RustExpr {
+  return expression.kind === "bottom" ? expression : { kind: "bottom", expression };
+}
+
+export function rustBottomAfterEffect(effect: RustExpr, message: string): RustExpr {
+  return rustBottomExpression({
+    kind: "evaluate-then",
+    effect,
+    discard: "unit",
+    value: { kind: "unreachable", message },
+  });
 }
 
 export function applyFallibleShape(
@@ -49,6 +65,7 @@ export function applyFallibleShape(
     last.kind === "tail" ||
     last.kind === "return" ||
     last.kind === "throw" ||
+    (last.kind === "expr" && last.expr.kind === "bottom") ||
     (last.kind === "resource-scope" && last.terminates) ||
     (last.kind === "try-scope" && last.terminates)
   );

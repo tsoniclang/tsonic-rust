@@ -8,6 +8,9 @@ export function rustBlockTerminates(block: RustBlock): boolean {
   if (last.kind === "return" || last.kind === "tail" || last.kind === "throw") {
     return true;
   }
+  if (last.kind === "expr" && last.expr.kind === "bottom") {
+    return true;
+  }
   if (last.kind === "scope" || last.kind === "unsafe-scope") {
     return rustBlockTerminates(last.body);
   }

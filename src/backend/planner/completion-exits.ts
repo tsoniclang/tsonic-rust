@@ -6,6 +6,9 @@ export function planRustReturnExit(
   context: RustPlanContext,
   rootResultWrapped = false,
 ): RustStmt {
+  if (expression?.kind === "bottom") {
+    return { kind: "expr", expr: expression };
+  }
   const boundary = context.completionBoundary;
   if (boundary === undefined) {
     if (!rootResultWrapped) {
@@ -34,6 +37,9 @@ export function planRustFallibleReturnExpression(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
+  if (expression.kind === "bottom") {
+    return expression;
+  }
   const boundary = context.completionBoundary;
   if (boundary === undefined) {
     return {

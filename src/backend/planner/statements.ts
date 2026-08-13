@@ -658,6 +658,9 @@ function rustBlockDefinitelyExits(block: RustBlock): boolean {
     last.kind === "completion-exit") {
     return true;
   }
+  if (last.kind === "expr" && last.expr.kind === "bottom") {
+    return true;
+  }
   if (last.kind === "scope" || last.kind === "unsafe-scope") {
     return rustBlockDefinitelyExits(last.body);
   }

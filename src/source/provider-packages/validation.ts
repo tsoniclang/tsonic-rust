@@ -40,6 +40,7 @@ import {
   rustIsizeTargetId,
   rustUsizeTargetId,
   isRustUnitCarrier,
+  isRustNeverCarrier,
 } from "../rust-target-types.js";
 import { rustProviderOperationFormContractViolation } from "../rust-facts/operation-form-contract.js";
 import { isClosedMetadata } from "../../common/closed-metadata.js";
@@ -700,7 +701,9 @@ function validateOperationRows(
     }
     validateProviderCallback(row, definition, label, fail);
     validateOperationParameters(row, exported, member, signature, fail);
-    validateCarrier(row.resultCarrier, definition, `${label}.resultCarrier`, fail);
+    validateCarrier(row.resultCarrier, definition, `${label}.resultCarrier`, fail, {
+      position: "return",
+    });
     if (row.receiverCarrier !== undefined) {
       validateCarrier(row.receiverCarrier, definition, `${label}.receiverCarrier`, fail);
     }
@@ -718,7 +721,7 @@ function validateOperationRows(
         definition,
         `${label}.parameterCarriers[${index}]`,
         fail,
-        row.immediateCallback?.sourceArgumentIndex === index,
+        { allowImmediateClosure: row.immediateCallback?.sourceArgumentIndex === index },
       );
     }
     const referencedTypeParameters = new Set([
@@ -1175,7 +1178,10 @@ function validateCarrier(
   definition: RustProviderPackageDefinition,
   where: string,
   fail: Fail,
-  allowImmediateClosure = false,
+  options: {
+    readonly allowImmediateClosure?: boolean;
+    readonly position?: "value" | "return";
+  } = {},
 ): void {
   const record = carrier as unknown as Readonly<Record<string, unknown>>;
   switch (carrier.kind) {
@@ -1231,20 +1237,30 @@ function validateCarrier(
       for (const [index, argument] of carrier.args.entries()) {
         validateCarrier(argument, definition, `${where}.args[${index}]`, fail);
       }
-      validateCarrier(carrier.result, definition, `${where}.result`, fail);
+      validateCarrier(carrier.result, definition, `${where}.result`, fail, {
+        position: "return",
+      });
       return;
     case "closure":
       requireExactKeys(record, ["kind", "args", "result"], where, fail);
-      if (!allowImmediateClosure) {
+      if (options.allowImmediateClosure !== true) {
         fail(`${where} uses a native Rust closure outside an exact immediate-callback parameter`);
       }
       for (const [index, argument] of carrier.args.entries()) {
         validateCarrier(argument, definition, `${where}.args[${index}]`, fail);
       }
-      validateCarrier(carrier.result, definition, `${where}.result`, fail);
+      validateCarrier(carrier.result, definition, `${where}.result`, fail, {
+        position: "return",
+      });
       return;
     case "target-specific": {
       requireExactKeys(record, ["kind", "target", "name", "value"], where, fail);
+      if (isRustNeverCarrier(carrier)) {
+        if (options.position !== "return") {
+          fail(`${where} uses Rust bottom outside a callable or operation result`);
+        }
+        return;
+      }
       const fixedArray = rustFixedArrayCarrierValue(carrier);
       if (fixedArray === undefined) {
         fail(`${where} is not a supported Rust target-specific carrier`);
@@ -1279,6 +1295,11 @@ function validateValueConversion(
     if (!isRustTargetTypeRef(conversion.source) || !isRustTargetTypeRef(conversion.target) ||
       typeof conversion.variantName !== "string" || conversion.variantName.length === 0) {
       fail(`${where} is not an exact closed source-union variant conversion`);
+    }
+  } else if (conversion.kind === "bottom-coercion") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
+    if (!isRustNeverCarrier(conversion.source) || !isRustTargetTypeRef(conversion.target)) {
+      fail(`${where} is not an exact Rust bottom coercion`);
     }
   } else {
     fail(`${where}.kind '${String((conversion as { readonly kind?: unknown }).kind)}' is not supported`);

@@ -12,6 +12,7 @@ export type RustType =
   | { readonly kind: "string" }
   | { readonly kind: "str-ref" }
   | { readonly kind: "unit" }
+  | { readonly kind: "never" }
   | { readonly kind: "named"; readonly path: string; readonly lifetimeArguments?: readonly string[]; readonly typeArguments?: readonly RustType[] }
   | { readonly kind: "trait-object"; readonly trait: RustType }
   | { readonly kind: "reference"; readonly referent: RustType; readonly mutable: boolean }
@@ -40,6 +41,7 @@ export type RustExpr =
   | { readonly kind: "string-literal"; readonly value: string }
   | { readonly kind: "str-literal"; readonly value: string }
   | { readonly kind: "path"; readonly path: string }
+  | { readonly kind: "bottom"; readonly expression: RustExpr }
   | { readonly kind: "unary"; readonly operator: "-" | "!"; readonly operand: RustExpr }
   | { readonly kind: "dereference"; readonly pointer: RustExpr }
   | { readonly kind: "numeric-cast"; readonly expression: RustExpr; readonly target: RustPrimitiveTypeName }

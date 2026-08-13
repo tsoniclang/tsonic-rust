@@ -90,6 +90,11 @@ export type RustValueConversion =
       readonly source: TargetTypeRef;
       readonly target: TargetTypeRef;
       readonly variantName: string;
+    }
+  | {
+      readonly kind: "bottom-coercion";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
     };
 
 export type RustProviderOperationForm =

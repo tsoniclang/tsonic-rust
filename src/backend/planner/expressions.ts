@@ -95,7 +95,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -122,6 +122,8 @@ import {
 import {
   applyFallibleShape,
   applyRustFallibleResultExpression,
+  rustBottomAfterEffect,
+  rustBottomExpression,
 } from "./fallible-shape.js";
 import type {
   RustFinalizedInputPlanOverrides,
@@ -1129,13 +1131,19 @@ function planExpressionInner(
         }
         awaited = { kind: "try", expr: awaited };
       }
-      return applyFinalizedValueConversion(
+      const converted = applyFinalizedValueConversion(
         context,
         awaited,
         future.awaitedConversion,
         node,
         "operation-result",
       );
+      if (converted === undefined || !isRustNeverCarrier(awaitFact.resultCarrier)) {
+        return converted;
+      }
+      return future.awaiting === "fallible"
+        ? rustBottomAfterEffect(converted, "fallible never await returned")
+        : rustBottomExpression(converted);
     }
     case "KindYieldExpression": {
       const generator = context.generator;
@@ -3133,9 +3141,19 @@ function finishProviderOperationExpression(
     }
     raw = { kind: "try", expr: raw };
   }
-  return fact.abi.result.kind === "async"
-    ? raw
-    : applyFinalizedValueConversion(context, raw, fact.abi.result.conversion, node, "operation-result");
+  if (fact.abi.result.kind === "async") {
+    return raw;
+  }
+  const converted = applyFinalizedValueConversion(
+    context,
+    raw,
+    fact.abi.result.conversion,
+    node,
+    "operation-result",
+  );
+  return converted === undefined || !isRustNeverCarrier(fact.resultCarrier)
+    ? converted
+    : rustBottomExpression(converted);
 }
 
 export function planFinalizedTargetInput(
@@ -3721,7 +3739,7 @@ function planSelectedSourceCall(
     return undefined;
   }
   if (effects.invocation === "infallible") {
-    return planned;
+    return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
   }
   if (context.fallibleContext !== true) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -3731,7 +3749,10 @@ function planSelectedSourceCall(
     ));
     return undefined;
   }
-  return { kind: "try", expr: planned };
+  const propagated: RustExpr = { kind: "try", expr: planned };
+  return isRustNeverCarrier(fact.resultCarrier)
+    ? rustBottomAfterEffect(propagated, "fallible never call returned")
+    : propagated;
 }
 
 function shapeRustSourceCallParameters(

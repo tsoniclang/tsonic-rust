@@ -8,7 +8,9 @@ import type {
   RustValueConversionId,
 } from "./keys.js";
 import {
+  isRustNeverCarrier,
   isRustNumericCarrier,
+  rustNeverTargetType,
   rustIsizeTargetType,
   rustJsValueTargetType,
   rustPrimitiveTypeName,
@@ -81,6 +83,18 @@ export const rustJsValueCloneConversion = conversion("js-value-clone");
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "bottom-coercion") {
+    return isRustNeverCarrier(value.source) && isRustTargetTypeRef(value.target)
+      ? {
+          category: "exact",
+          lowering: "identity",
+          sourceMode: "value",
+          source: rustNeverTargetType(),
+          target: value.target,
+          fallible: false,
+        }
+      : undefined;
+  }
   if (value.kind === "source-union-variant") {
     const union = rustSourceUnionCarrierValue(value.target);
     const matches = union?.variants.filter((variant) =>
@@ -197,13 +211,18 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
       ? `numeric-promotion.${value.source}.${value.target}`
       : value.kind === "raw-pointer-mut-to-const"
         ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
-        : `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
+        : value.kind === "source-union-variant"
+          ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`
+          : `bottom-coercion.${JSON.stringify(value.target)}`;
 }
 
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustValueConversion | undefined {
+  if (isRustNeverCarrier(source)) {
+    return Object.freeze({ kind: "bottom-coercion", source, target });
+  }
   const targetUnion = rustSourceUnionCarrierValue(target);
   const matchingUnionVariants = targetUnion?.variants.filter((variant) =>
     rustTargetTypeRefEquals(variant.carrier, source)) ?? [];

@@ -38,6 +38,7 @@ export const rustIsizeTargetId = "rust.core.isize";
 export const rustNamedTypeCarrierName = "named-type";
 export const rustStructuralObjectCarrierName = "structural-object";
 export const rustSourceUnionCarrierName = "source-union";
+export const rustNeverCarrierName = "never";
 
 export interface RustSourceTypeCarrierValue {
   readonly fileName: string;
@@ -238,6 +239,10 @@ export function rustIsizeTargetType(): TargetTypeRef {
 
 export function rustUnitTargetType(): TargetTypeRef {
   return { kind: "tuple", elements: [] };
+}
+
+export function rustNeverTargetType(): TargetTypeRef {
+  return { kind: "target-specific", target: "rust", name: rustNeverCarrierName };
 }
 
 export function rustUndefinedTargetType(): TargetTypeRef {
@@ -849,6 +854,11 @@ export function isRustBigIntCarrier(carrier: TargetTypeRef | undefined): boolean
 
 export function isRustUnitCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "tuple" && carrier.elements.length === 0;
+}
+
+export function isRustNeverCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-specific" && carrier.target === "rust" &&
+    carrier.name === rustNeverCarrierName && carrier.value === undefined;
 }
 
 export function isRustUndefinedCarrier(carrier: TargetTypeRef | undefined): boolean {

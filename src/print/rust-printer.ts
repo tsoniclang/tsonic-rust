@@ -336,6 +336,9 @@ export function printRustType(type: RustType): string {
     case "unit": {
       return "()";
     }
+    case "never": {
+      return "!";
+    }
     case "named": {
       const args = [
         ...(type.lifetimeArguments ?? []).map((lifetime) => `'${lifetime}`),
@@ -1035,6 +1038,8 @@ function operatorPrecedence(operator: string): RustPrecedence {
 
 function expressionPrecedence(expression: RustExpr): RustPrecedence {
   switch (expression.kind) {
+    case "bottom":
+      return expressionPrecedence(expression.expression);
     case "assignment":
     case "return-expression":
     case "conditional":
@@ -1084,6 +1089,9 @@ function expressionNeedsParentheses(
 }
 
 function expressionIsRightHandBlock(expression: RustExpr): boolean {
+  if (expression.kind === "bottom") {
+    return expressionIsRightHandBlock(expression.expression);
+  }
   return expression.kind === "conditional" ||
     expression.kind === "match" ||
     expression.kind === "block" ||
@@ -1092,6 +1100,9 @@ function expressionIsRightHandBlock(expression: RustExpr): boolean {
 }
 
 function expressionIsStatementBlockOperand(expression: RustExpr): boolean {
+  if (expression.kind === "bottom") {
+    return expressionIsStatementBlockOperand(expression.expression);
+  }
   return expression.kind === "block" ||
     expression.kind === "unsafe" ||
     expression.kind === "evaluate-then";
@@ -1151,6 +1162,9 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "path": {
       return expression.path;
+    }
+    case "bottom": {
+      return printRustExpr(expression.expression);
     }
     case "unary": {
       return `${expression.operator}${printOperand(expression.operand, RustPrecedence.Unary, false)}`;
@@ -1285,6 +1299,8 @@ function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
       return true;
     case "unary":
       return rustExpressionContainsStatementBlock(expression.operand);
+    case "bottom":
+      return rustExpressionContainsStatementBlock(expression.expression);
     case "dereference":
       return rustExpressionContainsStatementBlock(expression.pointer);
     case "unsafe":
@@ -1345,6 +1361,8 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
       return true;
     case "unary":
       return rustExpressionContainsClosure(expression.operand);
+    case "bottom":
+      return rustExpressionContainsClosure(expression.expression);
     case "dereference":
       return rustExpressionContainsClosure(expression.pointer);
     case "unsafe":
@@ -1408,6 +1426,8 @@ function rustExpressionContainsPreferredVerticalMethodChain(expression: RustExpr
         expression.args.some(rustExpressionContainsPreferredVerticalMethodChain);
     case "unary":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.operand);
+    case "bottom":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
     case "dereference":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.pointer);
     case "unsafe":
@@ -1481,6 +1501,14 @@ function printRustExprFitted(
 ): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
+    case "bottom":
+      return printRustExprFitted(
+        expression.expression,
+        depth,
+        column,
+        methodChainContinuationIndent,
+        grammarPosition,
+      );
     case "match":
       return printRustMatchExpression(expression, depth, column);
     case "conditional": {
@@ -3226,6 +3254,8 @@ function printNestedCallArgument(
 
 function rustExpressionContainsExpandedStructLiteral(expression: RustExpr): boolean {
   switch (expression.kind) {
+    case "bottom":
+      return rustExpressionContainsExpandedStructLiteral(expression.expression);
     case "unary":
       return rustExpressionContainsExpandedStructLiteral(expression.operand);
     case "dereference":

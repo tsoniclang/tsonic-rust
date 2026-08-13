@@ -478,7 +478,11 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
       isRustTargetTypeRef(value.conversion.source) &&
       isRustTargetTypeRef(value.conversion.target) &&
       typeof value.conversion.variantName === "string" &&
-      value.conversion.variantName.length > 0)) &&
+      value.conversion.variantName.length > 0) ||
+    (value.conversion.kind === "bottom-coercion" &&
+      hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.conversion.source) &&
+      isRustTargetTypeRef(value.conversion.target))) &&
     rustValueConversionContract(value.conversion as RustValueConversion) !== undefined &&
     typeof value.fallible === "boolean";
 }

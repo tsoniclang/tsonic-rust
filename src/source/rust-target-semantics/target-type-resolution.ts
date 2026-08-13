@@ -41,6 +41,7 @@ import {
   rustJsErrorTargetType,
   rustLocationTargetType,
   rustNullishSourceTargetType,
+  rustNeverTargetType,
   rustOptionTargetType,
   rustSliceMutRefTargetType,
   rustSliceRefTargetType,
@@ -208,6 +209,9 @@ function resolveRustTargetTypeSyntax(
   }
   if (kind === "KindVoidKeyword") {
     return rustUnitTargetType();
+  }
+  if (kind === "KindNeverKeyword") {
+    return rustNeverTargetType();
   }
   if (kind === "KindFunctionType") {
     return resolveRustTargetType(
@@ -439,7 +443,10 @@ function resolveRustTargetType(
   resolving.add(type);
   try {
     const { checker, typeShape } = context;
-    if (typeShape.isAny(type) || typeShape.isUnknown(type) || typeShape.isNever(type)) {
+    if (typeShape.isNever(type)) {
+      return rustNeverTargetType();
+    }
+    if (typeShape.isAny(type) || typeShape.isUnknown(type)) {
       return undefined;
     }
     const symbol = checker.getTypeAliasSymbol(type) ?? checker.getTypeSymbol(type);

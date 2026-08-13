@@ -42,6 +42,7 @@ export const stringCarrier = { kind: "target-named", id: "rust.std.String" };
 export const unitCarrier = { kind: "tuple", elements: [] };
 export const int32Carrier = { kind: "source-primitive", name: "int32" };
 export const boolCarrier = { kind: "source-primitive", name: "bool" };
+export const neverCarrier = { kind: "target-specific", target: "rust", name: "never" };
 export const storeCarrier = { kind: "target-named", id: "acme.platform.Store" };
 
 export function acmeFilesPackage({ binaryEpilogues } = {}) {
@@ -84,25 +85,47 @@ export function acmeTestingPackage() {
     modules: [{
       moduleSpecifier: "@acme/testing",
       providerModuleId: "acme.testing",
-      exports: [{
-        id: "@acme/testing::check",
-        name: "check",
-        kind: "function",
-        signatures: [{
-          id: "@acme/testing::check(condition)",
+      exports: [
+        {
+          id: "@acme/testing::check",
           name: "check",
-          parameters: [{ name: "condition", type: { kind: "boolean" } }],
-          returnType: { kind: "void" },
-        }],
-      }],
+          kind: "function",
+          signatures: [{
+            id: "@acme/testing::check(condition)",
+            name: "check",
+            parameters: [{ name: "condition", type: { kind: "boolean" } }],
+            returnType: { kind: "void" },
+          }],
+        },
+        {
+          id: "@acme/testing::fail",
+          name: "fail",
+          kind: "function",
+          signatures: [{
+            id: "@acme/testing::fail(message)",
+            name: "fail",
+            parameters: [{ name: "message", type: { kind: "string" } }],
+            returnType: { kind: "never" },
+          }],
+        },
+      ],
     }],
-    operations: [{
-      exportId: "@acme/testing::check",
-      operationKind: "method",
-      target: { form: "call", path: "acme_testing::check" },
-      resultCarrier: unitCarrier,
-      parameterCarriers: [boolCarrier],
-    }],
+    operations: [
+      {
+        exportId: "@acme/testing::check",
+        operationKind: "method",
+        target: { form: "call", path: "acme_testing::check" },
+        resultCarrier: unitCarrier,
+        parameterCarriers: [boolCarrier],
+      },
+      {
+        exportId: "@acme/testing::fail",
+        operationKind: "method",
+        target: { form: "call", path: "acme_testing::fail" },
+        resultCarrier: neverCarrier,
+        parameterCarriers: [stringCarrier],
+      },
+    ],
     crates: [{ crateName: "acme_testing", cargoPath: resolve(fixtureCratesRoot, "acme_testing") }],
   });
 }

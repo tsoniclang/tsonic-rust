@@ -14,6 +14,7 @@ import { rustProjectObjectLayout } from "../../source/rust-target-semantics/proj
 import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
 import {
   isRustUnitCarrier,
+  isRustNeverCarrier,
   rustSourceTypeCarrierValue,
 } from "../../source/rust-target-types.js";
 import type {
@@ -30,7 +31,7 @@ import {
   diagnosticInput,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrierInContext } from "./render-types.js";
+import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
 import { planRustCallableParameters } from "./callable-parameters.js";
 import { createRustSyntheticNameState } from "./synthetic-names.js";
 import { planProjectMethod } from "./declarations-nominal.js";
@@ -179,16 +180,17 @@ export function projectCallableShape(
   if (parameterPlan === undefined || returnCarrier === undefined) {
     return undefined;
   }
-  const returnType = isRustUnitCarrier(returnCarrier)
+  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  const returnType = isRustUnitCarrier(returnCarrier) || fallible && isRustNeverCarrier(returnCarrier)
     ? undefined
-    : rustTypeFromCarrierInContext(returnCarrier, context);
-  if (!isRustUnitCarrier(returnCarrier) && returnType === undefined) {
+    : rustReturnTypeFromCarrierInContext(returnCarrier, context);
+  if (!isRustUnitCarrier(returnCarrier) && !(fallible && isRustNeverCarrier(returnCarrier)) && returnType === undefined) {
     return undefined;
   }
   return {
     params: parameterPlan.params,
     ...(returnType === undefined ? {} : { returnType }),
-    fallible: context.input.facts.getFact(member, rustFallibleFactKey) !== undefined,
+    fallible,
     isUnsafe: rustDeclarationRequiresUnsafe(
       member,
       "declaration",
@@ -302,6 +304,7 @@ function rustTypeEquals(left: RustType | undefined, right: RustType | undefined)
     case "string":
     case "str-ref":
     case "unit":
+    case "never":
       return true;
     case "named":
       return right.kind === "named" && left.path === right.path &&
