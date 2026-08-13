@@ -1613,6 +1613,16 @@ function rustBinaryOperatorForAssignment(
       return "/";
     case "%=":
       return "%";
+    case "&=":
+      return "&";
+    case "|=":
+      return "|";
+    case "^=":
+      return "^";
+    case "<<=":
+      return "<<";
+    case ">>=":
+      return ">>";
     case "=":
       return undefined;
   }

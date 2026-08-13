@@ -2739,15 +2739,36 @@ export function planRustOperatorCallExpression(
     return undefined;
   }
   const operands = [
-    { expression: left, node: leftNode, mode: fact.operandModes[0] },
-    { expression: right, node: rightNode, mode: fact.operandModes[1] },
-  ].map(({ expression, node: operandNode, mode }) => {
+    {
+      expression: left,
+      node: leftNode,
+      mode: fact.operandModes[0],
+      conversion: fact.leftConversion,
+    },
+    {
+      expression: right,
+      node: rightNode,
+      mode: fact.operandModes[1],
+      conversion: fact.rightConversion,
+    },
+  ].map(({ expression, node: operandNode, mode, conversion }) => {
+    const converted = applyRustValueConversion(context, expression, conversion, operandNode);
+    if (converted === undefined) {
+      return undefined;
+    }
     const nonConsuming = mode === "value" || operandNode === undefined
-      ? expression
-      : planRustNonConsumingValue(operandNode, expression, context);
+      ? converted
+      : planRustNonConsumingValue(operandNode, converted, context);
     return applyRustArgumentMode(context, nonConsuming, mode, operandNode);
   });
-  const call: RustExpr = { kind: "call", path: fact.path, args: operands };
+  if (operands.some((operand) => operand === undefined)) {
+    return undefined;
+  }
+  const call: RustExpr = {
+    kind: "call",
+    path: fact.path,
+    args: operands as readonly RustExpr[],
+  };
   return fact.fallible ? { kind: "try", expr: call } : call;
 }
 

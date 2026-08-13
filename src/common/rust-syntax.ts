@@ -21,6 +21,11 @@ export type RustBinaryOperator =
   | "*"
   | "/"
   | "%"
+  | "&"
+  | "|"
+  | "^"
+  | "<<"
+  | ">>"
   | "<"
   | "<="
   | ">"
@@ -30,20 +35,35 @@ export type RustBinaryOperator =
   | "&&"
   | "||";
 
-export type RustAssignmentOperator = "=" | "+=" | "-=" | "*=" | "/=" | "%=";
+export type RustAssignmentOperator =
+  | "="
+  | "+="
+  | "-="
+  | "*="
+  | "/="
+  | "%="
+  | "&="
+  | "|="
+  | "^="
+  | "<<="
+  | ">>=";
 export type RustOperatorToken = RustBinaryOperator | RustAssignmentOperator | "!";
+export type RustOperationSymbol = RustOperatorToken | ">>>" | ">>>=";
 
-export function isRustBinaryOperator(value: RustOperatorToken): value is RustBinaryOperator {
+export function isRustBinaryOperator(value: RustOperationSymbol): value is RustBinaryOperator {
   return value === "+" || value === "-" || value === "*" || value === "/" || value === "%" ||
+    value === "&" || value === "|" || value === "^" || value === "<<" || value === ">>" ||
     value === "<" || value === "<=" || value === ">" || value === ">=" || value === "==" ||
     value === "!=" || value === "&&" || value === "||";
 }
 
 export function isRustAssignmentOperator(
-  value: RustOperatorToken,
+  value: RustOperationSymbol,
 ): value is RustAssignmentOperator {
   return value === "=" || value === "+=" || value === "-=" ||
-    value === "*=" || value === "/=" || value === "%=";
+    value === "*=" || value === "/=" || value === "%=" ||
+    value === "&=" || value === "|=" || value === "^=" ||
+    value === "<<=" || value === ">>=";
 }
 
 export function rustBinaryOperatorTraitPath(operator: RustBinaryOperator): string | undefined {
@@ -58,6 +78,16 @@ export function rustBinaryOperatorTraitPath(operator: RustBinaryOperator): strin
       return "std::ops::Div";
     case "%":
       return "std::ops::Rem";
+    case "&":
+      return "std::ops::BitAnd";
+    case "|":
+      return "std::ops::BitOr";
+    case "^":
+      return "std::ops::BitXor";
+    case "<<":
+      return "std::ops::Shl";
+    case ">>":
+      return "std::ops::Shr";
     case "<":
     case "<=":
     case ">":

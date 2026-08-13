@@ -157,6 +157,7 @@ import type { RustProviderOperationRow } from "../provider-packages/index.js";
 import {
   isRustAssignmentOperator,
   rustBinaryResultCarrierIsIndependentOfOperands,
+  rustBinaryRightCarrierIsIndependentOfLeft,
   rustOperatorCarrierKey,
   selectRustBinaryOperator,
   selectRustCompoundAssignment,
@@ -553,6 +554,12 @@ function rustOperatorText(kind: string | undefined): string | undefined {
     KindAsteriskToken: "*",
     KindSlashToken: "/",
     KindPercentToken: "%",
+    KindAmpersandToken: "&",
+    KindBarToken: "|",
+    KindCaretToken: "^",
+    KindLessThanLessThanToken: "<<",
+    KindGreaterThanGreaterThanToken: ">>",
+    KindGreaterThanGreaterThanGreaterThanToken: ">>>",
     KindLessThanToken: "<",
     KindLessThanEqualsToken: "<=",
     KindGreaterThanToken: ">",
@@ -2374,7 +2381,9 @@ function resolveBinaryOperandCarriers(
     : operatorKind === KindEqualsToken
       ? selectedAssignmentValueCarrier ??
         (useAssignmentReadCarrier ? left ?? operandExpected : operandExpected)
-      : left ?? operandExpected;
+      : rustBinaryRightCarrierIsIndependentOfLeft(operatorKind)
+        ? undefined
+        : left ?? operandExpected;
   let right = resolveExpressionCarrier(
     walk,
     rightNode,
@@ -2582,10 +2591,16 @@ function resolvePostCheckBinaryCarrier(
                 kind: "operator-call",
                 operationId: `tsonic.rust.operator.${binary.rustOperator}.${rustOperatorCarrierKey(binary.resultCarrier)}`,
                 operator: binary.rustOperator,
-                path: binary.path!,
+                path: binary.path,
                 resultCarrier: binary.resultCarrier,
-                fallible: binary.fallible === true,
-                operandModes: binary.operandModes!,
+                fallible: binary.fallible,
+                operandModes: binary.operandModes,
+                ...(binary.leftConversion === undefined
+                  ? {}
+                  : { leftConversion: binary.leftConversion }),
+                ...(binary.rightConversion === undefined
+                  ? {}
+                  : { rightConversion: binary.rightConversion }),
               }
             : {
               kind: "operator-token",

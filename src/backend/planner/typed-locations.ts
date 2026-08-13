@@ -393,6 +393,16 @@ function assignmentBinaryOperator(
       return "/";
     case "%=":
       return "%";
+    case "&=":
+      return "&";
+    case "|=":
+      return "|";
+    case "^=":
+      return "^";
+    case "<<=":
+      return "<<";
+    case ">>=":
+      return ">>";
     case "=":
       return undefined;
   }

@@ -4,6 +4,7 @@ import { defineRustPlanKey } from "../../policy/keys.js";
 import type { RustPlanKey } from "../../policy/keys.js";
 import type {
   RustBinaryOperator,
+  RustOperationSymbol,
   RustOperatorToken,
 } from "../../common/rust-syntax.js";
 import { closedMetadataEquals } from "../../common/closed-metadata.js";
@@ -16,6 +17,7 @@ import type {
 export type {
   RustAssignmentOperator,
   RustBinaryOperator,
+  RustOperationSymbol,
   RustOperatorToken,
 } from "../../common/rust-syntax.js";
 
@@ -295,11 +297,13 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "operator-call";
       readonly operationId: string;
-      readonly operator: RustOperatorToken;
+      readonly operator: RustOperationSymbol;
       readonly path: string;
       readonly resultCarrier: TargetTypeRef;
       readonly fallible: boolean;
       readonly operandModes: readonly [RustArgumentMode, RustArgumentMode];
+      readonly leftConversion?: RustValueConversion;
+      readonly rightConversion?: RustValueConversion;
     }
   | {
       readonly kind: "string-concat";

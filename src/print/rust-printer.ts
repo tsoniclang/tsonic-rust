@@ -1039,12 +1039,16 @@ const enum RustPrecedence {
   Or = 1,
   And = 2,
   Comparison = 3,
-  Additive = 4,
-  Multiplicative = 5,
-  Unary = 6,
-  Cast = 7,
-  Postfix = 8,
-  Atom = 9,
+  BitOr = 4,
+  BitXor = 5,
+  BitAnd = 6,
+  Shift = 7,
+  Additive = 8,
+  Multiplicative = 9,
+  Unary = 10,
+  Cast = 11,
+  Postfix = 12,
+  Atom = 13,
 }
 
 function operatorPrecedence(operator: string): RustPrecedence {
@@ -1060,6 +1064,15 @@ function operatorPrecedence(operator: string): RustPrecedence {
     case ">":
     case ">=":
       return RustPrecedence.Comparison;
+    case "|":
+      return RustPrecedence.BitOr;
+    case "^":
+      return RustPrecedence.BitXor;
+    case "&":
+      return RustPrecedence.BitAnd;
+    case "<<":
+    case ">>":
+      return RustPrecedence.Shift;
     case "+":
     case "-":
       return RustPrecedence.Additive;
