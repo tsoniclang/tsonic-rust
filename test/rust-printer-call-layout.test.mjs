@@ -208,6 +208,108 @@ test("fallible calls on the left of comparisons expand their arguments before th
   assert.match(source, /divide\(\n {12}rt::BigInt::from_decimal_literal\("7"\),\n {12}rt::BigInt::from_decimal_literal\("3"\),\n {8}\)\? ==/u);
 });
 
+test("long calls on the left of comparisons expand before the operator", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "call",
+                path: "rt::option_coalesce",
+                args: [
+                  {
+                    kind: "try",
+                    expr: {
+                      kind: "call",
+                      path: "length",
+                      args: [{
+                        kind: "call",
+                        path: "Some",
+                        args: [{
+                          kind: "call",
+                          path: "String::from",
+                          args: [{ kind: "str-literal", value: "rust" }],
+                        }],
+                      }],
+                    },
+                  },
+                  { kind: "path", path: "std::convert::identity" },
+                  {
+                    kind: "closure",
+                    params: [],
+                    body: { kind: "int-literal", text: "-1" },
+                  },
+                ],
+              },
+              right: { kind: "int-literal", text: "4" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /rt::option_coalesce\(\n {12}length\(Some\(String::from\("rust"\)\)\)\?,\n {12}std::convert::identity,\n {12}\|\| -1,\n {8}\) == 4,/u,
+  );
+});
+
+test("unary expressions expand long nested calls before outer attachment", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "unary",
+              operator: "!",
+              operand: {
+                kind: "call",
+                path: "rt::option_coalesce",
+                args: [
+                  { kind: "call", path: "includes", args: [{ kind: "path", path: "None" }] },
+                  { kind: "path", path: "std::convert::identity" },
+                  {
+                    kind: "closure",
+                    params: [],
+                    body: { kind: "bool-literal", value: false },
+                  },
+                ],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /acme_testing::check\(!rt::option_coalesce\(\n {8}includes\(None\),\n {8}std::convert::identity,\n {8}\|\| false,\n {4}\)\);/u,
+  );
+});
+
 test("fallible conversion wrappers own multiline callback method chains", () => {
   const source = printRustSourceFile({
     headerComment,

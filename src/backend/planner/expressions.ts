@@ -93,7 +93,7 @@ import {
 import type { RustExpr, RustStmt, RustType } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
-import type { RustExpressionOverride, RustPlanContext } from "./plan-context.js";
+import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
 import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
@@ -173,46 +173,11 @@ export function planExpression(
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
-  const diagnosticCount = context.diagnostics.length;
-  const explicitSafety = tryPlanRustExplicitSafetyExpression(
-    node,
-    context,
-    planExpression,
-  );
-  const nativePointer = explicitSafety.handled
-    ? undefined
-    : tryPlanRustNativePointerOperation(node, context, planExpression);
-  let planned: RustExpr | undefined;
-  if (explicitSafety.handled) {
-    planned = explicitSafety.expression;
-  } else if (nativePointer?.handled === true) {
-    planned = nativePointer.expression;
-  } else if (
-    rustExpressionUnsafeRequirement(node, context) !== undefined &&
-    (context.explicitUnsafeContextDepth ?? 0) === 0
-  ) {
-    context.diagnostics.push({
-      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
-      category: "error",
-      source: "tsonic-rust",
-      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
-      sourceNode: node,
-    });
-    planned = undefined;
-  } else {
-    planned = override?.expression ?? planExpressionInner(node, context, resultUse);
+  if (override !== undefined) {
+    return override.expression;
   }
-  if (planned === undefined) {
-    if (context.diagnostics.length === diagnosticCount) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node ?? context.sourceFile),
-        "rust.backend.expression-finalization",
-        "Expression planning returned no Rust AST and no specific diagnostic.",
-      ));
-    }
-    return undefined;
-  }
-  if (resultUse === "discarded") {
+  const planned = planRawExpression(node, context, resultUse);
+  if (planned === undefined || resultUse === "discarded") {
     return planned;
   }
   const flowRead = context.input.facts.getFact(node, rustFlowReadProjectionFactKey);
@@ -260,7 +225,54 @@ export function planExpression(
     ? { kind: "call", path: "Some", args: [contextuallyConverted] }
     : projection?.kind === "none"
       ? { kind: "path", path: "None" }
-    : contextuallyConverted;
+      : contextuallyConverted;
+}
+
+function planRawExpression(
+  node: Node,
+  context: RustPlanContext,
+  resultUse: RustExpressionResultUse,
+): RustExpr | undefined {
+  const diagnosticCount = context.diagnostics.length;
+  const explicitSafety = tryPlanRustExplicitSafetyExpression(
+    node,
+    context,
+    planExpression,
+  );
+  const nativePointer = explicitSafety.handled
+    ? undefined
+    : tryPlanRustNativePointerOperation(node, context, planExpression);
+  let planned: RustExpr | undefined;
+  if (explicitSafety.handled) {
+    planned = explicitSafety.expression;
+  } else if (nativePointer?.handled === true) {
+    planned = nativePointer.expression;
+  } else if (
+    rustExpressionUnsafeRequirement(node, context) !== undefined &&
+    (context.explicitUnsafeContextDepth ?? 0) === 0
+  ) {
+    context.diagnostics.push({
+      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
+      category: "error",
+      source: "tsonic-rust",
+      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      sourceNode: node,
+    });
+    planned = undefined;
+  } else {
+    planned = planExpressionInner(node, context, resultUse);
+  }
+  if (planned === undefined) {
+    if (context.diagnostics.length === diagnosticCount) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node ?? context.sourceFile),
+        "rust.backend.expression-finalization",
+        "Expression planning returned no Rust AST and no specific diagnostic.",
+      ));
+    }
+    return undefined;
+  }
+  return planned;
 }
 
 function applyRustContextualValueConversion(
@@ -2196,7 +2208,7 @@ function planRustUpdateProjectionArguments(
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly overrides: readonly {
     readonly node: Node;
-    readonly value: RustExpressionOverride;
+    readonly value: RustEffectiveExpressionOverride;
   }[];
   readonly inputOverrides: ReadonlyMap<RustFinalizedSourceInput, RustExpr>;
 } | undefined {
@@ -4478,7 +4490,22 @@ function planOptionalChainExpression(
     ));
     return undefined;
   }
-  const guard = planExpression(fact.guard, context);
+  const guardFlowRead = context.input.facts.getFact(
+    fact.guard,
+    rustFlowReadProjectionFactKey,
+  );
+  if (guardFlowRead !== undefined &&
+    (guardFlowRead.kind !== "option-value" ||
+      !rustTargetTypeRefEquals(guardFlowRead.sourceCarrier, fact.sourceGuardCarrier) ||
+      !rustTargetTypeRefEquals(guardFlowRead.selectedCarrier, fact.selectedGuardCarrier))) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, fact.guard),
+      "rust.backend.optional-chain-flow-read",
+      "Optional-chain lowering conflicts with the separately finalized receiver projection.",
+    ));
+    return undefined;
+  }
+  const guard = planRawExpression(fact.guard, context, "value");
   if (guard === undefined) {
     return undefined;
   }

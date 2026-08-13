@@ -15,7 +15,7 @@ import type { RustExpr } from "../rust-ast/nodes.js";
 import { unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
 import type {
-  RustExpressionOverride,
+  RustEffectiveExpressionOverride,
   RustPlanContext,
 } from "./plan-context.js";
 
@@ -103,7 +103,7 @@ export function prepareRustPreconstructionExpression(
           };
           return;
         }
-        const override: RustExpressionOverride = {
+        const override: RustEffectiveExpressionOverride = {
           expression: planned,
           carrier: field.carrier,
           valueForm: "value",

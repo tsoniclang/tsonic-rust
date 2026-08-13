@@ -7,7 +7,7 @@ import type { TargetTypeRef } from "../../policy/types.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
 import type { RustBlock, RustExpr, RustType } from "../rust-ast/nodes.js";
 
-export interface RustExpressionOverride {
+export interface RustEffectiveExpressionOverride {
   readonly expression: RustExpr;
   readonly carrier: TargetTypeRef;
   readonly valueForm: "value" | "shared-reference";
@@ -77,7 +77,7 @@ export interface RustPlanContext {
     readonly controllerName: string;
     readonly protocol: RustGeneratorFact;
   };
-  readonly expressionOverrides?: ReadonlyMap<Node, RustExpressionOverride>;
+  readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
   readonly capturedBindingPaths?: ReadonlyMap<Node, string>;
   readonly projectDispatchRoot?: RustExpr;
   readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../policy/types.js").TargetTypeRef>;

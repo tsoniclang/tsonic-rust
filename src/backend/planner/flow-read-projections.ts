@@ -18,8 +18,7 @@ export function planRustFlowReadProjection(
   fact: RustFlowReadProjectionFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const sourceCarrier = context.expressionOverrides?.get(node)?.carrier ??
-    context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const sourceCarrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
   if (sourceCarrier === undefined ||
     !rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(

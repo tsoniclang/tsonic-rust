@@ -21,7 +21,7 @@ import {
   sourceTypePath,
 } from "./plan-context.js";
 import type {
-  RustExpressionOverride,
+  RustEffectiveExpressionOverride,
   RustPlanContext,
 } from "./plan-context.js";
 import {
@@ -433,10 +433,10 @@ function projectThisOverrides(
   bindingName: string,
   context: RustPlanContext,
 ): {
-  readonly overrides: ReadonlyMap<Node, RustExpressionOverride>;
+  readonly overrides: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
   readonly binding?: RustExpr;
 } {
-  const overrides = new Map<Node, RustExpressionOverride>();
+  const overrides = new Map<Node, RustEffectiveExpressionOverride>();
   const ownerValue = rustSourceTypeCarrierValue(ownerCarrier);
   const wrapperPath = ownerValue === undefined ? undefined : sourceTypePath(context, ownerValue);
   const dispatchType = rustProjectDispatchTraitType(ownerCarrier, context);

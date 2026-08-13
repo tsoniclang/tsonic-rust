@@ -1957,7 +1957,28 @@ function printRustExprFitted(
           grammarPosition,
         );
       }
-      const renderedLeft = expression.left.kind === "try" &&
+      const expandedLeftCall = expression.left.kind === "call" &&
+          expression.left.args.length > 1 &&
+          !rustExpressionContainsStatementBlock(expression.left)
+        ? printFittedCall(
+            expression.left.path,
+            expression.left.args,
+            depth,
+            column,
+            true,
+          )
+        : expression.left.kind === "associated-call" &&
+            expression.left.args.length > 1 &&
+            !rustExpressionContainsStatementBlock(expression.left)
+          ? printFittedCall(
+              `${printRustAssociatedCallOwner(expression.left)}::${expression.left.method}`,
+              expression.left.args,
+              depth,
+              column,
+              true,
+            )
+          : undefined;
+      const renderedLeft = expandedLeftCall ?? (expression.left.kind === "try" &&
           (expression.left.expr.kind === "call" || expression.left.expr.kind === "associated-call") &&
           expression.left.expr.args.length > 1
         ? printNestedCallArgument(expression.left, depth, column, true)
@@ -1968,7 +1989,7 @@ function printRustExprFitted(
             methodChainContinuationIndent ??
               (column > indentText(depth).length ? indentText(depth + 1) : undefined),
             grammarPosition,
-          );
+          ));
       const left = printFittedBinaryOperand(
         expression.left,
         renderedLeft,
@@ -3019,12 +3040,15 @@ function printFittedCall(
         }
       }
     } else if (argument.kind === "unary" &&
-      argument.operand.kind === "associated-call") {
+      (argument.operand.kind === "call" ||
+        argument.operand.kind === "associated-call" ||
+        argument.operand.kind === "method-call") &&
+      printRustExpr(argument.operand).length > rustNestedCallWidth) {
       const nested = printNestedCallArgument(
         argument.operand,
         depth,
         column + prefix.length + argument.operator.length,
-        false,
+        true,
       );
       const compact = appendToLastLine(
         `${prefix}${argument.operator}${nested}`,
