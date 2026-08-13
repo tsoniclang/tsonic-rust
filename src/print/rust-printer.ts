@@ -1966,6 +1966,17 @@ function printRustExprFitted(
         renderedFits(flat, column)) {
         return flat;
       }
+      const onlyElement = expression.elements[0];
+      if (expression.kind !== "tuple-literal" && expression.elements.length === 1 &&
+        onlyElement !== undefined && rustExpressionContainsStatementBlock(onlyElement)) {
+        const opening = expression.kind === "vec-literal" ? "vec![" : "[";
+        const rendered = printRustExprFitted(
+          onlyElement,
+          depth,
+          column + opening.length,
+        );
+        return appendToLastLine(`${opening}${rendered}`, "]");
+      }
       const elementIndent = indentText(depth + 1);
       const elements = expression.elements.map((element) => {
         const rendered = printRustExprFitted(element, depth + 1, elementIndent.length);
@@ -2621,7 +2632,7 @@ function printFittedCall(
     const directChain = rustMethodChain(arguments_[0]);
     const expandedAggregateArgument = arguments_[0].args.some((argument) =>
       (argument.kind === "slice-literal" || argument.kind === "vec-literal") &&
-      argument.elements.length > 1);
+      (argument.elements.length > 1 || rustExpressionContainsStatementBlock(argument)));
     if (directChain?.steps.length === 1 && expandedAggregateArgument) {
       const nested = printRustExprFitted(
         arguments_[0],

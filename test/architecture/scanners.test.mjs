@@ -486,7 +486,7 @@ test("call-argument conversion consumes the checked expression carrier, not a se
   const conversion = sourceSection(
     semantics,
     "export function selectRustCheckedConversion(",
-    "function selectProjectUpcast(",
+    "function selectProjectDowncast(",
   );
   const callArgument = conversion.slice(0, conversion.indexOf("const targetCarrier = resolveRustTargetTypeRef(request.explicitTargetTypeNode"));
   assert.match(callArgument, /resolveRustTargetTypeRef\(request\.expression, context, options\)/u);

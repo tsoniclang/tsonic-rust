@@ -2005,7 +2005,8 @@ function selectedCallSourceCarriers(
   }[] = [];
   const actual = request.source.sourceArguments.map((sourceArgument, index) => {
     const argument = sourceArgument.expression;
-    const expected = declaredBySourceIndex.get(index);
+    const expected = selectedCallArgumentTargetCarrier(fact.target, index) ??
+      declaredBySourceIndex.get(index);
     const resolved = selectedSourceValueCarrier(sourceArgument, context, options);
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
     let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
@@ -2043,19 +2044,7 @@ function selectedCallSourceCarriers(
     if (actual.length < form.leadingArguments.length) {
       return { kind: "incompatible", sourceIndex: actual.length };
     }
-    const incompatible = actual.findIndex((carrier, sourceIndex) => {
-      if (carrier === undefined) {
-        return true;
-      }
-      const target = sourceIndex < form.leadingArguments.length
-        ? form.leadingArguments[sourceIndex]!.carrier
-        : form.elementCarrier;
-      return !rustTargetTypeRefEquals(carrier, target) &&
-        selectRustSourceValueConversion(carrier, target) === undefined;
-    });
-    return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
-      : { kind: "incompatible", sourceIndex: incompatible };
+    return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
   }
   if (fact.target.form === "receiver-tagged-array") {
     const form = fact.target;
@@ -2084,6 +2073,25 @@ function selectedCallSourceCarriers(
       : { kind: "incompatible", sourceIndex: incompatible };
   }
   return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+}
+
+function selectedCallArgumentTargetCarrier(
+  form: RustProviderOperationForm,
+  sourceIndex: number,
+): TargetTypeRef | undefined {
+  if (form.form === "call-str-slice" || form.form === "free-call-str-slice") {
+    return rustStringTargetType();
+  }
+  if (form.form === "call-value-slice" || form.form === "call-value-array" ||
+    form.form === "receiver-value-array") {
+    return sourceIndex < form.leadingArguments.length
+      ? form.leadingArguments[sourceIndex]!.carrier
+      : form.elementCarrier;
+  }
+  if (form.form === "receiver-tagged-array" && sourceIndex < form.leadingArguments.length) {
+    return form.leadingArguments[sourceIndex]!.carrier;
+  }
+  return undefined;
 }
 
 function selectedCallReceiverCarrier(

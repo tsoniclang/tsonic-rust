@@ -180,7 +180,7 @@ export function main(): void {
   assert.equal(validateGeneratedProject("js-collections", result.artifacts, { run: true }).status, 0);
 });
 
-test("Map operations reconcile exact derived values to their selected project base carrier", { timeout: 300_000 }, () => {
+test("collection operations reconcile exact derived values to their selected project base carrier", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
     packages: [acmeTestingPackage()],
@@ -206,6 +206,10 @@ export function main(): void {
   values.set("selected", new DetailedItem(3));
   const selected = values.get("selected");
   check(selected !== undefined && selected.value === 3 && selected.label() === "detailed");
+
+  const ordered: Item[] = [];
+  ordered.push(new DetailedItem(4));
+  check(ordered.length === 1 && ordered[0]!.value === 4 && ordered[0]!.label() === "detailed");
 }
 `,
     },

@@ -263,6 +263,55 @@ test("fallible conversion wrappers own multiline callback method chains", () => 
   );
 });
 
+test("conversion wrappers retain rustfmt layout for one block-valued array argument", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "method-call",
+                receiver: { kind: "path", path: "values" },
+                method: "push_many",
+                args: [{
+                  kind: "slice-literal",
+                  elements: [{
+                    kind: "block",
+                    bindings: [{
+                      name: "derived",
+                      value: { kind: "call", path: "Derived::new", args: [] },
+                    }],
+                    value: {
+                      kind: "struct-literal",
+                      path: "Base",
+                      fields: [{
+                        name: "identity",
+                        value: { kind: "field", receiver: { kind: "path", path: "derived" }, name: "identity" },
+                      }],
+                    },
+                  }],
+                }],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /usize_to_i32\(values\.push_many\(\[\{\n {8}let derived = Derived::new\(\);\n {8}Base \{\n {12}identity: derived\.identity,\n {8}\}\n {4}\}\]\)\)\?;/u);
+});
+
 test("method chains inside expanded call comparisons use argument indentation", () => {
   const source = printRustSourceFile({
     headerComment,
