@@ -261,20 +261,20 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /tsonic_rust_node::http::create_server_fallible_callable/u);
+  assert.match(source, /tsonic_rust_node::http::create_server_callable/u);
   assert.match(source, /fn handle\([^)]*\) -> rt::TsonicResult<\(\)>/u);
   assert.match(source, /response\.set_status_code\(/u);
   assert.match(source, /response\.set_header\(/u);
   assert.match(source, /response\.end_buffer\(/u);
   assert.match(source, /server\.listen\(/u);
-  assert.match(source, /tsonic_rust_node::timers::set_interval_fallible_callable/u);
+  assert.match(source, /tsonic_rust_node::timers::set_interval_callable/u);
   assert.match(source, /rt::Callable::<[^;]+rt::TsonicResult<\(\)>>/u);
   const main = artifactText(result, "src/main.rs");
   assert.match(main, /tsonic_rust_node::run_event_loop\(\)\?/u);
   validateGeneratedProject("node-server-contract", result.artifacts);
 });
 
-test("provider callbacks fail closed when no exact callable implementation is available", async () => {
+test("retained provider callbacks preserve arbitrary first-class callable values", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
@@ -291,9 +291,11 @@ export function register(
     },
   });
 
-  assert.equal(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_CALLBACK_VALUE_NOT_PROVEN"), true);
-  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /handler: rt::Callable<[\s\S]*?rt::TsonicResult<\(\)>,?\s*>/u);
+  assert.match(source, /tsonic_rust_node::http::create_server_callable\(handler\.clone\(\)\)/u);
+  validateGeneratedProject("node-retained-callback", result.artifacts);
 });
 
 test("async third-party provider rows lower through the same generic infrastructure", async () => {

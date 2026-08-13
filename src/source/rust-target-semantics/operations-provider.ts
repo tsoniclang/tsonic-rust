@@ -674,14 +674,14 @@ export function selectRustCheckedCall(
     if (instantiation === undefined) {
       return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier}' does not prove one closed instantiation of its Rust provider type parameters.`);
     }
-    if (selection.row.callback !== undefined) {
+    if (selection.row.immediateCallback !== undefined) {
       return acceptRustPolicy({
         kind: "deferred-callback",
         callback: {
           shape: "direct",
-          sourceArgumentIndex: selection.row.callback.sourceArgumentIndex,
+          sourceArgumentIndex: selection.row.immediateCallback.sourceArgumentIndex,
           fallibleTarget: substituteProviderOperationForm(
-            selection.row.callback.fallibleTarget,
+            selection.row.immediateCallback.fallibleTarget,
             instantiation.substitutions,
           ),
         },

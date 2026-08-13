@@ -7,6 +7,7 @@ import {
   createRustProviderPackageSourceProvider,
   rustInt32ToFloat64ValueConversion,
   rustCallableTargetType,
+  rustClosureTargetType,
 } from "../dist/index.js";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
@@ -234,8 +235,8 @@ test("runtime Callable is a built-in generic carrier and needs no provider-owned
     rustCallableTargetType([], int32Carrier));
 });
 
-test("provider callback metadata declares one exact fallible target ABI", () => {
-  const callbackCarrier = rustCallableTargetType([], { kind: "tuple", elements: [] });
+test("provider immediate-callback metadata declares one exact fallible target ABI", () => {
+  const callbackCarrier = rustClosureTargetType([], { kind: "tuple", elements: [] });
   const callbackExport = {
     id: "@acme/validation::withCallback",
     name: "withCallback",
@@ -267,43 +268,49 @@ test("provider callback metadata declares one exact fallible target ABI", () => 
       target: { form: "call", path: "acme_validation::with_callback" },
       resultCarrier: { kind: "tuple", elements: [] },
       parameterCarriers: [callbackCarrier],
-      callback: {
+      immediateCallback: {
         sourceArgumentIndex: 0,
         fallibleTarget: { form: "call", path: "acme_validation::with_fallible_callback" },
       },
     }],
   }));
   const [contribution] = providerPackage.createTargetContributions({});
-  assert.deepEqual(contribution.definition.operations[0].callback, {
+  assert.deepEqual(contribution.definition.operations[0].immediateCallback, {
     sourceArgumentIndex: 0,
     fallibleTarget: { form: "call", path: "acme_validation::with_fallible_callback" },
   });
 });
 
-test("provider callback metadata fails closed on an inexact callback contract", () => {
+test("provider immediate-callback metadata fails closed on an inexact callback contract", () => {
   const cases = [
     {
       label: "missing callback parameter",
       parameterCarriers: [],
-      callback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
       pattern: /must select one declared parameter carrier/u,
     },
     {
       label: "non-callable parameter",
       parameterCarriers: [int32Carrier],
-      callback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
-      pattern: /must select one exact callable carrier/u,
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /must select one exact native closure carrier/u,
+    },
+    {
+      label: "retained callable cannot use immediate metadata",
+      parameterCarriers: [rustCallableTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /must select one exact native closure carrier/u,
     },
     {
       label: "unknown callback field",
-      parameterCarriers: [rustCallableTargetType([], int32Carrier)],
-      callback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" }, fallback: true },
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" }, fallback: true },
       pattern: /unsupported field 'fallback'/u,
     },
     {
       label: "raw fallible target",
-      parameterCarriers: [rustCallableTargetType([], int32Carrier)],
-      callback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible\(\)" } },
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible\(\)" } },
       pattern: /not a closed Rust path/u,
     },
   ];
@@ -316,7 +323,7 @@ test("provider callback metadata fails closed on an inexact callback contract", 
           target: { form: "call", path: "acme_validation::run" },
           resultCarrier: int32Carrier,
           parameterCarriers: item.parameterCarriers,
-          callback: item.callback,
+          immediateCallback: item.immediateCallback,
         }],
       })),
       item.pattern,

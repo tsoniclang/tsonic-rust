@@ -86,6 +86,9 @@ export function rustTargetOperationIsFallible(fact: RustTargetOperationFact | un
   if (fact.kind === "operator-call") {
     return fact.fallible;
   }
+  if (fact.kind === "source-call" && fact.target.form === "callable") {
+    return fact.target.carrier.kind !== "function-pointer";
+  }
   if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
     return rustOperationAbiInvocationIsFallible(fact.abi);
   }

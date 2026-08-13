@@ -54,7 +54,7 @@ export type RustProviderOperationKind =
   | "property-set"
   | "index-set";
 
-export interface RustProviderCallbackDefinition {
+export interface RustProviderImmediateCallbackDefinition {
   readonly sourceArgumentIndex: number;
   readonly fallibleTarget: RustProviderOperationForm;
 }
@@ -81,7 +81,7 @@ export interface RustProviderOperationDefinition<
   // Exact target invocation safety. This does not grant a lexical unsafe
   // context; source code must still select an explicit unsafeContext region.
   readonly isUnsafe?: boolean;
-  readonly callback?: RustProviderCallbackDefinition;
+  readonly immediateCallback?: RustProviderImmediateCallbackDefinition;
 }
 
 export interface RustProviderTypeDefinition {
@@ -435,13 +435,13 @@ function materializeProviderOperationRow(
     ...(row.resultConversion === undefined
       ? {}
       : { resultConversion: row.resultConversion }),
-    ...(row.callback === undefined
+    ...(row.immediateCallback === undefined
       ? {}
       : {
-          callback: {
-            ...row.callback,
+          immediateCallback: {
+            ...row.immediateCallback,
             fallibleTarget: materializeProviderOperationForm(
-              row.callback.fallibleTarget,
+              row.immediateCallback.fallibleTarget,
               aliases,
               carrierPaths,
             ),

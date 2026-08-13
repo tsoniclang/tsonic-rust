@@ -33,7 +33,6 @@ import {
   rustJsSetTargetId,
   rustJsValueTargetId,
   rustOptionTargetId,
-  rustCallableProtocol,
   rustUndefinedTargetId,
   rustPrimitiveTypeName,
   rustTargetTypeParameterNames,
@@ -641,7 +640,7 @@ function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible", "isUnsafe", "callback",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -714,16 +713,22 @@ function validateOperationRows(
       typeParameterNames.add(name);
     }
     for (const [index, carrier] of (row.parameterCarriers ?? []).entries()) {
-      validateCarrier(carrier, definition, `${label}.parameterCarriers[${index}]`, fail);
+      validateCarrier(
+        carrier,
+        definition,
+        `${label}.parameterCarriers[${index}]`,
+        fail,
+        row.immediateCallback?.sourceArgumentIndex === index,
+      );
     }
     const referencedTypeParameters = new Set([
       ...rustTargetTypeParameterNames(row.resultCarrier),
       ...(row.receiverCarrier === undefined ? [] : rustTargetTypeParameterNames(row.receiverCarrier)),
       ...(row.parameterCarriers ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
       ...operationFormCarriers(row.target).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
-      ...(row.callback === undefined
+      ...(row.immediateCallback === undefined
         ? []
-        : operationFormCarriers(row.callback.fallibleTarget)
+        : operationFormCarriers(row.immediateCallback.fallibleTarget)
             .flatMap((carrier) => rustTargetTypeParameterNames(carrier))),
     ]);
     for (const name of referencedTypeParameters) {
@@ -760,34 +765,32 @@ function validateProviderCallback(
   label: string,
   fail: Fail,
 ): void {
-  const callback = row.callback;
+  const callback = row.immediateCallback;
   if (callback === undefined) {
     return;
   }
   requireExactKeys(
     asRecord(callback),
     ["sourceArgumentIndex", "fallibleTarget"],
-    `${label}.callback`,
+    `${label}.immediateCallback`,
     fail,
   );
   if (row.operationKind !== "method" && row.operationKind !== "constructor") {
-    fail(`${label}.callback is supported only on checked call operations`);
+    fail(`${label}.immediateCallback is supported only on checked call operations`);
   }
   if (!Number.isSafeInteger(callback.sourceArgumentIndex) || callback.sourceArgumentIndex < 0 ||
     callback.sourceArgumentIndex >= (row.parameterCarriers?.length ?? 0)) {
-    fail(`${label}.callback.sourceArgumentIndex must select one declared parameter carrier`);
+    fail(`${label}.immediateCallback.sourceArgumentIndex must select one declared parameter carrier`);
   }
   const callbackCarrier = row.parameterCarriers?.[callback.sourceArgumentIndex];
-  if (callbackCarrier === undefined ||
-    (callbackCarrier.kind !== "closure" && callbackCarrier.kind !== "function-pointer" &&
-      rustCallableProtocol(callbackCarrier) === undefined)) {
-    fail(`${label}.callback.sourceArgumentIndex must select one exact callable carrier`);
+  if (callbackCarrier?.kind !== "closure") {
+    fail(`${label}.immediateCallback.sourceArgumentIndex must select one exact native closure carrier`);
   }
   validateOperationForm(
     row.operationKind,
     callback.fallibleTarget,
     definition,
-    `${label}.callback.fallibleTarget`,
+    `${label}.immediateCallback.fallibleTarget`,
     row.parameterCarriers,
     fail,
   );
@@ -802,7 +805,7 @@ function validateProviderCallback(
       : row.parameterCarriers?.length ?? 0,
   );
   if (violation !== undefined) {
-    fail(`${label}.callback.fallibleTarget violates the closed Rust operation-form contract: ${violation}`);
+    fail(`${label}.immediateCallback.fallibleTarget violates the closed Rust operation-form contract: ${violation}`);
   }
 }
 
@@ -1172,6 +1175,7 @@ function validateCarrier(
   definition: RustProviderPackageDefinition,
   where: string,
   fail: Fail,
+  allowImmediateClosure = false,
 ): void {
   const record = carrier as unknown as Readonly<Record<string, unknown>>;
   switch (carrier.kind) {
@@ -1223,6 +1227,16 @@ function validateCarrier(
       if ((carrier.abi?.length ?? 0) > 1 || carrier.abi?.some((entry) =>
         entry !== "target-default" && entry !== "C" && entry !== "system")) {
         fail(`${where}.abi must contain at most one supported Rust ABI name`);
+      }
+      for (const [index, argument] of carrier.args.entries()) {
+        validateCarrier(argument, definition, `${where}.args[${index}]`, fail);
+      }
+      validateCarrier(carrier.result, definition, `${where}.result`, fail);
+      return;
+    case "closure":
+      requireExactKeys(record, ["kind", "args", "result"], where, fail);
+      if (!allowImmediateClosure) {
+        fail(`${where} uses a native Rust closure outside an exact immediate-callback parameter`);
       }
       for (const [index, argument] of carrier.args.entries()) {
         validateCarrier(argument, definition, `${where}.args[${index}]`, fail);

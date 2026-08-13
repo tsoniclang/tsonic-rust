@@ -469,10 +469,12 @@ function planExpressionInner(
           ));
           return undefined;
         }
-        const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+        const fallible = context.input.facts.getFact(
+          callableValue.sourceDeclaration,
+          rustFallibleFactKey,
+        ) !== undefined;
         const callableType = rustCallableConstructionType(
           callableValue.carrier,
-          fallible,
           context,
         );
         const declarationModule = context.moduleNameByFileName.get(callableValue.fileName);
@@ -485,41 +487,45 @@ function planExpressionInner(
           ? callableValue.name
           : `crate::${declarationModule}::${callableValue.name}`;
         context.usedAliases?.add("rt");
+        const invocation: RustExpr = {
+          kind: "call",
+          path,
+          args: callableValue.parameterCarriers.map((_carrier, index) => {
+            const value: RustExpr = {
+              kind: "field",
+              receiver: { kind: "path", path: argumentsName },
+              name: String(index),
+            };
+            const mode = callableValue.argumentModes[index];
+            return mode === "ref"
+              ? { kind: "reference", expr: value }
+              : mode === "mut-ref"
+                ? { kind: "reference", expr: value, mutable: true }
+                : value;
+          }),
+        };
+        const callableResult = fallible
+          ? invocation
+          : applyRustFallibleResultExpression(invocation);
+        const mutableArguments = callableValue.argumentModes.some((mode) => mode === "mut-ref");
+        const implementation: RustExpr = mutableArguments
+          ? {
+              kind: "closure-block",
+              params: [{ name: argumentsName, mutable: true }],
+              move: true,
+              async: false,
+              body: { statements: [{ kind: "tail", expr: callableResult }] },
+            }
+          : {
+              kind: "closure",
+              params: [{ name: argumentsName, byRefCopy: false }],
+              body: callableResult,
+            };
         return {
           kind: "associated-call",
           owner: callableType,
           method: "new",
-          args: [{
-            kind: "closure-block",
-            params: [{
-              name: argumentsName,
-              mutable: callableValue.argumentModes.some((mode) => mode === "mut-ref"),
-            }],
-            move: true,
-            async: false,
-            body: {
-              statements: [{
-                kind: "tail",
-                expr: {
-                  kind: "call",
-                  path,
-                  args: callableValue.parameterCarriers.map((_carrier, index) => {
-                    const value: RustExpr = {
-                      kind: "field",
-                      receiver: { kind: "path", path: argumentsName },
-                      name: String(index),
-                    };
-                    const mode = callableValue.argumentModes[index];
-                    return mode === "ref"
-                      ? { kind: "reference", expr: value }
-                      : mode === "mut-ref"
-                        ? { kind: "reference", expr: value, mutable: true }
-                        : value;
-                  }),
-                },
-              }],
-            },
-          }],
+          args: [implementation],
         };
       }
       const binding = context.input.facts.getFact(node, rustSourceBindingFactKey);
@@ -832,12 +838,13 @@ function planExpressionInner(
         return undefined;
       }
       const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+      const resultIsFallible = callableProtocol !== undefined || fallible;
       const closureContext: RustPlanContext = {
         ...context,
         controlFlow: { nextLoopId: 0 },
         controlTargets: undefined,
         completionBoundary: undefined,
-        fallibleContext: fallible,
+        fallibleContext: resultIsFallible,
         asyncContext: false,
         generator: undefined,
       };
@@ -946,8 +953,8 @@ function planExpressionInner(
         if (body === undefined) {
           return undefined;
         }
-        const resultBody = fallible ? applyRustFallibleResultExpression(body) : body;
-        const closure: RustExpr = bindingStatements.length === 0 && !closureMove &&
+        const resultBody = resultIsFallible ? applyRustFallibleResultExpression(body) : body;
+        const closure: RustExpr = bindingStatements.length === 0 &&
             closureParams.every((parameter) => !parameter.mutable)
           ? {
               kind: "closure",
@@ -955,6 +962,7 @@ function planExpressionInner(
                 name: parameter.name,
                 byRefCopy: parameter.byRefCopy === true,
               })),
+              ...(closureMove ? { move: true } : {}),
               body: resultBody,
             }
           : {
@@ -971,7 +979,6 @@ function planExpressionInner(
         }
         const callableType = rustCallableConstructionType(
           closureFact.resultCarrier,
-          fallible,
           context,
         );
         if (callableType === undefined) {
@@ -1018,11 +1025,11 @@ function planExpressionInner(
       const finalizedBlock = applyFallibleShape(applyRustTailShape(
         { statements: [...bindingStatements, ...block.statements] },
         !isRustUnitCarrier(resultCarrier),
-      ), fallible, !isRustUnitCarrier(resultCarrier));
+      ), resultIsFallible, !isRustUnitCarrier(resultCarrier));
       const onlyStatement = finalizedBlock.statements.length === 1
         ? finalizedBlock.statements[0]
         : undefined;
-      const closure: RustExpr = onlyStatement?.kind === "tail" && !closureMove &&
+      const closure: RustExpr = onlyStatement?.kind === "tail" &&
           closureParams.every((parameter) => !parameter.mutable)
         ? {
           kind: "closure",
@@ -1030,6 +1037,7 @@ function planExpressionInner(
             name: parameter.name,
             byRefCopy: parameter.byRefCopy === true,
           })),
+          ...(closureMove ? { move: true } : {}),
           body: onlyStatement.expr,
         }
         : {
@@ -1046,7 +1054,6 @@ function planExpressionInner(
       }
       const callableType = rustCallableConstructionType(
         closureFact.resultCarrier,
-        fallible,
         context,
       );
       if (callableType === undefined) {
@@ -1220,34 +1227,9 @@ function planExpressionInner(
 
 function rustCallableConstructionType(
   carrier: TargetTypeRef,
-  fallible: boolean,
   context: RustPlanContext,
 ): RustType | undefined {
-  const callable = rustCallableProtocol(carrier);
-  if (!fallible || callable === undefined) {
-    return rustTypeFromCarrierInContext(carrier, context);
-  }
-  const argumentsType = rustTypeFromCarrierInContext(
-    { kind: "tuple", elements: callable.parameters },
-    context,
-  );
-  const resultType = rustTypeFromCarrierInContext(callable.result, context);
-  if (argumentsType === undefined || resultType === undefined) {
-    return undefined;
-  }
-  context.usedAliases?.add("rt");
-  return {
-    kind: "named",
-    path: "rt::Callable",
-    typeArguments: [
-      argumentsType,
-      {
-        kind: "named",
-        path: "rt::TsonicResult",
-        typeArguments: [resultType],
-      },
-    ],
-  };
+  return rustTypeFromCarrierInContext(carrier, context);
 }
 
 function planGeneratorResumeExpression(
@@ -3422,7 +3404,9 @@ function sourceCallEffectsMatch(
   }
   const isAsync = rustFutureOutputCarrier(fact.resultCarrier) !== undefined;
   return isAsync
-    ? effects.invocation === "infallible" && effects.awaiting !== "not-applicable"
+    ? effects.awaiting !== "not-applicable" &&
+      (fact.target.form !== "callable" || fact.target.carrier.kind === "function-pointer" ||
+        effects.invocation === "fallible")
     : effects.awaiting === "not-applicable";
 }
 

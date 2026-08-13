@@ -37,7 +37,6 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustBigIntTargetId]: "rt::BigInt",
   [rustOptionTargetId]: "Option",
   [rustLocationTargetId]: "rt::Location",
-  [rustCallableTargetId]: "rt::Callable",
   [rustGeneratorTargetId]: "rt::Generator",
   [rustAsyncGeneratorTargetId]: "rt::AsyncGenerator",
   [rustIteratorResultTargetId]: "rt::IteratorResult",
@@ -75,6 +74,29 @@ export function rustTypeFromCarrier(
   }
   if (carrier.kind === "target-named" && carrier.id === rustIsizeTargetId) {
     return { kind: "primitive", name: "isize" };
+  }
+  if (carrier.kind === "target-named" && carrier.id === rustCallableTargetId) {
+    const [argumentsCarrier, resultCarrier] = carrier.typeArguments ?? [];
+    if (carrier.typeArguments?.length !== 2 || argumentsCarrier?.kind !== "tuple" ||
+      resultCarrier === undefined) {
+      return undefined;
+    }
+    const argumentsType = rustTypeFromCarrier(argumentsCarrier, resolveSourceTypePath);
+    const resultType = rustTypeFromCarrier(resultCarrier, resolveSourceTypePath);
+    return argumentsType === undefined || resultType === undefined
+      ? undefined
+      : {
+          kind: "named",
+          path: "rt::Callable",
+          typeArguments: [
+            argumentsType,
+            {
+              kind: "named",
+              path: "rt::TsonicResult",
+              typeArguments: [resultType],
+            },
+          ],
+        };
   }
   if (carrier.kind === "target-named") {
     const path = namedCarrierPaths[carrier.id];

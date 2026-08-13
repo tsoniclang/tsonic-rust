@@ -2507,6 +2507,7 @@ function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFi
         );
         walk.context.facts.set(identifier, rustSourceCallableValueFactKey, {
           form: "function",
+          sourceDeclaration: declaration,
           fileName: ast.getFileName(ast.getSourceFile(declaration)),
           name: ast.text(name),
           carrier: callableCarrier,
@@ -4847,15 +4848,20 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const body = ast.body(node);
-        if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body) &&
-          !ownedCallbackClosures.has(node)) {
-          appendRustDiagnostic(
-            walk,
-            "RUST_FALLIBLE_CLOSURE_UNSUPPORTED",
-            "Rust closures cannot contain fallible operations because the selected target callback ABI has an infallible result.",
-            node,
-            ["target.capability=rust.closure.infallible-result"],
-          );
+        if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body)) {
+          if (rustCallableProtocol(operation.resultCarrier) !== undefined) {
+            walk.context.facts.set(node, rustFallibleFactKey, { fallible: true }, [
+              { message: "rust fallible first-class callable implementation" },
+            ]);
+          } else if (!ownedCallbackClosures.has(node)) {
+            appendRustDiagnostic(
+              walk,
+              "RUST_FALLIBLE_CLOSURE_UNSUPPORTED",
+              "Native Rust closures cannot contain fallible operations without an exact fallible callback ABI.",
+              node,
+              ["target.capability=rust.closure.exact-result"],
+            );
+          }
         }
       } else if (kind === KindPropertyAccessExpression) {
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
@@ -4881,18 +4887,24 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
           }, [{ message: "rust finalized selected project accessor effects" }]);
         }
       } else if (kind === KindCallExpression || kind === KindNewExpression) {
-        const declaration = selectedProjectDeclaration(node);
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
-        if (declaration !== undefined && operation?.kind === "source-call") {
-          const isAsync = walk.context.facts.get(declaration, rustAsyncFunctionFactKey) !== undefined;
-          const isFallible = fallible.has(declaration);
-          walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
-            invocation: isFallible && !isAsync ? "fallible" : "infallible",
-            awaiting: isAsync
-              ? isFallible ? "fallible" : "infallible"
-              : "not-applicable",
-          }, [{ message: "rust finalized selected project-source call effects" }]);
+        if (operation?.kind === "source-call") {
+          const declaration = selectedProjectDeclaration(node);
+          const runtimeCallable = operation.target.form === "callable" &&
+            rustCallableProtocol(operation.target.carrier) !== undefined;
+          if (runtimeCallable || declaration !== undefined) {
+            const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;
+            const isFallible = declaration !== undefined && fallible.has(declaration);
+            walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
+              invocation: runtimeCallable || isFallible && !isAsync
+                ? "fallible"
+                : "infallible",
+              awaiting: isAsync
+                ? runtimeCallable || isFallible ? "fallible" : "infallible"
+                : "not-applicable",
+            }, [{ message: "rust finalized selected project-source call effects" }]);
+          }
         }
       }
       ast.forEachChild(node, (child) => {

@@ -706,6 +706,7 @@ export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = de
 
 export interface RustSourceCallableValueFact {
   readonly form: "function";
+  readonly sourceDeclaration: Node;
   readonly fileName: string;
   readonly name: string;
   readonly carrier: TargetTypeRef;
@@ -717,6 +718,7 @@ export interface RustSourceCallableValueFact {
 export const rustSourceCallableValueFactKey: RustPlanKey<RustSourceCallableValueFact> = defineRustPlanKey(
   "sourceCallableValue",
   (left, right) => left.form === right.form &&
+    left.sourceDeclaration === right.sourceDeclaration &&
     left.fileName === right.fileName &&
     left.name === right.name &&
     rustTargetTypeRefEquals(left.carrier, right.carrier) &&
