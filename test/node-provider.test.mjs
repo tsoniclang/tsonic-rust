@@ -41,6 +41,60 @@ export function probe(dir: string, file: string): boolean {
   assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_node = \{ path = ".*rust-nodejs\/rust\/crates\/tsonic_rust_node" \}/u);
 });
 
+test("node path, filesystem, and crypto overloads lower through exact provider signatures", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { relative, sep } from "node:path";
+
+export function probe(root: string, bytes: Buffer): string {
+  const temporary = mkdtempSync(root);
+  mkdirSync(temporary, true);
+  const separator = sep;
+  const file = temporary + separator + "payload.bin";
+  writeFileSync(file, bytes);
+  const loaded = readFileSync(file);
+  const digest = createHash("sha256").update(loaded).digest("hex");
+  const textFile = temporary + separator + "payload.txt";
+  writeFileSync(textFile, "hello", "utf8");
+  const text = readFileSync(textFile, "utf8");
+  const symbolic = lstatSync(file).isSymbolicLink();
+  const relativePath = relative(temporary, file);
+  const result = text + digest;
+  rmSync(temporary, true);
+  if (symbolic) return relativePath;
+  return result;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /tsonic_rust_node::path::relative/u);
+  assert.match(text, /tsonic_rust_node::path::sep\(\)\.to_string\(\)/u);
+  assert.match(text, /tsonic_rust_node::fs::read_file_sync_buffer/u);
+  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string/u);
+  assert.match(text, /tsonic_rust_node::fs::write_file_sync_buffer/u);
+  assert.match(text, /tsonic_rust_node::fs::write_file_sync_string/u);
+  assert.match(text, /\.update_buffer_owned\(/u);
+  assert.match(text, /\.digest_string\(/u);
+  assert.match(text, /\.is_symbolic_link\(\)/u);
+  validateGeneratedProject("node-portable-contracts", result.artifacts);
+});
+
 test("node assert.ok overloads lower through exact selected signatures", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
