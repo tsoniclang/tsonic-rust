@@ -980,7 +980,7 @@ export const rustMutatedReferentFactKey: RustPlanKey<{ readonly mutated: true }>
 export const rustSelfModeFactKey: RustPlanKey<{ readonly mode: "ref" | "mut-ref" }> =
   defineRustPlanKey("selfMode", (left, right) => left.mode === right.mode);
 
-export type RustUnionDeclarationFact =
+export type RustTypeAliasDeclarationFact =
   | {
       readonly kind: "string-literal";
       readonly variants: readonly {
@@ -997,8 +997,8 @@ export type RustUnionDeclarationFact =
     }
   | { readonly kind: "erased" };
 
-export const rustUnionDeclarationFactKey: RustPlanKey<RustUnionDeclarationFact> =
-  defineRustPlanKey("unionDeclaration", closedMetadataEquals);
+export const rustTypeAliasDeclarationFactKey: RustPlanKey<RustTypeAliasDeclarationFact> =
+  defineRustPlanKey("typeAliasDeclaration", closedMetadataEquals);
 
 export interface RustAsyncFunctionFact {
   readonly isAsync: true;

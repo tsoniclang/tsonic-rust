@@ -24,7 +24,7 @@ import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustUnionDeclarationFactKey } from "../../source/rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustTypeAliasDeclarationFactKey } from "../../source/rust-facts/keys.js";
 import { applyRustTailShape, rustBlockTerminates } from "./functions.js";
 import { applyFallibleShape } from "./fallible-shape.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
@@ -902,16 +902,16 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   }];
 }
 
-export function planUnionAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  const fact = context.input.facts.getFact(node, rustUnionDeclarationFactKey);
+  const fact = context.input.facts.getFact(node, rustTypeAliasDeclarationFactKey);
   const nameNode = Node_Name(ast, node);
   const aliasName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
-      "rust.backend.union",
+      "rust.backend.type-alias",
       "Type aliases require one finalized Rust alias representation.",
     ));
     return undefined;

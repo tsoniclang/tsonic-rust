@@ -49,7 +49,7 @@ import {
   planClassDeclaration,
   planEnumDeclaration,
   planInterfaceDeclaration,
-  planUnionAliasDeclaration,
+  planTypeAliasDeclaration,
 } from "./declarations-nominal.js";
 import {
   planPolymorphicClassDeclaration,
@@ -242,7 +242,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
     if (kind === "KindTypeAliasDeclaration") {
       const diagnosticCount = context.diagnostics.length;
-      const planned = planUnionAliasDeclaration(statement, context);
+      const planned = planTypeAliasDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
       } else {

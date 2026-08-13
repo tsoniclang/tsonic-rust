@@ -47,9 +47,7 @@ import {
   rustSliceRefTargetType,
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
-  rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
-  rustStructuralObjectCarrierValue,
   rustStructuralObjectTargetType,
   rustStringTargetType,
   rustTupleTargetType,
@@ -1022,9 +1020,7 @@ function resolveProjectSourceCarrier(
         typeArguments,
       );
     }
-    if (carrier !== undefined && typeArguments.length === 0 &&
-      (rustSourceUnionCarrierValue(carrier) !== undefined ||
-        rustStructuralObjectCarrierValue(carrier) !== undefined)) {
+    if (carrier !== undefined && typeArguments.length === 0) {
       return carrier;
     }
   }

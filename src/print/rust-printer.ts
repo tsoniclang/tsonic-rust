@@ -2189,31 +2189,13 @@ function printRustAssociatedOwnerFitted(
   }
   const argumentIndent = indentText(depth + 1);
   const arguments_ = owner.typeArguments.map((argument) => {
-    const rendered = argument.kind === "tuple" && argument.elements.length > 1
-      ? printRustExpandedTupleType(argument, depth + 1)
-      : printRustTypeFitted(argument, depth + 1, argumentIndent.length);
+    const rendered = printRustTypeFitted(argument, depth + 1, argumentIndent.length);
     return appendToLastLine(`${argumentIndent}${rendered}`, ",");
   });
   return [
     `${owner.path}::<`,
     ...arguments_,
     `${indentText(depth)}>`,
-  ].join("\n");
-}
-
-function printRustExpandedTupleType(
-  type: Extract<RustType, { readonly kind: "tuple" }>,
-  depth: number,
-): string {
-  const elementIndent = indentText(depth + 1);
-  return [
-    "(",
-    ...type.elements.map((element) =>
-      appendToLastLine(
-        `${elementIndent}${printRustTypeFitted(element, depth + 1, elementIndent.length)}`,
-        ",",
-      )),
-    `${indentText(depth)})`,
   ].join("\n");
 }
 
@@ -2243,9 +2225,7 @@ function printRustTypeFitted(
     return [
       `${type.path}<`,
       ...type.typeArguments.map((argument) => {
-        const rendered = argument.kind === "tuple" && argument.elements.length > 1
-          ? printRustExpandedTupleType(argument, depth + 1)
-          : printRustTypeFitted(argument, depth + 1, argumentIndent.length);
+        const rendered = printRustTypeFitted(argument, depth + 1, argumentIndent.length);
         return appendToLastLine(`${argumentIndent}${rendered}`, ",");
       }),
       `${indentText(depth)}>`,

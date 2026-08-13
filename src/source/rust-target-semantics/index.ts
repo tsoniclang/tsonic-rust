@@ -140,7 +140,7 @@ import {
   parseSourceBigIntLiteral,
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustTypeAliasDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -673,7 +673,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
       if (kind === "KindInterfaceDeclaration") {
         recordInterfaceFacts(walk, statement);
       } else if (kind === "KindTypeAliasDeclaration") {
-        registerUnionAlias(walk, statement);
+        registerTypeAlias(walk, statement);
       }
     }
   }
@@ -4370,7 +4370,7 @@ function selectRustRecordLiteralUnionVariant(
   return candidates.length === 1 ? candidates[0] : undefined;
 }
 
-function registerUnionAlias(walk: RustFactWalk, declaration: Node): void {
+function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const variants = walk.sourceTypes.enumVariantsForDeclaration(declaration);
   if (variants !== undefined) {
     const carrier = sourceTypeCarrierForDeclaration(walk, declaration);
@@ -4378,7 +4378,7 @@ function registerUnionAlias(walk: RustFactWalk, declaration: Node): void {
       return;
     }
     setCarrierFact(walk, declaration, carrier);
-    walk.context.facts.set(declaration, rustUnionDeclarationFactKey, {
+    walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
       kind: "string-literal",
       variants,
     }, [{ message: "rust string-literal union declaration" }]);
@@ -4394,8 +4394,27 @@ function registerUnionAlias(walk: RustFactWalk, declaration: Node): void {
   const semantics = walk.context.semanticsFor(declaration);
   const symbol = nameNode === undefined ? undefined : semantics.getSymbolAtLocation(nameNode);
   const sourceType = symbol === undefined ? undefined : semantics.getDeclaredTypeOfSymbol(symbol);
-  if (sourceType === undefined || !semantics.isUnion(sourceType) ||
-    typeName.length === 0 || fileName.length === 0) {
+  if (sourceType === undefined || typeName.length === 0 || fileName.length === 0) {
+    return;
+  }
+  if (!semantics.isUnion(sourceType)) {
+    const typeNode = Node_Type(ast, declaration);
+    const carrier = resolveRustTargetTypeRef(
+      typeNode ?? sourceType,
+      rustResolutionContext(walk, declaration),
+      walk.operationOptions,
+    );
+    if (carrier === undefined ||
+      !walk.sourceTypes.registerDeclarationCarrier(declaration, carrier)) {
+      return;
+    }
+    setCarrierFact(walk, declaration, carrier);
+    if (typeNode !== undefined) {
+      setCarrierFact(walk, typeNode, carrier);
+    }
+    walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
+      kind: "erased",
+    }, [{ message: "rust representation-preserving type alias declaration" }]);
     return;
   }
   const compositeCarrier = resolveRustTargetTypeRef(
@@ -4408,7 +4427,7 @@ function registerUnionAlias(walk: RustFactWalk, declaration: Node): void {
       return;
     }
     setCarrierFact(walk, declaration, compositeCarrier);
-    walk.context.facts.set(declaration, rustUnionDeclarationFactKey, {
+    walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
       kind: "erased",
     }, [{ message: "rust representation-identical union declaration" }]);
     return;
@@ -4442,7 +4461,7 @@ function registerUnionAlias(walk: RustFactWalk, declaration: Node): void {
       return;
     }
     setCarrierFact(walk, declaration, carrier);
-    walk.context.facts.set(declaration, rustUnionDeclarationFactKey, {
+    walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
       kind: "erased",
     }, [{ message: "rust representation-identical union declaration" }]);
     return;
@@ -4497,7 +4516,7 @@ function registerUnionAlias(walk: RustFactWalk, declaration: Node): void {
     return;
   }
   setCarrierFact(walk, declaration, carrier);
-  walk.context.facts.set(declaration, rustUnionDeclarationFactKey, {
+  walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
     kind: "runtime",
     variants: finalizedVariants.map((variant) => ({
       name: variant.name,

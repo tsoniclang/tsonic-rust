@@ -137,6 +137,33 @@ export function main(): void {
   validateGeneratedProject("callable-top-level", result.artifacts, { run: true });
 });
 
+test("representation-preserving callable aliases close top-level callable values", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "callable_alias" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+type TextTransform = (value: string) => string;
+
+const apply = (value: string, transform: TextTransform): string => transform(value);
+
+export function main(): void {
+  check(apply("rust", (value: string): string => value.toUpperCase()) === "RUST");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(source, /type TextTransform/u);
+  assert.match(source, /rt::Callable<\(String,\), rt::TsonicResult<String>>/u);
+  validateGeneratedProject("callable-alias", result.artifacts, { run: true });
+});
+
 test("escaping closures preserve shared mutable captures", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

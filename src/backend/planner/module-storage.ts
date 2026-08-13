@@ -25,12 +25,15 @@ export function planRustModuleCell(
 ): PlannedRustModuleCell {
   const cellName = allocateRustSyntheticName(syntheticNames, "module_binding");
   const valueName = allocateRustSyntheticName(syntheticNames, "module_value");
+  const itemAttributes = attrs.includes("#[allow(clippy::type_complexity)]")
+    ? attrs
+    : [...attrs, "#[allow(clippy::type_complexity)]"];
   return {
     item: {
       kind: "thread-local",
       name,
       visibility,
-      ...(attrs.length === 0 ? {} : { attrs }),
+      attrs: itemAttributes,
       type: {
         kind: "named",
         path: "rt::ModuleCell",
