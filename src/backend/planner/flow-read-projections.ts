@@ -10,6 +10,7 @@ import { missingFactDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { planRustProjectDowncastValue } from "./project-downcasts.js";
+import { planRustProgramErrorFlowRead } from "./program-error-operations.js";
 
 export function planRustFlowReadProjection(
   node: Node,
@@ -73,6 +74,9 @@ export function planRustFlowReadProjection(
         },
       ],
     };
+  }
+  if (fact.kind === "program-error-variant") {
+    return planRustProgramErrorFlowRead(node, expression, fact, context);
   }
   return planRustProjectDowncastValue(
     node,

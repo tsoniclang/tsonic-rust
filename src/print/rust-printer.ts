@@ -476,15 +476,24 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return `${indent}continue${statement.label === undefined ? "" : ` '${statement.label}`};`;
     }
     case "completion-exit": {
-      const completion = statement.completion === "return"
-        ? `rt::Completion::Return(${statement.expr === undefined ? "()" : printRustExpr(statement.expr)})`
-        : statement.completion === "break"
-          ? `rt::Completion::Break(${statement.loopId ?? 0})`
-          : `rt::Completion::Continue(${statement.loopId ?? 0})`;
-      const value = statement.resultWrapped ? `Ok(${completion})` : completion;
-      return statement.tail === true
-        ? `${indent}${value}`
-        : `${indent}return ${value};`;
+      const completion: RustExpr = statement.completion === "return"
+        ? {
+            kind: "call",
+            path: "rt::Completion::Return",
+            args: [statement.expr ?? { kind: "path", path: "()" }],
+          }
+        : {
+            kind: "call",
+            path: statement.completion === "break"
+              ? "rt::Completion::Break"
+              : "rt::Completion::Continue",
+            args: [{ kind: "int-literal", text: String(statement.loopId ?? 0) }],
+          };
+      const value: RustExpr = statement.resultWrapped
+        ? { kind: "call", path: "Ok", args: [completion] }
+        : completion;
+      const prefix = statement.tail === true ? indent : `${indent}return `;
+      return `${prefix}${printRustExprFitted(value, depth, prefix.length)}${statement.tail === true ? "" : ";"}`;
     }
     case "resource-scope": {
       return printRustResourceScope(statement, depth);
@@ -563,39 +572,44 @@ function printRustTryScope(
     lines.push(`${indent}let ${statement.flowName} = ${statement.bodyName};`);
   } else {
     const catchClause = statement.catchClause;
+    const flowType = catchClause.fallible
+      ? `rt::TsonicResult<${completionType}>`
+      : completionType;
+    const inlineFlowMatchPrefix = `${indent}let ${statement.flowName}: ${flowType} = match ${statement.bodyName}`;
+    const catchUsesBlock = statement.asynchronous;
+    const matchContinues = !renderedFits(`${inlineFlowMatchPrefix} {`, 0);
+    const matchDepth = matchContinues ? depth + 1 : depth;
+    const matchIndent = indentText(matchDepth);
+    const armIndent = indentText(matchDepth + 1);
     const catchExpression = printRustCompletionCaptureExpression(
       completionType,
       catchClause.body,
       catchClause.fallible,
       catchClause.terminates,
       statement.asynchronous,
-      depth + (statement.asynchronous ? 2 : 1),
+      matchDepth + (catchUsesBlock ? 2 : 1),
     );
-    const flowType = catchClause.fallible
-      ? `rt::TsonicResult<${completionType}>`
-      : completionType;
     const catchArm = catchExpression.length === 1
-      ? [`${nested}Err(${catchClause.binding}) => ${catchExpression[0]},`]
-      : statement.asynchronous
+      ? [`${armIndent}Err(${catchClause.binding}) => ${catchExpression[0]},`]
+      : catchUsesBlock
         ? [
-          `${nested}Err(${catchClause.binding}) => {`,
-          `${indentText(depth + 2)}${catchExpression[0]}`,
+          `${armIndent}Err(${catchClause.binding}) => {`,
+          `${indentText(matchDepth + 2)}${catchExpression[0]}`,
           ...catchExpression.slice(1),
-          `${nested}}`,
+          `${armIndent}}`,
         ]
         : [
-            `${nested}Err(${catchClause.binding}) => ${catchExpression[0]}`,
+            `${armIndent}Err(${catchClause.binding}) => ${catchExpression[0]}`,
             ...catchExpression.slice(1, -1),
             `${catchExpression[catchExpression.length - 1]},`,
           ];
-    const flowMatchPrefix = `${indent}let ${statement.flowName}: ${flowType} = match ${statement.bodyName}`;
     lines.push(
-      ...(renderedFits(`${flowMatchPrefix} {`, 0)
-        ? [`${flowMatchPrefix} {`]
-        : [flowMatchPrefix, `${indent}{`]),
-      `${nested}Ok(completion) => ${catchClause.fallible ? "Ok(completion)" : "completion"},`,
+      ...(matchContinues
+        ? [`${indent}let ${statement.flowName}: ${flowType} =`, `${matchIndent}match ${statement.bodyName} {`]
+        : [`${inlineFlowMatchPrefix} {`]),
+      `${armIndent}Ok(completion) => ${catchClause.fallible ? "Ok(completion)" : "completion"},`,
       ...catchArm,
-      `${indent}};`,
+      `${matchIndent}};`,
     );
     flowFallible = catchClause.fallible;
   }
@@ -649,7 +663,7 @@ function printRustCompletionCapture(
   const captureType = fallible
     ? `rt::TsonicResult<${completionType}>`
     : completionType;
-  const expression = printRustCompletionCaptureExpression(
+  const inlineExpression = printRustCompletionCaptureExpression(
     completionType,
     body,
     fallible,
@@ -657,16 +671,34 @@ function printRustCompletionCapture(
     asynchronous,
     depth,
   );
-  if (expression.length === 1) {
-    const assignment = `${indent}let ${name}: ${captureType} = ${expression[0]};`;
+  const prefix = `${indent}let ${name}: ${captureType} = `;
+  if (inlineExpression.length === 1) {
+    const assignment = `${prefix}${inlineExpression[0]};`;
     return renderedFits(assignment, 0)
       ? [assignment]
-      : [`${indent}let ${name}: ${captureType} =`, `${indentText(depth + 1)}${expression[0]};`];
+      : [`${prefix.trimEnd()}`, `${indentText(depth + 1)}${inlineExpression[0]};`];
   }
+  if (renderedFits(`${prefix}${inlineExpression[0]}`, 0) &&
+    prefix.length + inlineExpression[0]!.length <= rustFormatWidth - 4) {
+    return [
+      `${prefix}${inlineExpression[0]}`,
+      ...inlineExpression.slice(1, -1),
+      `${inlineExpression[inlineExpression.length - 1]};`,
+    ];
+  }
+  const continuationExpression = printRustCompletionCaptureExpression(
+    completionType,
+    body,
+    fallible,
+    terminates,
+    asynchronous,
+    depth + 1,
+  );
   return [
-    `${indent}let ${name}: ${captureType} = ${expression[0]}`,
-    ...expression.slice(1, -1),
-    `${expression[expression.length - 1]};`,
+    `${prefix.trimEnd()}`,
+    `${indentText(depth + 1)}${continuationExpression[0]}`,
+    ...continuationExpression.slice(1, -1),
+    `${continuationExpression[continuationExpression.length - 1]};`,
   ];
 }
 
@@ -1189,6 +1221,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "match": {
       return printRustMatchExpression(expression, 0);
     }
+    case "matches": {
+      return `matches!(${printRustExpr(expression.expression)}, ${printRustPattern(expression.pattern)})`;
+    }
     case "assignment": {
       return `${printRustExpr(expression.target)} ${expression.operator} ${printRustExpr(expression.value)}`;
     }
@@ -1317,6 +1352,8 @@ function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
       return rustExpressionContainsStatementBlock(expression.condition) ||
         rustExpressionContainsStatementBlock(expression.whenTrue) ||
         rustExpressionContainsStatementBlock(expression.whenFalse);
+    case "matches":
+      return rustExpressionContainsStatementBlock(expression.expression);
     case "assignment":
       return rustExpressionContainsStatementBlock(expression.target) ||
         rustExpressionContainsStatementBlock(expression.value);
@@ -1380,6 +1417,8 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
     case "match":
       return rustExpressionContainsClosure(expression.expression) ||
         expression.arms.some((arm) => rustExpressionContainsClosure(arm.expression));
+    case "matches":
+      return rustExpressionContainsClosure(expression.expression);
     case "assignment":
       return rustExpressionContainsClosure(expression.target) || rustExpressionContainsClosure(expression.value);
     case "call":
@@ -1448,6 +1487,8 @@ function rustExpressionContainsPreferredVerticalMethodChain(expression: RustExpr
       return rustExpressionContainsPreferredVerticalMethodChain(expression.expression) ||
         expression.arms.some((arm) =>
           rustExpressionContainsPreferredVerticalMethodChain(arm.expression));
+    case "matches":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
     case "assignment":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.target) ||
         rustExpressionContainsPreferredVerticalMethodChain(expression.value);
@@ -1511,6 +1552,33 @@ function printRustExprFitted(
       );
     case "match":
       return printRustMatchExpression(expression, depth, column);
+    case "matches": {
+      if (!flat.includes("\n") && renderedFits(flat, column)) {
+        return flat;
+      }
+      const argumentIndent = indentText(depth + 1);
+      const matched = printRustExprFitted(
+        expression.expression,
+        depth + 1,
+        argumentIndent.length,
+      );
+      return [
+        "matches!(",
+        appendToLastLine(`${argumentIndent}${matched}`, ","),
+        `${argumentIndent}${printRustPattern(expression.pattern)},`,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
+    case "unreachable": {
+      if (renderedFits(flat, column)) {
+        return flat;
+      }
+      return [
+        "unreachable!(",
+        `${indentText(depth + 1)}"${escapeRustString(expression.message)}"`,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
     case "conditional": {
       const branchIndent = indentText(depth + 1);
       const condition = printRustExprFitted(
@@ -2340,7 +2408,7 @@ function printRustFormatArgument(
     if (renderedArgument.includes("\n")) {
       const attached = appendToLastLine(`${prefix}${renderedArgument}`, ",)");
       if (firstLine(attached).length <= rustNestedCallWidth &&
-        renderedFits(attached, column)) {
+        (renderedFits(attached, column) || rustExpressionContainsStatementBlock(argument))) {
         return attached;
       }
       return printFittedCall(callable, [argument], depth, column, true);
@@ -3305,6 +3373,8 @@ function rustExpressionContainsExpandedStructLiteral(expression: RustExpr): bool
       return rustExpressionContainsExpandedStructLiteral(expression.expression) ||
         expression.arms.some((arm) =>
           rustExpressionContainsExpandedStructLiteral(arm.expression));
+    case "matches":
+      return rustExpressionContainsExpandedStructLiteral(expression.expression);
     case "assignment":
       return rustExpressionContainsExpandedStructLiteral(expression.target) ||
         rustExpressionContainsExpandedStructLiteral(expression.value);

@@ -56,6 +56,7 @@ export type RustExpr =
         readonly expression: RustExpr;
       }[];
     }
+  | { readonly kind: "matches"; readonly expression: RustExpr; readonly pattern: RustPattern }
   | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
   | { readonly kind: "call"; readonly path: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }

@@ -14,6 +14,7 @@ import type {
   RustProjectUpcastFact,
 } from "../rust-facts/keys.js";
 import {
+  isRustProgramErrorCarrier,
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
 } from "../rust-target-types.js";
@@ -43,6 +44,23 @@ export function selectRustFlowReadProjection(
 ): RustFlowReadProjectionSelection {
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return { kind: "identity" };
+  }
+  if (isRustProgramErrorCarrier(sourceCarrier)) {
+    const selectedDefinition = projectTypes.definitionForCarrier(selectedCarrier);
+    const variant = selectedDefinition === undefined
+      ? undefined
+      : projectTypes.programErrorVariant(selectedDefinition);
+    return variant !== undefined && rustCarrierSupportsClone(selectedCarrier)
+      ? {
+          kind: "projection",
+          fact: {
+            kind: "program-error-variant",
+            sourceCarrier,
+            selectedCarrier,
+            variant,
+          },
+        }
+      : { kind: "incompatible" };
   }
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   if (optionalElement !== undefined &&

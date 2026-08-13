@@ -33,6 +33,20 @@ test("nested tuple fields use one edition-neutral rustfmt-stable form", () => {
   assert.doesNotMatch(text, /state\.0 \.1|state\.0\.1/u);
 });
 
+test("exact pattern predicates use the native matches expression", () => {
+  const text = projectFunction({
+    kind: "matches",
+    expression: { kind: "method-call", receiver: { kind: "path", path: "error" }, method: "clone", args: [] },
+    pattern: {
+      kind: "tuple-variant",
+      path: "rt::TsonicError::Project0",
+      elements: [{ kind: "wildcard" }],
+    },
+  });
+
+  assert.match(text, /matches!\(error\.clone\(\), rt::TsonicError::Project0\(_\)\)/u);
+});
+
 test("long tuple values use rustfmt-compatible element layout", () => {
   const text = projectFunction({
     kind: "tuple-literal",

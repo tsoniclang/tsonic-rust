@@ -80,6 +80,7 @@ import {
   isRustCopyCarrier,
   getRustGeneratorProtocol,
   isRustJsArrayCarrier,
+  isRustProgramErrorCarrier,
   isRustNullishSourceCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
@@ -138,6 +139,10 @@ import {
   resolveRustTargetTypeRef,
 } from "./target-type-resolution.js";
 import type { RustTargetTypeResolutionOptions } from "./target-type-resolution.js";
+import {
+  recordRustFlowReadProjection,
+  selectRustFlowReadProjection,
+} from "./value-carrier-reconciliation.js";
 import {
   tsonicCoreSourceSemanticsModules,
 } from "@tsonic/source-core";
@@ -252,6 +257,26 @@ function selectRustProjectTypeTest(
       targetDefinition.typeParameterNames.length !== 0
     ? undefined
     : options.projectTypes.openCarrier(targetDefinition);
+  const programErrorVariant = targetDefinition === undefined
+    ? undefined
+    : options.projectTypes.programErrorVariant(targetDefinition);
+  if (sourceCarrier !== undefined && isRustProgramErrorCarrier(sourceCarrier) &&
+    targetCarrier !== undefined && programErrorVariant !== undefined) {
+    const resultCarrier = rustSourcePrimitiveTargetType("bool");
+    const fact: RustTargetOperationFact = {
+      kind: "program-error-type-test",
+      operationId: `tsonic.rust.program-error-type-test.${programErrorVariant}`,
+      sourceCarrier,
+      targetCarrier,
+      variant: programErrorVariant,
+      resultCarrier,
+    };
+    return acceptRustOperation(request.expression, fact, context, {
+      sourceExpression: request.expression,
+      sourceReceiver: request.left,
+      sourceSelectedDeclaration: request.sourceRightDeclaration,
+    }, resultCarrier);
+  }
   if (sourceCarrier === undefined || dispatchCarrier === undefined || sourceDefinition === undefined ||
     targetDefinition === undefined || targetCarrier === undefined) {
     return rejectSelectedOperation(
@@ -3982,6 +4007,13 @@ function selectedMemberReceiverCarrier(
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
   }
+  if (isRustProgramErrorCarrier(sourceCarrier)) {
+    const selectedDefinition = options.projectTypes.definitionForCarrier(selectedCarrier);
+    return selectedDefinition !== undefined &&
+        options.projectTypes.programErrorVariant(selectedDefinition) !== undefined
+      ? selectedCarrier
+      : undefined;
+  }
   const selectedOperation = context.facts.resolve(receiver, rustTargetOperationFactKey);
   const preparedOperation = context.facts.resolve(receiver, rustPreparedOperationResultFactKey);
   const selectedOperationResult = selectedOperation === undefined
@@ -4027,6 +4059,34 @@ function acceptRustMemberOperation(
   provenance: NonNullable<RustTargetOperationSelection["provenance"]>,
   innerResultCarrier: TargetTypeRef | undefined = rustTargetOperationResultCarrier(fact),
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const sourceReceiverCarrier = resolveRustTargetTypeRef(
+    request.receiver,
+    context,
+    options,
+  );
+  const selectedReceiverCarrier = selectedMemberReceiverCarrier(
+    request,
+    context,
+    options,
+  );
+  if (sourceReceiverCarrier !== undefined && selectedReceiverCarrier !== undefined) {
+    const projection = selectRustFlowReadProjection(
+      sourceReceiverCarrier,
+      selectedReceiverCarrier,
+      options.projectTypes,
+    );
+    if (projection.kind === "incompatible") {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SELECTED_RECEIVER_PROJECTION_UNSUPPORTED",
+        "The checked member receiver cannot project from its exact runtime carrier to its TSTS-selected carrier.",
+      );
+    }
+    if (projection.kind === "projection") {
+      recordRustFlowReadProjection(context.facts, request.receiver, projection.fact);
+    }
+  }
   if (request.optionalChain !== true) {
     return acceptRustOperation(request.expression, fact, context, provenance, innerResultCarrier);
   }

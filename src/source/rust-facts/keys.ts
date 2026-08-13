@@ -330,6 +330,12 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "non-null-expression";
+      readonly operationId: string;
+      readonly sourceCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "switch";
       readonly operationId: string;
       readonly discriminantCarrier: TargetTypeRef;
@@ -413,6 +419,14 @@ export type RustTargetOperationFact =
         | { readonly kind: "dispatch" }
         | { readonly kind: "constant"; readonly value: boolean }
         | { readonly kind: "option-presence" };
+    }
+  | {
+      readonly kind: "program-error-type-test";
+      readonly operationId: string;
+      readonly sourceCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+      readonly variant: string;
+      readonly resultCarrier: TargetTypeRef;
     }
   | {
       readonly kind: "source-field";
@@ -664,10 +678,12 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "source-conversion":
     case "option-coalesce":
     case "nullish-identity":
+    case "non-null-expression":
     case "disjoint-equality":
     case "typed-location":
     case "native-pointer":
     case "project-type-test":
+    case "program-error-type-test":
       return fact.resultCarrier;
     case "iteration":
       return fact.elementCarrier;
@@ -837,6 +853,12 @@ export type RustFlowReadProjectionFact =
       readonly sourceCarrier: TargetTypeRef;
       readonly dispatchCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "program-error-variant";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+      readonly variant: string;
     };
 
 export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFact> =
@@ -846,7 +868,9 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
     rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier) &&
     (left.kind !== "project-downcast" ||
       (right.kind === "project-downcast" &&
-        rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier))));
+        rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier))) &&
+    (left.kind !== "program-error-variant" ||
+      (right.kind === "program-error-variant" && left.variant === right.variant)));
 
 export interface RustContextualValueConversionFact {
   readonly sourceCarrier: TargetTypeRef;

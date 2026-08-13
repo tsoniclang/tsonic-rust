@@ -163,6 +163,7 @@ import {
   planRustProjectDowncast,
   planRustProjectTypeTest,
 } from "./project-downcasts.js";
+import { planRustProgramErrorTypeTest } from "./program-error-operations.js";
 
 type RustExpressionResultUse = "value" | "discarded";
 
@@ -573,8 +574,7 @@ function planExpressionInner(
     case "KindTypeAssertionExpression": {
       return planSourceConversion(node, context);
     }
-    case KindSatisfiesExpression:
-    case KindNonNullExpression: {
+    case KindSatisfiesExpression: {
       const fact = rustOperationFact(node, context);
       const inner = Node_Expression(context.input.ast, node);
       if (fact?.kind !== "identity-expression" || inner === undefined) {
@@ -589,6 +589,36 @@ function planExpressionInner(
         return undefined;
       }
       return planExpression(inner, context);
+    }
+    case KindNonNullExpression: {
+      const fact = rustOperationFact(node, context);
+      const inner = Node_Expression(context.input.ast, node);
+      const planned = inner === undefined ? undefined : planExpression(inner, context);
+      const innerCarrier = inner === undefined
+        ? undefined
+        : rustEffectiveValueCarrier(context.input.facts, inner);
+      if (fact?.kind !== "non-null-expression" || inner === undefined || planned === undefined ||
+        innerCarrier === undefined || !rustTargetTypeRefEquals(innerCarrier, fact.sourceCarrier) ||
+        !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.non-null-expression")) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.non-null-expression",
+          "Non-null syntax requires one exact finalized source and result carrier.",
+        ));
+        return undefined;
+      }
+      if (rustTargetTypeRefEquals(fact.sourceCarrier, fact.resultCarrier)) {
+        return planned;
+      }
+      if (!rustTargetTypeRefEquals(rustOptionElementCarrier(fact.sourceCarrier), fact.resultCarrier)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.non-null-option",
+          "Non-null syntax can remove only the exact nullish lane from its finalized source carrier.",
+        ));
+        return undefined;
+      }
+      return { kind: "method-call", receiver: planned, method: "unwrap", args: [] };
     }
     case KindConditionalExpression: {
       const fact = rustOperationFact(node, context);
@@ -2416,6 +2446,28 @@ function planRustDirectUpdateTarget(
 
 function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "program-error-type-test") {
+    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
+    if (leftNode === undefined || left === undefined ||
+      !rustTargetTypeRefEquals(expressionCarrier(leftNode, context), fact.sourceCarrier) ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.program-error-type-test-carrier") ||
+      !selectedOperationMatches(
+        context.input.facts.getSelectedTargetOperator(node),
+        fact.operationId,
+        "operator",
+        fact.resultCarrier,
+        "program-error-type-test",
+      )) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.program-error-type-test-selected-evidence",
+        "Program-error type test conflicts with its exact finalized source operation evidence.",
+      ));
+      return undefined;
+    }
+    return planRustProgramErrorTypeTest(node, left, fact, context);
+  }
   if (fact?.kind === "project-type-test") {
     const leftNode = BinaryExpression_Left(context.input.ast, node);
     const plannedLeft = leftNode === undefined ? undefined : planExpression(leftNode, context);

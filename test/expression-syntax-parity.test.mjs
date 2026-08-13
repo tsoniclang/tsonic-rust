@@ -87,21 +87,38 @@ export function identity(value: int32): int32 {
   validateGeneratedProject("expression-erased-wrappers", result.artifacts);
 });
 
-test("non-null syntax does not guess through an Option carrier", () => {
+test("non-null syntax projects the exact Option element carrier", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "non_null_projection" } },
     files: {
       "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
 export function require(value: string | null): string {
   return value!;
+}
+
+export function selected(values: string[], index: int32 | undefined): string {
+  if (index === undefined) return "";
+  return values[index]!;
+}
+
+export function main(): void {
+  check(require("ready") === "ready");
+  check(selected(["zero", "one"], 1) === "one");
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("identity operation") ||
-    diagnostic.message.includes("Expression planning returned no Rust AST")));
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value\.unwrap\(\)/u);
+  assert.match(source, /get_number[\s\S]*Some\(__tsonic_flow_value\)/u);
+  assert.equal(validateGeneratedProject("non-null-projection", result.artifacts, { run: true }).status, 0);
 });
 
 test("arrow and function-expression callbacks share one exact block-body contract", { timeout: 300_000 }, () => {

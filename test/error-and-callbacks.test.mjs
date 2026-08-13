@@ -31,6 +31,49 @@ export function main(): void {
   assert.equal(validateGeneratedProject("error-subclass-fields", result.artifacts, { run: true }).status, 0);
 });
 
+test("caught project errors narrow through exact closed program variants", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "caught_project_error" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class NamedError extends Error {
+  value: int32;
+
+  constructor(value: int32) {
+    super("named");
+    this.value = value;
+  }
+}
+
+function read(named: boolean): string {
+  try {
+    if (named) throw new NamedError(42);
+    throw new Error("ordinary");
+  } catch (error) {
+    return error instanceof NamedError ? \`value=\${error.value}\` : \`\${error}\`;
+  }
+}
+
+export function main(): void {
+  check(read(true) === "value=42");
+  check(read(false).includes("ordinary"));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /matches!\(error\.clone\(\), rt::TsonicError::Project[0-9]+\(_\)\)/u);
+  assert.match(source, /rt::TsonicError::Project[0-9]+\(__tsonic_program_error\)/u);
+  assert.equal(validateGeneratedProject("caught-project-error", result.artifacts, { run: true }).status, 0);
+});
+
 test("array callbacks lower to Rust closures over the canonical JS array carrier", async () => {
   const { result } = compileRust({
     surfaces: ["js"],

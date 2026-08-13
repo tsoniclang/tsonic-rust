@@ -401,6 +401,9 @@ function selectExpressionOperation(
     if (source === undefined || source.callCallee) {
       return;
     }
+    const receiverReference = walk.context.source.navigation.sourceReferenceFor(
+      source.receiver.expression,
+    );
     recordPolicySelection(walk, expression, selectRustCheckedPropertyAccess({
       target: "rust",
       expression,
@@ -409,9 +412,9 @@ function selectExpressionOperation(
       ...(source.receiver.declaration === undefined
         ? {}
         : { sourceReceiverDeclaration: source.receiver.declaration }),
-      ...(source.receiver.valueDeclaration === undefined
+      ...(receiverReference?.declaration === undefined
         ? {}
-        : { sourceReceiverValueDeclaration: source.receiver.valueDeclaration }),
+        : { sourceReceiverValueDeclaration: receiverReference.declaration }),
       accessMode: source.accessMode,
       ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
       ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
@@ -433,14 +436,17 @@ function selectExpressionOperation(
     if (source === undefined || source.callCallee) {
       return;
     }
+    const receiverReference = walk.context.source.navigation.sourceReferenceFor(
+      source.receiver.expression,
+    );
     recordPolicySelection(walk, expression, selectRustCheckedElementAccess({
       target: "rust",
       expression,
       receiver: source.receiver.expression,
       sourceReceiverType: source.receiver.type,
-      ...(source.receiver.valueDeclaration === undefined
+      ...(receiverReference?.declaration === undefined
         ? {}
-        : { sourceReceiverValueDeclaration: source.receiver.valueDeclaration }),
+        : { sourceReceiverValueDeclaration: receiverReference.declaration }),
       accessMode: source.accessMode,
       argument: source.argument.expression,
       sourceArgumentType: source.argument.type,
@@ -1633,6 +1639,11 @@ function resolveCallArgumentOperationPrerequisite(
   sourceFile: SourceFile,
 ): void {
   const kind = walk.context.ast.kindName(argument);
+  const refinement = walk.context.source.semantics.selectValueTypeRefinement(argument);
+  if (refinement.kind === "resolved") {
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    return;
+  }
   if (kind === KindCallExpression || kind === KindNewExpression ||
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindBinaryExpression || kind === KindPrefixUnaryExpression ||
@@ -1640,8 +1651,12 @@ function resolveCallArgumentOperationPrerequisite(
     resolveExpressionCarrier(walk, argument, sourceFile, undefined);
     return;
   }
-  if (kind === KindParenthesizedExpression || kind === KindNonNullExpression ||
-    kind === KindSatisfiesExpression || kind === "KindAsExpression" ||
+  if (kind === KindNonNullExpression) {
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    return;
+  }
+  if (kind === KindParenthesizedExpression || kind === KindSatisfiesExpression ||
+    kind === "KindAsExpression" ||
     kind === "KindTypeAssertionExpression") {
     const inner = Node_Expression(walk.context.ast, argument);
     if (inner !== undefined) {
@@ -2037,13 +2052,12 @@ function resolveExpressionCarrierUncached(
       }
       return setCarrierFact(walk, expression, carrier);
     }
-    case KindSatisfiesExpression:
-    case KindNonNullExpression: {
+    case KindSatisfiesExpression: {
       const inner = Node_Expression(walk.context.ast, expression);
       const carrier = inner === undefined
         ? undefined
         : resolveExpressionCarrier(walk, inner, sourceFile, expected);
-      if (carrier === undefined || (kind === KindNonNullExpression && isRustOptionCarrier(carrier))) {
+      if (carrier === undefined) {
         return undefined;
       }
       const resultCarrier = expected ?? carrier;
@@ -2052,9 +2066,26 @@ function resolveExpressionCarrierUncached(
       }
       setRustOperationFact(walk, expression, {
         kind: "identity-expression",
-        operationId: kind === KindSatisfiesExpression
-          ? "tsonic.rust.syntax.satisfies"
-          : "tsonic.rust.syntax.non-null-identity",
+        operationId: "tsonic.rust.syntax.satisfies",
+        resultCarrier,
+      });
+      return setCarrierFact(walk, expression, resultCarrier);
+    }
+    case KindNonNullExpression: {
+      const inner = Node_Expression(walk.context.ast, expression);
+      const sourceCarrier = inner === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, inner, sourceFile, undefined);
+      if (sourceCarrier === undefined) {
+        return undefined;
+      }
+      const resultCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+      setRustOperationFact(walk, expression, {
+        kind: "non-null-expression",
+        operationId: rustTargetTypeRefEquals(sourceCarrier, resultCarrier)
+          ? "tsonic.rust.syntax.non-null.identity"
+          : "tsonic.rust.syntax.non-null.option-value",
+        sourceCarrier,
         resultCarrier,
       });
       return setCarrierFact(walk, expression, resultCarrier);
