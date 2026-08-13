@@ -229,6 +229,53 @@ export function render(): string {
   validateGeneratedProject("inferred-number-carrier", result.artifacts);
 });
 
+test("strict equality for disjoint nullish carriers preserves operand evaluation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "disjoint_nullish_equality" },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Counter {
+  value: int32 = 0;
+}
+
+function left(counter: Counter): string {
+  counter.value = counter.value * 10 + 1;
+  return "value";
+}
+
+function right(counter: Counter): void {
+  counter.value = counter.value * 10 + 2;
+}
+
+export function main(): void {
+  const counter = new Counter();
+  const equal = left(counter) === void right(counter);
+  check(!equal);
+  check(counter.value === 12);
+
+  const unequal = left(counter) !== void right(counter);
+  check(unequal);
+  check(counter.value === 1212);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let equal = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*false\s*\}\s*\};/u);
+  assert.match(source, /let unequal = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*true\s*\}\s*\};/u);
+  const run = validateGeneratedProject("disjoint-nullish-equality", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
 test("bodyless unsafe contracts require matching implementation ABI facts", () => {
   const { result } = compileRust({
     files: {

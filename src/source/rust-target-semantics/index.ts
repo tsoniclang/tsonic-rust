@@ -104,6 +104,7 @@ import {
   getRustGeneratorProtocol,
   isRustBigIntCarrier,
   isRustBoolCarrier,
+  isRustDefinitelyNullishCarrier,
   isRustIntegerCarrier,
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
@@ -2442,6 +2443,20 @@ function resolvePostCheckBinaryCarrier(
         : "tsonic.rust.option.is-none",
       negated: operatorKind === KindExclamationEqualsEqualsToken,
       optionOperand: isRustOptionCarrier(left) ? "left" : "right",
+    };
+  } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
+      operatorKind === KindExclamationEqualsEqualsToken) &&
+    ((isRustDefinitelyNullishCarrier(left) && right !== undefined &&
+        !isRustDefinitelyNullishCarrier(right) && !isRustOptionCarrier(right)) ||
+      (isRustDefinitelyNullishCarrier(right) && left !== undefined &&
+        !isRustDefinitelyNullishCarrier(left) && !isRustOptionCarrier(left)))) {
+    fact = {
+      kind: "disjoint-equality",
+      operationId: operatorKind === KindExclamationEqualsEqualsToken
+        ? "tsonic.rust.equality.disjoint.not-equal"
+        : "tsonic.rust.equality.disjoint.equal",
+      resultCarrier: rustSourcePrimitiveTargetType("bool"),
+      value: operatorKind === KindExclamationEqualsEqualsToken,
     };
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken) &&

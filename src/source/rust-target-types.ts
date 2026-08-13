@@ -1112,6 +1112,10 @@ export function isRustNullishSourceCarrier(carrier: TargetTypeRef | undefined): 
     carrier.name === "source-nullish";
 }
 
+export function isRustDefinitelyNullishCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return isRustNullishSourceCarrier(carrier) || isRustUndefinedCarrier(carrier);
+}
+
 export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustFutureTargetId, typeArguments: [output] };
 }

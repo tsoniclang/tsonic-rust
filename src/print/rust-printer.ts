@@ -1842,6 +1842,16 @@ function printRustExprFitted(
           grammarPosition,
         );
       }
+      if (expression.left.kind === "binary" &&
+        expression.left.operator === expression.operator) {
+        return printFittedLeftAssociativeBinaryChain(
+          expression,
+          expression.operator,
+          depth,
+          column,
+          grammarPosition,
+        );
+      }
       const renderedLeft = expression.left.kind === "try" &&
           (expression.left.expr.kind === "call" || expression.left.expr.kind === "associated-call") &&
           expression.left.expr.args.length > 1
@@ -1862,24 +1872,6 @@ function printRustExprFitted(
         grammarPosition === "statement" && expressionIsStatementBlockOperand(expression.left),
       );
       if (expression.right.kind === "match") {
-        const separator = ` ${expression.operator} `;
-        const renderedRight = printRustExprFitted(
-          expression.right,
-          depth,
-          lastLineLength(left) + separator.length,
-        );
-        const inline = appendToLastLine(
-          left,
-          `${separator}${printFittedBinaryOperand(
-            expression.right,
-            renderedRight,
-            expression.operator,
-            true,
-          )}`,
-        );
-        if (expression.left.kind !== "binary" && renderedFits(inline, column)) {
-          return inline;
-        }
         const continuationIndent = indentText(depth + 1);
         const continuedRight = printFittedBinaryOperand(
           expression.right,
@@ -2223,6 +2215,54 @@ function printFittedLogicalChain(
     }
   }
   return rendered;
+}
+
+function printFittedLeftAssociativeBinaryChain(
+  expression: Extract<RustExpr, { readonly kind: "binary" }>,
+  operator: string,
+  depth: number,
+  column: number,
+  grammarPosition: RustExpressionGrammarPosition,
+): string {
+  const operands: RustExpr[] = [];
+  collectLeftAssociativeBinaryOperands(expression, operator, operands);
+  const first = operands[0];
+  if (first === undefined) {
+    return printRustExpr(expression);
+  }
+  let rendered = printRustExprFitted(first, depth, column, undefined, grammarPosition);
+  const continuationIndent = indentText(depth + 1);
+  for (const operand of operands.slice(1)) {
+    const right = printFittedBinaryOperand(
+      operand,
+      printRustExprFitted(
+        operand,
+        depth + 1,
+        continuationIndent.length + operator.length + 1,
+      ),
+      operator,
+      true,
+    );
+    rendered += `\n${continuationIndent}${operator} ${firstLine(right)}`;
+    const rest = remainingLines(right);
+    if (rest.length > 0) {
+      rendered += `\n${rest.join("\n")}`;
+    }
+  }
+  return rendered;
+}
+
+function collectLeftAssociativeBinaryOperands(
+  expression: RustExpr,
+  operator: string,
+  operands: RustExpr[],
+): void {
+  if (expression.kind === "binary" && expression.operator === operator) {
+    collectLeftAssociativeBinaryOperands(expression.left, operator, operands);
+    operands.push(expression.right);
+    return;
+  }
+  operands.push(expression);
 }
 
 function printRustFormatArgument(

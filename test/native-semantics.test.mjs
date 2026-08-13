@@ -660,7 +660,7 @@ export function some_value(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32 \{/u);
-  assert.match(text, /match value \{[\s\S]*Some\(__tsonic_coalesced_value(?:_[0-9]+)?\) => __tsonic_coalesced_value(?:_[0-9]+)?,[\s\S]*None => 0,/u);
+  assert.match(text, /rt::option_coalesce\(value, std::convert::identity, \|\| 0\)/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
   assert.match(text, /value_or_zero\(None\)/u);
 });
@@ -716,7 +716,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /match left \{[\s\S]*Some\(__tsonic_coalesced_value(?:_[0-9]+)?\) => Some\(__tsonic_coalesced_value(?:_[0-9]+)?\),[\s\S]*None => right,/u);
+  assert.match(text, /rt::option_coalesce\(left, Some, \|\| right\)/u);
   assert.equal(validateGeneratedProject("nullish-lazy-proof", result.artifacts, { run: true }).status, 0);
 });
 

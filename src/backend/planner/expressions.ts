@@ -2464,7 +2464,7 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const rightNode = BinaryExpression_Right(context.input.ast, node);
     const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
     const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
-    if (left === undefined || right === undefined || context.syntheticNames === undefined ||
+    if (left === undefined || right === undefined ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.option-coalesce-carrier") ||
       !selectedOperationMatches(
         context.input.facts.getSelectedTargetOperator(node),
@@ -2475,23 +2475,25 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       )) {
       return undefined;
     }
-    const valueName = allocateRustSyntheticName(context.syntheticNames, "coalesced_value");
+    context.usedAliases?.add("rt");
+    const fallback: RustExpr = right.kind === "call" && right.args.length === 0
+      ? { kind: "path", path: right.path }
+      : {
+          kind: "closure",
+          params: [],
+          body: right,
+        };
     return {
-      kind: "match",
-      expression: left,
-      arms: [{
-        pattern: {
-          kind: "tuple-variant",
-          path: "Some",
-          elements: [{ kind: "binding", name: valueName }],
+      kind: "call",
+      path: "rt::option_coalesce",
+      args: [
+        left,
+        {
+          kind: "path",
+          path: fact.rightOperand === "option" ? "Some" : "std::convert::identity",
         },
-        expression: fact.rightOperand === "option"
-          ? { kind: "call", path: "Some", args: [{ kind: "path", path: valueName }] }
-          : { kind: "path", path: valueName },
-      }, {
-        pattern: { kind: "path", path: "None" },
-        expression: right,
-      }],
+        fallback,
+      ],
     };
   }
   if (fact !== undefined && fact.kind === "option-check") {
@@ -2523,6 +2525,39 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       right: fact.optionOperand === "left"
         ? { kind: "call", path: "Some", args: [value] }
         : option,
+    };
+  }
+  if (fact !== undefined && fact.kind === "disjoint-equality") {
+    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.ast, node);
+    const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
+    const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
+    if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.disjoint-equality-carrier") ||
+      !selectedOperationMatches(
+        context.input.facts.getSelectedTargetOperator(node),
+        fact.operationId,
+        "operator",
+        fact.resultCarrier,
+        rustTargetOperationText(fact),
+      )) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.disjoint-equality-selected-evidence",
+        "Disjoint equality conflicts with its exact finalized source operation evidence.",
+      ));
+      return undefined;
+    }
+    return {
+      kind: "evaluate-then",
+      effect: left,
+      discard: isRustUnitCarrier(expressionCarrier(leftNode, context)) ? "unit" : "value",
+      value: {
+        kind: "evaluate-then",
+        effect: right,
+        discard: isRustUnitCarrier(expressionCarrier(rightNode, context)) ? "unit" : "value",
+        value: { kind: "bool-literal", value: fact.value },
+      },
     };
   }
   if (fact === undefined) {

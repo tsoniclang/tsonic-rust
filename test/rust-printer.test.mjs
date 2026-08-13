@@ -920,6 +920,51 @@ test("long logical chains use rustfmt-compatible operand-per-line layout", () =>
   assert.match(text, /if fibonacci\(0\) != 0\n        \|\| fibonacci\(1\) != 1\n        \|\| fibonacci\(2\) != 2/u);
 });
 
+test("binary expressions place multiline match operands on a continuation line", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "with_default",
+      visibility: "public",
+      params: [],
+      returnType: { kind: "primitive", name: "i32" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "binary",
+            operator: "+",
+            left: {
+              kind: "binary",
+              operator: "+",
+              left: { kind: "path", path: "base" },
+              right: { kind: "path", path: "value" },
+            },
+            right: {
+              kind: "match",
+              expression: { kind: "path", path: "delta" },
+              arms: [{
+                pattern: {
+                  kind: "tuple-variant",
+                  path: "Some",
+                  elements: [{ kind: "binding", name: "selected" }],
+                },
+                expression: { kind: "path", path: "selected" },
+              }, {
+                pattern: { kind: "path", path: "None" },
+                expression: { kind: "int-literal", text: "0" },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /base\n        \+ value\n        \+ \(match delta \{/u);
+});
+
 test("multiline mixed logical groups preserve source precedence", () => {
   const call = (suffix) => ({
     kind: "call",
