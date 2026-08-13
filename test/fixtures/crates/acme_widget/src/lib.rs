@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use tsonic_rust_runtime::{TsonicError, TsonicResult};
 
 pub const ANSWER: i32 = 42;
 
@@ -45,8 +46,38 @@ impl<T> Widget<T> {
     }
 }
 
+pub struct CheckedWidget {
+    pub value: i32,
+}
+
+impl CheckedWidget {
+    pub fn new(value: i32) -> TsonicResult<Self> {
+        if value < 0 {
+            Err(TsonicError::unsupported("negative widget value"))
+        } else {
+            Ok(Self { value })
+        }
+    }
+}
+
 pub fn double(value: i32) -> i32 {
     value * 2
+}
+
+pub fn checked_double(value: i32) -> TsonicResult<i32> {
+    if value < 0 {
+        Err(TsonicError::unsupported("negative input"))
+    } else {
+        Ok(value * 2)
+    }
+}
+
+pub fn foreign_result(value: i32) -> Result<i32, String> {
+    if value < 0 {
+        Err(String::from("negative input"))
+    } else {
+        Ok(value)
+    }
 }
 
 pub fn identity<T>(value: T) -> T {

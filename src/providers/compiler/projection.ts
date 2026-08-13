@@ -303,8 +303,9 @@ function projectExport(
     }
   }
   for (const method of exported.methods) {
+    const result = compilerFunctionResult(method.result);
     const constructor = exported.kind === "struct" && method.receiver === undefined &&
-      method.name === "new" && method.result.kind === "self";
+      method.name === "new" && result.type.kind === "self";
     const projected = projectFunction(method, typeContext, exportId, constructor);
     members.push(Object.freeze({
       id: projected.memberId!,
@@ -362,10 +363,11 @@ function projectFunction(
     parameterCarriers.push(targetTypeFor(passing.type, context, "parameter"));
     argumentModes.push(passing.targetMode);
   }
+  const result = compilerFunctionResult(fn.result);
   const resultCarrier = constructor
     ? requireCurrentType(context).carrier
-    : targetTypeFor(fn.result, context, "result");
-  const returnType = constructor ? undefined : sourceTypeFor(fn.result, context, "result");
+    : targetTypeFor(result.type, context, "result");
+  const returnType = constructor ? undefined : sourceTypeFor(result.type, context, "result");
   const methodTypeParameters = fn.typeParameters.map((parameter) => parameter.name);
   const allTypeParameters = uniqueText([
     ...(context.currentType?.typeParameters ?? []),
@@ -409,9 +411,55 @@ function projectFunction(
         : { receiverCarrier: context.currentType.carrier }),
       ...(allTypeParameters.length === 0 ? {} : { typeParameters: allTypeParameters }),
       ...(fn.asynchronous ? { isAsync: true } : {}),
+      ...(result.fallible ? { isFallible: true } : {}),
       ...(fn.unsafe ? { isUnsafe: true } : {}),
     }),
   };
+}
+
+function compilerFunctionResult(type: RustCompilerType): {
+  readonly type: RustCompilerType;
+  readonly fallible: boolean;
+} {
+  if (type.kind === "path" && isTsonicResultPath(type)) {
+    return { type: type.typeArguments[0]!, fallible: true };
+  }
+  if (type.kind !== "path" || !isRustResultPath(type)) {
+    return { type, fallible: false };
+  }
+  const [success, error] = type.typeArguments;
+  if (success === undefined || error === undefined || !isTsonicErrorPath(error)) {
+    throw new Error(
+      `Rust result '${rustCompilerTypeText(type)}' cannot cross the source boundary; ` +
+      "fallible compiler-provider functions must use tsonic_rust_runtime::TsonicResult<T>.",
+    );
+  }
+  return { type: success, fallible: true };
+}
+
+function isTsonicResultPath(type: Extract<RustCompilerType, { readonly kind: "path" }>): boolean {
+  return type.crateName === "tsonic_rust_runtime" &&
+    type.modulePath.length === 1 &&
+    type.modulePath[0] === "error" &&
+    type.name === "TsonicResult" &&
+    type.typeArguments.length === 1;
+}
+
+function isRustResultPath(type: Extract<RustCompilerType, { readonly kind: "path" }>): boolean {
+  return type.crateName === "core" &&
+    type.modulePath.length === 1 &&
+    type.modulePath[0] === "result" &&
+    type.name === "Result" &&
+    type.typeArguments.length === 2;
+}
+
+function isTsonicErrorPath(type: RustCompilerType): boolean {
+  return type.kind === "path" &&
+    type.crateName === "tsonic_rust_runtime" &&
+    type.modulePath.length === 1 &&
+    type.modulePath[0] === "error" &&
+    type.name === "TsonicError" &&
+    type.typeArguments.length === 0;
 }
 
 function sourceTypeFor(
