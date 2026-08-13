@@ -1815,13 +1815,13 @@ function printRustExprFitted(
         return flat;
       }
       const receiver = printRustExprFitted(expression.receiver, depth, column);
-      const continuationIndent = indentText(depth + 1);
+      const opening = appendToLastLine(receiver, "[");
       const index = printRustExprFitted(
         expression.index,
-        depth + 1,
-        continuationIndent.length + 1,
+        depth,
+        lastLineLength(opening),
       );
-      return `${receiver}\n${continuationIndent}${appendToLastLine(`[${index}`, "]")}`;
+      return appendToLastLine(`${opening}${index}`, "]");
     }
     case "unary": {
       const operand = printRustExprFitted(expression.operand, depth, column + 1);

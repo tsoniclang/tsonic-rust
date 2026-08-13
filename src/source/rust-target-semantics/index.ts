@@ -442,6 +442,7 @@ function selectExpressionOperation(
         : { sourceReceiverValueDeclaration: source.receiver.valueDeclaration }),
       accessMode: source.accessMode,
       argument: source.argument.expression,
+      sourceArgumentType: source.argument.type,
       ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
       ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
       ...(source.selectedElementIndex === undefined ? {} : { sourceSelectedElementIndex: source.selectedElementIndex }),

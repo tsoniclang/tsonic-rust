@@ -154,6 +154,30 @@ export function pick(pair: [int32, int32], flag: boolean): int32 {
   }]);
 });
 
+test("flow-narrowed indexes consume the exact selected argument type", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function read(values: readonly int32[], index: int32 | undefined): int32 {
+  if (index !== undefined) {
+    return values[index];
+  }
+  return 0;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /i32_to_usize\(match index\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => \*__tsonic_flow_value/u,
+  );
+  validateGeneratedProject("selected-flow-narrowed-index", result.artifacts);
+});
+
 test("for-of lowers only from selected iteration element evidence", () => {
   const { result } = compileRust({
     files: {

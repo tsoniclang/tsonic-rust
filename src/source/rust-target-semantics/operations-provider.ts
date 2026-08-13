@@ -659,8 +659,17 @@ function selectedSourceValueCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
-  const stored = resolveRustTargetTypeRef(value.expression, context, options);
-  const selected = resolveRustTargetTypeRef(value.type, context, options);
+  return selectedValueCarrier(value.expression, value.type, context, options);
+}
+
+function selectedValueCarrier(
+  expression: ExtensionFactSubject,
+  selectedType: ExtensionFactSubject,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  const stored = resolveRustTargetTypeRef(expression, context, options);
+  const selected = resolveRustTargetTypeRef(selectedType, context, options);
   if (stored === undefined || selected === undefined ||
     rustTargetTypeRefEquals(stored, selected)) {
     return selected ?? stored;
@@ -3272,7 +3281,12 @@ export function selectRustCheckedElementAccess(
     if (!isRustCopyCarrier(fixedReceiver.element)) {
       return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY", "Dynamic fixed-array element access requires an exact Copy element carrier so a borrowed Rust index result can preserve source value semantics.");
     }
-    const dynamicIndexCarrier = resolveRustTargetTypeRef(request.argument, context, options);
+    const dynamicIndexCarrier = selectedValueCarrier(
+      request.argument,
+      request.sourceArgumentType,
+      context,
+      options,
+    );
     if (dynamicIndexCarrier === undefined ||
       !rustTargetTypeRefEquals(dynamicIndexCarrier, rustSourcePrimitiveTargetType("int32"))) {
       return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED", "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.");
@@ -3294,6 +3308,7 @@ export function selectRustCheckedElementAccess(
       context,
       options,
       selectedReceiverCarrier,
+      [dynamicIndexCarrier],
     );
     if (fact === undefined) {
       return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", "Dynamic fixed-array indexing cannot finalize one total Rust index ABI.");
@@ -3340,12 +3355,18 @@ export function selectRustCheckedElementAccess(
     if (!options.jsEnabled) {
       return rejectSelectedOperation(request.expression, context, "RUST_JS_SURFACE_REQUIRED", "The selected index signature belongs to the explicit JavaScript source profile, which is not active.");
     }
+    const selectedArgumentCarrier = selectedValueCarrier(
+      request.argument,
+      request.sourceArgumentType,
+      context,
+      options,
+    );
     const selection = selectJsSurfaceOperation({
       ownerName: jsIdentity.ownerName,
       memberName: jsIdentity.memberName,
       operationKind: "indexer",
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
-      argumentCarriers: [resolveRustTargetTypeRef(request.argument, context, options)],
+      argumentCarriers: [selectedArgumentCarrier],
       argumentCompatibility: selectedArgumentCompatibility([request.argument], context, options),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
@@ -3355,11 +3376,19 @@ export function selectRustCheckedElementAccess(
         "RUST_SELECTED_OPERATION_UNSUPPORTED",
         `The selected JavaScript index signature '${jsIdentity.ownerName}' has no closed Rust operation row for this receiver carrier.`,
         [{
-          message: `receiver=${JSON.stringify(receiverCarrier)}; argument=${JSON.stringify(resolveRustTargetTypeRef(request.argument, context, options))}`,
+          message: `receiver=${JSON.stringify(receiverCarrier)}; argument=${JSON.stringify(selectedArgumentCarrier)}`,
         }],
       );
     }
-    const fact = finalizeProviderOperationFromSubjects(selection.fact, request.receiver, [request.argument], context, options, selectedReceiverCarrier);
+    const fact = finalizeProviderOperationFromSubjects(
+      selection.fact,
+      request.receiver,
+      [request.argument],
+      context,
+      options,
+      selectedReceiverCarrier,
+      [selectedArgumentCarrier],
+    );
     if (fact === undefined) {
       return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `The selected JavaScript indexer '${jsIdentity.ownerName}.${jsIdentity.memberName}' cannot finalize one total Rust operation ABI.`);
     }
@@ -3865,9 +3894,12 @@ function finalizeProviderOperationFromSubjects(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
   selectedReceiverCarrier?: TargetTypeRef,
+  selectedArgumentCarriers?: readonly (TargetTypeRef | undefined)[],
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
-  const rawArgumentCarriers = sourceArguments.map((argument) =>
-    resolveRustTargetTypeRef(argument, context, options));
+  const rawArgumentCarriers = sourceArguments.map((argument, index) =>
+    selectedArgumentCarriers?.[index] ??
+      rustEffectiveValueCarrier(context.facts, argument) ??
+      resolveRustTargetTypeRef(argument, context, options));
   const rawReceiverCarrier = selectedReceiverCarrier ?? (sourceReceiver === undefined
     ? undefined
     : resolveRustTargetTypeRef(sourceReceiver, context, options));
@@ -3880,7 +3912,9 @@ function finalizeProviderOperationFromSubjects(
   }
   const instantiatedTemplate = instantiation.template;
   const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
-    const resolved = resolveRustTargetTypeRef(argument, context, options);
+    const resolved = selectedArgumentCarriers?.[index] ??
+      rustEffectiveValueCarrier(context.facts, argument) ??
+      resolveRustTargetTypeRef(argument, context, options);
     return normalizeSelectedLiteralCarrier(argument, resolved, instantiatedTemplate.parameterCarriers?.[index], context, options);
   });
   if (sourceArgumentCarriers.some((carrier) => carrier === undefined)) {

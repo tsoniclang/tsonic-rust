@@ -144,6 +144,7 @@ export interface RustCheckedPropertySelectionInput {
 export interface RustCheckedElementSelectionInput
   extends RustCheckedPropertySelectionInput {
   readonly argument: Node;
+  readonly sourceArgumentType: Type;
   readonly sourceSelectedElementIndex?: number;
 }
 

@@ -278,7 +278,7 @@ function applyRustContextualValueConversion(
     ));
     return undefined;
   }
-  return applyRustValueConversion(context, expression, fact.conversion, node);
+  return applyRustValueConversion(context, expression, fact.conversion, node, false);
 }
 
 function rustExpressionUnsafeRequirement(
@@ -2759,7 +2759,7 @@ export function applyRustValueConversion(
   if (validateSourceCarrier) {
     const sourceCarrier = node === undefined
       ? undefined
-      : context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+      : rustEffectiveValueCarrier(context.input.facts, node);
     if (sourceCarrier === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node ?? context.sourceFile),
