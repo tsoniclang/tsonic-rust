@@ -1521,7 +1521,7 @@ function resolveExpressionOperationDependencies(
   const { ast } = walk.context;
   const kind = ast.kindName(expression);
   if (kind === KindBinaryExpression) {
-    resolveBinaryOperandCarriers(walk, expression, sourceFile, expected);
+    resolveBinaryOperandCarriers(walk, expression, sourceFile, expected, true);
     return;
   }
   if (kind === KindConditionalExpression) {
@@ -3782,7 +3782,8 @@ function resolveArrayLiteralCarrier(
       }
     }
   }
-  if (expectedElement === undefined && presentElements.every((element) => ast.kindName(element) === KindNumericLiteral)) {
+  if (expectedElement === undefined && presentElements.length > 0 &&
+    presentElements.every((element) => ast.kindName(element) === KindNumericLiteral)) {
     expectedElement = rustSourcePrimitiveTargetType("float64");
   }
   if (expectedElement === undefined) {

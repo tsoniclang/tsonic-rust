@@ -207,9 +207,16 @@ export function main(): void {
   const selected = values.get("selected");
   check(selected !== undefined && selected.value === 3 && selected.label() === "detailed");
 
-  const ordered: Item[] = [];
+  let ordered: Item[] = [];
   ordered.push(new DetailedItem(4));
   check(ordered.length === 1 && ordered[0]!.value === 4 && ordered[0]!.label() === "detailed");
+  ordered = [];
+  check(ordered.length === 0);
+
+  let integers: int32[] = [];
+  check(integers.length === 0);
+  integers = [0];
+  check(integers.length === 1 && integers[0] === 0);
 }
 `,
     },
