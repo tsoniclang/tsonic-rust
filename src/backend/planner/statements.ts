@@ -225,7 +225,7 @@ export function planBlockLike(node: Node, context: RustPlanContext): RustBlock |
   return planStatementSequence(children, node, context);
 }
 
-function planStatementSequence(
+export function planStatementSequence(
   children: readonly (Node | undefined)[],
   diagnosticNode: Node,
   context: RustPlanContext,
@@ -619,6 +619,9 @@ function planLoopExitStatement(
     return undefined;
   }
   target.used.value = true;
+  if (completion === "break" && target.kind === "loop") {
+    target.breakUsed.value = true;
+  }
   if (context.completionBoundary === target.resourceBoundary) {
     return completion === "continue"
       ? [...(target.kind === "loop" ? target.continuePrelude : []), { kind: "continue", label: target.label }]
@@ -934,7 +937,10 @@ function planExpressionAsStatement(
         return undefined;
       }
       const sourceField = context.input.facts.getFact(left, rustTargetOperationFactKey);
-      const target = ast.kindName(left) === KindIdentifier
+      const storageOverride = context.expressionOverrides?.get(left);
+      const target = storageOverride?.valueForm === "storage"
+        ? storageOverride.expression
+        : ast.kindName(left) === KindIdentifier
         ? (() => {
             const path = rustSourceName(context, ast.text(left));
             return isValidRustIdentifier(path) ? { kind: "path" as const, path } : undefined;
@@ -1117,7 +1123,7 @@ function planExpressionAsStatement(
               },
             }];
       }
-      if (sourceField?.kind === "source-field") {
+      if (storageOverride?.valueForm !== "storage" && sourceField?.kind === "source-field") {
         if (!sourceFieldSelectedOperationMatches(left, sourceField, context)) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, left),
@@ -2050,12 +2056,22 @@ function planWhileStatement(
     IterationStatement_Statement(context.input.ast, node),
     withRustControlTarget(context, target),
   );
-  return body === undefined ? undefined : [{
-    kind: "while",
-    ...(target.used.value ? { label: target.label } : {}),
-    condition: planned,
-    body,
-  }];
+  if (body === undefined) {
+    return undefined;
+  }
+  return planned.kind === "bool-literal" && planned.value && !target.breakUsed.value
+    ? [{
+        kind: "loop",
+        ...(target.used.value ? { label: target.label } : {}),
+        body,
+        neverFallsThrough: true,
+      }]
+    : [{
+        kind: "while",
+        ...(target.used.value ? { label: target.label } : {}),
+        condition: planned,
+        body,
+      }];
 }
 
 function planDoStatement(
@@ -2234,6 +2250,7 @@ function createRustLoopTarget(
       ? {}
       : { resourceBoundary: context.completionBoundary }),
     used: { value: false },
+    breakUsed: { value: false },
     continuePrelude,
   };
   context.controlFlow.nextLoopId += 1;

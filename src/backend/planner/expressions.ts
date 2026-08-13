@@ -95,7 +95,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustUnitCarrier, rustCallableProtocol, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -174,7 +174,23 @@ export function planExpression(
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   if (override !== undefined) {
-    return override.expression;
+    if (override.valueForm !== "storage" || isRustCopyCarrier(override.carrier)) {
+      return override.expression;
+    }
+    if (!rustCarrierSupportsClone(override.carrier)) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.preconstruction-field-read",
+        "A preconstruction field value must be Copy or Clone when read before the complete object exists.",
+      ));
+      return undefined;
+    }
+    return {
+      kind: "method-call",
+      receiver: override.expression,
+      method: "clone",
+      args: [],
+    };
   }
   const planned = planRawExpression(node, context, resultUse);
   if (planned === undefined || resultUse === "discarded") {
@@ -3420,9 +3436,14 @@ export function planFinalizedSourceInput(
   if (plannedExpression === undefined) {
     return undefined;
   }
+  const directStorage = expressionOverride?.valueForm === "storage" &&
+      input.conversion.kind === "identity" &&
+      (position === "target-receiver" || input.mode !== "value")
+    ? expressionOverride.expression
+    : undefined;
   const rawExpression = input.conversion.kind === "identity" &&
       (position === "target-receiver" || input.mode !== "value")
-    ? planRustNonConsumingValue(sourceNode, plannedExpression, context)
+    ? directStorage ?? planRustNonConsumingValue(sourceNode, plannedExpression, context)
     : plannedExpression;
   if (!directCarrierMatch) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -3806,9 +3827,14 @@ function planSelectedSourceCall(
         );
         break;
       }
-      const receiver = receiverNode === undefined
+      const receiverOverride = receiverNode === undefined
         ? undefined
-        : planExpression(receiverNode, context);
+        : context.expressionOverrides?.get(receiverNode);
+      const receiver = receiverOverride?.valueForm === "storage"
+        ? receiverOverride.expression
+        : receiverNode === undefined
+          ? undefined
+          : planExpression(receiverNode, context);
       if (receiver !== undefined) {
         planned = {
           kind: "method-call",

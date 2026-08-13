@@ -1,11 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import {
-  BinaryExpression_Left,
-  BinaryExpression_OperatorToken,
-  BinaryExpression_Right,
-  KindEqualsToken,
   KindIdentifier,
-  Node_Expression,
   Node_Initializer,
   Node_Name,
   Node_Type,
@@ -20,7 +15,7 @@ import type {
 } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
-import { planBlockLike } from "./statements.js";
+import { planBlockLike, planStatementSequence } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
@@ -50,7 +45,7 @@ import {
 import { rustProjectTypeParameters } from "./project-polymorphism-names.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
-  prepareRustPreconstructionExpression,
+  prepareRustPreconstructionNode,
   type RustPreconstructionFieldValue,
 } from "./preconstruction-fields.js";
 
@@ -346,10 +341,33 @@ function planConstructor(
     return undefined;
   }
   const values = new Map<Node, RustExpr>();
+  const fieldSlots: RustPreconstructionFieldValue[] = [];
   const availableFields: RustPreconstructionFieldValue[] = [];
   const statements: RustStmt[] = [...parameterStatements];
+  for (const field of fields) {
+    const valueName = allocateRustSyntheticName(
+      syntheticNames,
+      `field_${rustLocalBindingName(field.targetName)}`,
+    );
+    const expression: RustExpr = { kind: "path", path: valueName };
+    const slot = {
+      declaration: field.declaration,
+      storageIndex: field.storageIndex,
+      carrier: field.carrier,
+      expression,
+    };
+    statements.push({
+      kind: "let",
+      name: valueName,
+      mutable: true,
+      type: field.type,
+      attrs: ["#[allow(unused_mut)]"],
+    });
+    values.set(field.declaration, expression);
+    fieldSlots.push(slot);
+  }
   const evaluateField = (field: PlannedProjectObjectField, expression: Node): boolean => {
-    const expressionContext = prepareRustPreconstructionExpression(
+    const expressionContext = prepareRustPreconstructionNode(
       expression,
       availableFields,
       constructorContext,
@@ -361,25 +379,17 @@ function planConstructor(
     if (value === undefined) {
       return false;
     }
-    const valueName = allocateRustSyntheticName(
-      syntheticNames,
-      `field_${rustLocalBindingName(field.targetName)}`,
-    );
-    statements.push({ kind: "let", name: valueName, mutable: false, init: value });
-    const fieldValue: RustExpr = { kind: "path", path: valueName };
-    values.set(field.declaration, fieldValue);
+    const slot = fieldSlots.find((candidate) => candidate.declaration === field.declaration);
+    if (slot === undefined) {
+      return false;
+    }
+    statements.push({ kind: "assign", target: slot.expression, operator: "=", value });
     const existing = availableFields.findIndex((candidate) =>
       candidate.declaration === field.declaration);
-    const available = {
-      declaration: field.declaration,
-      storageIndex: field.storageIndex,
-      carrier: field.carrier,
-      expression: fieldValue,
-    };
     if (existing < 0) {
-      availableFields.push(available);
+      availableFields.push(slot);
     } else {
-      availableFields[existing] = available;
+      availableFields[existing] = slot;
     }
     return true;
   };
@@ -389,53 +399,20 @@ function planConstructor(
     }
   }
   const bodyStatements = body === undefined ? [] : ast.statements(body);
-  for (const statement of bodyStatements) {
-    if (statement === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, body ?? classDeclaration),
-        "rust.backend.constructor-statement",
-        "Constructor body contains an undefined statement slot.",
-      ));
+  if (body !== undefined) {
+    const bodyContext = prepareRustPreconstructionNode(
+      body,
+      fieldSlots,
+      constructorContext,
+    );
+    if (bodyContext === undefined) {
       return undefined;
     }
-    const expression = ast.kindName(statement) === "KindExpressionStatement" ? Node_Expression(ast, statement) : undefined;
-    const operatorToken = expression === undefined ? undefined : BinaryExpression_OperatorToken(ast, expression);
-    const left = expression === undefined ? undefined : BinaryExpression_Left(ast, expression);
-    const right = expression === undefined ? undefined : BinaryExpression_Right(ast, expression);
-    const receiver = left === undefined ? undefined : Node_Expression(ast, left);
-    const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
-    const selectedDeclaration = left === undefined
-      ? undefined
-      : context.input.facts.getSelectedTargetProperty(left)?.provenance?.sourceSelectedDeclaration;
-    const field = fields.find((candidate) => candidate.declaration === selectedDeclaration);
-    const isFieldInit =
-      expression !== undefined &&
-      operatorToken !== undefined &&
-      ast.kindName(operatorToken) === KindEqualsToken &&
-      left !== undefined &&
-      ast.kindName(left) === "KindPropertyAccessExpression" &&
-      (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") &&
-      field !== undefined &&
-      right !== undefined;
-    if (!isFieldInit) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, statement),
-        "rust.backend.class",
-        "Constructors support field initialization statements whose exact target is `this.<field>`.",
-      ));
+    const bodyPlan = planStatementSequence(bodyStatements, body, bodyContext);
+    if (bodyPlan === undefined) {
       return undefined;
     }
-    if (!evaluateField(field, right)) {
-      return undefined;
-    }
-  }
-  if (values.size !== fields.length) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, member ?? classDeclaration),
-      "rust.backend.class",
-      "Construction must initialize every declared field through a field initializer or constructor assignment.",
-    ));
-    return undefined;
+    statements.push(...bodyPlan.statements);
   }
   const fieldValues: RustExpr[] = [];
   for (const field of fields) {

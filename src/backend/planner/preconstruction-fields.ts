@@ -7,10 +7,6 @@ import {
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import { rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
-import {
-  isRustCopyCarrier,
-  rustCarrierSupportsClone,
-} from "../../source/rust-target-types.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import { unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
@@ -36,8 +32,8 @@ export function rustTupleFieldPath(
   );
 }
 
-export function prepareRustPreconstructionExpression(
-  expression: Node,
+export function prepareRustPreconstructionNode(
+  root: Node,
   availableFields: readonly RustPreconstructionFieldValue[],
   context: RustPlanContext,
   resolveSelectedDeclaration?: (declaration: Node) => Node | undefined,
@@ -85,28 +81,10 @@ export function prepareRustPreconstructionExpression(
           };
           return;
         }
-        const planned = isRustCopyCarrier(field.carrier)
-          ? field.expression
-          : rustCarrierSupportsClone(field.carrier)
-            ? {
-                kind: "method-call" as const,
-                receiver: field.expression,
-                method: "clone",
-                args: [],
-              }
-            : undefined;
-        if (planned === undefined) {
-          failure = {
-            node,
-            message:
-              "Preconstruction field reads require a Copy or Clone Rust carrier so the eventual object field remains initialized.",
-          };
-          return;
-        }
         const override: RustEffectiveExpressionOverride = {
-          expression: planned,
+          expression: field.expression,
           carrier: field.carrier,
-          valueForm: "value",
+          valueForm: "storage",
         };
         overrides.set(node, override);
         return;
@@ -127,7 +105,7 @@ export function prepareRustPreconstructionExpression(
     });
   };
 
-  visit(expression);
+  visit(root);
   if (failure !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, failure.node),

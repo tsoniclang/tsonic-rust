@@ -10,7 +10,7 @@ import type { RustBlock, RustExpr, RustType } from "../rust-ast/nodes.js";
 export interface RustEffectiveExpressionOverride {
   readonly expression: RustExpr;
   readonly carrier: TargetTypeRef;
-  readonly valueForm: "value" | "shared-reference";
+  readonly valueForm: "value" | "shared-reference" | "storage";
 }
 
 export interface RustCapturedBinding {
@@ -31,6 +31,7 @@ export type RustControlTarget =
   | (RustControlTargetBase & {
       readonly kind: "loop";
       readonly continuePrelude: readonly import("../rust-ast/nodes.js").RustStmt[];
+      readonly breakUsed: { value: boolean };
     })
   | (RustControlTargetBase & { readonly kind: "switch" | "label" });
 

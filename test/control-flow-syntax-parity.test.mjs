@@ -4,6 +4,35 @@ import { test } from "node:test";
 import { artifactText, compileRust } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
+test("constant-true loops with no selected break satisfy value-return flow", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "constant_loop_flow" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function reach(limit: int32): int32 {
+  let current: int32 = 0;
+  while (true) {
+    if (current === limit) return current;
+    current++;
+  }
+}
+
+export function main(): void {
+  void reach(3);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /loop \{/u);
+  assert.doesNotMatch(source, /while true/u);
+  validateGeneratedProject("control-flow-constant-loop", result.artifacts);
+});
+
 test("do-while evaluates its condition after normal and continue paths", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

@@ -1,10 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import {
-  BinaryExpression_Left,
-  BinaryExpression_OperatorToken,
-  BinaryExpression_Right,
   KindCallExpression,
-  KindEqualsToken,
   Node_Expression,
 } from "../../common/source-ast.js";
 import type {
@@ -64,10 +60,11 @@ import {
   rustSafetyAttributesForDeclaration,
 } from "./explicit-safety.js";
 import {
-  prepareRustPreconstructionExpression,
+  prepareRustPreconstructionNode,
   rustTupleFieldPath,
   type RustPreconstructionFieldValue,
 } from "./preconstruction-fields.js";
+import { planStatementSequence } from "./statements.js";
 
 export function planProjectClassConstructor(
   definition: RustProjectTypeDefinition,
@@ -164,28 +161,42 @@ export function planProjectClassConstructor(
     return undefined;
   }
   const values = new Map<Node, RustExpr>();
+  const fieldSlots: RustPreconstructionFieldValue[] = [];
   const availableFields: RustPreconstructionFieldValue[] = [];
-  const bindInitializedField = (
-    field: ProjectFieldPlan,
-    value: RustExpr,
-    nameHint: string = `field_${field.sourceName}`,
-  ): void => {
-    const name = allocateRustSyntheticName(syntheticNames, nameHint);
-    statements.push({ kind: "let", name, mutable: false, init: value });
-    const fieldValue: RustExpr = { kind: "path", path: name };
-    values.set(field.declaration, fieldValue);
-    const existing = availableFields.findIndex((candidate) =>
-      candidate.declaration === field.declaration);
-    const available = {
+  for (const field of ownLayer.fields) {
+    const name = allocateRustSyntheticName(syntheticNames, `field_${field.sourceName}`);
+    const expression: RustExpr = { kind: "path", path: name };
+    const slot = {
       declaration: field.declaration,
       storageIndex: field.storageIndex,
       carrier: field.carrier,
-      expression: fieldValue,
+      expression,
     };
+    statements.push({
+      kind: "let",
+      name,
+      mutable: true,
+      type: field.type,
+      attrs: ["#[allow(unused_mut)]"],
+    });
+    values.set(field.declaration, expression);
+    fieldSlots.push(slot);
+  }
+  const bindInitializedField = (
+    field: ProjectFieldPlan,
+    value: RustExpr,
+  ): void => {
+    const slot = fieldSlots.find((candidate) => candidate.declaration === field.declaration);
+    if (slot === undefined) {
+      return;
+    }
+    statements.push({ kind: "assign", target: slot.expression, operator: "=", value });
+    const existing = availableFields.findIndex((candidate) =>
+      candidate.declaration === field.declaration);
     if (existing < 0) {
-      availableFields.push(available);
+      availableFields.push(slot);
     } else {
-      availableFields[existing] = available;
+      availableFields[existing] = slot;
     }
   };
   let bodyIndex = 0;
@@ -219,7 +230,8 @@ export function planProjectClassConstructor(
     statements.push({
       kind: "let",
       name: "__tsonic_base_state",
-      mutable: false,
+      mutable: true,
+      attrs: ["#[allow(unused_mut)]"],
       init: {
         kind: "associated-call",
         owner: baseType,
@@ -273,7 +285,7 @@ export function planProjectClassConstructor(
             method: "to_string",
             args: [],
           };
-      bindInitializedField(field, value, `external_${field.sourceName}`);
+      bindInitializedField(field, value);
     }
     bodyIndex = 1;
   }
@@ -320,7 +332,7 @@ export function planProjectClassConstructor(
       : undefined;
   };
   const evaluateField = (field: ProjectFieldPlan, expression: Node): boolean => {
-    const expressionContext = prepareRustPreconstructionExpression(
+    const expressionContext = prepareRustPreconstructionNode(
       expression,
       availableFields,
       initializationContext,
@@ -341,41 +353,32 @@ export function planProjectClassConstructor(
       return undefined;
     }
   }
-  for (const statement of bodyStatements.slice(bodyIndex) as readonly Node[]) {
-    const expression = Node_Expression(context.input.ast, statement);
-    const operator = expression === undefined
-      ? undefined
-      : BinaryExpression_OperatorToken(context.input.ast, expression);
-    const left = expression === undefined ? undefined : BinaryExpression_Left(context.input.ast, expression);
-    const right = expression === undefined ? undefined : BinaryExpression_Right(context.input.ast, expression);
-    const receiver = left === undefined ? undefined : Node_Expression(context.input.ast, left);
-    const selectedDeclaration = left === undefined
-      ? undefined
-      : context.input.facts.getSelectedTargetProperty(left)?.provenance?.sourceSelectedDeclaration;
-    const field = ownLayer.fields.find((candidate) =>
-      candidate.declaration === selectedDeclaration);
-    if (expression === undefined || operator === undefined ||
-      context.input.ast.kindName(operator) !== KindEqualsToken ||
-      left === undefined || context.input.ast.kindName(left) !== "KindPropertyAccessExpression" ||
-      receiver === undefined ||
-      (context.input.ast.kindName(receiver) !== "KindThisExpression" &&
-        context.input.ast.kindName(receiver) !== "KindThisKeyword") ||
-      right === undefined || field === undefined || !evaluateField(field, right)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, statement),
-        "rust.backend.project-constructor-body",
-        "Project constructors require a checked super(...) followed by total initialization of their own fields.",
-      ));
+  const constructorStatements = bodyStatements.slice(bodyIndex) as readonly Node[];
+  if (body !== undefined && constructorStatements.length > 0) {
+    const bodyFields = [...availableFields];
+    for (const slot of fieldSlots) {
+      if (!bodyFields.some((candidate) => candidate.declaration === slot.declaration)) {
+        bodyFields.push(slot);
+      }
+    }
+    let bodyContext = initializationContext;
+    for (const statement of constructorStatements) {
+      const prepared = prepareRustPreconstructionNode(
+        statement,
+        bodyFields,
+        bodyContext,
+        resolveSelectedFieldDeclaration,
+      );
+      if (prepared === undefined) {
+        return undefined;
+      }
+      bodyContext = prepared;
+    }
+    const bodyPlan = planStatementSequence(constructorStatements, body, bodyContext);
+    if (bodyPlan === undefined) {
       return undefined;
     }
-  }
-  if (values.size !== ownLayer.fields.length) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, constructor ?? definition.declaration),
-      "rust.backend.project-constructor-initialization",
-      "Project construction must initialize every own field exactly once.",
-    ));
-    return undefined;
+    statements.push(...bodyPlan.statements);
   }
   const ownState = createRustProjectObjectLayer(
     ownLayer.fields.map((field) => values.get(field.declaration)!),

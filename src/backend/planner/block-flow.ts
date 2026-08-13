@@ -20,6 +20,9 @@ export function rustBlockTerminates(block: RustBlock): boolean {
   if (last.kind === "try-scope") {
     return last.terminates;
   }
+  if (last.kind === "loop" && last.neverFallsThrough === true) {
+    return true;
+  }
   return last.kind === "if" && last.else !== undefined &&
     rustBlockTerminates(last.then) && rustBlockTerminates(last.else);
 }
