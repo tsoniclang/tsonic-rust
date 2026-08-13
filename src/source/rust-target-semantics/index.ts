@@ -139,7 +139,7 @@ import {
   parseSourceBigIntLiteral,
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustProjectUpcastFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustUnionDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -1364,6 +1364,10 @@ function selectedFlowReadSource(
   walk: RustFactWalk,
   expression: Node,
 ): { readonly declaration?: Node; readonly type: Type } | undefined {
+  const sourceFile = walk.context.ast.getSourceFile(expression);
+  if (sourceFile === undefined || !walk.context.source.semantics.includes(sourceFile)) {
+    return undefined;
+  }
   const semantics = walk.context.source.semantics.forNode(expression);
   const kind = walk.context.ast.kindName(expression);
   if (kind === KindPropertyAccessExpression) {
@@ -1402,7 +1406,11 @@ function resolveSelectedFlowReadCarrier(
   sourceCarrier: TargetTypeRef,
 ): TargetTypeRef | undefined {
   const typeNode = Node_Type(walk.context.ast, declaration);
-  if (typeNode !== undefined) {
+  const typeSourceFile = typeNode === undefined
+    ? undefined
+    : walk.context.ast.getSourceFile(typeNode);
+  if (typeNode !== undefined && typeSourceFile !== undefined &&
+    walk.context.source.semantics.includes(typeSourceFile)) {
     const semantics = walk.context.source.semantics.forNode(typeNode);
     const authored = semantics.selectAuthoredType(typeNode, selectedType);
     if (authored.kind === "ambiguous") {
@@ -1637,11 +1645,12 @@ function applyOptionLane(
   let projected = resolved;
   if (resolved !== undefined && target !== undefined &&
     !rustTargetTypeRefEquals(resolved, target)) {
-    const targetDefinition = walk.context.projectTypes.definitionForCarrier(target);
-    const relation = targetDefinition === undefined
-      ? { kind: "unrelated" as const }
-      : walk.context.projectTypes.relationship(resolved, targetDefinition);
-    if (relation.kind === "ambiguous") {
+    const reconciliation = selectRustValueCarrierReconciliation(
+      resolved,
+      target,
+      walk.context.projectTypes,
+    );
+    if (reconciliation.kind === "incompatible" && reconciliation.reason === "ambiguous") {
       appendRustDiagnostic(
         walk,
         "RUST_PROJECT_UPCAST_AMBIGUOUS",
@@ -1651,11 +1660,8 @@ function applyOptionLane(
       );
       return undefined;
     }
-    if (relation.kind === "related" && rustTargetTypeRefEquals(relation.targetType, target)) {
-      walk.context.facts.set(expression, rustProjectUpcastFactKey, {
-        sourceCarrier: resolved,
-        targetCarrier: target,
-      }, [{ message: "rust exact project-type upcast" }]);
+    if (reconciliation.kind === "project-upcast") {
+      recordRustValueCarrierReconciliation(walk.context.facts, expression, reconciliation);
       projected = target;
       if (!isRustOptionCarrier(expected)) {
         walk.context.facts.set(expression, rustConversionKey, { convertedType: target }, [
@@ -1666,7 +1672,11 @@ function applyOptionLane(
   }
   if (projected !== undefined && target !== undefined &&
     !rustTargetTypeRefEquals(projected, target) && !isRustOptionCarrier(expected)) {
-    const reconciliation = selectRustValueCarrierReconciliation(projected, target);
+    const reconciliation = selectRustValueCarrierReconciliation(
+      projected,
+      target,
+      walk.context.projectTypes,
+    );
     if (reconciliation.kind === "conversion") {
       recordRustValueCarrierReconciliation(
         walk.context.facts,
@@ -1721,11 +1731,12 @@ function reconcileRequiredCarrier(
   const reconciliation = selectRustValueCarrierReconciliation(
     sourceCarrier,
     targetCarrier,
+    walk.context.projectTypes,
   );
   if (reconciliation.kind === "incompatible") {
     return false;
   }
-  if (reconciliation.kind === "conversion") {
+  if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
     recordRustValueCarrierReconciliation(
       walk.context.facts,
       expression,
@@ -2531,6 +2542,8 @@ function resolvePostCheckBinaryCarrier(
         [
           `target.capability=rust.operation.${assignment ? "assignment" : "binary"}`,
           `source.operatorKind=${operatorKind}`,
+          `left=${JSON.stringify(left)}`,
+          `right=${JSON.stringify(right)}`,
         ],
       );
     }

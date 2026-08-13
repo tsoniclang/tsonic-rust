@@ -344,6 +344,46 @@ test("a single block argument stays attached to its outer call", () => {
   assert.match(source, /\n    \}\);/);
 });
 
+test("a trailing block argument stays attached after preceding arguments", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      visibility: "public",
+      name: "run",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "values" },
+            method: "set",
+            args: [
+              { kind: "string-literal", value: "selected" },
+              {
+                kind: "block",
+                bindings: [{
+                  name: "value",
+                  value: {
+                    kind: "call",
+                    path: "make_value_with_an_intentionally_long_name_that_requires_block_expansion",
+                    args: [],
+                  },
+                }],
+                value: { kind: "path", path: "value" },
+              },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /values\.set\(String::from\("selected"\), \{\n/u);
+  assert.match(source, /\n    \}\);/u);
+});
+
 test("a trailing fitted closure stays attached after preceding arguments", () => {
   const source = printRustSourceFile({
     headerComment,

@@ -177,7 +177,7 @@ export function main(): void {
   assert.equal(validateGeneratedProject("js-collections", result.artifacts, { run: true }).status, 0);
 });
 
-test("Map construction accepts exact project value carriers without claiming unused capabilities", { timeout: 300_000 }, () => {
+test("Map operations reconcile exact derived values to their selected project base carrier", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
     packages: [acmeTestingPackage()],
@@ -190,13 +190,19 @@ import { check } from "@acme/testing";
 class Item {
   value: int32;
   constructor(value: int32) { this.value = value; }
+
+  label(): string { return "item"; }
+}
+
+class DetailedItem extends Item {
+  label(): string { return "detailed"; }
 }
 
 export function main(): void {
   const values = new Map<string, Item>();
-  values.set("selected", new Item(3));
+  values.set("selected", new DetailedItem(3));
   const selected = values.get("selected");
-  check(selected !== undefined && selected.value === 3);
+  check(selected !== undefined && selected.value === 3 && selected.label() === "detailed");
 }
 `,
     },

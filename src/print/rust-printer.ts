@@ -2509,6 +2509,24 @@ function printFittedCall(
       }
     }
   }
+  if (!forceExpanded && arguments_.length > 1 &&
+    (trailingClosure?.kind === "block" || trailingClosure?.kind === "match" ||
+      trailingClosure?.kind === "conditional")) {
+    const preceding = arguments_.slice(0, -1).map(printRustExpr);
+    if (preceding.every((argument) => !argument.includes("\n"))) {
+      const prefix = `${callable}(${preceding.join(", ")}, `;
+      if (column + prefix.length <= rustFormatWidth) {
+        return appendToLastLine(
+          `${prefix}${printRustExprFitted(
+            trailingClosure,
+            inlineArgumentDepth,
+            column + prefix.length,
+          )}`,
+          ")",
+        );
+      }
+    }
+  }
   if (arguments_.length === 1 &&
     (arguments_[0]?.kind === "slice-literal" || arguments_[0]?.kind === "vec-literal" ||
       arguments_[0]?.kind === "tuple-literal")) {

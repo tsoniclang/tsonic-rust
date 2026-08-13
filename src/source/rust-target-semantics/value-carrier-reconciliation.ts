@@ -11,6 +11,7 @@ import {
 import type {
   RustContextualValueConversionFact,
   RustFlowReadProjectionFact,
+  RustProjectUpcastFact,
 } from "../rust-facts/keys.js";
 import {
   rustCarrierSupportsClone,
@@ -22,7 +23,13 @@ import { selectRustSourceValueConversion } from "../rust-facts/value-conversions
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
   | { readonly kind: "conversion"; readonly fact: RustContextualValueConversionFact }
-  | { readonly kind: "incompatible" };
+  | { readonly kind: "project-upcast"; readonly fact: RustProjectUpcastFact }
+  | { readonly kind: "incompatible"; readonly reason: "ambiguous" | "unrelated" };
+
+export type RustAppliedValueCarrierReconciliation = Extract<
+  RustValueCarrierReconciliation,
+  { readonly kind: "conversion" | "project-upcast" }
+>;
 
 export type RustFlowReadProjectionSelection =
   | { readonly kind: "identity" }
@@ -86,13 +93,28 @@ export function recordRustFlowReadProjection(
 export function selectRustValueCarrierReconciliation(
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
+  projectTypes: RustProjectTypePolicy,
 ): RustValueCarrierReconciliation {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
   }
+  const targetDefinition = projectTypes.definitionForCarrier(targetCarrier);
+  const relationship = targetDefinition === undefined
+    ? { kind: "unrelated" as const }
+    : projectTypes.relationship(sourceCarrier, targetDefinition);
+  if (relationship.kind === "ambiguous") {
+    return { kind: "incompatible", reason: "ambiguous" };
+  }
+  if (relationship.kind === "related" &&
+    rustTargetTypeRefEquals(relationship.targetType, targetCarrier)) {
+    return {
+      kind: "project-upcast",
+      fact: { sourceCarrier, targetCarrier },
+    };
+  }
   const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier);
   return conversion === undefined
-    ? { kind: "incompatible" }
+    ? { kind: "incompatible", reason: "unrelated" }
     : {
         kind: "conversion",
         fact: { sourceCarrier, targetCarrier, conversion },
@@ -102,11 +124,20 @@ export function selectRustValueCarrierReconciliation(
 export function recordRustValueCarrierReconciliation(
   facts: RustSemanticModel,
   subject: ExtensionFactSubject,
-  reconciliation: Extract<RustValueCarrierReconciliation, { readonly kind: "conversion" }>,
+  reconciliation: RustAppliedValueCarrierReconciliation,
 ): void {
-  facts.set(subject, rustContextualValueConversionFactKey, reconciliation.fact, [
-    { message: "rust exact contextual value conversion" },
-  ]);
+  if (reconciliation.kind === "project-upcast") {
+    facts.set(subject, rustProjectUpcastFactKey, reconciliation.fact, [
+      { message: "rust exact project-type upcast" },
+    ]);
+    return;
+  }
+  facts.set(
+    subject,
+    rustContextualValueConversionFactKey,
+    reconciliation.fact,
+    [{ message: "rust exact contextual value conversion" }],
+  );
 }
 
 export function rustValueCarrierBeforeContextualConversion(

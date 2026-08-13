@@ -94,7 +94,6 @@ import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
   rustProjectDowncastFactKey,
-  rustProjectUpcastFactKey,
   rustSourceCallableReturnFactKey,
 } from "../rust-facts/keys.js";
 import type {
@@ -175,7 +174,7 @@ import {
   selectRustValueCarrierReconciliation,
 } from "./value-carrier-reconciliation.js";
 import type {
-  RustValueCarrierReconciliation,
+  RustAppliedValueCarrierReconciliation,
 } from "./value-carrier-reconciliation.js";
 
 const sourceCallMarkerByIdentity = new Map(
@@ -888,7 +887,15 @@ export function selectRustCheckedCall(
       argumentCompatibility: selectedArgumentCompatibility(selectedCallArgumentNodes(request), context, options),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-      return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`);
+      return rejectSelectedOperation(
+        request.source.call,
+        context,
+        "RUST_SELECTED_OPERATION_UNSUPPORTED",
+        `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`,
+        [{
+          message: `receiver=${JSON.stringify(receiverCarrier)}; arguments=${JSON.stringify(argumentCarriers)}; selectedTypeArguments=${JSON.stringify(selectedMethodTypeArgumentCarriers)}; authoredTypeArguments=${JSON.stringify(authoredMethodTypeArgumentCarriers)}`,
+        }],
+      );
     }
     if (selection.callback !== undefined) {
       return selection.fact.kind !== "provider-operation"
@@ -1838,7 +1845,7 @@ function acceptSelectedCall(
     },
   };
   const evidence = [{ message: `rust selected call ${fact.operationId}` }];
-  for (const pending of sourceArguments.conversions) {
+  for (const pending of sourceArguments.reconciliations) {
     const argument = selectedCallArgumentNodes(request)[pending.sourceIndex];
     if (argument === undefined) {
       return rejectSelectedOperation(
@@ -1917,9 +1924,9 @@ type SelectedCallSourceCarriers =
   | {
       readonly kind: "resolved";
       readonly carriers: readonly TargetTypeRef[];
-      readonly conversions: readonly {
+      readonly reconciliations: readonly {
         readonly sourceIndex: number;
-        readonly reconciliation: Extract<RustValueCarrierReconciliation, { readonly kind: "conversion" }>;
+        readonly reconciliation: RustAppliedValueCarrierReconciliation;
       }[];
     }
   | { readonly kind: "missing" }
@@ -1955,29 +1962,29 @@ function selectedCallSourceCarriers(
     declaredBySourceIndex.set(sourceIndex, declared?.[first.sourceParameterIndex]);
   }
   let incompatibility: Extract<SelectedCallSourceCarriers, { readonly kind: "incompatible" }> | undefined;
-  const conversions: {
+  const reconciliations: {
     readonly sourceIndex: number;
-    readonly reconciliation: Extract<RustValueCarrierReconciliation, { readonly kind: "conversion" }>;
+    readonly reconciliation: RustAppliedValueCarrierReconciliation;
   }[] = [];
   const actual = request.source.sourceArguments.map((sourceArgument, index) => {
     const argument = sourceArgument.expression;
     const expected = declaredBySourceIndex.get(index);
     const resolved = selectedSourceValueCarrier(sourceArgument, context, options);
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
-    const converted = rustEffectiveValueCarrier(context.facts, argument);
-    let effective = converted ?? normalized;
-    if (converted === undefined && normalized !== undefined && expected !== undefined &&
-      !rustTargetTypeRefEquals(normalized, expected)) {
-      const reconciliation = selectRustValueCarrierReconciliation(normalized, expected);
-      if (reconciliation.kind === "conversion") {
-        conversions.push({ sourceIndex: index, reconciliation });
+    let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
+    if (effective !== undefined && expected !== undefined &&
+      !rustTargetTypeRefEquals(effective, expected)) {
+      const reconciliation = selectRustValueCarrierReconciliation(
+        effective,
+        expected,
+        options.projectTypes,
+      );
+      if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+        reconciliations.push({ sourceIndex: index, reconciliation });
         effective = expected;
       } else if (reconciliation.kind === "incompatible") {
-        incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: normalized, expected };
+        incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: effective, expected };
       }
-    } else if (effective !== undefined && expected !== undefined &&
-      !rustTargetTypeRefEquals(effective, expected)) {
-      incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: effective, expected };
     }
     return effective ?? expected;
   });
@@ -1990,7 +1997,7 @@ function selectedCallSourceCarriers(
   if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {
     const stringCarrier = rustStringTargetType();
     return actual.every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, stringCarrier))
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], conversions }
+      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
       : { kind: "incompatible", sourceIndex: 0 };
   }
   if (fact.target.form === "call-value-slice" || fact.target.form === "call-value-array" ||
@@ -2010,7 +2017,7 @@ function selectedCallSourceCarriers(
         selectRustSourceValueConversion(carrier, target) === undefined;
     });
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], conversions }
+      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
       : { kind: "incompatible", sourceIndex: incompatible };
   }
   if (fact.target.form === "receiver-tagged-array") {
@@ -2036,10 +2043,10 @@ function selectedCallSourceCarriers(
       return (exact.length > 0 ? exact : convertible).length !== 1;
     });
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], conversions }
+      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
       : { kind: "incompatible", sourceIndex: incompatible };
   }
-  return { kind: "resolved", carriers: actual as TargetTypeRef[], conversions };
+  return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
 }
 
 function selectedCallReceiverCarrier(
@@ -3271,7 +3278,15 @@ export function selectRustCheckedElementAccess(
       argumentCompatibility: selectedArgumentCompatibility([request.argument], context, options),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-      return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript index signature '${jsIdentity.ownerName}' has no closed Rust operation row for this receiver carrier.`);
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SELECTED_OPERATION_UNSUPPORTED",
+        `The selected JavaScript index signature '${jsIdentity.ownerName}' has no closed Rust operation row for this receiver carrier.`,
+        [{
+          message: `receiver=${JSON.stringify(receiverCarrier)}; argument=${JSON.stringify(resolveRustTargetTypeRef(request.argument, context, options))}`,
+        }],
+      );
     }
     const fact = finalizeProviderOperationFromSubjects(selection.fact, request.receiver, [request.argument], context, options, selectedReceiverCarrier);
     if (fact === undefined) {
@@ -3573,13 +3588,11 @@ export function selectRustCheckedConversion(
         { message: "rust selected call argument borrows into the selected target pointer carrier" },
       ]);
     }
-    if (sourceCarrier !== undefined && selectProjectUpcast(
-      request.expression,
-      sourceCarrier,
-      targetCarrier,
-      context,
-      options,
-    )) {
+    const reconciliation = sourceCarrier === undefined
+      ? undefined
+      : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
+    if (reconciliation?.kind === "project-upcast") {
+      recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
       return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected call argument uses an exact project-type upcast" },
       ]);
@@ -3622,13 +3635,13 @@ export function selectRustCheckedConversion(
     );
   }
   const identity = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
-  const projectUpcast = !identity && selectProjectUpcast(
-    request.expression,
-    sourceCarrier,
-    targetCarrier,
-    context,
-    options,
-  );
+  const reconciliation = identity
+    ? { kind: "identity" as const }
+    : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
+  const projectUpcast = reconciliation.kind === "project-upcast";
+  if (projectUpcast) {
+    recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
+  }
   const projectDowncast = !identity && !projectUpcast && selectProjectDowncast(
     request.expression,
     sourceCarrier,
@@ -3714,28 +3727,6 @@ function selectProjectDowncast(
     dispatchCarrier,
     targetCarrier,
   }, [{ message: "rust exact project-type downcast" }]);
-  return true;
-}
-
-function selectProjectUpcast(
-  subject: Node,
-  sourceCarrier: TargetTypeRef,
-  targetCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
-  options: RustOperationsProviderOptions,
-): boolean {
-  const targetDefinition = options.projectTypes.definitionForCarrier(targetCarrier);
-  const relationship = targetDefinition === undefined
-    ? { kind: "unrelated" as const }
-    : options.projectTypes.relationship(sourceCarrier, targetDefinition);
-  if (relationship.kind !== "related" ||
-    !rustTargetTypeRefEquals(relationship.targetType, targetCarrier)) {
-    return false;
-  }
-  context.facts.set(subject, rustProjectUpcastFactKey, {
-    sourceCarrier,
-    targetCarrier,
-  }, [{ message: "rust exact project-type upcast" }]);
   return true;
 }
 
@@ -4245,6 +4236,14 @@ function selectedArgumentCompatibility(
     }
     if (actual === undefined) {
       return 10;
+    }
+    const reconciliation = selectRustValueCarrierReconciliation(
+      actual,
+      expected,
+      options.projectTypes,
+    );
+    if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+      return 1;
     }
     return expected.kind === "source-primitive" && isRustNumericCarrier(expected) &&
       sourceLiteralIsRepresentableAsPrimitive(node, expected.name, context)
