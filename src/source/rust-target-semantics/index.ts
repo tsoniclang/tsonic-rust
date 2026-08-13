@@ -2399,6 +2399,16 @@ function resolvePostCheckBinaryCarrier(
       fact = {
         kind: "option-coalesce",
         operationId: "tsonic.rust.option.coalesce",
+        rightOperand: "value",
+        resultCarrier: inner,
+      };
+    } else if (inner !== undefined && left !== undefined && right !== undefined &&
+      rustTargetTypeRefEquals(left, right)) {
+      fact = {
+        kind: "option-coalesce",
+        operationId: "tsonic.rust.option.coalesce-option",
+        rightOperand: "option",
+        resultCarrier: left,
       };
     } else if (inner !== undefined && isRustNullishSourceCarrier(right) && left !== undefined) {
       fact = {
@@ -2549,9 +2559,7 @@ function resolvePostCheckBinaryCarrier(
     }
     return undefined;
   }
-  const resultCarrier = fact.kind === "option-coalesce"
-    ? rustOptionElementCarrier(left)
-    : fact.kind === "option-check"
+  const resultCarrier = fact.kind === "option-check"
       ? rustSourcePrimitiveTargetType("bool")
       : rustTargetOperationResultCarrier(fact);
   if (resultCarrier === undefined) {

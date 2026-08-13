@@ -660,9 +660,64 @@ export function some_value(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32 \{/u);
-  assert.match(text, /value\.unwrap_or\(0\)/u);
+  assert.match(text, /match value \{[\s\S]*Some\(__tsonic_coalesced_value(?:_[0-9]+)?\) => __tsonic_coalesced_value(?:_[0-9]+)?,[\s\S]*None => 0,/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
   assert.match(text, /value_or_zero\(None\)/u);
+});
+
+test("nullish coalescing preserves lazy value and optional fallback evaluation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "nullish_lazy_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+let fallbackCalls: int32 = 0;
+
+function fallback(): int32 {
+  fallbackCalls += 1;
+  return 7;
+}
+
+function optionalFallback(): int32 | undefined {
+  fallbackCalls += 1;
+  return undefined;
+}
+
+function choose(left: int32 | undefined, right: int32 | undefined): int32 | undefined {
+  return left ?? right;
+}
+
+function withFallback(left: int32 | undefined): int32 {
+  return left ?? fallback();
+}
+
+function withOptionalFallback(left: int32 | undefined): int32 | undefined {
+  return left ?? optionalFallback();
+}
+
+export function main(): void {
+  check(withFallback(3) === 3);
+  check(fallbackCalls === 0);
+  check(withFallback(undefined) === 7);
+  check(fallbackCalls === 1);
+  check(choose(4, undefined) === 4);
+  check(fallbackCalls === 1);
+  check(withOptionalFallback(4) === 4);
+  check(fallbackCalls === 1);
+  check(withOptionalFallback(undefined) === undefined);
+  check(fallbackCalls === 2);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /match left \{[\s\S]*Some\(__tsonic_coalesced_value(?:_[0-9]+)?\) => Some\(__tsonic_coalesced_value(?:_[0-9]+)?\),[\s\S]*None => right,/u);
+  assert.equal(validateGeneratedProject("nullish-lazy-proof", result.artifacts, { run: true }).status, 0);
 });
 
 test("undefined-typed unions lower to Option in the native profile", () => {

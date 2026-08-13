@@ -2464,10 +2464,35 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const rightNode = BinaryExpression_Right(context.input.ast, node);
     const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
     const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
-    if (left === undefined || right === undefined) {
+    if (left === undefined || right === undefined || context.syntheticNames === undefined ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.option-coalesce-carrier") ||
+      !selectedOperationMatches(
+        context.input.facts.getSelectedTargetOperator(node),
+        fact.operationId,
+        "operator",
+        fact.resultCarrier,
+        rustTargetOperationText(fact),
+      )) {
       return undefined;
     }
-    return { kind: "method-call", receiver: left, method: "unwrap_or", args: [right] };
+    const valueName = allocateRustSyntheticName(context.syntheticNames, "coalesced_value");
+    return {
+      kind: "match",
+      expression: left,
+      arms: [{
+        pattern: {
+          kind: "tuple-variant",
+          path: "Some",
+          elements: [{ kind: "binding", name: valueName }],
+        },
+        expression: fact.rightOperand === "option"
+          ? { kind: "call", path: "Some", args: [{ kind: "path", path: valueName }] }
+          : { kind: "path", path: valueName },
+      }, {
+        pattern: { kind: "path", path: "None" },
+        expression: right,
+      }],
+    };
   }
   if (fact !== undefined && fact.kind === "option-check") {
     const leftNode = BinaryExpression_Left(context.input.ast, node);

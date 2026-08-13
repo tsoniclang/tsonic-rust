@@ -542,7 +542,12 @@ export type RustTargetOperationFact =
     }
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
-  | { readonly kind: "option-coalesce"; readonly operationId: string }
+  | {
+      readonly kind: "option-coalesce";
+      readonly operationId: string;
+      readonly rightOperand: "value" | "option";
+      readonly resultCarrier: TargetTypeRef;
+    }
   | { readonly kind: "nullish-identity"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
   | {
       readonly kind: "source-conversion";
@@ -645,6 +650,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "await-op":
     case "closure":
     case "source-conversion":
+    case "option-coalesce":
     case "nullish-identity":
     case "typed-location":
     case "native-pointer":
