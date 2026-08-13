@@ -905,6 +905,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
       value: {
         id: "acme.validation.Value",
         path: "acme_validation::Value",
+        traits: { clone: "never", copy: "never" },
         typeArguments: [],
       },
     },
@@ -926,6 +927,20 @@ test("provider type relations remain target-owned and require closed Rust paths"
   assert.throws(
     () => createRustProviderPackage({ ...valid, carrierPaths: {} }),
     /target type 'acme\.validation\.Value' has no closed Rust carrier path/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage({
+      ...valid,
+      carrierTraits: { "acme.validation.Missing": { clone: "always", copy: "never" } },
+    }),
+    /carrier trait contract 'acme\.validation\.Missing' has no rendered carrier path/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage({
+      ...valid,
+      carrierTraits: { "acme.validation.Value": { clone: "never", copy: "always" } },
+    }),
+    /invalid native trait contract/u,
   );
   assert.throws(
     () => createRustProviderPackage({ ...definition(), targetIdentities: { "@acme/validation::Value": "acme.validation.Value" } }),

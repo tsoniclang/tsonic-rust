@@ -39,7 +39,7 @@ export function load(path: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /acme_files::read_text\(path\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /acme_files::read_text\(path\.clone\(\)\)/u);
   const manifest = artifactText(result, "Cargo.toml");
   assert.match(manifest, /acme_files = \{ path = ".*acme_files" \}/u);
   assert.match(manifest, /tsonic_rust_runtime = \{ path = /u);
@@ -268,6 +268,9 @@ test("provider paths and named carriers materialize before facts reach the backe
     }],
     aliasImports: [{ alias: "api", path: "acme_runtime::api" }],
     carrierPaths: { "acme.materialized.Value": "acme_runtime::Value" },
+    carrierTraits: {
+      "acme.materialized.Value": { clone: "always", copy: "never" },
+    },
     crates: [],
   });
 
@@ -289,6 +292,7 @@ test("provider paths and named carriers materialize before facts reach the backe
     value: {
       id: "acme.materialized.Value",
       path: "acme_runtime::Value",
+      traits: { clone: "always", copy: "never" },
       typeArguments: [],
     },
   });
@@ -311,5 +315,26 @@ test("conflicting provider carrier paths fail before operation facts are recorde
       packageWithPath("acme-second", "@acme/second", "acme_second::Shared"),
     ])),
     /conflicting target paths 'acme_first::Shared' and 'acme_second::Shared'/u,
+  );
+});
+
+test("conflicting provider carrier trait contracts fail before operation facts are recorded", () => {
+  const packageWithTraits = (id, moduleSpecifier, traits) => createRustProviderPackage({
+    id,
+    displayName: id,
+    version: "1.0.0",
+    modules: [{ moduleSpecifier, providerModuleId: id, exports: [] }],
+    operations: [],
+    carrierPaths: { "acme.Shared": "acme_shared::Shared" },
+    carrierTraits: { "acme.Shared": traits },
+    crates: [],
+  });
+
+  assert.throws(
+    () => collectRustProviderSemantics(providerContext([
+      packageWithTraits("acme-first", "@acme/first", { clone: "always", copy: "never" }),
+      packageWithTraits("acme-second", "@acme/second", { clone: "never", copy: "never" }),
+    ])),
+    /conflicting native trait contracts/u,
   );
 });

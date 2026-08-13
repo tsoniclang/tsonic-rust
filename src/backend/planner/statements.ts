@@ -77,6 +77,7 @@ import {
   isRustStringCarrier,
   isRustUnitCarrier,
   rustLocationTargetType,
+  rustOptionElementCarrier,
 } from "../../source/rust-target-types.js";
 import { validateRustFinalizedOperationAbi } from "../../source/rust-facts/finalized-operation-abi.js";
 import { rustTargetOperationIsDirectLocation } from "../../source/rust-facts/target-operation.js";
@@ -782,9 +783,12 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  if (initializer === undefined && rustType === undefined) {
-    rustType = rustTypeFromCarrierInContext(declarationCarrier, context);
-    if (rustType === undefined) {
+  if (rustType === undefined) {
+    const renderedCarrier = locationStorage === undefined
+      ? declarationCarrier
+      : rustLocationTargetType(locationStorage.valueCarrier);
+    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
+    if (rustType === undefined && initializer === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, declaration),
         "rust.backend.variable",
@@ -828,6 +832,8 @@ function planVariableDeclaration(
       context.usedAliases?.add("rt");
       init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
     }
+  } else if (rustOptionElementCarrier(declarationCarrier) !== undefined && rustType !== undefined) {
+    init = { kind: "associated-value", owner: rustType, name: "None" };
   }
   if (initializer !== undefined && init === undefined) {
     return undefined;

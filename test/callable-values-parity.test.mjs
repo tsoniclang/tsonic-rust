@@ -287,7 +287,7 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /action\s*\.as_ref\(\)\s*\.map/u);
+  assert.match(artifactText(result, "src/index.rs"), /action\s*\.clone\(\)\s*\.as_ref\(\)\s*\.map/u);
   validateGeneratedProject("callable-optional", result.artifacts, { run: true });
 });
 

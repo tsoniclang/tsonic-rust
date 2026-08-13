@@ -217,7 +217,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
       name,
-      visibility: isExported ? "public" : "private",
+      visibility: isExported ? "public" : "crate",
       ...(!nonSnakeSeen.value && safetyAttributes.length === 0
         ? {}
         : {
@@ -271,7 +271,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
-    visibility: isExported ? "public" : "private",
+    visibility: isExported ? "public" : "crate",
     ...(!nonSnakeSeen.value && safetyAttributes.length === 0
       ? {}
       : {

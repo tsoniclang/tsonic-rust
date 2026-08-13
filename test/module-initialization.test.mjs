@@ -46,8 +46,13 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const main = artifactText(result, "src/main.rs");
   assert.equal(
-    main.indexOf("module_order_proof::state::__tsonic_module_init()") <
-      main.indexOf("module_order_proof::index::__tsonic_module_init()"),
+    main.includes("module_order_proof::__tsonic_initialize()"),
+    true,
+  );
+  const library = artifactText(result, "src/lib.rs");
+  assert.equal(
+    library.indexOf("crate::state::__tsonic_module_init()") <
+      library.indexOf("crate::index::__tsonic_module_init()"),
     true,
   );
   const index = artifactText(result, "src/index.rs");
@@ -202,7 +207,7 @@ export function main(): void {
   );
   assert.match(
     artifactText(result, "src/main.rs"),
-    /tsonic_rust_runtime::block_on\(async_module_proof::index::__tsonic_module_init\(\)\)/u,
+    /tsonic_rust_runtime::block_on\(async_module_proof::__tsonic_initialize\(\)\)/u,
   );
   validateGeneratedProject("async-module-proof", result.artifacts, { run: true });
 });
@@ -230,7 +235,7 @@ export function main(): void {}
   );
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fallible_module_proof::index::__tsonic_module_init\(\)\?;/u,
+    /fallible_module_proof::__tsonic_initialize\(\)\?;/u,
   );
   validateGeneratedProject("fallible-module-proof", result.artifacts, { run: true });
 });

@@ -66,6 +66,7 @@ export function selectRustGeneratorSourceCall(
       parameterCarriers,
       isAsync: protocol.kind === "async",
       isFallible: false,
+      errorBoundary: "none",
     }, parameterCarriers);
   }
   if (request.memberName === "return" && request.selectedParameterCount === 1) {
@@ -82,6 +83,7 @@ export function selectRustGeneratorSourceCall(
       parameterCarriers: [protocol.returnType],
       isAsync: protocol.kind === "async",
       isFallible: false,
+      errorBoundary: "none",
     }, [protocol.returnType]);
   }
   if (request.memberName === "throw") {
@@ -103,6 +105,7 @@ export function selectRustGeneratorSourceCall(
       parameterCarriers: [errorCarrier],
       isAsync: protocol.kind === "async",
       isFallible: true,
+      errorBoundary: "source-program",
     }, [errorCarrier]);
   }
   return rejected(`The exact selected ${request.ownerName}.${request.memberName} signature has no Rust generator operation.`);
@@ -136,6 +139,7 @@ export function selectRustGeneratorSourceProperty(
       resultCarrier: rustSourcePrimitiveTargetType("bool"),
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     }, []);
   }
   if (sourceMember.memberName === "value" && singleOwner !== undefined) {
@@ -153,6 +157,7 @@ export function selectRustGeneratorSourceProperty(
       resultCarrier,
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     }, []);
   }
   return rejected(`The exact selected iterator-result '${sourceMember.memberName}' property set has no Rust operation.`);

@@ -240,6 +240,7 @@ export interface RustProviderOperationTemplate<
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly errorBoundary: "none" | "provider-native" | "source-program";
   readonly isUnsafe?: boolean;
 }
 
@@ -914,13 +915,26 @@ export const rustProjectDowncastFactKey: RustPlanKey<RustProjectDowncastFact> =
     rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) &&
     rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier));
 
-export interface RustSourceBindingFact {
-  readonly sourceName: string;
-  readonly fileName: string;
-}
+export type RustSourceBindingFact =
+  | {
+      readonly scope: "lexical";
+      readonly sourceName: string;
+      readonly sourceDeclaration: Node;
+    }
+  | {
+      readonly scope: "module";
+      readonly sourceName: string;
+      readonly fileName: string;
+      readonly sourceDeclaration: Node;
+    };
 
 export const rustSourceBindingFactKey: RustPlanKey<RustSourceBindingFact> =
-  defineRustPlanKey("sourceBinding", closedMetadataEquals);
+  defineRustPlanKey("sourceBinding", (left, right) =>
+    left.scope === right.scope &&
+    left.sourceName === right.sourceName &&
+    left.sourceDeclaration === right.sourceDeclaration &&
+    (left.scope !== "module" ||
+      (right.scope === "module" && left.fileName === right.fileName)));
 
 export type RustBindingProjection =
   | {
@@ -1117,6 +1131,7 @@ export interface RustFutureValueFact {
   readonly outputCarrier: TargetTypeRef;
   readonly awaitedConversion: RustFinalizedValueConversion;
   readonly awaiting: "infallible" | "fallible";
+  readonly errorBoundary: "none" | "provider-native" | "source-program";
 }
 
 // Exact await behavior for one first-class future value. Unlike its runtime

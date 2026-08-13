@@ -32,7 +32,12 @@ test("operation fact equality is structural and independent of metadata key orde
     kind: "target-specific",
     target: "rust",
     name: "named-type",
-    value: { id: "acme.Value", path: "acme::Value", typeArguments: [] },
+    value: {
+      id: "acme.Value",
+      path: "acme::Value",
+      traits: { clone: "never", copy: "never" },
+      typeArguments: [],
+    },
   };
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",
@@ -157,7 +162,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
   assert.deepEqual(context.diagnostics, []);
 });
 
-test("runtime module bindings require an explicit Rust executable startup contract", () => {
+test("runtime module bindings publish one explicit Rust crate startup contract", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -168,10 +173,11 @@ export let VALUE: int32 = 1;
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_LIBRARY_MODULE_INITIALIZATION_UNSUPPORTED" &&
-    diagnostic.message.includes("runtime module initialization")));
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/lib.rs"),
+    /pub fn __tsonic_initialize\(\) \{\s*crate::index::__tsonic_module_init\(\);\s*\}/su,
+  );
 });
 
 test("singleton tuples render with the Rust-required trailing comma", () => {
@@ -303,7 +309,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)> \{\n    fallible_main::index::main\(\)\n\}/u,
+    /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)> \{\n    fallible_main::index::main\(\)\?;\n    Ok\(\(\)\)\n\}/u,
   );
   validateGeneratedProject("backend-fallible-main", result.artifacts, { run: true });
 });

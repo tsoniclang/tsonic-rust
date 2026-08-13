@@ -1,12 +1,106 @@
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
 
-export function applyRustFallibleResultExpression(expression: RustExpr): RustExpr {
+export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): boolean {
+  switch (expression.kind) {
+    case "try":
+      return true;
+    case "bottom":
+      return rustExpressionUsesTryInCurrentRegion(expression.expression);
+    case "unary":
+      return rustExpressionUsesTryInCurrentRegion(expression.operand);
+    case "dereference":
+      return rustExpressionUsesTryInCurrentRegion(expression.pointer);
+    case "numeric-cast":
+      return rustExpressionUsesTryInCurrentRegion(expression.expression);
+    case "binary":
+      return rustExpressionUsesTryInCurrentRegion(expression.left) ||
+        rustExpressionUsesTryInCurrentRegion(expression.right);
+    case "range":
+      return rustExpressionUsesTryInCurrentRegion(expression.start) ||
+        rustExpressionUsesTryInCurrentRegion(expression.end);
+    case "conditional":
+      return rustExpressionUsesTryInCurrentRegion(expression.condition) ||
+        rustExpressionUsesTryInCurrentRegion(expression.whenTrue) ||
+        rustExpressionUsesTryInCurrentRegion(expression.whenFalse);
+    case "match":
+      return rustExpressionUsesTryInCurrentRegion(expression.expression) ||
+        expression.arms.some((arm) => rustExpressionUsesTryInCurrentRegion(arm.expression));
+    case "matches":
+      return rustExpressionUsesTryInCurrentRegion(expression.expression);
+    case "assignment":
+      return rustExpressionUsesTryInCurrentRegion(expression.target) ||
+        rustExpressionUsesTryInCurrentRegion(expression.value);
+    case "call":
+    case "associated-call":
+      return expression.args.some(rustExpressionUsesTryInCurrentRegion);
+    case "invoke":
+      return rustExpressionUsesTryInCurrentRegion(expression.callee) ||
+        expression.args.some(rustExpressionUsesTryInCurrentRegion);
+    case "method-call":
+      return rustExpressionUsesTryInCurrentRegion(expression.receiver) ||
+        expression.args.some(rustExpressionUsesTryInCurrentRegion);
+    case "field":
+      return rustExpressionUsesTryInCurrentRegion(expression.receiver);
+    case "index":
+      return rustExpressionUsesTryInCurrentRegion(expression.receiver) ||
+        rustExpressionUsesTryInCurrentRegion(expression.index);
+    case "block":
+      return expression.bindings.some((binding) =>
+        rustExpressionUsesTryInCurrentRegion(binding.value)) ||
+        rustExpressionUsesTryInCurrentRegion(expression.value);
+    case "unsafe":
+      return rustExpressionUsesTryInCurrentRegion(expression.expression);
+    case "evaluate-then":
+      return rustExpressionUsesTryInCurrentRegion(expression.effect) ||
+        rustExpressionUsesTryInCurrentRegion(expression.value);
+    case "string-concat":
+      return expression.parts.some(rustExpressionUsesTryInCurrentRegion);
+    case "format-write":
+      return rustExpressionUsesTryInCurrentRegion(expression.writer) ||
+        expression.args.some(rustExpressionUsesTryInCurrentRegion);
+    case "reference":
+      return rustExpressionUsesTryInCurrentRegion(expression.expr);
+    case "vec-literal":
+    case "slice-literal":
+      return expression.elements.some(rustExpressionUsesTryInCurrentRegion);
+    case "await":
+      return rustExpressionUsesTryInCurrentRegion(expression.expr);
+    case "return-expression":
+      return expression.expr !== undefined && rustExpressionUsesTryInCurrentRegion(expression.expr);
+    case "struct-literal":
+      return expression.fields.some((field) => rustExpressionUsesTryInCurrentRegion(field.value));
+    case "tuple-literal":
+      return expression.elements.some(rustExpressionUsesTryInCurrentRegion);
+    case "closure":
+    case "closure-block":
+    case "int-literal":
+    case "float-literal":
+    case "bool-literal":
+    case "none":
+    case "string-literal":
+    case "str-literal":
+    case "path":
+    case "associated-value":
+    case "unreachable":
+      return false;
+  }
+}
+
+export function applyRustFallibleResultExpression(
+  expression: RustExpr,
+  errorTypePath?: string,
+): RustExpr {
   if (expression.kind === "bottom") {
     return expression;
   }
-  return expression.kind === "try"
-    ? expression.expr
-    : { kind: "call", path: "Ok", args: [expression] };
+  if (expression.kind === "try") {
+    return expression.expr;
+  }
+  return {
+    kind: "call",
+    path: errorTypePath === undefined ? "Ok" : `Ok::<_, ${errorTypePath}>`,
+    args: [expression],
+  };
 }
 
 export function rustBottomExpression(expression: RustExpr): RustExpr {
@@ -26,19 +120,25 @@ export function applyFallibleShape(
   body: RustBlock,
   fallible: boolean,
   hasReturnValue: boolean,
+  errorTypePath?: string,
 ): RustBlock {
   if (!fallible) {
     return body;
   }
   const wrap = (statement: RustStmt): RustStmt => {
     if (statement.kind === "return" && statement.expr !== undefined) {
-      return { kind: "return", expr: applyRustFallibleResultExpression(statement.expr) };
+      return { kind: "return", expr: applyRustFallibleResultExpression(statement.expr, errorTypePath) };
     }
     if (statement.kind === "return") {
-      return { kind: "return", expr: { kind: "path", path: "Ok(())" } };
+      return {
+        kind: "return",
+        expr: errorTypePath === undefined
+          ? { kind: "path", path: "Ok(())" }
+          : { kind: "call", path: `Ok::<_, ${errorTypePath}>`, args: [{ kind: "path", path: "()" }] },
+      };
     }
     if (statement.kind === "tail") {
-      return { kind: "tail", expr: applyRustFallibleResultExpression(statement.expr) };
+      return { kind: "tail", expr: applyRustFallibleResultExpression(statement.expr, errorTypePath) };
     }
     if (statement.kind === "if") {
       return {
@@ -70,7 +170,12 @@ export function applyFallibleShape(
     (last.kind === "try-scope" && last.terminates)
   );
   if (!hasReturnValue && !endsWithExit) {
-    wrapped.push({ kind: "tail", expr: { kind: "path", path: "Ok(())" } });
+    wrapped.push({
+      kind: "tail",
+      expr: errorTypePath === undefined
+        ? { kind: "path", path: "Ok(())" }
+        : { kind: "call", path: `Ok::<_, ${errorTypePath}>`, args: [{ kind: "path", path: "()" }] },
+    });
   }
   return { ...body, statements: wrapped };
 }

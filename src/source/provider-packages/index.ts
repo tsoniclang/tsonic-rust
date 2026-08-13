@@ -31,8 +31,10 @@ import {
 import {
   rustFixedArrayCarrierValue,
   rustFixedArrayTargetType,
+  rustMoveOnlyNamedTypeTraits,
   rustNamedTargetType,
 } from "../rust-target-types.js";
+import type { RustNamedTypeTraitContract } from "../rust-target-types.js";
 
 // Generic Rust provider-package model. Concrete module specifiers, export
 // names, and Rust operation paths live only in package definitions (product
@@ -59,7 +61,7 @@ export interface RustProviderImmediateCallbackDefinition {
   readonly fallibleTarget: RustProviderOperationForm;
 }
 
-export interface RustProviderOperationDefinition<
+interface RustProviderOperationDefinitionBase<
   OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
 > {
   readonly exportId: string;
@@ -74,15 +76,24 @@ export interface RustProviderOperationDefinition<
   readonly resultConversion?: RustValueConversion;
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
-  // Fallible operations return TsonicResult and require a fallible context.
-  // Method, constructor, and property operations support fallibility;
-  // package creation rejects other kinds.
-  readonly isFallible?: boolean;
   // Exact target invocation safety. This does not grant a lexical unsafe
   // context; source code must still select an explicit unsafeContext region.
   readonly isUnsafe?: boolean;
   readonly immediateCallback?: RustProviderImmediateCallbackDefinition;
 }
+
+export type RustProviderOperationDefinition<
+  OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
+> = RustProviderOperationDefinitionBase<OperationKind> & (
+  | {
+      readonly isFallible: true;
+      readonly errorBoundary: "provider-native" | "source-program";
+    }
+  | {
+      readonly isFallible?: false;
+      readonly errorBoundary?: never;
+    }
+);
 
 export interface RustProviderTypeDefinition {
   readonly exportId: string;
@@ -98,15 +109,15 @@ export interface RustProviderTypeRow extends RustProviderTypeDefinition {
   readonly sourceTypeParameters: readonly string[];
 }
 
-export interface RustProviderOperationRow<
+export type RustProviderOperationRow<
   OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
-> extends RustProviderOperationDefinition<OperationKind> {
+> = RustProviderOperationDefinition<OperationKind> & {
   readonly providerPackageId: string;
   readonly providerId: string;
   readonly providerVersion: string;
   readonly providerModuleId: string;
   readonly moduleSpecifier: string;
-}
+};
 
 export interface RustProviderExportRow {
   readonly exportId: string;
@@ -157,6 +168,9 @@ export interface RustProviderPackageDefinition {
   // Rendered Rust paths for this capability's target-named carriers
   // (e.g. acme.db.Row -> acme_db::Row).
   readonly carrierPaths?: Readonly<Record<string, string>>;
+  // Exact native trait guarantees for rendered named carriers. Missing rows
+  // materialize as move-only; consumers never infer traits from Rust names.
+  readonly carrierTraits?: Readonly<Record<string, RustNamedTypeTraitContract>>;
   readonly binaryEpilogues?: readonly RustProviderBinaryEpilogueDefinition[];
 }
 
@@ -256,6 +270,7 @@ export interface RustProviderSemantics {
   readonly exports: readonly RustProviderExportRow[];
   readonly operations: readonly RustProviderOperationRow[];
   readonly carrierPaths: ReadonlyMap<string, string>;
+  readonly carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>;
   readonly types: readonly RustProviderTypeRow[];
   readonly binaryEpilogues: readonly RustProviderBinaryEpilogueRow[];
 }
@@ -272,6 +287,7 @@ export function mergeRustProviderSemantics(
     "binary epilogue",
   );
   const carrierPaths = new Map<string, string>();
+  const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   for (const input of inputs) {
     for (const [id, path] of input.carrierPaths) {
       const existing = carrierPaths.get(id);
@@ -280,6 +296,13 @@ export function mergeRustProviderSemantics(
       }
       carrierPaths.set(id, path);
     }
+    for (const [id, traits] of input.carrierTraits) {
+      const existing = carrierTraits.get(id);
+      if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
+        throw new Error(`Rust provider carrier '${id}' has conflicting native trait contracts.`);
+      }
+      carrierTraits.set(id, traits);
+    }
   }
   return Object.freeze({
     exports,
@@ -287,6 +310,7 @@ export function mergeRustProviderSemantics(
     types,
     binaryEpilogues,
     carrierPaths: new Map([...carrierPaths.entries()].sort(([left], [right]) => left.localeCompare(right, "en"))),
+    carrierTraits: new Map([...carrierTraits.entries()].sort(([left], [right]) => left.localeCompare(right, "en"))),
   });
 }
 
@@ -339,6 +363,7 @@ export function collectRustProviderSemanticsFromDefinitions(
   const exports: RustProviderExportRow[] = [];
   const operations: RustProviderOperationRow[] = [];
   const carrierPaths = new Map<string, string>();
+  const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   const types: RustProviderTypeRow[] = [];
   const binaryEpilogues: RustProviderBinaryEpilogueRow[] = [];
   for (const definition of definitions) {
@@ -360,12 +385,20 @@ export function collectRustProviderSemanticsFromDefinitions(
       }
     }
     const carrierPathRows = definition.carrierPaths ?? {};
+    const carrierTraitRows = definition.carrierTraits ?? {};
     for (const [carrierId, path] of Object.entries(carrierPathRows)) {
       const existing = carrierPaths.get(carrierId);
       if (existing !== undefined && existing !== path) {
         throw new Error(`Rust provider carrier '${carrierId}' has conflicting target paths '${existing}' and '${path}'.`);
       }
       carrierPaths.set(carrierId, path);
+    }
+    for (const [carrierId, traits] of Object.entries(carrierTraitRows)) {
+      const existing = carrierTraits.get(carrierId);
+      if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
+        throw new Error(`Rust provider carrier '${carrierId}' has conflicting native trait contracts.`);
+      }
+      carrierTraits.set(carrierId, traits);
     }
     for (const type of definition.types ?? []) {
       const owner = moduleByExportId.get(type.exportId);
@@ -374,7 +407,7 @@ export function collectRustProviderSemanticsFromDefinitions(
       }
       types.push(Object.freeze({
         ...type,
-        targetCarrier: materializeProviderCarrier(type.targetCarrier, carrierPathRows),
+        targetCarrier: materializeProviderCarrier(type.targetCarrier, carrierPathRows, carrierTraitRows),
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
@@ -397,7 +430,7 @@ export function collectRustProviderSemanticsFromDefinitions(
       if (owner === undefined) {
         throw new Error(`Rust provider package '${definition.id}' operation '${row.memberId ?? row.exportId}' has no declaration owner.`);
       }
-      return materializeProviderOperationRow(row, aliases, carrierPathRows, {
+      return materializeProviderOperationRow(row, aliases, carrierPathRows, carrierTraitRows, {
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
@@ -410,6 +443,7 @@ export function collectRustProviderSemanticsFromDefinitions(
     exports: Object.freeze(exports),
     operations: Object.freeze(operations),
     carrierPaths,
+    carrierTraits,
     types: Object.freeze(types),
     binaryEpilogues: Object.freeze(binaryEpilogues),
   };
@@ -419,19 +453,20 @@ function materializeProviderOperationRow(
   row: RustProviderOperationDefinition,
   aliases: ReadonlyMap<string, string>,
   carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
   owner: Pick<RustProviderOperationRow, "providerPackageId" | "providerId" | "providerVersion" | "providerModuleId" | "moduleSpecifier">,
 ): RustProviderOperationRow {
   return {
     ...row,
     ...owner,
-    target: materializeProviderOperationForm(row.target, aliases, carrierPaths),
-    resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths),
+    target: materializeProviderOperationForm(row.target, aliases, carrierPaths, carrierTraits),
+    resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths, carrierTraits),
     ...(row.receiverCarrier === undefined
       ? {}
-      : { receiverCarrier: materializeProviderCarrier(row.receiverCarrier, carrierPaths) }),
+      : { receiverCarrier: materializeProviderCarrier(row.receiverCarrier, carrierPaths, carrierTraits) }),
     ...(row.parameterCarriers === undefined
       ? {}
-      : { parameterCarriers: row.parameterCarriers.map((carrier) => materializeProviderCarrier(carrier, carrierPaths)) }),
+      : { parameterCarriers: row.parameterCarriers.map((carrier) => materializeProviderCarrier(carrier, carrierPaths, carrierTraits)) }),
     ...(row.resultConversion === undefined
       ? {}
       : { resultConversion: row.resultConversion }),
@@ -444,6 +479,7 @@ function materializeProviderOperationRow(
               row.immediateCallback.fallibleTarget,
               aliases,
               carrierPaths,
+              carrierTraits,
             ),
           },
         }),
@@ -454,6 +490,7 @@ function materializeProviderOperationForm(
   form: RustProviderOperationForm,
   aliases: ReadonlyMap<string, string>,
   carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustProviderOperationForm {
   const argConversions = "argConversions" in form && form.argConversions !== undefined
     ? [...form.argConversions]
@@ -481,9 +518,9 @@ function materializeProviderOperationForm(
         : {}),
       leadingArguments: form.leadingArguments.map((argument) => ({
         ...argument,
-        carrier: materializeProviderCarrier(argument.carrier, carrierPaths),
+        carrier: materializeProviderCarrier(argument.carrier, carrierPaths, carrierTraits),
       })),
-      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths),
+      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths, carrierTraits),
     };
   }
   if (form.form === "receiver-tagged-array") {
@@ -491,12 +528,12 @@ function materializeProviderOperationForm(
       ...form,
       leadingArguments: form.leadingArguments.map((argument) => ({
         ...argument,
-        carrier: materializeProviderCarrier(argument.carrier, carrierPaths),
+        carrier: materializeProviderCarrier(argument.carrier, carrierPaths, carrierTraits),
       })),
-      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths),
+      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths, carrierTraits),
       alternatives: form.alternatives.map((alternative) => ({
         ...alternative,
-        inputCarrier: materializeProviderCarrier(alternative.inputCarrier, carrierPaths),
+        inputCarrier: materializeProviderCarrier(alternative.inputCarrier, carrierPaths, carrierTraits),
         constructorPath: expandProviderPath(alternative.constructorPath, aliases),
       })),
     };
@@ -528,37 +565,41 @@ function expandProviderPath(path: string, aliases: ReadonlyMap<string, string>):
 export function materializeProviderCarrier(
   carrier: TargetTypeRef,
   carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract> = {},
 ): TargetTypeRef {
   if (carrier.kind === "target-named") {
     const typeArguments = (carrier.typeArguments ?? []).map((argument) =>
-      materializeProviderCarrier(argument, carrierPaths));
+      materializeProviderCarrier(argument, carrierPaths, carrierTraits));
     const path = carrierPaths instanceof Map
       ? carrierPaths.get(carrier.id)
       : (carrierPaths as Readonly<Record<string, string>>)[carrier.id];
+    const traits = carrierTraits instanceof Map
+      ? carrierTraits.get(carrier.id)
+      : (carrierTraits as Readonly<Record<string, RustNamedTypeTraitContract>>)[carrier.id];
     return path === undefined
       ? { ...carrier, ...(typeArguments.length === 0 ? {} : { typeArguments }) }
-      : rustNamedTargetType(carrier.id, path, typeArguments);
+      : rustNamedTargetType(carrier.id, path, typeArguments, traits ?? rustMoveOnlyNamedTypeTraits);
   }
   if (carrier.kind === "array") {
-    return { ...carrier, element: materializeProviderCarrier(carrier.element, carrierPaths) };
+    return { ...carrier, element: materializeProviderCarrier(carrier.element, carrierPaths, carrierTraits) };
   }
   if (carrier.kind === "tuple") {
-    return { ...carrier, elements: carrier.elements.map((element) => materializeProviderCarrier(element, carrierPaths)) };
+    return { ...carrier, elements: carrier.elements.map((element) => materializeProviderCarrier(element, carrierPaths, carrierTraits)) };
   }
   if (carrier.kind === "pointer") {
-    return { ...carrier, pointee: materializeProviderCarrier(carrier.pointee, carrierPaths) };
+    return { ...carrier, pointee: materializeProviderCarrier(carrier.pointee, carrierPaths, carrierTraits) };
   }
   if (carrier.kind === "function-pointer") {
     return {
       ...carrier,
-      args: carrier.args.map((argument) => materializeProviderCarrier(argument, carrierPaths)),
-      result: materializeProviderCarrier(carrier.result, carrierPaths),
+      args: carrier.args.map((argument) => materializeProviderCarrier(argument, carrierPaths, carrierTraits)),
+      result: materializeProviderCarrier(carrier.result, carrierPaths, carrierTraits),
     };
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   return fixedArray === undefined
     ? carrier
-    : rustFixedArrayTargetType(materializeProviderCarrier(fixedArray.element, carrierPaths), fixedArray.length);
+    : rustFixedArrayTargetType(materializeProviderCarrier(fixedArray.element, carrierPaths, carrierTraits), fixedArray.length);
 }
 
 function createRustProviderPackageSourceExtension(definition: RustProviderPackageDefinition): CompilerExtension {

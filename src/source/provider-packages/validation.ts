@@ -42,6 +42,7 @@ import {
   rustUsizeTargetId,
   isRustUnitCarrier,
   isRustNeverCarrier,
+  isRustNamedTypeTraitContract,
   rustOptionElementCarrier,
 } from "../rust-target-types.js";
 import { rustProviderOperationFormContractViolation } from "../rust-facts/operation-form-contract.js";
@@ -99,7 +100,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
     "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "modules", "types", "operations", "crates",
-    "aliasImports", "carrierPaths", "binaryEpilogues",
+    "aliasImports", "carrierPaths", "carrierTraits", "binaryEpilogues",
   ], "package", fail);
 
   const modulesBySpecifier = new Map<string, RustProviderPackageDefinition["modules"][number]>();
@@ -180,6 +181,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   validateCrates(definition, fail);
   validateAliases(definition, fail);
   validateCarrierPaths(definition, fail);
+  validateCarrierTraits(definition, fail);
   validateBinaryEpilogues(definition, fail);
   validateTypeRelations(definition, exportsById, fail);
   validateOperationRows(definition, exportsById, membersById, signaturesById, fail);
@@ -521,6 +523,18 @@ function validateCarrierPaths(definition: RustProviderPackageDefinition, fail: F
   }
 }
 
+function validateCarrierTraits(definition: RustProviderPackageDefinition, fail: Fail): void {
+  for (const [carrierId, traits] of Object.entries(definition.carrierTraits ?? {})) {
+    requireNonEmpty(carrierId, "carrier trait id", fail);
+    if (definition.carrierPaths?.[carrierId] === undefined) {
+      fail(`carrier trait contract '${carrierId}' has no rendered carrier path`);
+    }
+    if (!isRustNamedTypeTraitContract(traits)) {
+      fail(`carrier '${carrierId}' has an invalid native trait contract`);
+    }
+  }
+}
+
 function validateBinaryEpilogues(definition: RustProviderPackageDefinition, fail: Fail): void {
   const ids = new Set<string>();
   const crates = new Set(definition.crates.map((crate) => crate.crateName));
@@ -644,7 +658,7 @@ function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible", "isUnsafe", "immediateCallback",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible", "errorBoundary", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -690,8 +704,15 @@ function validateOperationRows(
       fail(`duplicate operation selector row '${label}' for '${row.operationKind}'`);
     }
     rowKeys.add(rowKey);
-    if (row.isFallible !== undefined && typeof row.isFallible !== "boolean") {
-      fail(`isFallible must be boolean when present (row '${label}').`);
+    if (row.isFallible !== undefined && row.isFallible !== true) {
+      fail(`isFallible must be true when present (row '${label}').`);
+    }
+    if (row.isFallible === true &&
+      row.errorBoundary !== "provider-native" && row.errorBoundary !== "source-program") {
+      fail(`fallible row '${label}' requires an exact errorBoundary.`);
+    }
+    if (row.isFallible !== true && row.errorBoundary !== undefined) {
+      fail(`infallible row '${label}' cannot declare an errorBoundary.`);
     }
     if (row.isAsync !== undefined && typeof row.isAsync !== "boolean") {
       fail(`isAsync must be boolean when present (row '${label}').`);

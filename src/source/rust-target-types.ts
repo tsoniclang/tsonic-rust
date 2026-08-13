@@ -275,19 +275,33 @@ export interface RustFixedArrayCarrierValue {
 export interface RustNamedTypeCarrierValue {
   readonly id: string;
   readonly path: string;
+  readonly traits: RustNamedTypeTraitContract;
   readonly typeArguments: readonly TargetTypeRef[];
 }
+
+export type RustNamedTypeTraitCondition = "never" | "always" | "all-type-arguments";
+
+export interface RustNamedTypeTraitContract {
+  readonly clone: RustNamedTypeTraitCondition;
+  readonly copy: RustNamedTypeTraitCondition;
+}
+
+export const rustMoveOnlyNamedTypeTraits: RustNamedTypeTraitContract = Object.freeze({
+  clone: "never",
+  copy: "never",
+});
 
 export function rustNamedTargetType(
   id: string,
   path: string,
   typeArguments: readonly TargetTypeRef[] = [],
+  traits: RustNamedTypeTraitContract = rustMoveOnlyNamedTypeTraits,
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: rustNamedTypeCarrierName,
-    value: { id, path, typeArguments },
+    value: { id, path, traits, typeArguments },
   };
 }
 
@@ -300,16 +314,19 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     return undefined;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 3 || keys[0] !== "id" || keys[1] !== "path" || keys[2] !== "typeArguments") {
+  if (keys.length !== 4 || keys[0] !== "id" || keys[1] !== "path" || keys[2] !== "traits" ||
+    keys[3] !== "typeArguments") {
     return undefined;
   }
   const candidate = value as {
     readonly id?: unknown;
     readonly path?: unknown;
+    readonly traits?: unknown;
     readonly typeArguments?: unknown;
   };
   if (typeof candidate.id !== "string" || candidate.id.length === 0 ||
     typeof candidate.path !== "string" || candidate.path.length === 0 ||
+    !isRustNamedTypeTraitContract(candidate.traits) ||
     !isDenseDataArray(candidate.typeArguments) ||
     candidate.typeArguments.some((argument) => !isRustTargetTypeRef(argument))) {
     return undefined;
@@ -317,8 +334,29 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
   return {
     id: candidate.id,
     path: candidate.path,
+    traits: candidate.traits,
     typeArguments: candidate.typeArguments as readonly TargetTypeRef[],
   };
+}
+
+export function isRustNamedTypeTraitContract(value: unknown): value is RustNamedTypeTraitContract {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const keys = Object.keys(value).sort();
+  if (keys.length !== 2 || keys[0] !== "clone" || keys[1] !== "copy") {
+    return false;
+  }
+  const candidate = value as { readonly clone?: unknown; readonly copy?: unknown };
+  if (!isRustNamedTypeTraitCondition(candidate.clone) || !isRustNamedTypeTraitCondition(candidate.copy)) {
+    return false;
+  }
+  return candidate.copy === "never" || candidate.clone === "always" ||
+    (candidate.copy === "all-type-arguments" && candidate.clone === "all-type-arguments");
+}
+
+function isRustNamedTypeTraitCondition(value: unknown): value is RustNamedTypeTraitCondition {
+  return value === "never" || value === "always" || value === "all-type-arguments";
 }
 
 export function rustFixedArrayTargetType(element: TargetTypeRef, length: number): TargetTypeRef {
@@ -416,6 +454,7 @@ export function substituteRustTargetTypeParameters(
           namedType.path,
           namedType.typeArguments.map((argument) =>
             substituteRustTargetTypeParameters(argument, substitutions)),
+          namedType.traits,
         );
       }
       const fixedArray = rustFixedArrayCarrierValue(type);
@@ -901,6 +940,12 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (fixedArray !== undefined) {
     return isRustCopyCarrier(fixedArray.element);
   }
+  const namedType = rustNamedTypeCarrierValue(carrier);
+  if (namedType !== undefined) {
+    return namedType.traits.copy === "always" ||
+      (namedType.traits.copy === "all-type-arguments" &&
+        namedType.typeArguments.every(isRustCopyCarrier));
+  }
   return rustSourceTypeCarrierValue(carrier)?.shape === "enum";
 }
 
@@ -910,13 +955,6 @@ const rustUnconditionallyCopyTargetIds: ReadonlySet<string> = new Set([
   rustUsizeTargetId,
   rustIsizeTargetId,
 ]);
-
-export function rustValueCarrierRequiresCloneOnRead(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && rustCloneOnReadTargetIds.has(carrier.id) ||
-    rustSourceTypeCarrierValue(carrier)?.shape === "object" ||
-    rustStructuralObjectCarrierValue(carrier) !== undefined ||
-    rustSourceUnionCarrierValue(carrier) !== undefined;
-}
 
 export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "target-named" && rustJsStrictEqualityTargetIds.has(carrier.id);
@@ -948,6 +986,12 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   if (fixedArray !== undefined) {
     return rustCarrierSupportsClone(fixedArray.element);
   }
+  const namedType = rustNamedTypeCarrierValue(carrier);
+  if (namedType !== undefined) {
+    return namedType.traits.clone === "always" ||
+      (namedType.traits.clone === "all-type-arguments" &&
+        namedType.typeArguments.every(rustCarrierSupportsClone));
+  }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
   if (structuralObject !== undefined) {
     return structuralObject.fields.every((field) => rustCarrierSupportsClone(field.type));
@@ -965,20 +1009,6 @@ export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined
     isRustUndefinedCarrier(carrier) ||
     isRustJsStrictEqualityCarrier(carrier);
 }
-
-const rustCloneOnReadTargetIds: ReadonlySet<string> = new Set([
-  rustBigIntTargetId,
-  rustCallableTargetId,
-  rustLocationTargetId,
-  rustJsValueTargetId,
-  rustJsArrayTargetId,
-  rustJsMapTargetId,
-  rustJsSetTargetId,
-  rustJsDateTargetId,
-  rustJsRegExpTargetId,
-  rustJsErrorTargetId,
-  rustProgramErrorTargetId,
-]);
 
 const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
   rustNullTargetId,

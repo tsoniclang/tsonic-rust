@@ -249,7 +249,8 @@ function selectRustProjectTypeTest(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  const sourceCarrier = resolveRustTargetTypeRef(request.left, context, options);
+  const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.left) ??
+    resolveRustTargetTypeRef(request.left, context, options);
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForDeclaration(request.sourceRightDeclaration);
@@ -621,6 +622,7 @@ function mapSelectedProviderAssignment(
     resultCarrier: template.resultCarrier,
     isAsync: template.isAsync,
     isFallible: template.isFallible,
+    ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     isUnsafe: template.isUnsafe,
   });
   if (abi === undefined) {
@@ -836,6 +838,7 @@ export function selectRustCheckedCall(
       resultCarrier,
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     }, [rustStringTargetType()], context, options, {
       sourceName: "Error",
     });
@@ -1177,6 +1180,7 @@ export function finalizeRustPreparedCheckedCall(
         ...prepared.template,
         target: prepared.callback.fallibleTarget,
         isFallible: true,
+        errorBoundary: "source-program" as const,
       }
     : prepared.template;
   return acceptSelectedCall(
@@ -1461,6 +1465,7 @@ function mapSelectedJsSpecialCall(
       resultCarrier,
       isAsync: false,
       isFallible: true,
+      errorBoundary: "provider-native",
     }, [{ kind: "target-named", id: "rust.js.JsRegExp" }], context, options, {
       sourceName: memberName,
     });
@@ -1499,6 +1504,7 @@ function mapSelectedJsSpecialCall(
     resultCarrier,
     isAsync: false,
     isFallible: true,
+    errorBoundary: "provider-native",
   }, [rustJsValueTargetType()], context, options, {
     sourceName: memberName,
   });
@@ -1701,6 +1707,9 @@ function acceptProjectSourceCall(
   };
   const selectedSignature = {
     member,
+    ...(construction || ownerCarrier === undefined
+      ? {}
+      : { sourceSelectedReceiverCarrier: ownerCarrier }),
     sourceDeclaration: callableDeclaration,
     ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
     ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
@@ -1723,6 +1732,9 @@ function acceptProjectSourceCall(
   return acceptRustPolicy({
     selectedSignature: {
       member,
+      ...(construction || ownerCarrier === undefined
+        ? {}
+        : { sourceSelectedReceiverCarrier: ownerCarrier }),
       sourceDeclaration: callableDeclaration,
       ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
       ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
@@ -2044,8 +2056,8 @@ function selectedCallSourceCarriers(
   }[] = [];
   const actual = request.source.sourceArguments.map((sourceArgument, index) => {
     const argument = sourceArgument.expression;
-    const expected = selectedCallArgumentTargetCarrier(fact.target, index) ??
-      declaredBySourceIndex.get(index);
+    const targetExpected = selectedCallArgumentTargetCarrier(fact.target, index);
+    const expected = targetExpected ?? declaredBySourceIndex.get(index);
     const resolved = selectedSourceValueCarrier(sourceArgument, context, options);
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
     let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
@@ -2057,8 +2069,10 @@ function selectedCallSourceCarriers(
         options.projectTypes,
       );
       if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
-        reconciliations.push({ sourceIndex: index, reconciliation });
-        effective = expected;
+        if (reconciliation.kind === "project-upcast" || targetExpected === undefined) {
+          reconciliations.push({ sourceIndex: index, reconciliation });
+          effective = expected;
+        }
       } else if (reconciliation.kind === "incompatible") {
         incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: effective, expected };
       }
@@ -2402,6 +2416,7 @@ function finalizeProviderOperationFact(
     ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
     isAsync: template.isAsync,
     isFallible: template.isFallible,
+    ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     isUnsafe: template.isUnsafe,
   });
   if (abi === undefined) {
@@ -2558,6 +2573,11 @@ export function selectRustCheckedPropertyAccess(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const selectedReceiverCarrier = selectedMemberReceiverCarrier(request, context, options);
+  const runtimeReceiverCarrier = resolveRustTargetTypeRef(
+    request.receiver,
+    context,
+    options,
+  );
   if (request.optionalChain === true && selectedReceiverCarrier === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_EVIDENCE_MISSING", "Optional-chain property access has no exact TSTS-selected non-null receiver type.");
   }
@@ -2589,10 +2609,11 @@ export function selectRustCheckedPropertyAccess(
     options.sourceProfiles,
   );
   if (sourceProfileMembers !== undefined) {
-    const receiverCarrier = selectedReceiverCarrier;
     const generator = selectRustGeneratorSourceProperty({
       sourceMembers: sourceProfileMembers.members,
-      ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
+      ...(runtimeReceiverCarrier === undefined
+        ? {}
+        : { receiverCarrier: runtimeReceiverCarrier }),
     });
     if (generator.kind === "rejected") {
       return rejectSelectedOperation(
@@ -2609,7 +2630,7 @@ export function selectRustCheckedPropertyAccess(
         [],
         context,
         options,
-        selectedReceiverCarrier,
+        runtimeReceiverCarrier,
       );
       if (fact === undefined) {
         return rejectSelectedOperation(
@@ -2657,9 +2678,6 @@ export function selectRustCheckedPropertyAccess(
         context,
         "RUST_SELECTED_OPERATION_UNSUPPORTED",
         `The selected JavaScript property '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust operation row for this receiver carrier.`,
-        [{
-          message: `receiver=${JSON.stringify(receiverCarrier)}; sourceReceiver=${JSON.stringify(resolveRustTargetTypeRef(request.receiver, context, options))}; selectedReceiver=${JSON.stringify(resolveRustTargetTypeRef(request.sourceReceiverType, context, options))}`,
-        }],
       );
     }
     const fact = finalizeProviderOperationFromSubjects(selection.fact, request.receiver, [], context, options, selectedReceiverCarrier);
@@ -3330,6 +3348,7 @@ export function selectRustCheckedElementAccess(
       parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     };
     const fact = finalizeProviderOperationFromSubjects(
       template,
@@ -3372,6 +3391,7 @@ export function selectRustCheckedElementAccess(
       parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     };
     const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.argument], context, options, selectedReceiverCarrier);
     if (fact === undefined) {
@@ -3691,7 +3711,8 @@ export function selectRustCheckedConversion(
         { message: "rust deferred the selected generic source-call argument carrier to post-check target substitution" },
       ]);
     }
-    const sourceCarrier = resolveRustTargetTypeRef(request.expression, context, options);
+    const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.expression) ??
+      resolveRustTargetTypeRef(request.expression, context, options);
     if (sourceCarrier !== undefined && rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
       return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected call argument already has the selected target parameter carrier" },
@@ -3755,7 +3776,8 @@ export function selectRustCheckedConversion(
     );
   }
   const targetCarrier = resolveRustTargetTypeRef(request.explicitTargetTypeNode, context, options);
-  const sourceCarrier = resolveRustTargetTypeRef(request.sourceExpression, context, options);
+  const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.sourceExpression) ??
+    resolveRustTargetTypeRef(request.sourceExpression, context, options);
   if (targetCarrier === undefined || sourceCarrier === undefined) {
     return rejectSelectedOperation(
       request.expression,
@@ -3992,8 +4014,14 @@ function selectedMemberReceiverCarrier(
     context,
     options,
   );
-  if (receiver === undefined || sourceCarrier === undefined ||
-    request.sourceReceiverType === undefined) {
+  if (receiver === undefined || sourceCarrier === undefined) {
+    return undefined;
+  }
+  const optionElement = rustOptionElementCarrier(sourceCarrier);
+  if (request.optionalChain === true && optionElement !== undefined) {
+    return optionElement;
+  }
+  if (request.sourceReceiverType === undefined) {
     return undefined;
   }
   const selectedCarrier = resolveRustTargetTypeRef(
@@ -4023,7 +4051,6 @@ function selectedMemberReceiverCarrier(
     rustTargetTypeRefEquals(sourceCarrier, selectedOperationResult)) {
     return sourceCarrier;
   }
-  const optionElement = rustOptionElementCarrier(sourceCarrier);
   const declaredCarrier = optionElement ?? sourceCarrier;
   const declaredDefinition = options.projectTypes.definitionForCarrier(declaredCarrier);
   const selectedDefinition = options.projectTypes.definitionForCarrier(selectedCarrier);
@@ -4064,14 +4091,16 @@ function acceptRustMemberOperation(
     context,
     options,
   );
-  const selectedReceiverCarrier = selectedMemberReceiverCarrier(
-    request,
-    context,
-    options,
-  );
-  if (sourceReceiverCarrier !== undefined && selectedReceiverCarrier !== undefined) {
+  const operationReceiverCarrier = request.optionalChain === true
+    ? rustOptionElementCarrier(sourceReceiverCarrier) ?? sourceReceiverCarrier
+    : sourceReceiverCarrier;
+  const selectedReceiverCarrier = fact.kind === "provider-operation" &&
+      fact.abi.sourceReceiver.kind === "receiver"
+    ? fact.abi.sourceReceiver.carrier
+    : selectedMemberReceiverCarrier(request, context, options);
+  if (operationReceiverCarrier !== undefined && selectedReceiverCarrier !== undefined) {
     const projection = selectRustFlowReadProjection(
-      sourceReceiverCarrier,
+      operationReceiverCarrier,
       selectedReceiverCarrier,
       options.projectTypes,
     );
@@ -4185,6 +4214,7 @@ function providerOperationTemplate<
     ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,
+    errorBoundary: row.isFallible === true ? row.errorBoundary : "none",
     isUnsafe: row.isUnsafe === true,
   };
 }

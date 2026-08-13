@@ -50,7 +50,7 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
   assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value(?:_[0-9]+)?\)/u);
   assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
-  assert.match(text, /let counter = Counter::new\(10\);/u);
+  assert.match(text, /let counter: Counter = Counter::new\(10\);/u);
   assert.match(text, /counter\.clone\(\)\.add\(5\);/u);
   assert.match(text, /counter\.clone\(\)\.current\(\)/u);
 });
@@ -643,8 +643,33 @@ export function read(type: string): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn new\(r#type: String\)/u);
   assert.match(text, /pub fn read\(r#type: String\) -> String/u);
-  assert.match(text, /Label::new\(r#type\)/u);
+  assert.match(text, /Label::new\(r#type\.clone\(\)\)/u);
   validateGeneratedProject("native-raw-identifiers", result.artifacts);
+});
+
+test("Rust keyword-shaped project methods use one raw identifier at declaration and call", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export class Matcher {
+  match(value: string): string {
+    return value;
+  }
+}
+
+export function read(value: string): string {
+  const matcher = new Matcher();
+  return matcher.match(value);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn r#match\(&self, value: String\) -> String/u);
+  assert.match(text, /matcher\.clone\(\)\.r#match\(value\.clone\(\)\)/u);
+  validateGeneratedProject("native-raw-method-identifiers", result.artifacts);
 });
 
 test("class decorators fail closed", () => {
@@ -908,9 +933,9 @@ export function first(entry: [int32, string]): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pair\(a: i32, label: String\) -> \(i32, String\)/u);
-  assert.match(text, /let entry: \(i32, String\) = \(a, label\);/u);
+  assert.match(text, /let entry: \(i32, String\) = \(a, label\.clone\(\)\);/u);
   assert.match(text, /pub fn first\(entry: \(i32, String\)\) -> i32/u);
-  assert.match(text, /entry\.0/u);
+  assert.match(text, /entry\.clone\(\)\.0/u);
 });
 
 test("homogeneous tuple carriers support checked dynamic indexing", { timeout: 300_000 }, () => {
@@ -1233,7 +1258,7 @@ export function bad(xs: int32[]): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn bad\(xs: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
-  assert.match(text, /xs\.try_some\(\|x\| Ok\(risky\(x\)\? == 1\)\)/u);
+  assert.match(text, /xs\.try_some\(\|x\| Ok::<_, rt::TsonicError>\(risky\(x\)\? == 1\)\)/u);
 });
 
 test("string literals mentioning runtime aliases do not create imports", () => {

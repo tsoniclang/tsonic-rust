@@ -387,6 +387,21 @@ function projectFunction(
         ...(argumentModes.every((mode) => mode === "value") ? {} : { argModes: argumentModes }),
         ...(fn.receiver === "mutable" ? { mutatesReceiver: true } : {}),
       };
+  const operation = {
+    exportId,
+    ...(memberId === undefined ? {} : { memberId }),
+    signatureId,
+    operationKind: constructor ? "constructor" as const : "method" as const,
+    target,
+    resultCarrier,
+    parameterCarriers,
+    ...(context.currentType === undefined || fn.receiver === undefined
+      ? {}
+      : { receiverCarrier: context.currentType.carrier }),
+    ...(allTypeParameters.length === 0 ? {} : { typeParameters: allTypeParameters }),
+    ...(fn.asynchronous ? { isAsync: true as const } : {}),
+    ...(fn.unsafe ? { isUnsafe: true as const } : {}),
+  };
   return {
     ...(memberId === undefined ? {} : { memberId }),
     signature: Object.freeze({
@@ -398,22 +413,13 @@ function projectFunction(
         ? {}
         : { typeParameters: Object.freeze(methodTypeParameters.map((name) => Object.freeze({ name }))) }),
     }),
-    operation: operationRow({
-      exportId,
-      ...(memberId === undefined ? {} : { memberId }),
-      signatureId,
-      operationKind: constructor ? "constructor" : "method",
-      target,
-      resultCarrier,
-      parameterCarriers,
-      ...(context.currentType === undefined || fn.receiver === undefined
-        ? {}
-        : { receiverCarrier: context.currentType.carrier }),
-      ...(allTypeParameters.length === 0 ? {} : { typeParameters: allTypeParameters }),
-      ...(fn.asynchronous ? { isAsync: true } : {}),
-      ...(result.fallible ? { isFallible: true } : {}),
-      ...(fn.unsafe ? { isUnsafe: true } : {}),
-    }),
+    operation: result.fallible
+      ? operationRow({
+          ...operation,
+          isFallible: true,
+          errorBoundary: "source-program",
+        })
+      : operationRow(operation),
   };
 }
 

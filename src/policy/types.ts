@@ -60,6 +60,7 @@ export interface RustTargetCallArgumentSlot {
 
 export interface RustSelectedTargetSignature {
   readonly member: RustTargetMember;
+  readonly sourceSelectedReceiverCarrier?: RustTargetTypeRef;
   readonly targetTypeArguments?: readonly RustTargetTypeRef[];
   readonly providerDeclaration?: ProviderDeclarationIdentity;
   readonly argumentConversions?: readonly RustTargetCallArgumentSlot[];

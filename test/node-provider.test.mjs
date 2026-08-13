@@ -250,7 +250,7 @@ export function main(): void {
   const port: int32 = 0;
   setInterval((): void => {
     JSON.parse("{}");
-  }, 250);
+  }, 250 as int32);
   const aliasedHandle = handle;
   const server = createServer((aliasedHandle));
   server.listen(port, "127.0.0.1", (): void => {});

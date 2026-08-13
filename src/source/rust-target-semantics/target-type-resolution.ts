@@ -563,6 +563,18 @@ function resolveRustTargetType(
   }
 }
 
+export function resolveRustExactNullishValueCarrier(
+  type: Type,
+  queries: SourceFileSemantics,
+): TargetTypeRef | undefined {
+  if (!queries.isNullish(type)) {
+    return undefined;
+  }
+  return queries.isNever(queries.removeMissingOrUndefined(type))
+    ? rustUndefinedTargetType()
+    : rustNullTargetType();
+}
+
 function resolveStructuralObjectType(
   type: Type,
   context: RustTargetTypeResolutionContext,

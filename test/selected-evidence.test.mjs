@@ -224,7 +224,7 @@ export function length(value: string | null): int32 | undefined {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /value\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u,
+    /value\s*\.clone\(\)\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u,
   );
   validateGeneratedProject("selected-optional-property", result.artifacts);
 });
@@ -251,10 +251,10 @@ export function read(value: Counter | undefined): int32 {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /value\s*\.as_ref\(\)\s*\.unwrap\(\)\s*\.clone\(\)\s*\.__tsonic_state/su,
+    /match value\.clone\(\)\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => __tsonic_flow_value\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\}\s*\.__tsonic_state/su,
   );
   assert.equal(
-    source.match(/value\s*\.as_ref\(\)\s*\.unwrap\(\)\s*\.clone\(\)/gsu)?.length,
+    source.match(/match value\.clone\(\)\.as_ref\(\)/gsu)?.length,
     2,
   );
   validateGeneratedProject("selected-narrowed-project-property", result.artifacts);
@@ -279,11 +279,17 @@ export class JsonString extends JsonTagged {
 }
 
 export class JsonArray extends JsonValue {}
+
+export class JsonObject extends JsonValue {
+  value: JsonValue | undefined;
+  constructor(value: JsonValue | undefined) { super(); this.value = value; }
+  getValue(): JsonValue | undefined { return this.value; }
+}
 `,
       "index.ts": `
 import { check } from "@acme/testing";
 import type { int32 } from "@tsonic/core/types.js";
-import { JsonArray, JsonString as SelectedString, JsonTagged, JsonValue } from "./model.js";
+import { JsonArray, JsonObject, JsonString as SelectedString, JsonTagged, JsonValue } from "./model.js";
 
 function read(value: JsonValue): string {
   if (value instanceof SelectedString) return value.value;
@@ -307,6 +313,14 @@ function isValue(value: SelectedString): boolean {
   return value instanceof JsonValue;
 }
 
+function readNested(value: JsonValue): string {
+  if (value instanceof JsonObject) {
+    const selected = value.getValue();
+    if (selected instanceof SelectedString) return selected.value;
+  }
+  return "other";
+}
+
 let evaluations: int32 = 0;
 
 function selected(value: JsonValue): JsonValue {
@@ -324,6 +338,7 @@ export function main(): void {
   check(present(text as SelectedString));
   check(!present(undefined));
   check(isValue(text as SelectedString));
+  check(readNested(new JsonObject(text)) === "selected");
   check(selected(text) instanceof SelectedString);
   check(evaluations === 1);
 }
@@ -375,10 +390,15 @@ function isExactlyNull(value: string | null): boolean {
   return value === null && value !== undefined;
 }
 
+function isAlwaysPresent(value: string): boolean {
+  return value !== undefined;
+}
+
 export function main(): void {
   check(isNull(new NullValue()));
   check(isExactlyUndefined(undefined));
   check(isExactlyNull(null));
+  check(isAlwaysPresent("present"));
   check(\`value=\${null}\` === "value=null");
 }
 `,
@@ -414,9 +434,16 @@ const sumToArrow = (value: int32): int32 => {
   return value + sumToArrow(value - 1);
 };
 
+function localSumTo(value: int32): int32 {
+  const visit = (current: int32): int32 =>
+    current <= 0 ? 0 : current + visit(current - 1);
+  return visit(value);
+}
+
 export function main(): void {
   check(sumTo(4) === 10);
   check(sumToArrow(4) === 10);
+  check(localSumTo(4) === 10);
 }
 `,
     },
@@ -517,7 +544,7 @@ export function currentPlatform(platform: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /pub fn currentPlatform\(platform: String\) -> String \{\n    platform\n\}/u);
+  assert.match(artifactText(result, "src/index.rs"), /pub fn currentPlatform\(platform: String\) -> String \{\n    platform\.clone\(\)\n\}/u);
 });
 
 test("a selected provider value without a target relation fails closed", () => {

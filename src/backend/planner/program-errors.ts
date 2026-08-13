@@ -23,36 +23,6 @@ const runtimeJsErrorType: RustType = {
 };
 const unitType: RustType = { kind: "unit" };
 const typeParameterT: RustType = { kind: "named", path: "T" };
-const runtimeReexports = [
-  "AsyncGenerator",
-  "BigInt",
-  "BorrowedAsyncGenerator",
-  "BorrowedGenerator",
-  "Callable",
-  "Completion",
-  "EmptyObjectState",
-  "Generator",
-  "GeneratorController",
-  "GeneratorResume",
-  "IteratorResult",
-  "IteratorValue",
-  "JsError",
-  "JsErrorKind",
-  "Location",
-  "ModuleCell",
-  "Null",
-  "ObjectHandle",
-  "ObjectIdentity",
-  "ToSourceString",
-  "Undefined",
-  "YieldPoint",
-  "block_on",
-  "completion_region",
-  "iter_cloned",
-  "iter_copied",
-  "source_string",
-] as const;
-
 function namedType(path: string, typeArguments?: readonly RustType[]): RustType {
   return {
     kind: "named",
@@ -125,11 +95,11 @@ export function planRustProgramErrorModule(
   const exactProjectVariants = projectVariants.filter((variant) => variant !== undefined);
 
   const items: RustItem[] = [
-    ...runtimeReexports.map((name): RustItem => ({
+    {
       kind: "use",
       visibility: "public",
-      path: `tsonic_rust_runtime::${name}`,
-    })),
+      path: "tsonic_rust_runtime::*",
+    },
     {
       kind: "enum",
       name: programErrorName,

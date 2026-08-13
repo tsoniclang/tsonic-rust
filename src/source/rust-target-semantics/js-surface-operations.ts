@@ -750,7 +750,7 @@ const jsOperationRows = defineJsOperationRows([
   { owner: "Date", member: "toJSON", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_json" }, result: { ref: "string" } } },
   { owner: "Date", member: "valueOf", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
   { owner: "DateConstructor", member: "now", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::now" }, result: { ref: "float64" } } },
-  { owner: "Date", member: "toISOString", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_iso_string" }, result: { ref: "string" } } },
+  { owner: "Date", member: "toISOString", operationKind: "call", lane: "date", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_iso_string" }, result: { ref: "string" } } },
   { owner: "Date", member: "getTime", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
 ]);
 
@@ -1174,6 +1174,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
       isAsync: false,
       isFallible: row.fallible === true,
+      errorBoundary: row.fallible === true ? "provider-native" : "none",
       ...(row.shape.resultConversion === undefined ? {} : { resultConversion: row.shape.resultConversion }),
     },
     resultCarrier,
@@ -1327,6 +1328,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
       parameterCarriers,
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     },
     resultCarrier,
     parameterCarriers,

@@ -580,6 +580,7 @@ test("fallible provider rows are restricted to method, constructor, and property
         resultCarrier: { kind: "source-primitive", name: "int32" },
         parameterCarriers: [{ kind: "source-primitive", name: "float64" }],
         isFallible: true,
+        errorBoundary: "provider-native",
       }],
       crates: [],
     }),

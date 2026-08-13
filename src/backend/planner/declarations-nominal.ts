@@ -273,7 +273,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: className,
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
-    visibility: exported ? "public" : "private",
+    visibility: exported ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [stateField],
@@ -775,7 +775,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
   return [{
     kind: "enum",
     name: enumName,
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
+    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
     variants,
   }];
@@ -877,7 +877,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ...(structAttributes(interfaceName, fields.map((field) => ({ name: field.targetName }))) === undefined
       ? {}
       : { attrs: structAttributes(interfaceName, fields.map((field) => ({ name: field.targetName }))) }),
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
+    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [{
@@ -920,7 +920,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
   return [{
     kind: "enum",
     name: aliasName,
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
+    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
     derives: fact.kind === "string-literal"
       ? ["Clone", "Copy", "Debug", "PartialEq"]
       : ["Clone", "Debug", "PartialEq"],

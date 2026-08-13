@@ -2,7 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustGenericRequirementSet } from "./generic-requirements.js";
-import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
+import type { RustGeneratorFact, RustSourceBindingFact } from "../../source/rust-facts/keys.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
 import type { RustBlock, RustExpr, RustType } from "../rust-ast/nodes.js";
@@ -14,6 +14,7 @@ export interface RustEffectiveExpressionOverride {
 }
 
 export interface RustCapturedBinding {
+  readonly declaration: Node;
   readonly path: string;
   readonly storage: "value" | "location";
   readonly valueCarrier: import("../../policy/types.js").TargetTypeRef;
@@ -85,7 +86,7 @@ export interface RustPlanContext {
     readonly protocol: RustGeneratorFact;
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
-  readonly capturedBindings?: ReadonlyMap<Node, RustCapturedBinding>;
+  readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly projectDispatchRoot?: RustExpr;
   readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../policy/types.js").TargetTypeRef>;
 }
@@ -149,6 +150,23 @@ export function rustSourceName(context: { readonly nonSnakeSeen?: { value: boole
     }
   }
   return targetName;
+}
+
+export function rustSourceBindingPath(
+  context: RustPlanContext,
+  binding: RustSourceBindingFact,
+): string | undefined {
+  const name = rustSourceName(context, binding.sourceName);
+  if (!isValidRustIdentifier(name)) {
+    return undefined;
+  }
+  if (binding.scope === "lexical") {
+    return name;
+  }
+  const declarationModule = context.moduleNameByFileName.get(binding.fileName);
+  return declarationModule !== undefined && declarationModule !== context.moduleName
+    ? `crate::${declarationModule}::${name}`
+    : name;
 }
 
 export function isUpperSnakeName(name: string): boolean {

@@ -1,6 +1,7 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
+import type { RustItem, RustStmt } from "../rust-ast/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file-planner.js";
 
 export interface RustModuleInitializer {
@@ -11,7 +12,7 @@ export interface RustModuleInitializer {
   readonly fallible: boolean;
 }
 
-export function planRustBinaryModuleInitializers(
+export function planRustModuleInitializers(
   input: RustTranslationContext,
   plannedSources: readonly PlannedRustSourceFile[],
   entrySourceFile: SourceFile,
@@ -57,28 +58,68 @@ export function planRustBinaryModuleInitializers(
   return Object.freeze(ordered);
 }
 
-export function diagnoseRustLibraryModuleInitialization(
-  input: RustTranslationContext,
-  plannedSources: readonly PlannedRustSourceFile[],
-  diagnostics: TargetDiagnostic[],
-): void {
-  const runtimeSources = plannedSources.filter((source) =>
-    source.moduleInitialization !== undefined);
-  if (runtimeSources.length === 0) {
-    return;
+export interface RustCrateInitializer {
+  readonly functionName: "__tsonic_initialize";
+  readonly asynchronous: boolean;
+  readonly fallible: boolean;
+  readonly item: RustItem;
+}
+
+export function planRustCrateInitializer(
+  initializers: readonly RustModuleInitializer[],
+  resultTypePath: string,
+): RustCrateInitializer | undefined {
+  if (initializers.length === 0) {
+    return undefined;
   }
-  diagnostics.push({
-    code: "RUST_LIBRARY_MODULE_INITIALIZATION_UNSUPPORTED",
-    category: "error",
-    source: "tsonic-rust",
-    message:
-      "Rust library output cannot preserve TypeScript runtime module initialization without an explicit target-toolchain startup contract.",
-    evidence: [
-      "target.capability=rust.backend.module-initialization",
-      ...runtimeSources.map((source) =>
-        `source.file=${input.ast.getFileName(source.sourceFile)}`),
-    ],
+  const asynchronous = initializers.some((initializer) => initializer.asynchronous);
+  const fallible = initializers.some((initializer) => initializer.fallible);
+  const statements: RustStmt[] = initializers.map((initializer) => {
+    const call = {
+      kind: "call" as const,
+      path: `crate::${initializer.moduleName}::${initializer.functionName}`,
+      args: [],
+    };
+    const execution = initializer.asynchronous
+      ? { kind: "await" as const, expr: call }
+      : call;
+    return {
+      kind: "expr" as const,
+      expr: initializer.fallible
+        ? { kind: "try" as const, expr: execution }
+        : execution,
+    };
   });
+  if (fallible) {
+    statements.push({
+      kind: "tail",
+      expr: { kind: "path", path: "Ok(())" },
+    });
+  }
+  const item: RustItem = {
+    kind: "function",
+    name: "__tsonic_initialize",
+    visibility: "public",
+    attrs: ["#[doc(hidden)]"],
+    ...(asynchronous ? { isAsync: true } : {}),
+    params: [],
+    ...(fallible
+      ? {
+          returnType: {
+            kind: "named" as const,
+            path: resultTypePath,
+            typeArguments: [{ kind: "unit" as const }],
+          },
+        }
+      : {}),
+    body: { statements },
+  };
+  return {
+    functionName: "__tsonic_initialize",
+    asynchronous,
+    fallible,
+    item,
+  };
 }
 
 function validateRuntimeModuleGraph(

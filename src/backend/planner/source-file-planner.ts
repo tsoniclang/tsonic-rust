@@ -379,7 +379,7 @@ function planTopLevelVariableStatement(
     }
     const visibility = ast.hasModifierKind(statement, "export")
       ? "public" as const
-      : "private" as const;
+      : "crate" as const;
     if (binding.storage === "native-const") {
       items.push({
         kind: "const",

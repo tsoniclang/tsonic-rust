@@ -21,8 +21,8 @@ import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturn
 import type { RustTranslationContext } from "../../translate/context.js";
 import { reconstructRustSourceFiles } from "./source-file-reconstruction.js";
 import {
-  diagnoseRustLibraryModuleInitialization,
-  planRustBinaryModuleInitializers,
+  planRustCrateInitializer,
+  planRustModuleInitializers,
 } from "./module-initialization.js";
 import { planRustSourceOutputIdentities } from "../../translate/artifacts/source-output-identities.js";
 import { planRustProgramErrorModule } from "./program-errors.js";
@@ -61,17 +61,21 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const entryFunction = outputType === "bin"
     ? resolveBinaryEntry(input, moduleNameByFileName, diagnostics)
     : undefined;
-  if (outputType === "lib") {
-    diagnoseRustLibraryModuleInitialization(input, plannedSources, diagnostics);
-  }
-  const moduleInitializers = outputType === "bin" && entryFunction !== undefined
-    ? planRustBinaryModuleInitializers(
+  const hasModuleInitialization = plannedSources.some((source) =>
+    source.moduleInitialization !== undefined);
+  const entrySourceFile = outputType === "bin"
+    ? entryFunction?.sourceFile
+    : hasModuleInitialization
+      ? resolveProjectEntrySourceFile(input, diagnostics)
+      : undefined;
+  const moduleInitializers = entrySourceFile === undefined
+    ? []
+    : planRustModuleInitializers(
         input,
         plannedSources,
-        entryFunction.sourceFile,
+        entrySourceFile,
         diagnostics,
-      )
-    : [];
+      );
 
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
@@ -88,6 +92,12 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
+  const crateInitializer = planRustCrateInitializer(
+    moduleInitializers ?? [],
+    programErrorModel === undefined
+      ? "tsonic_rust_runtime::TsonicResult"
+      : "crate::__tsonic_program::TsonicResult",
+  );
   const artifacts: TargetArtifact[] = cargoProject.project.kind === "generated"
     ? [{
         kind: "project",
@@ -106,6 +116,7 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
             attrs: ["#[doc(hidden)]"],
           }]),
       ...sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
+      ...(crateInitializer === undefined ? [] : [crateInitializer.item]),
     ],
   );
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
@@ -149,26 +160,45 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
           args: [entryCall],
         }
       : entryCall;
-    const initializationStatements = (moduleInitializers ?? []).map((initializer) => {
-      const call = {
-        kind: "call" as const,
-        path: `${crateName}::${initializer.moduleName}::${initializer.functionName}`,
-        args: [],
-      };
-      const execution = initializer.asynchronous
-        ? {
-            kind: "call" as const,
-            path: "tsonic_rust_runtime::block_on",
-            args: [call],
-          }
-        : call;
-      return {
-        kind: "expr" as const,
-        expr: initializer.fallible
-          ? { kind: "try" as const, expr: execution }
-          : execution,
-      };
-    });
+    const initializationStatements = crateInitializer === undefined
+      ? []
+      : [{
+          kind: "expr" as const,
+          expr: crateInitializer.fallible
+            ? {
+                kind: "try" as const,
+                expr: crateInitializer.asynchronous
+                  ? {
+                      kind: "call" as const,
+                      path: "tsonic_rust_runtime::block_on",
+                      args: [{
+                        kind: "call" as const,
+                        path: `${crateName}::${crateInitializer.functionName}`,
+                        args: [],
+                      }],
+                    }
+                  : {
+                      kind: "call" as const,
+                      path: `${crateName}::${crateInitializer.functionName}`,
+                      args: [],
+                    },
+              }
+            : crateInitializer.asynchronous
+              ? {
+                  kind: "call" as const,
+                  path: "tsonic_rust_runtime::block_on",
+                  args: [{
+                    kind: "call" as const,
+                    path: `${crateName}::${crateInitializer.functionName}`,
+                    args: [],
+                  }],
+                }
+              : {
+                  kind: "call" as const,
+                  path: `${crateName}::${crateInitializer.functionName}`,
+                  args: [],
+                },
+        }];
     const activeCrates = new Set(input.runtimeReferences.flatMap((reference) => {
       const crate = reference.attributes?.[cargoCrateAttributeName];
       return typeof crate === "string" ? [crate] : [];
@@ -185,7 +215,7 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
         : { kind: "call" as const, path: epilogue.path, args: [] },
     }));
     const mainFallible = entryFunction.fallible ||
-      (moduleInitializers ?? []).some((initializer) => initializer.fallible) ||
+      crateInitializer?.fallible === true ||
       activeEpilogues.some((epilogue) => epilogue.isFallible === true);
     const entryStatement = {
       kind: "expr" as const,
@@ -231,19 +261,41 @@ interface RustBinaryEntry {
   readonly fallible: boolean;
 }
 
+function resolveProjectEntrySourceFile(
+  input: RustTranslationContext,
+  diagnostics: TargetDiagnostic[],
+): SourceFile | undefined {
+  const entryPoint = input.project.entryPoint;
+  const sourceFile = input.sourceFiles.find((candidate) => {
+    const fileName = input.ast.getFileName(candidate);
+    return fileName === entryPoint || fileName.endsWith(`/${entryPoint}`);
+  });
+  if (sourceFile === undefined) {
+    diagnostics.push({
+      code: "RUST_MISSING_ENTRYPOINT",
+      category: "error",
+      source: "tsonic-rust",
+      message: `Rust output requires entry point '${entryPoint}' to be part of the compiled sources.`,
+      evidence: ["target.capability=rust.backend.entrypoint"],
+    });
+    return undefined;
+  }
+  return sourceFile;
+}
+
 function resolveBinaryEntry(
   input: RustTranslationContext,
   moduleNameByFileName: ReadonlyMap<string, string>,
   diagnostics: TargetDiagnostic[],
 ): RustBinaryEntry | undefined {
   const entryPoint = input.project.entryPoint;
-  const entrySourceFile = input.sourceFiles.find((sourceFile) => {
-    const fileName = input.ast.getFileName(sourceFile);
-    return fileName === entryPoint || fileName.endsWith(`/${entryPoint}`);
-  });
+  const entrySourceFile = resolveProjectEntrySourceFile(input, diagnostics);
+  if (entrySourceFile === undefined) {
+    return undefined;
+  }
   const entryFileName = entrySourceFile === undefined ? undefined : input.ast.getFileName(entrySourceFile);
   const moduleName = entryFileName === undefined ? undefined : moduleNameByFileName.get(entryFileName);
-  if (entrySourceFile === undefined || moduleName === undefined) {
+  if (moduleName === undefined) {
     diagnostics.push({
       code: "RUST_MISSING_ENTRYPOINT",
       category: "error",

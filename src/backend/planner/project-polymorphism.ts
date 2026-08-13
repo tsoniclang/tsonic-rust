@@ -82,7 +82,7 @@ export function planPolymorphicClassDeclaration(
       name: definition.sourceName,
       visibility: context.input.projectTypes.programErrorVariant(definition) !== undefined
         ? "public"
-        : context.input.ast.hasModifierKind(declaration, "export") ? "public" : "private",
+        : context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
       ...(context.input.projectTypes.programErrorVariant(definition) === undefined
         ? {}
         : { attrs: ["#[doc(hidden)]"] }),
@@ -243,7 +243,7 @@ export function planPolymorphicInterfaceDeclaration(
     {
       kind: "struct",
       name: definition.sourceName,
-      visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "private",
+      visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
       ...(context.input.ast.hasModifierKind(declaration, "export")
         ? {}
         : { attrs: ["#[allow(dead_code)]"] }),

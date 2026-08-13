@@ -640,8 +640,8 @@ function printRustTryScope(
       : completionType;
     const inlineFlowMatchPrefix = `${indent}let ${statement.flowName}: ${flowType} = match ${statement.bodyName}`;
     const catchUsesBlock = statement.asynchronous;
-    const matchContinues = !renderedFits(`${inlineFlowMatchPrefix} {`, 0);
-    const matchDepth = matchContinues ? depth + 1 : depth;
+    const braceContinues = !renderedFits(`${inlineFlowMatchPrefix} {`, 0);
+    const matchDepth = depth;
     const matchIndent = indentText(matchDepth);
     const armIndent = indentText(matchDepth + 1);
     const catchExpression = printRustCompletionCaptureExpression(
@@ -667,8 +667,8 @@ function printRustTryScope(
             `${catchExpression[catchExpression.length - 1]},`,
           ];
     lines.push(
-      ...(matchContinues
-        ? [`${indent}let ${statement.flowName}: ${flowType} =`, `${matchIndent}match ${statement.bodyName} {`]
+      ...(braceContinues
+        ? [inlineFlowMatchPrefix, `${matchIndent}{`]
         : [`${inlineFlowMatchPrefix} {`]),
       `${armIndent}Ok(completion) => ${catchClause.fallible ? "Ok(completion)" : "completion"},`,
       ...catchArm,
@@ -1089,7 +1089,9 @@ function printRustConditionalBlock(
   }
   const body = printRustBlockStatements(block, depth + 1);
   const conditionHeader = `${indent}${prefix}${renderedCondition}`;
-  const header = lastLine(renderedCondition).trim() === "}"
+  const conditionEnding = lastLine(renderedCondition).trim();
+  const header = (conditionEnding === "}" || conditionEnding.endsWith("})")) &&
+      lastLine(conditionHeader).length + 2 <= rustFormatWidth
     ? appendToLastLine(conditionHeader, " {")
     : `${conditionHeader}\n${indent}{`;
   return body.length === 0
@@ -1859,9 +1861,11 @@ function printRustExprFitted(
       const verticalLayout = rustMethodChainPrefersVerticalLayout(expression);
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
       const singleSelectorFits = chain !== undefined &&
-        chain.steps.filter((step) => step.kind === "method" || step.kind === "field").length === 1 &&
+        chain.steps.filter((step) =>
+          step.kind === "method" || step.kind === "field" || step.kind === "await").length === 1 &&
         expression.receiver.kind === "path" &&
-        expression.args.some((argument) => argument.kind === "try") &&
+        expression.args.some((argument) => argument.kind === "try" ||
+          printRustExpr(argument).length > rustNestedCallWidth) &&
         !rustExpressionContainsExpandedStructLiteral(expression.receiver) &&
         column + receiver.length + expression.method.length + 2 <= rustFormatWidth;
       if (!flat.includes("\n") && renderedFits(flat, column) && !verticalLayout &&
@@ -1870,7 +1874,9 @@ function printRustExprFitted(
       }
       const hasClosure = expression.args.some((argument) =>
         argument.kind === "closure" || argument.kind === "closure-block");
-      if (hasClosure && rustMethodCallKeepsTrailingClosureAttached(expression, depth, column)) {
+      if (hasClosure && (!verticalLayout ||
+          rustMethodCallHasExpandedTrailingClosure(expression, depth, column)) &&
+        rustMethodCallKeepsTrailingClosureAttached(expression, depth, column)) {
         return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
       }
       if (chain !== undefined && hasClosure && !renderedFits(flat, column)) {
@@ -1908,7 +1914,16 @@ function printRustExprFitted(
       return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
     }
     case "closure": {
-      if (!flat.includes("\n") && renderedFits(flat, column)) {
+      const bodyChain = rustMethodChain(expression.body);
+      const bodySelectorCount = bodyChain?.steps.filter((step) =>
+        step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+      const bodyHasLongMethodChain = bodyChain !== undefined &&
+        bodySelectorCount >= 3 &&
+        flat.length > rustNestedCallWidth;
+      if (!flat.includes("\n") && renderedFits(flat, column) && !bodyHasLongMethodChain &&
+        !rustMethodChainPrefersVerticalLayout(expression.body) &&
+        (bodyChain === undefined || bodySelectorCount <= 1 ||
+          !rustMethodChainBreaksReceiverWhenExpanded(bodyChain))) {
         return flat;
       }
       const params = printRustClosureParams(expression.params);
@@ -2023,6 +2038,8 @@ function printRustExprFitted(
     case "binary": {
       if (!rustExpressionContainsStatementBlock(expression) &&
         !rustExpressionContainsExpandedStructLiteral(expression) &&
+        !rustBinaryOperandPrefersExpandedCall(expression.left) &&
+        !rustBinaryOperandPrefersExpandedCall(expression.right) &&
         !rustMethodChainPrefersVerticalLayout(expression.left) &&
         !rustMethodChainPrefersVerticalLayout(expression.right) &&
         !flat.includes("\n") && renderedFits(flat, column)) {
@@ -2300,7 +2317,8 @@ function printRustTypeFitted(
   column: number,
 ): string {
   const flat = printRustType(type);
-  if (renderedFits(flat, column) && column + flat.length + 1 < rustFormatWidth) {
+  const longTuple = type.kind === "tuple" && flat.length > rustMethodChainWidth;
+  if (!longTuple && renderedFits(flat, column) && column + flat.length + 1 < rustFormatWidth) {
     return flat;
   }
   if (type.kind === "tuple") {
@@ -2351,7 +2369,7 @@ function printRustLetInitializer(
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
   }
-  if (flat.includes("\n")) {
+  if (flat.includes("\n") && initializer.kind !== "match") {
     const continuationIndent = indentText(depth + 1);
     const authoredOpening = firstLine(flat);
     if (prefix.length + authoredOpening.length + 1 > rustFormatWidth &&
@@ -2624,6 +2642,7 @@ interface RustMethodChain {
 type RustMethodChainStep =
   | { readonly kind: "method"; readonly name: string; readonly args: readonly RustExpr[] }
   | { readonly kind: "field"; readonly name: string }
+  | { readonly kind: "await" }
   | { readonly kind: "try" };
 
 function rustMethodChain(expression: RustExpr): RustMethodChain | undefined {
@@ -2635,9 +2654,31 @@ function rustMethodChain(expression: RustExpr): RustMethodChain | undefined {
 function rustMethodChainRequiresVerticalLayout(expression: RustExpr): boolean {
   const chain = rustMethodChain(expression);
   return chain !== undefined &&
-    !rustMethodCallKeepsTrailingClosureAttached(expression, 0, 0) &&
+    !rustMethodCallHasExpandedTrailingClosure(expression) &&
     printRustExpr(expression).length > rustMethodChainWidth &&
-    chain.steps.filter((step) => step.kind === "method" || step.kind === "field").length > 1;
+    chain.steps.filter((step) =>
+      step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1;
+}
+
+function rustMethodCallHasExpandedTrailingClosure(
+  expression: RustExpr,
+  depth = 0,
+  column = 0,
+): boolean {
+  if (expression.kind !== "method-call") {
+    return false;
+  }
+  const trailing = expression.args[expression.args.length - 1];
+  if (trailing?.kind !== "closure" && trailing?.kind !== "closure-block") {
+    return false;
+  }
+  const preceding = expression.args.slice(0, -1).map(printRustExpr);
+  if (preceding.some((argument) => argument.includes("\n"))) {
+    return true;
+  }
+  const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
+  const prefix = `${receiver}.${expression.method}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
+  return printRustExprFitted(trailing, depth, column + prefix.length).includes("\n");
 }
 
 function rustMethodCallKeepsTrailingClosureAttached(
@@ -2667,16 +2708,17 @@ function rustMethodCallKeepsTrailingClosureAttached(
     const flatClosure = printRustExpr(trailing);
     const continuationWidth = indentText(depth + 1).length + expression.method.length +
       (preceding.length === 0 ? 3 : preceding.join(", ").length + 5) + flatClosure.length;
-    if (!flatClosure.includes("\n") && continuationWidth <= rustFormatWidth) {
+    const bodyChain = rustMethodChain(trailing.body);
+    const complexBody = bodyChain !== undefined &&
+      bodyChain.steps.filter((step) =>
+        step.kind === "method" || step.kind === "field" || step.kind === "await").length >= 3;
+    if (!complexBody && !flatClosure.includes("\n") && continuationWidth <= rustFormatWidth) {
       return false;
     }
   }
   const closureOpening = firstLine(renderedClosure);
   const openingWidth = prefix.length + closureOpening.length + 1;
-  const selectorCount = rustMethodChain(expression)?.steps.filter((step) =>
-    step.kind === "method" || step.kind === "field").length ?? 1;
-  return column + openingWidth <= rustFormatWidth &&
-    (selectorCount === 1 || openingWidth <= rustMethodChainWidth);
+  return column + openingWidth <= rustFormatWidth;
 }
 
 function rustMethodChainPrefersVerticalLayout(expression: RustExpr): boolean {
@@ -2688,12 +2730,26 @@ function rustMethodChainPrefersVerticalLayout(expression: RustExpr): boolean {
       rustExpressionContainsClosure(argument)));
 }
 
+function rustBinaryOperandPrefersExpandedCall(expression: RustExpr): boolean {
+  const call = expression.kind === "call" || expression.kind === "associated-call"
+    ? expression
+    : expression.kind === "try" &&
+        (expression.expr.kind === "call" || expression.expr.kind === "associated-call")
+      ? expression.expr
+      : undefined;
+  return call !== undefined && call.args.length > 1 &&
+    (expression.kind === "try" || call.args.some((argument) => argument.kind === "try")) &&
+    printRustExpr(expression).length > rustNestedCallWidth;
+}
+
 function rustMethodChainBreaksReceiverWhenExpanded(chain: RustMethodChain): boolean {
   const first = chain.steps[0];
   const firstSelectorWidth = first?.kind === "method" || first?.kind === "field"
     ? first.name.length + 1
-    : first?.kind === "try" ? 1 : 0;
-  return chain.steps.filter((step) => step.kind === "method" || step.kind === "field").length > 1 ||
+    : first?.kind === "await" ? ".await".length
+      : first?.kind === "try" ? 1 : 0;
+  return chain.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1 ||
     printRustExpr(chain.base).length + firstSelectorWidth > rustInlineFieldReceiverWidth ||
     chain.steps.some((step, index) =>
       step.kind === "try" && chain.steps[index + 1]?.kind === "method");
@@ -2713,6 +2769,11 @@ function collectRustMethodChain(expression: RustExpr, steps: RustMethodChainStep
   if (expression.kind === "try") {
     const base = collectRustMethodChain(expression.expr, steps);
     steps.push({ kind: "try" });
+    return base;
+  }
+  if (expression.kind === "await") {
+    const base = collectRustMethodChain(expression.expr, steps);
+    steps.push({ kind: "await" });
     return base;
   }
   if (expression.kind === "field") {
@@ -2743,6 +2804,12 @@ function printFittedMethodChain(
   for (const step of chain.steps) {
     if (step.kind === "try") {
       rendered = appendToLastLine(rendered, "?");
+      continue;
+    }
+    if (step.kind === "await") {
+      rendered = emittedCall || rendered.includes("\n")
+        ? `${rendered}\n${selectedContinuationIndent}.await`
+        : appendToLastLine(rendered, ".await");
       continue;
     }
     if (step.kind === "field") {
@@ -2907,7 +2974,7 @@ function printFittedCall(
       column + prefix.length,
     );
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
-    if (renderedFits(attached, column)) {
+    if (!rendered.includes("\n") && renderedFits(attached, column)) {
       return attached;
     }
   }
