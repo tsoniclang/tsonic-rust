@@ -965,6 +965,47 @@ test("binary expressions place multiline match operands on a continuation line",
   assert.match(text, /base\n        \+ value\n        \+ \(match delta \{/u);
 });
 
+test("binary expressions join adjacent multiline match operands at the closing delimiter", () => {
+  const matchExpression = (name) => ({
+    kind: "match",
+    expression: { kind: "path", path: name },
+    arms: [{
+      pattern: {
+        kind: "tuple-variant",
+        path: "Some",
+        elements: [{ kind: "binding", name: "selected" }],
+      },
+      expression: { kind: "path", path: "selected" },
+    }, {
+      pattern: { kind: "path", path: "None" },
+      expression: { kind: "int-literal", text: "0" },
+    }],
+  });
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "product",
+      visibility: "public",
+      params: [],
+      returnType: { kind: "primitive", name: "i32" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "binary",
+            operator: "*",
+            left: matchExpression("left"),
+            right: matchExpression("right"),
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /    \}\) \* \(match right \{/u);
+});
+
 test("multiline mixed logical groups preserve source precedence", () => {
   const call = (suffix) => ({
     kind: "call",

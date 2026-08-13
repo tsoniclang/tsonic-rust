@@ -471,8 +471,8 @@ export function drive(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn bump\(xs: js_abi::JsArray<i32>\)/u);
-  assert.match(text, /xs\.set\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?, 42\);/u);
-  assert.match(text, /bump\(values\.clone\(\)\)\?;/u);
+  assert.match(text, /xs\.set_number\(0\.0, 42\);/u);
+  assert.match(text, /bump\(values\.clone\(\)\);/u);
 });
 
 test("native array parameters preserve caller storage through exact slice ABIs", { timeout: 300_000 }, () => {
@@ -562,7 +562,8 @@ export function grow(xs: int32[]): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn grow\(xs: js_abi::JsArray<i32>\)/u);
-  assert.match(text, /xs\s*\.push_many\(\[tsonic_rust_runtime::conversions::f64_to_i32\(4\.0\)\?\]\)/u);
+  assert.match(text, /xs\s*\.push_many\(\[4\]\)/u);
+  assert.doesNotMatch(text, /f64_to_i32/u);
 });
 
 test("user-authored identifiers are preserved verbatim with scoped allowances", () => {

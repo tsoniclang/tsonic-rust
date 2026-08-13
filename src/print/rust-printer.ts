@@ -1839,6 +1839,15 @@ function printRustExprFitted(
         return flat;
       }
       const receiver = printRustExprFitted(expression.receiver, depth, column);
+      if (!receiver.includes("\n")) {
+        const continuation = indentText(depth + 1);
+        const index = printRustExprFitted(
+          expression.index,
+          depth + 1,
+          continuation.length + 1,
+        );
+        return `${receiver}\n${continuation}[${index}]`;
+      }
       const opening = appendToLastLine(receiver, "[");
       const index = printRustExprFitted(
         expression.index,
@@ -1900,6 +1909,24 @@ function printRustExprFitted(
         grammarPosition === "statement" && expressionIsStatementBlockOperand(expression.left),
       );
       if (expression.right.kind === "match") {
+        if (expression.left.kind === "match" && left.includes("\n")) {
+          const renderedRight = printFittedBinaryOperand(
+            expression.right,
+            printRustExprFitted(
+              expression.right,
+              depth,
+              lastLineLength(left) + expression.operator.length + 2,
+            ),
+            expression.operator,
+            true,
+          );
+          const attached = appendToLastLine(
+            left,
+            ` ${expression.operator} ${firstLine(renderedRight)}`,
+          );
+          const rest = remainingLines(renderedRight);
+          return rest.length === 0 ? attached : `${attached}\n${rest.join("\n")}`;
+        }
         const continuationIndent = indentText(depth + 1);
         const continuedRight = printFittedBinaryOperand(
           expression.right,
@@ -3380,7 +3407,7 @@ function printRustMatchExpression(
     const flatValue = printRustExpr(arm.expression);
     if (flatValue.includes("\n") || !renderedFits(`${prefix}${flatValue},`, 0)) {
       if (arm.expression.kind === "call" || arm.expression.kind === "associated-call" ||
-        arm.expression.kind === "invoke" || arm.expression.kind === "method-call") {
+        arm.expression.kind === "invoke") {
         const directValue = printRustExprFitted(
           arm.expression,
           depth + 1,

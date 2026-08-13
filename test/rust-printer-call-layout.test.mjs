@@ -408,6 +408,117 @@ test("field and closure method chains retain rustfmt vertical layout", () => {
   );
 });
 
+test("long indexes continue after one-line method-chain receivers", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "index",
+            receiver: {
+              kind: "method-call",
+              receiver: {
+                kind: "field",
+                receiver: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "holder" },
+                  method: "clone",
+                  args: [],
+                },
+                name: "__tsonic_state",
+              },
+              method: "with",
+              args: [{
+                kind: "closure",
+                params: [{ name: "state", byRefCopy: false }],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "state.0" },
+                  method: "clone",
+                  args: [],
+                },
+              }],
+            },
+            index: {
+              kind: "try",
+              expr: {
+                kind: "call",
+                path: "tsonic_rust_runtime::conversions::i32_to_usize",
+                args: [{ kind: "int-literal", text: "1" }],
+              },
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /holder\.clone\(\)\.__tsonic_state\.with\(\|state\| state\.0\.clone\(\)\)\n        \[tsonic_rust_runtime::conversions::i32_to_usize\(1\)\?\];/u,
+  );
+});
+
+test("multiline method-call match arms use rustfmt block arms", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "match",
+            expression: { kind: "path", path: "shape" },
+            arms: [{
+              pattern: {
+                kind: "tuple-variant",
+                path: "Shape::Variant0",
+                elements: [{
+                  kind: "binding",
+                  name: "__tsonic_union_variant_with_a_long_identity",
+                }],
+              },
+              expression: {
+                kind: "method-call",
+                receiver: {
+                  kind: "path",
+                  path: "__tsonic_union_variant_with_a_long_identity",
+                },
+                method: "with",
+                args: [{
+                  kind: "closure",
+                  params: [{ name: "state", byRefCopy: false }],
+                  body: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "state.0" },
+                    method: "clone",
+                    args: [],
+                  },
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /Shape::Variant0\(__tsonic_union_variant_with_a_long_identity\) => \{\n            __tsonic_union_variant_with_a_long_identity\.with\(\|state\| state\.0\.clone\(\)\)\n        \}/u,
+  );
+});
+
 test("two-selector method arguments retain rustfmt vertical layout", () => {
   const source = printRustSourceFile({
     headerComment,

@@ -1231,8 +1231,17 @@ function resolveExpressionCarrier(
       recordSelectedOperationInputs(walk, expression, sourceFile, operation);
       return finalize(existing.carrier);
     }
-    resolveExpressionOperationDependencies(walk, expression, sourceFile, contextualExpected);
-    selectExpressionOperation(walk, expression, sourceFile);
+    if (expressionIsPlainAssignment(walk.context.ast, expression)) {
+      const target = BinaryExpression_Left(walk.context.ast, expression);
+      if (target !== undefined) {
+        resolveExpressionCarrier(walk, target, sourceFile, undefined);
+      }
+      selectExpressionOperation(walk, expression, sourceFile);
+      resolveExpressionOperationDependencies(walk, expression, sourceFile, contextualExpected);
+    } else {
+      resolveExpressionOperationDependencies(walk, expression, sourceFile, contextualExpected);
+      selectExpressionOperation(walk, expression, sourceFile);
+    }
     const selectedCarrier = facts.get(expression, rustRuntimeCarrierKey) ??
       walk.context.facts.resolve(expression, rustRuntimeCarrierKey);
     if (selectedCarrier !== undefined) {
@@ -1286,6 +1295,14 @@ function resolveExpressionCarrier(
     recordExpressionBindingEffects(walk, expression);
     walk.resolving.delete(expression);
   }
+}
+
+function expressionIsPlainAssignment(ast: AstReader, expression: Node): boolean {
+  if (ast.kindName(expression) !== KindBinaryExpression) {
+    return false;
+  }
+  const operator = BinaryExpression_OperatorToken(ast, expression);
+  return operator !== undefined && ast.kindName(operator) === KindEqualsToken;
 }
 
 function applyFlowReadLane(
@@ -1582,7 +1599,7 @@ function resolveExpressionOperationDependencies(
     if (kind === KindElementAccessExpression) {
       const argument = ElementAccessExpression_ArgumentExpression(ast, expression);
       if (argument !== undefined) {
-        resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+        resolveCallArgumentOperationPrerequisite(walk, argument, sourceFile);
       }
     }
     return;
@@ -2267,6 +2284,12 @@ function resolveBinaryOperandCarriers(
     return undefined;
   }
   const operatorKind = walk.context.ast.kindName(operatorToken);
+  const selectedAssignmentValueCarrier = operatorKind === KindEqualsToken
+    ? rustSelectedAssignmentValueCarrier(
+        walk.context.facts.get(expression, rustTargetOperationFactKey) ??
+          walk.context.facts.resolve(expression, rustTargetOperationFactKey),
+      )
+    : undefined;
   if (rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)) {
     const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken;
@@ -2333,7 +2356,8 @@ function resolveBinaryOperandCarriers(
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
     ? rustOptionElementCarrier(left) ?? expected
     : operatorKind === KindEqualsToken
-      ? useAssignmentReadCarrier ? left ?? operandExpected : operandExpected
+      ? selectedAssignmentValueCarrier ??
+        (useAssignmentReadCarrier ? left ?? operandExpected : operandExpected)
       : left ?? operandExpected;
   let right = resolveExpressionCarrier(
     walk,
@@ -2355,6 +2379,17 @@ function resolveBinaryOperandCarriers(
     rightNode,
     operatorKind,
   };
+}
+
+function rustSelectedAssignmentValueCarrier(
+  fact: RustTargetOperationFact | undefined,
+): TargetTypeRef | undefined {
+  if (fact?.kind !== "runtime-set") {
+    return undefined;
+  }
+  const values = fact.abi.sourceArguments.filter((argument) =>
+    argument.role === "parameter" && argument.disposition === "runtime");
+  return values.length === 1 ? values[0]!.carrier : undefined;
 }
 
 function expressionUsesContextualLiteralCarrier(ast: AstReader, expression: Node): boolean {
@@ -3615,7 +3650,12 @@ function recordSelectedOperationInputs(
       resolveExpressionCarrier(walk, left, sourceFile, undefined);
     }
     if (right !== undefined) {
-      resolveExpressionCarrier(walk, right, sourceFile, undefined);
+      resolveExpressionCarrier(
+        walk,
+        right,
+        sourceFile,
+        rustSelectedAssignmentValueCarrier(fact),
+      );
     }
     return;
   }
