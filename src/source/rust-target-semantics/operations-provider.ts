@@ -632,6 +632,60 @@ function rustCarrierIdentity(carrier: TargetTypeRef): string {
   return carrier.kind;
 }
 
+function selectedCallArgumentNodes(
+  request: RustCheckedCallSelectionInput,
+): readonly Node[] {
+  return request.source.sourceArguments.map((argument) => argument.expression);
+}
+
+function selectedCallArgumentCarriers(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): readonly (TargetTypeRef | undefined)[] {
+  return request.source.sourceArguments.map((argument) =>
+    selectedSourceValueCarrier(argument, context, options));
+}
+
+function selectedSourceValueCarrier(
+  value: RustCheckedCallSelectionInput["source"]["sourceArguments"][number],
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  const stored = resolveRustTargetTypeRef(value.expression, context, options);
+  const selected = resolveRustTargetTypeRef(value.type, context, options);
+  if (stored === undefined || selected === undefined ||
+    rustTargetTypeRefEquals(stored, selected)) {
+    return selected ?? stored;
+  }
+  const optionalElement = rustOptionElementCarrier(stored);
+  if (optionalElement !== undefined &&
+    rustTargetTypeRefEquals(optionalElement, selected)) {
+    return selected;
+  }
+  const sourceDefinition = options.projectTypes.definitionForCarrier(
+    optionalElement ?? stored,
+  );
+  return sourceDefinition !== undefined &&
+      options.projectTypes.downcastRoute(sourceDefinition, selected) !== undefined
+    ? selected
+    : stored;
+}
+
+function selectedCallCalleeSymbol(
+  request: RustCheckedCallSelectionInput,
+): import("@tsonic/tsts").Symbol | undefined {
+  return request.source.sourceCallee.selectedSymbol ??
+    request.source.sourceCallee.symbol;
+}
+
+function selectedCallCalleeDeclaration(
+  request: RustCheckedCallSelectionInput,
+): Node | undefined {
+  return request.source.sourceCallee.selectedDeclaration ??
+    request.source.sourceCallee.declaration;
+}
+
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
   context: RustOperationPolicyContext,
@@ -641,13 +695,13 @@ export function selectRustCheckedCall(
     context,
     request.sourceSelectedDeclaration,
     [
-      { subject: request.sourceSelectedSignature, precision: "exact" },
-      { subject: request.sourceCalleeDeclaration, precision: "declaration" },
-      { subject: request.sourceCalleeSymbol, precision: "declaration" },
+      { subject: request.source.selectedSignature, precision: "exact" },
+      { subject: selectedCallCalleeDeclaration(request), precision: "declaration" },
+      { subject: selectedCallCalleeSymbol(request), precision: "declaration" },
     ],
   );
   if (providerEvidence.kind === "conflict") {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked call carries conflicting selected provider declaration identities.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked call carries conflicting selected provider declaration identities.");
   }
   if (providerEvidence.kind === "selected") {
     const provider = providerEvidence.identity;
@@ -660,10 +714,10 @@ export function selectRustCheckedCall(
     const operationKind = checkedCallIsConstruction(request, context) ? "constructor" : "method";
     const selection = selectRustProviderOperation(options.providerRows, provider, operationKind);
     if (selection.kind === "missing") {
-      return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_OPERATION_NOT_MAPPED", `No Rust operation row matches selected provider declaration '${providerIdentityText(provider)}' as ${operationKind}.`);
+      return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_OPERATION_NOT_MAPPED", `No Rust operation row matches selected provider declaration '${providerIdentityText(provider)}' as ${operationKind}.`);
     }
     if (selection.kind === "ambiguous") {
-      return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_OPERATION_AMBIGUOUS", `Selected provider declaration '${providerIdentityText(provider)}' matches ${selection.rows.length} Rust operation rows.`);
+      return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_OPERATION_AMBIGUOUS", `Selected provider declaration '${providerIdentityText(provider)}' matches ${selection.rows.length} Rust operation rows.`);
     }
     const instantiation = instantiateSelectedCallTemplate(
       request,
@@ -672,7 +726,7 @@ export function selectRustCheckedCall(
       options,
     );
     if (instantiation === undefined) {
-      return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier}' does not prove one closed instantiation of its Rust provider type parameters.`);
+      return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier}' does not prove one closed instantiation of its Rust provider type parameters.`);
     }
     if (selection.row.immediateCallback !== undefined) {
       return acceptRustPolicy({
@@ -704,23 +758,23 @@ export function selectRustCheckedCall(
   );
   const calleeSourceMember = resolveSelectedSourceProfileMember(
     context,
-    request.sourceCalleeDeclaration,
+    selectedCallCalleeDeclaration(request),
     options.sourceProfiles,
   );
   if (selectedSourceMember === undefined && calleeSourceMember !== undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_SOURCE_DECLARATION_MISSING", "Checked source-profile call has callee evidence but no exact selected declaration evidence.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_DECLARATION_MISSING", "Checked source-profile call has callee evidence but no exact selected declaration evidence.");
   }
   if (selectedSourceMember !== undefined && calleeSourceMember !== undefined &&
     (selectedSourceMember.profile !== calleeSourceMember.profile ||
       selectedSourceMember.ownerName !== calleeSourceMember.ownerName ||
       selectedSourceMember.memberName !== calleeSourceMember.memberName)) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_SOURCE_EVIDENCE_CONFLICT", "Checked source-profile call carries conflicting selected and callee declaration identities.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_EVIDENCE_CONFLICT", "Checked source-profile call carries conflicting selected and callee declaration identities.");
   }
   if (selectedSourceMember?.ownerName === "ErrorConstructor" &&
     selectedSourceMember.memberName === "constructor" && checkedCallIsConstruction(request, context)) {
-    if (request.arguments.length !== 1) {
+    if (selectedCallArgumentNodes(request).length !== 1) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_ERROR_MESSAGE_REQUIRED",
         "Rust Error construction currently requires one checked string message argument.",
@@ -750,13 +804,12 @@ export function selectRustCheckedCall(
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
-      selectedParameterCount: request.sourceSelectedSignatureParameters.length,
-      argumentCarriers: request.arguments.map((argument) =>
-        resolveRustTargetTypeRef(argument, context, options)),
+      selectedParameterCount: request.source.sourceSelectedSignatureParameters.length,
+      argumentCarriers: selectedCallArgumentCarriers(request, context, options),
     });
     if (generator.kind === "rejected") {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_GENERATOR_SOURCE_CALL_NOT_CLOSED",
         generator.message,
@@ -775,23 +828,22 @@ export function selectRustCheckedCall(
   }
   if (selectedSourceMember?.profile === "js") {
     if (!options.jsEnabled) {
-      return rejectSelectedOperation(request.call, context, "RUST_JS_SURFACE_REQUIRED", "The selected call belongs to the explicit JavaScript source profile, which is not active.");
+      return rejectSelectedOperation(request.source.call, context, "RUST_JS_SURFACE_REQUIRED", "The selected call belongs to the explicit JavaScript source profile, which is not active.");
     }
     if (checkedCallIsConstruction(request, context)) {
       if (selectedSourceMember.ownerName === "RegExpConstructor") {
         return mapSelectedRegExpConstruction(request, context, options);
       }
-      const typeArgumentCarriers = (request.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
+      const typeArgumentCarriers = (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, options));
-      const argumentCarriers = request.arguments.map((argument) =>
-        resolveRustTargetTypeRef(argument, context, options));
+      const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
       const selection = selectJsSurfaceConstructorBySourceOwner({
         sourceOwnerName: selectedSourceMember.ownerName,
         typeArgumentCarriers,
         argumentCarriers,
       });
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-        return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript constructor '${selectedSourceMember.ownerName}' has no closed Rust operation row for the selected argument carriers.`);
+        return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript constructor '${selectedSourceMember.ownerName}' has no closed Rust operation row for the selected argument carriers.`);
       }
       return acceptSelectedCall(request, selection.fact, selection.parameterCarriers ?? [], context, options, {
         sourceName: selectedSourceMember.ownerName,
@@ -802,17 +854,16 @@ export function selectRustCheckedCall(
       context,
       options,
     );
-    const argumentCarriers = request.arguments.map((argument) =>
-      resolveRustTargetTypeRef(argument, context, options));
+    const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
     const selectedMethodTypeArgumentCarriers =
-      (request.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
+      (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         resolveRustTargetTypeRef(
           argument.explicitTypeNode ?? argument.selectedType,
           context,
           options,
         ));
     const authoredMethodTypeArgumentCarriers =
-      (request.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
+      (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         argument.explicitTypeNode === undefined
           ? undefined
           : resolveRustTargetTypeRef(argument.explicitTypeNode, context, options));
@@ -834,14 +885,14 @@ export function selectRustCheckedCall(
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,
-      argumentCompatibility: selectedArgumentCompatibility(request.arguments, context, options),
+      argumentCompatibility: selectedArgumentCompatibility(selectedCallArgumentNodes(request), context, options),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-      return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`);
+      return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`);
     }
     if (selection.callback !== undefined) {
       return selection.fact.kind !== "provider-operation"
-        ? rejectSelectedOperation(request.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
+        ? rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
         : acceptRustPolicy({
             kind: "deferred-callback",
             callback: selection.callback,
@@ -858,31 +909,57 @@ export function selectRustCheckedCall(
   const sourceDeclaration = isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)
     ? asNode(request.sourceSelectedDeclaration, context)
     : undefined;
-  const calleeDeclaration = isProjectSourceDeclaration(context, request.sourceCalleeDeclaration)
-    ? asNode(request.sourceCalleeDeclaration, context)
+  const calleeDeclaration = isProjectSourceDeclaration(context, selectedCallCalleeDeclaration(request))
+    ? asNode(selectedCallCalleeDeclaration(request), context)
     : undefined;
   const implicitConstructorClass = sourceDeclaration === undefined &&
       calleeDeclaration !== undefined &&
       checkedCallIsConstruction(request, context) &&
       context.ast.kindName(calleeDeclaration) === "KindClassDeclaration"
     ? calleeDeclaration
-    : undefined;
+    : sourceDeclaration === undefined
+      ? selectedImplicitSuperConstructorClass(request, context, options)
+      : undefined;
   if (implicitConstructorClass !== undefined) {
     return acceptProjectSourceCall(request, implicitConstructorClass, context, options);
   }
   if (sourceDeclaration === undefined && calleeDeclaration !== undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_PROJECT_DECLARATION_MISSING", "Checked project-source call has callee evidence but no exact selected callable declaration evidence.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROJECT_DECLARATION_MISSING", "Checked project-source call has callee evidence but no exact selected callable declaration evidence.");
   }
   if (sourceDeclaration !== undefined) {
     return acceptProjectSourceCall(request, sourceDeclaration, context, options);
   }
 
   return rejectSelectedOperation(
-    request.call,
+    request.source.call,
     context,
     "RUST_SELECTED_CALL_EVIDENCE_MISSING",
     "Checked call has no exact provider, source-profile, or project-source selection that Rust can lower.",
   );
+}
+
+function selectedImplicitSuperConstructorClass(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): Node | undefined {
+  if (context.ast.kindName(request.source.sourceCallee.expression) !== "KindSuperKeyword") {
+    return undefined;
+  }
+  const containing = options.projectTypes.definitionContainingDeclaration(
+    request.source.call,
+  );
+  if (containing?.kind !== "class") {
+    return undefined;
+  }
+  const matches = options.projectTypes.heritageForDefinition(containing).filter((edge) =>
+    edge.kind === "extends" &&
+    edge.target.kind === "class" &&
+    options.projectTypes.constructorForSignature(
+      edge.target,
+      request.source.selectedSignature,
+    ) !== undefined);
+  return matches.length === 1 ? matches[0]!.target.declaration : undefined;
 }
 
 export interface RustPreparedDeferredCheckedCall {
@@ -907,10 +984,10 @@ export function prepareRustDeferredCheckedCall(
     expected: TargetTypeRef | undefined,
   ) => TargetTypeRef | undefined,
 ): RustPolicySelection<RustPreparedDeferredCheckedCall> {
-  const arguments_ = request.arguments;
+  const arguments_ = selectedCallArgumentNodes(request);
   if (arguments_.length !== deferred.parameterCarriers.length) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CALLBACK_ARITY_MISMATCH",
       `Selected callback call '${deferred.sourceName}' has ${arguments_.length} source arguments but ${deferred.parameterCarriers.length} target parameters.`,
@@ -924,7 +1001,7 @@ export function prepareRustDeferredCheckedCall(
       : arguments_[accumulatorIndex];
     if (accumulatorArgument === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_CALLBACK_ACCUMULATOR_MISSING",
         "Selected reduce call has no exact accumulator source argument.",
@@ -939,7 +1016,7 @@ export function prepareRustDeferredCheckedCall(
     );
     if (accumulator === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_CALLBACK_ACCUMULATOR_CARRIER_MISSING",
         "Selected reduce call has no closed target carrier for its exact accumulator argument.",
@@ -950,7 +1027,7 @@ export function prepareRustDeferredCheckedCall(
     const callbackTemplate = deferred.parameterCarriers[deferred.callback.sourceArgumentIndex];
     if (callbackArgument === undefined || callbackTemplate === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_CALLBACK_CARRIER_MISSING",
         "Selected reduce call has no exact callback argument or callback target template.",
@@ -970,7 +1047,7 @@ export function prepareRustDeferredCheckedCall(
   }
   if (actual.some((carrier) => carrier === undefined)) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CALLBACK_CARRIER_MISSING",
       `Selected callback call '${deferred.sourceName}' has no closed callback/result carrier from exact target analysis.`,
@@ -983,7 +1060,7 @@ export function prepareRustDeferredCheckedCall(
   }, actual as TargetTypeRef[]);
   if (finalized?.fact.kind !== "provider-operation") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CALLBACK_CARRIER_CONFLICT",
       `Selected callback call '${deferred.sourceName}' has callback argument carriers incompatible with its exact target operation row.`,
@@ -992,7 +1069,7 @@ export function prepareRustDeferredCheckedCall(
   const parameterCarriers = finalized.parameterCarriers;
   if (parameterCarriers === undefined || parameterCarriers.some((carrier) => carrier === undefined)) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CALLBACK_PARAMETER_CARRIER_MISSING",
       `Selected callback call '${deferred.sourceName}' did not finalize every callback parameter carrier.`,
@@ -1006,7 +1083,7 @@ export function prepareRustDeferredCheckedCall(
   );
   if (optionalResult.kind === "rejected") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_OPTIONAL_CALL_CONTRACT_INVALID",
       optionalResult.message,
@@ -1094,31 +1171,31 @@ function mapRustSourceMarkerCall(
     markerName !== "move"
   ) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SOURCE_MARKER_UNSUPPORTED",
       `Rust does not support selected source marker '${markerName}' in this operation lane.`,
     );
   }
-  const flow = context.facts.resolve(request.call, flowStateFactKey) ??
-    context.facts.get(request.call, flowStateFactKey);
+  const flow = context.facts.resolve(request.source.call, flowStateFactKey) ??
+    context.facts.get(request.source.call, flowStateFactKey);
   const expectedState = markerName === "shared-borrow"
     ? "borrowed-shared"
     : markerName === "mutable-borrow" ? "borrowed-mut" : "moved";
   if (flow?.state !== expectedState) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_FLOW_MARKER_FACT_NOT_PROVEN",
       `Selected Rust flow marker '${markerName}' requires finalized TSTS flow state '${expectedState}'.`,
     );
   }
-  const [argument] = request.arguments;
-  const carrier = resolveRustTargetTypeRef(request.sourceReturnType ?? argument, context, options) ??
+  const [argument] = selectedCallArgumentNodes(request);
+  const carrier = resolveRustTargetTypeRef(request.source.sourceResultType ?? argument, context, options) ??
     resolveRustTargetTypeRef(argument, context, options);
   if (argument === undefined || carrier === undefined) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_FLOW_MARKER_CARRIER_NOT_PROVEN",
       `Selected Rust flow marker '${markerName}' has no closed target carrier from TSTS evidence.`,
@@ -1130,7 +1207,7 @@ function mapRustSourceMarkerCall(
     state: expectedState,
   };
   const evidence = [{ message: `rust selected flow marker ${markerName}` }];
-  context.facts.set(request.call, rustTargetOperationFactKey, fact, evidence);
+  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
   return acceptRustPolicy({
     selectedSignature: {
       member: {
@@ -1143,13 +1220,13 @@ function mapRustSourceMarkerCall(
         providerDeclaration: provider,
       },
       providerDeclaration: provider,
-      ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
+      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
       ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-      ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-      ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-      sourceArgumentBindings: request.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
+      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+      sourceArgumentBindings: request.source.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     },
   }, evidence);
 }
@@ -1221,7 +1298,7 @@ function mapSelectedRegExpConstruction(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  const [patternNode, flagsNode] = request.arguments.map((argument) => asNode(argument, context));
+  const [patternNode, flagsNode] = selectedCallArgumentNodes(request).map((argument) => asNode(argument, context));
   const ast = context.ast;
   const pattern = patternNode !== undefined && ast.kindName(patternNode) === "KindStringLiteral"
     ? ast.text(patternNode)
@@ -1230,11 +1307,11 @@ function mapSelectedRegExpConstruction(
     ? ""
     : ast.kindName(flagsNode) === "KindStringLiteral" ? ast.text(flagsNode) : undefined;
   if (pattern === undefined || flags === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_REGEXP_DYNAMIC_UNSUPPORTED", "Rust RegExp construction requires TSTS-selected RegExp constructor evidence and compile-time string pattern/flags.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_REGEXP_DYNAMIC_UNSUPPORTED", "Rust RegExp construction requires TSTS-selected RegExp constructor evidence and compile-time string pattern/flags.");
   }
   const violation = options.regExpSubsetViolation(pattern, flags);
   if (violation !== undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_REGEXP_UNSUPPORTED", violation);
+    return rejectSelectedOperation(request.source.call, context, "RUST_REGEXP_UNSUPPORTED", violation);
   }
   const resultCarrier: TargetTypeRef = { kind: "target-named", id: "rust.js.JsRegExp" };
   const fact: RustTargetOperationFact = {
@@ -1244,19 +1321,19 @@ function mapSelectedRegExpConstruction(
     flags,
   };
   const evidence = [{ message: "rust selected RegExp constructor" }];
-  context.facts.set(request.call, rustTargetOperationFactKey, fact, evidence);
-  context.facts.set(request.call, rustSelectedOperationKey, {
+  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
+  context.facts.set(request.source.call, rustSelectedOperationKey, {
     operationId: fact.operationId,
     operationKind: "constructor",
     targetOperation: "js_abi::JsRegExp::new",
     resultType: resultCarrier,
     provenance: {
-      sourceExpression: request.call,
-      sourceCallee: request.callee,
-      sourceSelectedSignature: request.sourceSelectedSignature,
+      sourceExpression: request.source.call,
+      sourceCallee: request.source.sourceCallee.expression,
+      sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration,
-      sourceSelectedSymbol: request.sourceCalleeSymbol,
-      sourceResultType: request.sourceReturnType,
+      sourceSelectedSymbol: selectedCallCalleeSymbol(request),
+      sourceResultType: request.source.sourceResultType,
     },
   }, evidence);
   return acceptRustPolicy({
@@ -1272,13 +1349,13 @@ function mapSelectedRegExpConstruction(
         ],
         returnType: resultCarrier,
       },
-      ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
+      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
       ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-      ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-      ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-      sourceArgumentBindings: request.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
+      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+      sourceArgumentBindings: request.source.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     },
   }, evidence);
 }
@@ -1291,13 +1368,13 @@ function mapSelectedJsSpecialCall(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   if (ownerName === "String" && memberName === "match") {
-    const [argument] = request.arguments;
+    const [argument] = selectedCallArgumentNodes(request);
     const creation = argument === undefined
       ? undefined
       : context.facts.resolve(argument, rustTargetOperationFactKey);
     if (creation === undefined || creation.kind !== "regexp-create") {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_REGEXP_MATCH_PATTERN_NOT_FINALIZED",
         "Rust String.match requires an inline RegExp whose checked construction fact finalizes the result shape.",
@@ -1324,13 +1401,13 @@ function mapSelectedJsSpecialCall(
       sourceName: memberName,
     });
   }
-  if (ownerName !== "JSON" || memberName !== "stringify" || request.arguments.length !== 3) {
+  if (ownerName !== "JSON" || memberName !== "stringify" || selectedCallArgumentNodes(request).length !== 3) {
     return undefined;
   }
-  const [valueNode, replacerNode, spaceNode] = request.arguments.map((argument) => asNode(argument, context));
+  const [valueNode, replacerNode, spaceNode] = selectedCallArgumentNodes(request).map((argument) => asNode(argument, context));
   const ast = context.ast;
   if (valueNode === undefined || replacerNode === undefined || spaceNode === undefined || ast.kindName(replacerNode) !== "KindNullKeyword") {
-    return rejectSelectedOperation(request.call, context, "RUST_JSON_STRINGIFY_REPLACER_UNSUPPORTED", "Rust JSON.stringify supports the selected three-argument overload only with a null replacer and compile-time string/number indentation.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_JSON_STRINGIFY_REPLACER_UNSUPPORTED", "Rust JSON.stringify supports the selected three-argument overload only with a null replacer and compile-time string/number indentation.");
   }
   let indent: string | undefined;
   if (ast.kindName(spaceNode) === "KindNumericLiteral") {
@@ -1339,7 +1416,7 @@ function mapSelectedJsSpecialCall(
     indent = ast.text(spaceNode).slice(0, 10);
   }
   if (indent === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_JSON_STRINGIFY_INDENT_UNSUPPORTED", "Rust JSON.stringify indentation must be a compile-time string or number selected by the checked source call.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_JSON_STRINGIFY_INDENT_UNSUPPORTED", "Rust JSON.stringify indentation must be a compile-time string or number selected by the checked source call.");
   }
   const resultCarrier = rustOptionTargetType(rustStringTargetType());
   return acceptSelectedCall(request, {
@@ -1374,9 +1451,9 @@ function acceptProjectSourceCall(
   const construction = checkedCallIsConstruction(request, context) ||
     selectedKind === "KindConstructor";
   if (construction && selectedKind !== "KindClassDeclaration" && selectedKind !== "KindConstructor") {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_INVALID", "Project-source construction evidence is not an exact constructor declaration or an implicit-constructor class declaration.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_INVALID", "Project-source construction evidence is not an exact constructor declaration or an implicit-constructor class declaration.");
   }
-  const selectedCalleeDeclaration = asNode(request.sourceCalleeDeclaration, context);
+  const selectedCalleeDeclaration = asNode(selectedCallCalleeDeclaration(request), context);
   const selectedOwner = construction && selectedCalleeDeclaration !== undefined &&
       ast.kindName(selectedCalleeDeclaration) === "KindClassDeclaration"
     ? selectedCalleeDeclaration
@@ -1393,15 +1470,15 @@ function acceptProjectSourceCall(
     : undefined;
   if (construction && selectedConstructor === undefined) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CONSTRUCTOR_SIGNATURE_MISSING",
       "Project construction requires one exact effective constructor signature from shared source-program navigation.",
     );
   }
   if (selectedConstructor !== undefined &&
-    (request.sourceSelectedSignatureParameters.length !== selectedConstructor.parameters.length ||
-      request.sourceSelectedSignatureParameters.some((parameter, index) => {
+    (request.source.sourceSelectedSignatureParameters.length !== selectedConstructor.parameters.length ||
+      request.source.sourceSelectedSignatureParameters.some((parameter, index) => {
         const expected = selectedConstructor.parameters[index];
         return expected === undefined ||
           parameter.parameterDeclaration !== expected.parameterDeclaration ||
@@ -1409,7 +1486,7 @@ function acceptProjectSourceCall(
           parameter.rest !== expected.rest;
       }))) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CONSTRUCTOR_PARAMETER_EVIDENCE_CONFLICT",
       "The selected constructor parameter evidence conflicts with the exact effective constructor signature.",
@@ -1434,7 +1511,7 @@ function acceptProjectSourceCall(
     callableImplementation?.kind !== "resolved" &&
     !selectedContractHasNoBody) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SOURCE_CALL_IMPLEMENTATION_MISSING",
       callableImplementation?.kind === "unresolved"
@@ -1446,11 +1523,11 @@ function acceptProjectSourceCall(
     ? callableImplementation.implementation.declaration
     : selectedCallableDeclaration;
   const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
-  if (targetTypeArguments === undefined && (request.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
+  if (targetTypeArguments === undefined && (request.source.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
   }
   const containingDefinition = options.projectTypes.definitionContainingDeclaration(
-    asNode(request.call, context),
+    asNode(request.source.call, context),
   );
   const selectedOwnerRelationship = selectedOwnerDefinition === undefined ||
       containingDefinition?.kind !== "class"
@@ -1462,10 +1539,10 @@ function acceptProjectSourceCall(
   const ownerCarrier = construction
     ? selectedOwnerRelationship?.kind === "related"
       ? selectedOwnerRelationship.targetType
-      : resolveRustTargetTypeRef(request.sourceReturnType, context, options)
-    : resolveRustTargetTypeRef(request.sourceReceiver?.type, context, options);
+      : resolveRustTargetTypeRef(request.source.sourceResultType, context, options)
+    : resolveRustTargetTypeRef(request.source.sourceReceiver?.type, context, options);
   const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration"
-    ? request.sourceSelectedSignatureParameters.map((parameter) =>
+    ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
         parameter.parameterDeclaration)
     : ast.parameters(callableDeclaration);
   const parameters = sourceParameters.map((parameter, index) => {
@@ -1502,17 +1579,17 @@ function acceptProjectSourceCall(
     };
   });
   if (parameters.some((parameter) => parameter === undefined)) {
-    return rejectSelectedOperation(request.call, context, "RUST_SOURCE_CALL_PARAMETER_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has a parameter without a closed Rust target carrier.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_PARAMETER_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has a parameter without a closed Rust target carrier.");
   }
   let returnType: TargetTypeRef | undefined;
   if (construction) {
     returnType = resolveRustTargetTypeRef(
-      request.sourceReturnType,
+      request.source.sourceResultType,
       context,
       options,
     );
   } else {
-    const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.sourceReturnType;
+    const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.source.sourceResultType;
     const declaredReturnType = sourceReturn === undefined
       ? undefined
       : resolveRustTargetTypeRef(sourceReturn, context, options);
@@ -1525,7 +1602,7 @@ function acceptProjectSourceCall(
         );
   }
   if (returnType === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
@@ -1535,7 +1612,7 @@ function acceptProjectSourceCall(
   );
   if (optionalResult.kind === "rejected") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_OPTIONAL_CALL_CONTRACT_INVALID",
       optionalResult.message,
@@ -1561,35 +1638,35 @@ function acceptProjectSourceCall(
   const selectedSignature = {
     member,
     sourceDeclaration: callableDeclaration,
-    ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
-    ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-    ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-    ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-    sourceArgumentBindings: request.sourceArgumentBindings,
-    sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
-    ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
+    ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
+    ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+    ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+    ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+    sourceArgumentBindings: request.source.sourceArgumentBindings,
+    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+    ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
     ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
   };
   if (optionalResult.fact !== undefined) {
     context.facts.set(
-      request.call,
+      request.source.call,
       rustOptionalChainFactKey,
       optionalResult.fact,
       [{ message: `rust optional call ${optionalResult.fact.lowering}` }],
     );
   }
-  context.facts.set(request.call, rustSelectedCallKey, selectedSignature);
+  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature);
   return acceptRustPolicy({
     selectedSignature: {
       member,
       sourceDeclaration: callableDeclaration,
-      ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
-      ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-      ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-      ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-      sourceArgumentBindings: request.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
-      ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
+      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
+      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+      sourceArgumentBindings: request.source.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+      ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
     },
   }, [{ message: `rust selected project-source call ${member.id}` }]);
@@ -1602,15 +1679,15 @@ function selectedProjectConstructor(
 ): import("./project-type-policy.js").RustProjectConstructorSignature | undefined {
   const exact = options.projectTypes.constructorForSignature(
     definition,
-    request.sourceSelectedSignature,
+    request.source.selectedSignature,
   );
   if (exact !== undefined) {
     return exact;
   }
   const candidates = options.projectTypes.constructorsForDefinition(definition).filter((candidate) =>
-    candidate.parameters.length === request.sourceSelectedSignatureParameters.length &&
+    candidate.parameters.length === request.source.sourceSelectedSignatureParameters.length &&
     candidate.parameters.every((parameter, index) => {
-      const selected = request.sourceSelectedSignatureParameters[index];
+      const selected = request.source.sourceSelectedSignatureParameters[index];
       return selected !== undefined &&
         parameter.parameterDeclaration === selected.parameterDeclaration &&
         parameter.acceptsOmission === selected.acceptsOmission &&
@@ -1624,7 +1701,7 @@ function mapSelectedTargetTypeArguments(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): readonly TargetTypeRef[] | undefined {
-  const sourceArguments = request.sourceSelectedMethodTypeArguments;
+  const sourceArguments = request.source.sourceSelectedMethodTypeArguments;
   if (sourceArguments === undefined || sourceArguments.length === 0) {
     return undefined;
   }
@@ -1646,13 +1723,13 @@ function instantiateSelectedCallTemplate(
     context,
     resolutionOptions,
   );
-  const selectedParameterCarriers = request.sourceSelectedSignatureParameters.map((parameter) =>
+  const selectedParameterCarriers = request.source.sourceSelectedSignatureParameters.map((parameter) =>
     resolveRustTargetTypeRef(parameter.selectedType, context, resolutionOptions));
-  const selectedResultCarrier = request.sourceReturnType === undefined
+  const selectedResultCarrier = request.source.sourceResultType === undefined
     ? undefined
-    : resolveRustTargetTypeRef(request.sourceReturnType, context, resolutionOptions);
+    : resolveRustTargetTypeRef(request.source.sourceResultType, context, resolutionOptions);
   const directTypeArguments = new Map<string, TargetTypeRef>();
-  for (const argument of request.sourceSelectedMethodTypeArguments ?? []) {
+  for (const argument of request.source.sourceSelectedMethodTypeArguments ?? []) {
     const carrier = resolveRustTargetTypeRef(
       argument.explicitTypeNode ?? argument.selectedType,
       context,
@@ -1688,7 +1765,7 @@ function acceptSelectedCall(
     resolutionOptions,
   );
   if (instantiation === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${callIdentity.sourceName}' does not prove one closed instantiation of its Rust provider type parameters.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${callIdentity.sourceName}' does not prove one closed instantiation of its Rust provider type parameters.`);
   }
   const instantiatedTemplate = instantiation.template;
   const sourceArguments = selectedCallSourceCarriers(
@@ -1699,11 +1776,11 @@ function acceptSelectedCall(
     resolutionOptions,
   );
   if (sourceArguments.kind === "missing") {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_PARAMETER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust carrier for every target parameter.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PARAMETER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust carrier for every target parameter.`);
   }
   if (sourceArguments.kind === "incompatible") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
       "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
@@ -1719,16 +1796,16 @@ function acceptSelectedCall(
     resolutionOptions,
   );
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && selectedReceiverCarrier === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver carrier.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver carrier.`);
   }
   const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier);
   if (fact === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
   }
-  const targetTypeArguments = request.sourceSelectedMethodTypeArguments?.map((argument) =>
+  const targetTypeArguments = request.source.sourceSelectedMethodTypeArguments?.map((argument) =>
     resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, resolutionOptions));
   if (targetTypeArguments?.some((argument) => argument === undefined) === true) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", `Selected generic call '${callIdentity.sourceName}' has a source-selected type argument that cannot map to a closed Rust target type.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", `Selected generic call '${callIdentity.sourceName}' has a source-selected type argument that cannot map to a closed Rust target type.`);
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
@@ -1738,7 +1815,7 @@ function acceptSelectedCall(
   );
   if (optionalResult.kind === "rejected") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_OPTIONAL_CALL_CONTRACT_INVALID",
       optionalResult.message,
@@ -1751,21 +1828,21 @@ function acceptSelectedCall(
     targetOperation: rustTargetOperationText(fact),
     resultType: resultCarrier,
     provenance: {
-      sourceExpression: request.call,
-      sourceCallee: request.callee,
-      sourceSelectedSignature: request.sourceSelectedSignature,
+      sourceExpression: request.source.call,
+      sourceCallee: request.source.sourceCallee.expression,
+      sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration,
-      sourceSelectedSymbol: request.sourceCalleeSymbol,
-      sourceResultType: request.sourceReturnType,
+      sourceSelectedSymbol: selectedCallCalleeSymbol(request),
+      sourceResultType: request.source.sourceResultType,
       ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
     },
   };
   const evidence = [{ message: `rust selected call ${fact.operationId}` }];
   for (const pending of sourceArguments.conversions) {
-    const argument = request.arguments[pending.sourceIndex];
+    const argument = selectedCallArgumentNodes(request)[pending.sourceIndex];
     if (argument === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_ARGUMENT_BINDING_MISSING",
         `Selected call '${callIdentity.sourceName}' has no exact source argument ${pending.sourceIndex}.`,
@@ -1777,10 +1854,10 @@ function acceptSelectedCall(
     if (sourceArgument.disposition !== "runtime") {
       continue;
     }
-    const argument = request.arguments[sourceArgument.sourceIndex];
+    const argument = selectedCallArgumentNodes(request)[sourceArgument.sourceIndex];
     if (argument === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_ARGUMENT_BINDING_MISSING",
         `Selected call '${callIdentity.sourceName}' has no exact source argument ${sourceArgument.sourceIndex}.`,
@@ -1794,18 +1871,18 @@ function acceptSelectedCall(
         : {}),
     }, [{ message: `rust selected argument ${sourceArgument.sourceIndex} passes as ${mode}` }]);
   }
-  context.facts.set(request.call, rustTargetOperationFactKey, {
+  context.facts.set(request.source.call, rustTargetOperationFactKey, {
     ...fact,
   }, evidence);
   if (optionalResult.fact !== undefined) {
     context.facts.set(
-      request.call,
+      request.source.call,
       rustOptionalChainFactKey,
       optionalResult.fact,
       [{ message: `rust optional call ${optionalResult.fact.lowering}` }],
     );
   }
-  context.facts.set(request.call, rustSelectedOperationKey, operation, evidence);
+  context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
   const member: RustTargetMember = {
     id: fact.operationId,
     sourceName: callIdentity.sourceName,
@@ -1821,18 +1898,18 @@ function acceptSelectedCall(
   };
   const selectedSignature = {
       member,
-      ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
+      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
       ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-      ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-      ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-      sourceArgumentBindings: request.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
-      ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
+      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+      sourceArgumentBindings: request.source.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+      ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments: targetTypeArguments as TargetTypeRef[] }),
       ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
     };
-  context.facts.set(request.call, rustSelectedCallKey, selectedSignature, evidence);
+  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
@@ -1861,18 +1938,18 @@ function selectedCallSourceCarriers(
   options: RustOperationsProviderOptions,
 ): SelectedCallSourceCarriers {
   const compileTimeIndexes = new Set(fact.compileTimeSourceArgumentIndexes ?? []);
-  const runtimeIndexes = request.arguments
+  const runtimeIndexes = selectedCallArgumentNodes(request)
     .map((_argument, index) => index)
     .filter((index) => !compileTimeIndexes.has(index));
   const declaredBySourceIndex = new Map<number, TargetTypeRef | undefined>();
   for (const sourceIndex of runtimeIndexes) {
-    const bindings = request.sourceArgumentBindings.filter((binding) =>
+    const bindings = request.source.sourceArgumentBindings.filter((binding) =>
       binding.sourceArgumentIndex === sourceIndex);
     const first = bindings[0];
     if (first === undefined || bindings.some((binding) =>
       binding.sourceParameterIndex !== first.sourceParameterIndex ||
       binding.sourceForm !== first.sourceForm) ||
-      request.sourceSelectedSignatureParameters[first.sourceParameterIndex] === undefined) {
+      request.source.sourceSelectedSignatureParameters[first.sourceParameterIndex] === undefined) {
       return { kind: "missing" };
     }
     declaredBySourceIndex.set(sourceIndex, declared?.[first.sourceParameterIndex]);
@@ -1882,9 +1959,10 @@ function selectedCallSourceCarriers(
     readonly sourceIndex: number;
     readonly reconciliation: Extract<RustValueCarrierReconciliation, { readonly kind: "conversion" }>;
   }[] = [];
-  const actual = request.arguments.map((argument, index) => {
+  const actual = request.source.sourceArguments.map((sourceArgument, index) => {
+    const argument = sourceArgument.expression;
     const expected = declaredBySourceIndex.get(index);
-    const resolved = resolveRustTargetTypeRef(argument, context, options);
+    const resolved = selectedSourceValueCarrier(sourceArgument, context, options);
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
     const converted = rustEffectiveValueCarrier(context.facts, argument);
     let effective = converted ?? normalized;
@@ -1981,26 +2059,23 @@ function selectedCallReceiverValueCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
-  const receiver = request.sourceReceiver;
+  const receiver = request.source.sourceReceiver;
   if (receiver === undefined) {
     return undefined;
   }
-  const sourceCarrier = resolveRustTargetTypeRef(
-    receiver.expression,
-    context,
-    options,
-  );
-  if (!request.optionalChain) {
-    return sourceCarrier;
+  const storedCarrier = resolveRustTargetTypeRef(receiver.expression, context, options);
+  const selectedCarrier = selectedSourceValueCarrier(receiver, context, options);
+  if (!request.source.optionalChain) {
+    return selectedCarrier ?? storedCarrier;
   }
-  const optionElement = rustOptionElementCarrier(sourceCarrier);
-  if (optionElement !== undefined) {
-    return optionElement;
+  if (storedCarrier !== undefined && selectedCarrier !== undefined &&
+    rustTargetTypeRefEquals(storedCarrier, selectedCarrier)) {
+    return selectedCarrier;
   }
-  const selectedCarrier = resolveRustTargetTypeRef(receiver.type, context, options);
-  return sourceCarrier !== undefined && selectedCarrier !== undefined &&
-      rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)
-    ? selectedCarrier
+  const optionElement = rustOptionElementCarrier(storedCarrier);
+  return optionElement !== undefined &&
+      (selectedCarrier === undefined || rustTargetTypeRefEquals(optionElement, selectedCarrier))
+    ? selectedCarrier ?? optionElement
     : undefined;
 }
 
@@ -2018,14 +2093,14 @@ function selectRustOptionalCallResult(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustOptionalCallResult {
-  if (!request.optionalChain) {
+  if (!request.source.optionalChain) {
     return { kind: "resolved", resultCarrier: innerResultCarrier };
   }
-  const receiver = request.sourceReceiver;
-  const guard = receiver?.expression ?? request.callee;
+  const receiver = request.source.sourceReceiver;
+  const guard = receiver?.expression ?? request.source.sourceCallee.expression;
   const sourceGuardCarrier = receiver === undefined
     ? resolveRustTargetTypeRef(
-        request.sourceCalleeDeclaration ?? request.callee,
+        selectedCallCalleeDeclaration(request) ?? request.source.sourceCallee.expression,
         context,
         options,
       )
@@ -2049,7 +2124,7 @@ function selectRustOptionalCallResult(
     };
   }
   const selection = selectRustOptionalChain({
-    expression: request.call,
+    expression: request.source.call,
     guard,
     operationKind: "method",
     sourceGuardCarrier,
@@ -2253,8 +2328,8 @@ function checkedCallIsConstruction(
   request: RustCheckedCallSelectionInput,
   context: RustOperationPolicyContext,
 ): boolean {
-  const call = asNode(request.call, context);
-  const callee = asNode(request.callee, context);
+  const call = asNode(request.source.call, context);
+  const callee = asNode(request.source.sourceCallee.expression, context);
   return call !== undefined && (
     context.ast.kindName(call) === "KindNewExpression" ||
     (context.ast.kindName(call) === "KindCallExpression" &&
@@ -3804,6 +3879,14 @@ function selectedMemberReceiverCarrier(
     return undefined;
   }
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
+    return sourceCarrier;
+  }
+  const selectedOperation = context.facts.resolve(receiver, rustTargetOperationFactKey);
+  const selectedOperationResult = selectedOperation === undefined
+    ? undefined
+    : rustTargetOperationResultCarrier(selectedOperation);
+  if (request.optionalChain !== true && selectedOperationResult !== undefined &&
+    rustTargetTypeRefEquals(sourceCarrier, selectedOperationResult)) {
     return sourceCarrier;
   }
   const optionElement = rustOptionElementCarrier(sourceCarrier);

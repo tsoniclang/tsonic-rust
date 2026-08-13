@@ -34,20 +34,35 @@ export function planRustFlowSelectedValue(
       return undefined;
     }
     return {
-      kind: "method-call",
-      receiver: {
+      kind: "match",
+      expression: {
         kind: "method-call",
-        receiver: {
-          kind: "method-call",
-          receiver: expression,
-          method: "as_ref",
-          args: [],
-        },
-        method: "unwrap",
+        receiver: expression,
+        method: "as_ref",
         args: [],
       },
-      method: "clone",
-      args: [],
+      arms: [
+        {
+          pattern: {
+            kind: "tuple-variant",
+            path: "Some",
+            elements: [{ kind: "binding", name: "__tsonic_flow_value" }],
+          },
+          expression: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "__tsonic_flow_value" },
+            method: "clone",
+            args: [],
+          },
+        },
+        {
+          pattern: { kind: "path", path: "None" },
+          expression: {
+            kind: "unreachable",
+            message: "checked flow selected a missing optional value",
+          },
+        },
+      ],
     };
   }
   const dispatchCarrier = optionalElement ?? storedCarrier;

@@ -376,26 +376,10 @@ function selectExpressionOperation(
       return;
     }
     const sourceSelectedDeclaration = semantics.getSignatureDeclaration(source.selectedSignature);
-    const sourceCalleeSymbol = source.sourceCallee.selectedSymbol ?? source.sourceCallee.symbol;
-    const sourceCalleeDeclaration = source.sourceCallee.selectedDeclaration ?? source.sourceCallee.declaration;
     const request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput = {
       target: "rust",
-      call: expression,
-      callee: source.sourceCallee.expression,
-      arguments: source.sourceArguments.map((argument) => argument.expression),
-      sourceArgumentBindings: source.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: source.sourceSelectedSignatureParameters,
-      optionalChain: source.optionalChain,
-      ...(source.sourceReceiver === undefined ? {} : { sourceReceiver: source.sourceReceiver }),
-      ...(source.sourceCalleeAccess === undefined ? {} : { sourceCalleeAccess: source.sourceCalleeAccess }),
-      sourceSelectedSignature: source.selectedSignature,
+      source,
       ...(sourceSelectedDeclaration === undefined ? {} : { sourceSelectedDeclaration }),
-      ...(sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol }),
-      ...(sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration }),
-      sourceReturnType: source.sourceResultType,
-      ...(source.sourceSelectedMethodTypeArguments === undefined
-        ? {}
-        : { sourceSelectedMethodTypeArguments: source.sourceSelectedMethodTypeArguments }),
     };
     const selection = selectRustCheckedCall(request, context, walk.operationOptions);
     if (selection.kind === "reject") {
@@ -3021,7 +3005,7 @@ function applySelectedProjectSourceCall(
       ast.kindName(callee) === "KindArrowFunction" || ast.kindName(callee) === KindFunctionExpression);
   if (indirectCallable) {
     target = { form: "callable", carrier: selectedCallableCarrier };
-  } else if (expressionKind === KindNewExpression || declarationKind === "KindConstructor") {
+  } else if (selectedMember.kind === "constructor") {
     target = {
       form: "constructor",
       name: selectedMember.targetName,
@@ -4588,7 +4572,9 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
 
   const callbackExpression = (
     pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
-  ): Node | undefined => pending.request.arguments[pending.prepared.callback.sourceArgumentIndex];
+  ): Node | undefined => pending.request.source.sourceArguments[
+    pending.prepared.callback.sourceArgumentIndex
+  ]?.expression;
   const callbackValueExpression = (expression: Node | undefined): Node | undefined => {
     let current = expression;
     while (current !== undefined && ast.kindName(current) === KindParenthesizedExpression) {

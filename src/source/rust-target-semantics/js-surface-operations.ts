@@ -76,6 +76,7 @@ type JsCarrierRef =
   | { readonly ref: "cb-array-reduce"; readonly arity: 0 | 1 | 2 | 3 | 4 }
   | { readonly ref: "cb-array-reduce-first"; readonly arity: 0 | 1 | 2 | 3 | 4 }
   | { readonly ref: "cb-array-for-each"; readonly arity: 0 | 1 | 2 | 3 }
+  | { readonly ref: "cb-array-comparator"; readonly arity: 0 | 1 | 2 }
   | { readonly ref: "cb-map-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "cb-set-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "int32" }
@@ -197,6 +198,11 @@ const arrayReduceCallbackRows = [
   { arity: 2, variant: "accumulator-value", suffix: "" },
   { arity: 3, variant: "accumulator-value-index", suffix: "_with_index" },
   { arity: 4, variant: "accumulator-value-index-array", suffix: "_with_array" },
+] as const;
+const arrayComparatorRows = [
+  { arity: 0, variant: "zero", targetName: "sort_zero" },
+  { arity: 1, variant: "value", targetName: "sort_value" },
+  { arity: 2, variant: "left-right", targetName: "sort" },
 ] as const;
 const arrayPredicateRows = [
   { member: "filter", targetName: "filter", result: { ref: "receiver" } as const },
@@ -343,6 +349,21 @@ const jsOperationRows = defineJsOperationRows([
   { owner: "Array", member: "splice", operationKind: "call", lane: "js-array", variant: "delete-and-items", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-value-array", name: "splice_many", receiverMode: "ref", leadingArguments: [{ carrier: rustSourcePrimitiveTargetType("float64"), mode: "value" }, { carrier: rustSourcePrimitiveTargetType("float64"), mode: "value" }], elementCarrier: rustInferCarrier }, result: { ref: "element-array" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
   { owner: "Array", member: "reverse", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "reverse" }, result: { ref: "receiver" } } },
   { owner: "Array", member: "sort", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "stringifiable" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_by_js_string" }, result: { ref: "receiver" } } },
+  ...arrayComparatorRows.map(({ arity, variant, targetName }): JsOperationRowData => ({
+    owner: "Array",
+    member: "sort",
+    operationKind: "call",
+    lane: "js-array",
+    variant,
+    callback: callbackOperation("direct", targetName),
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "receiver-method", name: targetName },
+      result: { ref: "receiver" },
+      params: [{ ref: "cb-array-comparator", arity }],
+    },
+  })),
   { owner: "Array", member: "fill", operationKind: "call", lane: "js-array", variant: "all", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "fill_all" }, result: { ref: "receiver" }, params: [{ ref: "element" }] } },
   { owner: "Array", member: "fill", operationKind: "call", lane: "js-array", variant: "from", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "fill_from" }, result: { ref: "receiver" }, params: [{ ref: "element" }, { ref: "float64" }] } },
   { owner: "Array", member: "fill", operationKind: "call", lane: "js-array", variant: "to", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "fill_to" }, result: { ref: "receiver" }, params: [{ ref: "element" }, { ref: "float64" }, { ref: "float64" }] } },
@@ -767,6 +788,15 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
       );
     case "cb-array-for-each":
       return arrayCallbackCarrier(bindings, reference.arity, rustUnitTargetType());
+    case "cb-array-comparator": {
+      const args = [bindings.element, bindings.element].slice(0, reference.arity);
+      return args.some((argument) => argument === undefined)
+        ? undefined
+        : rustClosureTargetType(
+            args as TargetTypeRef[],
+            rustSourcePrimitiveTargetType("float64"),
+          );
+    }
     case "cb-array-reduce":
       return arrayReduceCallbackCarrier(bindings, reference.arity, rustInferCarrier);
     case "cb-array-reduce-first":
@@ -1169,9 +1199,6 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
     return undefined;
   }
   const typeArguments = request.typeArgumentCarriers;
-  if (!typeArguments.every((carrier) => carrier === undefined || isPrimitiveLaneCarrier(carrier))) {
-    return undefined;
-  }
   let resultCarrier: TargetTypeRef | undefined;
   if (row.result === "map") {
     const [key, value] = typeArguments;
@@ -1216,8 +1243,4 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
         typeArgumentCarriers: request.typeArgumentCarriers,
         argumentCarriers: request.argumentCarriers,
       });
-}
-
-function isPrimitiveLaneCarrier(carrier: TargetTypeRef): boolean {
-  return carrier.kind === "source-primitive" || isRustStringCarrier(carrier);
 }

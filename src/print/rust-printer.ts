@@ -235,13 +235,10 @@ function printRustFittedReturnSuffix(
   returnType: RustType | undefined,
   depth: number,
   column: number,
-  forceExpandedTuple = false,
 ): string {
   return returnType === undefined
     ? ""
-    : ` -> ${forceExpandedTuple && returnType.kind === "tuple" && returnType.elements.length > 1
-      ? printRustExpandedTupleType(returnType, depth)
-      : printRustTypeFitted(returnType, depth, column + " -> ".length)}`;
+    : ` -> ${printRustTypeFitted(returnType, depth, column + " -> ".length)}`;
 }
 
 function printRustFunctionHeader(
@@ -266,7 +263,6 @@ function printRustFunctionHeader(
     returnType,
     depth,
     closingPrefix.length + 1,
-    parameters.length > 0,
   );
   return [
     ...(parameters.length === 0
@@ -305,7 +301,6 @@ function printRustFunctionSignature(
     returnType,
     depth,
     closingPrefix.length,
-    parameters.length > 0,
   );
   return [
     ...(parameters.length === 0
@@ -1881,6 +1876,20 @@ function printRustExprFitted(
         );
         return `${left}${separator}${renderedRight}`;
       }
+      if (left.includes("\n") &&
+        (expression.left.kind === "call" || expression.left.kind === "associated-call") &&
+        (expression.right.kind === "call" || expression.right.kind === "associated-call")) {
+        const separator = ` ${expression.operator} `;
+        const renderedRight = printRustExprFitted(
+          expression.right,
+          depth,
+          lastLineLength(left) + separator.length,
+        );
+        const attached = appendToLastLine(left, `${separator}${renderedRight}`);
+        if (renderedFits(attached, column)) {
+          return attached;
+        }
+      }
       const joined = appendToLastLine(
         left,
         ` ${expression.operator} ${printBinaryOperand(expression.right, expression.operator, true)}`,
@@ -2403,7 +2412,8 @@ function printFittedMethodChain(
   continuationIndent = indentText(depth + 1),
 ): string {
   const flatBase = printRustExpr(chain.base);
-  let rendered = renderedFits(flatBase, column) && !rustExpressionContainsExpandedStructLiteral(chain.base)
+  let rendered = !flatBase.includes("\n") && renderedFits(flatBase, column) &&
+      !rustExpressionContainsExpandedStructLiteral(chain.base)
     ? flatBase
     : printRustExprFitted(chain.base, depth, column);
   const selectedContinuationIndent = rendered.includes("\n")
@@ -2417,7 +2427,7 @@ function printFittedMethodChain(
       continue;
     }
     if (step.kind === "field") {
-      rendered = breakBeforeFirstField || emittedCall ||
+      rendered = breakBeforeFirstField || emittedCall || rendered.includes("\n") ||
           lastLineLength(rendered) + step.name.length + 1 > rustInlineFieldReceiverWidth
         ? `${rendered}\n${selectedContinuationIndent}.${step.name}`
         : appendToLastLine(rendered, `.${step.name}`);
@@ -2509,6 +2519,35 @@ function printFittedCall(
       )}`,
       ")",
     );
+  }
+  if (arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
+    rustExpressionContainsStatementBlock(arguments_[0])) {
+    const prefix = `${callable}(`;
+    const rendered = printRustExprFitted(
+      arguments_[0],
+      inlineArgumentDepth,
+      column + prefix.length,
+    );
+    const attached = appendToLastLine(`${prefix}${rendered}`, ")");
+    if (renderedFits(attached, column)) {
+      return attached;
+    }
+  }
+  if (arguments_.length === 1 && arguments_[0]?.kind === "binary" &&
+    (arguments_[0].operator === "+" || arguments_[0].operator === "-" ||
+      arguments_[0].operator === "*" || arguments_[0].operator === "/" ||
+      arguments_[0].operator === "%") &&
+    !rustExpressionContainsStatementBlock(arguments_[0])) {
+    const prefix = `${callable}(`;
+    const rendered = printRustExprFitted(
+      arguments_[0],
+      inlineArgumentDepth,
+      column + prefix.length,
+    );
+    const attached = appendToLastLine(`${prefix}${rendered}`, ")");
+    if (renderedFits(attached, column)) {
+      return attached;
+    }
   }
   if (arguments_.length === 1 && arguments_[0]?.kind === "struct-literal") {
     const prefix = `${callable}(`;

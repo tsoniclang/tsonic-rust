@@ -56,6 +56,26 @@ import type {
   RustSafeTypedLocationSourceFact,
 } from "./typed-location-selection.js";
 
+function typedLocationCallArguments(
+  request: RustCheckedCallSelectionInput,
+): readonly Node[] {
+  return request.source.sourceArguments.map((argument) => argument.expression);
+}
+
+function typedLocationCallCalleeSymbol(
+  request: RustCheckedCallSelectionInput,
+): import("@tsonic/tsts").Symbol | undefined {
+  return request.source.sourceCallee.selectedSymbol ??
+    request.source.sourceCallee.symbol;
+}
+
+function typedLocationCallCalleeDeclaration(
+  request: RustCheckedCallSelectionInput,
+): Node | undefined {
+  return request.source.sourceCallee.selectedDeclaration ??
+    request.source.sourceCallee.declaration;
+}
+
 export function selectRustTypedLocationCall(
   request: RustCheckedCallSelectionInput,
   provider: ProviderDeclarationIdentity,
@@ -64,7 +84,7 @@ export function selectRustTypedLocationCall(
   options: RustTargetTypeResolutionOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   const selection = selectRustTypedLocationSourceOperation(
-    request.call,
+    request.source.call,
     marker,
     (subject, key) => context.facts.resolve(subject, key),
     (subject, key) => context.facts.get(subject, key),
@@ -74,7 +94,7 @@ export function selectRustTypedLocationCall(
   }
   if (selection.kind === "evidence-missing") {
     return rejectRustTypedLocation(
-      request.call,
+      request.source.call,
       context,
       "RUST_POINTER_OPERATION_FACT_NOT_PROVEN",
       `Selected typed-location operation '${selection.operation}' has no matching finalized TSTS operation fact.`,
@@ -84,7 +104,7 @@ export function selectRustTypedLocationCall(
     selection.sourceOperation.operation === "bind-pointer" ||
     selection.sourceOperation.operation === "project-pointer") {
     return rejectRustTypedLocation(
-      request.call,
+      request.source.call,
       context,
       "RUST_TYPED_LOCATION_UNSUPPORTED",
       `Selected typed-location operation '${selection.sourceOperation.operation}' has no accepted safe Rust target contract.`,
@@ -108,7 +128,7 @@ function acceptRustTypedLocationCall(
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   if (!rustTypedLocationArgumentsMatch(request, sourceOperation)) {
     return rejectRustTypedLocation(
-      request.call,
+      request.source.call,
       context,
       "RUST_POINTER_OPERATION_EVIDENCE_CONFLICT",
       `Selected '${sourceOperation.operation}' call arguments conflict with its finalized TSTS pointer-operation evidence.`,
@@ -121,7 +141,7 @@ function acceptRustTypedLocationCall(
   );
   if (pointeeCarrier === undefined) {
     return rejectRustTypedLocation(
-      request.call,
+      request.source.call,
       context,
       "RUST_POINTER_POINTEE_CARRIER_NOT_PROVEN",
       `Selected '${sourceOperation.operation}' operation has no closed Rust pointee carrier from finalized source evidence.`,
@@ -157,7 +177,7 @@ function acceptRustTypedLocationCall(
   );
   if (plan.kind === "rejected") {
     return rejectRustTypedLocation(
-      request.call,
+      request.source.call,
       context,
       "RUST_POINTER_STORAGE_NOT_REPRESENTABLE",
       plan.reason,
@@ -166,8 +186,8 @@ function acceptRustTypedLocationCall(
   const evidence = [{
     message: `rust selected exact typed-location operation ${sourceOperation.operation}`,
   }];
-  context.facts.set(request.call, rustTypedLocationPlanKey, plan.value, evidence);
-  context.facts.set(request.call, rustTargetOperationFactKey, {
+  context.facts.set(request.source.call, rustTypedLocationPlanKey, plan.value, evidence);
+  context.facts.set(request.source.call, rustTargetOperationFactKey, {
     kind: "typed-location",
     operationId,
     operation: sourceOperation.operation,
@@ -175,22 +195,22 @@ function acceptRustTypedLocationCall(
     locationCarrier,
     resultCarrier,
   }, evidence);
-  context.facts.set(request.call, rustSelectedOperationKey, {
+  context.facts.set(request.source.call, rustSelectedOperationKey, {
     operationId,
     operationKind: "method",
     targetOperation: sourceOperation.operation,
     resultType: resultCarrier,
     provenance: {
-      sourceExpression: request.call,
-      sourceCallee: request.callee,
-      sourceSelectedSignature: request.sourceSelectedSignature,
+      sourceExpression: request.source.call,
+      sourceCallee: request.source.sourceCallee.expression,
+      sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration,
-      sourceSelectedSymbol: request.sourceCalleeSymbol,
-      sourceResultType: request.sourceReturnType,
+      sourceSelectedSymbol: typedLocationCallCalleeSymbol(request),
+      sourceResultType: request.source.sourceResultType,
       providerDeclaration: provider,
     },
   }, evidence);
-  for (const argument of request.arguments) {
+  for (const argument of typedLocationCallArguments(request)) {
     context.facts.set(argument, rustArgumentPassingKey, {
       mode: "by-value",
     }, evidence);
@@ -211,32 +231,32 @@ function acceptRustTypedLocationCall(
   const selectedSignature = {
     member,
     providerDeclaration: provider,
-    ...(request.sourceSelectedSignature === undefined
+    ...(request.source.selectedSignature === undefined
       ? {}
-      : { sourceSignature: request.sourceSelectedSignature }),
+      : { sourceSignature: request.source.selectedSignature }),
     ...(request.sourceSelectedDeclaration === undefined
       ? {}
       : { sourceDeclaration: request.sourceSelectedDeclaration }),
-    ...(request.sourceCalleeSymbol === undefined
+    ...(typedLocationCallCalleeSymbol(request) === undefined
       ? {}
-      : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-    ...(request.sourceCalleeDeclaration === undefined
+      : { sourceCalleeSymbol: typedLocationCallCalleeSymbol(request) }),
+    ...(typedLocationCallCalleeDeclaration(request) === undefined
       ? {}
-      : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-    ...(request.sourceReturnType === undefined
+      : { sourceCalleeDeclaration: typedLocationCallCalleeDeclaration(request) }),
+    ...(request.source.sourceResultType === undefined
       ? {}
-      : { sourceReturnType: request.sourceReturnType }),
-    sourceArgumentBindings: request.sourceArgumentBindings,
-    sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
-    ...(request.sourceSelectedMethodTypeArguments === undefined
+      : { sourceReturnType: request.source.sourceResultType }),
+    sourceArgumentBindings: request.source.sourceArgumentBindings,
+    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+    ...(request.source.sourceSelectedMethodTypeArguments === undefined
       ? {}
       : {
           sourceSelectedMethodTypeArguments:
-            request.sourceSelectedMethodTypeArguments,
+            request.source.sourceSelectedMethodTypeArguments,
         }),
     targetTypeArguments: [pointeeCarrier],
   };
-  context.facts.set(request.call, rustSelectedCallKey, selectedSignature, evidence);
+  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
@@ -308,7 +328,7 @@ function rustTypedLocationArgumentsMatch(
   request: RustCheckedCallSelectionInput,
   operation: RustSafeTypedLocationSourceFact,
 ): boolean {
-  if (operation.call !== request.call) {
+  if (operation.call !== request.source.call) {
     return false;
   }
   const expected = operation.operation === "address-of"
@@ -322,8 +342,8 @@ function rustTypedLocationArgumentsMatch(
           : operation.operation === "equal-pointer"
             ? [operation.leftExpression, operation.rightExpression]
             : [];
-  return expected.length === request.arguments.length &&
-    expected.every((argument, index) => argument === request.arguments[index]);
+  return expected.length === typedLocationCallArguments(request).length &&
+    expected.every((argument, index) => argument === typedLocationCallArguments(request)[index]);
 }
 
 type RustTypedLocationPlanSelection =

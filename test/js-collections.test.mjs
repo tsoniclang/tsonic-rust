@@ -177,6 +177,98 @@ export function main(): void {
   assert.equal(validateGeneratedProject("js-collections", result.artifacts, { run: true }).status, 0);
 });
 
+test("Map construction accepts exact project value carriers without claiming unused capabilities", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_map_project_values" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Item {
+  value: int32;
+  constructor(value: int32) { this.value = value; }
+}
+
+export function main(): void {
+  const values = new Map<string, Item>();
+  values.set("selected", new Item(3));
+  const selected = values.get("selected");
+  check(selected !== undefined && selected.value === 3);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let values = js_abi::JsMap::new\(\);/u);
+  assert.equal(validateGeneratedProject("js-map-project-values", result.artifacts, { run: true }).status, 0);
+});
+
+test("flow-selected string receivers lower from their exact optional storage carrier", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_flow_selected_string" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+function normalize(value: string | undefined): string {
+  return value === undefined ? "missing" : value.trim().toLowerCase();
+}
+
+export function main(): void {
+  check(normalize(undefined) === "missing");
+  check(normalize("  Ready  ") === "ready");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /match value\.as_ref\(\)/u);
+  assert.equal(validateGeneratedProject("js-flow-selected-string", result.artifacts, { run: true }).status, 0);
+});
+
+test("Array sort comparator callbacks preserve source arity and stable JavaScript ordering", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_array_comparator_sort" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const values = ["bb", "a", "cc", "ddd"];
+  values.sort((left, right) => left.length - right.length);
+  check(values.join("|") === "a|bb|cc|ddd");
+
+  const unary = [3, 2, 1];
+  unary.sort((value) => value - 2);
+  check(unary.length === 3);
+
+  const zero = [2, 1];
+  zero.sort(() => 0);
+  check(zero[0] === 2 && zero[1] === 1);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /values\.try_sort\(/u);
+  assert.match(source, /unary\.sort_value\(/u);
+  assert.match(source, /zero\.sort_zero\(/u);
+  assert.equal(validateGeneratedProject("js-array-comparator-sort", result.artifacts, { run: true }).status, 0);
+});
+
 test("generated Rust preserves every declared Array callback argument", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],

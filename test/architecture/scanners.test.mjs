@@ -349,14 +349,17 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
 
 test("optional chains consume exact TSTS evidence through one finalized Option fact", () => {
   const contracts = readFileSync(join(sourceRoot, "policy/operations/contracts.ts"), "utf8");
-  assert.match(contracts, /readonly optionalChain: ResolvedSourceCallInfo\["optionalChain"\]/u);
-  assert.match(contracts, /readonly sourceReceiver\?: ResolvedSourceCallInfo\["sourceReceiver"\]/u);
+  assert.match(contracts, /readonly source: ResolvedSourceCallInfo/u);
+  assert.doesNotMatch(contracts, /readonly optionalChain: ResolvedSourceCallInfo/u);
+  assert.doesNotMatch(contracts, /readonly sourceReceiver\?: ResolvedSourceCallInfo/u);
   assert.match(contracts, /readonly sourceReceiverType\?: Type/u);
 
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/operations-provider.ts"), "utf8");
   assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
   assert.match(semantics, /selectRustOptionalChain\(\{/u);
-  assert.match(semantics, /resolveRustTargetTypeRef\(receiver\.type, context, options\)/u);
+  assert.match(semantics, /request\.source\.sourceReceiver/u);
+  assert.match(semantics, /request\.source\.optionalChain/u);
+  assert.match(semantics, /selectedSourceValueCarrier\(receiver, context, options\)/u);
   assert.match(semantics, /rustOptionalChainFactKey/u);
 
   const selector = readFileSync(join(sourceRoot, "source/rust-target-semantics/optional-chains.ts"), "utf8");

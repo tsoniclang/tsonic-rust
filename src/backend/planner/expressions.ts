@@ -3165,7 +3165,12 @@ export function planFinalizedSourceInput(
     ));
     return undefined;
   }
-  if (!rustFinalizedCarrierTransitionMatches(sourceCarrier, convertedCarrier, input.sourceCarrier)) {
+  const directCarrierMatch = rustFinalizedCarrierTransitionMatches(
+    sourceCarrier,
+    convertedCarrier,
+    input.sourceCarrier,
+  );
+  if (!directCarrierMatch && convertedCarrier !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, sourceNode),
       "rust.backend.provider-operation-input-carrier",
@@ -3182,10 +3187,22 @@ export function planFinalizedSourceInput(
   if (plannedExpression === undefined) {
     return undefined;
   }
-  const expression = input.conversion.kind === "identity" &&
+  const rawExpression = input.conversion.kind === "identity" &&
       (position === "target-receiver" || input.mode !== "value")
     ? planRustNonConsumingValue(sourceNode, plannedExpression, context)
     : plannedExpression;
+  const expression = directCarrierMatch
+    ? rawExpression
+    : planRustFlowSelectedValue(
+        operationNode,
+        sourceNode,
+        rawExpression,
+        input.sourceCarrier,
+        context,
+      );
+  if (expression === undefined) {
+    return undefined;
+  }
   const converted = applyFinalizedValueConversion(context, expression, input.conversion, sourceNode, "source-input");
   return converted === undefined
     ? undefined
@@ -4124,28 +4141,6 @@ export function requireProviderArgumentPassingFacts(
         ));
         valid = false;
       }
-    }
-    const sourceCarrier = context.input.facts.getRuntimeCarrierFact(argument)?.carrier;
-    const convertedCarrier = rustValueCarrierTransitionTarget(
-      context.input.facts,
-      argument,
-    );
-    if (sourceCarrier === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, argument),
-        "rust.backend.provider-argument-carrier",
-        `Provider argument ${index} has no finalized source carrier fact.`,
-      ));
-      valid = false;
-      continue;
-    }
-    if (!rustFinalizedCarrierTransitionMatches(sourceCarrier, convertedCarrier, sourceArgument.carrier)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, argument),
-        "rust.backend.provider-argument-carrier",
-        `Provider argument ${index} does not match its finalized source parameter carrier.`,
-      ));
-      valid = false;
     }
   }
   return valid;
