@@ -211,10 +211,12 @@ export type RustProviderOperationForm =
       readonly mutatesReceiver?: boolean;
     };
 
-export interface RustProviderOperationTemplate {
+export interface RustProviderOperationTemplate<
+  OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
+> {
   readonly kind: "provider-operation";
   readonly operationId: string;
-  readonly operationKind: "method" | "constructor" | "property" | "indexer";
+  readonly operationKind: OperationKind;
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];

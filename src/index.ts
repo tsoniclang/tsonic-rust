@@ -70,6 +70,8 @@ export {
 } from "./source/provider-packages/index.js";
 export type {
   RustProviderCrateDefinition,
+  RustProviderBinaryEpilogueDefinition,
+  RustProviderBinaryEpilogueRow,
   RustProviderModuleDefinition,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
@@ -116,6 +118,7 @@ export {
   isRustUnitCarrier,
   rustPrimitiveTypeName,
   rustJsArrayTargetType,
+  rustCallableTargetType,
   rustJsArrayConcatItemTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,

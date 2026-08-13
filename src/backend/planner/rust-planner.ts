@@ -10,6 +10,7 @@ import {
   Node_Name,
 } from "../../common/source-ast.js";
 import { readRustCrateName, readRustOutputType } from "../../options/rust-target-options.js";
+import { cargoCrateAttributeName } from "./cargo-project.js";
 import { isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { createRustSourceFile } from "../rust-ast/nodes.js";
 import type { RustItem } from "../rust-ast/nodes.js";
@@ -123,16 +124,33 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
           : execution,
       };
     });
+    const activeCrates = new Set(input.runtimeReferences.flatMap((reference) => {
+      const crate = reference.attributes?.[cargoCrateAttributeName];
+      return typeof crate === "string" ? [crate] : [];
+    }));
+    const activeEpilogues = input.providerSemantics.binaryEpilogues.filter((epilogue) =>
+      activeCrates.has(epilogue.requiredCrate));
+    const epilogueStatements = activeEpilogues.map((epilogue) => ({
+      kind: "expr" as const,
+      expr: epilogue.isFallible === true
+        ? {
+            kind: "try" as const,
+            expr: { kind: "call" as const, path: epilogue.path, args: [] },
+          }
+        : { kind: "call" as const, path: epilogue.path, args: [] },
+    }));
     const mainFallible = entryFunction.fallible ||
-      (moduleInitializers ?? []).some((initializer) => initializer.fallible);
-    const entryStatements = entryFunction.fallible
-      ? [{ kind: "tail" as const, expr: entryExecution }]
-      : mainFallible
-        ? [
-            { kind: "expr" as const, expr: entryExecution },
-            { kind: "tail" as const, expr: { kind: "path" as const, path: "Ok(())" } },
-          ]
-        : [{ kind: "expr" as const, expr: entryExecution }];
+      (moduleInitializers ?? []).some((initializer) => initializer.fallible) ||
+      activeEpilogues.some((epilogue) => epilogue.isFallible === true);
+    const entryStatement = {
+      kind: "expr" as const,
+      expr: entryFunction.fallible
+        ? { kind: "try" as const, expr: entryExecution }
+        : entryExecution,
+    };
+    const completionStatements = mainFallible
+      ? [{ kind: "tail" as const, expr: { kind: "path" as const, path: "Ok(())" } }]
+      : [];
     const mainItem: RustItem = {
       kind: "function",
       name: "main",
@@ -145,9 +163,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
               path: "tsonic_rust_runtime::TsonicResult",
               typeArguments: [{ kind: "unit" as const }],
             },
-            body: { statements: [...initializationStatements, ...entryStatements] },
+            body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
           }
-        : { body: { statements: [...initializationStatements, ...entryStatements] } }),
+        : { body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements] } }),
     };
     artifacts.push(rustSourceArtifact("src/main.rs", printRustSourceFile(createRustSourceFile([mainItem]))));
   }

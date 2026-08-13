@@ -17,6 +17,14 @@ impl Store {
     pub fn get(&self, index: i32) -> i32 {
         self.seed_len + index
     }
+
+    pub fn set_count(&mut self, value: i32) {
+        self.count = value;
+    }
+
+    pub fn set(&mut self, index: i32, value: i32) {
+        self.seed_len = value - index;
+    }
 }
 
 pub fn env_home_dir() -> String {

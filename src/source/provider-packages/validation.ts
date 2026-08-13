@@ -38,6 +38,7 @@ import {
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,
+  isRustUnitCarrier,
 } from "../rust-target-types.js";
 import { rustProviderOperationFormContractViolation } from "../rust-facts/operation-form-contract.js";
 import { isClosedMetadata } from "../../common/closed-metadata.js";
@@ -92,7 +93,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
     "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "modules", "types", "operations", "crates",
-    "aliasImports", "carrierPaths",
+    "aliasImports", "carrierPaths", "binaryEpilogues",
   ], "package", fail);
 
   const modulesBySpecifier = new Map<string, RustProviderPackageDefinition["modules"][number]>();
@@ -173,6 +174,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   validateCrates(definition, fail);
   validateAliases(definition, fail);
   validateCarrierPaths(definition, fail);
+  validateBinaryEpilogues(definition, fail);
   validateTypeRelations(definition, exportsById, fail);
   validateOperationRows(definition, exportsById, membersById, signaturesById, fail);
 }
@@ -513,6 +515,27 @@ function validateCarrierPaths(definition: RustProviderPackageDefinition, fail: F
   }
 }
 
+function validateBinaryEpilogues(definition: RustProviderPackageDefinition, fail: Fail): void {
+  const ids = new Set<string>();
+  const crates = new Set(definition.crates.map((crate) => crate.crateName));
+  for (const epilogue of definition.binaryEpilogues ?? []) {
+    requireExactKeys(asRecord(epilogue), ["id", "path", "requiredCrate", "isFallible"], "binary epilogue", fail);
+    requireNonEmpty(epilogue.id, "binary epilogue id", fail);
+    requireRustPath(epilogue.path, `path for binary epilogue '${epilogue.id}'`, fail);
+    requireRustIdentifier(epilogue.requiredCrate, `required crate for binary epilogue '${epilogue.id}'`, fail);
+    if (!crates.has(epilogue.requiredCrate)) {
+      fail(`binary epilogue '${epilogue.id}' requires undeclared crate '${epilogue.requiredCrate}'`);
+    }
+    if (epilogue.isFallible !== undefined && epilogue.isFallible !== true) {
+      fail(`binary epilogue '${epilogue.id}' has invalid isFallible value`);
+    }
+    if (ids.has(epilogue.id)) {
+      fail(`duplicate binary epilogue id '${epilogue.id}'`);
+    }
+    ids.add(epilogue.id);
+  }
+}
+
 function validateTypeRelations(
   definition: RustProviderPackageDefinition,
   exportsById: ReadonlyMap<string, ExportRecord>,
@@ -619,7 +642,8 @@ function validateOperationRows(
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
-      row.operationKind !== "property" && row.operationKind !== "indexer") {
+      row.operationKind !== "property" && row.operationKind !== "indexer" &&
+      row.operationKind !== "property-set" && row.operationKind !== "index-set") {
       fail(`row '${String(label)}' has unsupported operation kind '${String(row.operationKind)}'`);
     }
     const exported = exportsById.get(row.exportId);
@@ -642,6 +666,18 @@ function validateOperationRows(
     if (row.memberId === undefined && exported?.declaration.kind === "value" &&
       row.operationKind !== "property") {
       fail(`row '${label}' must represent provider value export '${row.exportId}' as a property operation`);
+    }
+    if (row.operationKind === "property-set" || row.operationKind === "index-set") {
+      const expectedMemberKind = row.operationKind === "property-set" ? "property" : "indexer";
+      if (member?.declaration.kind !== expectedMemberKind || member.declaration.readonly === true) {
+        fail(`row '${label}' requires a writable provider ${expectedMemberKind} declaration`);
+      }
+      if (row.signatureId !== undefined && row.operationKind === "property-set") {
+        fail(`row '${label}' cannot select a property setter by signatureId`);
+      }
+      if (!isRustUnitCarrier(row.resultCarrier)) {
+        fail(`row '${label}' setter result carrier must be Rust unit`);
+      }
     }
     const rowKey = [row.exportId, row.memberId ?? "", row.signatureId ?? "", row.operationKind].join("\u0000");
     if (rowKeys.has(rowKey)) {
@@ -732,6 +768,29 @@ function validateOperationParameters(
   signature: SignatureRecord | undefined,
   fail: Fail,
 ): void {
+  if (row.operationKind === "property-set") {
+    if (row.parameterCarriers?.length !== 1) {
+      fail(`row '${row.memberId ?? row.exportId}' property setter must declare exactly one value carrier`);
+    }
+    return;
+  }
+  if (row.operationKind === "index-set") {
+    const ownerSignatures = signature === undefined
+      ? member?.declaration.signatures ?? []
+      : [signature.declaration];
+    if (ownerSignatures.length === 0) {
+      fail(`row '${row.memberId ?? row.exportId}' index setter requires an exact index signature`);
+    }
+    const counts = new Set(ownerSignatures.map((candidate) => candidate.parameters.length + 1));
+    if (counts.size !== 1) {
+      fail(`row '${row.memberId ?? row.exportId}' spans index signatures with different parameter counts; declare exact signatureId rows`);
+    }
+    const [expectedCount] = counts;
+    if ((row.parameterCarriers?.length ?? 0) !== expectedCount) {
+      fail(`row '${row.memberId ?? row.exportId}' declares ${row.parameterCarriers?.length ?? 0} target parameter carriers for ${expectedCount} selected index/value inputs`);
+    }
+    return;
+  }
   if (row.operationKind === "property" || row.target.form === "call-str-slice" ||
     row.target.form === "free-call-str-slice") {
     return;

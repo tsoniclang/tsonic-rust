@@ -28,6 +28,13 @@ import type {
 } from "../source/rust-target-semantics/project-type-policy.js";
 import type { RustProviderSemantics } from "../source/provider-packages/index.js";
 import {
+  collectRustProviderSemantics,
+  collectRustProviderSemanticsFromDefinitions,
+  mergeRustProviderSemantics,
+} from "../source/provider-packages/index.js";
+import { rustBuiltInSourceTypeSemantics } from "../source/rust-target-semantics/built-in-source-types.js";
+import { rustStdProviderDefinition } from "../providers/compiler/std-catalog.js";
+import {
   createRustSafetyApplicationFactIndex,
 } from "./safety/application-fact-index.js";
 import type {
@@ -41,7 +48,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly facts: RustSemanticModel;
   readonly artifacts: RustTranslationArtifactGraph;
   readonly projectTypes: RustProjectTypePolicyRegistry;
-  readonly compilerProviderSemantics?: RustProviderSemantics;
+  readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly diagnostics: TargetDiagnostic[];
   readonly analysis: {
@@ -74,6 +81,14 @@ export function createRustTranslationContext(
     navigation: input.source.navigation,
   });
   const diagnostics: TargetDiagnostic[] = [];
+  const staticProviderSemantics = mergeRustProviderSemantics(
+    rustBuiltInSourceTypeSemantics(),
+    collectRustProviderSemanticsFromDefinitions([rustStdProviderDefinition()]),
+    collectRustProviderSemantics(backend),
+  );
+  const providerSemantics = compilerProviderSemantics === undefined
+    ? staticProviderSemantics
+    : mergeRustProviderSemantics(staticProviderSemantics, compilerProviderSemantics);
   const context: RustTranslationContext = {
     ...input,
     backend,
@@ -83,7 +98,7 @@ export function createRustTranslationContext(
     artifacts,
     projectTypes,
     safetyApplications,
-    ...(compilerProviderSemantics === undefined ? {} : { compilerProviderSemantics }),
+    providerSemantics,
     diagnostics,
     analysis: Object.freeze({
       getEnumMemberConstant(node: Node) {

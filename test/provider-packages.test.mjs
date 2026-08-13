@@ -153,6 +153,51 @@ export function storeProbe(): int32 {
   assert.match(text, /store\.get\(2\)/u);
 });
 
+test("provider-owned writable properties and indexers lower through exact setter rows", () => {
+  const { result } = compileRust({
+    packages: [acmePlatformPackage({ includeSetters: true })],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+
+export function update(): int32 {
+  let store = new Store("seed");
+  store.count = 9;
+  store[2] = 11;
+  return store.count + store[2];
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /store\.set_count\(9\)/u);
+  assert.match(text, /store\.set\(2, 11\)/u);
+});
+
+test("provider fields remain direct writable locations when no setter row is declared", () => {
+  const { result } = compileRust({
+    packages: [acmePlatformPackage()],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+
+export function update(): int32 {
+  let store = new Store("seed");
+  store.count = 9;
+  return store.count;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /store\.count = 9/u);
+});
+
 test("source checking remains target-neutral for an unmapped Rust provider operation", () => {
   const strippedPackage = acmePlatformPackage({ includeHomeDir: false });
   const harness = createRustSession({

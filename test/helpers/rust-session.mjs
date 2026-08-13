@@ -44,7 +44,7 @@ export const int32Carrier = { kind: "source-primitive", name: "int32" };
 export const boolCarrier = { kind: "source-primitive", name: "bool" };
 export const storeCarrier = { kind: "target-named", id: "acme.platform.Store" };
 
-export function acmeFilesPackage() {
+export function acmeFilesPackage({ binaryEpilogues } = {}) {
   return createRustProviderPackage({
     id: "acme-files",
     displayName: "Acme files",
@@ -71,6 +71,7 @@ export function acmeFilesPackage() {
       resultCarrier: stringCarrier,
       parameterCarriers: [stringCarrier],
     }],
+    ...(binaryEpilogues === undefined ? {} : { binaryEpilogues }),
     crates: [{ crateName: "acme_files", cargoPath: resolve(fixtureCratesRoot, "acme_files") }],
   });
 }
@@ -106,7 +107,7 @@ export function acmeTestingPackage() {
   });
 }
 
-export function acmePlatformPackage({ includeHomeDir = true } = {}) {
+export function acmePlatformPackage({ includeHomeDir = true, includeSetters = false, binaryEpilogues } = {}) {
   return createRustProviderPackage({
     id: "acme-platform",
     displayName: "Acme platform",
@@ -181,8 +182,30 @@ export function acmePlatformPackage({ includeHomeDir = true } = {}) {
         resultCarrier: int32Carrier,
         parameterCarriers: [int32Carrier],
       },
+      ...(includeSetters
+        ? [
+            {
+              exportId: "@acme/platform::Store",
+              memberId: "@acme/platform::Store.count",
+              operationKind: "property-set",
+              target: { form: "receiver-method", name: "set_count" },
+              resultCarrier: unitCarrier,
+              parameterCarriers: [int32Carrier],
+            },
+            {
+              exportId: "@acme/platform::Store",
+              memberId: "@acme/platform::Store.indexer",
+              signatureId: "@acme/platform::Store.indexer(index)",
+              operationKind: "index-set",
+              target: { form: "receiver-method", name: "set" },
+              resultCarrier: unitCarrier,
+              parameterCarriers: [int32Carrier, int32Carrier],
+            },
+          ]
+        : []),
     ].filter((row) => includeHomeDir || row.memberId !== "@acme/platform::Env.homeDir"),
     carrierPaths: { "acme.platform.Store": "acme_platform::Store" },
+    ...(binaryEpilogues === undefined ? {} : { binaryEpilogues }),
     crates: [{ crateName: "acme_platform", cargoPath: resolve(fixtureCratesRoot, "acme_platform") }],
   });
 }

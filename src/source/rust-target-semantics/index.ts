@@ -148,12 +148,6 @@ import {
   rustTargetOperationText,
 } from "../rust-facts/target-operation.js";
 import { rustArgumentPassingMode } from "../rust-facts/parameter-passing.js";
-import {
-  collectRustProviderSemantics,
-  collectRustProviderSemanticsFromDefinitions,
-  mergeRustProviderSemantics,
-} from "../provider-packages/index.js";
-import { rustStdProviderDefinition } from "../../providers/compiler/std-catalog.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
 import {
   isRustAssignmentOperator,
@@ -223,7 +217,6 @@ import {
   selectRustValueCarrierReconciliation,
 } from "./value-carrier-reconciliation.js";
 import { recordRustBindingPatternFacts } from "./binding-patterns.js";
-import { rustBuiltInSourceTypeSemantics } from "./built-in-source-types.js";
 import {
   readRustSourceNativePointerOperation,
   readRustSourceSafetyBuilder,
@@ -582,14 +575,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     return;
   }
   const allSourceFiles = rawSourceFiles as readonly SourceFile[];
-  const staticProviderSemantics = mergeRustProviderSemantics(
-    rustBuiltInSourceTypeSemantics(),
-    collectRustProviderSemanticsFromDefinitions([rustStdProviderDefinition()]),
-    collectRustProviderSemantics(context.backend),
-  );
-  const providerSemantics = context.compilerProviderSemantics === undefined
-    ? staticProviderSemantics
-    : mergeRustProviderSemantics(staticProviderSemantics, context.compilerProviderSemantics);
+  const providerSemantics = context.providerSemantics;
   const providerRows = providerSemantics.operations;
   const jsEnabled = context.backend.selectedSurfaces.some((surface) => surface.id === "js") ||
     readRustTypescriptCompatibilityMode(context.target) === "compat";

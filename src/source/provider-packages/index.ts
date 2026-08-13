@@ -46,11 +46,21 @@ export interface RustProviderModuleDefinition {
   readonly exports: readonly ProviderExportDeclaration[];
 }
 
-export interface RustProviderOperationDefinition {
+export type RustProviderOperationKind =
+  | "method"
+  | "constructor"
+  | "property"
+  | "indexer"
+  | "property-set"
+  | "index-set";
+
+export interface RustProviderOperationDefinition<
+  OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
+> {
   readonly exportId: string;
   readonly memberId?: string;
   readonly signatureId?: string;
-  readonly operationKind: "method" | "constructor" | "property" | "indexer";
+  readonly operationKind: OperationKind;
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly TargetTypeRef[];
@@ -82,7 +92,9 @@ export interface RustProviderTypeRow extends RustProviderTypeDefinition {
   readonly sourceTypeParameters: readonly string[];
 }
 
-export interface RustProviderOperationRow extends RustProviderOperationDefinition {
+export interface RustProviderOperationRow<
+  OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
+> extends RustProviderOperationDefinition<OperationKind> {
   readonly providerPackageId: string;
   readonly providerId: string;
   readonly providerVersion: string;
@@ -111,6 +123,18 @@ export interface RustProviderSourceDependency {
   readonly exportedNames: readonly string[];
 }
 
+export interface RustProviderBinaryEpilogueDefinition {
+  readonly id: string;
+  readonly path: string;
+  readonly requiredCrate: string;
+  readonly isFallible?: boolean;
+}
+
+export interface RustProviderBinaryEpilogueRow extends RustProviderBinaryEpilogueDefinition {
+  readonly providerPackageId: string;
+  readonly providerVersion: string;
+}
+
 export interface RustProviderPackageDefinition {
   readonly id: string;
   readonly displayName: string;
@@ -127,6 +151,7 @@ export interface RustProviderPackageDefinition {
   // Rendered Rust paths for this capability's target-named carriers
   // (e.g. acme.db.Row -> acme_db::Row).
   readonly carrierPaths?: Readonly<Record<string, string>>;
+  readonly binaryEpilogues?: readonly RustProviderBinaryEpilogueDefinition[];
 }
 
 export const rustProviderPolicyContributionKind = "rust-provider-policy";
@@ -226,6 +251,7 @@ export interface RustProviderSemantics {
   readonly operations: readonly RustProviderOperationRow[];
   readonly carrierPaths: ReadonlyMap<string, string>;
   readonly types: readonly RustProviderTypeRow[];
+  readonly binaryEpilogues: readonly RustProviderBinaryEpilogueRow[];
 }
 
 export function mergeRustProviderSemantics(
@@ -234,6 +260,11 @@ export function mergeRustProviderSemantics(
   const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
   const operations = mergeExactRows(inputs.flatMap((input) => input.operations), providerOperationRowIdentity, "operation");
   const types = mergeExactRows(inputs.flatMap((input) => input.types), providerTypeRowIdentity, "type");
+  const binaryEpilogues = mergeExactRows(
+    inputs.flatMap((input) => input.binaryEpilogues),
+    providerBinaryEpilogueIdentity,
+    "binary epilogue",
+  );
   const carrierPaths = new Map<string, string>();
   for (const input of inputs) {
     for (const [id, path] of input.carrierPaths) {
@@ -248,6 +279,7 @@ export function mergeRustProviderSemantics(
     exports,
     operations,
     types,
+    binaryEpilogues,
     carrierPaths: new Map([...carrierPaths.entries()].sort(([left], [right]) => left.localeCompare(right, "en"))),
   });
 }
@@ -283,6 +315,10 @@ function providerTypeRowIdentity(row: RustProviderTypeRow): string {
   return `${providerExportRowIdentity(row)}\0${row.sourceTypeParameters.join("\0")}\0${JSON.stringify(row.targetCarrier)}`;
 }
 
+function providerBinaryEpilogueIdentity(row: RustProviderBinaryEpilogueRow): string {
+  return `${row.providerPackageId}\0${row.id}`;
+}
+
 export function collectRustProviderSemantics(
   context: TargetProviderContext,
 ): RustProviderSemantics {
@@ -298,6 +334,7 @@ export function collectRustProviderSemanticsFromDefinitions(
   const operations: RustProviderOperationRow[] = [];
   const carrierPaths = new Map<string, string>();
   const types: RustProviderTypeRow[] = [];
+  const binaryEpilogues: RustProviderBinaryEpilogueRow[] = [];
   for (const definition of definitions) {
     validateProviderPackageDefinition(definition);
     const providerId = rustProviderBindingProviderId(definition.id);
@@ -343,6 +380,12 @@ export function collectRustProviderSemanticsFromDefinitions(
       }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
+    binaryEpilogues.push(...(definition.binaryEpilogues ?? []).map((epilogue) => Object.freeze({
+      ...epilogue,
+      path: expandProviderPath(epilogue.path, aliases),
+      providerPackageId: definition.id,
+      providerVersion: definition.version,
+    })));
     operations.push(...definition.operations.map((row) => {
       const owner = moduleByExportId.get(row.exportId);
       if (owner === undefined) {
@@ -362,6 +405,7 @@ export function collectRustProviderSemanticsFromDefinitions(
     operations: Object.freeze(operations),
     carrierPaths,
     types: Object.freeze(types),
+    binaryEpilogues: Object.freeze(binaryEpilogues),
   };
 }
 
