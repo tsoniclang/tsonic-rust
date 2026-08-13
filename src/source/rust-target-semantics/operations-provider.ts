@@ -117,10 +117,10 @@ import {
 } from "../rust-facts/finalized-operation-abi.js";
 import { rustTargetOperationText } from "../rust-facts/target-operation.js";
 import {
-  finalizeJsCallbackOperation,
   selectJsSurfaceConstructorBySourceOwner,
   selectJsSurfaceOperation,
 } from "./js-surface-operations.js";
+import { finalizeRustCallbackOperation } from "./callback-operations.js";
 import {
   asNode,
   isProjectSourceDeclaration,
@@ -465,13 +465,14 @@ function mapSelectedProviderAssignment(
   }
   const rawArgumentCarriers = sourceArguments.map((argument) =>
     resolveRustTargetTypeRef(argument, context, options));
-  const template = instantiateProviderOperationTemplate(
+  const instantiation = instantiateProviderOperationTemplate(
     providerOperationTemplate(selection.row, operationKind),
     {
       sourceReceiverCarrier: receiverCarrier,
       sourceParameterCarriers: rawArgumentCarriers,
     },
   );
+  const template = instantiation?.template;
   if (template === undefined || template.parameterCarriers === undefined ||
     template.parameterCarriers.length !== sourceArguments.length) {
     return rejectSelectedOperation(
@@ -587,7 +588,33 @@ export function selectRustCheckedCall(
     if (selection.kind === "ambiguous") {
       return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_OPERATION_AMBIGUOUS", `Selected provider declaration '${providerIdentityText(provider)}' matches ${selection.rows.length} Rust operation rows.`);
     }
-    return acceptSelectedCall(request, providerOperationFact(selection.row), selection.row.parameterCarriers, context, options, {
+    const instantiation = instantiateSelectedCallTemplate(
+      request,
+      providerOperationFact(selection.row),
+      context,
+      options,
+    );
+    if (instantiation === undefined) {
+      return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier}' does not prove one closed instantiation of its Rust provider type parameters.`);
+    }
+    if (selection.row.callback !== undefined) {
+      return acceptRustPolicy({
+        kind: "deferred-callback",
+        callback: {
+          shape: "direct",
+          sourceArgumentIndex: selection.row.callback.sourceArgumentIndex,
+          fallibleTarget: substituteProviderOperationForm(
+            selection.row.callback.fallibleTarget,
+            instantiation.substitutions,
+          ),
+        },
+        sourceName: provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier,
+        providerDeclaration: provider,
+        template: instantiation.template,
+        parameterCarriers: instantiation.template.parameterCarriers ?? [],
+      });
+    }
+    return acceptSelectedCall(request, instantiation.template, instantiation.template.parameterCarriers, context, options, {
       sourceName: provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier,
       providerDeclaration: provider,
     });
@@ -783,6 +810,7 @@ export function selectRustCheckedCall(
 
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;
+  readonly providerDeclaration?: ProviderDeclarationIdentity;
   readonly callback: import("../rust-facts/keys.js").RustCallbackOperationTemplate;
   readonly template: RustProviderOperationTemplate;
   readonly parameterCarriers: readonly TargetTypeRef[];
@@ -868,10 +896,10 @@ export function prepareRustDeferredCheckedCall(
       request.call,
       context,
       "RUST_SELECTED_CALLBACK_CARRIER_MISSING",
-      `Selected JavaScript call '${deferred.sourceName}' has no closed callback/result carrier from exact target analysis.`,
+      `Selected callback call '${deferred.sourceName}' has no closed callback/result carrier from exact target analysis.`,
     );
   }
-  const finalized = finalizeJsCallbackOperation({
+  const finalized = finalizeRustCallbackOperation({
     fact: deferred.template,
     parameterCarriers: deferred.parameterCarriers,
     callback: deferred.callback,
@@ -881,7 +909,7 @@ export function prepareRustDeferredCheckedCall(
       request.call,
       context,
       "RUST_SELECTED_CALLBACK_CARRIER_CONFLICT",
-      `Selected JavaScript call '${deferred.sourceName}' has callback argument carriers incompatible with its exact target operation row.`,
+      `Selected callback call '${deferred.sourceName}' has callback argument carriers incompatible with its exact target operation row.`,
     );
   }
   const parameterCarriers = finalized.parameterCarriers;
@@ -890,7 +918,7 @@ export function prepareRustDeferredCheckedCall(
       request.call,
       context,
       "RUST_SELECTED_CALLBACK_PARAMETER_CARRIER_MISSING",
-      `Selected JavaScript call '${deferred.sourceName}' did not finalize every callback parameter carrier.`,
+      `Selected callback call '${deferred.sourceName}' did not finalize every callback parameter carrier.`,
     );
   }
   const optionalResult = selectRustOptionalCallResult(
@@ -909,6 +937,9 @@ export function prepareRustDeferredCheckedCall(
   }
   return acceptRustPolicy({
     sourceName: deferred.sourceName,
+    ...(deferred.providerDeclaration === undefined
+      ? {}
+      : { providerDeclaration: deferred.providerDeclaration }),
     callback: deferred.callback,
     template: finalized.fact,
     parameterCarriers: parameterCarriers as readonly TargetTypeRef[],
@@ -936,7 +967,12 @@ export function finalizeRustPreparedCheckedCall(
     prepared.parameterCarriers,
     context,
     options,
-    { sourceName: prepared.sourceName },
+    {
+      sourceName: prepared.sourceName,
+      ...(prepared.providerDeclaration === undefined
+        ? {}
+        : { providerDeclaration: prepared.providerDeclaration }),
+    },
   );
 }
 
@@ -1522,17 +1558,12 @@ function mapSelectedTargetTypeArguments(
     : undefined;
 }
 
-function acceptSelectedCall(
+function instantiateSelectedCallTemplate(
   request: RustCheckedCallSelectionInput,
   template: RustProviderOperationTemplate,
-  parameterCarriers: readonly (TargetTypeRef | undefined)[] | undefined,
   context: RustOperationPolicyContext,
   resolutionOptions: RustOperationsProviderOptions,
-  callIdentity: {
-    readonly sourceName: string;
-    readonly providerDeclaration?: ProviderDeclarationIdentity;
-  },
-): RustPolicySelection<RustCheckedCallSelectionResult> {
+): InstantiatedProviderOperationTemplate | undefined {
   const rawReceiverCarrier = selectedCallReceiverValueCarrier(
     request,
     context,
@@ -1554,15 +1585,35 @@ function acceptSelectedCall(
       directTypeArguments.set(argument.typeParameterName, carrier);
     }
   }
-  const instantiatedTemplate = instantiateProviderOperationTemplate(template, {
+  return instantiateProviderOperationTemplate(template, {
     sourceReceiverCarrier: rawReceiverCarrier,
     sourceParameterCarriers: selectedParameterCarriers,
     sourceResultCarrier: selectedResultCarrier,
     directTypeArguments,
   });
-  if (instantiatedTemplate === undefined) {
+}
+
+function acceptSelectedCall(
+  request: RustCheckedCallSelectionInput,
+  template: RustProviderOperationTemplate,
+  parameterCarriers: readonly (TargetTypeRef | undefined)[] | undefined,
+  context: RustOperationPolicyContext,
+  resolutionOptions: RustOperationsProviderOptions,
+  callIdentity: {
+    readonly sourceName: string;
+    readonly providerDeclaration?: ProviderDeclarationIdentity;
+  },
+): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const instantiation = instantiateSelectedCallTemplate(
+    request,
+    template,
+    context,
+    resolutionOptions,
+  );
+  if (instantiation === undefined) {
     return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${callIdentity.sourceName}' does not prove one closed instantiation of its Rust provider type parameters.`);
   }
+  const instantiatedTemplate = instantiation.template;
   const sourceArguments = selectedCallSourceCarriers(
     request,
     instantiatedTemplate,
@@ -1579,6 +1630,9 @@ function acceptSelectedCall(
       context,
       "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
       "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
+      [{
+        message: `sourceArgumentIndex=${sourceArguments.sourceIndex}; actual=${JSON.stringify(sourceArguments.actual)}; expected=${JSON.stringify(sourceArguments.expected)}`,
+      }],
     );
   }
   const selectedReceiverCarrier = selectedCallReceiverCarrier(
@@ -1715,7 +1769,12 @@ type SelectedCallSourceCarriers =
       }[];
     }
   | { readonly kind: "missing" }
-  | { readonly kind: "incompatible"; readonly sourceIndex: number };
+  | {
+      readonly kind: "incompatible";
+      readonly sourceIndex: number;
+      readonly actual?: TargetTypeRef;
+      readonly expected?: TargetTypeRef;
+    };
 
 function selectedCallSourceCarriers(
   request: RustCheckedCallSelectionInput,
@@ -1741,7 +1800,7 @@ function selectedCallSourceCarriers(
     }
     declaredBySourceIndex.set(sourceIndex, declared?.[first.sourceParameterIndex]);
   }
-  let incompatibleIndex: number | undefined;
+  let incompatibility: Extract<SelectedCallSourceCarriers, { readonly kind: "incompatible" }> | undefined;
   const conversions: {
     readonly sourceIndex: number;
     readonly reconciliation: Extract<RustValueCarrierReconciliation, { readonly kind: "conversion" }>;
@@ -1759,16 +1818,16 @@ function selectedCallSourceCarriers(
         conversions.push({ sourceIndex: index, reconciliation });
         effective = expected;
       } else if (reconciliation.kind === "incompatible") {
-        incompatibleIndex ??= index;
+        incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: normalized, expected };
       }
     } else if (effective !== undefined && expected !== undefined &&
       !rustTargetTypeRefEquals(effective, expected)) {
-      incompatibleIndex ??= index;
+      incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: effective, expected };
     }
     return effective ?? expected;
   });
-  if (incompatibleIndex !== undefined) {
-    return { kind: "incompatible", sourceIndex: incompatibleIndex };
+  if (incompatibility !== undefined) {
+    return incompatibility;
   }
   if (actual.some((carrier) => carrier === undefined)) {
     return { kind: "missing" };
@@ -1944,6 +2003,13 @@ function providerFormRequiresSourceReceiver(form: RustProviderOperationForm): bo
     form.form === "arg-receiver-method";
 }
 
+interface InstantiatedProviderOperationTemplate<
+  OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
+> {
+  readonly template: RustProviderOperationTemplate<OperationKind>;
+  readonly substitutions: ReadonlyMap<string, TargetTypeRef>;
+}
+
 function instantiateProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind,
 >(
@@ -1954,10 +2020,10 @@ function instantiateProviderOperationTemplate<
     readonly sourceResultCarrier?: TargetTypeRef;
     readonly directTypeArguments?: ReadonlyMap<string, TargetTypeRef>;
   },
-): RustProviderOperationTemplate<OperationKind> | undefined {
+): InstantiatedProviderOperationTemplate<OperationKind> | undefined {
   const parameterNames = new Set(template.typeParameters ?? []);
   if (parameterNames.size === 0) {
-    return template;
+    return { template, substitutions: new Map() };
   }
   const bindings = new Map<string, TargetTypeRef>();
   for (const [name, carrier] of evidence.directTypeArguments ?? []) {
@@ -1982,17 +2048,20 @@ function instantiateProviderOperationTemplate<
     return undefined;
   }
   return {
-    ...template,
-    target: substituteProviderOperationForm(template.target, bindings),
-    resultCarrier: substituteRustTargetTypeParameters(template.resultCarrier, bindings),
-    ...(template.parameterCarriers === undefined
-      ? {}
-      : { parameterCarriers: template.parameterCarriers.map((carrier) =>
-          carrier === undefined ? undefined : substituteRustTargetTypeParameters(carrier, bindings)) }),
-    ...(template.receiverCarrier === undefined
-      ? {}
-      : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
-    typeParameters: [],
+    template: {
+      ...template,
+      target: substituteProviderOperationForm(template.target, bindings),
+      resultCarrier: substituteRustTargetTypeParameters(template.resultCarrier, bindings),
+      ...(template.parameterCarriers === undefined
+        ? {}
+        : { parameterCarriers: template.parameterCarriers.map((carrier) =>
+            carrier === undefined ? undefined : substituteRustTargetTypeParameters(carrier, bindings)) }),
+      ...(template.receiverCarrier === undefined
+        ? {}
+        : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
+      typeParameters: [],
+    },
+    substitutions: bindings,
   };
 
   function inferTemplateBindings(
@@ -3277,10 +3346,11 @@ export function selectRustCheckedConversion(
     }
     const sourceNode = asNode(request.expression, context);
     const sourceKind = sourceNode === undefined ? "" : context.ast.kindName(sourceNode);
-    if ((targetCarrier.kind === "function-pointer" || targetCarrier.kind === "closure") &&
+    if ((targetCarrier.kind === "function-pointer" || targetCarrier.kind === "closure" ||
+      rustCallableProtocol(targetCarrier) !== undefined) &&
       (sourceKind === "KindArrowFunction" || sourceKind === "KindFunctionExpression")) {
       return acceptRustPolicy({ convertedType: targetCarrier }, [
-        { message: `rust selected function expression uses the selected target ${targetCarrier.kind} carrier` },
+        { message: "rust selected function expression uses the selected target callable carrier" },
       ]);
     }
     if (targetCarrier.kind === "source-primitive" && sourceNode !== undefined &&
@@ -3485,13 +3555,14 @@ function finalizeProviderOperationFromSubjects(
   const rawReceiverCarrier = selectedReceiverCarrier ?? (sourceReceiver === undefined
     ? undefined
     : resolveRustTargetTypeRef(sourceReceiver, context, options));
-  const instantiatedTemplate = instantiateProviderOperationTemplate(template, {
+  const instantiation = instantiateProviderOperationTemplate(template, {
     sourceReceiverCarrier: rawReceiverCarrier,
     sourceParameterCarriers: rawArgumentCarriers,
   });
-  if (instantiatedTemplate === undefined) {
+  if (instantiation === undefined) {
     return undefined;
   }
+  const instantiatedTemplate = instantiation.template;
   const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
     const resolved = resolveRustTargetTypeRef(argument, context, options);
     return normalizeSelectedLiteralCarrier(argument, resolved, instantiatedTemplate.parameterCarriers?.[index], context, options);
@@ -3626,6 +3697,7 @@ function rejectSelectedOperation<T>(
   context: RustOperationPolicyContext,
   extensionCode: string,
   message: string,
+  evidence: readonly { readonly message: string }[] = [],
 ): RustPolicySelection<T> {
   return rejectRustPolicy({
     extensionId: context.extensionId,
@@ -3634,7 +3706,7 @@ function rejectSelectedOperation<T>(
     category: "error",
     message,
     nodeOrSpan,
-    evidence: [{ message: "target.capability=rust.selected-operation" }],
+    evidence: [{ message: "target.capability=rust.selected-operation" }, ...evidence],
   });
 }
 
@@ -3847,7 +3919,8 @@ function normalizeSelectedArgumentCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const literal = normalizeSelectedLiteralCarrier(subject, actual, expected, context, options);
-  if (literal !== actual || (expected?.kind !== "function-pointer" && expected?.kind !== "closure")) {
+  if (literal !== actual || (expected?.kind !== "function-pointer" && expected?.kind !== "closure" &&
+    rustCallableProtocol(expected) === undefined)) {
     return literal;
   }
   const node = asNode(subject, context);
@@ -3873,9 +3946,13 @@ function selectedArgumentCompatibility(
       return 1;
     }
     const kind = context.ast.kindName(node);
-    if ((expected.kind === "function-pointer" || expected.kind === "closure") &&
+    const callable = rustCallableProtocol(expected);
+    if ((expected.kind === "function-pointer" || expected.kind === "closure" || callable !== undefined) &&
       (kind === "KindArrowFunction" || kind === "KindFunctionExpression")) {
-      return context.ast.parameters(node).length === expected.args.length ? 1 : undefined;
+      const parameterCount = expected.kind === "function-pointer" || expected.kind === "closure"
+        ? expected.args.length
+        : callable!.parameters.length;
+      return context.ast.parameters(node).length === parameterCount ? 1 : undefined;
     }
     if (actual === undefined) {
       return 10;

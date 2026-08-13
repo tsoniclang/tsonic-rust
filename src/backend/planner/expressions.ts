@@ -90,7 +90,7 @@ import {
 import {
   rustArgumentPassingMode,
 } from "../../source/rust-facts/parameter-passing.js";
-import type { RustExpr, RustStmt } from "../rust-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName, sourceTypePath } from "./plan-context.js";
 import type { RustExpressionOverride, RustPlanContext } from "./plan-context.js";
@@ -445,7 +445,12 @@ function planExpressionInner(
           ));
           return undefined;
         }
-        const callableType = rustTypeFromCarrierInContext(callableValue.carrier, context);
+        const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+        const callableType = rustCallableConstructionType(
+          callableValue.carrier,
+          fallible,
+          context,
+        );
         const declarationModule = context.moduleNameByFileName.get(callableValue.fileName);
         if (callableType === undefined || declarationModule === undefined ||
           !isValidRustIdentifier(callableValue.name)) {
@@ -940,7 +945,11 @@ function planExpressionInner(
             ? closure
             : { kind: "block", bindings: captureBindings, value: closure };
         }
-        const callableType = rustTypeFromCarrierInContext(closureFact.resultCarrier, context);
+        const callableType = rustCallableConstructionType(
+          closureFact.resultCarrier,
+          fallible,
+          context,
+        );
         if (callableType === undefined) {
           return undefined;
         }
@@ -1011,7 +1020,11 @@ function planExpressionInner(
           ? closure
           : { kind: "block", bindings: captureBindings, value: closure };
       }
-      const callableType = rustTypeFromCarrierInContext(closureFact.resultCarrier, context);
+      const callableType = rustCallableConstructionType(
+        closureFact.resultCarrier,
+        fallible,
+        context,
+      );
       if (callableType === undefined) {
         return undefined;
       }
@@ -1179,6 +1192,38 @@ function planExpressionInner(
       return undefined;
     }
   }
+}
+
+function rustCallableConstructionType(
+  carrier: TargetTypeRef,
+  fallible: boolean,
+  context: RustPlanContext,
+): RustType | undefined {
+  const callable = rustCallableProtocol(carrier);
+  if (!fallible || callable === undefined) {
+    return rustTypeFromCarrierInContext(carrier, context);
+  }
+  const argumentsType = rustTypeFromCarrierInContext(
+    { kind: "tuple", elements: callable.parameters },
+    context,
+  );
+  const resultType = rustTypeFromCarrierInContext(callable.result, context);
+  if (argumentsType === undefined || resultType === undefined) {
+    return undefined;
+  }
+  context.usedAliases?.add("rt");
+  return {
+    kind: "named",
+    path: "rt::Callable",
+    typeArguments: [
+      argumentsType,
+      {
+        kind: "named",
+        path: "rt::TsonicResult",
+        typeArguments: [resultType],
+      },
+    ],
+  };
 }
 
 function planGeneratorResumeExpression(

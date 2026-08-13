@@ -6,6 +6,7 @@ import {
   createRustProviderPackage,
   createRustProviderPackageSourceProvider,
   rustInt32ToFloat64ValueConversion,
+  rustCallableTargetType,
 } from "../dist/index.js";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
@@ -211,6 +212,111 @@ test("provider operation carriers are closed and renderable", () => {
           target: { form: "call", path: "acme_validation::run" },
           resultCarrier: item.cast === true ? int32Carrier : item.carrier,
           ...(item.cast === true ? { resultConversion: rustInt32ToFloat64ValueConversion } : {}),
+        }],
+      })),
+      item.pattern,
+      item.label,
+    );
+  }
+});
+
+test("runtime Callable is a built-in generic carrier and needs no provider-owned path", () => {
+  const providerPackage = createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: rustCallableTargetType([], int32Carrier),
+    }],
+  }));
+  const [contribution] = providerPackage.createTargetContributions({});
+  assert.deepEqual(contribution.definition.operations[0].resultCarrier,
+    rustCallableTargetType([], int32Carrier));
+});
+
+test("provider callback metadata declares one exact fallible target ABI", () => {
+  const callbackCarrier = rustCallableTargetType([], { kind: "tuple", elements: [] });
+  const callbackExport = {
+    id: "@acme/validation::withCallback",
+    name: "withCallback",
+    kind: "function",
+    signatures: [{
+      id: "@acme/validation::withCallback(callback)",
+      name: "withCallback",
+      parameters: [{
+        name: "callback",
+        type: {
+          kind: "function",
+          id: "@acme/validation::withCallback.callback",
+          parameters: [],
+          returnType: { kind: "void" },
+        },
+      }],
+      returnType: { kind: "void" },
+    }],
+  };
+  const providerPackage = createRustProviderPackage(definition({
+    modules: [{
+      moduleSpecifier: "@acme/validation",
+      providerModuleId: "acme.validation",
+      exports: [callbackExport],
+    }],
+    operations: [{
+      exportId: callbackExport.id,
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::with_callback" },
+      resultCarrier: { kind: "tuple", elements: [] },
+      parameterCarriers: [callbackCarrier],
+      callback: {
+        sourceArgumentIndex: 0,
+        fallibleTarget: { form: "call", path: "acme_validation::with_fallible_callback" },
+      },
+    }],
+  }));
+  const [contribution] = providerPackage.createTargetContributions({});
+  assert.deepEqual(contribution.definition.operations[0].callback, {
+    sourceArgumentIndex: 0,
+    fallibleTarget: { form: "call", path: "acme_validation::with_fallible_callback" },
+  });
+});
+
+test("provider callback metadata fails closed on an inexact callback contract", () => {
+  const cases = [
+    {
+      label: "missing callback parameter",
+      parameterCarriers: [],
+      callback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /must select one declared parameter carrier/u,
+    },
+    {
+      label: "non-callable parameter",
+      parameterCarriers: [int32Carrier],
+      callback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /must select one exact callable carrier/u,
+    },
+    {
+      label: "unknown callback field",
+      parameterCarriers: [rustCallableTargetType([], int32Carrier)],
+      callback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" }, fallback: true },
+      pattern: /unsupported field 'fallback'/u,
+    },
+    {
+      label: "raw fallible target",
+      parameterCarriers: [rustCallableTargetType([], int32Carrier)],
+      callback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible\(\)" } },
+      pattern: /not a closed Rust path/u,
+    },
+  ];
+  for (const item of cases) {
+    assert.throws(
+      () => createRustProviderPackage(definition({
+        operations: [{
+          exportId: "@acme/validation::run",
+          operationKind: "method",
+          target: { form: "call", path: "acme_validation::run" },
+          resultCarrier: int32Carrier,
+          parameterCarriers: item.parameterCarriers,
+          callback: item.callback,
         }],
       })),
       item.pattern,

@@ -24,6 +24,7 @@ import {
 } from "../../common/rust-syntax.js";
 import {
   rustBigIntTargetId,
+  rustCallableTargetId,
   rustFixedArrayCarrierValue,
   rustJsArrayTargetId,
   rustJsArrayConcatItemTargetId,
@@ -32,6 +33,7 @@ import {
   rustJsSetTargetId,
   rustJsValueTargetId,
   rustOptionTargetId,
+  rustCallableProtocol,
   rustUndefinedTargetId,
   rustPrimitiveTypeName,
   rustTargetTypeParameterNames,
@@ -63,6 +65,7 @@ interface SignatureRecord {
 
 const builtInTargetCarrierIds = new Set([
   rustBigIntTargetId,
+  rustCallableTargetId,
   rustStringTargetId,
   rustIsizeTargetId,
   rustUsizeTargetId,
@@ -638,7 +641,7 @@ function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible", "isUnsafe",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible", "isUnsafe", "callback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -696,6 +699,7 @@ function validateOperationRows(
     if (row.isAsync === true && row.operationKind !== "method") {
       fail(`isAsync is supported only on method operations (row '${label}').`);
     }
+    validateProviderCallback(row, definition, label, fail);
     validateOperationParameters(row, exported, member, signature, fail);
     validateCarrier(row.resultCarrier, definition, `${label}.resultCarrier`, fail);
     if (row.receiverCarrier !== undefined) {
@@ -717,6 +721,10 @@ function validateOperationRows(
       ...(row.receiverCarrier === undefined ? [] : rustTargetTypeParameterNames(row.receiverCarrier)),
       ...(row.parameterCarriers ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
       ...operationFormCarriers(row.target).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
+      ...(row.callback === undefined
+        ? []
+        : operationFormCarriers(row.callback.fallibleTarget)
+            .flatMap((carrier) => rustTargetTypeParameterNames(carrier))),
     ]);
     for (const name of referencedTypeParameters) {
       if (!typeParameterNames.has(name)) {
@@ -743,6 +751,58 @@ function validateOperationRows(
     if (operationFormContractViolation !== undefined) {
       fail(`${label}.target violates the closed Rust operation-form contract: ${operationFormContractViolation}`);
     }
+  }
+}
+
+function validateProviderCallback(
+  row: RustProviderPackageDefinition["operations"][number],
+  definition: RustProviderPackageDefinition,
+  label: string,
+  fail: Fail,
+): void {
+  const callback = row.callback;
+  if (callback === undefined) {
+    return;
+  }
+  requireExactKeys(
+    asRecord(callback),
+    ["sourceArgumentIndex", "fallibleTarget"],
+    `${label}.callback`,
+    fail,
+  );
+  if (row.operationKind !== "method" && row.operationKind !== "constructor") {
+    fail(`${label}.callback is supported only on checked call operations`);
+  }
+  if (!Number.isSafeInteger(callback.sourceArgumentIndex) || callback.sourceArgumentIndex < 0 ||
+    callback.sourceArgumentIndex >= (row.parameterCarriers?.length ?? 0)) {
+    fail(`${label}.callback.sourceArgumentIndex must select one declared parameter carrier`);
+  }
+  const callbackCarrier = row.parameterCarriers?.[callback.sourceArgumentIndex];
+  if (callbackCarrier === undefined ||
+    (callbackCarrier.kind !== "closure" && callbackCarrier.kind !== "function-pointer" &&
+      rustCallableProtocol(callbackCarrier) === undefined)) {
+    fail(`${label}.callback.sourceArgumentIndex must select one exact callable carrier`);
+  }
+  validateOperationForm(
+    row.operationKind,
+    callback.fallibleTarget,
+    definition,
+    `${label}.callback.fallibleTarget`,
+    row.parameterCarriers,
+    fail,
+  );
+  const violation = rustProviderOperationFormContractViolation(
+    row.operationKind,
+    callback.fallibleTarget,
+    callback.fallibleTarget.form === "call-value-slice" ||
+        callback.fallibleTarget.form === "call-value-array" ||
+        callback.fallibleTarget.form === "receiver-value-array" ||
+        callback.fallibleTarget.form === "receiver-tagged-array"
+      ? callback.fallibleTarget.leadingArguments.length
+      : row.parameterCarriers?.length ?? 0,
+  );
+  if (violation !== undefined) {
+    fail(`${label}.callback.fallibleTarget violates the closed Rust operation-form contract: ${violation}`);
   }
 }
 

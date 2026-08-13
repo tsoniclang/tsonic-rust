@@ -4509,12 +4509,61 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
   const callbackExpression = (
     pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
   ): Node | undefined => pending.request.arguments[pending.prepared.callback.sourceArgumentIndex];
+  const callbackValueExpression = (expression: Node | undefined): Node | undefined => {
+    let current = expression;
+    while (current !== undefined && ast.kindName(current) === KindParenthesizedExpression) {
+      current = Node_Expression(ast, current);
+    }
+    return current;
+  };
+  interface CallbackValueAnalysis {
+    readonly fallible: boolean;
+    readonly subjects: readonly Node[];
+  }
   const callbackExpressionIsFallible = (
     pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
-  ): boolean => {
-    const expression = callbackExpression(pending);
-    const body = expression === undefined ? undefined : ast.body(expression);
-    return body !== undefined && expressionRegionIsFallible(body);
+  ): boolean => callbackValueAnalysis(callbackExpression(pending), new Set())?.fallible === true;
+  const callbackValueAnalysis = (
+    expression: Node | undefined,
+    resolving: Set<Node>,
+  ): CallbackValueAnalysis | undefined => {
+    const value = callbackValueExpression(expression);
+    if (value === undefined || resolving.has(value)) {
+      return undefined;
+    }
+    resolving.add(value);
+    try {
+      const body = ast.body(value);
+      if (body !== undefined) {
+        return {
+          fallible: expressionRegionIsFallible(body),
+          subjects: [value],
+        };
+      }
+      const declaration = walk.context.source.navigation.sourceReferenceFor(value)?.declaration;
+      if (declaration === undefined) {
+        return undefined;
+      }
+      if (fallible.has(declaration)) {
+        return { fallible: true, subjects: [value, declaration] };
+      }
+      const declarationBody = ast.body(declaration);
+      if (declarationBody !== undefined) {
+        return {
+          fallible: expressionRegionIsFallible(declarationBody),
+          subjects: [value, declaration],
+        };
+      }
+      const initialized = callbackValueAnalysis(Node_Initializer(ast, declaration), resolving);
+      return initialized === undefined
+        ? undefined
+        : {
+            fallible: initialized.fallible,
+            subjects: [value, declaration, ...initialized.subjects],
+          };
+    } finally {
+      resolving.delete(value);
+    }
   };
   const preparedCallbackOperationIsFallible = (node: Node): boolean => {
     const pending = walk.preparedCallbackCalls.get(node);
@@ -4640,9 +4689,20 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
   }
   const ownedCallbackClosures = new Set<Node>();
   for (const [call, pending] of walk.preparedCallbackCalls) {
-    const callback = callbackExpression(pending);
-    if (callback !== undefined) {
-      ownedCallbackClosures.add(callback);
+    const callbackArgument = callbackValueExpression(callbackExpression(pending));
+    const callbackAnalysis = callbackValueAnalysis(callbackArgument, new Set());
+    if (callbackAnalysis === undefined) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_CALLBACK_VALUE_NOT_PROVEN",
+        "The selected provider callback argument does not resolve to one exact project-source callable implementation.",
+        callbackArgument ?? call,
+        ["target.capability=rust.callback.exact-source"],
+      );
+      continue;
+    }
+    for (const subject of callbackAnalysis.subjects) {
+      ownedCallbackClosures.add(subject);
     }
     const sourceFile = ast.getSourceFile(call);
     if (sourceFile === undefined) {
@@ -4655,7 +4715,7 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
       );
       continue;
     }
-    const callbackFallible = callbackExpressionIsFallible(pending);
+    const callbackFallible = callbackAnalysis.fallible;
     const finalized = finalizeRustPreparedCheckedCall(
       pending.request,
       pending.prepared,
@@ -4670,10 +4730,12 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
     const operation = walk.context.facts.get(call, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(call, rustTargetOperationFactKey);
     recordSelectedOperationInputs(walk, call, sourceFile, operation);
-    if (callbackFallible && callback !== undefined) {
-      walk.context.facts.set(callback, rustFallibleFactKey, { fallible: true }, [
-        { message: "rust fallible callback ABI" },
-      ]);
+    if (callbackFallible) {
+      for (const subject of callbackAnalysis.subjects) {
+        walk.context.facts.set(subject, rustFallibleFactKey, { fallible: true }, [
+          { message: "rust fallible callback ABI" },
+        ]);
+      }
     }
   }
   for (const declaration of fallible) {

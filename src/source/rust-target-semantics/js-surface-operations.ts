@@ -847,66 +847,6 @@ function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindings): T
   }
 }
 
-export function finalizeJsCallbackOperation(
-  selection: JsOperationSelection,
-  argumentCarriers: readonly TargetTypeRef[],
-): JsOperationSelection | undefined {
-  if (selection.fact.kind !== "provider-operation" || selection.callback === undefined) {
-    return undefined;
-  }
-  const callback = argumentCarriers[selection.callback.sourceArgumentIndex];
-  const callbackTemplate = selection.parameterCarriers?.[selection.callback.sourceArgumentIndex];
-  if (callback?.kind !== "closure" || callbackTemplate?.kind !== "closure" ||
-    !rustCallbackCarrierMatchesTemplate(callbackTemplate, callback)) {
-    return undefined;
-  }
-  if (selection.callback.shape === "map") {
-    const resultCarrier = rustJsArrayTargetType(callback.result);
-    const parameterCarriers = [callback, ...(selection.parameterCarriers?.slice(1) ?? [])];
-    return {
-      fact: {
-        ...selection.fact,
-        resultCarrier,
-        parameterCarriers,
-      },
-      resultCarrier,
-      parameterCarriers,
-    };
-  }
-  if (selection.callback.shape === "direct") {
-    const templates = selection.parameterCarriers ?? [];
-    if (templates.length !== argumentCarriers.length || !templates.every((template, index) =>
-      template !== undefined && argumentCarriers[index] !== undefined &&
-      rustCallbackCarrierMatchesTemplate(template, argumentCarriers[index]!))) {
-      return undefined;
-    }
-    return {
-      fact: { ...selection.fact, parameterCarriers: argumentCarriers },
-      resultCarrier: selection.resultCarrier,
-      parameterCarriers: argumentCarriers,
-    };
-  }
-  const accumulatorIndex = selection.callback.accumulatorArgumentIndex;
-  const accumulator = accumulatorIndex === undefined
-    ? undefined
-    : argumentCarriers[accumulatorIndex];
-  if (accumulator === undefined ||
-    (callback.args[0] !== undefined && !rustTargetTypeRefEquals(callback.args[0], accumulator)) ||
-    !rustTargetTypeRefEquals(callback.result, accumulator)) {
-    return undefined;
-  }
-  const parameterCarriers = [...argumentCarriers];
-  return {
-    fact: {
-      ...selection.fact,
-      resultCarrier: accumulator,
-      parameterCarriers,
-    },
-    resultCarrier: accumulator,
-    parameterCarriers,
-  };
-}
-
 function arrayCallbackCarrier(
   bindings: JsLaneBindings,
   arity: 0 | 1 | 2 | 3,
@@ -932,26 +872,6 @@ function arrayReduceCallbackCarrier(
   return args.some((argument) => argument === undefined)
     ? undefined
     : rustClosureTargetType(args as TargetTypeRef[], accumulator);
-}
-
-function rustCallbackCarrierMatchesTemplate(
-  template: TargetTypeRef,
-  actual: TargetTypeRef,
-): boolean {
-  if (template.kind === "opaque" && template.id === "tsonic.rust.infer") {
-    return true;
-  }
-  if (template.kind !== actual.kind) {
-    return false;
-  }
-  if (template.kind !== "closure" || actual.kind !== "closure") {
-    return rustTargetTypeRefEquals(template, actual);
-  }
-  return template.args.length === actual.args.length &&
-    template.args.every((argument, index) =>
-      actual.args[index] !== undefined &&
-      rustCallbackCarrierMatchesTemplate(argument, actual.args[index]!)) &&
-    rustCallbackCarrierMatchesTemplate(template.result, actual.result);
 }
 
 function copyStyleOf(carrier: TargetTypeRef | undefined): { readonly kind: "method"; readonly name: "copied" | "cloned" } {

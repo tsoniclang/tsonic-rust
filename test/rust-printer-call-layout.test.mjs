@@ -41,6 +41,54 @@ test("fitting method-call arguments remain on one rustfmt line", () => {
   );
 });
 
+test("multi-argument calls follow rustfmt argument width independently of callable width", () => {
+  const longArguments = {
+    kind: "path",
+    path: "__tsonic_callable_arguments_1",
+  };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "tsonic_rust_node::buffer::Buffer::from_string_enc",
+            args: [
+              { kind: "str-literal", value: "ok" },
+              { kind: "str-literal", value: "utf8" },
+            ],
+          },
+        }, {
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "handle",
+            args: [
+              { kind: "field", receiver: longArguments, name: "0" },
+              { kind: "field", receiver: longArguments, name: "1" },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /tsonic_rust_node::buffer::Buffer::from_string_enc\("ok", "utf8"\);/u,
+  );
+  assert.match(
+    source,
+    /handle\(\n {8}__tsonic_callable_arguments_1\.0,\n {8}__tsonic_callable_arguments_1\.1,\n {4}\);/u,
+  );
+});
+
 test("single projection calls keep a short receiver attached when closure arguments expand", () => {
   const source = printRustSourceFile({
     headerComment,

@@ -129,6 +129,7 @@ export type RustCheckedCallSelectionResult =
       readonly kind: "deferred-callback";
       readonly callback: RustCallbackOperationTemplate;
       readonly sourceName: string;
+      readonly providerDeclaration?: ProviderDeclarationIdentity;
       readonly template: RustProviderOperationTemplate;
       readonly parameterCarriers: readonly (TargetTypeRef | undefined)[];
     }

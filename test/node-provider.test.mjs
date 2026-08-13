@@ -222,6 +222,80 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("node HTTP and timers lower through exact provider evidence and activate the event loop", { timeout: 300_000 }, async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "node_server_contract" } },
+    files: {
+      "index.ts": `
+import { Buffer } from "node:buffer";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { setInterval } from "node:timers";
+import type { int32 } from "@tsonic/core/types.js";
+
+function send(response: ServerResponse, statusCode: int32): void {
+  response.statusCode = statusCode;
+  response.setHeader("content-type", "application/octet-stream");
+  const body = Buffer.from("ok", "utf8");
+  response.end(body);
+}
+
+function handle(_request: IncomingMessage, response: ServerResponse): void {
+  const okStatus: int32 = 200;
+  send(response, okStatus);
+}
+
+export function main(): void {
+  const port: int32 = 0;
+  setInterval((): void => {
+    JSON.parse("{}");
+  }, 250);
+  const aliasedHandle = handle;
+  const server = createServer((aliasedHandle));
+  server.listen(port, "127.0.0.1", (): void => {});
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /tsonic_rust_node::http::create_server_fallible_callable/u);
+  assert.match(source, /fn handle\([^)]*\) -> rt::TsonicResult<\(\)>/u);
+  assert.match(source, /response\.set_status_code\(/u);
+  assert.match(source, /response\.set_header\(/u);
+  assert.match(source, /response\.end_buffer\(/u);
+  assert.match(source, /server\.listen\(/u);
+  assert.match(source, /tsonic_rust_node::timers::set_interval_fallible_callable/u);
+  assert.match(source, /rt::Callable::<[^;]+rt::TsonicResult<\(\)>>/u);
+  const main = artifactText(result, "src/main.rs");
+  assert.match(main, /tsonic_rust_node::run_event_loop\(\)\?/u);
+  validateGeneratedProject("node-server-contract", result.artifacts);
+});
+
+test("provider callbacks fail closed when no exact callable implementation is available", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+
+export function register(
+  handler: (request: IncomingMessage, response: ServerResponse) => void,
+): void {
+  createServer(handler);
+}
+`,
+    },
+  });
+
+  assert.equal(result.diagnostics.some((diagnostic) =>
+    diagnostic.code === "RUST_CALLBACK_VALUE_NOT_PROVEN"), true);
+  assert.deepEqual(result.artifacts, []);
+});
+
 test("async third-party provider rows lower through the same generic infrastructure", async () => {
   const { acmeDbPackage } = await import("./helpers/rust-session.mjs");
   const { result } = compileRust({
