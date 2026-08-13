@@ -9,6 +9,7 @@ import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
+import { planRustProjectDowncastValue } from "./project-downcasts.js";
 
 export function planRustFlowSelectedValue(
   operation: Node,
@@ -48,6 +49,25 @@ export function planRustFlowSelectedValue(
       method: "clone",
       args: [],
     };
+  }
+  const dispatchCarrier = optionalElement ?? storedCarrier;
+  const sourceDefinition = context.input.projectTypes.definitionForCarrier(dispatchCarrier);
+  const targetDefinition = context.input.projectTypes.definitionForCarrier(selectedCarrier);
+  const relationship = sourceDefinition === undefined || targetDefinition === undefined
+    ? { kind: "unrelated" as const }
+    : context.input.projectTypes.relationship(selectedCarrier, sourceDefinition);
+  if (storedCarrier !== undefined && dispatchCarrier !== undefined && sourceDefinition !== undefined &&
+    relationship.kind === "related" &&
+    rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) &&
+    context.input.projectTypes.downcastRoute(sourceDefinition, selectedCarrier) !== undefined) {
+    return planRustProjectDowncastValue(
+      operation,
+      expression,
+      storedCarrier,
+      dispatchCarrier,
+      selectedCarrier,
+      context,
+    );
   }
   context.diagnostics.push(missingFactDiagnostic(
     diagnosticInput(context, operation),

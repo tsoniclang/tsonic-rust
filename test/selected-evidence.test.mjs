@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustProviderPackage } from "../dist/index.js";
 import {
+  acmeTestingPackage,
   artifactText,
   compileRust,
 } from "./helpers/rust-session.mjs";
@@ -226,6 +227,108 @@ export function read(value: Counter | undefined): int32 {
     2,
   );
   validateGeneratedProject("selected-narrowed-project-property", result.artifacts);
+});
+
+test("project instanceof and assertions use closed generated downcast routes", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "selected_project_downcast" },
+    },
+    files: {
+      "model.ts": `
+export class JsonValue { constructor() {} }
+
+export class JsonTagged extends JsonValue { constructor() { super(); } }
+
+export class JsonString extends JsonTagged {
+  value: string;
+  constructor(value: string) { super(); this.value = value; }
+}
+
+export class JsonArray extends JsonValue {}
+`,
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+import { JsonArray, JsonString as SelectedString, JsonTagged, JsonValue } from "./model.js";
+
+function read(value: JsonValue): string {
+  if (value instanceof SelectedString) return value.value;
+  if (value instanceof JsonArray) return "array";
+  return "other";
+}
+
+function asserted(value: JsonValue): string {
+  return (value as SelectedString).value;
+}
+
+function readTagged(value: JsonTagged): string {
+  return value instanceof SelectedString ? value.value : "other";
+}
+
+function present(value: SelectedString | undefined): boolean {
+  return value instanceof SelectedString;
+}
+
+function isValue(value: SelectedString): boolean {
+  return value instanceof JsonValue;
+}
+
+let evaluations: int32 = 0;
+
+function selected(value: JsonValue): JsonValue {
+  evaluations += 1;
+  return value;
+}
+
+export function main(): void {
+  const text: JsonValue = new SelectedString("selected");
+  const array: JsonValue = new JsonArray();
+  check(read(text) === "selected");
+  check(read(array) === "array");
+  check(asserted(text) === "selected");
+  check(readTagged(new SelectedString("tagged")) === "tagged");
+  check(present(text as SelectedString));
+  check(!present(undefined));
+  check(isValue(text as SelectedString));
+  check(selected(text) instanceof SelectedString);
+  check(evaluations === 1);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const model = artifactText(result, "src/model.rs");
+  const index = artifactText(result, "src/index.rs");
+  assert.match(model, /fn __tsonic_downcast(?:_[0-9]+)+\(\s*self: std::rc::Rc<Self>,?\s*\)/u);
+  assert.match(index, /__tsonic_downcast(?:_[0-9]+)+\(\)\s*\.is_some\(\)/u);
+  assert.match(index, /__tsonic_downcast(?:_[0-9]+)+\(\)\s*\.unwrap\(\)/u);
+  const run = validateGeneratedProject("selected-project-downcast", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
+test("generic project downcasts fail closed without a closed target carrier", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+class Value {}
+class Box<T> extends Value { value!: T; }
+
+export function isBox(value: Value): boolean {
+  return value instanceof Box;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
+    code: "RUST_PROJECT_TYPE_TEST_EVIDENCE_MISSING",
+    message: "Checked instanceof requires exact project source, concrete class declaration, and closed target carrier evidence.",
+  }]);
 });
 
 test("optional-chain selection fails closed without every exact carrier", () => {

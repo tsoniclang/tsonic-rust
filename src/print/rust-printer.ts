@@ -99,7 +99,7 @@ export function printRustItem(item: RustItem): string {
           ? ` -> rt::TsonicResult<${fn.returnType === undefined ? "()" : printRustType(fn.returnType)}>`
           : fn.returnType === undefined ? "" : ` -> ${printRustType(fn.returnType)}`;
         const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
-        return `${fnAttrs}${printRustFunctionSignature(`    ${fn.isUnsafe === true ? "unsafe " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)};`;
+        return `${fnAttrs}${printRustFunctionSignature(`    ${fn.isUnsafe === true ? "unsafe " : ""}fn `, fn.name, "", allParams, returnSuffix, 1)}`;
       }).join("\n");
       const declaration = `${printRustVisibility(item.visibility)}trait ${item.name}${generics}`;
       const flatHeader = `${declaration}${superTraits}`;
@@ -203,16 +203,20 @@ function printRustFunctionSignature(
   returnSuffix: string,
   depth: number,
 ): string {
-  const flat = `${prefix}${name}${generics}(${parameters.join(", ")})${returnSuffix}`;
-  if (flat.length <= rustFormatWidth || parameters.length === 0) {
+  const invocation = `${prefix}${name}${generics}(${parameters.join(", ")})`;
+  const flat = `${invocation}${returnSuffix};`;
+  if (flat.length < rustFormatWidth) {
     return flat;
+  }
+  if (flat.length === rustFormatWidth && returnSuffix.length > 0) {
+    return `${invocation}\n${indentText(depth + 1)}${returnSuffix.trimStart()};`;
   }
   const parameterIndent = indentText(depth + 1);
   const closingIndent = indentText(depth);
   return [
     `${prefix}${name}${generics}(`,
     ...parameters.map((parameter) => `${parameterIndent}${parameter},`),
-    `${closingIndent})${returnSuffix}`,
+    `${closingIndent})${returnSuffix};`,
   ].join("\n");
 }
 
@@ -1404,8 +1408,11 @@ function printRustExprFitted(
         undefined,
         "statement",
       );
+      const header = condition.includes("\n") && lastLine(condition).trim() !== "}"
+        ? `if ${condition}\n${indentText(depth)}{`
+        : `if ${condition} {`;
       return [
-        `if ${condition} {`,
+        header,
         `${branchIndent}${whenTrue}`,
         `${indentText(depth)}} else {`,
         `${branchIndent}${whenFalse}`,
@@ -1579,7 +1586,8 @@ function printRustExprFitted(
           chain,
           depth,
           column,
-          rustMethodChainContainsClosure(chain) || column > indentText(depth + 1).length,
+          chain.steps[0]?.kind === "field" || rustMethodChainContainsClosure(chain) ||
+            column > indentText(depth + 1).length,
           methodChainContinuationIndent,
         );
       }
@@ -2275,7 +2283,7 @@ function printFittedMethodChain(
   chain: RustMethodChain,
   depth: number,
   column: number,
-  breakBeforeFirstMethod = false,
+  breakBeforeFirstSelector = false,
   continuationIndent = indentText(depth + 1),
 ): string {
   const flatBase = printRustExpr(chain.base);
@@ -2285,6 +2293,7 @@ function printFittedMethodChain(
   const selectedContinuationIndent = rendered.includes("\n")
     ? indentText(depth)
     : continuationIndent;
+  const breakBeforeFirstField = breakBeforeFirstSelector && !rustMethodChainContainsClosure(chain);
   let emittedCall = false;
   for (const step of chain.steps) {
     if (step.kind === "try") {
@@ -2292,7 +2301,8 @@ function printFittedMethodChain(
       continue;
     }
     if (step.kind === "field") {
-      rendered = emittedCall || lastLineLength(rendered) + step.name.length + 1 > rustInlineFieldReceiverWidth
+      rendered = breakBeforeFirstField || emittedCall ||
+          lastLineLength(rendered) + step.name.length + 1 > rustInlineFieldReceiverWidth
         ? `${rendered}\n${selectedContinuationIndent}.${step.name}`
         : appendToLastLine(rendered, `.${step.name}`);
       continue;
@@ -2306,7 +2316,7 @@ function printFittedMethodChain(
       false,
       depth,
     );
-    const inlineFirstMethod = !breakBeforeFirstMethod && !emittedCall &&
+    const inlineFirstMethod = !breakBeforeFirstSelector && !emittedCall &&
       !rendered.includes("\n") &&
       lastLineLength(rendered) + firstLine(inlineMethod).length <= rustInlineFieldReceiverWidth;
     const method = inlineFirstMethod

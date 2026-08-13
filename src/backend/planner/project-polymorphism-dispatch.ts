@@ -1,6 +1,10 @@
 import type { Node } from "@tsonic/tsts";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
-import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
+import type {
+  RustProjectDowncastRoute,
+  RustProjectTypeDefinition,
+} from "../../source/rust-target-semantics/project-type-policy.js";
 import { rustProjectMemberSlotName } from "../../source/rust-target-semantics/project-type-policy.js";
 import { rustSourceTypeCarrierValue } from "../../source/rust-target-types.js";
 import type {
@@ -113,6 +117,18 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const functions: RustTraitFunction[] = [];
+  for (const route of context.input.projectTypes.downcastRoutesFor(definition)) {
+    const returnType = projectDowncastReturnType(route, context);
+    if (returnType === undefined) {
+      return undefined;
+    }
+    functions.push({
+      name: route.slot,
+      selfParam: "rc",
+      params: [],
+      returnType,
+    });
+  }
   for (const field of fields) {
     const read = rustProjectMemberSlotName(context.input.ast, field.declaration, "read");
     const write = rustProjectMemberSlotName(context.input.ast, field.declaration, "write");
@@ -222,6 +238,30 @@ function planRootContractFunctions(
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
+  for (const route of context.input.projectTypes.downcastRoutesFor(contract)) {
+    const returnType = projectDowncastReturnType(route, context);
+    if (returnType === undefined) {
+      return undefined;
+    }
+    const relation = context.input.projectTypes.relationship(concreteCarrier, route.target);
+    const matches = relation.kind === "related" &&
+      rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
+    functions.push({
+      name: route.slot,
+      visibility: "private",
+      selfParam: "rc",
+      params: [],
+      returnType,
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: matches
+            ? { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] }
+            : { kind: "none" },
+        }],
+      },
+    });
+  }
   const fields = projectOwnFields(contract, contractCarrier, context);
   if (fields === undefined) {
     return undefined;
@@ -301,6 +341,24 @@ function planRootContractFunctions(
     }
   }
   return functions;
+}
+
+function projectDowncastReturnType(
+  route: RustProjectDowncastRoute,
+  context: RustPlanContext,
+): RustType | undefined {
+  const dispatch = rustProjectDispatchTraitType(route.targetCarrier, context);
+  return dispatch === undefined
+    ? undefined
+    : {
+        kind: "named",
+        path: "Option",
+        typeArguments: [{
+          kind: "named",
+          path: "std::rc::Rc",
+          typeArguments: [{ kind: "trait-object", trait: dispatch }],
+        }],
+      };
 }
 
 function planRootMethod(

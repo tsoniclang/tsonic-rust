@@ -46,6 +46,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "source-conversion") {
     return fact.conversion === undefined ? "identity" : "runtime-conversion";
   }
+  if (fact.kind === "project-type-test") {
+    return "project-type-test";
+  }
   return fact.operationId;
 }
 

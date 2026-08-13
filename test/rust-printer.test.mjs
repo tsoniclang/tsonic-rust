@@ -469,6 +469,52 @@ test("a fitted condition moves only its overflowing brace", () => {
   assert.match(source, /truncate_value\(-2\.7\) != -2\.0\n    \{\}/u);
 });
 
+test("conditional expressions move the brace after a multiline method chain", () => {
+  const condition = {
+    kind: "method-call",
+    receiver: {
+      kind: "method-call",
+      receiver: {
+        kind: "method-call",
+        receiver: {
+          kind: "field",
+          receiver: { kind: "path", path: "value" },
+          name: "__tsonic_dispatch",
+        },
+        method: "clone",
+        args: [],
+      },
+      method: "__tsonic_downcast",
+      args: [],
+    },
+    method: "is_some",
+    args: [],
+  };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [{ name: "value", type: { kind: "named", path: "Value", typeArguments: [] } }],
+      returnType: { kind: "string" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "conditional",
+            condition,
+            whenTrue: { kind: "string-literal", value: "yes" },
+            whenFalse: { kind: "string-literal", value: "no" },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /\.is_some\(\)\n    \{\n        String::from\("yes"\)/u);
+});
+
 test("comparisons follow multiline arithmetic operands", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -539,6 +585,83 @@ test("long let-bound method chains stay attached to their receiver", () => {
   });
 
   assert.match(source, /let module_value_with_a_deliberately_long_generated_identity = second\n        \.with\(\|module_binding\| module_binding\.location\(\)\)\n        \.clone\(\);/u);
+});
+
+test("long field-led method chains use rustfmt selector layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [{ name: "value", type: { kind: "named", path: "Value", typeArguments: [] } }],
+      returnType: { kind: "named", path: "bool", typeArguments: [] },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: {
+                  kind: "field",
+                  receiver: { kind: "path", path: "value" },
+                  name: "__tsonic_dispatch",
+                },
+                method: "clone",
+                args: [],
+              },
+              method: "__tsonic_downcast_2",
+              args: [],
+            },
+            method: "is_some",
+            args: [],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /value\n        \.__tsonic_dispatch\n        \.clone\(\)\n        \.__tsonic_downcast_2\(\)\n        \.is_some\(\)/u,
+  );
+});
+
+test("trait signatures count their semicolon and break before long return types", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "Contract",
+      visibility: "crate",
+      typeParams: [],
+      functions: [{
+        name: "__tsonic_downcast",
+        selfParam: "rc",
+        params: [],
+        returnType: {
+          kind: "named",
+          path: "Option",
+          typeArguments: [{
+            kind: "named",
+            path: "std::rc::Rc",
+            typeArguments: [{
+              kind: "trait-object",
+              trait: { kind: "named", path: "__TsonicDispatch_Leaf", typeArguments: [] },
+            }],
+          }],
+        },
+      }],
+    }],
+  });
+
+  assert.match(
+    source,
+    /fn __tsonic_downcast\(self: std::rc::Rc<Self>\)\n        -> Option<std::rc::Rc<dyn __TsonicDispatch_Leaf>>;/u,
+  );
 });
 
 test("one-field struct literals honor rustfmt's compact body limit", () => {

@@ -93,6 +93,7 @@ import {
   rustPostCheckBinaryOperationId,
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
+  rustProjectDowncastFactKey,
   rustProjectUpcastFactKey,
   rustSourceCallableReturnFactKey,
 } from "../rust-facts/keys.js";
@@ -217,6 +218,9 @@ export function selectRustCheckedOperator(
   if (isDeclarationFileSubject(request.expression, context)) {
     return acceptDeclarationOperation("operator");
   }
+  if (request.operator === "instanceof") {
+    return selectRustProjectTypeTest(request, context, options);
+  }
   if (request.right !== undefined) {
     if (request.operator !== "=") {
       return acceptPostCheckOperator(request);
@@ -233,6 +237,76 @@ export function selectRustCheckedOperator(
   }
   const operand = resolveRustTargetTypeRef(request.left, context, options);
   return mapSelectedUnaryOperator(request, operand, context);
+}
+
+function selectRustProjectTypeTest(
+  request: RustCheckedOperatorSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const sourceCarrier = resolveRustTargetTypeRef(request.left, context, options);
+  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
+  const targetDefinition = options.projectTypes.definitionForDeclaration(request.sourceRightDeclaration);
+  const targetCarrier = targetDefinition === undefined || targetDefinition.kind !== "class" ||
+      targetDefinition.typeParameterNames.length !== 0
+    ? undefined
+    : options.projectTypes.openCarrier(targetDefinition);
+  if (sourceCarrier === undefined || dispatchCarrier === undefined || sourceDefinition === undefined ||
+    targetDefinition === undefined || targetCarrier === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_TYPE_TEST_EVIDENCE_MISSING",
+      "Checked instanceof requires exact project source, concrete class declaration, and closed target carrier evidence.",
+    );
+  }
+  const sourceToTarget = options.projectTypes.relationship(dispatchCarrier, targetDefinition);
+  let lowering: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>["lowering"];
+  if (sourceToTarget.kind === "related" && rustTargetTypeRefEquals(sourceToTarget.targetType, targetCarrier)) {
+    lowering = rustOptionElementCarrier(sourceCarrier) === undefined
+      ? { kind: "constant", value: true }
+      : { kind: "option-presence" };
+  } else {
+    const targetToSource = options.projectTypes.relationship(targetCarrier, sourceDefinition);
+    if (targetToSource.kind === "ambiguous" || sourceToTarget.kind === "ambiguous") {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_PROJECT_TYPE_TEST_AMBIGUOUS",
+        "Checked instanceof has more than one exact project heritage instantiation.",
+      );
+    }
+    if (targetToSource.kind === "related" &&
+      rustTargetTypeRefEquals(targetToSource.targetType, dispatchCarrier)) {
+      if (options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) === undefined) {
+        return rejectSelectedOperation(
+          request.expression,
+          context,
+          "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
+          "Checked instanceof requires one closed generated project downcast route.",
+        );
+      }
+      lowering = { kind: "dispatch" };
+    } else {
+      lowering = { kind: "constant", value: false };
+    }
+  }
+  const resultCarrier = rustSourcePrimitiveTargetType("bool");
+  const fact: RustTargetOperationFact = {
+    kind: "project-type-test",
+    operationId: `tsonic.rust.project-type-test.${lowering.kind}`,
+    sourceCarrier,
+    dispatchCarrier,
+    targetCarrier,
+    resultCarrier,
+    lowering,
+  };
+  return acceptRustOperation(request.expression, fact, context, {
+    sourceExpression: request.expression,
+    sourceReceiver: request.left,
+    sourceSelectedDeclaration: request.sourceRightDeclaration,
+  }, resultCarrier);
 }
 
 function acceptPostCheckOperator(
@@ -3480,8 +3554,17 @@ export function selectRustCheckedConversion(
     context,
     options,
   );
-  const conversion = identity || projectUpcast ? undefined : selectRustSourceValueConversion(sourceCarrier, targetCarrier);
-  if (!identity && !projectUpcast && conversion === undefined) {
+  const projectDowncast = !identity && !projectUpcast && selectProjectDowncast(
+    request.expression,
+    sourceCarrier,
+    targetCarrier,
+    context,
+    options,
+  );
+  const conversion = identity || projectUpcast || projectDowncast
+    ? undefined
+    : selectRustSourceValueConversion(sourceCarrier, targetCarrier);
+  if (!identity && !projectUpcast && !projectDowncast && conversion === undefined) {
     return rejectSelectedOperation(
       request.expression,
       context,
@@ -3493,6 +3576,8 @@ export function selectRustCheckedConversion(
     ? "tsonic.rust.conversion.identity"
     : projectUpcast
       ? "tsonic.rust.conversion.project-upcast"
+      : projectDowncast
+        ? "tsonic.rust.conversion.project-downcast"
     : `tsonic.rust.conversion.${rustValueConversionIdentity(conversion!)}`;
   const fact: RustTargetOperationFact = {
     kind: "source-conversion",
@@ -3503,7 +3588,13 @@ export function selectRustCheckedConversion(
   const operation: RustTargetOperationSelection = {
     operationId,
     operationKind: "operator",
-    targetOperation: identity ? "identity" : projectUpcast ? "project-upcast" : "runtime-conversion",
+    targetOperation: identity
+      ? "identity"
+      : projectUpcast
+        ? "project-upcast"
+        : projectDowncast
+          ? "project-downcast"
+          : "runtime-conversion",
     resultType: targetCarrier,
     provenance: {
       sourceExpression: request.sourceExpression,
@@ -3516,10 +3607,39 @@ export function selectRustCheckedConversion(
     ? "rust selected assertion identity conversion"
     : projectUpcast
       ? "rust selected assertion project-type upcast"
+      : projectDowncast
+        ? "rust selected assertion project-type downcast"
       : `rust selected assertion conversion '${rustValueConversionIdentity(conversion!)}'` }];
   context.facts.set(request.expression, rustTargetOperationFactKey, fact, evidence);
   context.facts.set(request.expression, rustSelectedOperationKey, operation, evidence);
   return acceptRustPolicy({ convertedType: targetCarrier, operation }, evidence);
+}
+
+function selectProjectDowncast(
+  subject: Node,
+  sourceCarrier: TargetTypeRef,
+  targetCarrier: TargetTypeRef,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): boolean {
+  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
+  const targetDefinition = options.projectTypes.definitionForCarrier(targetCarrier);
+  const relationship = sourceDefinition === undefined || targetDefinition === undefined ||
+      targetDefinition.kind !== "class" || targetDefinition.typeParameterNames.length !== 0
+    ? { kind: "unrelated" as const }
+    : options.projectTypes.relationship(targetCarrier, sourceDefinition);
+  if (sourceDefinition === undefined || relationship.kind !== "related" ||
+    !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
+    options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) === undefined) {
+    return false;
+  }
+  context.facts.set(subject, rustProjectDowncastFactKey, {
+    sourceCarrier,
+    dispatchCarrier,
+    targetCarrier,
+  }, [{ message: "rust exact project-type downcast" }]);
+  return true;
 }
 
 function selectProjectUpcast(
@@ -3687,6 +3807,16 @@ function selectedMemberReceiverCarrier(
     return sourceCarrier;
   }
   const optionElement = rustOptionElementCarrier(sourceCarrier);
+  const declaredCarrier = optionElement ?? sourceCarrier;
+  const declaredDefinition = options.projectTypes.definitionForCarrier(declaredCarrier);
+  const selectedDefinition = options.projectTypes.definitionForCarrier(selectedCarrier);
+  const selectedRelationship = declaredDefinition === undefined || selectedDefinition === undefined
+    ? { kind: "unrelated" as const }
+    : options.projectTypes.relationship(selectedCarrier, declaredDefinition);
+  if (selectedRelationship.kind === "related" &&
+    rustTargetTypeRefEquals(selectedRelationship.targetType, declaredCarrier)) {
+    return selectedCarrier;
+  }
   if (optionElement !== undefined) {
     return rustTargetTypeRefEquals(optionElement, selectedCarrier)
       ? optionElement

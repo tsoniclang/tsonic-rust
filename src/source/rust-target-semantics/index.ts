@@ -535,12 +535,18 @@ function selectExpressionOperation(
   const right = kind === KindBinaryExpression
     ? BinaryExpression_Right(ast, expression)
     : undefined;
+  const rightReference = right === undefined
+    ? undefined
+    : walk.context.source.navigation.sourceReferenceFor(right);
   recordPolicySelection(walk, expression, selectRustCheckedOperator({
     target: "rust",
     expression,
     operator,
     ...(left === undefined ? {} : { left }),
     ...(right === undefined ? {} : { right }),
+    ...(rightReference?.declaration === undefined
+      ? {}
+      : { sourceRightDeclaration: rightReference.declaration }),
   }, context, walk.operationOptions));
 }
 
@@ -569,6 +575,7 @@ function rustOperatorText(kind: string | undefined): string | undefined {
     KindExclamationToken: "!",
     KindPlusPlusToken: "++",
     KindMinusMinusToken: "--",
+    KindInstanceOfKeyword: "instanceof",
   };
   return kind === undefined ? undefined : operators[kind];
 }

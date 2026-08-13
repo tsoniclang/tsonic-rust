@@ -179,6 +179,7 @@ export interface RustCheckedOperatorSelectionInput {
   readonly operator: string;
   readonly left?: Node;
   readonly right?: Node;
+  readonly sourceRightDeclaration?: Node;
 }
 
 export interface RustCheckedIterationSelectionInput {

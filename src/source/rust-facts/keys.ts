@@ -391,6 +391,18 @@ export type RustTargetOperationFact =
       readonly optionOperand: "left" | "right";
     }
   | {
+      readonly kind: "project-type-test";
+      readonly operationId: string;
+      readonly sourceCarrier: TargetTypeRef;
+      readonly dispatchCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+      readonly lowering:
+        | { readonly kind: "dispatch" }
+        | { readonly kind: "constant"; readonly value: boolean }
+        | { readonly kind: "option-presence" };
+    }
+  | {
       readonly kind: "source-field";
       readonly operationId: string;
       readonly receiverCarrier: TargetTypeRef;
@@ -636,6 +648,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "nullish-identity":
     case "typed-location":
     case "native-pointer":
+    case "project-type-test":
       return fact.resultCarrier;
     case "iteration":
       return fact.elementCarrier;
@@ -797,6 +810,18 @@ export interface RustProjectUpcastFact {
 export const rustProjectUpcastFactKey: RustPlanKey<RustProjectUpcastFact> =
   defineRustPlanKey("projectUpcast", (left, right) =>
     rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
+    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier));
+
+export interface RustProjectDowncastFact {
+  readonly sourceCarrier: TargetTypeRef;
+  readonly dispatchCarrier: TargetTypeRef;
+  readonly targetCarrier: TargetTypeRef;
+}
+
+export const rustProjectDowncastFactKey: RustPlanKey<RustProjectDowncastFact> =
+  defineRustPlanKey("projectDowncast", (left, right) =>
+    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
+    rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) &&
     rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier));
 
 export interface RustSourceBindingFact {

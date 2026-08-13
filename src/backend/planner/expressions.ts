@@ -58,7 +58,7 @@ import {
   parseSourceIntegerLiteral,
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
-import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustProjectUpcastFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
+import { rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFutureValueFactKey, rustMutatedBindingFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustProjectDowncastFactKey, rustProjectUpcastFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustYieldFactKey } from "../../source/rust-facts/keys.js";
 import type {
   RustArgumentMode,
   RustOptionalChainFact,
@@ -156,6 +156,10 @@ import {
   rustValueCarrierTransitionTarget,
 } from "../../source/rust-target-semantics/value-carrier-reconciliation.js";
 import { planRustFlowSelectedValue } from "./flow-read-projections.js";
+import {
+  planRustProjectDowncast,
+  planRustProjectTypeTest,
+} from "./project-downcasts.js";
 
 type RustExpressionResultUse = "value" | "discarded";
 
@@ -208,9 +212,20 @@ export function planExpression(
     return planned;
   }
   const upcast = context.input.facts.getFact(node, rustProjectUpcastFactKey);
-  const converted = upcast === undefined
-    ? planned
-    : planRustProjectUpcast(node, planned, upcast, context);
+  const downcast = context.input.facts.getFact(node, rustProjectDowncastFactKey);
+  if (upcast !== undefined && downcast !== undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.project-cast-conflict",
+      "One source expression cannot carry both finalized project upcast and downcast facts.",
+    ));
+    return undefined;
+  }
+  const converted = upcast !== undefined
+    ? planRustProjectUpcast(node, planned, upcast, context)
+    : downcast !== undefined
+      ? planRustProjectDowncast(node, planned, downcast, context)
+      : planned;
   if (converted === undefined) {
     return undefined;
   }
@@ -1484,6 +1499,8 @@ function planSourceConversion(node: Node, context: RustPlanContext): RustExpr | 
       fact.resultCarrier,
       context.input.facts.getFact(node, rustProjectUpcastFactKey) !== undefined
         ? "project-upcast"
+        : context.input.facts.getFact(node, rustProjectDowncastFactKey) !== undefined
+          ? "project-downcast"
         : fact.conversion === undefined ? "identity" : "runtime-conversion",
     )) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -2409,6 +2426,31 @@ function planRustDirectUpdateTarget(
 
 function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "project-type-test") {
+    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const plannedLeft = leftNode === undefined ? undefined : planExpression(leftNode, context);
+    const left = leftNode === undefined || plannedLeft === undefined
+      ? undefined
+      : planRustNonConsumingValue(leftNode, plannedLeft, context);
+    if (leftNode === undefined || left === undefined ||
+      !rustTargetTypeRefEquals(expressionCarrier(leftNode, context), fact.sourceCarrier) ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.project-type-test-carrier") ||
+      !selectedOperationMatches(
+        context.input.facts.getSelectedTargetOperator(node),
+        fact.operationId,
+        "operator",
+        fact.resultCarrier,
+        "project-type-test",
+      )) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.project-type-test-selected-evidence",
+        "Project type test conflicts with its exact finalized source operation evidence.",
+      ));
+      return undefined;
+    }
+    return planRustProjectTypeTest(node, left, fact, context);
+  }
   if ((fact?.kind === "operator-token" || fact?.kind === "operator-call" || fact?.kind === "string-concat") &&
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.operator-carrier")) {
     return undefined;

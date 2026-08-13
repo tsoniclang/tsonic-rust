@@ -63,6 +63,13 @@ export type RustProjectTypeRelationship =
   | { readonly kind: "unrelated" }
   | { readonly kind: "ambiguous"; readonly targetTypes: readonly TargetTypeRef[] };
 
+export interface RustProjectDowncastRoute {
+  readonly source: RustProjectTypeDefinition;
+  readonly target: RustProjectTypeDefinition;
+  readonly targetCarrier: TargetTypeRef;
+  readonly slot: string;
+}
+
 export interface RustProjectTypePolicy {
   readonly definitions: readonly RustProjectTypeDefinition[];
   readonly issues: readonly RustProjectTypeIssue[];
@@ -95,6 +102,11 @@ export interface RustProjectTypePolicy {
   classLineage(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
   interfacesForClass(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
   concreteClassesFor(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[];
+  downcastRoutesFor(definition: RustProjectTypeDefinition): readonly RustProjectDowncastRoute[];
+  downcastRoute(
+    source: RustProjectTypeDefinition,
+    targetCarrier: TargetTypeRef,
+  ): RustProjectDowncastRoute | undefined;
   constructorsForDefinition(definition: RustProjectTypeDefinition): readonly RustProjectConstructorSignature[];
   constructorForSignature(
     definition: RustProjectTypeDefinition,
@@ -217,6 +229,12 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     },
     concreteClassesFor(definition) {
       return requireCurrent().concreteClassesFor(definition);
+    },
+    downcastRoutesFor(definition) {
+      return requireCurrent().downcastRoutesFor(definition);
+    },
+    downcastRoute(source, targetCarrier) {
+      return requireCurrent().downcastRoute(source, targetCarrier);
     },
     constructorsForDefinition(definition) {
       return requireCurrent().constructorsForDefinition(definition);
@@ -358,6 +376,14 @@ export function createRustProjectTypePolicy(
       ? project
       : [...project, external.targetType]);
   };
+
+  const openCarrier = (definition: RustProjectTypeDefinition): TargetTypeRef =>
+    rustSourceTypeCarrier(
+      definition.fileName,
+      definition.sourceName,
+      "object",
+      definition.typeParameterNames.map((name) => ({ kind: "type-parameter", name })),
+    );
 
   const relationship = (
     source: TargetTypeRef,
@@ -565,6 +591,36 @@ export function createRustProjectTypePolicy(
 
   const frozenDefinitions = Object.freeze(definitions);
   const frozenIssues = Object.freeze(issues);
+  const orderedDefinitions = [...frozenDefinitions].sort(compareProjectDefinitions);
+  const definitionOrdinal = new WeakMap<RustProjectTypeDefinition, number>();
+  orderedDefinitions.forEach((definition, index) => definitionOrdinal.set(definition, index + 1));
+  const ordinalForDefinition = (definition: RustProjectTypeDefinition): number => {
+    const ordinal = definitionOrdinal.get(definition);
+    if (ordinal === undefined) {
+      throw new Error("Rust project definition has no deterministic program ordinal.");
+    }
+    return ordinal;
+  };
+  const downcastRoutesByDefinition = new WeakMap<
+    RustProjectTypeDefinition,
+    readonly RustProjectDowncastRoute[]
+  >();
+  for (const source of frozenDefinitions) {
+    const usedNames = projectMemberNames(source.declaration, host.ast);
+    const targets = orderedDefinitions
+      .filter((target) => target.kind === "class" && target.typeParameterNames.length === 0)
+      .filter((target) => relationship(openCarrier(target), source).kind === "related");
+    const sourceOrdinal = ordinalForDefinition(source);
+    downcastRoutesByDefinition.set(source, Object.freeze(targets.map((target) => Object.freeze({
+      source,
+      target,
+      targetCarrier: openCarrier(target),
+      slot: allocateGeneratedName(
+        usedNames,
+        `__tsonic_downcast_${sourceOrdinal}_${ordinalForDefinition(target)}`,
+      ),
+    }))));
+  }
   const policy: RustProjectTypePolicy = {
     definitions: frozenDefinitions,
     issues: frozenIssues,
@@ -574,14 +630,7 @@ export function createRustProjectTypePolicy(
     },
     definitionContainingDeclaration,
     definitionForCarrier,
-    openCarrier(definition) {
-      return rustSourceTypeCarrier(
-        definition.fileName,
-        definition.sourceName,
-        "object",
-        definition.typeParameterNames.map((name) => ({ kind: "type-parameter", name })),
-      );
-    },
+    openCarrier,
     heritageForDefinition(definition) {
       return heritageByDeclaration.get(definition.declaration) ?? Object.freeze([]);
     },
@@ -662,6 +711,14 @@ export function createRustProjectTypePolicy(
         const relation = relationship(policy.openCarrier(candidate), definition);
         return relation.kind === "related";
       }));
+    },
+    downcastRoutesFor(definition) {
+      return downcastRoutesByDefinition.get(definition) ?? Object.freeze([]);
+    },
+    downcastRoute(source, targetCarrier) {
+      const matches = (downcastRoutesByDefinition.get(source) ?? []).filter((route) =>
+        rustTargetTypeRefEquals(route.targetCarrier, targetCarrier));
+      return matches.length === 1 ? matches[0] : undefined;
     },
     constructorsForDefinition(definition) {
       return constructorsByDefinition.get(definition) ?? Object.freeze([]);
@@ -803,6 +860,16 @@ function heritageKindIssue(
 
 function definitionKey(fileName: string, sourceName: string): string {
   return `${fileName}::${sourceName}`;
+}
+
+function compareProjectDefinitions(
+  left: RustProjectTypeDefinition,
+  right: RustProjectTypeDefinition,
+): number {
+  const fileOrder = left.fileName.localeCompare(right.fileName, "en");
+  return fileOrder !== 0
+    ? fileOrder
+    : left.sourceName.localeCompare(right.sourceName, "en");
 }
 
 function denseNodes(values: readonly (Node | undefined)[]): readonly Node[] | undefined {
