@@ -2488,6 +2488,7 @@ function resolvePostCheckBinaryCarrier(
             path: compound.path,
             resultCarrier: compound.resultCarrier,
             fallible: compound.fallible,
+            operandModes: compound.operandModes,
           }
         : {
             kind: "operator-token",
@@ -2512,6 +2513,7 @@ function resolvePostCheckBinaryCarrier(
                 path: binary.path!,
                 resultCarrier: binary.resultCarrier,
                 fallible: binary.fallible === true,
+                operandModes: binary.operandModes!,
               }
             : {
               kind: "operator-token",

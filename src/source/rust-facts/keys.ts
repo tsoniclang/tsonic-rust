@@ -287,6 +287,7 @@ export type RustTargetOperationFact =
       readonly path: string;
       readonly resultCarrier: TargetTypeRef;
       readonly fallible: boolean;
+      readonly operandModes: readonly [RustArgumentMode, RustArgumentMode];
     }
   | {
       readonly kind: "string-concat";

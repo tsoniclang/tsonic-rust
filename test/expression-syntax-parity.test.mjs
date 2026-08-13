@@ -38,6 +38,34 @@ export function text(): string {
   validateGeneratedProject("expression-template-literal", result.artifacts);
 });
 
+test("string relational operators preserve TypeScript UTF-16 ordering", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "string_ordering_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const supplementary = "\u{10000}";
+  const privateUse = "\u{e000}";
+  check("alpha" < "beta");
+  check("alpha" <= "alpha");
+  check("beta" > "alpha");
+  check("alpha" >= "alpha");
+  check(supplementary < privateUse);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::source_string_less_than\("alpha", "beta"\)/u);
+  assert.match(source, /rt::source_string_less_than\(&supplementary, &privateUse\)/u);
+  validateGeneratedProject("expression-string-ordering", result.artifacts, { run: true });
+});
+
 test("satisfies and redundant non-null syntax erase through exact identity facts", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

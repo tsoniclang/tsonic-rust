@@ -2552,7 +2552,15 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     return { kind: "string-concat", parts };
   }
   if (fact.kind === "operator-call") {
-    return planRustOperatorCallExpression(fact, left, right, node, context);
+    return planRustOperatorCallExpression(
+      fact,
+      left,
+      right,
+      node,
+      context,
+      leftNode,
+      rightNode,
+    );
   }
   if (fact.kind === "operator-token") {
     // Owned-String literals in comparison position lower as &str literals so
@@ -2611,6 +2619,8 @@ export function planRustOperatorCallExpression(
   right: RustExpr,
   node: Node,
   context: RustPlanContext,
+  leftNode?: Node,
+  rightNode?: Node,
 ): RustExpr | undefined {
   registerAliasFromPath(context, fact.path);
   if (fact.fallible && context.fallibleContext !== true) {
@@ -2621,7 +2631,16 @@ export function planRustOperatorCallExpression(
     ));
     return undefined;
   }
-  const call: RustExpr = { kind: "call", path: fact.path, args: [left, right] };
+  const operands = [
+    { expression: left, node: leftNode, mode: fact.operandModes[0] },
+    { expression: right, node: rightNode, mode: fact.operandModes[1] },
+  ].map(({ expression, node: operandNode, mode }) => {
+    const nonConsuming = mode === "value" || operandNode === undefined
+      ? expression
+      : planRustNonConsumingValue(operandNode, expression, context);
+    return applyRustArgumentMode(context, nonConsuming, mode, operandNode);
+  });
+  const call: RustExpr = { kind: "call", path: fact.path, args: operands };
   return fact.fallible ? { kind: "try", expr: call } : call;
 }
 
