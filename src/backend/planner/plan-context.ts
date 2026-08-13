@@ -112,11 +112,12 @@ export function registerAliasFromPath(
 // Provider, library, and capability API identity flows exclusively through
 // operation-row metadata, which the backend emits verbatim.
 export function rustLocalBindingName(name: string): string {
-  if (/^[A-Z][A-Z0-9_]*$/u.test(name)) {
+  const semanticName = name.startsWith("r#") ? name.slice(2) : name;
+  if (/^[A-Z][A-Z0-9_]*$/u.test(semanticName)) {
     // UPPER_SNAKE names are constant references and pass through unchanged.
-    return name;
+    return semanticName;
   }
-  return name
+  return semanticName
     .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
     .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
     .toLowerCase();
@@ -125,18 +126,22 @@ export function rustLocalBindingName(name: string): string {
 // Verbatim user-authored name plus whether the containing item needs a
 // scoped #[allow(non_snake_case)].
 export function rustPublicName(name: string): { readonly name: string; readonly needsAllow: boolean } {
-  return { name, needsAllow: name !== rustLocalBindingName(name) };
+  const targetName = rustTargetIdentifier(name);
+  const semanticName = targetName.startsWith("r#") ? targetName.slice(2) : targetName;
+  return { name: targetName, needsAllow: semanticName !== rustLocalBindingName(targetName) };
 }
 
 // Verbatim user identifier; records non-snake usage so the enclosing item
 // carries a scoped lint allowance.
 export function rustSourceName(context: { readonly nonSnakeSeen?: { value: boolean } }, name: string): string {
-  if (name !== rustLocalBindingName(name)) {
+  const targetName = rustTargetIdentifier(name);
+  const semanticName = targetName.startsWith("r#") ? targetName.slice(2) : targetName;
+  if (semanticName !== rustLocalBindingName(targetName)) {
     if (context.nonSnakeSeen !== undefined) {
       context.nonSnakeSeen.value = true;
     }
   }
-  return name;
+  return targetName;
 }
 
 export function isUpperSnakeName(name: string): boolean {
@@ -153,8 +158,26 @@ export const rustReservedIdentifiers: ReadonlySet<string> = new Set([
 ]);
 
 const rustIdentifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+const rustRawIdentifierPattern = /^r#[A-Za-z_][A-Za-z0-9_]*$/u;
+const rustRawIdentifierForbidden: ReadonlySet<string> = new Set([
+  "crate", "self", "Self", "super",
+]);
+
+function rustTargetIdentifier(name: string): string {
+  if (rustRawIdentifierPattern.test(name)) {
+    return name;
+  }
+  return rustReservedIdentifiers.has(name) && !rustRawIdentifierForbidden.has(name)
+    ? `r#${name}`
+    : name;
+}
 
 export function isValidRustIdentifier(name: string): boolean {
+  if (rustRawIdentifierPattern.test(name)) {
+    const semanticName = name.slice(2);
+    return rustReservedIdentifiers.has(semanticName) &&
+      !rustRawIdentifierForbidden.has(semanticName);
+  }
   return rustIdentifierPattern.test(name) && !rustReservedIdentifiers.has(name);
 }
 

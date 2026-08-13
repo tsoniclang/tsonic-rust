@@ -617,6 +617,34 @@ export function collide(): int32 {
   assert.match(text, /let foo_bar: i32 = 2;/u);
 });
 
+test("Rust keyword-shaped source identifiers use exact raw identifiers", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export class Label {
+  type: string;
+
+  constructor(type: string) {
+    this.type = type;
+  }
+}
+
+export function read(type: string): string {
+  const label = new Label(type);
+  return label.type;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn new\(r#type: String\)/u);
+  assert.match(text, /pub fn read\(r#type: String\) -> String/u);
+  assert.match(text, /Label::new\(r#type\)/u);
+  validateGeneratedProject("native-raw-identifiers", result.artifacts);
+});
+
 test("class decorators fail closed", () => {
   const { result } = compileRust({
     files: {
