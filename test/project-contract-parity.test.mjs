@@ -207,6 +207,28 @@ export function render(value: char): string {
   );
 });
 
+test("uncontextualized TypeScript numeric literals retain the number carrier", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function render(): string {
+  let result = "";
+  for (let index = 0; index < 2; index++) {
+    result = \`\${result}\${index}\`;
+  }
+  return result;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let mut index = 0\.0;/u);
+  assert.match(source, /rt::source_string\(&index\)/u);
+  validateGeneratedProject("inferred-number-carrier", result.artifacts);
+});
+
 test("bodyless unsafe contracts require matching implementation ABI facts", () => {
   const { result } = compileRust({
     files: {

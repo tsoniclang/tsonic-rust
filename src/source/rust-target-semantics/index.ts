@@ -1756,9 +1756,11 @@ function resolveExpressionCarrierUncached(
   const kind = walk.context.ast.kindName(expression);
   switch (kind) {
     case KindNumericLiteral: {
-      const effectiveExpected = expected !== undefined && isRustOptionCarrier(expected)
+      const contextualExpected = expected !== undefined && isRustOptionCarrier(expected)
         ? rustOptionElementCarrier(expected)
         : expected;
+      const effectiveExpected = contextualExpected ??
+        rustSourcePrimitiveTargetType("float64");
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&
         (!isRustIntegerCarrier(effectiveExpected) ||
           (selectedSourceLiteralIsRepresentable(
@@ -2188,7 +2190,10 @@ function resolveTemplateExpressionCarrier(
         "RUST_TEMPLATE_SUBSTITUTION_UNSUPPORTED",
         "Template substitution requires an exact closed primitive, string, or undefined carrier.",
         span,
-        ["target.capability=rust.syntax.template"],
+        [
+          "target.capability=rust.syntax.template",
+          `substitution.carrier=${JSON.stringify(carrier)}`,
+        ],
       );
       return undefined;
     }

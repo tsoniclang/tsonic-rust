@@ -1623,18 +1623,14 @@ function printRustExprFitted(
       }
       const argumentIndent = indentText(depth + 1);
       const placeholders = expression.parts.map(() => "{}").join("");
-      const compactParts = expression.parts.map(printRustExpr).join(", ");
-      const renderedParts = !compactParts.includes("\n") &&
-          renderedFits(`${compactParts},`, argumentIndent.length)
-        ? [`${argumentIndent}${compactParts},`]
-        : expression.parts.map((part) => {
-            const rendered = printRustFormatArgument(
-              part,
-              depth + 1,
-              argumentIndent.length,
-            );
-            return appendToLastLine(`${argumentIndent}${rendered}`, ",");
-          });
+      const renderedParts = expression.parts.map((part) => {
+        const rendered = printRustFormatArgument(
+          part,
+          depth + 1,
+          argumentIndent.length,
+        );
+        return appendToLastLine(`${argumentIndent}${rendered}`, ",");
+      });
       return [
         "format!(",
         `${argumentIndent}\"${placeholders}\",`,
