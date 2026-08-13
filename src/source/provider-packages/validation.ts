@@ -41,6 +41,7 @@ import {
   rustUsizeTargetId,
   isRustUnitCarrier,
   isRustNeverCarrier,
+  rustOptionElementCarrier,
 } from "../rust-target-types.js";
 import { rustProviderOperationFormContractViolation } from "../rust-facts/operation-form-contract.js";
 import { isClosedMetadata } from "../../common/closed-metadata.js";
@@ -1301,6 +1302,16 @@ function validateValueConversion(
     if (!isRustNeverCarrier(conversion.source) || !isRustTargetTypeRef(conversion.target)) {
       fail(`${where} is not an exact Rust bottom coercion`);
     }
+  } else if (conversion.kind === "option-map") {
+    requireExactKeys(asRecord(conversion), ["kind", "elementConversion"], where, fail);
+    validateValueConversion(
+      conversion.elementConversion,
+      definition,
+      `${where}.elementConversion`,
+      rustOptionElementCarrier(expectedSource),
+      rustOptionElementCarrier(expectedTarget),
+      fail,
+    );
   } else {
     fail(`${where}.kind '${String((conversion as { readonly kind?: unknown }).kind)}' is not supported`);
   }

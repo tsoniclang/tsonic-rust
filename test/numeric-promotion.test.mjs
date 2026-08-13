@@ -128,6 +128,48 @@ test("numeric promotion conversions carry exact source and target primitive evid
   );
 });
 
+test("optional value conversions lift one exact element conversion", () => {
+  const source = {
+    kind: "target-named",
+    id: "rust.std.Option",
+    typeArguments: [{ kind: "source-primitive", name: "int32" }],
+  };
+  const target = {
+    kind: "target-named",
+    id: "rust.std.Option",
+    typeArguments: [{ kind: "source-primitive", name: "float64" }],
+  };
+  const conversion = selectRustSourceValueConversion(source, target);
+  assert.deepEqual(conversion, {
+    kind: "option-map",
+    elementConversion: { kind: "semantic-conversion", id: "exact-i32-to-f64" },
+  });
+  assert.deepEqual(rustValueConversionContract(conversion), {
+    category: "exact",
+    lowering: "option-map",
+    sourceMode: "value",
+    source,
+    target,
+    element: {
+      category: "exact",
+      lowering: "call",
+      path: "tsonic_rust_runtime::conversions::i32_to_f64",
+      sourceMode: "value",
+      source: { kind: "source-primitive", name: "int32" },
+      target: { kind: "source-primitive", name: "float64" },
+      fallible: false,
+    },
+    fallible: false,
+  });
+  assert.equal(
+    selectRustSourceValueConversion(
+      source,
+      { kind: "source-primitive", name: "float64" },
+    ),
+    undefined,
+  );
+});
+
 test("generated Rust compiles representative mixed numeric operations", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

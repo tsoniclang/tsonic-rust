@@ -2930,6 +2930,35 @@ function lowerRustValueConversion(
         args: [source],
       };
     }
+    case "option-map": {
+      const valueName = "__tsonic_option_value";
+      const value: RustExpr = { kind: "path", path: valueName };
+      const elementSource: RustExpr = contract.element.sourceMode === "ref"
+        ? { kind: "reference", expr: value }
+        : value;
+      const converted = lowerRustValueConversion(
+        contract.element,
+        elementSource,
+        context,
+        node,
+      );
+      if (converted === undefined) {
+        return undefined;
+      }
+      const mapped: RustExpr = {
+        kind: "method-call",
+        receiver: source,
+        method: "map",
+        args: [{
+          kind: "closure",
+          params: [{ name: valueName, byRefCopy: false }],
+          body: converted,
+        }],
+      };
+      return contract.element.fallible
+        ? { kind: "method-call", receiver: mapped, method: "transpose", args: [] }
+        : mapped;
+    }
   }
 }
 

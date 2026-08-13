@@ -1673,9 +1673,10 @@ function applyOptionLane(
   resolved: TargetTypeRef | undefined,
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  const target = expected === undefined
-    ? undefined
-    : rustOptionElementCarrier(expected) ?? expected;
+  const expectedOptionElement = rustOptionElementCarrier(expected);
+  const target = expectedOptionElement !== undefined && isRustOptionCarrier(resolved)
+    ? expected
+    : expectedOptionElement ?? expected;
   let projected = resolved;
   if (resolved !== undefined && target !== undefined &&
     !rustTargetTypeRefEquals(resolved, target)) {

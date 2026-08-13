@@ -11,6 +11,8 @@ import {
   isRustNeverCarrier,
   isRustNumericCarrier,
   rustNeverTargetType,
+  rustOptionElementCarrier,
+  rustOptionTargetType,
   rustIsizeTargetType,
   rustJsValueTargetType,
   rustPrimitiveTypeName,
@@ -57,6 +59,10 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "source-union-variant";
       readonly variantName: string;
     }
+  | {
+      readonly lowering: "option-map";
+      readonly element: RustValueConversionContract;
+    }
 );
 
 function conversion(id: RustValueConversionId): RustValueConversion {
@@ -83,6 +89,20 @@ export const rustJsValueCloneConversion = conversion("js-value-clone");
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "option-map") {
+    const element = rustValueConversionContract(value.elementConversion);
+    return element === undefined
+      ? undefined
+      : {
+          category: element.category,
+          lowering: "option-map",
+          sourceMode: "value",
+          source: rustOptionTargetType(element.source),
+          target: rustOptionTargetType(element.target),
+          element,
+          fallible: element.fallible,
+        };
+  }
   if (value.kind === "bottom-coercion") {
     return isRustNeverCarrier(value.source) && isRustTargetTypeRef(value.target)
       ? {
@@ -213,13 +233,27 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
         ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
         : value.kind === "source-union-variant"
           ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`
-          : `bottom-coercion.${JSON.stringify(value.target)}`;
+          : value.kind === "bottom-coercion"
+            ? `bottom-coercion.${JSON.stringify(value.target)}`
+            : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }
 
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustValueConversion | undefined {
+  const sourceOptionElement = rustOptionElementCarrier(source);
+  const targetOptionElement = rustOptionElementCarrier(target);
+  if (sourceOptionElement !== undefined && targetOptionElement !== undefined) {
+    const elementConversion = selectRustSourceValueConversion(
+      sourceOptionElement,
+      targetOptionElement,
+    );
+    if (elementConversion === undefined || elementConversion.kind === "option-map") {
+      return undefined;
+    }
+    return { kind: "option-map", elementConversion };
+  }
   if (isRustNeverCarrier(source)) {
     return Object.freeze({ kind: "bottom-coercion", source, target });
   }

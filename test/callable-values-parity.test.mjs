@@ -276,10 +276,16 @@ function defaulted(value: number = 3.5): number {
   return value;
 }
 
+function optionalBridge(value: int32 | undefined): number {
+  return optional(value);
+}
+
 export function main(): void {
   const value: int32 = 8;
   check(optional(value) === 8);
   check(defaulted(value) === 8);
+  check(optionalBridge(value) === 8);
+  check(optionalBridge(undefined) === 0);
   check(optional() === 0);
   check(defaulted() === 3.5);
 }
@@ -291,6 +297,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /optional\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
   assert.match(source, /defaulted\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
+  assert.match(source, /value\.map\(\|__tsonic_option_value\|\s*\{\s*tsonic_rust_runtime::conversions::i32_to_f64\(__tsonic_option_value\)/u);
   validateGeneratedProject("source-call-optional-conversion", result.artifacts, { run: true });
 });
 

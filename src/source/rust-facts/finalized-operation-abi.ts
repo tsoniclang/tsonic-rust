@@ -482,9 +482,32 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
     (value.conversion.kind === "bottom-coercion" &&
       hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
       isRustTargetTypeRef(value.conversion.source) &&
-      isRustTargetTypeRef(value.conversion.target))) &&
+      isRustTargetTypeRef(value.conversion.target)) ||
+    (value.conversion.kind === "option-map" &&
+      hasExactKeys(value.conversion, ["kind", "elementConversion"]) &&
+      isNonOptionValueConversion(value.conversion.elementConversion))) &&
     rustValueConversionContract(value.conversion as RustValueConversion) !== undefined &&
     typeof value.fallible === "boolean";
+}
+
+function isNonOptionValueConversion(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (value.kind === "semantic-conversion" &&
+      hasExactKeys(value, ["kind", "id"]) && typeof value.id === "string") ||
+    (value.kind === "numeric-promotion" &&
+      hasExactKeys(value, ["kind", "source", "target"]) &&
+      typeof value.source === "string" && typeof value.target === "string") ||
+    (value.kind === "raw-pointer-mut-to-const" &&
+      hasExactKeys(value, ["kind", "pointee"]) && isRustTargetTypeRef(value.pointee)) ||
+    (value.kind === "source-union-variant" &&
+      hasExactKeys(value, ["kind", "source", "target", "variantName"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      typeof value.variantName === "string" && value.variantName.length > 0) ||
+    (value.kind === "bottom-coercion" &&
+      hasExactKeys(value, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target));
 }
 
 function isProviderConstant(value: unknown): value is RustProviderConstantArgument {

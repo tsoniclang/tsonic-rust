@@ -71,7 +71,7 @@ export type RustValueConversionId =
   | "js-value-from-string"
   | "js-value-clone";
 
-export type RustValueConversion =
+export type RustNonOptionValueConversion =
   | {
       readonly kind: "semantic-conversion";
       readonly id: RustValueConversionId;
@@ -95,6 +95,13 @@ export type RustValueConversion =
       readonly kind: "bottom-coercion";
       readonly source: TargetTypeRef;
       readonly target: TargetTypeRef;
+    };
+
+export type RustValueConversion =
+  | RustNonOptionValueConversion
+  | {
+      readonly kind: "option-map";
+      readonly elementConversion: RustNonOptionValueConversion;
     };
 
 export type RustProviderOperationForm =
