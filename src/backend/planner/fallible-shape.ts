@@ -47,7 +47,7 @@ export function applyFallibleShape(
         ...(statement.else === undefined ? {} : { else: { statements: statement.else.statements.map(wrap) } }),
       };
     }
-    if (statement.kind === "while" || statement.kind === "for" ||
+    if (statement.kind === "loop" || statement.kind === "while" || statement.kind === "for" ||
       statement.kind === "while-let-some" || statement.kind === "if-let-some") {
       return { ...statement, body: { statements: statement.body.statements.map(wrap) } };
     }

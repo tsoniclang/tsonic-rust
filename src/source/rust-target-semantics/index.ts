@@ -96,6 +96,8 @@ import {
   Node_Name,
   Node_Type,
   ObjectLiteralProperty_Value,
+  VariableDeclarationList_Declarations,
+  VariableStatement_DeclarationList,
   asSourceNode,
 } from "../../common/source-ast.js";
 import {
@@ -220,7 +222,10 @@ import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { selectRustResourceManagement } from "./resource-management.js";
-import { rustProjectMemberSlotName } from "./project-type-policy.js";
+import {
+  rustInheritedProjectConstructor,
+  rustProjectMemberSlotName,
+} from "./project-type-policy.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
 import { rustProjectObjectLayout } from "./project-object-layout.js";
 import {
@@ -987,7 +992,24 @@ function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFi
 
 function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
   const moduleLevel = walk.context.ast.kindName(walk.context.ast.parent(statement)) === "KindSourceFile";
-  for (const declaration of collectDescendantsOfKind(walk, statement, KindVariableDeclaration)) {
+  const declarationList = VariableStatement_DeclarationList(walk.context.ast, statement);
+  const declarationSlots = VariableDeclarationList_Declarations(
+    walk.context.ast,
+    declarationList,
+  );
+  if (declarationSlots === undefined || !isDenseDataArray(declarationSlots) ||
+    declarationSlots.some((declaration) =>
+      declaration === undefined || walk.context.ast.kindName(declaration) !== KindVariableDeclaration)) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_VARIABLE_DECLARATIONS_NOT_CLOSED",
+      "Variable statement has no exact dense declaration list.",
+      statement,
+      ["target.capability=rust.source.variable-declarations"],
+    );
+    return;
+  }
+  for (const declaration of declarationSlots as readonly Node[]) {
     const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
     const predeclared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
       walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
@@ -5013,23 +5035,128 @@ function resolveFutureOperationOrigin(
 function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly SourceFile[]): void {
   const { ast } = walk.context;
   const declarations: Node[] = [];
+  const declarationSet = new Set<Node>();
+  const regionsByDeclaration = new Map<Node, Set<Node>>();
+  const relatedDeclarations = new Map<Node, Set<Node>>();
+  const dependenciesByDeclaration = new Map<Node, Set<Node>>();
+  const addDeclaration = (declaration: Node): void => {
+    if (!declarationSet.has(declaration)) {
+      declarationSet.add(declaration);
+      declarations.push(declaration);
+    }
+  };
+  const addRegion = (declaration: Node, region: Node | undefined): void => {
+    addDeclaration(declaration);
+    if (region === undefined) {
+      return;
+    }
+    const regions = regionsByDeclaration.get(declaration) ?? new Set<Node>();
+    regions.add(region);
+    regionsByDeclaration.set(declaration, regions);
+  };
+  const relateDeclarations = (left: Node, right: Node): void => {
+    addDeclaration(left);
+    addDeclaration(right);
+    if (left === right) {
+      return;
+    }
+    const leftRelations = relatedDeclarations.get(left) ?? new Set<Node>();
+    const rightRelations = relatedDeclarations.get(right) ?? new Set<Node>();
+    leftRelations.add(right);
+    rightRelations.add(left);
+    relatedDeclarations.set(left, leftRelations);
+    relatedDeclarations.set(right, rightRelations);
+  };
+  const addDeclarationDependency = (declaration: Node, dependency: Node): void => {
+    addDeclaration(declaration);
+    addDeclaration(dependency);
+    const dependencies = dependenciesByDeclaration.get(declaration) ?? new Set<Node>();
+    dependencies.add(dependency);
+    dependenciesByDeclaration.set(declaration, dependencies);
+  };
+  const registerCallableDeclaration = (declaration: Node): void => {
+    addRegion(declaration, ast.body(declaration));
+    const implementation = walk.context.source.navigation.callableImplementation(declaration);
+    if (implementation.kind !== "resolved") {
+      return;
+    }
+    const implementationDeclaration = implementation.implementation.declaration;
+    addRegion(implementationDeclaration, ast.body(implementationDeclaration));
+    relateDeclarations(declaration, implementationDeclaration);
+  };
+  const callableMemberKind = (node: Node): boolean => {
+    const kind = ast.kindName(node);
+    return kind === "KindMethodDeclaration" || kind === "KindMethodSignature" ||
+      kind === "KindGetAccessor" || kind === "KindSetAccessor";
+  };
   for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
-        declarations.push(statement);
+        registerCallableDeclaration(statement);
       } else if (kind === "KindClassDeclaration") {
         const members = requireDenseSourceNodes(walk, ast.members(statement), "Class declaration contains an undefined or non-data member slot.");
         if (members === undefined) {
           return;
         }
+        const constructors = members.filter((member) =>
+          ast.kindName(member) === "KindConstructor");
+        const constructorImplementation = constructors.find((member) =>
+          ast.body(member) !== undefined);
+        const constructorSubject = constructorImplementation ?? statement;
+        addDeclaration(constructorSubject);
+        for (const constructor of constructors) {
+          registerCallableDeclaration(constructor);
+          relateDeclarations(constructorSubject, constructor);
+        }
         for (const member of members) {
-          if (ast.kindName(member) === "KindMethodDeclaration" ||
-            ast.kindName(member) === "KindConstructor" ||
-            ast.kindName(member) === "KindGetAccessor" ||
-            ast.kindName(member) === "KindSetAccessor") {
-            declarations.push(member);
+          if (ast.kindName(member) === "KindPropertyDeclaration") {
+            if (!ast.hasModifierKind(member, "static")) {
+              addRegion(constructorSubject, Node_Initializer(ast, member));
+            }
+          } else if (callableMemberKind(member)) {
+            registerCallableDeclaration(member);
           }
+        }
+      }
+    }
+  }
+  for (const definition of walk.context.projectTypes.definitions) {
+    const members = requireDenseSourceNodes(
+      walk,
+      ast.members(definition.declaration),
+      "Project type declaration contains an undefined or non-data member slot.",
+    );
+    if (members === undefined) {
+      return;
+    }
+    for (const member of members) {
+      if (!callableMemberKind(member) || ast.hasModifierKind(member, "static")) {
+        continue;
+      }
+      registerCallableDeclaration(member);
+      for (const concrete of walk.context.projectTypes.concreteClassesFor(definition)) {
+        const implementation = walk.context.projectTypes.memberImplementation(concrete, member);
+        if (implementation.kind !== "resolved") {
+          continue;
+        }
+        const implementationDeclaration = implementation.implementation.declaration;
+        addRegion(implementationDeclaration, ast.body(implementationDeclaration));
+        relateDeclarations(member, implementationDeclaration);
+      }
+    }
+    if (definition.kind === "class") {
+      for (const signature of walk.context.projectTypes.constructorsForDefinition(definition)) {
+        const inherited = rustInheritedProjectConstructor(
+          walk.context.projectTypes,
+          definition,
+          signature,
+        );
+        if (inherited !== undefined) {
+          addDeclarationDependency(
+            definition.declaration,
+            inherited.constructor.declaration ?? inherited.base.declaration,
+          );
         }
       }
     }
@@ -5239,16 +5366,22 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
     visit(root, false);
     return found;
   }
-  const bodyIsFallible = (declaration: Node): boolean => {
-    const body = ast.body(declaration);
-    return body !== undefined && expressionRegionIsFallible(body);
-  };
+  const declarationIsFallible = (declaration: Node): boolean =>
+    [...(regionsByDeclaration.get(declaration) ?? [])].some(expressionRegionIsFallible) ||
+    [...(dependenciesByDeclaration.get(declaration) ?? [])].some((dependency) =>
+      fallible.has(dependency));
 
   let changed = true;
   while (changed) {
     changed = false;
     for (const declaration of declarations) {
-      if (!fallible.has(declaration) && bodyIsFallible(declaration)) {
+      if (!fallible.has(declaration) && declarationIsFallible(declaration)) {
+        fallible.add(declaration);
+        changed = true;
+      }
+    }
+    for (const [declaration, related] of relatedDeclarations) {
+      if (!fallible.has(declaration) && [...related].some((candidate) => fallible.has(candidate))) {
         fallible.add(declaration);
         changed = true;
       }

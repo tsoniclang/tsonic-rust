@@ -280,7 +280,10 @@ export function inspectJson(): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let value = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
-  assert.match(text, /let rendered = js_abi::json_stringify\(&value\)\?\.unwrap_or\(String::from\(""\)\);/u);
+  assert.match(
+    text,
+    /let rendered = rt::option_coalesce\(\n            js_abi::json_stringify\(&value\)\?,\n            std::convert::identity,\n            \|\| String::from\(""\),\n        \);/u,
+  );
   assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });
 
@@ -409,6 +412,73 @@ export function drive(): int32 {
   assert.match(text, /fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
   assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32> \{\n    Machine::risky\(false\)\n\}/u);
   assert.doesNotMatch(text, /Ok\(Machine::risky\(false\)\?\)/u);
+});
+
+test("constructor and virtual-call fallibility close over exact project dependencies", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "project_fallibility_closure" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+function checkedValue(value: int32): int32 {
+  if (value < 0) {
+    throw new Error("negative");
+  }
+  return value;
+}
+
+class Base {
+  value: int32;
+
+  constructor(value: int32) {
+    this.value = checkedValue(value);
+  }
+
+  read(): int32 {
+    return this.value;
+  }
+}
+
+class Derived extends Base {
+  constructor(value: int32) {
+    super(value);
+  }
+
+  read(): int32 {
+    return checkedValue(this.value + 1);
+  }
+}
+
+class Inherited extends Base {}
+
+class Initialized {
+  value: int32 = checkedValue(40);
+}
+
+function readThroughBase(value: Base): int32 {
+  return value.read();
+}
+
+export function main(): void {
+  check(readThroughBase(new Derived(41)) === 42);
+  check(readThroughBase(new Inherited(41)) === 41);
+  check(new Initialized().value === 40);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn __tsonic_initialize[^\n]*-> rt::TsonicResult</u);
+  assert.match(text, /pub fn new\([^)]*\) -> rt::TsonicResult<Derived>/u);
+  assert.match(text, /pub fn new\(\) -> rt::TsonicResult<Initialized>/u);
+  assert.match(text, /fn __tsonic_virtual_[^(]+\([^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn readThroughBase\([^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.equal(validateGeneratedProject("project-fallibility-closure", result.artifacts, { run: true }).status, 0);
 });
 
 test("catch returns propagate through exact completion state in fallible functions", async () => {

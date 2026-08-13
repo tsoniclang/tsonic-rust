@@ -329,6 +329,16 @@ export function VariableDeclarationList_Declarations(
   return ast.as.AsVariableDeclarationList(node)?.Declarations?.Nodes;
 }
 
+export function VariableStatement_DeclarationList(
+  ast: AstReader,
+  node: Node | undefined,
+): Node | undefined {
+  if (node === undefined || ast.kindName(node) !== KindVariableStatement) {
+    return undefined;
+  }
+  return ast.as.AsVariableStatement(node)?.DeclarationList;
+}
+
 export function BinaryExpression_Left(ast: AstReader, node: Node | undefined): Node | undefined {
   return node === undefined || ast.kindName(node) !== KindBinaryExpression
     ? undefined

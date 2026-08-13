@@ -33,6 +33,38 @@ export function main(): void {
   validateGeneratedProject("control-flow-constant-loop", result.artifacts);
 });
 
+test("top-level callable values keep nested mutable bindings local", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "callable_local_binding" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export const reach = (limit: int32): int32 => {
+  let current: int32 = 0;
+  while (true) {
+    if (current === limit) return current;
+    current++;
+  }
+};
+
+export function main(): void {
+  if (reach(3) !== 3) {
+    throw new Error("callable local binding failed");
+  }
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let mut current: i32 = 0;/u);
+  assert.doesNotMatch(source, /current\.with/u);
+  const run = validateGeneratedProject("control-flow-callable-local", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
 test("do-while evaluates its condition after normal and continue paths", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

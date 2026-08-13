@@ -7,7 +7,10 @@ import type {
   RustProjectConstructorSignature,
   RustProjectTypeDefinition,
 } from "../../source/rust-target-semantics/project-type-policy.js";
+import { rustInheritedProjectConstructor } from "../../source/rust-target-semantics/project-type-policy.js";
 import {
+  rustFallibleFactKey,
+  rustSourceCallEffectsFactKey,
   rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey,
 } from "../../source/rust-facts/keys.js";
@@ -65,6 +68,7 @@ import {
   type RustPreconstructionFieldValue,
 } from "./preconstruction-fields.js";
 import { planStatementSequence } from "./statements.js";
+import { applyFallibleShape } from "./fallible-shape.js";
 
 export function planProjectClassConstructor(
   definition: RustProjectTypeDefinition,
@@ -135,12 +139,20 @@ export function planProjectClassConstructor(
   if (parameterPlan === undefined) {
     return undefined;
   }
+  const fallible = context.input.facts.getFact(
+    constructor ?? definition.declaration,
+    rustFallibleFactKey,
+  ) !== undefined;
+  if (fallible) {
+    context.usedAliases?.add("rt");
+  }
   const stateType = projectStateType(layers);
   const initializationContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: stateType,
+    ...(fallible ? { fallibleContext: true } : {}),
   };
   const prelude = planRustCallableParameterPrelude(parameterPlan, initializationContext, planExpression);
   if (prelude === undefined) {
@@ -209,14 +221,25 @@ export function planProjectClassConstructor(
           base.target,
           context,
         );
-    const implicitBase = constructor === undefined
-      ? selectedImplicitBaseConstructor(
+    const inheritedBase = constructor === undefined
+      ? rustInheritedProjectConstructor(
+          context.input.projectTypes,
+          definition,
           constructorSignature,
-          base.target,
-          context,
         )
       : undefined;
+    const implicitBase = inheritedBase?.base === base.target
+      ? inheritedBase.constructor
+      : undefined;
     const baseConstructor = explicitBase?.constructor ?? implicitBase;
+    if (baseConstructor === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, constructor ?? definition.declaration),
+        "rust.backend.project-inherited-constructor",
+        "Project construction does not identify one exact inherited base constructor ABI.",
+      ));
+      return undefined;
+    }
     const baseArgs = explicitBase === undefined
       ? parameterPlan.params.map((parameter) => ({
           kind: "path" as const,
@@ -224,20 +247,53 @@ export function planProjectClassConstructor(
         }))
       : planRustSelectedSourceCallArguments(explicitBase.call, initializationContext);
     const baseType = rustTypeFromCarrierInContext(base.targetType, context);
-    if (baseConstructor === undefined || baseArgs === undefined || baseType === undefined) {
+    if (baseArgs === undefined || baseType === undefined) {
       return undefined;
+    }
+    let baseInitialization: RustExpr = {
+      kind: "associated-call",
+      owner: baseType,
+      method: baseConstructor.initializeName,
+      args: baseArgs,
+    };
+    const explicitBaseEffects = explicitBase === undefined
+      ? undefined
+      : context.input.facts.getFact(
+          explicitBase.call,
+          rustSourceCallEffectsFactKey,
+        );
+    if (explicitBase !== undefined &&
+      (explicitBaseEffects === undefined || explicitBaseEffects.awaiting !== "not-applicable")) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, explicitBase.call),
+        "rust.backend.project-base-constructor-effects",
+        "An explicit project base constructor call has no exact finalized synchronous invocation effects.",
+      ));
+      return undefined;
+    }
+    const baseFallible = explicitBase === undefined
+      ? context.input.facts.getFact(
+          baseConstructor.declaration ?? base.target.declaration,
+          rustFallibleFactKey,
+        ) !== undefined
+      : explicitBaseEffects!.invocation === "fallible";
+    if (baseFallible && !fallible) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, constructor ?? definition.declaration),
+        "rust.backend.project-constructor-fallibility",
+        "A fallible selected base constructor conflicts with the finalized derived constructor ABI.",
+      ));
+      return undefined;
+    }
+    if (baseFallible) {
+      baseInitialization = { kind: "try", expr: baseInitialization };
     }
     statements.push({
       kind: "let",
       name: "__tsonic_base_state",
       mutable: true,
       attrs: ["#[allow(unused_mut)]"],
-      init: {
-        kind: "associated-call",
-        owner: baseType,
-        method: baseConstructor.initializeName,
-        args: baseArgs,
-      },
+      init: baseInitialization,
     });
     bodyIndex = constructor === undefined ? 0 : 1;
   } else if (externalBase !== undefined) {
@@ -397,10 +453,11 @@ export function planProjectClassConstructor(
       ? {}
       : { attrs: initializationSafetyAttributes }),
     params: parameterPlan.params,
+    ...(fallible ? { fallible: true } : {}),
     returnType: stateType,
     body: {
       ...(parameterPlan.bodyInnerAttrs.length === 0 ? {} : { innerAttrs: parameterPlan.bodyInnerAttrs }),
-      statements,
+      ...applyFallibleShape({ statements }, fallible, true),
     },
   };
   const forwardArgs = parameterPlan.params.map((parameter) => ({
@@ -426,14 +483,23 @@ export function planProjectClassConstructor(
       return attrs.length === 0 ? {} : { attrs };
     })(),
     params: parameterPlan.params,
+    ...(fallible ? { fallible: true } : {}),
     returnType: wrapperType,
-    body: {
+    body: applyFallibleShape({
       statements: [
         {
           kind: "let",
           name: "__tsonic_state",
           mutable: false,
-          init: {
+          init: fallible ? {
+            kind: "try",
+            expr: {
+              kind: "associated-call",
+              owner: wrapperType,
+              method: constructorSignature.initializeName,
+              args: forwardArgs,
+            },
+          } : {
             kind: "associated-call",
             owner: wrapperType,
             method: constructorSignature.initializeName,
@@ -491,7 +557,7 @@ export function planProjectClassConstructor(
           },
         },
       ],
-    },
+    }, fallible, true),
   };
   return { initialize, construct };
 }
@@ -532,31 +598,6 @@ function planImplicitProjectConstructorParameters(
     params.push({ name, type, mutable: false });
   }
   return { params, prelude: [], bodyInnerAttrs: [] };
-}
-
-function selectedImplicitBaseConstructor(
-  derived: RustProjectConstructorSignature,
-  base: RustProjectTypeDefinition,
-  context: RustPlanContext,
-): RustProjectConstructorSignature | undefined {
-  const matches = context.input.projectTypes.constructorsForDefinition(base).filter((candidate) =>
-    candidate.parameters.length === derived.parameters.length &&
-    candidate.parameters.every((parameter, index) => {
-      const selected = derived.parameters[index];
-      return selected !== undefined &&
-        parameter.parameterDeclaration === selected.parameterDeclaration &&
-        parameter.acceptsOmission === selected.acceptsOmission &&
-        parameter.rest === selected.rest;
-    }));
-  if (matches.length !== 1) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, base.declaration),
-      "rust.backend.project-inherited-constructor",
-      "An implicit derived constructor does not identify one exact inherited base constructor ABI.",
-    ));
-    return undefined;
-  }
-  return matches[0];
 }
 
 function selectedExplicitExternalBaseConstructor(

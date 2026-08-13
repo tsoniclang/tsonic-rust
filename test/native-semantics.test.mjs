@@ -45,7 +45,7 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32,\)>,\n\}/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
-  assert.match(text, /let __tsonic_field_value = value;/u);
+  assert.match(text, /let mut __tsonic_field_value: i32;\n        __tsonic_field_value = value;/u);
   assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(__tsonic_field_value,\)\)/u);
   assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
   assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value(?:_[0-9]+)?\)/u);
@@ -184,7 +184,7 @@ export function create(): Initialized {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /impl Initialized \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Initialized/u);
-  assert.match(text, /let __tsonic_field_value = 42;/u);
+  assert.match(text, /let mut __tsonic_field_value: i32;\n        __tsonic_field_value = 42;/u);
   assert.match(text, /impl Empty \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Empty/u);
 });
 
@@ -251,9 +251,11 @@ export class Initialized {
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let mut __tsonic_field_second(?:_[0-9]+)?: i32;/u);
   assert.match(
-    artifactText(result, "src/index.rs"),
-    /let __tsonic_field_second(?:_[0-9]+)? = __tsonic_field_first(?:_[0-9]+)?;/u,
+    text,
+    /__tsonic_field_second(?:_[0-9]+)? = __tsonic_field_first(?:_[0-9]+)?;/u,
   );
 });
 
@@ -691,7 +693,7 @@ export function some_value(): int32 {
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32 \{/u);
   assert.match(text, /rt::option_coalesce\(value, std::convert::identity, \|\| 0\)/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
-  assert.match(text, /value_or_zero\(None\)/u);
+  assert.match(text, /value_or_zero\(Option::<i32>::None\)/u);
 });
 
 test("nullish coalescing preserves lazy value and optional fallback evaluation", { timeout: 300_000 }, () => {
@@ -770,7 +772,7 @@ export function some_value(): int32 {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
-  assert.match(text, /value_or_zero\(None\)/u);
+  assert.match(text, /value_or_zero\(Option::<i32>::None\)/u);
 });
 
 test("interfaces lower to reference-backed object wrappers with annotated object literals", () => {
@@ -1178,7 +1180,7 @@ export function caller(flag: boolean): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::new\(/u);
+  assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);
   assert.match(text, /Ok\(7\)/u);
   assert.match(text, /let __tsonic_try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
   assert.match(text, /outcome = risky\(flag\)\?;/u);

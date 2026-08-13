@@ -326,11 +326,19 @@ function planConstructor(
     return undefined;
   }
   const params = parameterPlan.params;
+  const fallible = context.input.facts.getFact(
+    member ?? classDeclaration,
+    rustFallibleFactKey,
+  ) !== undefined;
+  if (fallible) {
+    context.usedAliases?.add("rt");
+  }
   const constructorContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "named", path: className },
+    ...(fallible ? { fallibleContext: true } : {}),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -439,13 +447,14 @@ function planConstructor(
       ? "public"
       : "private",
     ...(constructorAttributes.length === 0 ? {} : { attrs: constructorAttributes }),
+    ...(fallible ? { fallible: true } : {}),
     params,
     returnType: { kind: "named", path: className },
     body: {
       ...(parameterPlan.bodyInnerAttrs.length === 0
         ? {}
         : { innerAttrs: parameterPlan.bodyInnerAttrs }),
-      statements,
+      ...applyFallibleShape({ statements }, fallible, true),
     },
   };
 }

@@ -516,11 +516,74 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return printRustBlock(statement.body, depth, "unsafe");
     }
     case "throw": {
-      return `${indent}${statement.tail === true ? "" : "return "}Err(${printRustExpr(statement.error)})${statement.tail === true ? "" : ";"}`;
+      const prefix = `${statement.tail === true ? "" : "return "}Err(`;
+      const callChain = statement.error.kind === "call" || statement.error.kind === "associated-call"
+        ? collectNestedCallExpressionChain(statement.error)
+        : undefined;
+      if (callChain !== undefined && callChain.callables.length > 1 &&
+        indent.length + prefix.length + printRustExpr(statement.error).length >= rustFormatWidth - 10) {
+        const argumentIndent = indentText(depth + 1);
+        return [
+          `${indent}${prefix}${callChain.callables.map((callable) => `${callable}(`).join("")}`,
+          ...callChain.arguments.map((argument) => appendToLastLine(
+            `${argumentIndent}${printRustExprFitted(
+              argument,
+              depth + 1,
+              argumentIndent.length,
+            )}`,
+            ",",
+          )),
+          `${indent}${")".repeat(callChain.callables.length + 1)}${statement.tail === true ? "" : ";"}`,
+        ].join("\n");
+      }
+      const renderedError = printRustExprFitted(
+        statement.error,
+        depth,
+        indent.length + prefix.length + 1,
+      );
+      const rendered = appendToLastLine(
+        `${prefix}${renderedError}`,
+        `)${statement.tail === true ? "" : ";"}`,
+      );
+      if (renderedFits(rendered, indent.length) &&
+        rendered.length + indent.length < rustFormatWidth) {
+        return `${indent}${rendered}`;
+      }
+      const errorIndent = indentText(depth + 1);
+      const expandedError = printRustExprFitted(
+        statement.error,
+        depth + 1,
+        errorIndent.length,
+      );
+      return [
+        `${indent}${prefix}`,
+        appendToLastLine(`${errorIndent}${expandedError}`, ","),
+        `${indent})${statement.tail === true ? "" : ";"}`,
+      ].join("\n");
     }
     case "try-scope": {
       return printRustTryScope(statement, depth);
     }
+  }
+}
+
+function collectNestedCallExpressionChain(
+  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
+): {
+  readonly callables: readonly string[];
+  readonly arguments: readonly RustExpr[];
+} | undefined {
+  const callables: string[] = [];
+  let current = expression;
+  for (;;) {
+    callables.push(current.kind === "call"
+      ? current.path
+      : `${printRustAssociatedOwner(current.owner)}::${current.method}`);
+    if (current.args.length !== 1 ||
+      (current.args[0]?.kind !== "call" && current.args[0]?.kind !== "associated-call")) {
+      return current.args.length === 0 ? undefined : { callables, arguments: current.args };
+    }
+    current = current.args[0];
   }
 }
 
@@ -2745,7 +2808,17 @@ function printFittedCall(
         depth,
         column + prefix.length,
       );
-      if (firstLine(renderedClosure).length + column + prefix.length <= rustFormatWidth) {
+      const expandedClosure = printRustExprFitted(
+        trailingClosure,
+        depth + 1,
+        indentText(depth + 1).length + 1,
+      );
+      const expansionMakesClosureCompact = trailingClosure.kind === "closure" &&
+        !expressionIsRightHandBlock(trailingClosure.body) &&
+        renderedClosure.includes("\n") &&
+        !expandedClosure.includes("\n");
+      if (!expansionMakesClosureCompact &&
+        firstLine(renderedClosure).length + column + prefix.length <= rustFormatWidth) {
         return appendToLastLine(`${prefix}${renderedClosure}`, ")");
       }
     }
