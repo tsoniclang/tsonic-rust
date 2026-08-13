@@ -586,6 +586,47 @@ test("one-field struct literals honor rustfmt's compact body limit", () => {
   assert.match(source, /Counter \{\n        value: value\.clone\(\),\n    \}/u);
 });
 
+test("typed bindings retain overflowing struct openings and expand their fields", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      visibility: "public",
+      name: "new_pair",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "pair",
+          mutable: false,
+          type: { kind: "named", path: "Pair", typeArguments: [{ kind: "named", path: "i32" }] },
+          init: {
+            kind: "struct-literal",
+            path: "Pair",
+            fields: [{
+              name: "__tsonic_state",
+              value: {
+                kind: "call",
+                path: "rt::ObjectHandle::new",
+                args: [{
+                  kind: "tuple-literal",
+                  elements: [
+                    { kind: "int-literal", text: "1" },
+                    { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "kept" }] },
+                    { kind: "int-literal", text: "2" },
+                  ],
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /let pair: Pair<i32> = Pair \{\n        __tsonic_state: rt::ObjectHandle::new/u);
+});
+
 test("optional closure chains and nested struct arguments stay rustfmt-stable", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -753,6 +794,39 @@ test("multiline mixed logical groups preserve source precedence", () => {
   assert.match(text, /enabled\n        && \(predicate_with_an_intentionally_long_name_left\(value\)\n            \|\| predicate_with_an_intentionally_long_name_right\(value\)\)/u);
 });
 
+test("statement-valued expressions are parenthesized as binary operands", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      returnType: { kind: "primitive", name: "i32" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "binary",
+            operator: "+",
+            left: {
+              kind: "block",
+              bindings: [{
+                name: "selected",
+                value: { kind: "int-literal", text: "1" },
+              }],
+              value: { kind: "path", path: "selected" },
+            },
+            right: { kind: "int-literal", text: "1" },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /\(\{\n        let selected = 1;\n        selected\n    \}\) \+ 1/u);
+});
+
 test("long assignments break after the assignment operator", () => {
   const conversion = {
     kind: "call",
@@ -829,7 +903,7 @@ test("multiline arithmetic assignments break after the assignment operator", () 
   assert.match(text, /entryTotal \+=\n        tsonic_rust_runtime::conversions::usize_to_i32/u);
 });
 
-test("overflowing outer calls retain jointly fitting nested arguments", () => {
+test("overflowing nested calls retain attached wrappers and jointly fitting arguments", () => {
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -861,7 +935,7 @@ test("overflowing outer calls retain jointly fitting nested arguments", () => {
     }],
   });
 
-  assert.match(text, /isize_to_i32\(\n        example_runtime::canonical_array_index_of\(&values, &3, 0\),\n    \)\?/u);
+  assert.match(text, /isize_to_i32\(example_runtime::canonical_array_index_of\(\n        &values, &3, 0,\n    \)\)\?/u);
 });
 
 test("nested calls beyond rustfmt call width put each argument on its own line", () => {
@@ -1153,4 +1227,76 @@ test("logical assignment keeps a fitting first operand beside the operator", () 
   });
 
   assert.match(text, /passed = js_string::includes\(&rendered, "tsonic", 0\)\n        && digits\.test/u);
+});
+
+test("fitting fallible statement calls remain horizontal", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_node::fs::write_file_sync_string",
+              args: [
+                { kind: "reference", expr: { kind: "path", path: "file" } },
+                { kind: "str-literal", value: "payload" },
+                { kind: "str-literal", value: "utf8" },
+              ],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /write_file_sync_string\(&file, "payload", "utf8"\)\?;/u);
+});
+
+test("expanded method arguments stay attached to one outer conversion wrapper", () => {
+  const convertedElements = ["2.0", "3.0"].map((text) => ({
+    kind: "try",
+    expr: {
+      kind: "call",
+      path: "tsonic_rust_runtime::conversions::f64_to_i32",
+      args: [{ kind: "float-literal", text }],
+    },
+  }));
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "method-call",
+                receiver: { kind: "path", path: "values" },
+                method: "push_many",
+                args: [{ kind: "slice-literal", elements: convertedElements }],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /usize_to_i32\(values\.push_many\(\[\n[\s\S]*?\n\s+\]\)\)\?;/u);
+  assert.doesNotMatch(text, /usize_to_i32\(\n/u);
 });

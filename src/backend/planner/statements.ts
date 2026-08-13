@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import { isRustAssignmentOperator } from "../../common/rust-syntax.js";
+import type { RustAssignmentOperator, RustBinaryOperator } from "../../common/rust-syntax.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -67,13 +68,12 @@ import {
   Node_Initializer,
   Node_Name,
   Node_Type,
-  Node_Operand,
 } from "../../common/source-ast.js";
 import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustResourceManagementFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
-import type { RustResourceManagementFact } from "../../source/rust-facts/keys.js";
+import type { RustResourceManagementFact, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import {
-  isRustBigIntCarrier,
   isRustBoolCarrier,
+  isRustCopyCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
   rustLocationTargetType,
@@ -86,11 +86,17 @@ import {
   applyRustArgumentMode,
   expressionCarrier,
   planExpression,
+  planRustOperatorCallExpression,
   planFinalizedSourceInput,
   planFinalizedTargetInput,
+  finishRustSourceAccessorCall,
+  planRustSourceAccessorCall,
   providerSelectedCallMatches,
   requireProviderArgumentPassingFacts,
+  sourceAccessorSelectedOperationMatches,
   sourceFieldSelectedOperationMatches,
+  sourceStaticFieldSelectedOperationMatches,
+  sourceUnionFieldSelectedOperationMatches,
 } from "./expressions.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName } from "./plan-context.js";
 import type { RustCompletionBoundary, RustControlTarget, RustLoopTarget, RustPlanContext } from "./plan-context.js";
@@ -108,9 +114,24 @@ import { planRustReturnExit } from "./completion-exits.js";
 import {
   readRustProjectDispatchedField,
   readRustProjectObjectField,
+  readRustStructuralObjectField,
   writeRustProjectDispatchedField,
   writeRustProjectObjectField,
+  writeRustStructuralObjectField,
 } from "./project-objects.js";
+import {
+  isErasedRustSafetyExpressionStatement,
+  isRustExplicitUnsafeBlockMarker,
+  rustSelectedAccessorRequiresUnsafe,
+  withExplicitUnsafeContext,
+} from "./explicit-safety.js";
+import { planRustSourceUnionFieldProjection } from "./source-union-projection.js";
+import { rustSourceStaticFieldLocation } from "./static-field-storage.js";
+
+type RustAssignmentOperationFact = Extract<
+  RustTargetOperationFact,
+  { readonly kind: "operator-token" | "operator-call" }
+>;
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -155,6 +176,9 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return planSwitchStatement(node, context);
     }
     case KindExpressionStatement: {
+      if (isErasedRustSafetyExpressionStatement(node, context.input)) {
+        return [];
+      }
       return planExpressionStatement(node, context);
     }
     case KindIfStatement: {
@@ -219,6 +243,18 @@ function planStatementSequence(
       ));
       failed = true;
       continue;
+    }
+    if (isRustExplicitUnsafeBlockMarker(child, context.input)) {
+      const body = planStatementSequence(
+        children.slice(index + 1),
+        diagnosticNode,
+        withExplicitUnsafeContext(context),
+      );
+      if (body === undefined) {
+        return undefined;
+      }
+      statements.push({ kind: "unsafe-scope", body });
+      return { statements };
     }
     const resourceDeclaration = directResourceDeclaration(child, context);
     if (resourceDeclaration !== undefined) {
@@ -623,7 +659,7 @@ function rustBlockDefinitelyExits(block: RustBlock): boolean {
     last.kind === "completion-exit") {
     return true;
   }
-  if (last.kind === "scope") {
+  if (last.kind === "scope" || last.kind === "unsafe-scope") {
     return rustBlockDefinitelyExits(last.body);
   }
   if (last.kind === "resource-scope") {
@@ -644,7 +680,7 @@ function tailCompletionExits(block: RustBlock): RustBlock {
     replacement = { ...last, tail: true };
   } else if (last.kind === "throw") {
     replacement = { ...last, tail: true };
-  } else if (last.kind === "scope") {
+  } else if (last.kind === "scope" || last.kind === "unsafe-scope") {
     replacement = { ...last, body: tailCompletionExits(last.body) };
   } else if (last.kind === "if" && last.else !== undefined) {
     replacement = {
@@ -841,116 +877,6 @@ function planBindingVariableDeclaration(
     : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
 }
 
-function planUpdateStatement(expression: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const fact = context.input.facts.getFact(expression, rustTargetOperationFactKey);
-  if (fact === undefined || fact.kind !== "operator-token" || (fact.operator !== "+=" && fact.operator !== "-=")) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.operator",
-      "Increment/decrement requires a finalized Rust update-operator fact.",
-    ));
-    return undefined;
-  }
-  if (!selectedOperatorMatches(expression, fact, context)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.operator-selected-evidence",
-      "Update operation fact conflicts with the TSTS-selected operator fact.",
-    ));
-    return undefined;
-  }
-  const operand = Node_Operand(context.input.ast, expression);
-  if (operand === undefined) {
-    return undefined;
-  }
-  const sourceField = context.input.facts.getFact(operand, rustTargetOperationFactKey);
-  if (sourceField?.kind === "source-field") {
-    if (!sourceFieldSelectedOperationMatches(operand, sourceField, context)) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, operand),
-        "rust.backend.source-field-selected-evidence",
-        "Project-source field update conflicts with the TSTS-selected property fact.",
-      ));
-      return undefined;
-    }
-    const receiverNode = Node_Expression(ast, operand);
-    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    if (receiver === undefined) {
-      return undefined;
-    }
-    const step: RustExpr = isRustBigIntCarrier(fact.resultCarrier)
-      ? {
-          kind: "call",
-          path: "rt::BigInt::from_decimal_literal",
-          args: [{ kind: "str-literal", value: "1" }],
-        }
-      : { kind: "int-literal", text: "1" };
-    if (isRustBigIntCarrier(fact.resultCarrier)) {
-      context.usedAliases?.add("rt");
-    }
-    if (sourceField.dispatch === undefined) {
-      return [{
-        kind: "expr",
-        expr: writeRustProjectObjectField(receiver, sourceField.storageIndex, fact.operator, step),
-      }];
-    }
-    const syntheticNames = context.syntheticNames;
-    if (syntheticNames === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, operand),
-        "rust.backend.project-dispatch-temporary",
-        "Dispatched project-source field update requires a finalized hygienic-name scope.",
-      ));
-      return undefined;
-    }
-    return [{
-      kind: "expr",
-      expr: writeRustProjectDispatchedField(
-        receiver,
-        allocateRustSyntheticName(syntheticNames, "dispatch_receiver"),
-        sourceField.dispatch.read,
-        sourceField.dispatch.write,
-        fact.operator,
-        step,
-      ),
-    }];
-  }
-  if (ast.kindName(operand) !== KindIdentifier) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.operator",
-      "Increment/decrement targets must be identifiers.",
-    ));
-    return undefined;
-  }
-  const target = rustSourceName(context, ast.text(operand));
-  if (!isValidRustIdentifier(target)) {
-    return undefined;
-  }
-  const step: RustExpr = isRustBigIntCarrier(fact.resultCarrier)
-    ? {
-        kind: "call",
-        path: "rt::BigInt::from_decimal_literal",
-        args: [{ kind: "str-literal", value: "1" }],
-      }
-    : { kind: "int-literal", text: "1" };
-  if (isRustBigIntCarrier(fact.resultCarrier)) {
-    context.usedAliases?.add("rt");
-  }
-  const promoted = planRustPromotedStorageWrite(
-    operand,
-    fact.operator,
-    step,
-    context,
-    planExpression,
-  );
-  if (promoted.handled) {
-    return promoted.statement === undefined ? undefined : [promoted.statement];
-  }
-  return [{ kind: "assign", target: { kind: "path", path: target }, operator: fact.operator, value: step }];
-}
-
 function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.ast, node);
   return expression === undefined
@@ -974,10 +900,7 @@ function planExpressionAsStatement(
       KindSlashEqualsToken,
       KindPercentEqualsToken,
     ];
-    let selectedAssignmentFact: Extract<
-      import("../../source/rust-facts/keys.js").RustTargetOperationFact,
-      { kind: "operator-token" }
-    > | undefined;
+    let selectedAssignmentFact: RustAssignmentOperationFact | undefined;
     if (operatorKind === KindEqualsToken) {
       const assignment = context.input.facts.getFact(expression, rustTargetOperationFactKey);
       if (assignment !== undefined && assignment.kind === "runtime-set") {
@@ -1019,7 +942,10 @@ function planExpressionAsStatement(
           )
           ? planExpression(left, context)
           : undefined;
-      if (target === undefined && sourceField?.kind !== "source-field") {
+      if (target === undefined && sourceField?.kind !== "source-accessor" &&
+        sourceField?.kind !== "source-static-field" &&
+        sourceField?.kind !== "source-field" &&
+        sourceField?.kind !== "source-union-field") {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.assignment",
@@ -1029,7 +955,7 @@ function planExpressionAsStatement(
       }
       const fact = selectedAssignmentFact ??
         context.input.facts.getFact(expression, rustTargetOperationFactKey);
-      if (fact === undefined || fact.kind !== "operator-token") {
+      if (fact === undefined || (fact.kind !== "operator-token" && fact.kind !== "operator-call")) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, expression),
           "rust.backend.operator",
@@ -1065,6 +991,130 @@ function planExpressionAsStatement(
         ));
         return undefined;
       }
+      if (sourceField?.kind === "source-accessor") {
+        return planRustSourceAccessorAssignment(
+          left,
+          valueNode,
+          sourceField,
+          fact,
+          context,
+        );
+      }
+      if (sourceField?.kind === "source-static-field") {
+        return planRustSourceStaticFieldAssignment(
+          left,
+          valueNode,
+          sourceField,
+          fact,
+          context,
+        );
+      }
+      if (sourceField?.kind === "source-union-field") {
+        if (!sourceUnionFieldSelectedOperationMatches(left, sourceField, context)) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, left),
+            "rust.backend.source-union-field-selected-evidence",
+            "Source-union field assignment conflicts with the TSTS-selected property fact.",
+          ));
+          return undefined;
+        }
+        const receiverNode = Node_Expression(ast, left);
+        const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+        if (receiver === undefined || context.syntheticNames === undefined) {
+          return undefined;
+        }
+        const syntheticNames = context.syntheticNames;
+        const receiverName = allocateRustSyntheticName(syntheticNames, "union_receiver");
+        const value = planExpression(valueNode, context);
+        if (value === undefined) {
+          return undefined;
+        }
+        const valueName = allocateRustSyntheticName(syntheticNames, "union_value");
+        const projected = planRustSourceUnionFieldProjection(
+          left,
+          { kind: "path", path: receiverName },
+          sourceField,
+          context,
+          (payload, field) => {
+            const read = field.storage === "project-object"
+              ? readRustProjectObjectField
+              : readRustStructuralObjectField;
+            const write = field.storage === "project-object"
+              ? writeRustProjectObjectField
+              : writeRustStructuralObjectField;
+            if (fact.kind === "operator-call") {
+              const currentName = allocateRustSyntheticName(syntheticNames, "union_current");
+              const nextName = allocateRustSyntheticName(syntheticNames, "union_next");
+              const next = planRustCompoundAssignmentValue(
+                fact,
+                { kind: "path", path: currentName },
+                { kind: "path", path: valueName },
+                left,
+                context,
+              );
+              return next === undefined
+                ? undefined
+                : {
+                    kind: "block",
+                    bindings: [
+                      {
+                        name: currentName,
+                        value: read(payload, field.storageIndex, fact.resultCarrier),
+                      },
+                      { name: valueName, value },
+                      { name: nextName, value: next },
+                    ],
+                    value: write(
+                      payload,
+                      field.storageIndex,
+                      "=",
+                      { kind: "path", path: nextName },
+                    ),
+                  };
+            }
+            const selectedValue: RustExpr = { kind: "path", path: valueName };
+            if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+              const currentName = allocateRustSyntheticName(
+                syntheticNames,
+                "union_current",
+              );
+              return {
+                kind: "block",
+                bindings: [{
+                  name: currentName,
+                  value: read(payload, field.storageIndex, fact.resultCarrier),
+                }],
+                value: write(
+                  payload,
+                  field.storageIndex,
+                  "=",
+                  {
+                    kind: "string-concat",
+                    parts: [
+                      { kind: "path", path: currentName },
+                      selectedValue,
+                    ],
+                  },
+                ),
+              };
+            }
+            return write(payload, field.storageIndex, operator, selectedValue);
+          },
+        );
+        return projected === undefined
+          ? undefined
+          : [{
+              kind: "expr",
+              expr: {
+                kind: "block",
+                bindings: [
+                  { name: receiverName, value: receiver },
+                  ...(fact.kind === "operator-token" ? [{ name: valueName, value }] : []),
+                ],
+                value: projected,
+              },
+            }];
+      }
       if (sourceField?.kind === "source-field") {
         if (!sourceFieldSelectedOperationMatches(left, sourceField, context)) {
           context.diagnostics.push(missingFactDiagnostic(
@@ -1076,8 +1126,7 @@ function planExpressionAsStatement(
         }
         const receiverNode = Node_Expression(ast, left);
         const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-        const value = planExpression(valueNode, context);
-        if (receiver === undefined || value === undefined) {
+        if (receiver === undefined) {
           return undefined;
         }
         if (context.syntheticNames === undefined) {
@@ -1089,12 +1138,76 @@ function planExpressionAsStatement(
           return undefined;
         }
         const receiverName = allocateRustSyntheticName(context.syntheticNames, "receiver");
+        if (fact.kind === "operator-call") {
+          const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+          const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
+          const nextName = allocateRustSyntheticName(context.syntheticNames, "next");
+          const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
+          const current = sourceField.dispatch === undefined
+            ? (sourceField.storage === "project-object"
+              ? readRustProjectObjectField
+              : readRustStructuralObjectField)(
+                selectedReceiver,
+                sourceField.storageIndex,
+                fact.resultCarrier,
+              )
+            : readRustProjectDispatchedField(selectedReceiver, sourceField.dispatch.read);
+          const value = planExpression(valueNode, context);
+          if (value === undefined) {
+            return undefined;
+          }
+          const next = planRustCompoundAssignmentValue(
+            fact,
+            { kind: "path", path: currentName },
+            { kind: "path", path: valueName },
+            left,
+            context,
+          );
+          if (next === undefined) {
+            return undefined;
+          }
+          return [{
+            kind: "expr",
+            expr: {
+              kind: "block",
+              bindings: [
+                { name: receiverName, value: receiver },
+                { name: currentName, value: current },
+                { name: valueName, value },
+                { name: nextName, value: next },
+              ],
+              value: sourceField.dispatch === undefined
+                ? (sourceField.storage === "project-object"
+                  ? writeRustProjectObjectField
+                  : writeRustStructuralObjectField)(
+                    selectedReceiver,
+                    sourceField.storageIndex,
+                    "=",
+                    { kind: "path", path: nextName },
+                  )
+                : writeRustProjectDispatchedField(
+                    selectedReceiver,
+                    allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"),
+                    sourceField.dispatch.read,
+                    sourceField.dispatch.write,
+                    "=",
+                    { kind: "path", path: nextName },
+                  ),
+            },
+          }];
+        }
+        const value = planExpression(valueNode, context);
+        if (value === undefined) {
+          return undefined;
+        }
         const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
         if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
           const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
           const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
           const current = sourceField.dispatch === undefined
-            ? readRustProjectObjectField(
+            ? (sourceField.storage === "project-object"
+              ? readRustProjectObjectField
+              : readRustStructuralObjectField)(
                 selectedReceiver,
                 sourceField.storageIndex,
                 fact.resultCarrier,
@@ -1116,7 +1229,9 @@ function planExpressionAsStatement(
                 { name: currentName, value: current },
               ],
               value: sourceField.dispatch === undefined
-                ? writeRustProjectObjectField(
+                ? (sourceField.storage === "project-object"
+                  ? writeRustProjectObjectField
+                  : writeRustStructuralObjectField)(
                     selectedReceiver,
                     sourceField.storageIndex,
                     "=",
@@ -1142,7 +1257,9 @@ function planExpressionAsStatement(
               { name: valueName, value },
             ],
             value: sourceField.dispatch === undefined
-              ? writeRustProjectObjectField(
+              ? (sourceField.storage === "project-object"
+                ? writeRustProjectObjectField
+                : writeRustStructuralObjectField)(
                   { kind: "path", path: receiverName },
                   sourceField.storageIndex,
                   operator,
@@ -1162,6 +1279,15 @@ function planExpressionAsStatement(
       const value = planExpression(valueNode, context);
       if (value === undefined || target === undefined) {
         return undefined;
+      }
+      if (fact.kind === "operator-call") {
+        return planRustDirectOperatorCallAssignment(
+          left,
+          target,
+          value,
+          fact,
+          context,
+        );
       }
       if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
         if (context.syntheticNames === undefined) {
@@ -1252,7 +1378,8 @@ function planExpressionAsStatement(
     }
   }
   if (expressionKind === KindPostfixUnaryExpression || expressionKind === KindPrefixUnaryExpression) {
-    return planUpdateStatement(expression, context);
+    const planned = planExpression(expression, context, "discarded");
+    return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression" ||
     expressionKind === "KindYieldExpression" || expressionKind === KindDeleteExpression ||
@@ -1264,6 +1391,390 @@ function planExpressionAsStatement(
   return planned === undefined
     ? undefined
     : [{ kind: "let", name: "_", mutable: false, init: planned }];
+}
+
+function planRustSourceStaticFieldAssignment(
+  target: Node,
+  valueNode: Node,
+  field: Extract<RustTargetOperationFact, { readonly kind: "source-static-field" }>,
+  assignment: RustAssignmentOperationFact,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  if (!isRustAssignmentOperator(assignment.operator)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-static-field-operator",
+      "Project static-field assignment requires an exact Rust assignment operator.",
+    ));
+    return undefined;
+  }
+  if (!sourceStaticFieldSelectedOperationMatches(target, field, context)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-static-field-selected-evidence",
+      "Project static-field assignment conflicts with the TSTS-selected property fact.",
+    ));
+    return undefined;
+  }
+  const location = rustSourceStaticFieldLocation(field, context);
+  const value = planExpression(valueNode, context);
+  if (location === undefined || value === undefined || context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const locationName = allocateRustSyntheticName(context.syntheticNames, "static_field_location");
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "static_field_value");
+  const locationPath: RustExpr = { kind: "path", path: locationName };
+  const valuePath: RustExpr = { kind: "path", path: valueName };
+  if (assignment.operator === "=") {
+    return [{
+      kind: "expr",
+      expr: {
+        kind: "block",
+        bindings: [
+          { name: locationName, value: location },
+          { name: valueName, value },
+        ],
+        value: {
+          kind: "method-call",
+          receiver: locationPath,
+          method: "store",
+          args: [valuePath],
+        },
+      },
+    }];
+  }
+  const currentName = allocateRustSyntheticName(context.syntheticNames, "static_field_current");
+  const nextName = allocateRustSyntheticName(context.syntheticNames, "static_field_next");
+  const nextValue = planRustCompoundAssignmentValue(
+    assignment,
+    { kind: "path", path: currentName },
+    valuePath,
+    target,
+    context,
+  );
+  if (nextValue === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-static-field-operator",
+      "Project static-field compound assignment has no exact Rust value operation.",
+    ));
+    return undefined;
+  }
+  return [{
+    kind: "expr",
+    expr: {
+      kind: "block",
+      bindings: [
+        { name: locationName, value: location },
+        {
+          name: currentName,
+          value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+        },
+        { name: valueName, value },
+        { name: nextName, value: nextValue },
+      ],
+      value: {
+        kind: "method-call",
+        receiver: locationPath,
+        method: "store",
+        args: [{ kind: "path", path: nextName }],
+      },
+    },
+  }];
+}
+
+function planRustDirectOperatorCallAssignment(
+  targetNode: Node,
+  target: RustExpr,
+  value: RustExpr,
+  assignment: Extract<RustAssignmentOperationFact, { readonly kind: "operator-call" }>,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, targetNode),
+      "rust.backend.compound-assignment-temporary",
+      "Fallible compound assignment requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  const promoted = planRustPromotedStorageLocation(
+    targetNode,
+    context,
+    planExpression,
+    false,
+  );
+  if (promoted.kind === "promoted") {
+    if (promoted.expression === undefined) {
+      return undefined;
+    }
+    const locationName = allocateRustSyntheticName(context.syntheticNames, "location");
+    const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+    const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
+    const nextName = allocateRustSyntheticName(context.syntheticNames, "next");
+    const locationPath: RustExpr = { kind: "path", path: locationName };
+    const next = planRustCompoundAssignmentValue(
+      assignment,
+      { kind: "path", path: currentName },
+      { kind: "path", path: valueName },
+      targetNode,
+      context,
+    );
+    if (next === undefined) {
+      return undefined;
+    }
+    return [{
+      kind: "expr",
+      expr: {
+        kind: "block",
+        bindings: [
+          { name: locationName, value: promoted.expression },
+          {
+            name: currentName,
+            value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+          },
+          { name: valueName, value },
+          { name: nextName, value: next },
+        ],
+        value: {
+          kind: "method-call",
+          receiver: locationPath,
+          method: "store",
+          args: [{ kind: "path", path: nextName }],
+        },
+      },
+    }];
+  }
+
+  const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
+  const nextName = allocateRustSyntheticName(context.syntheticNames, "next");
+  const directIdentifier = context.input.ast.kindName(targetNode) === KindIdentifier;
+  const locationName = directIdentifier
+    ? undefined
+    : allocateRustSyntheticName(context.syntheticNames, "location");
+  const locationPath: RustExpr = locationName === undefined
+    ? target
+    : { kind: "dereference", pointer: { kind: "path", path: locationName } };
+  const current = isRustCopyCarrier(assignment.resultCarrier)
+    ? locationPath
+    : { kind: "method-call", receiver: locationPath, method: "clone", args: [] } as RustExpr;
+  const next = planRustCompoundAssignmentValue(
+    assignment,
+    { kind: "path", path: currentName },
+    { kind: "path", path: valueName },
+    targetNode,
+    context,
+  );
+  if (next === undefined) {
+    return undefined;
+  }
+  return [{
+    kind: "expr",
+    expr: {
+      kind: "block",
+      bindings: [
+        ...(locationName === undefined
+          ? []
+          : [{
+              name: locationName,
+              value: { kind: "reference" as const, expr: target, mutable: true },
+            }]),
+        { name: currentName, value: current },
+        { name: valueName, value },
+        { name: nextName, value: next },
+      ],
+      value: {
+        kind: "assignment",
+        operator: "=",
+        target: locationPath,
+        value: { kind: "path", path: nextName },
+      },
+    },
+  }];
+}
+
+function rustBinaryOperatorForAssignment(
+  operator: RustAssignmentOperator,
+): RustBinaryOperator | undefined {
+  switch (operator) {
+    case "+=":
+      return "+";
+    case "-=":
+      return "-";
+    case "*=":
+      return "*";
+    case "/=":
+      return "/";
+    case "%=":
+      return "%";
+    case "=":
+      return undefined;
+  }
+}
+
+function planRustSourceAccessorAssignment(
+  target: Node,
+  valueNode: Node,
+  accessor: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
+  assignment: RustAssignmentOperationFact,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const operator = assignment.operator;
+  if (!isRustAssignmentOperator(operator)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-assignment-operator",
+      "Project accessor assignment requires a finalized Rust assignment operator.",
+    ));
+    return undefined;
+  }
+  if (!sourceAccessorSelectedOperationMatches(target, accessor, context)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-selected-evidence",
+      "Project accessor assignment conflicts with the TSTS-selected property fact.",
+    ));
+    return undefined;
+  }
+  const unsafeAccessor = rustSelectedAccessorRequiresUnsafe(
+    target,
+    "setter",
+    context.input,
+  ) || (operator !== "=" && rustSelectedAccessorRequiresUnsafe(
+    target,
+    "getter",
+    context.input,
+  ));
+  if (unsafeAccessor && (context.explicitUnsafeContextDepth ?? 0) === 0) {
+    context.diagnostics.push({
+      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
+      category: "error",
+      source: "tsonic-rust",
+      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      sourceNode: target,
+    });
+    return undefined;
+  }
+  const write = accessor.write;
+  const read = operator === "=" ? undefined : accessor.read;
+  if (write === undefined || (operator !== "=" && read === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-assignment",
+      "Project accessor assignment requires the exact selected setter and compound assignments also require the selected getter.",
+    ));
+    return undefined;
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-temporary",
+      "Project accessor assignment requires a finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  const bindings: { name: string; value: RustExpr }[] = [];
+  let receiver: RustExpr | undefined;
+  if (accessor.receiver.kind === "instance") {
+    const receiverNode = Node_Expression(context.input.ast, target);
+    const plannedReceiver = receiverNode === undefined
+      ? undefined
+      : planExpression(receiverNode, context);
+    if (plannedReceiver === undefined) {
+      return undefined;
+    }
+    const receiverName = allocateRustSyntheticName(context.syntheticNames, "accessor_receiver");
+    bindings.push({ name: receiverName, value: plannedReceiver });
+    receiver = { kind: "path", path: receiverName };
+  }
+  let current: RustExpr | undefined;
+  if (read !== undefined) {
+    const plannedRead = planRustSourceAccessorCall(
+      target,
+      accessor,
+      read.method,
+      [],
+      context,
+      receiver,
+    );
+    const finalizedRead = plannedRead === undefined
+      ? undefined
+      : finishRustSourceAccessorCall(target, "read", plannedRead, context);
+    if (finalizedRead === undefined) {
+      return undefined;
+    }
+    const currentName = allocateRustSyntheticName(context.syntheticNames, "accessor_current");
+    bindings.push({ name: currentName, value: finalizedRead });
+    current = { kind: "path", path: currentName };
+  }
+  const plannedValue = planExpression(valueNode, context);
+  if (plannedValue === undefined) {
+    return undefined;
+  }
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "accessor_value");
+  bindings.push({ name: valueName, value: plannedValue });
+  const selectedValue: RustExpr = { kind: "path", path: valueName };
+  const next = operator === "="
+    ? selectedValue
+    : current === undefined
+      ? undefined
+      : planRustCompoundAssignmentValue(
+          assignment,
+          current,
+          selectedValue,
+          target,
+          context,
+        );
+  if (next === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.source-accessor-operator",
+      "Project accessor compound assignment has no exact Rust value operation.",
+    ));
+    return undefined;
+  }
+  const plannedWrite = planRustSourceAccessorCall(
+    target,
+    accessor,
+    write.method,
+    [next],
+    context,
+    receiver,
+  );
+  const finalizedWrite = plannedWrite === undefined
+    ? undefined
+    : finishRustSourceAccessorCall(target, "write", plannedWrite, context);
+  return finalizedWrite === undefined
+    ? undefined
+    : [{ kind: "expr", expr: { kind: "block", bindings, value: finalizedWrite } }];
+}
+
+function planRustCompoundAssignmentValue(
+  assignment: RustAssignmentOperationFact,
+  current: RustExpr,
+  value: RustExpr,
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (assignment.kind === "operator-call") {
+    return planRustOperatorCallExpression(assignment, current, value, node, context);
+  }
+  const operator = assignment.operator;
+  if (!isRustAssignmentOperator(operator)) {
+    return undefined;
+  }
+  if (operator === "=") {
+    return value;
+  }
+  if (operator === "+=" && isRustStringCarrier(assignment.resultCarrier)) {
+    return { kind: "string-concat", parts: [current, value] };
+  }
+  const binary = rustBinaryOperatorForAssignment(operator);
+  if (binary === undefined) {
+    return undefined;
+  }
+  return { kind: "binary", operator: binary, left: current, right: value };
 }
 
 function planCondition(condition: Node, context: RustPlanContext, construct: string) {
@@ -1884,7 +2395,7 @@ function planRuntimeSetStatement(
 
 function selectedOperatorMatches(
   expression: Node,
-  fact: Extract<import("../../source/rust-facts/keys.js").RustTargetOperationFact, { kind: "operator-token" }>,
+  fact: RustAssignmentOperationFact,
   context: RustPlanContext,
 ): boolean {
   return selectedOperatorIdentityMatches(expression, fact.operationId, fact.operator, fact.resultCarrier, context);

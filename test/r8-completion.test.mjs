@@ -56,23 +56,26 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("dynamic fixed-array indexing fails closed", async () => {
-  const options = {
+test("dynamic fixed-array locations support checked read-modify-write", { timeout: 300_000 }, async () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "dynamic_fixed_array_update_proof" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
-export function f(i: int32): int32 {
-  const xs: [int32, int32] = [1, 2];
-  return xs[i];
+export function main(): void {
+  let xs: [int32, int32] = [1, 2];
+  const i: int32 = 1;
+  xs[i] += 3;
+  check(xs[i] === 5);
 }
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
-    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
-  }]);
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("dynamic-fixed-array-update", result.artifacts, { run: true }).status, 0);
 });
 
 test("RegExp outside the oracle subset stays hard-rejected", async () => {
@@ -99,10 +102,7 @@ test("RegExp outside the oracle subset stays hard-rejected", async () => {
   }
 });
 
-test("discriminated union narrowing repro stays fail-closed: it requires narrowing facts", async () => {
-  // Exact repro: narrowing requires finalized facts; checker-level narrowed
-  // types are not exposed as finalized facts, so member access on a
-  // narrowed branch cannot prove its variant.
+test("discriminated object unions consume exact selected narrowing evidence", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -111,6 +111,10 @@ import type { int32 } from "@tsonic/core/types.js";
 export type Shape =
   | { kind: "circle"; radius: int32 }
   | { kind: "square"; size: int32 };
+
+export function make(): Shape {
+  return { kind: "circle", radius: 1 };
+}
 
 export function area(shape: Shape): int32 {
   if (shape.kind === "circle") {
@@ -121,9 +125,34 @@ export function area(shape: Shape): int32 {
 `,
     },
   });
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
-  assert.ok(result.diagnostics.every((diagnostic) => diagnostic.code.startsWith("RUST_")));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub enum Shape \{\n    Variant0\(rt::ObjectHandle<\(String, i32\)>\),\n    Variant1\(rt::ObjectHandle<\(String, i32\)>\),\n\}/u);
+  assert.match(text, /Shape::Variant0\(rt::ObjectHandle::new\(\(String::from\("circle"\), 1\)\)\)/u);
+  assert.match(text, /match &shape/u);
+  assert.match(text, /unreachable!\("TSTS-selected source refinement excluded this union variant"\)/u);
+});
+
+test("object union construction selects target-distinct same-key variants from exact discriminant types", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32, uint8 } from "@tsonic/core/types.js";
+
+export type Event =
+  | { kind: "added"; value: int32 }
+  | { kind: "removed"; value: uint8 };
+
+export function added(value: int32): Event {
+  return { kind: "added", value };
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /Event::Variant0\(rt::ObjectHandle::new\(\(String::from\("added"\), value\)\)\)/u);
+  assert.doesNotMatch(text, /Event::Variant1\(rt::ObjectHandle::new\(\(String::from\("added"\), value\)\)\)/u);
 });
 
 test("fixed-array indexing accepts only exact in-range integer literal indexes", async () => {

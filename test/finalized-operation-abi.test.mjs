@@ -435,7 +435,11 @@ test("async ABI separates invocation, await fallibility, and post-await conversi
   });
 
   assert.ok(abi);
-  assert.deepEqual(abi.effects, { invocation: "infallible", awaiting: "fallible" });
+  assert.deepEqual(abi.effects, {
+    invocation: "infallible",
+    awaiting: "fallible",
+    safety: "safe",
+  });
   assert.equal(abi.result.kind, "async");
   assert.deepEqual(abi.result.awaitedRawCarrier, isize);
   assert.deepEqual(abi.result.awaitedCarrier, int32);
@@ -534,6 +538,7 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
     { ...abi, unexpected: true },
     { ...abi, effects: { ...abi.effects, invocation: "guess" } },
     { ...abi, effects: { ...abi.effects, awaiting: "guess" } },
+    { ...abi, effects: { ...abi.effects, safety: "guess" } },
     { ...abi, sourceArguments: [{ ...abi.sourceArguments[0], mode: "guess" }] },
     { ...abi, sourceArguments: [{ ...abi.sourceArguments[0], carrier: null }] },
     { ...abi, sourceArguments: [{ ...abi.sourceArguments[0], role: "compile-time" }] },

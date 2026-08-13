@@ -2,8 +2,11 @@ import type {
   AstReader,
   Node,
   SourceFile,
+  Symbol,
+  Type,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../policy/types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import {
   KindStringLiteral,
   Node_Type,
@@ -12,6 +15,7 @@ import { isDenseDataArray } from "../../common/closed-metadata.js";
 import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
+  rustSourceUnionCarrierValue,
 } from "../rust-target-types.js";
 
 export interface RustSourceEnumVariant {
@@ -19,25 +23,107 @@ export interface RustSourceEnumVariant {
   readonly literal: string;
 }
 
+export interface RustSourceObjectField {
+  readonly declarations: readonly Node[];
+  readonly symbols: readonly Symbol[];
+  readonly sourceName: string;
+  readonly sourceType: Type;
+  readonly storageIndex: number;
+  readonly resultCarrier: TargetTypeRef;
+}
+
+export interface RustSourceObjectShape {
+  readonly sourceType: Type;
+  readonly carrier: TargetTypeRef;
+  readonly storage: "project-object" | "object-handle";
+  readonly fields: readonly RustSourceObjectField[];
+}
+
+export interface RustSourceUnionVariant {
+  readonly name: string;
+  readonly sourceType: Type;
+  readonly carrier: TargetTypeRef;
+  readonly shape?: RustSourceObjectShape;
+}
+
+export interface RustSourceUnion {
+  readonly declaration: Node;
+  readonly sourceType: Type;
+  readonly carrier: TargetTypeRef;
+  readonly variants: readonly RustSourceUnionVariant[];
+  readonly selectedProperties: readonly {
+    readonly symbol: Symbol;
+    readonly declarations: readonly Node[];
+  }[];
+}
+
+interface RustStructuralFieldRegistration {
+  readonly shape: RustSourceObjectShape;
+  readonly field: RustSourceObjectField;
+}
+
 export interface RustSourceTypeRegistry {
   registerSourceFile(sourceFile: SourceFile, ast: AstReader): void;
+  registerDeclarationCarrier(declaration: Node, carrier: TargetTypeRef): boolean;
   carrierForDeclaration(declaration: Node, ast: AstReader): TargetTypeRef | undefined;
   declarationForCarrier(carrier: TargetTypeRef): Node | undefined;
   propertyKeysForCarrier(carrier: TargetTypeRef, ast: AstReader): readonly string[] | undefined;
   enumVariantsForDeclaration(declaration: Node): readonly RustSourceEnumVariant[] | undefined;
   enumVariantForLiteral(carrier: TargetTypeRef, literal: string): RustSourceEnumVariant | undefined;
+  registerStructuralObject(shape: RustSourceObjectShape): boolean;
+  structuralObjectForType(type: Type): RustSourceObjectShape | undefined;
+  structuralFieldProjectionForDeclaration(
+    declaration: Node,
+    receiverCarrier: TargetTypeRef,
+  ): RustStructuralFieldRegistration | undefined;
+  declarationsForSelectedSymbol(symbol: Symbol): readonly Node[] | undefined;
+  registerSourceUnion(union: RustSourceUnion): boolean;
+  sourceUnionForCarrier(carrier: TargetTypeRef): RustSourceUnion | undefined;
+  sourceUnionVariantIndexesForTypes(
+    carrier: TargetTypeRef,
+    types: readonly Type[],
+  ): readonly number[] | undefined;
+}
+
+export function isRustStructuralObjectFieldDeclaration(
+  declaration: Node,
+  ast: AstReader,
+): boolean {
+  const kind = ast.kindName(declaration);
+  return kind === "KindPropertySignature" ||
+    kind === "KindPropertyDeclaration" ||
+    kind === "KindPropertyAssignment" ||
+    kind === "KindShorthandPropertyAssignment";
 }
 
 export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   const declarations = new Map<string, Node>();
+  const carriersByDeclaration = new WeakMap<Node, TargetTypeRef>();
   const variantsByDeclaration = new Map<Node, readonly RustSourceEnumVariant[]>();
+  const structuralObjectsByType = new WeakMap<Type, RustSourceObjectShape>();
+  const structuralFieldsByDeclaration = new WeakMap<Node, RustStructuralFieldRegistration[]>();
+  const selectedDeclarationsBySymbol = new WeakMap<Symbol, readonly Node[]>();
+  const sourceUnionsByDeclaration = new WeakMap<Node, RustSourceUnion>();
+  const sourceUnionsByKey = new Map<string, RustSourceUnion>();
 
   const keyForCarrier = (carrier: TargetTypeRef): string | undefined => {
     const value = rustSourceTypeCarrierValue(carrier);
-    return value === undefined ? undefined : `${value.fileName}::${value.typeName}`;
+    if (value !== undefined) {
+      return `${value.fileName}::${value.typeName}`;
+    }
+    const union = rustSourceUnionCarrierValue(carrier);
+    return union === undefined ? undefined : `${union.fileName}::${union.typeName}`;
   };
 
   const carrierForDeclaration = (declaration: Node, ast: AstReader): TargetTypeRef | undefined => {
+    const registered = carriersByDeclaration.get(declaration);
+    if (registered !== undefined) {
+      return registered;
+    }
+    const sourceUnion = sourceUnionsByDeclaration.get(declaration);
+    if (sourceUnion !== undefined) {
+      return sourceUnion.carrier;
+    }
     const sourceFile = ast.getSourceFile(declaration);
     const fileName = ast.getFileName(sourceFile);
     if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
@@ -79,6 +165,23 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
           declarations.set(key, declaration);
         }
       }
+    },
+    registerDeclarationCarrier(declaration, carrier) {
+      const existing = carriersByDeclaration.get(declaration);
+      if (existing !== undefined) {
+        return rustTargetTypeRefEquals(existing, carrier);
+      }
+      carriersByDeclaration.set(declaration, carrier);
+      const key = keyForCarrier(carrier);
+      if (key !== undefined) {
+        const owner = declarations.get(key);
+        if (owner !== undefined && owner !== declaration) {
+          carriersByDeclaration.delete(declaration);
+          return false;
+        }
+        declarations.set(key, declaration);
+      }
+      return true;
     },
     carrierForDeclaration,
     declarationForCarrier(carrier) {
@@ -135,6 +238,125 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       return declaration === undefined
         ? undefined
         : variantsByDeclaration.get(declaration)?.find((variant) => variant.literal === literal);
+    },
+    registerStructuralObject(shape) {
+      const existing = structuralObjectsByType.get(shape.sourceType);
+      if (existing !== undefined) {
+        return sourceObjectShapeEquals(existing, shape);
+      }
+      const normalized = freezeSourceObjectShape(shape);
+      const pendingDeclarationsBySymbol = new Map<Symbol, readonly Node[]>();
+      for (const field of normalized.fields) {
+        for (const symbol of field.symbols) {
+          const existingDeclarations = pendingDeclarationsBySymbol.get(symbol) ??
+            selectedDeclarationsBySymbol.get(symbol);
+          if (existingDeclarations !== undefined &&
+            !nodeListsEqual(existingDeclarations, field.declarations)) {
+            return false;
+          }
+          pendingDeclarationsBySymbol.set(symbol, field.declarations);
+        }
+      }
+      structuralObjectsByType.set(shape.sourceType, normalized);
+      for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
+        selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
+      }
+      for (const field of normalized.fields) {
+        for (const declaration of field.declarations) {
+          const entries = structuralFieldsByDeclaration.get(declaration) ?? [];
+          if (!entries.some((entry) =>
+            sourceObjectShapeEquals(entry.shape, normalized) &&
+            sourceObjectFieldEquals(entry.field, field))) {
+            entries.push(Object.freeze({ shape: normalized, field }));
+            structuralFieldsByDeclaration.set(declaration, entries);
+          }
+        }
+      }
+      return true;
+    },
+    structuralObjectForType(type) {
+      return structuralObjectsByType.get(type);
+    },
+    structuralFieldProjectionForDeclaration(declaration, receiverCarrier) {
+      const candidates = (structuralFieldsByDeclaration.get(declaration) ?? [])
+        .filter((entry) => rustTargetTypeRefEquals(entry.shape.carrier, receiverCarrier));
+      return candidates.length === 1 ? candidates[0] : undefined;
+    },
+    declarationsForSelectedSymbol(symbol) {
+      return selectedDeclarationsBySymbol.get(symbol);
+    },
+    registerSourceUnion(union) {
+      const value = rustSourceUnionCarrierValue(union.carrier);
+      const key = value === undefined ? undefined : `${value.fileName}::${value.typeName}`;
+      if (value === undefined || key === undefined || value.variants.length !== union.variants.length ||
+        value.variants.some((variant, index) => {
+          const selected = union.variants[index];
+          return selected === undefined || variant.name !== selected.name ||
+            !rustTargetTypeRefEquals(variant.carrier, selected.carrier);
+        })) {
+        return false;
+      }
+      const byDeclaration = sourceUnionsByDeclaration.get(union.declaration);
+      const byKey = sourceUnionsByKey.get(key);
+      if (byDeclaration !== undefined || byKey !== undefined) {
+        return byDeclaration !== undefined && byKey === byDeclaration &&
+          sourceUnionEquals(byDeclaration, union);
+      }
+      const normalized = freezeSourceUnion(union);
+      const pendingDeclarationsBySymbol = new Map<Symbol, readonly Node[]>();
+      for (const property of normalized.selectedProperties) {
+        const existingDeclarations = pendingDeclarationsBySymbol.get(property.symbol) ??
+          selectedDeclarationsBySymbol.get(property.symbol);
+        if (existingDeclarations !== undefined &&
+          !nodeListsEqual(existingDeclarations, property.declarations)) {
+          return false;
+        }
+        pendingDeclarationsBySymbol.set(property.symbol, property.declarations);
+      }
+      const existingCarrier = carriersByDeclaration.get(union.declaration);
+      if (existingCarrier !== undefined &&
+        !rustTargetTypeRefEquals(existingCarrier, normalized.carrier)) {
+        return false;
+      }
+      const existingDeclaration = declarations.get(key);
+      if (existingDeclaration !== undefined && existingDeclaration !== union.declaration) {
+        return false;
+      }
+      sourceUnionsByDeclaration.set(union.declaration, normalized);
+      sourceUnionsByKey.set(key, normalized);
+      carriersByDeclaration.set(union.declaration, normalized.carrier);
+      declarations.set(key, union.declaration);
+      for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
+        selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
+      }
+      return true;
+    },
+    sourceUnionForCarrier(carrier) {
+      const value = rustSourceUnionCarrierValue(carrier);
+      return value === undefined
+        ? undefined
+        : sourceUnionsByKey.get(`${value.fileName}::${value.typeName}`);
+    },
+    sourceUnionVariantIndexesForTypes(carrier, types) {
+      const value = rustSourceUnionCarrierValue(carrier);
+      const union = value === undefined
+        ? undefined
+        : sourceUnionsByKey.get(`${value.fileName}::${value.typeName}`);
+      if (union === undefined || types.length === 0) {
+        return undefined;
+      }
+      const indexes: number[] = [];
+      for (const type of types) {
+        const matches = union.variants.flatMap((variant, index) =>
+          variant.sourceType === type ? [index] : []);
+        if (matches.length !== 1) {
+          return undefined;
+        }
+        if (!indexes.includes(matches[0]!)) {
+          indexes.push(matches[0]!);
+        }
+      }
+      return Object.freeze(indexes.sort((left, right) => left - right));
     },
   };
 }
@@ -194,4 +416,109 @@ function rustVariantName(literal: string): string | undefined {
     return undefined;
   }
   return cleaned[0]!.toUpperCase() + cleaned.slice(1);
+}
+
+function freezeSourceObjectField(field: RustSourceObjectField): RustSourceObjectField {
+  return Object.freeze({
+    declarations: Object.freeze([...field.declarations]),
+    symbols: Object.freeze([...field.symbols]),
+    sourceName: field.sourceName,
+    sourceType: field.sourceType,
+    storageIndex: field.storageIndex,
+    resultCarrier: field.resultCarrier,
+  });
+}
+
+function freezeSourceObjectShape(shape: RustSourceObjectShape): RustSourceObjectShape {
+  return Object.freeze({
+    sourceType: shape.sourceType,
+    carrier: shape.carrier,
+    storage: shape.storage,
+    fields: Object.freeze(shape.fields.map(freezeSourceObjectField)),
+  });
+}
+
+function freezeSourceUnion(union: RustSourceUnion): RustSourceUnion {
+  return Object.freeze({
+    declaration: union.declaration,
+    sourceType: union.sourceType,
+    carrier: union.carrier,
+    variants: Object.freeze(union.variants.map((variant) => Object.freeze({
+      name: variant.name,
+      sourceType: variant.sourceType,
+      carrier: variant.carrier,
+      ...(variant.shape === undefined
+        ? {}
+        : { shape: freezeSourceObjectShape(variant.shape) }),
+    }))),
+    selectedProperties: Object.freeze(union.selectedProperties.map((property) => Object.freeze({
+      symbol: property.symbol,
+      declarations: Object.freeze([...property.declarations]),
+    }))),
+  });
+}
+
+function sourceObjectFieldEquals(
+  left: RustSourceObjectField,
+  right: RustSourceObjectField,
+): boolean {
+  return left.sourceName === right.sourceName &&
+    left.sourceType === right.sourceType &&
+    left.storageIndex === right.storageIndex &&
+    rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) &&
+    nodeListsEqual(left.declarations, right.declarations) &&
+    symbolListsEqual(left.symbols, right.symbols);
+}
+
+function sourceObjectShapeEquals(
+  left: RustSourceObjectShape,
+  right: RustSourceObjectShape,
+): boolean {
+  return left.sourceType === right.sourceType &&
+    left.storage === right.storage &&
+    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    left.fields.length === right.fields.length &&
+    left.fields.every((field, index) =>
+      sourceObjectFieldEquals(field, right.fields[index]!));
+}
+
+function sourceUnionEquals(
+  left: RustSourceUnion,
+  right: RustSourceUnion,
+): boolean {
+  return left.declaration === right.declaration &&
+    left.sourceType === right.sourceType &&
+    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    left.variants.length === right.variants.length &&
+    left.variants.every((variant, index) => {
+      const selected = right.variants[index];
+      return selected !== undefined && variant.name === selected.name &&
+        variant.sourceType === selected.sourceType &&
+        rustTargetTypeRefEquals(variant.carrier, selected.carrier) &&
+        optionalSourceObjectShapeEquals(variant.shape, selected.shape);
+    }) && left.selectedProperties.length === right.selectedProperties.length &&
+    left.selectedProperties.every((property, index) => {
+      const selected = right.selectedProperties[index];
+      return selected !== undefined && property.symbol === selected.symbol &&
+        nodeListsEqual(property.declarations, selected.declarations);
+    });
+}
+
+function optionalSourceObjectShapeEquals(
+  left: RustSourceObjectShape | undefined,
+  right: RustSourceObjectShape | undefined,
+): boolean {
+  return left === undefined || right === undefined
+    ? left === right
+    : sourceObjectShapeEquals(left, right);
+}
+
+function nodeListsEqual(left: readonly Node[], right: readonly Node[]): boolean {
+  return left.length === right.length &&
+    left.every((node, index) => node === right[index]);
+}
+
+function symbolListsEqual(left: readonly Symbol[], right: readonly Symbol[]): boolean {
+  return left.length === right.length &&
+    left.every((symbol, index) => symbol === right[index]);
 }

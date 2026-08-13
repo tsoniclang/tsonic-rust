@@ -21,12 +21,12 @@ import {
   TypeOperatorNode_Type,
 } from "../../common/source-ast.js";
 import type { RustSourcePolicyContext } from "../../policy/context.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import type {
   RustProviderOperationRow,
   RustProviderTypeRow,
 } from "../provider-packages/index.js";
-import { materializeProviderCarrier } from "../provider-packages/index.js";
 import {
   rustFutureTargetType,
   rustBigIntTargetType,
@@ -45,11 +45,15 @@ import {
   rustSliceRefTargetType,
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
+  rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
+  rustStructuralObjectCarrierValue,
+  rustStructuralObjectTargetType,
   rustStringTargetType,
   rustTupleTargetType,
   rustUnitTargetType,
   rustVecTargetType,
+  substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
 import { rustProviderOperationOwnerMatches } from "./provider-operation-selection.js";
 import {
@@ -57,7 +61,10 @@ import {
   mergeProviderDeclarationIdentities,
 } from "./selected-evidence.js";
 import type { RustSourceProfileRegistry } from "./source-profile-registry.js";
-import type { RustSourceTypeRegistry } from "./source-type-registry.js";
+import {
+  isRustStructuralObjectFieldDeclaration,
+  type RustSourceTypeRegistry,
+} from "./source-type-registry.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 
 export interface RustTargetTypeResolutionOptions {
@@ -300,8 +307,10 @@ function resolveRustTargetTypeSyntax(
     context,
   );
   if (provider !== undefined) {
-    const base = providerCarrierFromRelations(provider, options);
-    return base === undefined ? undefined : instantiateTargetTypeArguments(base, typeArguments as TargetTypeRef[]);
+    const relation = providerCarrierFromRelations(provider, options);
+    return relation === undefined
+      ? undefined
+      : instantiateProviderTargetType(relation, typeArguments as TargetTypeRef[]);
   }
   const sourceProfileName = resolveOwnedSourceProfileTypeName(symbol, context, options.sourceProfiles);
   if (sourceProfileName !== undefined) {
@@ -407,6 +416,10 @@ function resolveRustTargetType(
   if (type === undefined || resolving.has(type)) {
     return undefined;
   }
+  const existingStructuralObject = options.sourceTypes.structuralObjectForType(type);
+  if (existingStructuralObject !== undefined) {
+    return existingStructuralObject.carrier;
+  }
   const primitive = resolveSourcePrimitive(type, context);
   if (primitive !== undefined) {
     return primitive;
@@ -501,10 +514,86 @@ function resolveRustTargetType(
           ? rustJsArrayTargetType(element)
           : rustVecTargetType(element);
     }
-    return undefined;
+    return resolveStructuralObjectType(type, context, options, resolving);
   } finally {
     resolving.delete(type);
   }
+}
+
+function resolveStructuralObjectType(
+  type: Type,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  const { checker, typeShape } = context;
+  if (typeShape.getCallSignatures(type).length !== 0 ||
+    typeShape.getConstructSignatures(type).length !== 0 ||
+    typeShape.getIndexInfos(type).length !== 0) {
+    return undefined;
+  }
+  const properties = denseDefined(typeShape.getPropertyInfos(type));
+  if (properties === undefined || properties.length === 0) {
+    return undefined;
+  }
+  const selected = properties.map((property) => {
+    const declarations = denseDefined(checker.getSymbolDeclarations(property.symbol));
+    const projectDeclarations = declarations?.filter((declaration) =>
+      context.source.navigation.isProjectDeclaration(declaration) &&
+      isRustStructuralObjectFieldDeclaration(declaration, context.ast));
+    const authoredTypeNodes = projectDeclarations?.map((declaration) =>
+      Node_Type(context.ast, declaration)).filter((node) => node !== undefined) ?? [];
+    const authoredCarriers = authoredTypeNodes.length === projectDeclarations?.length
+      ? authoredTypeNodes.map((node) =>
+          resolveRustTargetTypeSyntax(node, context, options, resolving))
+      : [];
+    const authoredCarrier = authoredCarriers.length > 0 &&
+        authoredCarriers.every((carrier) =>
+          carrier !== undefined && rustTargetTypeRefEquals(carrier, authoredCarriers[0]))
+      ? authoredCarriers[0]
+      : undefined;
+    const fieldCarrier = authoredTypeNodes.length === 0 ||
+        authoredCarriers.every((carrier) => carrier === undefined)
+      ? resolveRustTargetType(property.type, context, options, resolving)
+      : authoredCarrier;
+    return projectDeclarations === undefined || projectDeclarations.length === 0 ||
+        projectDeclarations.length !== declarations?.length || fieldCarrier === undefined
+      ? undefined
+      : {
+          declarations: Object.freeze(projectDeclarations),
+          symbols: Object.freeze([property.symbol]),
+          sourceName: property.name,
+          sourceType: property.type,
+          resultCarrier: fieldCarrier,
+        };
+  });
+  if (selected.some((field) => field === undefined)) {
+    return undefined;
+  }
+  const fields = [...(selected as readonly {
+    readonly declarations: readonly Node[];
+    readonly symbols: readonly Symbol[];
+    readonly sourceName: string;
+    readonly sourceType: Type;
+    readonly resultCarrier: TargetTypeRef;
+  }[])]
+    .sort((left, right) => left.sourceName.localeCompare(right.sourceName))
+    .map((field, storageIndex) => ({ ...field, storageIndex }));
+  if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
+    return undefined;
+  }
+  const carrier = rustStructuralObjectTargetType(fields.map((field) => ({
+    sourceName: field.sourceName,
+    type: field.resultCarrier,
+  })));
+  return options.sourceTypes.registerStructuralObject({
+    sourceType: type,
+    carrier,
+    storage: "object-handle",
+    fields,
+  })
+    ? carrier
+    : undefined;
 }
 
 function resolveCallableType(
@@ -664,7 +753,7 @@ function resolveProviderTypeIdentity(
 function providerCarrierFromRelations(
   identity: ProviderDeclarationIdentity,
   options: RustTargetTypeResolutionOptions,
-): TargetTypeRef | undefined {
+): RustProviderTypeRow | undefined {
   if (identity.exportId === undefined) {
     return undefined;
   }
@@ -674,23 +763,16 @@ function providerCarrierFromRelations(
   if (relations.length !== 1) {
     return undefined;
   }
-  const relation = relations[0]!;
-  return materializeProviderCarrier(
-    { kind: "target-named", id: relation.targetTypeId },
-    options.providerCarrierPaths,
-  );
+  return relations[0];
 }
 
 function instantiateTargetType(
-  base: TargetTypeRef,
+  base: RustProviderTypeRow,
   type: Type,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  if (base.kind !== "target-named") {
-    return base;
-  }
   const rawArguments = context.typeShape.isTypeReference(type)
     ? context.typeShape.getTypeArguments(type)
     : [];
@@ -703,18 +785,20 @@ function instantiateTargetType(
   if (targetArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
-  return targetArguments.length === 0
-    ? base
-    : { ...base, typeArguments: targetArguments as TargetTypeRef[] };
+  return instantiateProviderTargetType(base, targetArguments as TargetTypeRef[]);
 }
 
-function instantiateTargetTypeArguments(
-  base: TargetTypeRef,
+function instantiateProviderTargetType(
+  relation: RustProviderTypeRow,
   arguments_: readonly TargetTypeRef[],
-): TargetTypeRef {
-  return base.kind === "target-named" && arguments_.length > 0
-    ? { ...base, typeArguments: arguments_ }
-    : base;
+): TargetTypeRef | undefined {
+  if (relation.sourceTypeParameters.length !== arguments_.length) {
+    return undefined;
+  }
+  const substitutions = new Map(
+    relation.sourceTypeParameters.map((name, index) => [name, arguments_[index]!] as const),
+  );
+  return substituteRustTargetTypeParameters(relation.targetCarrier, substitutions);
 }
 
 function resolveOwnedSourceProfileTypeName(
@@ -733,7 +817,17 @@ function resolveOwnedSourceProfileTypeName(
     if (sourceProfiles.profileForNode(declaration, context.ast) === undefined) {
       continue;
     }
-    const name = context.ast.text(context.ast.name(declaration));
+    if (!context.ast.is.IsClassDeclaration(declaration) &&
+      !context.ast.is.IsInterfaceDeclaration(declaration) &&
+      !context.ast.is.IsTypeAliasDeclaration(declaration) &&
+      !context.ast.is.IsEnumDeclaration(declaration)) {
+      continue;
+    }
+    const nameNode = context.ast.name(declaration);
+    if (!context.ast.is.IsIdentifier(nameNode)) {
+      continue;
+    }
+    const name = context.ast.text(nameNode);
     if (name.length > 0) {
       return name;
     }
@@ -892,6 +986,11 @@ function resolveProjectSourceCarrier(
         sourceType.shape,
         typeArguments,
       );
+    }
+    if (carrier !== undefined && typeArguments.length === 0 &&
+      (rustSourceUnionCarrierValue(carrier) !== undefined ||
+        rustStructuralObjectCarrierValue(carrier) !== undefined)) {
+      return carrier;
     }
   }
   return undefined;

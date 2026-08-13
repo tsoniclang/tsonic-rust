@@ -1,9 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRustBackend, planCargoManifest, printCargoManifest } from "../dist/index.js";
+import {
+  createRustBackend,
+  planCargoManifest,
+  planRustCargoProject,
+  printCargoManifest,
+} from "../dist/index.js";
 import {
   fakeBackendContext,
   fakeCompileInput,
@@ -224,4 +229,47 @@ test("sparse Cargo runtime-reference lists fail closed", () => {
   assert.equal(plan.manifest, undefined);
   assert.equal(plan.diagnostics.length, 1);
   assert.match(plan.diagnostics[0].message, /sparse slot at index 0/u);
+});
+
+test("user-owned Cargo mode emits sources without creating or mutating the manifest", () => {
+  const root = resolve(fixtureRoot, "user-owned-project");
+  const manifestPath = resolve(root, "Cargo.toml");
+  mkdirSync(root, { recursive: true });
+  const manifestText = "[package]\nname = \"user-owned\"\nversion = \"0.1.0\"\nedition = \"2021\"\n";
+  writeFileSync(manifestPath, manifestText);
+  const target = { id: "rust", options: { projectFile: manifestPath } };
+  const paths = {
+    projectFilePath: resolve(repositoryRoot, "tsonic.json"),
+    projectRoot: repositoryRoot,
+    outputRoot: resolve(repositoryRoot, "out"),
+    targetOutputRoot: resolve(repositoryRoot, "out/rust"),
+  };
+
+  const plan = planRustCargoProject(target, paths, [{ kind: "unowned", include: "ignored" }]);
+  assert.deepEqual(plan, {
+    project: { kind: "user-owned", manifestPath },
+    diagnostics: [],
+  });
+  assert.equal(readFileSync(manifestPath, "utf8"), manifestText);
+});
+
+test("user-owned Cargo mode rejects missing, non-Cargo, and generated-output manifests", () => {
+  const paths = {
+    projectFilePath: resolve(repositoryRoot, "tsonic.json"),
+    projectRoot: repositoryRoot,
+    outputRoot: resolve(fixtureRoot, "user-owned-output"),
+    targetOutputRoot: resolve(fixtureRoot, "user-owned-output/rust"),
+  };
+  mkdirSync(paths.targetOutputRoot, { recursive: true });
+  const insideOutput = resolve(paths.targetOutputRoot, "Cargo.toml");
+  const wrongName = resolve(fixtureRoot, "user-owned-project/not-cargo.toml");
+  writeFileSync(insideOutput, "[package]\nname = \"bad\"\nversion = \"0.1.0\"\n");
+  writeFileSync(wrongName, "[package]\nname = \"bad\"\nversion = \"0.1.0\"\n");
+
+  for (const configured of [resolve(fixtureRoot, "missing/Cargo.toml"), wrongName, insideOutput]) {
+    const plan = planRustCargoProject({ id: "rust", options: { projectFile: configured } }, paths, []);
+    assert.equal(plan.project, undefined);
+    assert.equal(plan.diagnostics.length, 1);
+    assert.equal(plan.diagnostics[0].code, "RUST_USER_PROJECT_INVALID");
+  }
 });

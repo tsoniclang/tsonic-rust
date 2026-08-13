@@ -1,6 +1,7 @@
 import type { TargetTypeRef } from "../../policy/types.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type {
+  RustCallbackOperationTemplate,
   RustProviderOperationForm,
   RustProviderOperationTemplate,
   RustRuntimeSetTemplate,
@@ -64,7 +65,7 @@ export interface JsOperationSelection {
   readonly fact: RustProviderOperationTemplate | RustRuntimeSetTemplate;
   readonly resultCarrier?: TargetTypeRef;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
-  readonly callbackShape?: "direct" | "map" | "reduce";
+  readonly callback?: RustCallbackOperationTemplate;
 }
 
 type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "global" | "console" | "object" | "regexp" | "regexp-match";
@@ -119,7 +120,7 @@ interface JsOperationRowData {
     readonly carrier: JsCarrierRef;
     readonly capability: JsCarrierCapability;
   }[];
-  readonly callback?: "direct" | "map" | "reduce";
+  readonly callback?: RustCallbackOperationTemplate;
   readonly selectedMethodTypeArgumentArity?: number;
   readonly fallible?: boolean;
   readonly variadic?: true;
@@ -206,6 +207,26 @@ const arrayPredicateRows = [
   { member: "some", targetName: "some", result: { ref: "bool" } as const },
   { member: "every", targetName: "every", result: { ref: "bool" } as const },
 ] as const;
+
+function callbackOperation(
+  shape: RustCallbackOperationTemplate["shape"],
+  targetName: string,
+  targetOptions: Omit<
+    Extract<RustProviderOperationForm, { readonly form: "receiver-method" }>,
+    "form" | "name"
+  > = {},
+): RustCallbackOperationTemplate {
+  return {
+    shape,
+    sourceArgumentIndex: 0,
+    ...(shape === "reduce" ? { accumulatorArgumentIndex: 1 } : {}),
+    fallibleTarget: {
+      form: "receiver-method",
+      name: `try_${targetName}`,
+      ...targetOptions,
+    },
+  };
+}
 const numberPredicateRows = [
   { member: "isFinite", path: "js_abi::number_is_finite" },
   { member: "isInteger", path: "js_abi::number_is_integer" },
@@ -248,7 +269,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
       operationKind: "call",
       lane: "js-array",
       variant,
-      callback: "direct",
+      callback: callbackOperation("direct", `${predicateRow.targetName}${suffix}`),
       shape: {
         op: "operation",
         operationKind: "method",
@@ -268,7 +289,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
     lane: "js-array",
     variant,
     selectedMethodTypeArgumentArity: 1,
-    callback: "map",
+    callback: callbackOperation("map", `map${suffix}`),
     shape: {
       op: "operation",
       operationKind: "method",
@@ -277,24 +298,27 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
       params: [{ ref: "cb-array-map", arity }],
     },
   })),
-  ...arrayCallbackRows.map(({ arity, variant }): JsOperationRowData => ({
+  ...arrayCallbackRows.map(({ arity, variant }): JsOperationRowData => {
+    const targetName = ["for_each_zero", "for_each_value", "for_each_value_index", "for_each"][arity]!;
+    return {
     owner,
     member: "forEach",
     operationKind: "call",
     lane: "js-array",
     variant,
-    callback: "direct",
+    callback: callbackOperation("direct", targetName),
     shape: {
       op: "operation",
       operationKind: "method",
       target: {
         form: "receiver-method",
-        name: ["for_each_zero", "for_each_value", "for_each_value_index", "for_each"][arity]!,
+        name: targetName,
       },
       result: { ref: "unit" },
       params: [{ ref: "cb-array-for-each", arity }],
     },
-  })),
+    };
+  }),
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_all" }, result: { ref: "element-array" } } },
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "start", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_from" }, result: { ref: "element-array" }, params: [{ ref: "float64" }] } },
   { owner, member: "slice", operationKind: "call", lane: "js-array", variant: "start-end", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "slice_to" }, result: { ref: "element-array" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
@@ -334,7 +358,7 @@ const jsOperationRows = defineJsOperationRows([
       variant: `from-first-${variant}`,
       selectedMethodTypeArgumentArity: 0,
       fallible: true,
-      callback: "direct",
+      callback: callbackOperation("direct", `reduce_from_first${suffix}`),
       shape: {
         op: "operation",
         operationKind: "method",
@@ -350,7 +374,7 @@ const jsOperationRows = defineJsOperationRows([
       lane: "js-array",
       variant: `element-initial-${variant}`,
       selectedMethodTypeArgumentArity: 0,
-      callback: "reduce",
+      callback: callbackOperation("reduce", `reduce${suffix}`, { argOrder: [1, 0] }),
       shape: {
         op: "operation",
         operationKind: "method",
@@ -366,7 +390,7 @@ const jsOperationRows = defineJsOperationRows([
       lane: "js-array",
       variant: `selected-initial-${variant}`,
       selectedMethodTypeArgumentArity: 1,
-      callback: "reduce",
+      callback: callbackOperation("reduce", `reduce${suffix}`, { argOrder: [1, 0] }),
       shape: {
         op: "operation",
         operationKind: "method",
@@ -468,7 +492,7 @@ const jsOperationRows = defineJsOperationRows([
         { carrier: { ref: "map-key" } as const, capability: "clone" as const },
         { carrier: { ref: "map-value" } as const, capability: "clone" as const },
       ],
-      callback: "direct" as const,
+      callback: callbackOperation("direct", targetName),
       shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "receiver-method" as const, name: targetName }, result: { ref: "unit" as const }, params: [{ ref: "cb-map-for-each" as const, arity }] },
     })),
     { owner, member: "size", operationKind: "property", lane: "map", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
@@ -490,7 +514,7 @@ const jsOperationRows = defineJsOperationRows([
       lane: "set" as const,
       variant,
       requirements: [{ carrier: { ref: "set-value" } as const, capability: "clone" as const }],
-      callback: "direct" as const,
+      callback: callbackOperation("direct", targetName),
       shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "receiver-method" as const, name: targetName }, result: { ref: "unit" as const }, params: [{ ref: "cb-set-for-each" as const, arity }] },
     })),
     { owner, member: "size", operationKind: "property", lane: "set", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
@@ -827,16 +851,16 @@ export function finalizeJsCallbackOperation(
   selection: JsOperationSelection,
   argumentCarriers: readonly TargetTypeRef[],
 ): JsOperationSelection | undefined {
-  if (selection.fact.kind !== "provider-operation" || selection.callbackShape === undefined) {
+  if (selection.fact.kind !== "provider-operation" || selection.callback === undefined) {
     return undefined;
   }
-  const callback = argumentCarriers[0];
-  const callbackTemplate = selection.parameterCarriers?.[0];
+  const callback = argumentCarriers[selection.callback.sourceArgumentIndex];
+  const callbackTemplate = selection.parameterCarriers?.[selection.callback.sourceArgumentIndex];
   if (callback?.kind !== "closure" || callbackTemplate?.kind !== "closure" ||
     !rustCallbackCarrierMatchesTemplate(callbackTemplate, callback)) {
     return undefined;
   }
-  if (selection.callbackShape === "map") {
+  if (selection.callback.shape === "map") {
     const resultCarrier = rustJsArrayTargetType(callback.result);
     const parameterCarriers = [callback, ...(selection.parameterCarriers?.slice(1) ?? [])];
     return {
@@ -849,7 +873,7 @@ export function finalizeJsCallbackOperation(
       parameterCarriers,
     };
   }
-  if (selection.callbackShape === "direct") {
+  if (selection.callback.shape === "direct") {
     const templates = selection.parameterCarriers ?? [];
     if (templates.length !== argumentCarriers.length || !templates.every((template, index) =>
       template !== undefined && argumentCarriers[index] !== undefined &&
@@ -862,13 +886,16 @@ export function finalizeJsCallbackOperation(
       parameterCarriers: argumentCarriers,
     };
   }
-  const accumulator = argumentCarriers[1];
+  const accumulatorIndex = selection.callback.accumulatorArgumentIndex;
+  const accumulator = accumulatorIndex === undefined
+    ? undefined
+    : argumentCarriers[accumulatorIndex];
   if (accumulator === undefined ||
     (callback.args[0] !== undefined && !rustTargetTypeRefEquals(callback.args[0], accumulator)) ||
     !rustTargetTypeRefEquals(callback.result, accumulator)) {
     return undefined;
   }
-  const parameterCarriers = [callback, accumulator];
+  const parameterCarriers = [...argumentCarriers];
   return {
     fact: {
       ...selection.fact,
@@ -1108,6 +1135,12 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     return undefined;
   }
   const copyReference = row.shape.result.ref === "option-of-map-value" ? bindings.mapValue : bindings.element;
+  const callback = row.callback === undefined
+    ? undefined
+    : {
+        ...row.callback,
+        fallibleTarget: materializeTarget(row.callback.fallibleTarget, copyReference),
+      };
   return {
     fact: {
       kind: "provider-operation",
@@ -1122,7 +1155,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     },
     resultCarrier,
     ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
-    ...(row.callback === undefined ? {} : { callbackShape: row.callback }),
+    ...(callback === undefined ? {} : { callback }),
   };
 }
 

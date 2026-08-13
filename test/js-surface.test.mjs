@@ -181,8 +181,8 @@ export function write(label: string, count: int32, ok: boolean): void {
       "index.ts": "export function write(): void { console.log({ ok: true }); }\n",
     },
   }, [{
-    code: "RUST_SELECTED_PARAMETER_CARRIER_MISSING",
-    message: "Selected call 'log' has no closed Rust carrier for every target parameter.",
+    code: "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
+    message: "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
   }]);
 });
 

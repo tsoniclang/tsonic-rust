@@ -1,0 +1,135 @@
+import type {
+  Node,
+} from "@tsonic/tsts";
+import {
+  rustTargetTypeRefEquals,
+} from "../../policy/equality.js";
+import type {
+  RustTargetOperationFact,
+} from "../../source/rust-facts/keys.js";
+import {
+  rustTargetOperationFactKey,
+} from "../../source/rust-facts/keys.js";
+import type {
+  RustExpr,
+} from "../rust-ast/nodes.js";
+import {
+  missingFactDiagnostic,
+} from "./diagnostics.js";
+import {
+  diagnosticInput,
+} from "./plan-context.js";
+import type {
+  RustPlanContext,
+} from "./plan-context.js";
+
+export type RustNativePointerOperationPlan =
+  | { readonly handled: false }
+  | { readonly handled: true; readonly expression?: RustExpr };
+
+export function tryPlanRustNativePointerOperation(
+  node: Node,
+  context: RustPlanContext,
+  planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
+): RustNativePointerOperationPlan {
+  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  if (fact?.kind !== "native-pointer") {
+    return { handled: false };
+  }
+  if (!nativePointerFactIsClosed(fact, context)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.native-pointer-fact",
+      "The finalized Rust native-pointer operation has inconsistent exact carrier evidence.",
+    ));
+    return { handled: true };
+  }
+  if ((context.explicitUnsafeContextDepth ?? 0) === 0) {
+    context.diagnostics.push({
+      code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED",
+      category: "error",
+      source: "tsonic-rust",
+      message: `Rust native-pointer '${fact.operation}' requires an explicit unsafeContext() source region.`,
+      sourceNode: node,
+    });
+    return { handled: true };
+  }
+  const pointer = planExpression(fact.pointerExpression, context);
+  if (pointer === undefined) {
+    return { handled: true };
+  }
+  const dereference: RustExpr = { kind: "dereference", pointer };
+  switch (fact.operation) {
+    case "load":
+      return { handled: true, expression: dereference };
+    case "store": {
+      const value = fact.valueExpression === undefined
+        ? undefined
+        : planExpression(fact.valueExpression, context);
+      return {
+        handled: true,
+        ...(value === undefined
+          ? {}
+          : {
+              expression: {
+                kind: "assignment",
+                operator: "=",
+                target: dereference,
+                value,
+              },
+            }),
+      };
+    }
+    case "offset": {
+      const offset = fact.offsetExpression === undefined
+        ? undefined
+        : planExpression(fact.offsetExpression, context);
+      return {
+        handled: true,
+        ...(offset === undefined
+          ? {}
+          : {
+              expression: {
+                kind: "method-call",
+                receiver: pointer,
+                method: "offset",
+                args: [offset],
+              },
+            }),
+      };
+    }
+  }
+}
+
+function nativePointerFactIsClosed(
+  fact: Extract<RustTargetOperationFact, { readonly kind: "native-pointer" }>,
+  context: RustPlanContext,
+): boolean {
+  const pointerCarrier = context.input.facts.getRuntimeCarrierFact(
+    fact.pointerExpression,
+  )?.carrier;
+  if (!rustTargetTypeRefEquals(pointerCarrier, fact.pointerCarrier) ||
+    !rustTargetTypeRefEquals(fact.pointerCarrier.pointee, fact.pointeeCarrier)) {
+    return false;
+  }
+  if (fact.operation === "load") {
+    return rustTargetTypeRefEquals(fact.resultCarrier, fact.pointeeCarrier);
+  }
+  if (fact.operation === "store") {
+    const valueCarrier = fact.valueExpression === undefined
+      ? undefined
+      : context.input.facts.getRuntimeCarrierFact(fact.valueExpression)?.carrier;
+    return fact.pointerCarrier.mutability === "mut" &&
+      rustTargetTypeRefEquals(fact.valueCarrier, fact.pointeeCarrier) &&
+      rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) &&
+      fact.resultCarrier.kind === "tuple" &&
+      fact.resultCarrier.elements.length === 0;
+  }
+  const offsetCarrier = fact.offsetExpression === undefined
+    ? undefined
+    : context.input.facts.getRuntimeCarrierFact(fact.offsetExpression)?.carrier;
+  return rustTargetTypeRefEquals(offsetCarrier, fact.offsetCarrier) &&
+    fact.offsetCarrier?.kind === "source-primitive" &&
+    fact.offsetCarrier.name === "native-int" &&
+    rustTargetTypeRefEquals(fact.resultCarrier, fact.pointerCarrier);
+}

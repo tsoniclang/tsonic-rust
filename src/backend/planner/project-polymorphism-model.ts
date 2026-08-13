@@ -34,6 +34,8 @@ import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { planRustCallableParameters } from "./callable-parameters.js";
 import { createRustSyntheticNameState } from "./synthetic-names.js";
 import { planProjectMethod } from "./declarations-nominal.js";
+import { rustDeclarationRequiresUnsafe } from "./explicit-safety.js";
+import { rustProjectObjectLayerType } from "./project-objects.js";
 
 export interface ProjectFieldPlan {
   readonly declaration: Node;
@@ -48,6 +50,7 @@ export interface ProjectCallableShape {
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
   readonly fallible: boolean;
+  readonly isUnsafe: boolean;
 }
 
 export interface ProjectClassStateLayer {
@@ -168,6 +171,11 @@ export function projectCallableShape(
     params: parameterPlan.params,
     ...(returnType === undefined ? {} : { returnType }),
     fallible: context.input.facts.getFact(member, rustFallibleFactKey) !== undefined,
+    isUnsafe: rustDeclarationRequiresUnsafe(
+      member,
+      "declaration",
+      context.input,
+    ),
   };
 }
 
@@ -176,10 +184,6 @@ export function projectMemberImplementation(
   contractMember: Node,
   context: RustPlanContext,
 ): Node | undefined {
-  const owner = context.input.projectTypes.definitionContainingDeclaration(contractMember);
-  if (owner === concrete) {
-    return contractMember;
-  }
   const selected = context.input.projectTypes.memberImplementation(concrete, contractMember);
   if (selected.kind !== "resolved") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -219,10 +223,8 @@ export function projectFieldStoragePath(
 }
 
 export function projectStateType(layers: readonly ProjectClassStateLayer[]): RustType {
-  const types = layers.map((layer) => ({
-    kind: "tuple" as const,
-    elements: layer.fields.map((field) => field.type),
-  }));
+  const types = layers.map((layer) =>
+    rustProjectObjectLayerType(layer.fields.map((field) => field.type)));
   let state = types[0]!;
   for (const own of types.slice(1)) {
     state = { kind: "tuple", elements: [state, own] };
@@ -255,24 +257,6 @@ export function planProjectStaticMethods(
     methods.push(planned);
   }
   return methods;
-}
-
-export function sourceSubtreeContainsThis(node: Node, context: RustPlanContext): boolean {
-  let found = false;
-  const visit = (candidate: Node): void => {
-    const kind = context.input.ast.kindName(candidate);
-    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-      found = true;
-      return;
-    }
-    context.input.ast.forEachChild(candidate, (child) => {
-      if (!found && child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(node);
-  return found;
 }
 
 export function rustFunctionTypesMatch(
@@ -310,6 +294,9 @@ function rustTypeEquals(left: RustType | undefined, right: RustType | undefined)
     case "reference":
       return right.kind === "reference" && left.mutable === right.mutable &&
         rustTypeEquals(left.referent, right.referent);
+    case "raw-pointer":
+      return right.kind === "raw-pointer" && left.mutable === right.mutable &&
+        rustTypeEquals(left.pointee, right.pointee);
     case "fixed-array":
       return right.kind === "fixed-array" && left.length === right.length &&
         rustTypeEquals(left.element, right.element);
@@ -317,7 +304,8 @@ function rustTypeEquals(left: RustType | undefined, right: RustType | undefined)
       return right.kind === "slice-ref" && left.mutable === right.mutable &&
         rustTypeEquals(left.element, right.element);
     case "function-pointer":
-      return right.kind === "function-pointer" && sameStrings(left.abi, right.abi) &&
+      return right.kind === "function-pointer" && left.isUnsafe === right.isUnsafe &&
+        sameStrings(left.abi, right.abi) &&
         sameTypes(left.parameters, right.parameters) && rustTypeEquals(left.result, right.result);
     case "tuple":
       return right.kind === "tuple" && sameTypes(left.elements, right.elements);

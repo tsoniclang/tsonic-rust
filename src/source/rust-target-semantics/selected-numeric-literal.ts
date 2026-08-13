@@ -44,11 +44,31 @@ export function selectedSourceLiteralIsRepresentable(
     uint32: [0n, 4294967295n],
     int64: [-9223372036854775808n, 9223372036854775807n],
     uint64: [0n, 18446744073709551615n],
+    int128: [
+      -170141183460469231731687303715884105728n,
+      170141183460469231731687303715884105727n,
+    ],
+    uint128: [0n, 340282366920938463463374607431768211455n],
+    "native-int": [-32768n, 32767n],
+    "native-uint": [0n, 65535n],
   };
   const range = ranges[primitive];
-  const requiresExactNumberProof = primitive === "int64" || primitive === "uint64";
+  const requiresExactNumberProof = primitive === "int64" || primitive === "uint64" ||
+    primitive === "int128" || primitive === "uint128";
   return value !== undefined && range !== undefined && value >= range[0] && value <= range[1] &&
-    (!requiresExactNumberProof || selectedNumberLiteralIsSafe(node, ast));
+    (!requiresExactNumberProof || selectedIntegerLiteralIsExact(node, ast));
+}
+
+export function selectedSourceLiteralOperandIsRepresentable(
+  node: Node,
+  primitive: SourcePrimitiveName,
+  ast: AstReader,
+): boolean {
+  const parent = ast.parent(node);
+  return parent !== undefined &&
+    ast.kindName(parent) === "KindPrefixUnaryExpression" &&
+    Node_Operand(ast, parent) === node &&
+    selectedSourceLiteralIsRepresentable(parent, primitive, ast);
 }
 
 export function selectedSourceNumericLiteralOperationId(
@@ -128,8 +148,11 @@ function selectedIntegerLiteralValue(
   return value === undefined ? undefined : sign * value;
 }
 
-function selectedNumberLiteralIsSafe(node: Node, ast: AstReader): boolean {
+function selectedIntegerLiteralIsExact(node: Node, ast: AstReader): boolean {
   const kind = ast.kindName(node);
+  if (kind === KindBigIntLiteral) {
+    return parseSourceBigIntLiteral(ast.text(node)) !== undefined;
+  }
   if (kind === "KindNumericLiteral") {
     const value = parseSourceIntegerLiteral(ast.text(node));
     return value !== undefined && value <= BigInt(Number.MAX_SAFE_INTEGER);
@@ -138,7 +161,13 @@ function selectedNumberLiteralIsSafe(node: Node, ast: AstReader): boolean {
     return false;
   }
   const operand = Node_Operand(ast, node);
-  if (operand === undefined || ast.kindName(operand) !== "KindNumericLiteral") {
+  if (operand === undefined) {
+    return false;
+  }
+  if (ast.kindName(operand) === KindBigIntLiteral) {
+    return parseSourceBigIntLiteral(ast.text(operand)) !== undefined;
+  }
+  if (ast.kindName(operand) !== "KindNumericLiteral") {
     return false;
   }
   const value = parseSourceIntegerLiteral(ast.text(operand));

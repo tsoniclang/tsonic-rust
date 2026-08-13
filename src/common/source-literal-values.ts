@@ -24,3 +24,7 @@ export function parseSourceBigIntLiteral(text: string): bigint | undefined {
   const normalized = normalizeIntegerLiteral(text, true);
   return normalized === undefined ? undefined : BigInt(normalized);
 }
+
+export function sourceCharCodeUnit(value: string): number | undefined {
+  return value.length === 1 ? value.charCodeAt(0) : undefined;
+}

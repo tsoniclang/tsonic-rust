@@ -64,7 +64,8 @@ the blocked section with the contract each requires.
   inspect over closed JsValue, format with closed placeholders), and
   node:assert `ok` with optional string messages.
 - Error model, async/await, callbacks, tuples, fixed arrays, records,
-  string-literal unions, generics, statics — see README.
+  string-literal unions, discriminated object unions with exact selected
+  narrowing evidence, generics, statics — see README.
 
 ## Hard-rejected by architecture
 
@@ -77,9 +78,6 @@ the blocked section with the contract each requires.
 
 ## Blocked by named external contracts
 
-- discriminated object unions (narrowing): requires public TSTS narrowing
-  facts
-  (repro pinned in test/r8-completion.test.mjs).
 - localeCompare, locale case conversion, normalization: requires an ICU
   contract.
 - Local-timezone Date lanes: requires a tzdata contract.

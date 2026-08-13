@@ -108,26 +108,39 @@ export function transform(values: int32[]): int32[] {
   validateGeneratedProject("expression-callable-blocks", result.artifacts);
 });
 
-test("named callable expressions fail closed instead of inventing recursive closure identity", () => {
+test("named callable expressions preserve exact callback and recursive identities", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "named_callable_expression_proof" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
-export function transform(values: int32[]): int32[] {
+function transform(values: int32[]): int32[] {
   return values.map(function recurse(value: int32): int32 {
-    return value;
+    return value + 1;
   });
+}
+
+const factorial: (value: int32) => int32 = function visit(value: int32): int32 {
+  return value <= 1 ? 1 : value * visit(value - 1);
+};
+
+export function main(): void {
+  check(transform([1, 2])[1] === 3);
+  check(factorial(5) === 120);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("closure") || diagnostic.message.includes("callable") ||
-    diagnostic.message.includes("callback")));
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /values\.map\(\|value\| value \+ 1\)/u);
+  assert.match(source, /Callable::<\(i32,\), i32>::recursive/u);
+  validateGeneratedProject("named-callable-expression", result.artifacts, { run: true });
 });
 
 test("substituted templates use exact source-string conversions", { timeout: 300_000 }, () => {
@@ -255,38 +268,129 @@ export function main(): void {
   validateGeneratedProject("expression-bigint", result.artifacts, { run: true });
 });
 
-test("inexact number literals cannot masquerade as fixed-width 64-bit values", () => {
-  const { result } = compileRust({
-    files: {
-      "index.ts": `
+test("wide integer aliases reject number literals during source checking", () => {
+  assert.throws(
+    () => compileRust({
+      files: {
+        "index.ts": `
 import type { int64 } from "@tsonic/core/types.js";
 
 export function invalid(): int64 {
   return 9007199254740993;
 }
 `,
-    },
-  });
-
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_INTEGER_LITERAL_NOT_EXACT"));
+      },
+    }),
+    /TS2322: Type 'number' is not assignable to type 'bigint'/u,
+  );
 });
 
-test("bigint division fails closed until its catchable error ABI is selected", () => {
+test("bigint division and remainder use the catchable runtime ABI", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "bigint_division_proof" } },
     files: {
       "index.ts": `
-export function divide(left: bigint, right: bigint): bigint {
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+function divide(left: bigint, right: bigint): bigint {
   return left / right;
+}
+
+function remainder(left: bigint, right: bigint): bigint {
+  return left % right;
+}
+
+class BigCounter {
+  value: bigint;
+
+  constructor(value: bigint) {
+    this.value = value;
+  }
+}
+
+class BigAccessor {
+  private stored: bigint;
+  writes: int32 = 0;
+
+  constructor(value: bigint) {
+    this.stored = value;
+  }
+
+  get current(): bigint {
+    return this.stored;
+  }
+
+  set current(value: bigint) {
+    this.writes += 1;
+    this.stored = value;
+  }
+}
+
+class BigStatics {
+  static value: bigint = 20n;
+}
+
+const counter = new BigCounter(20n);
+const accessor = new BigAccessor(20n);
+let receiverCalls: int32 = 0;
+
+function selectedCounter(): BigCounter {
+  receiverCalls += 1;
+  return counter;
+}
+
+export function main(): void {
+  check(divide(7n, 3n) === 2n);
+  check(divide(-7n, 3n) === -2n);
+  check(remainder(-7n, 3n) === -1n);
+  let changed = 20n;
+  changed /= 3n;
+  check(changed === 6n);
+  changed %= 4n;
+  check(changed === 2n);
+  selectedCounter().value /= 3n;
+  check(counter.value === 6n);
+  check(receiverCalls === 1);
+  accessor.current %= 6n;
+  check(accessor.current === 2n);
+  check(accessor.writes === 1);
+  BigStatics.value /= 4n;
+  check(BigStatics.value === 5n);
+  let caught = false;
+  try {
+    divide(1n, 0n);
+  } catch (error) {
+    caught = true;
+  }
+  check(caught);
+  let unchanged = 9n;
+  try {
+    unchanged /= 0n;
+  } catch (error) {
+    caught = true;
+  }
+  check(unchanged === 9n);
+  try {
+    accessor.current /= 0n;
+  } catch (error) {
+    caught = true;
+  }
+  check(accessor.current === 2n);
+  check(accessor.writes === 1);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED"));
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::BigInt::checked_div\(left\.clone\(\), right\.clone\(\)\)/u);
+  assert.match(source, /rt::BigInt::checked_rem\(left\.clone\(\), right\.clone\(\)\)/u);
+  assert.match(source, /rt::BigInt::checked_div\(__tsonic_current(?:_[0-9]+)?, __tsonic_value(?:_[0-9]+)?\)\?/u);
+  assert.match(source, /rt::BigInt::checked_rem\(\s*__tsonic_current(?:_[0-9]+)?,\s*__tsonic_value(?:_[0-9]+)?,?\s*\)\?/u);
+  validateGeneratedProject("expression-bigint-division", result.artifacts, { run: true });
 });
 
 test("delete lowers only an exact mutable JS Array index selection", { timeout: 300_000 }, () => {

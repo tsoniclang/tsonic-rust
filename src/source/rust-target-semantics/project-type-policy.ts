@@ -106,7 +106,7 @@ export interface RustProjectTypePolicyHost {
 export function rustProjectMemberSlotName(
   ast: AstReader,
   declaration: Node,
-  role: "read" | "write" | "virtual" | "exact",
+  role: "read" | "write" | "virtual" | "exact" | "static",
 ): string | undefined {
   const sourceFile = ast.getSourceFile(declaration);
   const fileName = ast.getFileName(sourceFile);
@@ -452,15 +452,15 @@ export function createRustProjectTypePolicy(
       continue;
     }
     const usedNames = projectMemberNames(definition.declaration, host.ast);
-    const signatures = selected.signatures.map((signature, index) => {
-      const preferredTargetName = index === 0 && !usedNames.has("new")
-        ? "new"
-        : index === 0 ? "__tsonic_new" : `__tsonic_new_${index + 1}`;
-      const targetName = allocateGeneratedName(usedNames, preferredTargetName);
-      const initializeName = allocateGeneratedName(
-        usedNames,
-        index === 0 ? "__tsonic_initialize" : `__tsonic_initialize_${index + 1}`,
-      );
+    const targetName = allocateGeneratedName(
+      usedNames,
+      usedNames.has("new") ? "__tsonic_new" : "new",
+    );
+    const initializeName = allocateGeneratedName(
+      usedNames,
+      "__tsonic_initialize",
+    );
+    const signatures = selected.signatures.map((signature) => {
       const plan: RustProjectConstructorSignature = Object.freeze({
         signature: signature.signature,
         ...(signature.declaration === undefined ? {} : { declaration: signature.declaration }),

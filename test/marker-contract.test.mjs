@@ -35,6 +35,10 @@ test("Rust source modules expose only the approved native aliases", () => {
     ["u32", "uint32"],
     ["i64", "int64"],
     ["u64", "uint64"],
+    ["i128", "int128"],
+    ["u128", "uint128"],
+    ["isize", "native-int"],
+    ["usize", "native-uint"],
     ["f32", "float32"],
     ["f64", "float64"],
   ]);
@@ -45,7 +49,7 @@ test("Rust source modules expose only the approved native aliases", () => {
   ]);
   assert.doesNotMatch(
     modules,
-    /sourcePrimitive\("(?:i128|u128|isize|usize|char)"|marker:\s*"(?:pointer|function-pointer)"/u,
+    /sourcePrimitive\("char"|marker:\s*"(?:pointer|function-pointer)"/u,
   );
 });
 

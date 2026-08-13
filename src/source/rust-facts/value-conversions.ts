@@ -1,5 +1,8 @@
 import type { TargetTypeRef } from "../../policy/types.js";
-import { rustTargetTypeRefEquals } from "../../policy/equality.js";
+import {
+  isRustTargetTypeRef,
+  rustTargetTypeRefEquals,
+} from "../../policy/equality.js";
 import type {
   RustValueConversion,
   RustValueConversionId,
@@ -9,6 +12,7 @@ import {
   rustIsizeTargetType,
   rustJsValueTargetType,
   rustPrimitiveTypeName,
+  rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUsizeTargetType,
@@ -44,6 +48,13 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "numeric-cast";
       readonly targetType: RustPrimitiveTypeName;
     }
+  | {
+      readonly lowering: "identity";
+    }
+  | {
+      readonly lowering: "source-union-variant";
+      readonly variantName: string;
+    }
 );
 
 function conversion(id: RustValueConversionId): RustValueConversion {
@@ -70,6 +81,45 @@ export const rustJsValueCloneConversion = conversion("js-value-clone");
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "source-union-variant") {
+    const union = rustSourceUnionCarrierValue(value.target);
+    const matches = union?.variants.filter((variant) =>
+      variant.name === value.variantName &&
+      rustTargetTypeRefEquals(variant.carrier, value.source)) ?? [];
+    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+        matches.length === 1
+      ? {
+          category: "exact",
+          lowering: "source-union-variant",
+          sourceMode: "value",
+          source: value.source,
+          target: value.target,
+          variantName: value.variantName,
+          fallible: false,
+        }
+      : undefined;
+  }
+  if (value.kind === "raw-pointer-mut-to-const") {
+    if (!isRustTargetTypeRef(value.pointee)) {
+      return undefined;
+    }
+    return {
+      category: "exact",
+      lowering: "identity",
+      sourceMode: "value",
+      source: {
+        kind: "pointer",
+        pointee: value.pointee,
+        mutability: "mut",
+      },
+      target: {
+        kind: "pointer",
+        pointee: value.pointee,
+        mutability: "const",
+      },
+      fallible: false,
+    };
+  }
   if (value.kind === "numeric-promotion") {
     const source = rustSourcePrimitiveTargetType(value.source);
     const target = rustSourcePrimitiveTargetType(value.target);
@@ -143,13 +193,36 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 export function rustValueConversionIdentity(value: RustValueConversion): string {
   return value.kind === "semantic-conversion"
     ? value.id
-    : `numeric-promotion.${value.source}.${value.target}`;
+    : value.kind === "numeric-promotion"
+      ? `numeric-promotion.${value.source}.${value.target}`
+      : value.kind === "raw-pointer-mut-to-const"
+        ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
+        : `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
 }
 
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustValueConversion | undefined {
+  const targetUnion = rustSourceUnionCarrierValue(target);
+  const matchingUnionVariants = targetUnion?.variants.filter((variant) =>
+    rustTargetTypeRefEquals(variant.carrier, source)) ?? [];
+  if (matchingUnionVariants.length === 1) {
+    return Object.freeze({
+      kind: "source-union-variant",
+      source,
+      target,
+      variantName: matchingUnionVariants[0]!.name,
+    });
+  }
+  if (source.kind === "pointer" && target.kind === "pointer" &&
+    source.mutability === "mut" && target.mutability === "const" &&
+    rustTargetTypeRefEquals(source.pointee, target.pointee)) {
+    return Object.freeze({
+      kind: "raw-pointer-mut-to-const",
+      pointee: source.pointee,
+    });
+  }
   if (rustTargetTypeRefEquals(target, jsValueCarrier)) {
     if (rustTargetTypeRefEquals(source, jsValueCarrier)) {
       return rustJsValueCloneConversion;
@@ -189,5 +262,8 @@ export function selectRustSourceValueConversion(
   if (source.name === "uint64" && target.name === "float64") {
     return rustUint64ToFloat64ValueConversion;
   }
-  return undefined;
+  return source.name !== target.name &&
+      rustNumericPromotionKind(source.name, target.name) === target.name
+    ? { kind: "numeric-promotion", source: source.name, target: target.name }
+    : undefined;
 }

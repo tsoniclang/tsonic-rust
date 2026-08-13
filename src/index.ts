@@ -9,6 +9,7 @@ export {
   readRustCrateName,
   readRustEdition,
   readRustOutputType,
+  readRustUserProjectFile,
   readRustTypescriptCompatibilityMode,
   validateRustTargetOptions,
 } from "./options/rust-target-options.js";
@@ -21,8 +22,15 @@ export {
   cargoPathReferenceKind,
   cargoRegistryPatchAttributeName,
   planCargoManifest,
+  planRustCargoProject,
 } from "./backend/planner/cargo-project.js";
-export type { CargoDependency, CargoManifestPlan, CargoManifestPlanResult } from "./backend/planner/cargo-project.js";
+export type {
+  CargoDependency,
+  CargoManifestPlan,
+  CargoManifestPlanResult,
+  RustCargoProjectPlan,
+  RustCargoProjectPlanResult,
+} from "./backend/planner/cargo-project.js";
 export {
   missingFactDiagnostic,
   missingRuntimeReferenceDiagnostic,
@@ -68,6 +76,7 @@ export type {
   RustProviderPackageDefinition,
   RustProviderPackageImplementation,
   RustProviderPolicyContribution,
+  RustProviderSourceDependency,
   RustProviderTypeDefinition,
   RustProviderTypeRow,
 } from "./source/provider-packages/index.js";

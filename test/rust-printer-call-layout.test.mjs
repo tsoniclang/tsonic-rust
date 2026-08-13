@@ -41,6 +41,180 @@ test("fitting method-call arguments remain on one rustfmt line", () => {
   );
 });
 
+test("single projection calls keep a short receiver attached when closure arguments expand", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "projected",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "pair" },
+            method: "project_member",
+            args: [
+              { kind: "str-literal", value: "stable.member.identity" },
+              {
+                kind: "closure",
+                params: [{ name: "owner", byRefCopy: false }],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "field", receiver: { kind: "path", path: "owner" }, name: "state" },
+                  method: "with",
+                  args: [{
+                    kind: "closure",
+                    params: [{ name: "state", byRefCopy: false }],
+                    body: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
+                  }],
+                },
+              },
+              {
+                kind: "closure",
+                params: [
+                  { name: "owner", byRefCopy: false },
+                  { name: "value", byRefCopy: false },
+                ],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "field", receiver: { kind: "path", path: "owner" }, name: "state" },
+                  method: "with_mut",
+                  args: [{
+                    kind: "closure",
+                    params: [{ name: "state", byRefCopy: false }],
+                    body: {
+                      kind: "assignment",
+                      target: { kind: "field", receiver: { kind: "path", path: "state" }, name: "0" },
+                      value: { kind: "path", path: "value" },
+                    },
+                  }],
+                },
+              },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /let projected = pair\.project_member\(\n/u);
+  assert.match(source, /pair\.project_member\(\n {8}"stable\.member\.identity",/u);
+  assert.doesNotMatch(source, /let projected = pair\n\s+\.project_member/u);
+});
+
+test("fallible calls on the left of comparisons expand their arguments before the operator", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "divide",
+              args: [
+                { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "1" }] },
+                { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "0" }] },
+              ],
+            },
+          },
+        }, {
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "divide",
+                  args: [
+                    { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "7" }] },
+                    { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "3" }] },
+                  ],
+                },
+              },
+              right: { kind: "call", path: "rt::BigInt::from_decimal_literal", args: [{ kind: "str-literal", value: "2" }] },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /divide\(\n {8}rt::BigInt::from_decimal_literal\("1"\),\n {8}rt::BigInt::from_decimal_literal\("0"\),\n {4}\)\?;/u);
+  assert.match(source, /divide\(\n {12}rt::BigInt::from_decimal_literal\("7"\),\n {12}rt::BigInt::from_decimal_literal\("3"\),\n {8}\)\? ==/u);
+});
+
+test("fallible conversion wrappers own multiline callback method chains", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "method-call",
+                receiver: {
+                  kind: "try",
+                  expr: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "values" },
+                    method: "try_map_with_array",
+                    args: [{
+                      kind: "closure",
+                      params: [
+                        { name: "value", byRefCopy: false },
+                        { name: "index", byRefCopy: false },
+                        { name: "owner", byRefCopy: false },
+                      ],
+                      body: {
+                        kind: "call",
+                        path: "risky",
+                        args: [{ kind: "path", path: "value" }],
+                      },
+                    }],
+                  },
+                },
+                method: "len",
+                args: [],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /usize_to_i32\(\n {8}values\n {12}\.try_map_with_array\(\|value, index, owner\| risky\(value\)\)\?\n {12}\.len\(\),\n {4}\)\?;/u,
+  );
+});
+
 test("method chains inside expanded call comparisons use argument indentation", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -398,6 +572,100 @@ test("long multi-supertrait headers use rustfmt-compatible vertical layout", () 
   assert.match(
     source,
     /trait __TsonicDispatch_CompleteProjectObject:\n    __TsonicDispatch_TaggedProjectObject \+ __TsonicDispatch_CountedProjectObject\n\{\n\}/u,
+  );
+});
+
+test("one long supertrait header uses rustfmt-compatible vertical layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_ProjectObjectWithAnIntentionallyLongContractName",
+      visibility: "private",
+      superTraits: [{
+        kind: "named",
+        path: "__TsonicDispatch_ProjectObjectWithAnIntentionallyLongBaseContractName",
+      }],
+      functions: [],
+    }],
+  });
+
+  assert.match(
+    source,
+    /trait __TsonicDispatch_ProjectObjectWithAnIntentionallyLongContractName:\n    __TsonicDispatch_ProjectObjectWithAnIntentionallyLongBaseContractName\n\{\n\}/u,
+  );
+});
+
+test("one supertrait header below rustfmt width remains on one line", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_StringValue",
+      visibility: "crate",
+      superTraits: [{
+        kind: "named",
+        path: "__TsonicDispatch_GenericBase<String>",
+      }],
+      functions: [],
+    }],
+  });
+
+  assert.match(
+    source,
+    /pub\(crate\) trait __TsonicDispatch_StringValue: __TsonicDispatch_GenericBase<String> \{\}/u,
+  );
+});
+
+test("nonempty traits use rustfmt-compatible long supertrait headers", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_UnsafeImplementation",
+      visibility: "crate",
+      superTraits: [{
+        kind: "named",
+        path: "__TsonicDispatch_UnsafeContract",
+      }],
+      functions: [{
+        name: "read",
+        selfParam: "rc",
+        params: [{ name: "value", type: { kind: "primitive", name: "i32" } }],
+        returnType: { kind: "primitive", name: "i32" },
+      }],
+    }],
+  });
+
+  assert.match(
+    source,
+    /pub\(crate\) trait __TsonicDispatch_UnsafeImplementation:\n    __TsonicDispatch_UnsafeContract\n\{\n/u,
+  );
+});
+
+test("nonempty traits retain rustfmt-compatible fitted supertrait headers", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "__TsonicDispatch_StringValue",
+      visibility: "crate",
+      superTraits: [{
+        kind: "named",
+        path: "__TsonicDispatch_GenericBase<String>",
+      }],
+      functions: [{
+        name: "read",
+        selfParam: "rc",
+        params: [],
+        returnType: { kind: "named", path: "String" },
+      }],
+    }],
+  });
+
+  assert.match(
+    source,
+    /pub\(crate\) trait __TsonicDispatch_StringValue: __TsonicDispatch_GenericBase<String> \{\n/u,
   );
 });
 

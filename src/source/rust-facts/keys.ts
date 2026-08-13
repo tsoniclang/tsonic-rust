@@ -80,6 +80,16 @@ export type RustValueConversion =
       readonly kind: "numeric-promotion";
       readonly source: SourcePrimitiveKind;
       readonly target: SourcePrimitiveKind;
+    }
+  | {
+      readonly kind: "raw-pointer-mut-to-const";
+      readonly pointee: TargetTypeRef;
+    }
+  | {
+      readonly kind: "source-union-variant";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+      readonly variantName: string;
     };
 
 export type RustProviderOperationForm =
@@ -208,10 +218,20 @@ export interface RustProviderOperationTemplate {
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly receiverCarrier?: TargetTypeRef;
+  readonly typeParameters?: readonly string[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly isUnsafe?: boolean;
+}
+
+export interface RustCallbackOperationTemplate {
+  readonly shape: "direct" | "map" | "reduce";
+  readonly sourceArgumentIndex: number;
+  readonly accumulatorArgumentIndex?: number;
+  readonly fallibleTarget: RustProviderOperationForm;
 }
 
 export interface RustRuntimeSetTemplate {
@@ -257,6 +277,14 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
       readonly leftConversion?: RustValueConversion;
       readonly rightConversion?: RustValueConversion;
+    }
+  | {
+      readonly kind: "operator-call";
+      readonly operationId: string;
+      readonly operator: RustOperatorToken;
+      readonly path: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly fallible: boolean;
     }
   | {
       readonly kind: "string-concat";
@@ -363,6 +391,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "source-field";
       readonly operationId: string;
+      readonly storage: "project-object" | "object-handle";
       readonly storageIndex: number;
       readonly resultCarrier: TargetTypeRef;
       readonly dispatch?: {
@@ -370,6 +399,45 @@ export type RustTargetOperationFact =
         readonly write: string;
         readonly ownerCarrier: TargetTypeRef;
       };
+    }
+  | {
+      readonly kind: "source-static-field";
+      readonly operationId: string;
+      readonly storageFileName: string;
+      readonly storageName: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "source-accessor";
+      readonly operationId: string;
+      readonly accessMode: "read" | "write" | "read-write";
+      readonly receiver:
+        | { readonly kind: "instance" }
+        | { readonly kind: "static"; readonly typeCarrier: TargetTypeRef };
+      readonly read?: {
+        readonly method: string;
+        readonly resultCarrier: TargetTypeRef;
+      };
+      readonly write?: {
+        readonly method: string;
+        readonly valueCarrier: TargetTypeRef;
+      };
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "source-union-field";
+      readonly operationId: string;
+      readonly unionCarrier: TargetTypeRef;
+      readonly selectedVariantIndexes: readonly number[];
+      readonly variants: readonly {
+        readonly name: string;
+        readonly carrier: TargetTypeRef;
+        readonly field?: {
+          readonly storage: "project-object" | "object-handle";
+          readonly storageIndex: number;
+        };
+      }[];
+      readonly resultCarrier: TargetTypeRef;
     }
   | {
       // Exact TSTS-selected project-source callable. The source lifecycle
@@ -412,6 +480,7 @@ export type RustTargetOperationFact =
       // carriers come from the finalized shape declaration.
       readonly kind: "record-literal";
       readonly operationId: string;
+      readonly storage: "project-object" | "object-handle";
       readonly resultCarrier: TargetTypeRef;
       readonly fields: readonly {
         readonly sourceName: string;
@@ -478,6 +547,19 @@ export type RustTargetOperationFact =
       readonly pointeeCarrier: TargetTypeRef;
       readonly locationCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "native-pointer";
+      readonly operationId: string;
+      readonly operation: "load" | "store" | "offset";
+      readonly pointerExpression: Node;
+      readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "pointer" }>;
+      readonly pointeeCarrier: TargetTypeRef;
+      readonly valueExpression?: Node;
+      readonly valueCarrier?: TargetTypeRef;
+      readonly offsetExpression?: Node;
+      readonly offsetCarrier?: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
     };
 
 export type RustTypedLocationOperationKind =
@@ -528,12 +610,16 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
   switch (fact.kind) {
     case "provider-operation":
     case "operator-token":
+    case "operator-call":
     case "string-concat":
     case "template-string":
     case "typeof":
     case "void-expression":
     case "array-literal":
     case "source-field":
+    case "source-static-field":
+    case "source-accessor":
+    case "source-union-field":
     case "source-call":
     case "source-enum-member":
     case "record-literal":
@@ -544,6 +630,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "source-conversion":
     case "nullish-identity":
     case "typed-location":
+    case "native-pointer":
       return fact.resultCarrier;
     case "iteration":
       return fact.elementCarrier;
@@ -675,6 +762,15 @@ function rustTypedLocationPlanEquals(
 export const rustOptionWrapFactKey: RustPlanKey<{ readonly wrap: boolean }> =
   defineRustPlanKey("optionWrap", (left, right) => left.wrap === right.wrap);
 
+export interface RustContextualValueConversionFact {
+  readonly sourceCarrier: TargetTypeRef;
+  readonly targetCarrier: TargetTypeRef;
+  readonly conversion: RustValueConversion;
+}
+
+export const rustContextualValueConversionFactKey: RustPlanKey<RustContextualValueConversionFact> =
+  defineRustPlanKey("contextualValueConversion", closedMetadataEquals);
+
 export interface RustProjectUpcastFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;
@@ -694,7 +790,20 @@ export const rustSourceBindingFactKey: RustPlanKey<RustSourceBindingFact> =
   defineRustPlanKey("sourceBinding", closedMetadataEquals);
 
 export type RustBindingProjection =
-  | { readonly kind: "project-field"; readonly storageIndex: number }
+  | {
+      readonly kind: "object-field";
+      readonly storage: "project-object" | "object-handle";
+      readonly storageIndex: number;
+    }
+  | {
+      readonly kind: "object-rest";
+      readonly storage: "project-object" | "object-handle";
+      readonly fields: readonly {
+        readonly sourceStorageIndex: number;
+        readonly targetStorageIndex: number;
+        readonly carrier: TargetTypeRef;
+      }[];
+    }
   | { readonly kind: "tuple-element"; readonly index: number }
   | { readonly kind: "fixed-array-element"; readonly index: number }
   | { readonly kind: "vec-element"; readonly index: number; readonly checked: boolean }
@@ -742,8 +851,25 @@ export const rustMutatedReferentFactKey: RustPlanKey<{ readonly mutated: true }>
 export const rustSelfModeFactKey: RustPlanKey<{ readonly mode: "ref" | "mut-ref" }> =
   defineRustPlanKey("selfMode", (left, right) => left.mode === right.mode);
 
-export const rustUnionVariantsFactKey: RustPlanKey<{ readonly variants: readonly { readonly name: string; readonly literal: string }[] }> =
-  defineRustPlanKey("unionVariants", closedMetadataEquals);
+export type RustUnionDeclarationFact =
+  | {
+      readonly kind: "string-literal";
+      readonly variants: readonly {
+        readonly name: string;
+        readonly literal: string;
+      }[];
+    }
+  | {
+      readonly kind: "runtime";
+      readonly variants: readonly {
+        readonly name: string;
+        readonly carrier: TargetTypeRef;
+      }[];
+    }
+  | { readonly kind: "erased" };
+
+export const rustUnionDeclarationFactKey: RustPlanKey<RustUnionDeclarationFact> =
+  defineRustPlanKey("unionDeclaration", closedMetadataEquals);
 
 export interface RustAsyncFunctionFact {
   readonly isAsync: true;
@@ -845,6 +971,14 @@ export interface RustSourceCallEffectsFact {
 // Total post-fixpoint effects for an exact selected project-source call.
 export const rustSourceCallEffectsFactKey: RustPlanKey<RustSourceCallEffectsFact> =
   defineRustPlanKey("sourceCallEffects", closedMetadataEquals);
+
+export interface RustSourceAccessorEffectsFact {
+  readonly read?: "infallible" | "fallible";
+  readonly write?: "infallible" | "fallible";
+}
+
+export const rustSourceAccessorEffectsFactKey: RustPlanKey<RustSourceAccessorEffectsFact> =
+  defineRustPlanKey("sourceAccessorEffects", closedMetadataEquals);
 
 export interface RustFutureValueFact {
   readonly outputCarrier: TargetTypeRef;

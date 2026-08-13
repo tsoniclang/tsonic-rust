@@ -15,7 +15,7 @@ import { createRustSourceFile } from "../rust-ast/nodes.js";
 import type { RustItem } from "../rust-ast/nodes.js";
 import { printRustSourceFile } from "../../print/rust-printer.js";
 import { printCargoManifest } from "../../print/cargo-manifest-printer.js";
-import { planCargoManifest } from "./cargo-project.js";
+import { planRustCargoProject } from "./cargo-project.js";
 import { rustReservedIdentifiers } from "./plan-context.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
 import type { RustTranslationContext } from "../../translate/context.js";
@@ -44,9 +44,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   // Activation: a runtime crate is a dependency only when planned code
   // references it (directly or through a declared alias). Surface-selected
   // crates without carrier/operation use stay out of the manifest.
-  const manifestPlan = planCargoManifest(input.target, input.runtimeReferences);
-  if (manifestPlan.manifest === undefined) {
-    return { artifacts: [], diagnostics: [...diagnostics, ...manifestPlan.diagnostics] };
+  const cargoProject = planRustCargoProject(input.target, input.paths, input.runtimeReferences);
+  if (cargoProject.project === undefined) {
+    return { artifacts: [], diagnostics: [...diagnostics, ...cargoProject.diagnostics] };
   }
 
   const outputType = readRustOutputType(input.target);
@@ -72,13 +72,13 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const sortedSources = [...plannedSources].sort((left, right) =>
     left.moduleName.localeCompare(right.moduleName, "en"));
   const sortedModuleNames = sortedSources.map((source) => source.moduleName);
-  const artifacts: TargetArtifact[] = [
-    {
-      kind: "project",
-      path: "Cargo.toml",
-      text: printCargoManifest(manifestPlan.manifest),
-    },
-  ];
+  const artifacts: TargetArtifact[] = cargoProject.project.kind === "generated"
+    ? [{
+        kind: "project",
+        path: "Cargo.toml",
+        text: printCargoManifest(cargoProject.project.manifest),
+      }]
+    : [];
   const libraryModel = createRustSourceFile(
     sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
   );

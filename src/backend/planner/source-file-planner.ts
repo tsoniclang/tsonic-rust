@@ -40,7 +40,7 @@ import {
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { planBlockLike, planStatement } from "./statements.js";
-import { applyFallibleShape } from "./functions.js";
+import { applyFallibleShape } from "./fallible-shape.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -55,6 +55,11 @@ import {
   planPolymorphicClassDeclaration,
   planPolymorphicInterfaceDeclaration,
 } from "./project-polymorphism.js";
+import {
+  diagnoseRustSafetyApplications,
+} from "./explicit-safety.js";
+import { planRustModuleCell } from "./module-storage.js";
+import { planRustClassStaticFields } from "./class-static-fields.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -74,6 +79,7 @@ export function planRustSourceFile(
   input: RustTranslationContext,
   diagnostics: TargetDiagnostic[],
 ): PlannedRustSourceFile {
+  diagnoseRustSafetyApplications(sourceFile, input, diagnostics);
   const usedAliases = new Set<string>();
   const context: RustPlanContext = {
     input,
@@ -152,6 +158,14 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       continue;
     }
     if (kind === KindFunctionDeclaration) {
+      if (ast.body(statement) === undefined) {
+        const implementation = context.input.source.navigation
+          .callableImplementation(statement);
+        if (implementation.kind === "resolved" &&
+          implementation.implementation.declaration !== statement) {
+          continue;
+        }
+      }
       const diagnosticCount = context.diagnostics.length;
       const item = planFunctionDeclaration(statement, context);
       if (item !== undefined) {
@@ -188,11 +202,14 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     if (kind === "KindClassDeclaration") {
       const diagnosticCount = context.diagnostics.length;
       const definition = context.input.projectTypes.definitionForDeclaration(statement);
+      const staticFields = planRustClassStaticFields(statement, initializationContext);
       const planned = definition !== undefined && context.input.projectTypes.isPolymorphic(definition)
         ? planPolymorphicClassDeclaration(statement, context)
         : planClassDeclaration(statement, context);
-      if (planned !== undefined) {
+      if (planned !== undefined && staticFields !== undefined) {
+        items.push(...staticFields.items);
         items.push(...planned);
+        initializationStatements.push(...staticFields.initialization);
       } else {
         ensureTopLevelPlanningDiagnostic(
           context,
@@ -383,50 +400,16 @@ function planTopLevelVariableStatement(
       return undefined;
     }
     context.usedAliases?.add("rt");
-    items.push({
-      kind: "thread-local",
+    const planned = planRustModuleCell(
       name,
+      rustType,
+      value,
       visibility,
-      ...(isUpperSnakeName(name)
-        ? {}
-        : { attrs: ["#[allow(non_upper_case_globals)]"] }),
-      type: {
-        kind: "named",
-        path: "rt::ModuleCell",
-        typeArguments: [rustType],
-      },
-      value: { kind: "call", path: "rt::ModuleCell::new", args: [] },
-    });
-    const bindingName = allocateRustSyntheticName(
       context.syntheticNames!,
-      "module_binding",
+      isUpperSnakeName(name) ? [] : ["#[allow(non_upper_case_globals)]"],
     );
-    const valueName = allocateRustSyntheticName(
-      context.syntheticNames!,
-      "module_value",
-    );
-    initialization.push({
-      kind: "expr",
-      expr: {
-        kind: "block",
-        bindings: [{ name: valueName, value }],
-        value: {
-          kind: "method-call",
-          receiver: { kind: "path", path: name },
-          method: "with",
-          args: [{
-            kind: "closure",
-            params: [{ name: bindingName, byRefCopy: false }],
-            body: {
-              kind: "method-call",
-              receiver: { kind: "path", path: bindingName },
-              method: "initialize",
-              args: [{ kind: "path", path: valueName }],
-            },
-          }],
-        },
-      },
-    });
+    items.push(planned.item);
+    initialization.push(planned.initialization);
   }
   return { items, initialization };
 }

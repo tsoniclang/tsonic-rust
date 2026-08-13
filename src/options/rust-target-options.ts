@@ -11,6 +11,7 @@ const supportedRustTargetOptionKeys = Object.freeze([
   "crateName",
   "edition",
   "outputType",
+  "projectFile",
   "typescriptCompatibility",
 ]);
 
@@ -30,6 +31,7 @@ export function validateRustTargetOptions(target: TargetSelection): void {
   readRustCrateName(target);
   readRustEdition(target);
   readRustOutputType(target);
+  readRustUserProjectFile(target);
   readRustTypescriptCompatibilityMode(target);
 }
 
@@ -64,6 +66,10 @@ export function readRustOutputType(target: TargetSelection): RustOutputType {
     throw new Error("Rust target option 'outputType' must be either 'lib' or 'bin'.");
   }
   return value;
+}
+
+export function readRustUserProjectFile(target: TargetSelection): string | undefined {
+  return readOptionalStringOption(target, "projectFile");
 }
 
 export function readRustTypescriptCompatibilityMode(target: TargetSelection): TargetTypescriptCompatibilityMode {

@@ -149,7 +149,7 @@ export function acmePlatformPackage({ includeHomeDir = true } = {}) {
         },
       ],
     }],
-    types: [{ exportId: "@acme/platform::Store", targetTypeId: "acme.platform.Store" }],
+    types: [{ exportId: "@acme/platform::Store", targetCarrier: { kind: "target-named", id: "acme.platform.Store" } }],
     operations: [
       {
         exportId: "@acme/platform::Env",
@@ -342,19 +342,7 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
       harness,
     };
   }
-  const contributionContext = harness.runtimeContributionContext;
-  const capabilityReferences = harness.runtimeActivatedCapabilities.flatMap((providerPackage) =>
-    providerPackage.runtimeContributions?.({
-      ...contributionContext,
-      targetPack: harness.pack,
-      capability: providerPackage,
-    }).references ?? []);
-  const runtimeReferences = [
-    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
-    ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
-      surface.runtimeContributions?.(contributionContext).references ?? []),
-    ...capabilityReferences,
-  ];
+  const runtimeReferences = runtimeReferencesForHarness(harness);
   const input = createRustCompileInputFromSession({
     source,
     project: harness.project,
@@ -371,6 +359,44 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
     translationContext,
     harness,
   };
+}
+
+export function compileRustThroughTargetPack({
+  files,
+  target = { id: "rust", options: {} },
+  packages = [],
+  capabilities = [],
+  surfaces = [],
+  entryPoint = "index.ts",
+}) {
+  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
+  const source = checkRustSession(harness);
+  const input = createRustCompileInputFromSession({
+    source,
+    project: harness.project,
+    target,
+    runtimeReferences: runtimeReferencesForHarness(harness),
+    paths: harness.paths,
+  });
+  const result = harness.pack.createBackend(harness.providerContext).compile(input);
+  attachBoundedDiagnosticInspection(result.diagnostics);
+  return { result, source, harness };
+}
+
+function runtimeReferencesForHarness(harness) {
+  const contributionContext = harness.runtimeContributionContext;
+  const capabilityReferences = harness.runtimeActivatedCapabilities.flatMap((providerPackage) =>
+    providerPackage.runtimeContributions?.({
+      ...contributionContext,
+      targetPack: harness.pack,
+      capability: providerPackage,
+    }).references ?? []);
+  return [
+    ...(harness.pack.provider.runtimeContributions?.(contributionContext).references ?? []),
+    ...harness.providerContext.selectedSurfaces.flatMap((surface) =>
+      surface.runtimeContributions?.(contributionContext).references ?? []),
+    ...capabilityReferences,
+  ];
 }
 
 export function assertRustTargetRejection(options, expectedDiagnostics) {
@@ -529,7 +555,7 @@ export function acmeVectorsPackage() {
         },
       ],
     }],
-    types: [{ exportId: "@acme/vectors::Vector", targetTypeId: "acme.vectors.Vector" }],
+    types: [{ exportId: "@acme/vectors::Vector", targetCarrier: { kind: "target-named", id: "acme.vectors.Vector" } }],
     operations: [
       {
         exportId: "@acme/vectors::Vector",
@@ -638,7 +664,7 @@ export function acmeDbPackage() {
         },
       ],
     }],
-    types: [{ exportId: "@acme/db::Db", targetTypeId: "acme.db.Db" }],
+    types: [{ exportId: "@acme/db::Db", targetCarrier: { kind: "target-named", id: "acme.db.Db" } }],
     operations: [
       {
         exportId: "@acme/db::connect",
@@ -850,7 +876,7 @@ export function acmeTelemetryCapability() {
         },
       ],
     }],
-    types: [{ exportId: "telemetry::Meter", targetTypeId: "acme.telemetry.Meter" }],
+    types: [{ exportId: "telemetry::Meter", targetCarrier: { kind: "target-named", id: "acme.telemetry.Meter" } }],
     operations: [
       { exportId: "telemetry::createMeter", operationKind: "method", target: { form: "call", path: "acme_telemetry::create_meter", argModes: ["ref"] }, resultCarrier: meterCarrier, parameterCarriers: [stringCarrier], isFallible: true },
       { exportId: "telemetry::Meter", memberId: "telemetry::Meter.record", operationKind: "method", target: { form: "receiver-method", name: "record", mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [{ kind: "source-primitive", name: "float64" }], isFallible: true, isAsync: true },
@@ -885,7 +911,7 @@ export function acmeLogsinkCapability() {
         },
       ],
     }],
-    types: [{ exportId: "logsink::Sink", targetTypeId: "acme.logsink.Sink" }],
+    types: [{ exportId: "logsink::Sink", targetCarrier: { kind: "target-named", id: "acme.logsink.Sink" } }],
     operations: [
       { exportId: "logsink::openSink", operationKind: "method", target: { form: "call", path: "acme_logsink::open_sink" }, resultCarrier: sinkCarrier },
       { exportId: "logsink::openSinkNamed", operationKind: "method", target: { form: "call", path: "acme_logsink::openSinkNamed", argModes: ["ref"] }, resultCarrier: sinkCarrier, parameterCarriers: [stringCarrier] },

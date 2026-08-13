@@ -29,7 +29,7 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     }
     return target.name;
   }
-  if (fact.kind === "operator-token") {
+  if (fact.kind === "operator-token" || fact.kind === "operator-call") {
     return fact.operator;
   }
   if (fact.kind === "string-concat") {
@@ -61,7 +61,10 @@ export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFac
 }
 
 export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationFact | undefined): boolean {
-  return fact?.kind === "source-field" || rustTargetOperationIsDirectLocation(fact);
+  return fact?.kind === "source-field" || fact?.kind === "source-static-field" ||
+    fact?.kind === "source-union-field" ||
+    (fact?.kind === "source-accessor" && fact.write !== undefined) ||
+    rustTargetOperationIsDirectLocation(fact);
 }
 
 export function rustTargetOperationIsFallible(fact: RustTargetOperationFact | undefined): boolean {
@@ -73,6 +76,12 @@ export function rustTargetOperationIsFallible(fact: RustTargetOperationFact | un
   }
   if (fact.kind === "source-conversion") {
     return rustValueConversionIsFallible(fact.conversion);
+  }
+  if (fact.kind === "source-accessor") {
+    return false;
+  }
+  if (fact.kind === "operator-call") {
+    return fact.fallible;
   }
   if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
     return rustOperationAbiInvocationIsFallible(fact.abi);

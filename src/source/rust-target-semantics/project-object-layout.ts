@@ -1,5 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
+import { rustProjectMemberSlotName } from "./project-type-policy.js";
 
 export interface RustProjectObjectField {
   readonly declaration: Node;
@@ -11,6 +12,12 @@ export interface RustProjectObjectLayout {
   readonly declaration: Node;
   readonly kind: "class" | "interface";
   readonly fields: readonly RustProjectObjectField[];
+}
+
+export interface RustProjectStaticFieldStorage {
+  readonly declaration: Node;
+  readonly fileName: string;
+  readonly targetName: string;
 }
 
 export function rustProjectObjectLayout(
@@ -59,4 +66,29 @@ export function rustProjectObjectField(
   return owner === undefined
     ? undefined
     : rustProjectObjectLayout(owner, ast)?.fields.find((field) => field.declaration === declaration);
+}
+
+export function rustProjectStaticFieldStorage(
+  declaration: Node,
+  ast: AstReader,
+): RustProjectStaticFieldStorage | undefined {
+  if (ast.kindName(declaration) !== "KindPropertyDeclaration" ||
+    !ast.hasModifierKind(declaration, "static")) {
+    return undefined;
+  }
+  const owner = ast.parent(declaration);
+  if (owner === undefined || ast.kindName(owner) !== "KindClassDeclaration") {
+    return undefined;
+  }
+  const sourceFile = ast.getSourceFile(declaration);
+  const fileName = ast.getFileName(sourceFile);
+  const targetName = rustProjectMemberSlotName(ast, declaration, "static");
+  if (fileName.length === 0 || targetName === undefined) {
+    return undefined;
+  }
+  return {
+    declaration,
+    fileName,
+    targetName,
+  };
 }

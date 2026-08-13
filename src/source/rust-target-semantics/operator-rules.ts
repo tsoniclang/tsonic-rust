@@ -33,6 +33,7 @@ import {
   isRustNumericCarrier,
   isRustStringCarrier,
   rustSourcePrimitiveTargetType,
+  rustStructuralObjectCarrierValue,
   sameRustPrimitiveCarrier,
 } from "../rust-target-types.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
@@ -40,12 +41,33 @@ import { rustSourceTypeCarrierValue } from "../rust-target-types.js";
 import { selectRustNumericBinaryPromotion } from "./numeric-promotion.js";
 
 export interface RustBinaryOperatorSelection {
-  readonly kind: "operator-token" | "string-concat";
+  readonly kind: "operator-token" | "operator-call" | "string-concat";
   readonly rustOperator: RustBinaryOperator;
   readonly resultCarrier: TargetTypeRef;
+  readonly path?: string;
+  readonly fallible?: boolean;
   readonly leftConversion?: RustValueConversion;
   readonly rightConversion?: RustValueConversion;
 }
+
+export type RustCompoundAssignmentSelection =
+  | {
+      readonly kind: "operator-token";
+      readonly operator: RustAssignmentOperator;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "operator-call";
+      readonly operator: RustAssignmentOperator;
+      readonly path: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly fallible: boolean;
+    };
+
+const bigintArithmeticCallByOperator: Readonly<Partial<Record<RustBinaryOperator, string>>> = {
+  "/": "rt::BigInt::checked_div",
+  "%": "rt::BigInt::checked_rem",
+};
 
 const arithmeticTokens: Readonly<Record<string, RustBinaryOperator>> = {
   [KindPlusToken]: "+",
@@ -162,6 +184,18 @@ export function selectRustBinaryOperator(
       rustArithmeticOperatorHasDirectSemantics(arithmetic, left)) {
       return { kind: "operator-token", rustOperator: arithmetic, resultCarrier: left };
     }
+    if (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) {
+      const path = bigintArithmeticCallByOperator[arithmetic];
+      if (path !== undefined) {
+        return {
+          kind: "operator-call",
+          rustOperator: arithmetic,
+          resultCarrier: left,
+          path,
+          fallible: true,
+        };
+      }
+    }
     return undefined;
   }
   const comparison = comparisonTokens[operatorKindName];
@@ -190,6 +224,9 @@ export function selectRustBinaryOperator(
     const sameObject = leftEnum !== undefined && rightEnum !== undefined &&
       leftEnum.shape === "object" && rightEnum.shape === "object" &&
       leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
+    const sameStructuralObject = rustStructuralObjectCarrierValue(left) !== undefined &&
+      rustStructuralObjectCarrierValue(right) !== undefined &&
+      rustTargetTypeRefEquals(left, right);
     const numericPromotion = selectRustNumericBinaryPromotion(left, right);
     const comparable =
       numericPromotion !== undefined ||
@@ -197,7 +234,7 @@ export function selectRustBinaryOperator(
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
       (isRustStringCarrier(left) && isRustStringCarrier(right)) ||
       (isRustJsStrictEqualityCarrier(left) && rustTargetTypeRefEquals(left, right)) ||
-      sameEnum || sameObject;
+      sameEnum || sameObject || sameStructuralObject;
     return comparable
       ? {
           kind: "operator-token",
@@ -234,7 +271,7 @@ export function selectRustCompoundAssignment(
   operatorKindName: string,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
-): RustAssignmentOperator | undefined {
+): RustCompoundAssignmentSelection | undefined {
   operatorKindName = operatorKindByText[operatorKindName] ?? operatorKindName;
   const operator = compoundAssignmentTokens[operatorKindName];
   if (operator === undefined || left === undefined || right === undefined) {
@@ -242,11 +279,17 @@ export function selectRustCompoundAssignment(
   }
   const binaryOperator = compoundBinaryOperator(operator);
   if (operator === "+=" && isRustStringCarrier(left) && isRustStringCarrier(right)) {
-    return operator;
+    return { kind: "operator-token", operator, resultCarrier: left };
   }
-  return binaryOperator !== undefined && sameRustArithmeticCarrier(left, right) &&
-      rustArithmeticOperatorHasDirectSemantics(binaryOperator, left)
-    ? operator
+  if (binaryOperator === undefined || !sameRustArithmeticCarrier(left, right)) {
+    return undefined;
+  }
+  if (rustArithmeticOperatorHasDirectSemantics(binaryOperator, left)) {
+    return { kind: "operator-token", operator, resultCarrier: left };
+  }
+  const path = bigintArithmeticCallByOperator[binaryOperator];
+  return isRustBigIntCarrier(left) && path !== undefined
+    ? { kind: "operator-call", operator, path, resultCarrier: left, fallible: true }
     : undefined;
 }
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
+  sourceCharCodeUnit,
 } from "../dist/common/source-literal-values.js";
 
 test("source integer literal parsing preserves exact authored integer values", () => {
@@ -18,4 +19,12 @@ test("source bigint literal parsing requires and removes the bigint suffix", () 
   assert.equal(parseSourceBigIntLiteral("0xFFn"), 255n);
   assert.equal(parseSourceBigIntLiteral("123"), undefined);
   assert.equal(parseSourceBigIntLiteral("not-a-bigint"), undefined);
+});
+
+test("source char code units preserve the exact neutral UTF-16 contract", () => {
+  assert.equal(sourceCharCodeUnit("A"), 65);
+  assert.equal(sourceCharCodeUnit("\ud800"), 0xd800);
+  assert.equal(sourceCharCodeUnit(""), undefined);
+  assert.equal(sourceCharCodeUnit("ab"), undefined);
+  assert.equal(sourceCharCodeUnit("😀"), undefined);
 });

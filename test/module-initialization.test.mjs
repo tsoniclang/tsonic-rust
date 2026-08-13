@@ -53,7 +53,7 @@ export function main(): void {
   const firstInitialization = initializationBody.indexOf("crate::state::next()");
   const secondInitialization = initializationBody.indexOf("first.with(");
   const thirdInitialization = initializationBody.indexOf("second.with(");
-  const finalWrite = initializationBody.indexOf(".update_with(");
+  const finalWrite = initializationBody.lastIndexOf(".store(");
   assert.equal(firstInitialization >= 0, true);
   assert.equal(firstInitialization < secondInitialization, true);
   assert.equal(secondInitialization < thirdInitialization, true);
@@ -61,7 +61,7 @@ export function main(): void {
   validateGeneratedProject("module-order-proof", result.artifacts, { run: true });
 });
 
-test("runtime module cycles fail before Rust publication", () => {
+test("function-only runtime module cycles require no initialization ordering", () => {
   const { result } = compileRust({
     target: {
       id: "rust",
@@ -72,34 +72,100 @@ test("runtime module cycles fail before Rust publication", () => {
 import type { int32 } from "@tsonic/core/types.js";
 import { fromB } from "./b.js";
 
-export function fromA(): int32 {
-  return fromB();
+export function fromA(value: int32): int32 {
+  return value <= 0 ? 1 : fromB(value - 1) + 1;
 }
 `,
       "b.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import { fromA } from "./a.js";
 
-export function fromB(): int32 {
-  return fromA();
+export function fromB(value: int32): int32 {
+  return value <= 0 ? 1 : fromA(value - 1) + 1;
 }
 `,
       "index.ts": `
 import { fromA } from "./a.js";
 
 export function main(): void {
-  fromA();
+  if (fromA(3) !== 4) {
+    throw new Error("cyclic function call mismatch");
+  }
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.doesNotMatch(artifactText(result, "src/main.rs"), /__tsonic_module_init/u);
+  validateGeneratedProject("module-cycle-functions", result.artifacts, { run: true });
+});
+
+test("a cyclic component with one initializer fails without cyclic call evidence", () => {
+  const { result } = compileRust({
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "module_cycle_single_init" },
+    },
+    files: {
+      "a.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { fromB } from "./b.js";
+
+export let value: int32 = 4;
+export function fromA(): int32 { return fromB() + value; }
+`,
+      "b.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { fromA } from "./a.js";
+
+export function fromB(): int32 { return 3; }
+export function cycleReference(): int32 { return fromA(); }
+`,
+      "index.ts": `
+import { fromA } from "./a.js";
+
+export function main(): void {
+  if (fromA() !== 7) {
+    throw new Error("single cyclic initializer mismatch");
+  }
 }
 `,
     },
   });
 
   assert.equal(result.artifacts.length, 0);
-  assert.equal(
-    result.diagnostics.filter((diagnostic) =>
-      diagnostic.code === "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE").length,
-    1,
-  );
+  assert.equal(result.diagnostics.filter((diagnostic) =>
+    diagnostic.code === "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE").length, 1);
+});
+
+test("cycles with competing runtime initializers fail before publication", () => {
+  const { result } = compileRust({
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "module_cycle_rejection" },
+    },
+    files: {
+      "a.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { fromB } from "./b.js";
+export let fromA: int32 = fromB + 1;
+`,
+      "b.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { fromA } from "./a.js";
+export let fromB: int32 = fromA + 1;
+`,
+      "index.ts": `
+import { fromA } from "./a.js";
+export function main(): void { if (fromA === 0) { throw new Error("unreachable"); } }
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.equal(result.diagnostics.filter((diagnostic) =>
+    diagnostic.code === "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE").length, 1);
 });
 
 test("top-level await runs before the binary entry function", () => {

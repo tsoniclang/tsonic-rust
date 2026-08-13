@@ -44,10 +44,13 @@ export const KindParenthesizedExpression = "KindParenthesizedExpression";
 export const KindPostfixUnaryExpression = "KindPostfixUnaryExpression";
 export const KindPrefixUnaryExpression = "KindPrefixUnaryExpression";
 export const KindPropertyAccessExpression = "KindPropertyAccessExpression";
+export const KindPropertyAssignment = "KindPropertyAssignment";
+export const KindShorthandPropertyAssignment = "KindShorthandPropertyAssignment";
 export const KindReturnStatement = "KindReturnStatement";
 export const KindStringKeyword = "KindStringKeyword";
 export const KindStringLiteral = "KindStringLiteral";
 export const KindSatisfiesExpression = "KindSatisfiesExpression";
+export const KindSpreadElement = "KindSpreadElement";
 export const KindSwitchStatement = "KindSwitchStatement";
 export const KindTemplateExpression = "KindTemplateExpression";
 export const KindTrueKeyword = "KindTrueKeyword";
@@ -273,6 +276,27 @@ export function Node_Initializer(ast: AstReader, node: Node | undefined): Node |
       return ast.as.AsPropertyAssignment(node)?.Initializer;
     case "KindEnumMember":
       return ast.as.AsEnumMember(node)?.Initializer;
+    default:
+      return undefined;
+  }
+}
+
+export function ObjectLiteralProperty_Value(
+  ast: AstReader,
+  node: Node | undefined,
+): Node | undefined {
+  if (node === undefined) {
+    return undefined;
+  }
+  switch (ast.kindName(node)) {
+    case KindPropertyAssignment:
+      return ast.as.AsPropertyAssignment(node)?.Initializer;
+    case KindShorthandPropertyAssignment: {
+      const shorthand = ast.as.AsShorthandPropertyAssignment(node);
+      return shorthand?.ObjectAssignmentInitializer === undefined
+        ? shorthand?.name
+        : undefined;
+    }
     default:
       return undefined;
   }

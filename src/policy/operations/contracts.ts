@@ -21,11 +21,16 @@ import type {
   TargetTypeRef,
 } from "../types.js";
 import type {
+  RustCallbackOperationTemplate,
   RustProviderOperationTemplate,
 } from "../../source/rust-facts/keys.js";
 
 type ResolvedSourceCallInfo = NonNullable<
   ReturnType<SourceFileSemantics["getResolvedCallInfo"]>
+>;
+
+type ResolvedSourcePropertyAccessInfo = NonNullable<
+  ReturnType<SourceFileSemantics["getResolvedPropertyAccessInfo"]>
 >;
 
 export type RustSourceSelectedMethodTypeArguments =
@@ -122,7 +127,7 @@ export type RustCheckedCallSelectionResult =
   | { readonly kind: "source" }
   | {
       readonly kind: "deferred-callback";
-      readonly callbackShape: "direct" | "map" | "reduce";
+      readonly callback: RustCallbackOperationTemplate;
       readonly sourceName: string;
       readonly template: RustProviderOperationTemplate;
       readonly parameterCarriers: readonly (TargetTypeRef | undefined)[];
@@ -139,8 +144,14 @@ export interface RustCheckedPropertySelectionInput {
   readonly receiver: Node;
   readonly sourceReceiverType?: Type;
   readonly sourceReceiverDeclaration?: Node;
+  readonly sourceReceiverValueDeclaration?: Node;
+  readonly accessMode: ResolvedSourcePropertyAccessInfo["accessMode"];
   readonly sourceSelectedSymbol?: Symbol;
   readonly sourceSelectedDeclaration?: Node;
+  readonly sourceSelectedReadDeclaration?: Node;
+  readonly sourceSelectedWriteDeclaration?: Node;
+  readonly sourceReadType?: Type;
+  readonly sourceWriteType?: Type;
   readonly sourceResultType?: Type;
   readonly optionalChain?: boolean;
 }

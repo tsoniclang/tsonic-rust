@@ -17,7 +17,7 @@ export type RustTargetTypeRef =
   | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }
   | { readonly kind: "tuple"; readonly elements: readonly RustTargetTypeRef[] }
   | { readonly kind: "pointer"; readonly pointee: RustTargetTypeRef; readonly mutability?: "const" | "mut" | "target-defined" }
-  | { readonly kind: "function-pointer"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef; readonly abi?: readonly string[] }
+  | { readonly kind: "function-pointer"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef; readonly abi?: readonly string[]; readonly isUnsafe?: boolean }
   | { readonly kind: "closure"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef }
   | { readonly kind: "opaque"; readonly id: string }
   | { readonly kind: "associated-type"; readonly owner: RustTargetTypeRef; readonly name: string }
@@ -92,6 +92,8 @@ export interface RustSelectedTargetOperation {
     readonly sourceSelectedSignature?: ExtensionFactSubject;
     readonly sourceSelectedSymbol?: ExtensionFactSubject;
     readonly sourceSelectedDeclaration?: ExtensionFactSubject;
+    readonly sourceSelectedReadDeclaration?: Node;
+    readonly sourceSelectedWriteDeclaration?: Node;
     readonly sourceCalleeSymbol?: ExtensionFactSubject;
     readonly sourceCalleeDeclaration?: ExtensionFactSubject;
     readonly sourceResultType?: ExtensionFactSubject;

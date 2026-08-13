@@ -148,8 +148,8 @@ export function pick(pair: [int32, int32], flag: boolean): int32 {
 
   assert.deepEqual(result.artifacts, []);
   assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
-    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
-    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
+    code: "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED",
+    message: "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
   }]);
 });
 

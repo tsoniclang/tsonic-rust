@@ -1,7 +1,12 @@
 import type { TargetTypeRef } from "../../policy/types.js";
 import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
-import { rustSourceTypeCarrierValue } from "../../source/rust-target-types.js";
+import { rustProjectObjectType } from "./project-objects.js";
+import {
+  rustSourceTypeCarrierValue,
+  rustSourceUnionCarrierValue,
+  rustStructuralObjectCarrierValue,
+} from "../../source/rust-target-types.js";
 import {
   rustBigIntTargetId,
   rustJsArrayTargetId,
@@ -92,6 +97,13 @@ export function rustTypeFromCarrier(
     const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
   }
+  if (carrier.kind === "pointer" &&
+    (carrier.mutability === "const" || carrier.mutability === "mut")) {
+    const pointee = rustTypeFromCarrier(carrier.pointee, resolveSourceTypePath);
+    return pointee === undefined
+      ? undefined
+      : { kind: "raw-pointer", pointee, mutable: carrier.mutability === "mut" };
+  }
   if (carrier.kind === "function-pointer") {
     const parameters = carrier.args.map((argument) =>
       rustTypeFromCarrier(argument, resolveSourceTypePath));
@@ -103,6 +115,7 @@ export function rustTypeFromCarrier(
           parameters: parameters as RustType[],
           result,
           ...(carrier.abi === undefined ? {} : { abi: carrier.abi }),
+          ...(carrier.isUnsafe === true ? { isUnsafe: true } : {}),
         };
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
@@ -120,7 +133,15 @@ export function rustTypeFromCarrier(
           kind: "named",
           path: namedType.path,
           ...(typeArguments.length === 0 ? {} : { typeArguments: typeArguments as RustType[] }),
-        };
+      };
+  }
+  const structuralObject = rustStructuralObjectCarrierValue(carrier);
+  if (structuralObject !== undefined) {
+    const fields = structuralObject.fields.map((field) =>
+      rustTypeFromCarrier(field.type, resolveSourceTypePath));
+    return fields.some((field) => field === undefined)
+      ? undefined
+      : rustProjectObjectType(fields as RustType[]);
   }
   if (carrier.kind === "array") {
     const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath);
@@ -151,6 +172,11 @@ export function rustTypeFromCarrier(
               ? {}
               : { typeArguments: typeArguments as RustType[] }),
           };
+    }
+    const union = rustSourceUnionCarrierValue(carrier);
+    if (union !== undefined) {
+      const path = resolveSourceTypePath(union);
+      return path === undefined ? undefined : { kind: "named", path };
     }
   }
   return undefined;

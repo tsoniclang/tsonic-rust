@@ -55,6 +55,112 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /counter\.clone\(\)\.current\(\)/u);
 });
 
+test("class accessors preserve exact read write and update semantics", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "class_accessor_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+let receiverCalls: int32 = 0;
+
+class Value {
+  private stored: int32;
+  private reads: int32 = 0;
+  private writes: int32 = 0;
+
+  constructor(initial: int32) {
+    this.stored = initial;
+  }
+
+  get current(): int32 {
+    this.reads += 1;
+    return this.stored;
+  }
+
+  set current(value: int32) {
+    this.writes += 1;
+    this.stored = value;
+  }
+
+  storedValue(): int32 {
+    return this.stored;
+  }
+
+  readCount(): int32 {
+    return this.reads;
+  }
+
+  writeCount(): int32 {
+    return this.writes;
+  }
+}
+
+const singleton = new Value(1);
+
+function selected(): Value {
+  receiverCalls += 1;
+  return singleton;
+}
+
+export function main(): void {
+  check(selected().current === 1);
+  selected().current = 2;
+  selected().current += 3;
+  const previous = selected().current++;
+  const current = ++selected().current;
+  check(previous === 5);
+  check(current === 7);
+  check(receiverCalls === 5);
+  check(singleton.storedValue() === 7);
+  check(singleton.readCount() === 4);
+  check(singleton.writeCount() === 4);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn __tsonic_read_[0-9]+_[0-9]+\(&self\) -> i32/u);
+  assert.match(text, /fn __tsonic_write_[0-9]+_[0-9]+\(&self, value: i32\)/u);
+  const run = validateGeneratedProject("class-accessor-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("fallible accessors propagate through exact getter and setter effects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Value {
+  get current(): int32 { throw new Error("read failed"); }
+  set current(_value: int32) { throw new Error("write failed"); }
+}
+
+export function read(value: Value): int32 {
+  return value.current;
+}
+
+export function write(value: Value, next: int32): void {
+  value.current = next;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn __tsonic_read_[0-9]+_[0-9]+\(&self\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn __tsonic_write_[0-9]+_[0-9]+\(&self, _value: i32\) -> rt::TsonicResult<\(\)>/u);
+  assert.match(text, /pub fn read\(value: Value\) -> rt::TsonicResult<i32>[\s\S]*__tsonic_read_[0-9]+_[0-9]+\(\)/u);
+  assert.match(text, /__tsonic_write_[0-9]+_[0-9]+\(__tsonic_accessor_value(?:_[0-9]+)?\)\?/u);
+  validateGeneratedProject("class-accessor-fallibility", result.artifacts);
+});
+
 test("implicit constructors and class field initializers lower deterministically", () => {
   const { result } = compileRust({
     files: {
@@ -130,13 +236,13 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("class field initializers requiring a pre-construction this fail closed", () => {
+test("class field initializers read already-initialized fields from exact selected evidence", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 
-export class Invalid {
+export class Initialized {
   first: int32 = 1;
   second: int32 = this.first;
 }
@@ -144,10 +250,11 @@ export class Invalid {
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
-    diagnostic.message.includes("before the reference-backed Rust object state exists")));
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /let __tsonic_field_second(?:_[0-9]+)? = __tsonic_field_first(?:_[0-9]+)?;/u,
+  );
 });
 
 test("enums lower with TSTS integer discriminants and fact-backed equality", () => {
@@ -405,6 +512,40 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("native arrays moved into project objects retain owned Vec storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_array_constructor_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { move } from "@tsonic/rust/lang.js";
+import { check } from "@acme/testing";
+
+class Holder {
+  items: int32[];
+
+  constructor(items: int32[]) {
+    this.items = move(items);
+  }
+}
+
+export function main(): void {
+  const holder = new Holder([30, 40]);
+  check(holder.items[1] === 40);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn new\(items: Vec<i32>\)/u);
+  assert.match(text, /Holder::new\(vec!\[30, 40\]\)/u);
+  const run = validateGeneratedProject("native-array-constructor-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
 test("push mutates the canonical shared JS array carrier", () => {
   const { result } = compileRust({
     surfaces: ["js"],
@@ -630,19 +771,34 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("unannotated object literals fail closed", () => {
+test("unannotated object literals use their exact checked structural shape", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "inferred_object_proof" } },
     files: {
       "index.ts": `
-export function make(): void {
-  const p = { x: 1 };
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const point = { x: 1, label: "start" };
+  const alias = point;
+  alias.x += 2;
+  alias.label = "done";
+  check(point.x === 3);
+  check(point.label === "done");
+  check(alias === point);
+  const separate = { x: 3, label: "done" };
+  check(separate !== point);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /rt::ObjectHandle::new\(\(String::from\("start"\), 1\.0\)\)/u);
+  const run = validateGeneratedProject("inferred-object-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
 });
 
 test("tuple types lower to Rust tuples with literal construction and indexing", () => {
@@ -671,22 +827,28 @@ export function first(entry: [int32, string]): int32 {
   assert.match(text, /entry\.0/u);
 });
 
-test("dynamic tuple indexing fails closed", () => {
-  const options = {
+test("homogeneous tuple carriers support checked dynamic indexing", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "dynamic_tuple_index_proof" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
 export function pick(entry: [int32, int32], i: int32): int32 {
   return entry[i];
 }
+
+export function main(): void {
+  check(pick([10, 20], 1) === 20);
+}
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
-    message: "Fixed-array element access requires a TSTS-selected in-range fixed ordinal.",
-  }]);
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /entry\[tsonic_rust_runtime::conversions::i32_to_usize\(i\)\?\]/u);
+  assert.equal(validateGeneratedProject("dynamic-tuple-index", result.artifacts, { run: true }).status, 0);
 });
 
 test("closed string-literal unions lower to unit-variant enums", () => {
@@ -716,23 +878,62 @@ export function is_off(mode: Mode): boolean {
   assert.match(text, /mode == Mode::Off/u);
 });
 
-test("discriminated object unions fail closed: they require narrowing facts", () => {
+test("discriminated object unions lower to native enums and preserve narrowed behavior", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "discriminated_union_proof" } },
     files: {
       "index.ts": `
-export type Shape =
-  | { kind: "circle"; radius: number }
-  | { kind: "square"; size: number };
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
 
-export function make(): Shape {
-  return { kind: "circle", radius: 1 };
+export type Shape =
+  | { kind: "circle"; radius: int32 }
+  | { kind: "square"; size: int32 };
+
+export function circle(radius: int32): Shape {
+  return { kind: "circle", radius };
+}
+
+export function square(size: int32): Shape {
+  return { kind: "square", size };
+}
+
+export function area(shape: Shape): int32 {
+  if (shape.kind === "circle") {
+    return shape.radius * 3;
+  }
+  return shape.size * shape.size;
+}
+
+export function grow(shape: Shape): int32 {
+  if (shape.kind === "circle") {
+    shape.radius += 2;
+    const previous = shape.radius++;
+    return previous * 10 + shape.radius;
+  }
+  shape.size = shape.size + 1;
+  return ++shape.size;
+}
+
+export function main(): void {
+  const circleShape = circle(4);
+  const squareShape = square(5);
+  check(grow(circleShape) === 67);
+  check(grow(squareShape) === 7);
+  check(area(circleShape) === 21);
+  check(area(squareShape) === 49);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.length > 0);
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub enum Shape/u);
+  assert.match(text, /match &shape/u);
+  const run = validateGeneratedProject("discriminated-union-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
 });
 
 test("static class methods lower to associated functions", () => {
@@ -926,8 +1127,8 @@ export function forwards(): int32 {
   assert.doesNotMatch(text, /Ok\(risky\(\)\?\)/u);
 });
 
-test("fallible calls inside closures fail closed", () => {
-  const options = {
+test("fallible calls inside callbacks use the explicit fallible callback ABI", () => {
+  const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
@@ -942,11 +1143,11 @@ export function bad(xs: int32[]): boolean {
 }
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_FALLIBLE_CLOSURE_UNSUPPORTED",
-    message: "Rust closures cannot contain fallible operations because the selected target callback ABI has an infallible result.",
-  }]);
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn bad\(xs: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
+  assert.match(text, /xs\.try_some\(\|x\| Ok\(risky\(x\)\? == 1\)\)/u);
 });
 
 test("string literals mentioning runtime aliases do not create imports", () => {

@@ -61,6 +61,17 @@ export function rustNumericPromotionKind(
   if (left === "float32" || right === "float32") {
     return "float32";
   }
+  if (left === "native-int" || right === "native-int" ||
+    left === "native-uint" || right === "native-uint") {
+    return undefined;
+  }
+  if (left === "uint128" || right === "uint128") {
+    const other = left === "uint128" ? right : left;
+    return unsignedKinds.has(other) ? "uint128" : undefined;
+  }
+  if (left === "int128" || right === "int128") {
+    return "int128";
+  }
   if (left === "uint64" || right === "uint64") {
     const other = left === "uint64" ? right : left;
     return unsignedKinds.has(other) ? "uint64" : undefined;
@@ -86,12 +97,22 @@ const numericKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "uint32",
   "int64",
   "uint64",
+  "int128",
+  "uint128",
+  "native-int",
+  "native-uint",
   "float32",
   "float64",
 ]);
 
 const signedKinds: ReadonlySet<SourcePrimitiveKind> = new Set(["int8", "int16", "int32"]);
-const unsignedKinds: ReadonlySet<SourcePrimitiveKind> = new Set(["uint8", "uint16", "uint32", "uint64"]);
+const unsignedKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
+  "uint8",
+  "uint16",
+  "uint32",
+  "uint64",
+  "uint128",
+]);
 const smallIntegerKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "int8",
   "uint8",

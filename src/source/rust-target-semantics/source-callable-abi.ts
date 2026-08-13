@@ -1,4 +1,5 @@
-import type { Node, Symbol } from "@tsonic/tsts";
+import { flowStateFactKey } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import {
   isRustStringCarrier,
   rustOptionElementCarrier,
@@ -61,9 +62,30 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           : context.ast.questionToken(parameter) !== undefined
             ? "optional" as const
             : "required" as const;
-      const requiredParameterCarrier = form === "required" && typeNode !== undefined
-        ? rustParameterLaneTargetType(base, typeNode, context, options)
+      const requiresOwnedValue = parameterUsesFlowState(
+        parameter,
+        "moved",
+        context,
+      );
+      const parameterLaneCarrier = form === "required" && typeNode !== undefined
+        ? requiresOwnedValue
+          ? base
+          : rustParameterLaneTargetType(base, typeNode, context, options)
         : undefined;
+      const requiredParameterCarrier = parameterLaneCarrier !== undefined &&
+          rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
+          isRustStringCarrier(base) &&
+          !requiresOwnedValue &&
+          parameterOnlyReadsThroughReceiver(parameter, context)
+        ? {
+            kind: "pointer" as const,
+            pointee: base,
+            mutability: "const" as const,
+          }
+        : parameterLaneCarrier;
+      const requiredMode = requiredParameterCarrier === undefined
+        ? undefined
+        : rustParameterModeForCarriers(base, requiredParameterCarrier);
       const abi = form === "optional"
         ? {
             form,
@@ -85,36 +107,18 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
                 parameterCarrier: base,
                 mode: "value" as const,
               }
-            : requiredParameterCarrier?.kind === "pointer"
+          : requiredParameterCarrier !== undefined && requiredMode !== undefined
               ? {
                   form,
                   valueCarrier: base,
                   parameterCarrier: requiredParameterCarrier,
-                  mode: requiredParameterCarrier.mutability === "mut"
-                    ? "mut-ref" as const
-                    : "ref" as const,
+                  mode: requiredMode,
                 }
-            : !isRustStringCarrier(base)
-        ? {
-            form,
-            valueCarrier: base,
-            parameterCarrier: base,
-            mode: base.kind === "pointer"
-              ? base.mutability === "mut" ? "mut-ref" as const : "ref" as const
-              : "value" as const,
-          }
-        : parameterOnlyReadsThroughReceiver(parameter, context)
-          ? {
-              form,
-              valueCarrier: base,
-              parameterCarrier: {
-                kind: "pointer" as const,
-                pointee: base,
-                mutability: "const" as const,
-              },
-              mode: "ref" as const,
-            }
-          : { form, valueCarrier: base, parameterCarrier: base, mode: "value" as const };
+              : undefined;
+      if (abi === undefined) {
+        cache.set(parameter, null);
+        return undefined;
+      }
       cache.set(parameter, abi);
       return abi;
     },
@@ -138,20 +142,20 @@ export function resolveRustContextualParameterAbi(
       : context.ast.questionToken(parameter) !== undefined
         ? "optional" as const
         : "required" as const;
+  const authoredType = Node_Type(context.ast, parameter);
+  const authoredCarrier = authoredType === undefined
+    ? resolveRustTargetTypeRef(parameter, context, options)
+    : resolveRustTargetTypeRef(authoredType, context, options);
   const selectedValueCarrier = form === "optional"
     ? selectedParameterCarrier
     : form === "default"
       ? rustOptionElementCarrier(selectedParameterCarrier)
       : selectedParameterCarrier.kind === "pointer"
-        ? selectedParameterCarrier.pointee
+        ? authoredCarrier
         : selectedParameterCarrier;
   if (selectedValueCarrier === undefined) {
     return undefined;
   }
-  const authoredType = Node_Type(context.ast, parameter);
-  const authoredCarrier = authoredType === undefined
-    ? undefined
-    : resolveRustTargetTypeRef(authoredType, context, options);
   const authoredExpectation = form === "optional"
     ? rustOptionElementCarrier(selectedParameterCarrier)
     : selectedValueCarrier;
@@ -160,14 +164,57 @@ export function resolveRustContextualParameterAbi(
       !rustTargetTypeRefEquals(authoredCarrier, authoredExpectation))) {
     return undefined;
   }
+  const mode = form === "required"
+    ? rustParameterModeForCarriers(selectedValueCarrier, selectedParameterCarrier)
+    : "value" as const;
+  if (mode === undefined) {
+    return undefined;
+  }
   return {
     form,
     valueCarrier: selectedValueCarrier,
     parameterCarrier: selectedParameterCarrier,
-    mode: selectedParameterCarrier.kind === "pointer"
-      ? selectedParameterCarrier.mutability === "mut" ? "mut-ref" : "ref"
-      : "value",
+    mode,
   };
+}
+
+function rustParameterModeForCarriers(
+  valueCarrier: TargetTypeRef,
+  parameterCarrier: TargetTypeRef,
+): RustArgumentMode | undefined {
+  if (rustTargetTypeRefEquals(valueCarrier, parameterCarrier)) {
+    return "value";
+  }
+  if (parameterCarrier.kind !== "pointer" ||
+    !rustTargetTypeRefEquals(parameterCarrier.pointee, valueCarrier)) {
+    return undefined;
+  }
+  return parameterCarrier.mutability === "mut" ? "mut-ref" : "ref";
+}
+
+function parameterUsesFlowState(
+  parameter: Node,
+  state: "borrowed-shared" | "borrowed-mut" | "moved",
+  context: RustTargetTypeResolutionContext,
+): boolean {
+  const { ast } = context;
+  const name = ast.name(parameter);
+  const declarationReference = context.source.navigation.sourceReferenceFor(name);
+  if (name === undefined || declarationReference?.declaration !== parameter) {
+    return false;
+  }
+  const callable = enclosingCallable(ast.parent(parameter), context);
+  const body = ast.body(callable);
+  if (body === undefined) {
+    return false;
+  }
+  return context.source.navigation
+    .referencesWithin(declarationReference.symbol, body)
+    .some((reference) => {
+      const flow = context.facts.resolve(reference, flowStateFactKey) ??
+        context.facts.get(reference, flowStateFactKey);
+      return flow?.state === state;
+    });
 }
 
 function parameterOnlyReadsThroughReceiver(
@@ -185,23 +232,12 @@ function parameterOnlyReadsThroughReceiver(
   if (body === undefined) {
     return false;
   }
-  let found = false;
-  let valid = true;
-  const visit = (node: Node | undefined): void => {
-    if (node === undefined || !valid) {
-      return;
-    }
-    if (node !== name && referenceMatches(node, declarationReference.symbol, context)) {
-      found = true;
-      valid = referenceOnlyReadsThroughReceiver(node, context);
-      if (!valid) {
-        return;
-      }
-    }
-    ast.forEachChild(node, visit);
-  };
-  visit(body);
-  return found && valid;
+  const references = context.source.navigation.referencesWithin(
+    declarationReference.symbol,
+    body,
+  );
+  return references.length > 0 && references.every((reference) =>
+    referenceOnlyReadsThroughReceiver(reference, context));
 }
 
 function enclosingCallable(
@@ -225,14 +261,6 @@ function enclosingCallable(
     current = ast.parent(current);
   }
   return undefined;
-}
-
-function referenceMatches(
-  node: Node,
-  symbol: Symbol,
-  context: RustTargetTypeResolutionContext,
-): boolean {
-  return context.source.navigation.sourceReferenceFor(node)?.symbol === symbol;
 }
 
 function referenceOnlyReadsThroughReceiver(

@@ -832,8 +832,7 @@
   {
     "area": "Unions",
     "lane": "discriminated object unions",
-    "classification": "blocked",
-    "contract": "requires public TSTS narrowing facts"
+    "classification": "implemented"
   },
   {
     "area": "Arrays",

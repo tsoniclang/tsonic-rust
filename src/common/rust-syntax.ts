@@ -8,6 +8,8 @@ export type RustPrimitiveTypeName =
   | "u32"
   | "i64"
   | "u64"
+  | "i128"
+  | "u128"
   | "f32"
   | "f64"
   | "isize"

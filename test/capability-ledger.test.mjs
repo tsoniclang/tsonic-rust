@@ -6,10 +6,6 @@ import { compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 // Rows name the capability, a minimal repro, and the required behavior.
 const unsupportedLanes = [
   {
-    capability: "discriminated object unions (require narrowing facts)",
-    files: { "index.ts": "export type Shape = { kind: \"circle\"; radius: number } | { kind: \"square\"; size: number };\nexport function make(): Shape {\n  return { kind: \"circle\", radius: 1 };\n}\n" },
-  },
-  {
     capability: "RegExp constructs outside the oracle-proven subset",
     surfaces: ["js"],
     files: { "index.ts": "export function f(text: string): boolean {\n  const pattern = /x(?=y)/;\n  return pattern.test(text);\n}\n" },

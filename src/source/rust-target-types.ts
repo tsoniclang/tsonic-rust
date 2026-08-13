@@ -34,12 +34,34 @@ export const rustJsRegExpMatchTargetId = "rust.js.JsRegExpMatch";
 export const rustUsizeTargetId = "rust.core.usize";
 export const rustIsizeTargetId = "rust.core.isize";
 export const rustNamedTypeCarrierName = "named-type";
+export const rustStructuralObjectCarrierName = "structural-object";
+export const rustSourceUnionCarrierName = "source-union";
 
 export interface RustSourceTypeCarrierValue {
   readonly fileName: string;
   readonly typeName: string;
   readonly shape: "object" | "enum";
   readonly typeArguments: readonly TargetTypeRef[];
+}
+
+export interface RustStructuralObjectFieldCarrierValue {
+  readonly sourceName: string;
+  readonly type: TargetTypeRef;
+}
+
+export interface RustStructuralObjectCarrierValue {
+  readonly fields: readonly RustStructuralObjectFieldCarrierValue[];
+}
+
+export interface RustSourceUnionVariantCarrierValue {
+  readonly name: string;
+  readonly carrier: TargetTypeRef;
+}
+
+export interface RustSourceUnionCarrierValue {
+  readonly fileName: string;
+  readonly typeName: string;
+  readonly variants: readonly RustSourceUnionVariantCarrierValue[];
 }
 
 export function rustSourceTypeCarrier(
@@ -89,6 +111,107 @@ export function rustSourceTypeCarrierValue(
         typeArguments: candidate.typeArguments as readonly TargetTypeRef[],
       }
     : undefined;
+}
+
+export function rustStructuralObjectTargetType(
+  fields: readonly RustStructuralObjectFieldCarrierValue[],
+): TargetTypeRef {
+  const canonicalFields = Object.freeze(
+    [...fields].sort((left, right) => left.sourceName.localeCompare(right.sourceName)),
+  );
+  return {
+    kind: "target-specific",
+    target: "rust",
+    name: rustStructuralObjectCarrierName,
+    value: { fields: canonicalFields },
+  };
+}
+
+export function rustStructuralObjectCarrierValue(
+  carrier: TargetTypeRef | undefined,
+): RustStructuralObjectCarrierValue | undefined {
+  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" ||
+    carrier.name !== rustStructuralObjectCarrierName) {
+    return undefined;
+  }
+  const value = carrier.value;
+  if (typeof value !== "object" || value === null || Array.isArray(value) ||
+    !hasExactObjectKeys(value, ["fields"])) {
+    return undefined;
+  }
+  const fields = (value as { readonly fields?: unknown }).fields;
+  if (!isDenseDataArray(fields) || fields.length === 0) {
+    return undefined;
+  }
+  const seenNames = new Set<string>();
+  const normalized: RustStructuralObjectFieldCarrierValue[] = [];
+  for (const field of fields) {
+    if (typeof field !== "object" || field === null || Array.isArray(field) ||
+      !hasExactObjectKeys(field, ["sourceName", "type"])) {
+      return undefined;
+    }
+    const candidate = field as Partial<RustStructuralObjectFieldCarrierValue>;
+    if (typeof candidate.sourceName !== "string" || candidate.sourceName.length === 0 ||
+      seenNames.has(candidate.sourceName) || !isRustTargetTypeRef(candidate.type)) {
+      return undefined;
+    }
+    seenNames.add(candidate.sourceName);
+    normalized.push(candidate as RustStructuralObjectFieldCarrierValue);
+  }
+  return { fields: Object.freeze(normalized) };
+}
+
+export function rustSourceUnionTargetType(
+  fileName: string,
+  typeName: string,
+  variants: readonly RustSourceUnionVariantCarrierValue[],
+): TargetTypeRef {
+  return {
+    kind: "target-specific",
+    target: "rust",
+    name: rustSourceUnionCarrierName,
+    value: { fileName, typeName, variants },
+  };
+}
+
+export function rustSourceUnionCarrierValue(
+  carrier: TargetTypeRef | undefined,
+): RustSourceUnionCarrierValue | undefined {
+  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" ||
+    carrier.name !== rustSourceUnionCarrierName) {
+    return undefined;
+  }
+  const value = carrier.value;
+  if (typeof value !== "object" || value === null || Array.isArray(value) ||
+    !hasExactObjectKeys(value, ["fileName", "typeName", "variants"])) {
+    return undefined;
+  }
+  const candidate = value as Partial<RustSourceUnionCarrierValue>;
+  if (typeof candidate.fileName !== "string" || candidate.fileName.length === 0 ||
+    typeof candidate.typeName !== "string" || candidate.typeName.length === 0 ||
+    !isDenseDataArray(candidate.variants) || candidate.variants.length < 2) {
+    return undefined;
+  }
+  const seenNames = new Set<string>();
+  const variants: RustSourceUnionVariantCarrierValue[] = [];
+  for (const variant of candidate.variants) {
+    if (typeof variant !== "object" || variant === null || Array.isArray(variant) ||
+      !hasExactObjectKeys(variant, ["carrier", "name"])) {
+      return undefined;
+    }
+    const selected = variant as Partial<RustSourceUnionVariantCarrierValue>;
+    if (typeof selected.name !== "string" || selected.name.length === 0 ||
+      seenNames.has(selected.name) || !isRustTargetTypeRef(selected.carrier)) {
+      return undefined;
+    }
+    seenNames.add(selected.name);
+    variants.push(selected as RustSourceUnionVariantCarrierValue);
+  }
+  return {
+    fileName: candidate.fileName,
+    typeName: candidate.typeName,
+    variants: Object.freeze(variants),
+  };
 }
 
 export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
@@ -256,6 +379,24 @@ export function substituteRustTargetTypeParameters(
             substituteRustTargetTypeParameters(argument, substitutions)),
         );
       }
+      const structuralObject = rustStructuralObjectCarrierValue(type);
+      if (structuralObject !== undefined) {
+        return rustStructuralObjectTargetType(structuralObject.fields.map((field) => ({
+          ...field,
+          type: substituteRustTargetTypeParameters(field.type, substitutions),
+        })));
+      }
+      const sourceUnion = rustSourceUnionCarrierValue(type);
+      if (sourceUnion !== undefined) {
+        return rustSourceUnionTargetType(
+          sourceUnion.fileName,
+          sourceUnion.typeName,
+          sourceUnion.variants.map((variant) => ({
+            ...variant,
+            carrier: substituteRustTargetTypeParameters(variant.carrier, substitutions),
+          })),
+        );
+      }
       const namedType = rustNamedTypeCarrierValue(type);
       if (namedType !== undefined) {
         return rustNamedTargetType(
@@ -275,6 +416,76 @@ export function substituteRustTargetTypeParameters(
     }
     default:
       return type;
+  }
+}
+
+export function rustTargetTypeContainsTypeParameter(
+  type: TargetTypeRef,
+  selectedNames: ReadonlySet<string>,
+): boolean {
+  return visitRustTargetTypeParameters(type, (name) => selectedNames.has(name));
+}
+
+export function rustTargetTypeParameterNames(type: TargetTypeRef): readonly string[] {
+  const names = new Set<string>();
+  visitRustTargetTypeParameters(type, (name) => {
+    names.add(name);
+    return false;
+  });
+  return Object.freeze([...names].sort());
+}
+
+function visitRustTargetTypeParameters(
+  type: TargetTypeRef,
+  visit: (name: string) => boolean,
+): boolean {
+  switch (type.kind) {
+    case "type-parameter":
+      return visit(type.name);
+    case "target-named":
+      return type.typeArguments?.some((argument) =>
+        visitRustTargetTypeParameters(argument, visit)) === true;
+    case "array":
+      return visitRustTargetTypeParameters(type.element, visit);
+    case "tuple":
+      return type.elements.some((element) =>
+        visitRustTargetTypeParameters(element, visit));
+    case "pointer":
+      return visitRustTargetTypeParameters(type.pointee, visit);
+    case "function-pointer":
+    case "closure":
+      return type.args.some((argument) =>
+        visitRustTargetTypeParameters(argument, visit)) ||
+        visitRustTargetTypeParameters(type.result, visit);
+    case "associated-type":
+      return visitRustTargetTypeParameters(type.owner, visit);
+    case "target-specific": {
+      const sourceType = rustSourceTypeCarrierValue(type);
+      if (sourceType !== undefined) {
+        return sourceType.typeArguments.some((argument) =>
+          visitRustTargetTypeParameters(argument, visit));
+      }
+      const structuralObject = rustStructuralObjectCarrierValue(type);
+      if (structuralObject !== undefined) {
+        return structuralObject.fields.some((field) =>
+          visitRustTargetTypeParameters(field.type, visit));
+      }
+      const sourceUnion = rustSourceUnionCarrierValue(type);
+      if (sourceUnion !== undefined) {
+        return sourceUnion.variants.some((variant) =>
+          visitRustTargetTypeParameters(variant.carrier, visit));
+      }
+      const namedType = rustNamedTypeCarrierValue(type);
+      if (namedType !== undefined) {
+        return namedType.typeArguments.some((argument) =>
+          visitRustTargetTypeParameters(argument, visit));
+      }
+      const fixedArray = rustFixedArrayCarrierValue(type);
+      return fixedArray !== undefined &&
+        visitRustTargetTypeParameters(fixedArray.element, visit);
+    }
+    default:
+      return false;
   }
 }
 
@@ -339,6 +550,47 @@ export function inferRustTargetTypeParameterBindings(
             leftSource.typeArguments.length === rightSource.typeArguments.length &&
             leftSource.typeArguments.every((argument, index) =>
               match(argument, rightSource.typeArguments[index]!));
+        }
+        const leftStructural = rustStructuralObjectCarrierValue(left);
+        const rightStructural = rustStructuralObjectCarrierValue(right);
+        if (leftStructural !== undefined || rightStructural !== undefined) {
+          return leftStructural !== undefined && rightStructural !== undefined &&
+            leftStructural.fields.length === rightStructural.fields.length &&
+            leftStructural.fields.every((field, index) => {
+              const other = rightStructural.fields[index];
+              return other !== undefined && field.sourceName === other.sourceName &&
+                match(field.type, other.type);
+            });
+        }
+        const leftUnion = rustSourceUnionCarrierValue(left);
+        const rightUnion = rustSourceUnionCarrierValue(right);
+        if (leftUnion !== undefined || rightUnion !== undefined) {
+          return leftUnion !== undefined && rightUnion !== undefined &&
+            leftUnion.fileName === rightUnion.fileName &&
+            leftUnion.typeName === rightUnion.typeName &&
+            leftUnion.variants.length === rightUnion.variants.length &&
+            leftUnion.variants.every((variant, index) => {
+              const other = rightUnion.variants[index];
+              return other !== undefined && variant.name === other.name &&
+                match(variant.carrier, other.carrier);
+            });
+        }
+        const leftNamed = rustNamedTypeCarrierValue(left);
+        const rightNamed = rustNamedTypeCarrierValue(right);
+        if (leftNamed !== undefined || rightNamed !== undefined) {
+          return leftNamed !== undefined && rightNamed !== undefined &&
+            leftNamed.id === rightNamed.id &&
+            leftNamed.path === rightNamed.path &&
+            leftNamed.typeArguments.length === rightNamed.typeArguments.length &&
+            leftNamed.typeArguments.every((argument, index) =>
+              match(argument, rightNamed.typeArguments[index]!));
+        }
+        const leftArray = rustFixedArrayCarrierValue(left);
+        const rightArray = rustFixedArrayCarrierValue(right);
+        if (leftArray !== undefined || rightArray !== undefined) {
+          return leftArray !== undefined && rightArray !== undefined &&
+            leftArray.length === rightArray.length &&
+            match(leftArray.element, rightArray.element);
         }
         return rustTargetTypeRefEquals(left, right);
       }
@@ -612,7 +864,9 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
 
 export function rustValueCarrierRequiresCloneOnRead(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "target-named" && rustCloneOnReadTargetIds.has(carrier.id) ||
-    rustSourceTypeCarrierValue(carrier)?.shape === "object";
+    rustSourceTypeCarrierValue(carrier)?.shape === "object" ||
+    rustStructuralObjectCarrierValue(carrier) !== undefined ||
+    rustSourceUnionCarrierValue(carrier) !== undefined;
 }
 
 export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -642,9 +896,18 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
     return rustUnconditionallyCloneTargetIds.has(carrier.id);
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
-  return fixedArray !== undefined
-    ? rustCarrierSupportsClone(fixedArray.element)
-    : carrier.target === "rust" && carrier.name === "source-type";
+  if (fixedArray !== undefined) {
+    return rustCarrierSupportsClone(fixedArray.element);
+  }
+  const structuralObject = rustStructuralObjectCarrierValue(carrier);
+  if (structuralObject !== undefined) {
+    return structuralObject.fields.every((field) => rustCarrierSupportsClone(field.type));
+  }
+  const sourceUnion = rustSourceUnionCarrierValue(carrier);
+  if (sourceUnion !== undefined) {
+    return sourceUnion.variants.every((variant) => rustCarrierSupportsClone(variant.carrier));
+  }
+  return carrier.target === "rust" && carrier.name === "source-type";
 }
 
 export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined): boolean {
@@ -692,10 +955,11 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
     isRustUndefinedCarrier(carrier) || isRustBigIntCarrier(carrier) ||
-    carrier?.kind === "source-primitive";
+    (carrier?.kind === "source-primitive" && carrier.name !== "char");
 }
 
-const rustNumericPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
+const rustPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
+  char: "u16",
   int8: "i8",
   uint8: "u8",
   int16: "i16",
@@ -704,17 +968,40 @@ const rustNumericPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, Ru
   uint32: "u32",
   int64: "i64",
   uint64: "u64",
+  int128: "i128",
+  uint128: "u128",
   float32: "f32",
   float64: "f64",
+  "native-int": "isize",
+  "native-uint": "usize",
 };
+
+const rustNumericPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
+  "int8",
+  "uint8",
+  "int16",
+  "uint16",
+  "int32",
+  "uint32",
+  "int64",
+  "uint64",
+  "int128",
+  "uint128",
+  "float32",
+  "float64",
+  "native-int",
+  "native-uint",
+]);
 
 const rustSignedPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "int8",
   "int16",
   "int32",
   "int64",
+  "int128",
   "float32",
   "float64",
+  "native-int",
 ]);
 
 const rustIntegerPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
@@ -726,19 +1013,23 @@ const rustIntegerPrimitiveKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "uint32",
   "int64",
   "uint64",
+  "int128",
+  "uint128",
+  "native-int",
+  "native-uint",
 ]);
 
 export function rustPrimitiveTypeName(kind: SourcePrimitiveKind): RustPrimitiveTypeName | undefined {
   if (kind === "bool") {
     return "bool";
   }
-  return rustNumericPrimitiveNames[kind];
+  return rustPrimitiveNames[kind];
 }
 
 export function isRustNumericCarrier(
   carrier: TargetTypeRef | undefined,
 ): carrier is Extract<TargetTypeRef, { readonly kind: "source-primitive" }> {
-  return carrier?.kind === "source-primitive" && rustNumericPrimitiveNames[carrier.name] !== undefined;
+  return carrier?.kind === "source-primitive" && rustNumericPrimitiveKinds.has(carrier.name);
 }
 
 export function isRustSignedNumericCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -795,4 +1086,11 @@ export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): Tar
   return carrier?.kind === "target-named" && carrier.id === rustFutureTargetId
     ? carrier.typeArguments?.[0]
     : undefined;
+}
+
+function hasExactObjectKeys(value: object, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const selected = [...expected].sort();
+  return actual.length === selected.length &&
+    actual.every((key, index) => key === selected[index]);
 }

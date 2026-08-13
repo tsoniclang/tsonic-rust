@@ -30,7 +30,8 @@ Native semantics: classes to struct + impl (constructor lane, methods with
 fact-selected `&self`/`&mut self`, static methods as associated functions),
 enums with TSTS-evaluated discriminants, interfaces as record structs with
 contextual object literals, closed string-literal union aliases as
-unit-variant enums, tuples with constant indexing, `readonly T[]` as `&[T]`
+unit-variant enums, discriminated object unions as payload enums with
+TSTS-selected narrowing, tuples with constant indexing, `readonly T[]` as `&[T]`
 and mutable array parameters as `&mut [T]`, null-only unions as `Option<T>`
 with `??` coalescing, passthrough generic functions, Rust-flavoured
 `borrow`/`borrowMut`/`move` flow aliases validated against finalized
@@ -87,11 +88,50 @@ on activation: an installed but unused capability contributes no
 dependencies. The `@acme/rust-superbunapi` fixture proves the mechanism
 is name-blind — no code in this package names any capability.
 
+Rust standard-library declarations are available through target-owned virtual
+modules. For example:
+
+```ts
+import type { int32 } from "@tsonic/core/types.js";
+import { HashMap } from "@tsonic/rust/std/collections.js";
+
+const values = new HashMap<string, int32>();
+values.insert("answer", 42);
+```
+
+TSTS selects the exact virtual `HashMap.insert` declaration. Rust semantic
+analysis then consumes that selected identity and its closed generic carriers;
+the backend emits `std::collections::HashMap` operations without matching the
+source spelling.
+
+Third-party Cargo libraries use a user-owned `Cargo.toml`. Set the Rust target
+option `projectFile` to that manifest and import a direct dependency by its
+Cargo alias:
+
+```toml
+[dependencies]
+widget_alias = { package = "acme-widget", version = "1.2.3" }
+```
+
+```ts
+import type { int32 } from "@tsonic/core/types.js";
+import { Widget } from "@tsonic/rust/crates/widget_alias/index.js";
+
+const widget = new Widget<int32>(42);
+```
+
+The isolated compiler-provider worker snapshots the resolved Cargo graph,
+materializes rustdoc JSON once for the selected dependency, and projects only
+requested public exports into provider declarations. The same exact provider
+identities and target carriers flow into Rust operation selection. Unsupported
+Rust signatures fail at the virtual import boundary. In `projectFile` mode,
+Tsonic emits source artifacts only and never creates or mutates `Cargo.toml`;
+the user-owned Cargo project controls dependencies, features, profiles, and
+the inclusion of generated source.
+
 ## Explicitly unsupported (fail-closed, classified)
 
-Each unsupported lane requires a contract that does not exist: discriminated
-object unions (narrowing facts — see the exact repro pinned in
-`test/r8-completion.test.mjs`), and RegExp constructs outside the
+Each unsupported lane requires a contract that does not exist. RegExp constructs outside the
 oracle-proven subset (constant patterns with classes, quantifiers,
 anchors, alternation, and groups under flags i/g/m, proven against 217
 committed Node oracle vectors plus a 157-entry engine-generated

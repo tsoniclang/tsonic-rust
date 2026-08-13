@@ -4,7 +4,8 @@ import { acmeTelemetryCapability, artifactText, compileRust } from "./helpers/ru
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 import { rustTargetOperationFactKey } from "../dist/index.js";
 import { finalizeRustProviderOperationAbi } from "../dist/source/rust-facts/finalized-operation-abi.js";
-import { applyFallibleShape, rustBlockTerminates } from "../dist/backend/planner/functions.js";
+import { applyFallibleShape } from "../dist/backend/planner/fallible-shape.js";
+import { rustBlockTerminates } from "../dist/backend/planner/functions.js";
 import {
   requireProviderArgumentPassingFacts,
   sourceCallSelectedMemberMatches,
@@ -208,8 +209,8 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(\)>,\n\}/u);
-  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(\)\)/u);
+  assert.match(text, /pub struct Empty \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<rt::EmptyObjectState>,\n\}/u);
+  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(rt::EmptyObjectState\)/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
 
