@@ -667,6 +667,18 @@ function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: Rus
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
   defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
 
+export interface RustPreparedOperationResultFact {
+  readonly operationId: string;
+  readonly operationKind: RustProviderFactOperationKind;
+  readonly resultCarrier: TargetTypeRef;
+}
+
+export const rustPreparedOperationResultFactKey: RustPlanKey<RustPreparedOperationResultFact> =
+  defineRustPlanKey("preparedOperationResult", (left, right) =>
+    left.operationId === right.operationId &&
+    left.operationKind === right.operationKind &&
+    rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier));
+
 export const rustOptionalChainFactKey: RustPlanKey<RustOptionalChainFact> =
   defineRustPlanKey("optionalChain", closedMetadataEquals);
 

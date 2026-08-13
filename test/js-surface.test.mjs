@@ -312,6 +312,26 @@ export function values(): string {
   assert.match(text, /js_abi::array_is_array_value\(&input\)/u);
 });
 
+test("Array.from consumes exact native vectors and selected mapping callbacks", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function copy(values: Map<string, string>): string {
+  const copied = Array.from(values.values());
+  const mapped = Array.from(values.values(), (value) => value.toUpperCase());
+  return copied.join(",") + ":" + mapped.join(",");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::array_from_vec\(&values\.values\(\)\)/u);
+  assert.match(text, /js_abi::array_from_vec_map/u);
+});
+
 test("Array concat tags exact scalar and array arguments while preserving the receiver lane", () => {
   const int32Carrier = rustSourcePrimitiveTargetType("int32");
   const arrayCarrier = rustJsArrayTargetType(int32Carrier);
@@ -413,6 +433,28 @@ export function probe(name: string): boolean {
   assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
   assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(\s*js_string::js_len\(name\),?\s*\)\? > 0/su);
+});
+
+test("string index signatures and zero-argument Date construction use exact JS rows", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function probe(text: string, index: int32): boolean {
+  const now = new Date();
+  return text[0] === "a" && text[index] === "b" && now.getTime() <= Date.now();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_string::char_at\(text, 0\.0\)\?/u);
+  assert.match(text, /js_string::char_at\(text, tsonic_rust_runtime::conversions::i32_to_f64\(index\)\)\?/u);
+  assert.match(text, /js_abi::JsDate::new\(\)/u);
 });
 
 test("string slicing, code points, repeat, and JS array copies use exact rows", () => {

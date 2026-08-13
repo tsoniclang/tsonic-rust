@@ -3,6 +3,34 @@ import assert from "node:assert/strict";
 import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
+test("Error subclasses retain exact inherited field selection for reads and writes", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "error_subclass_fields" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class NamedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NamedError";
+  }
+}
+
+export function main(): void {
+  const error = new NamedError("failure");
+  check(error.name === "NamedError" && error.message === "failure");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("error-subclass-fields", result.artifacts, { run: true }).status, 0);
+});
+
 test("array callbacks lower to Rust closures over the canonical JS array carrier", async () => {
   const { result } = compileRust({
     surfaces: ["js"],

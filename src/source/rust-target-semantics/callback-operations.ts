@@ -29,7 +29,8 @@ export function finalizeRustCallbackOperation(
   }
   if (selection.callback.shape === "map") {
     const resultCarrier = rustJsArrayTargetType(callbackProtocol.result);
-    const parameterCarriers = [callback, ...(selection.parameterCarriers?.slice(1) ?? [])];
+    const parameterCarriers = [...(selection.parameterCarriers ?? [])];
+    parameterCarriers[selection.callback.sourceArgumentIndex] = callback;
     return {
       ...selection,
       fact: {

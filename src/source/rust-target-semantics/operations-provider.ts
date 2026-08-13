@@ -89,6 +89,7 @@ import {
 import {
   rustTargetOperationResultCarrier,
   rustTargetOperationFactKey,
+  rustPreparedOperationResultFactKey,
   rustOptionalChainFactKey,
   rustPostCheckBinaryOperationId,
   rustPostCheckUnaryMinusOperationId,
@@ -390,6 +391,13 @@ function mapSelectedAssignment(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  const selectedLeftFact = context.facts.resolve(request.left, rustTargetOperationFactKey);
+  if (selectedLeftFact?.kind === "source-field" ||
+    selectedLeftFact?.kind === "source-static-field" ||
+    selectedLeftFact?.kind === "source-union-field" ||
+    selectedLeftFact?.kind === "source-accessor") {
+    return undefined;
+  }
   const selectedLeft = context.facts.getSelectedTargetOperator(request.left);
   const selectedDeclaration = selectedLeft?.provenance?.sourceSelectedDeclaration;
   const providerIdentity = selectedLeft?.provenance?.providerDeclaration;
@@ -842,7 +850,15 @@ export function selectRustCheckedCall(
         argumentCarriers,
       });
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-        return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript constructor '${selectedSourceMember.ownerName}' has no closed Rust operation row for the selected argument carriers.`);
+        return rejectSelectedOperation(
+          request.source.call,
+          context,
+          "RUST_SELECTED_OPERATION_UNSUPPORTED",
+          `The selected JavaScript constructor '${selectedSourceMember.ownerName}' has no closed Rust operation row for the selected argument carriers.`,
+          [{
+            message: `arguments=${JSON.stringify(argumentCarriers)}; selectedTypeArguments=${JSON.stringify(typeArgumentCarriers)}`,
+          }],
+        );
       }
       return acceptSelectedCall(request, selection.fact, selection.parameterCarriers ?? [], context, options, {
         sourceName: selectedSourceMember.ownerName,
@@ -885,6 +901,8 @@ export function selectRustCheckedCall(
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,
       argumentCompatibility: selectedArgumentCompatibility(selectedCallArgumentNodes(request), context, options),
+      carrierSupportsProjectIdentity: (carrier) =>
+        options.projectTypes.definitionForCarrier(carrier) !== undefined,
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
@@ -1829,6 +1847,25 @@ function acceptSelectedCall(
     );
   }
   const resultCarrier = optionalResult.resultCarrier;
+  const preparedResult = context.facts.resolve(
+    request.source.call,
+    rustPreparedOperationResultFactKey,
+  );
+  if (preparedResult !== undefined && (
+    preparedResult.operationId !== fact.operationId ||
+    preparedResult.operationKind !== fact.abi.operationKind ||
+    !rustTargetTypeRefEquals(preparedResult.resultCarrier, resultCarrier)
+  )) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_PREPARED_OPERATION_RESULT_CONFLICT",
+      `Finalized call '${callIdentity.sourceName}' conflicts with its exact prepared Rust operation result.`,
+      [{
+        message: `prepared=${JSON.stringify(preparedResult)}; finalized=${JSON.stringify({ operationId: fact.operationId, operationKind: fact.abi.operationKind, resultCarrier })}`,
+      }],
+    );
+  }
   const operation: RustTargetOperationSelection = {
     operationId: fact.operationId,
     operationKind: fact.abi.operationKind,
@@ -2415,6 +2452,59 @@ export function selectRustCheckedDelete(
   });
 }
 
+function selectExternalProjectFieldAccess(
+  request: RustCheckedPropertySelectionInput,
+  selectedReceiverCarrier: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  const externalField = options.projectTypes.externalFieldForReceiver(
+    request.sourceSelectedDeclaration,
+    selectedReceiverCarrier,
+  );
+  if (externalField === undefined || selectedReceiverCarrier === undefined) {
+    return undefined;
+  }
+  const operationId = sourceOperationId(context, externalField.field.declaration, "external-field");
+  const readSlot = rustProjectMemberSlotName(
+    context.ast,
+    externalField.field.declaration,
+    "read",
+  );
+  const writeSlot = rustProjectMemberSlotName(
+    context.ast,
+    externalField.field.declaration,
+    "write",
+  );
+  if (readSlot === undefined || writeSlot === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_EXTERNAL_PROJECT_FIELD_SLOT_IDENTITY_MISSING",
+      "Selected external project field has no deterministic Rust dispatch-slot identity.",
+    );
+  }
+  return acceptRustMemberOperation(request, "property", {
+    kind: "source-field",
+    operationId,
+    receiverCarrier: selectedReceiverCarrier,
+    storage: "project-object",
+    storageIndex: externalField.field.storageIndex,
+    resultCarrier: externalField.field.carrier,
+    dispatch: {
+      read: readSlot,
+      write: writeSlot,
+      ownerCarrier: externalField.ownerCarrier,
+    },
+  }, context, options, {
+    sourceExpression: request.expression,
+    sourceReceiver: request.receiver,
+    sourceSelectedSymbol: request.sourceSelectedSymbol,
+    sourceSelectedDeclaration: externalField.field.declaration,
+    sourceResultType: request.sourceResultType,
+  });
+}
+
 export function selectRustCheckedPropertyAccess(
   request: RustCheckedPropertySelectionInput,
   context: RustOperationPolicyContext,
@@ -2492,6 +2582,16 @@ export function selectRustCheckedPropertyAccess(
     }
   }
 
+  const externalProjectField = selectExternalProjectFieldAccess(
+    request,
+    selectedReceiverCarrier,
+    context,
+    options,
+  );
+  if (externalProjectField !== undefined) {
+    return externalProjectField;
+  }
+
   const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
   if (jsIdentity !== undefined) {
     if (!options.jsEnabled) {
@@ -2505,7 +2605,15 @@ export function selectRustCheckedPropertyAccess(
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-      return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript property '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust operation row for this receiver carrier.`);
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SELECTED_OPERATION_UNSUPPORTED",
+        `The selected JavaScript property '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust operation row for this receiver carrier.`,
+        [{
+          message: `receiver=${JSON.stringify(receiverCarrier)}; sourceReceiver=${JSON.stringify(resolveRustTargetTypeRef(request.receiver, context, options))}; selectedReceiver=${JSON.stringify(resolveRustTargetTypeRef(request.sourceReceiverType, context, options))}`,
+        }],
+      );
     }
     const fact = finalizeProviderOperationFromSubjects(selection.fact, request.receiver, [], context, options, selectedReceiverCarrier);
     if (fact === undefined) {
@@ -2578,51 +2686,6 @@ export function selectRustCheckedPropertyAccess(
   );
   if (structuralProperty !== undefined) {
     return structuralProperty;
-  }
-
-  const externalField = options.projectTypes.externalFieldForReceiver(
-    request.sourceSelectedDeclaration,
-    selectedReceiverCarrier,
-  );
-  if (externalField !== undefined && selectedReceiverCarrier !== undefined) {
-    const operationId = sourceOperationId(context, externalField.field.declaration, "external-field");
-    const readSlot = rustProjectMemberSlotName(
-      context.ast,
-      externalField.field.declaration,
-      "read",
-    );
-    const writeSlot = rustProjectMemberSlotName(
-      context.ast,
-      externalField.field.declaration,
-      "write",
-    );
-    if (readSlot === undefined || writeSlot === undefined) {
-      return rejectSelectedOperation(
-        request.expression,
-        context,
-        "RUST_EXTERNAL_PROJECT_FIELD_SLOT_IDENTITY_MISSING",
-        "Selected external project field has no deterministic Rust dispatch-slot identity.",
-      );
-    }
-    return acceptRustMemberOperation(request, "property", {
-      kind: "source-field",
-      operationId,
-      receiverCarrier: selectedReceiverCarrier,
-      storage: "project-object",
-      storageIndex: externalField.field.storageIndex,
-      resultCarrier: externalField.field.carrier,
-      dispatch: {
-        read: readSlot,
-        write: writeSlot,
-        ownerCarrier: externalField.ownerCarrier,
-      },
-    }, context, options, {
-      sourceExpression: request.expression,
-      sourceReceiver: request.receiver,
-      sourceSelectedSymbol: request.sourceSelectedSymbol,
-      sourceSelectedDeclaration: externalField.field.declaration,
-      sourceResultType: request.sourceResultType,
-    });
   }
 
   if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
@@ -3873,8 +3936,9 @@ function selectedMemberReceiverCarrier(
     return sourceCarrier;
   }
   const selectedOperation = context.facts.resolve(receiver, rustTargetOperationFactKey);
+  const preparedOperation = context.facts.resolve(receiver, rustPreparedOperationResultFactKey);
   const selectedOperationResult = selectedOperation === undefined
-    ? undefined
+    ? preparedOperation?.resultCarrier
     : rustTargetOperationResultCarrier(selectedOperation);
   if (request.optionalChain !== true && selectedOperationResult !== undefined &&
     rustTargetTypeRefEquals(sourceCarrier, selectedOperationResult)) {

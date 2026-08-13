@@ -1515,6 +1515,29 @@ function printRustExprFitted(
         `${indentText(depth)}}`,
       ].join("\n");
     }
+    case "format-write": {
+      if (expression.args.length <= 1 && !flat.includes("\n") && renderedFits(flat, column)) {
+        return flat;
+      }
+      const argumentIndent = indentText(depth + 1);
+      const flatFormatArguments = expression.args.map(printRustExpr).join(", ");
+      const fittedFormatArguments = expression.args.length === 0
+        ? []
+        : !flatFormatArguments.includes("\n") && renderedFits(flatFormatArguments, argumentIndent.length)
+        ? [`${argumentIndent}${flatFormatArguments}`]
+        : expression.args.map((argument, index) =>
+          appendToLastLine(
+            `${argumentIndent}${printRustExprFitted(argument, depth + 1, argumentIndent.length)}`,
+            index + 1 === expression.args.length ? "" : ",",
+          ));
+      return [
+        "write!(",
+        `${argumentIndent}${printRustExpr(expression.writer)},`,
+        `${argumentIndent}"${escapeRustString(expression.format)}"${expression.args.length === 0 ? "" : ","}`,
+        ...fittedFormatArguments,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
     case "block": {
       const statementIndent = indentText(depth + 1);
       const bindings = expression.bindings.flatMap((binding) => {
@@ -2846,6 +2869,19 @@ function printFittedCall(
       if (renderedFits(compact, column)) {
         return compact;
       }
+    } else if (argument.kind === "reference" &&
+      (argument.expr.kind === "call" || argument.expr.kind === "associated-call" ||
+        argument.expr.kind === "method-call" || argument.expr.kind === "try")) {
+      const nested = printNestedCallArgument(
+        argument.expr,
+        depth,
+        column + prefix.length + 1,
+        false,
+      );
+      const compact = appendToLastLine(`${prefix}&${nested}`, ")");
+      if (renderedFits(compact, column)) {
+        return compact;
+      }
     } else if (!rustExpressionContainsStatementBlock(argument) &&
       !rustExpressionContainsPreferredVerticalMethodChain(argument) &&
       !rustExpressionContainsExpandedStructLiteral(argument) && renderedFits(flat, column)) {
@@ -3251,6 +3287,15 @@ function printRustMatchExpression(
     const prefix = `${armIndent}${pattern} => `;
     const flatValue = printRustExpr(arm.expression);
     if (flatValue.includes("\n") || !renderedFits(`${prefix}${flatValue},`, 0)) {
+      if (arm.expression.kind === "call" || arm.expression.kind === "associated-call" ||
+        arm.expression.kind === "invoke" || arm.expression.kind === "method-call") {
+        const directValue = printRustExprFitted(
+          arm.expression,
+          depth + 1,
+          prefix.length,
+        );
+        return [appendToLastLine(`${prefix}${directValue}`, ",")];
+      }
       const valueIndent = indentText(depth + 2);
       const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
       return [

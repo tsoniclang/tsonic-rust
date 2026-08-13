@@ -159,6 +159,9 @@ export function main(): void {
   set.delete(1);
   set.clear();
   check(set.size === 0);
+
+  const constructed = new Set<string>(["a", "b", "b"]);
+  check(constructed.size === 2 && constructed.has("a") && constructed.has("b"));
 }
 `,
     },
@@ -212,6 +215,47 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let values = js_abi::JsMap::new\(\);/u);
   assert.equal(validateGeneratedProject("js-map-project-values", result.artifacts, { run: true }).status, 0);
+});
+
+test("Map and Set use exact project identity for project object keys", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_project_identity_collections" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Key {
+  value: int32;
+  constructor(value: int32) { this.value = value; }
+}
+
+export function main(): void {
+  const first = new Key(1);
+  const sameValue = new Key(1);
+  const map = new Map<Key, string>();
+  map.set(first, "first");
+  check(map.get(first) === "first" && map.get(sameValue) === undefined);
+  check(map.has(first) && !map.has(sameValue));
+  check(!map.delete(sameValue) && map.delete(first));
+
+  const set = new Set<Key>();
+  set.add(first).add(first).add(sameValue);
+  check(set.size === 2 && set.has(first) && set.has(sameValue));
+  check(set.delete(first) && !set.has(first));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /map\.set_eq/u);
+  assert.match(source, /map\.get_eq/u);
+  assert.match(source, /set\.add_eq/u);
+  assert.equal(validateGeneratedProject("js-project-identity-collections", result.artifacts, { run: true }).status, 0);
 });
 
 test("flow-selected string receivers lower from their exact optional storage carrier", { timeout: 300_000 }, () => {
