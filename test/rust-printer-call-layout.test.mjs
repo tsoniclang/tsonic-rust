@@ -924,6 +924,50 @@ test("typed let bindings keep fitting call openings before expanded arrays", () 
   );
 });
 
+test("typed let bindings keep expanded ordinary calls attached", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "point",
+          mutable: false,
+          type: { kind: "primitive", name: "f64" },
+          init: {
+            kind: "call",
+            path: "rt::option_coalesce",
+            args: [{
+              kind: "call",
+              path: "js_string::code_point_at",
+              args: [
+                { kind: "reference", expr: { kind: "path", path: "text" } },
+                { kind: "float-literal", text: "0.0" },
+              ],
+            }, {
+              kind: "path",
+              path: "std::convert::identity",
+            }, {
+              kind: "closure",
+              params: [],
+              body: { kind: "float-literal", text: "0.0" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let point: f64 = rt::option_coalesce\(\n {8}js_string::code_point_at\(&text, 0\.0\),\n {8}std::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
+  );
+});
+
 test("typed let bindings keep a fitting call base before a fallible selector", () => {
   const source = printRustSourceFile({
     headerComment,

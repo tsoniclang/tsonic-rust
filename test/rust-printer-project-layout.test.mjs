@@ -393,8 +393,8 @@ test("format macro arguments keep borrowed nested calls attached to their call",
           expr: {
             kind: "associated-call",
             owner: { kind: "named", path: "Self" },
-            trait: { kind: "named", path: "__TsonicDispatch_Base" },
-            method: "__tsonic_exact_489_549",
+            trait: { kind: "named", path: "__TsonicDispatch_Middle" },
+            method: "__tsonic_exact_692_761",
             args: [clone({ kind: "path", path: "self" })],
           },
         }],
@@ -419,7 +419,7 @@ test("format macro arguments keep borrowed nested calls attached to their call",
 
   assert.match(
     text,
-    /rt::source_string\(&<Self as __TsonicDispatch_Base>::__tsonic_exact_489_549\(\n/u,
+    /rt::source_string\(&<Self as __TsonicDispatch_Middle>::__tsonic_exact_692_761\(\n/u,
   );
   assert.match(text, /self\.clone\(\)\n\s+\),\),/u);
   assert.doesNotMatch(text, /rt::source_string\(\n/u);
@@ -624,4 +624,112 @@ test("method chains in logical continuations use the continuation body indent", 
 
   assert.match(text, /\n        \|\| secondLocation\n            \.with/u);
   assert.match(text, /\n            \.load\(\)\n            != 4/u);
+});
+
+test("fallible method chains in logical continuations start from their receiver", () => {
+  const tested = {
+    kind: "try",
+    expr: {
+      kind: "method-call",
+      receiver: {
+        kind: "method-call",
+        receiver: { kind: "path", path: "digits" },
+        method: "test",
+        args: [{ kind: "str-literal", value: "a12" }],
+      },
+      method: "map_err",
+      args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+    },
+  };
+  const text = projectFunction({
+    kind: "binary",
+    operator: "&&",
+    left: {
+      kind: "call",
+      path: "js_string::includes_from_start",
+      args: [
+        { kind: "reference", expr: { kind: "path", path: "rendered" } },
+        { kind: "str-literal", value: "tsonic" },
+      ],
+    },
+    right: {
+      kind: "binary",
+      operator: "&&",
+      left: tested,
+      right: {
+        kind: "binary",
+        operator: "==",
+        left: {
+          kind: "method-call",
+          receiver: { kind: "path", path: "date" },
+          method: "get_time",
+          args: [],
+        },
+        right: { kind: "float-literal", text: "86400000.0" },
+      },
+    },
+  });
+
+  assert.match(text, /\n {8}&& digits\n {12}\.test\("a12"\)\n {12}\.map_err/u);
+});
+
+test("expanded call arguments start fallible method chains from their receiver", () => {
+  const convertedByte = {
+    kind: "call",
+    path: "tsonic_rust_runtime::conversions::u8_to_i32",
+    args: [{
+      kind: "try",
+      expr: {
+        kind: "method-call",
+        receiver: {
+          kind: "method-call",
+          receiver: { kind: "path", path: "buffer" },
+          method: "read_u8",
+          args: [{
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::i32_to_usize",
+              args: [{ kind: "int-literal", text: "0" }],
+            },
+          }],
+        },
+        method: "map_err",
+        args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+      },
+    }],
+  };
+  const text = projectFunction({
+    kind: "binary",
+    operator: "&&",
+    left: {
+      kind: "binary",
+      operator: "==",
+      left: {
+        kind: "try",
+        expr: {
+          kind: "call",
+          path: "tsonic_rust_runtime::conversions::usize_to_i32",
+          args: [{
+            kind: "method-call",
+            receiver: { kind: "path", path: "buffer" },
+            method: "len",
+            args: [],
+          }],
+        },
+      },
+      right: { kind: "int-literal", text: "3" },
+    },
+    right: {
+      kind: "binary",
+      operator: "==",
+      left: convertedByte,
+      right: { kind: "int-literal", text: "97" },
+    },
+  });
+
+  assert.match(
+    text,
+    /u8_to_i32\(\n {12}buffer\n {16}\.read_u8\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\)\n {16}\.map_err/u,
+  );
 });
