@@ -315,7 +315,7 @@ export function inspect(value: int32): int32 {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub unsafe fn new\(value: i32\) -> Box/u);
   assert.match(source, /pub unsafe fn read\(&self\) -> i32/u);
-  assert.match(source, /let instance = unsafe \{ Box::new\(value\) \};/u);
+  assert.match(source, /let instance: Box = unsafe \{ Box::new\(value\) \};/u);
   assert.match(source, /unsafe \{ instance\.clone\(\)\.read\(\) \}/u);
   validateGeneratedProject("explicit-safety-method-constructor", result.artifacts);
 });

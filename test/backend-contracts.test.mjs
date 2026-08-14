@@ -4,7 +4,10 @@ import { acmeTelemetryCapability, artifactText, compileRust } from "./helpers/ru
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 import { rustTargetOperationFactKey } from "../dist/index.js";
 import { finalizeRustProviderOperationAbi } from "../dist/source/rust-facts/finalized-operation-abi.js";
-import { applyFallibleShape } from "../dist/backend/planner/fallible-shape.js";
+import {
+  applyFallibleShape,
+  applyRustFallibleResultExpression,
+} from "../dist/backend/planner/fallible-shape.js";
 import { rustBlockTerminates } from "../dist/backend/planner/functions.js";
 import {
   requireProviderArgumentPassingFacts,
@@ -24,7 +27,41 @@ test("value-returning fallible bodies never synthesize an invalid Ok unit", () =
 
   assert.equal(rustBlockTerminates(incomplete), false);
   assert.equal(rustBlockTerminates(complete), true);
-  assert.deepEqual(applyFallibleShape(incomplete, true, true), incomplete);
+  assert.deepEqual(applyFallibleShape(incomplete, {
+    fallible: true,
+    hasReturnValue: true,
+    errorDomain: "runtime",
+  }), incomplete);
+});
+
+test("fallible result expressions preserve conversion into the enclosing program error", () => {
+  const providerCall = { kind: "call", path: "provider::read", args: [] };
+
+  assert.deepEqual(
+    applyRustFallibleResultExpression(
+      { kind: "try", expr: providerCall, errorDomain: "runtime" },
+      { errorDomain: "project", errorTypePath: "rt::TsonicError" },
+    ),
+    {
+      kind: "call",
+      path: "Ok::<_, rt::TsonicError>",
+      args: [{ kind: "try", expr: providerCall, errorDomain: "runtime" }],
+    },
+  );
+  assert.deepEqual(
+    applyRustFallibleResultExpression(
+      { kind: "try", expr: providerCall, errorDomain: "runtime" },
+      { errorDomain: "runtime" },
+    ),
+    providerCall,
+  );
+  assert.deepEqual(
+    applyRustFallibleResultExpression(
+      { kind: "try", expr: providerCall, errorDomain: "project" },
+      { errorDomain: "project" },
+    ),
+    providerCall,
+  );
 });
 
 test("operation fact equality is structural and independent of metadata key order", () => {
@@ -32,7 +69,12 @@ test("operation fact equality is structural and independent of metadata key orde
     kind: "target-specific",
     target: "rust",
     name: "named-type",
-    value: { id: "acme.Value", path: "acme::Value", typeArguments: [] },
+    value: {
+      id: "acme.Value",
+      path: "acme::Value",
+      traits: { clone: "never", copy: "never" },
+      typeArguments: [],
+    },
   };
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",
@@ -157,7 +199,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
   assert.deepEqual(context.diagnostics, []);
 });
 
-test("runtime module bindings require an explicit Rust executable startup contract", () => {
+test("runtime module bindings publish one explicit Rust crate startup contract", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -168,10 +210,11 @@ export let VALUE: int32 = 1;
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_LIBRARY_MODULE_INITIALIZATION_UNSUPPORTED" &&
-    diagnostic.message.includes("runtime module initialization")));
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/lib.rs"),
+    /pub fn __tsonic_initialize\(\) \{\s*crate::index::__tsonic_module_init\(\);\s*\}/su,
+  );
 });
 
 test("singleton tuples render with the Rust-required trailing comma", () => {
@@ -285,6 +328,31 @@ export function main(): void {}
   validateGeneratedProject("backend-structured-main", result.artifacts, { run: true });
 });
 
+test("binary entry selection uses the exact project-root path rather than a matching basename", () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "exact_entry_path" } },
+    files: {
+      "dependency/index.ts": `
+export function helper(): void {}
+`,
+      "index.ts": `
+import { helper } from "./dependency/index.js";
+
+export function main(): void {
+  helper();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/main.rs"),
+    /exact_entry_path::index::main\(\);/u,
+  );
+  validateGeneratedProject("backend-exact-entry-path", result.artifacts, { run: true });
+});
+
 test("fallible binary entry modules preserve structured Result return types", () => {
   const { result } = compileRust({
     packages: [acmeTelemetryCapability()],
@@ -303,7 +371,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)> \{\n    fallible_main::index::main\(\)\n\}/u,
+    /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)> \{\n    fallible_main::index::main\(\)\?;\n    Ok\(\(\)\)\n\}/u,
   );
   validateGeneratedProject("backend-fallible-main", result.artifacts, { run: true });
 });

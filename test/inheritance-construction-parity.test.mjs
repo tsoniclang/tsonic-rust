@@ -15,6 +15,31 @@ function compileExecutable(source, crateName) {
   });
 }
 
+test("explicit derived constructors select an implicit base constructor by checker signature", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Base {
+  value: int32 = 7;
+}
+
+class Derived extends Base {
+  constructor() {
+    super();
+  }
+}
+
+export function main(): void {
+  check(new Derived().value === 7);
+}
+`, "rust_implicit_base_constructor_proof");
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("implicit-base-constructor", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
 test("implicit derived constructors forward exact inherited generic and default parameters", { timeout: 300_000 }, () => {
   const { result } = compileExecutable(`
 import type { int32 } from "@tsonic/core/types.js";

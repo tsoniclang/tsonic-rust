@@ -165,7 +165,7 @@ test("a nested call owns the fitting break inside a wider expression", () => {
   assert.match(text, /usize_to_i32\(js_string::js_len\(\n            &tsonic_rust_node::os::platform\(\),\n        \)\)\? > 0/u);
 });
 
-test("a fallible nested call owns the fitting break", () => {
+test("a fitting fallible nested call remains horizontal", () => {
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -202,7 +202,91 @@ test("a fallible nested call owns the fitting break", () => {
     }],
   });
 
-  assert.match(text, /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(\n            16,\n        \)\?\)\?/u);
+  assert.match(
+    text,
+    /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(16\)\?\)\?/u,
+  );
+});
+
+test("an outer call stays attached to an expanded fallible inner call", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "receiver" },
+            method: "write_value",
+            args: [{
+              kind: "try",
+              expr: {
+                kind: "call",
+                path: "checked_operation_with_a_deliberately_long_name",
+                args: [
+                  { kind: "path", path: "first_value_with_a_deliberately_long_name" },
+                  { kind: "path", path: "second_value_with_a_deliberately_long_name" },
+                ],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /receiver\.write_value\(checked_operation_with_a_deliberately_long_name\(\n/u);
+  assert.match(source, /\n    \)\?\);/u);
+  assert.doesNotMatch(source, /receiver\.write_value\(\n/u);
+});
+
+test("a multiline fallible method chain expands inside its outer call", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: "Ok::<_, rt::TsonicError>",
+            args: [{
+              kind: "try",
+              expr: {
+                kind: "method-call",
+                receiver: {
+                  kind: "call",
+                  path: "js_string::replace_all",
+                  args: [
+                    { kind: "reference", expr: { kind: "path", path: "value" } },
+                    { kind: "string-literal", value: "a" },
+                    { kind: "string-literal", value: "b" },
+                  ],
+                },
+                method: "map_err",
+                args: [{
+                  kind: "path",
+                  path: "tsonic_rust_runtime::TsonicError::from",
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /Ok::<_, rt::TsonicError>\(\n        js_string::replace_all/u);
+  assert.match(source, /\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?,\n    \)/u);
 });
 
 test("a long outer call expands before a jointly fitting method argument", () => {
@@ -344,6 +428,46 @@ test("a single block argument stays attached to its outer call", () => {
   assert.match(source, /\n    \}\);/);
 });
 
+test("a trailing block argument stays attached after preceding arguments", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      visibility: "public",
+      name: "run",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "values" },
+            method: "set",
+            args: [
+              { kind: "string-literal", value: "selected" },
+              {
+                kind: "block",
+                bindings: [{
+                  name: "value",
+                  value: {
+                    kind: "call",
+                    path: "make_value_with_an_intentionally_long_name_that_requires_block_expansion",
+                    args: [],
+                  },
+                }],
+                value: { kind: "path", path: "value" },
+              },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /values\.set\(String::from\("selected"\), \{\n/u);
+  assert.match(source, /\n    \}\);/u);
+});
+
 test("a trailing fitted closure stays attached after preceding arguments", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -469,6 +593,52 @@ test("a fitted condition moves only its overflowing brace", () => {
   assert.match(source, /truncate_value\(-2\.7\) != -2\.0\n    \{\}/u);
 });
 
+test("conditional expressions move the brace after a multiline method chain", () => {
+  const condition = {
+    kind: "method-call",
+    receiver: {
+      kind: "method-call",
+      receiver: {
+        kind: "method-call",
+        receiver: {
+          kind: "field",
+          receiver: { kind: "path", path: "value" },
+          name: "__tsonic_dispatch",
+        },
+        method: "clone",
+        args: [],
+      },
+      method: "__tsonic_downcast",
+      args: [],
+    },
+    method: "is_some",
+    args: [],
+  };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [{ name: "value", type: { kind: "named", path: "Value", typeArguments: [] } }],
+      returnType: { kind: "string" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "conditional",
+            condition,
+            whenTrue: { kind: "string-literal", value: "yes" },
+            whenFalse: { kind: "string-literal", value: "no" },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /\.is_some\(\)\n    \{\n        String::from\("yes"\)/u);
+});
+
 test("comparisons follow multiline arithmetic operands", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -539,6 +709,83 @@ test("long let-bound method chains stay attached to their receiver", () => {
   });
 
   assert.match(source, /let module_value_with_a_deliberately_long_generated_identity = second\n        \.with\(\|module_binding\| module_binding\.location\(\)\)\n        \.clone\(\);/u);
+});
+
+test("long field-led method chains use rustfmt selector layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [{ name: "value", type: { kind: "named", path: "Value", typeArguments: [] } }],
+      returnType: { kind: "named", path: "bool", typeArguments: [] },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: {
+                  kind: "field",
+                  receiver: { kind: "path", path: "value" },
+                  name: "__tsonic_dispatch",
+                },
+                method: "clone",
+                args: [],
+              },
+              method: "__tsonic_downcast_2",
+              args: [],
+            },
+            method: "is_some",
+            args: [],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /value\n        \.__tsonic_dispatch\n        \.clone\(\)\n        \.__tsonic_downcast_2\(\)\n        \.is_some\(\)/u,
+  );
+});
+
+test("trait signatures count their semicolon and break before long return types", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "Contract",
+      visibility: "crate",
+      typeParams: [],
+      functions: [{
+        name: "__tsonic_downcast",
+        selfParam: "rc",
+        params: [],
+        returnType: {
+          kind: "named",
+          path: "Option",
+          typeArguments: [{
+            kind: "named",
+            path: "std::rc::Rc",
+            typeArguments: [{
+              kind: "trait-object",
+              trait: { kind: "named", path: "__TsonicDispatch_Leaf", typeArguments: [] },
+            }],
+          }],
+        },
+      }],
+    }],
+  });
+
+  assert.match(
+    source,
+    /fn __tsonic_downcast\(self: std::rc::Rc<Self>\)\n        -> Option<std::rc::Rc<dyn __TsonicDispatch_Leaf>>;/u,
+  );
 });
 
 test("one-field struct literals honor rustfmt's compact body limit", () => {
@@ -755,6 +1002,92 @@ test("long logical chains use rustfmt-compatible operand-per-line layout", () =>
   });
 
   assert.match(text, /if fibonacci\(0\) != 0\n        \|\| fibonacci\(1\) != 1\n        \|\| fibonacci\(2\) != 2/u);
+});
+
+test("binary expressions place multiline match operands on a continuation line", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "with_default",
+      visibility: "public",
+      params: [],
+      returnType: { kind: "primitive", name: "i32" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "binary",
+            operator: "+",
+            left: {
+              kind: "binary",
+              operator: "+",
+              left: { kind: "path", path: "base" },
+              right: { kind: "path", path: "value" },
+            },
+            right: {
+              kind: "match",
+              expression: { kind: "path", path: "delta" },
+              arms: [{
+                pattern: {
+                  kind: "tuple-variant",
+                  path: "Some",
+                  elements: [{ kind: "binding", name: "selected" }],
+                },
+                expression: { kind: "path", path: "selected" },
+              }, {
+                pattern: { kind: "path", path: "None" },
+                expression: { kind: "int-literal", text: "0" },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /base\n        \+ value\n        \+ \(match delta \{/u);
+});
+
+test("binary expressions join adjacent multiline match operands at the closing delimiter", () => {
+  const matchExpression = (name) => ({
+    kind: "match",
+    expression: { kind: "path", path: name },
+    arms: [{
+      pattern: {
+        kind: "tuple-variant",
+        path: "Some",
+        elements: [{ kind: "binding", name: "selected" }],
+      },
+      expression: { kind: "path", path: "selected" },
+    }, {
+      pattern: { kind: "path", path: "None" },
+      expression: { kind: "int-literal", text: "0" },
+    }],
+  });
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "product",
+      visibility: "public",
+      params: [],
+      returnType: { kind: "primitive", name: "i32" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "binary",
+            operator: "*",
+            left: matchExpression("left"),
+            right: matchExpression("right"),
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /    \}\) \* \(match right \{/u);
 });
 
 test("multiline mixed logical groups preserve source precedence", () => {
@@ -1002,6 +1335,41 @@ test("nested single-argument wrappers stay attached to the expanded inner call",
   });
 
   assert.match(text, /check\(js_abi::number_is_nan\(js_abi::math_pow\(\n        1\.0,\n        js_abi::NUMBER_POSITIVE_INFINITY,\n    \)\)\);/u);
+});
+
+test("nested single-argument error wrappers expand at the exact innermost value", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: "Err",
+            args: [{
+              kind: "call",
+              path: "rt::TsonicError::from",
+              args: [{
+                kind: "call",
+                path: "DomainError::new",
+                args: [{ kind: "string-literal", value: "domain" }],
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /Err\(rt::TsonicError::from\(DomainError::new\(String::from\(\n {8}"domain",\n {4}\)\)\)\)/u,
+  );
 });
 
 test("fallible nested calls in comparisons use rustfmt-compatible wrapper layout", () => {

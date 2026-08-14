@@ -159,6 +159,9 @@ export function main(): void {
   set.delete(1);
   set.clear();
   check(set.size === 0);
+
+  const constructed = new Set<string>(["a", "b", "b"]);
+  check(constructed.size === 2 && constructed.has("a") && constructed.has("b"));
 }
 `,
     },
@@ -175,6 +178,156 @@ export function main(): void {
   assert.match(source, /set\.for_each_zero\(\|\|/u);
   assert.match(source, /set\.for_each\(\|value, key, owner\|/u);
   assert.equal(validateGeneratedProject("js-collections", result.artifacts, { run: true }).status, 0);
+});
+
+test("collection operations reconcile exact derived values to their selected project base carrier", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_map_project_values" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Item {
+  value: int32;
+  constructor(value: int32) { this.value = value; }
+
+  label(): string { return "item"; }
+}
+
+class DetailedItem extends Item {
+  label(): string { return "detailed"; }
+}
+
+export function main(): void {
+  const values = new Map<string, Item>();
+  values.set("selected", new DetailedItem(3));
+  const selected = values.get("selected");
+  check(selected !== undefined && selected.value === 3 && selected.label() === "detailed");
+
+  let ordered: Item[] = [];
+  ordered.push(new DetailedItem(4));
+  check(ordered.length === 1 && ordered[0]!.value === 4 && ordered[0]!.label() === "detailed");
+  ordered = [];
+  check(ordered.length === 0);
+
+  let integers: int32[] = [];
+  check(integers.length === 0);
+  integers = [0];
+  check(integers.length === 1 && integers[0] === 0);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let values: js_abi::JsMap<String, Item> = js_abi::JsMap::new\(\);/u);
+  assert.equal(validateGeneratedProject("js-map-project-values", result.artifacts, { run: true }).status, 0);
+});
+
+test("Map and Set use exact project identity for project object keys", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_project_identity_collections" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Key {
+  value: int32;
+  constructor(value: int32) { this.value = value; }
+}
+
+export function main(): void {
+  const first = new Key(1);
+  const sameValue = new Key(1);
+  const map = new Map<Key, string>();
+  map.set(first, "first");
+  check(map.get(first) === "first" && map.get(sameValue) === undefined);
+  check(map.has(first) && !map.has(sameValue));
+  check(!map.delete(sameValue) && map.delete(first));
+
+  const set = new Set<Key>();
+  set.add(first).add(first).add(sameValue);
+  check(set.size === 2 && set.has(first) && set.has(sameValue));
+  check(set.delete(first) && !set.has(first));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /map\.set_eq/u);
+  assert.match(source, /map\.get_eq/u);
+  assert.match(source, /set\.add_eq/u);
+  assert.equal(validateGeneratedProject("js-project-identity-collections", result.artifacts, { run: true }).status, 0);
+});
+
+test("flow-selected string receivers lower from their exact optional storage carrier", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_flow_selected_string" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+function normalize(value: string | undefined): string {
+  return value === undefined ? "missing" : value.trim().toLowerCase();
+}
+
+export function main(): void {
+  check(normalize(undefined) === "missing");
+  check(normalize("  Ready  ") === "ready");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /match value\.as_ref\(\)/u);
+  assert.equal(validateGeneratedProject("js-flow-selected-string", result.artifacts, { run: true }).status, 0);
+});
+
+test("Array sort comparator callbacks preserve source arity and stable JavaScript ordering", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_array_comparator_sort" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const values = ["bb", "a", "cc", "ddd"];
+  values.sort((left, right) => left.length - right.length);
+  check(values.join("|") === "a|bb|cc|ddd");
+
+  const unary = [3, 2, 1];
+  unary.sort((value) => value - 2);
+  check(unary.length === 3);
+
+  const zero = [2, 1];
+  zero.sort(() => 0);
+  check(zero[0] === 2 && zero[1] === 1);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /values\s*\.try_sort\(/u);
+  assert.match(source, /unary\.sort_value\(/u);
+  assert.match(source, /zero\.sort_zero\(/u);
+  assert.equal(validateGeneratedProject("js-array-comparator-sort", result.artifacts, { run: true }).status, 0);
 });
 
 test("generated Rust preserves every declared Array callback argument", { timeout: 300_000 }, () => {

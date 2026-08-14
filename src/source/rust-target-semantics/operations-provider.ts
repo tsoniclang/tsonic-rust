@@ -62,6 +62,7 @@ import {
   getRustJsSetElementTargetType,
   rustJsArrayTargetType,
   rustJsValueTargetType,
+  rustJsErrorTargetType,
   rustOptionTargetType,
   rustCallableProtocol,
   rustSourceTypeCarrier,
@@ -78,8 +79,9 @@ import {
   isRustBoolCarrier,
   isRustCopyCarrier,
   getRustGeneratorProtocol,
-  isRustIntegerCarrier,
   isRustJsArrayCarrier,
+  isRustDefinitelyNullishCarrier,
+  isRustProgramErrorCarrier,
   isRustNullishSourceCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
@@ -89,17 +91,20 @@ import {
 import {
   rustTargetOperationResultCarrier,
   rustTargetOperationFactKey,
+  rustPreparedOperationResultFactKey,
   rustOptionalChainFactKey,
   rustPostCheckBinaryOperationId,
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
-  rustProjectUpcastFactKey,
+  rustProjectDowncastFactKey,
   rustSourceCallableReturnFactKey,
 } from "../rust-facts/keys.js";
 import type {
   RustOperatorToken,
+  RustProviderFactOperationKind,
   RustProviderOperationForm,
   RustProviderOperationTemplate,
+  RustRuntimeSetOperationKind,
   RustTargetOperationFact,
 } from "../rust-facts/keys.js";
 import {
@@ -115,10 +120,10 @@ import {
 } from "../rust-facts/finalized-operation-abi.js";
 import { rustTargetOperationText } from "../rust-facts/target-operation.js";
 import {
-  finalizeJsCallbackOperation,
   selectJsSurfaceConstructorBySourceOwner,
   selectJsSurfaceOperation,
 } from "./js-surface-operations.js";
+import { finalizeRustCallbackOperation } from "./callback-operations.js";
 import {
   asNode,
   isProjectSourceDeclaration,
@@ -134,6 +139,11 @@ import {
 import {
   resolveRustTargetTypeRef,
 } from "./target-type-resolution.js";
+import type { RustTargetTypeResolutionOptions } from "./target-type-resolution.js";
+import {
+  recordRustFlowReadProjection,
+  selectRustFlowReadProjection,
+} from "./value-carrier-reconciliation.js";
 import {
   tsonicCoreSourceSemanticsModules,
 } from "@tsonic/source-core";
@@ -167,10 +177,11 @@ import type { RustProjectTypePolicy } from "./project-type-policy.js";
 import { rustProjectMemberSlotName } from "./project-type-policy.js";
 import {
   recordRustValueCarrierReconciliation,
+  rustEffectiveValueCarrier,
   selectRustValueCarrierReconciliation,
 } from "./value-carrier-reconciliation.js";
 import type {
-  RustValueCarrierReconciliation,
+  RustAppliedValueCarrierReconciliation,
 } from "./value-carrier-reconciliation.js";
 
 const sourceCallMarkerByIdentity = new Map(
@@ -195,6 +206,7 @@ export interface RustOperationsProviderOptions {
   readonly regExpSubsetViolation: (pattern: string, flags: string) => string | undefined;
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
+  readonly resolveProjectUnionCarrier: RustTargetTypeResolutionOptions["resolveProjectUnionCarrier"];
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly projectTypes: RustProjectTypePolicy;
 }
@@ -212,6 +224,9 @@ export function selectRustCheckedOperator(
   if (isDeclarationFileSubject(request.expression, context)) {
     return acceptDeclarationOperation("operator");
   }
+  if (request.operator === "instanceof") {
+    return selectRustProjectTypeTest(request, context, options);
+  }
   if (request.right !== undefined) {
     if (request.operator !== "=") {
       return acceptPostCheckOperator(request);
@@ -228,6 +243,97 @@ export function selectRustCheckedOperator(
   }
   const operand = resolveRustTargetTypeRef(request.left, context, options);
   return mapSelectedUnaryOperator(request, operand, context);
+}
+
+function selectRustProjectTypeTest(
+  request: RustCheckedOperatorSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.left) ??
+    resolveRustTargetTypeRef(request.left, context, options);
+  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
+  const targetDefinition = options.projectTypes.definitionForDeclaration(request.sourceRightDeclaration);
+  const targetCarrier = targetDefinition === undefined || targetDefinition.kind !== "class" ||
+      targetDefinition.typeParameterNames.length !== 0
+    ? undefined
+    : options.projectTypes.openCarrier(targetDefinition);
+  const programErrorVariant = targetDefinition === undefined
+    ? undefined
+    : options.projectTypes.programErrorVariant(targetDefinition);
+  if (sourceCarrier !== undefined && isRustProgramErrorCarrier(sourceCarrier) &&
+    targetCarrier !== undefined && programErrorVariant !== undefined) {
+    const resultCarrier = rustSourcePrimitiveTargetType("bool");
+    const fact: RustTargetOperationFact = {
+      kind: "program-error-type-test",
+      operationId: `tsonic.rust.program-error-type-test.${programErrorVariant}`,
+      sourceCarrier,
+      targetCarrier,
+      variant: programErrorVariant,
+      resultCarrier,
+    };
+    return acceptRustOperation(request.expression, fact, context, {
+      sourceExpression: request.expression,
+      sourceReceiver: request.left,
+      sourceSelectedDeclaration: request.sourceRightDeclaration,
+    }, resultCarrier);
+  }
+  if (sourceCarrier === undefined || dispatchCarrier === undefined || sourceDefinition === undefined ||
+    targetDefinition === undefined || targetCarrier === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROJECT_TYPE_TEST_EVIDENCE_MISSING",
+      "Checked instanceof requires exact project source, concrete class declaration, and closed target carrier evidence.",
+    );
+  }
+  const sourceToTarget = options.projectTypes.relationship(dispatchCarrier, targetDefinition);
+  let lowering: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>["lowering"];
+  if (sourceToTarget.kind === "related" && rustTargetTypeRefEquals(sourceToTarget.targetType, targetCarrier)) {
+    lowering = rustOptionElementCarrier(sourceCarrier) === undefined
+      ? { kind: "constant", value: true }
+      : { kind: "option-presence" };
+  } else {
+    const targetToSource = options.projectTypes.relationship(targetCarrier, sourceDefinition);
+    if (targetToSource.kind === "ambiguous" || sourceToTarget.kind === "ambiguous") {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_PROJECT_TYPE_TEST_AMBIGUOUS",
+        "Checked instanceof has more than one exact project heritage instantiation.",
+      );
+    }
+    if (targetToSource.kind === "related" &&
+      rustTargetTypeRefEquals(targetToSource.targetType, dispatchCarrier)) {
+      if (options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) === undefined) {
+        return rejectSelectedOperation(
+          request.expression,
+          context,
+          "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
+          "Checked instanceof requires one closed generated project downcast route.",
+        );
+      }
+      lowering = { kind: "dispatch" };
+    } else {
+      lowering = { kind: "constant", value: false };
+    }
+  }
+  const resultCarrier = rustSourcePrimitiveTargetType("bool");
+  const fact: RustTargetOperationFact = {
+    kind: "project-type-test",
+    operationId: `tsonic.rust.project-type-test.${lowering.kind}`,
+    sourceCarrier,
+    dispatchCarrier,
+    targetCarrier,
+    resultCarrier,
+    lowering,
+  };
+  return acceptRustOperation(request.expression, fact, context, {
+    sourceExpression: request.expression,
+    sourceReceiver: request.left,
+    sourceSelectedDeclaration: request.sourceRightDeclaration,
+  }, resultCarrier);
 }
 
 function acceptPostCheckOperator(
@@ -283,7 +389,7 @@ function mapSelectedUnaryOperator(
     targetOperator = "-";
     resultCarrier = operand;
   } else if ((request.operator === "++" || request.operator === "--") &&
-    (isRustIntegerCarrier(operand) || isRustBigIntCarrier(operand))) {
+    (isRustNumericCarrier(operand) || isRustBigIntCarrier(operand))) {
     targetOperator = request.operator === "++" ? "+=" : "-=";
     resultCarrier = operand;
   } else if (request.operator === "+" && operand !== undefined && isRustNumericCarrier(operand)) {
@@ -312,12 +418,32 @@ function mapSelectedAssignment(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
-  const selectedLeft = context.facts.getSelectedTargetOperator(request.left);
-  const selectedDeclaration = selectedLeft?.provenance?.sourceSelectedDeclaration;
-  const identity = resolveSelectedJsSourceMember(context, selectedDeclaration, options.sourceProfiles);
-  if (identity === undefined || !options.jsEnabled) {
+  const selectedLeftFact = context.facts.resolve(request.left, rustTargetOperationFactKey);
+  if (selectedLeftFact?.kind === "source-field" ||
+    selectedLeftFact?.kind === "source-static-field" ||
+    selectedLeftFact?.kind === "source-union-field" ||
+    selectedLeftFact?.kind === "source-accessor") {
     return undefined;
   }
+  const selectedLeft = context.facts.getSelectedTargetOperator(request.left);
+  const selectedDeclaration = selectedLeft?.provenance?.sourceSelectedDeclaration;
+  const selectedWriteDeclaration = selectedLeft?.provenance?.sourceSelectedWriteDeclaration;
+  const providerWriteEvidence = resolveSelectedProviderDeclaration(
+    context,
+    selectedWriteDeclaration,
+  );
+  if (providerWriteEvidence.kind === "conflict") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_SELECTED_PROVIDER_WRITE_EVIDENCE_CONFLICT",
+      "Checked assignment carries conflicting selected provider write-declaration identities.",
+    );
+  }
+  const providerIdentity = providerWriteEvidence.kind === "selected"
+    ? providerWriteEvidence.identity
+    : selectedLeft?.provenance?.providerDeclaration;
+  const jsIdentity = resolveSelectedJsSourceMember(context, selectedDeclaration, options.sourceProfiles);
   const receiver = selectedLeft?.provenance?.sourceReceiver;
   const receiverCarrier = resolveRustTargetTypeRef(receiver, context, options);
   const operationKind = selectedLeft?.operationKind === "property"
@@ -325,8 +451,32 @@ function mapSelectedAssignment(
     : selectedLeft?.operationKind === "indexer"
       ? "index-set"
       : undefined;
-  if (operationKind === undefined || receiverCarrier === undefined) {
-    return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_EVIDENCE_MISSING", "Selected JavaScript assignment has no closed receiver or assignment-target evidence.");
+  if (operationKind === undefined) {
+    return undefined;
+  }
+  if (providerIdentity !== undefined) {
+    const providerSelection = mapSelectedProviderAssignment(
+      request,
+      right,
+      providerIdentity,
+      operationKind,
+      receiver,
+      selectedWriteDeclaration ?? selectedDeclaration,
+      receiverCarrier,
+      context,
+      options,
+    );
+    if (providerSelection !== undefined) {
+      return providerSelection;
+    }
+  }
+  if (receiverCarrier === undefined) {
+    return jsIdentity !== undefined && options.jsEnabled
+      ? rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_EVIDENCE_MISSING", "Selected JavaScript assignment has no closed receiver carrier in its finalized operation evidence.")
+      : undefined;
+  }
+  if (jsIdentity === undefined || !options.jsEnabled) {
+    return undefined;
   }
   const leftNode = asNode(request.left, context);
   const indexNode = operationKind === "index-set" && leftNode !== undefined
@@ -339,8 +489,8 @@ function mapSelectedAssignment(
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_EVIDENCE_MISSING", "Selected JavaScript assignment has no closed index/value source evidence.");
   }
   const selection = selectJsSurfaceOperation({
-    ownerName: identity.ownerName,
-    memberName: identity.memberName,
+    ownerName: jsIdentity.ownerName,
+    memberName: jsIdentity.memberName,
     operationKind,
     receiverCarrier,
     argumentCarriers: assignmentSubjects.map((subject) =>
@@ -348,7 +498,7 @@ function mapSelectedAssignment(
     argumentCompatibility: selectedArgumentCompatibility(assignmentSubjects, context, options),
   });
   if (selection === undefined || selection.fact.kind !== "runtime-set") {
-    return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED", `The selected JavaScript assignment '${identity.ownerName}.${identity.memberName}' has no closed Rust setter operation.`);
+    return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED", `The selected JavaScript assignment '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust setter operation.`);
   }
   const valueIndex = operationKind === "index-set" ? 1 : 0;
   const valueCarrier = selection.parameterCarriers?.[valueIndex];
@@ -401,6 +551,127 @@ function mapSelectedAssignment(
   }, selectedRight ?? left);
 }
 
+function mapSelectedProviderAssignment(
+  request: RustCheckedOperatorSelectionInput,
+  right: TargetTypeRef | undefined,
+  identity: ProviderDeclarationIdentity,
+  operationKind: RustRuntimeSetOperationKind,
+  receiver: ExtensionFactSubject | undefined,
+  selectedDeclaration: ExtensionFactSubject | undefined,
+  receiverCarrier: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  const selection = selectRustProviderOperation(options.providerRows, identity, operationKind);
+  if (selection.kind === "missing") {
+    return undefined;
+  }
+  if (selection.kind === "ambiguous") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROVIDER_SET_OPERATION_AMBIGUOUS",
+      `Selected provider declaration '${providerIdentityText(identity)}' matches ${selection.rows.length} Rust ${operationKind} rows.`,
+    );
+  }
+  const leftNode = asNode(request.left, context);
+  const indexNode = operationKind === "index-set" && leftNode !== undefined
+    ? ElementAccessExpression_ArgumentExpression(context.ast, leftNode)
+    : undefined;
+  const sourceArguments = operationKind === "index-set"
+    ? indexNode === undefined || request.right === undefined ? undefined : [indexNode, request.right]
+    : request.right === undefined ? undefined : [request.right];
+  if (sourceArguments === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROVIDER_SET_EVIDENCE_MISSING",
+      "Selected provider setter has no exact source index/value evidence.",
+    );
+  }
+  const rawArgumentCarriers = sourceArguments.map((argument) =>
+    resolveRustTargetTypeRef(argument, context, options));
+  const instantiation = instantiateProviderOperationTemplate(
+    providerOperationTemplate(selection.row, operationKind),
+    {
+      ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
+      sourceParameterCarriers: rawArgumentCarriers,
+    },
+  );
+  const template = instantiation?.template;
+  if (template !== undefined && providerFormRequiresSourceReceiver(template.target) && receiverCarrier === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROVIDER_SET_EVIDENCE_MISSING",
+      `Selected provider declaration '${providerIdentityText(identity)}' requires a closed source receiver carrier for its Rust ${operationKind} operation.`,
+    );
+  }
+  if (template === undefined || template.parameterCarriers === undefined ||
+    template.parameterCarriers.length !== sourceArguments.length) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROVIDER_SET_ABI_INCOMPLETE",
+      `Selected provider declaration '${providerIdentityText(identity)}' cannot instantiate one total Rust ${operationKind} ABI.`,
+    );
+  }
+  const sourceArgumentCarriers = sourceArguments.map((argument, index) =>
+    normalizeSelectedOperationInputCarrier(
+      argument,
+      rawArgumentCarriers[index],
+      template.parameterCarriers?.[index],
+      context,
+      options,
+    ));
+  const finalizedSourceArgumentCarriers = sourceArgumentCarriers.filter(
+    (carrier): carrier is TargetTypeRef => carrier !== undefined,
+  );
+  if (finalizedSourceArgumentCarriers.length !== sourceArgumentCarriers.length ||
+    finalizedSourceArgumentCarriers.some((carrier, index) =>
+      !rustTargetTypeRefEquals(carrier, template.parameterCarriers?.[index]))) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROVIDER_SET_VALUE_MISMATCH",
+      `Selected provider declaration '${providerIdentityText(identity)}' has source inputs that do not match its finalized Rust ${operationKind} carriers.`,
+    );
+  }
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind,
+    form: template.target,
+    ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
+    sourceArgumentCarriers: finalizedSourceArgumentCarriers,
+    declaredSourceArgumentCarriers: template.parameterCarriers,
+    resultCarrier: template.resultCarrier,
+    isAsync: template.isAsync,
+    isFallible: template.isFallible,
+    ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
+    isUnsafe: template.isUnsafe,
+  });
+  if (abi === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROVIDER_SET_ABI_INCOMPLETE",
+      `Selected provider declaration '${providerIdentityText(identity)}' cannot finalize one total Rust ${operationKind} ABI.`,
+    );
+  }
+  const selectedRight = finalizedSourceArgumentCarriers[finalizedSourceArgumentCarriers.length - 1];
+  const sourceResultCarrier = context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right;
+  return acceptRustOperation(request.expression, {
+    kind: "runtime-set",
+    operationId: template.operationId,
+    abi,
+  }, context, {
+    sourceExpression: request.expression,
+    sourceReceiver: receiver,
+    sourceSelectedDeclaration: selectedDeclaration,
+    sourceResultType: request.right,
+    providerDeclaration: identity,
+  }, sourceResultCarrier ?? selectedRight);
+}
+
 function operatorFact(operator: RustOperatorToken, resultCarrier: TargetTypeRef): Extract<RustTargetOperationFact, { readonly kind: "operator-token" }> {
   return {
     kind: "operator-token",
@@ -420,6 +691,74 @@ function rustCarrierIdentity(carrier: TargetTypeRef): string {
   return carrier.kind;
 }
 
+function selectedCallArgumentNodes(
+  request: RustCheckedCallSelectionInput,
+): readonly Node[] {
+  return request.source.sourceArguments.map((argument) => argument.expression);
+}
+
+function selectedCallArgumentCarriers(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): readonly (TargetTypeRef | undefined)[] {
+  return request.source.sourceArguments.map((argument) =>
+    selectedSourceValueCarrier(argument, context, options));
+}
+
+function selectedSourceValueCarrier(
+  value: RustCheckedCallSelectionInput["source"]["sourceArguments"][number],
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  return selectedValueCarrier(value.expression, value.type, context, options);
+}
+
+function selectedValueCarrier(
+  expression: ExtensionFactSubject,
+  selectedType: ExtensionFactSubject,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  const stored = resolveRustTargetTypeRef(expression, context, options);
+  const effective = rustEffectiveValueCarrier(context.facts, expression);
+  if (effective !== undefined &&
+    (stored === undefined || !rustTargetTypeRefEquals(effective, stored))) {
+    return effective;
+  }
+  const selected = resolveRustTargetTypeRef(selectedType, context, options);
+  if (stored === undefined || selected === undefined ||
+    rustTargetTypeRefEquals(stored, selected)) {
+    return selected ?? stored;
+  }
+  const optionalElement = rustOptionElementCarrier(stored);
+  if (optionalElement !== undefined &&
+    rustTargetTypeRefEquals(optionalElement, selected)) {
+    return selected;
+  }
+  const sourceDefinition = options.projectTypes.definitionForCarrier(
+    optionalElement ?? stored,
+  );
+  return sourceDefinition !== undefined &&
+      options.projectTypes.downcastRoute(sourceDefinition, selected) !== undefined
+    ? selected
+    : stored;
+}
+
+function selectedCallCalleeSymbol(
+  request: RustCheckedCallSelectionInput,
+): import("@tsonic/tsts").Symbol | undefined {
+  return request.source.sourceCallee.selectedSymbol ??
+    request.source.sourceCallee.symbol;
+}
+
+function selectedCallCalleeDeclaration(
+  request: RustCheckedCallSelectionInput,
+): Node | undefined {
+  return request.source.sourceCallee.selectedDeclaration ??
+    request.source.sourceCallee.declaration;
+}
+
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
   context: RustOperationPolicyContext,
@@ -429,13 +768,13 @@ export function selectRustCheckedCall(
     context,
     request.sourceSelectedDeclaration,
     [
-      { subject: request.sourceSelectedSignature, precision: "exact" },
-      { subject: request.sourceCalleeDeclaration, precision: "declaration" },
-      { subject: request.sourceCalleeSymbol, precision: "declaration" },
+      { subject: request.source.selectedSignature, precision: "exact" },
+      { subject: selectedCallCalleeDeclaration(request), precision: "declaration" },
+      { subject: selectedCallCalleeSymbol(request), precision: "declaration" },
     ],
   );
   if (providerEvidence.kind === "conflict") {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked call carries conflicting selected provider declaration identities.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked call carries conflicting selected provider declaration identities.");
   }
   if (providerEvidence.kind === "selected") {
     const provider = providerEvidence.identity;
@@ -448,12 +787,38 @@ export function selectRustCheckedCall(
     const operationKind = checkedCallIsConstruction(request, context) ? "constructor" : "method";
     const selection = selectRustProviderOperation(options.providerRows, provider, operationKind);
     if (selection.kind === "missing") {
-      return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_OPERATION_NOT_MAPPED", `No Rust operation row matches selected provider declaration '${providerIdentityText(provider)}' as ${operationKind}.`);
+      return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_OPERATION_NOT_MAPPED", `No Rust operation row matches selected provider declaration '${providerIdentityText(provider)}' as ${operationKind}.`);
     }
     if (selection.kind === "ambiguous") {
-      return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_OPERATION_AMBIGUOUS", `Selected provider declaration '${providerIdentityText(provider)}' matches ${selection.rows.length} Rust operation rows.`);
+      return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_OPERATION_AMBIGUOUS", `Selected provider declaration '${providerIdentityText(provider)}' matches ${selection.rows.length} Rust operation rows.`);
     }
-    return acceptSelectedCall(request, providerOperationFact(selection.row), selection.row.parameterCarriers, context, options, {
+    const instantiation = instantiateSelectedCallTemplate(
+      request,
+      providerOperationFact(selection.row),
+      context,
+      options,
+    );
+    if (instantiation === undefined) {
+      return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier}' does not prove one closed instantiation of its Rust provider type parameters.`);
+    }
+    if (selection.row.immediateCallback !== undefined) {
+      return acceptRustPolicy({
+        kind: "deferred-callback",
+        callback: {
+          shape: "direct",
+          sourceArgumentIndex: selection.row.immediateCallback.sourceArgumentIndex,
+          fallibleTarget: substituteProviderOperationForm(
+            selection.row.immediateCallback.fallibleTarget,
+            instantiation.substitutions,
+          ),
+        },
+        sourceName: provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier,
+        providerDeclaration: provider,
+        template: instantiation.template,
+        parameterCarriers: instantiation.template.parameterCarriers ?? [],
+      });
+    }
+    return acceptSelectedCall(request, instantiation.template, instantiation.template.parameterCarriers, context, options, {
       sourceName: provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier,
       providerDeclaration: provider,
     });
@@ -466,29 +831,29 @@ export function selectRustCheckedCall(
   );
   const calleeSourceMember = resolveSelectedSourceProfileMember(
     context,
-    request.sourceCalleeDeclaration,
+    selectedCallCalleeDeclaration(request),
     options.sourceProfiles,
   );
   if (selectedSourceMember === undefined && calleeSourceMember !== undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_SOURCE_DECLARATION_MISSING", "Checked source-profile call has callee evidence but no exact selected declaration evidence.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_DECLARATION_MISSING", "Checked source-profile call has callee evidence but no exact selected declaration evidence.");
   }
   if (selectedSourceMember !== undefined && calleeSourceMember !== undefined &&
     (selectedSourceMember.profile !== calleeSourceMember.profile ||
       selectedSourceMember.ownerName !== calleeSourceMember.ownerName ||
       selectedSourceMember.memberName !== calleeSourceMember.memberName)) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_SOURCE_EVIDENCE_CONFLICT", "Checked source-profile call carries conflicting selected and callee declaration identities.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_EVIDENCE_CONFLICT", "Checked source-profile call carries conflicting selected and callee declaration identities.");
   }
   if (selectedSourceMember?.ownerName === "ErrorConstructor" &&
     selectedSourceMember.memberName === "constructor" && checkedCallIsConstruction(request, context)) {
-    if (request.arguments.length !== 1) {
+    if (selectedCallArgumentNodes(request).length !== 1) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_ERROR_MESSAGE_REQUIRED",
         "Rust Error construction currently requires one checked string message argument.",
       );
     }
-    const resultCarrier: TargetTypeRef = { kind: "target-named", id: "rust.runtime.JsError" };
+    const resultCarrier = rustJsErrorTargetType();
     return acceptSelectedCall(request, {
       kind: "provider-operation",
       operationId: "tsonic.rust.error.constructor",
@@ -498,6 +863,7 @@ export function selectRustCheckedCall(
       resultCarrier,
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     }, [rustStringTargetType()], context, options, {
       sourceName: "Error",
     });
@@ -512,13 +878,12 @@ export function selectRustCheckedCall(
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
-      selectedParameterCount: request.sourceSelectedSignatureParameters.length,
-      argumentCarriers: request.arguments.map((argument) =>
-        resolveRustTargetTypeRef(argument, context, options)),
+      selectedParameterCount: request.source.sourceSelectedSignatureParameters.length,
+      argumentCarriers: selectedCallArgumentCarriers(request, context, options),
     });
     if (generator.kind === "rejected") {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_GENERATOR_SOURCE_CALL_NOT_CLOSED",
         generator.message,
@@ -537,23 +902,30 @@ export function selectRustCheckedCall(
   }
   if (selectedSourceMember?.profile === "js") {
     if (!options.jsEnabled) {
-      return rejectSelectedOperation(request.call, context, "RUST_JS_SURFACE_REQUIRED", "The selected call belongs to the explicit JavaScript source profile, which is not active.");
+      return rejectSelectedOperation(request.source.call, context, "RUST_JS_SURFACE_REQUIRED", "The selected call belongs to the explicit JavaScript source profile, which is not active.");
     }
     if (checkedCallIsConstruction(request, context)) {
       if (selectedSourceMember.ownerName === "RegExpConstructor") {
         return mapSelectedRegExpConstruction(request, context, options);
       }
-      const typeArgumentCarriers = (request.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
+      const typeArgumentCarriers = (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, options));
-      const argumentCarriers = request.arguments.map((argument) =>
-        resolveRustTargetTypeRef(argument, context, options));
+      const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
       const selection = selectJsSurfaceConstructorBySourceOwner({
         sourceOwnerName: selectedSourceMember.ownerName,
         typeArgumentCarriers,
         argumentCarriers,
       });
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-        return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript constructor '${selectedSourceMember.ownerName}' has no closed Rust operation row for the selected argument carriers.`);
+        return rejectSelectedOperation(
+          request.source.call,
+          context,
+          "RUST_SELECTED_OPERATION_UNSUPPORTED",
+          `The selected JavaScript constructor '${selectedSourceMember.ownerName}' has no closed Rust operation row for the selected argument carriers.`,
+          [{
+            message: `arguments=${JSON.stringify(argumentCarriers)}; selectedTypeArguments=${JSON.stringify(typeArgumentCarriers)}`,
+          }],
+        );
       }
       return acceptSelectedCall(request, selection.fact, selection.parameterCarriers ?? [], context, options, {
         sourceName: selectedSourceMember.ownerName,
@@ -564,17 +936,16 @@ export function selectRustCheckedCall(
       context,
       options,
     );
-    const argumentCarriers = request.arguments.map((argument) =>
-      resolveRustTargetTypeRef(argument, context, options));
+    const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
     const selectedMethodTypeArgumentCarriers =
-      (request.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
+      (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         resolveRustTargetTypeRef(
           argument.explicitTypeNode ?? argument.selectedType,
           context,
           options,
         ));
     const authoredMethodTypeArgumentCarriers =
-      (request.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
+      (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         argument.explicitTypeNode === undefined
           ? undefined
           : resolveRustTargetTypeRef(argument.explicitTypeNode, context, options));
@@ -596,14 +967,24 @@ export function selectRustCheckedCall(
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,
-      argumentCompatibility: selectedArgumentCompatibility(request.arguments, context, options),
+      argumentCompatibility: selectedArgumentCompatibility(selectedCallArgumentNodes(request), context, options),
+      carrierSupportsProjectIdentity: (carrier) =>
+        options.projectTypes.definitionForCarrier(carrier) !== undefined,
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-      return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`);
+      return rejectSelectedOperation(
+        request.source.call,
+        context,
+        "RUST_SELECTED_OPERATION_UNSUPPORTED",
+        `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`,
+        [{
+          message: `receiver=${JSON.stringify(receiverCarrier)}; arguments=${JSON.stringify(argumentCarriers)}; selectedTypeArguments=${JSON.stringify(selectedMethodTypeArgumentCarriers)}; authoredTypeArguments=${JSON.stringify(authoredMethodTypeArgumentCarriers)}`,
+        }],
+      );
     }
     if (selection.callback !== undefined) {
       return selection.fact.kind !== "provider-operation"
-        ? rejectSelectedOperation(request.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
+        ? rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
         : acceptRustPolicy({
             kind: "deferred-callback",
             callback: selection.callback,
@@ -620,35 +1001,62 @@ export function selectRustCheckedCall(
   const sourceDeclaration = isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)
     ? asNode(request.sourceSelectedDeclaration, context)
     : undefined;
-  const calleeDeclaration = isProjectSourceDeclaration(context, request.sourceCalleeDeclaration)
-    ? asNode(request.sourceCalleeDeclaration, context)
+  const calleeDeclaration = isProjectSourceDeclaration(context, selectedCallCalleeDeclaration(request))
+    ? asNode(selectedCallCalleeDeclaration(request), context)
     : undefined;
   const implicitConstructorClass = sourceDeclaration === undefined &&
       calleeDeclaration !== undefined &&
       checkedCallIsConstruction(request, context) &&
       context.ast.kindName(calleeDeclaration) === "KindClassDeclaration"
     ? calleeDeclaration
-    : undefined;
+    : sourceDeclaration === undefined
+      ? selectedImplicitSuperConstructorClass(request, context, options)
+      : undefined;
   if (implicitConstructorClass !== undefined) {
     return acceptProjectSourceCall(request, implicitConstructorClass, context, options);
   }
   if (sourceDeclaration === undefined && calleeDeclaration !== undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_PROJECT_DECLARATION_MISSING", "Checked project-source call has callee evidence but no exact selected callable declaration evidence.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROJECT_DECLARATION_MISSING", "Checked project-source call has callee evidence but no exact selected callable declaration evidence.");
   }
   if (sourceDeclaration !== undefined) {
     return acceptProjectSourceCall(request, sourceDeclaration, context, options);
   }
 
   return rejectSelectedOperation(
-    request.call,
+    request.source.call,
     context,
     "RUST_SELECTED_CALL_EVIDENCE_MISSING",
     "Checked call has no exact provider, source-profile, or project-source selection that Rust can lower.",
   );
 }
 
+function selectedImplicitSuperConstructorClass(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): Node | undefined {
+  if (context.ast.kindName(request.source.sourceCallee.expression) !== "KindSuperKeyword") {
+    return undefined;
+  }
+  const containing = options.projectTypes.definitionContainingDeclaration(
+    request.source.call,
+  );
+  if (containing?.kind !== "class") {
+    return undefined;
+  }
+  const matches = options.projectTypes.heritageForDefinition(containing).filter((edge) =>
+    edge.kind === "extends" &&
+    edge.target.kind === "class" &&
+    options.projectTypes.constructorForSignature(
+      edge.target,
+      request.source.selectedSignature,
+    ) !== undefined);
+  return matches.length === 1 ? matches[0]!.target.declaration : undefined;
+}
+
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;
+  readonly providerDeclaration?: ProviderDeclarationIdentity;
   readonly callback: import("../rust-facts/keys.js").RustCallbackOperationTemplate;
   readonly template: RustProviderOperationTemplate;
   readonly parameterCarriers: readonly TargetTypeRef[];
@@ -668,10 +1076,10 @@ export function prepareRustDeferredCheckedCall(
     expected: TargetTypeRef | undefined,
   ) => TargetTypeRef | undefined,
 ): RustPolicySelection<RustPreparedDeferredCheckedCall> {
-  const arguments_ = request.arguments;
+  const arguments_ = selectedCallArgumentNodes(request);
   if (arguments_.length !== deferred.parameterCarriers.length) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CALLBACK_ARITY_MISMATCH",
       `Selected callback call '${deferred.sourceName}' has ${arguments_.length} source arguments but ${deferred.parameterCarriers.length} target parameters.`,
@@ -685,7 +1093,7 @@ export function prepareRustDeferredCheckedCall(
       : arguments_[accumulatorIndex];
     if (accumulatorArgument === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_CALLBACK_ACCUMULATOR_MISSING",
         "Selected reduce call has no exact accumulator source argument.",
@@ -700,7 +1108,7 @@ export function prepareRustDeferredCheckedCall(
     );
     if (accumulator === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_CALLBACK_ACCUMULATOR_CARRIER_MISSING",
         "Selected reduce call has no closed target carrier for its exact accumulator argument.",
@@ -711,7 +1119,7 @@ export function prepareRustDeferredCheckedCall(
     const callbackTemplate = deferred.parameterCarriers[deferred.callback.sourceArgumentIndex];
     if (callbackArgument === undefined || callbackTemplate === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_CALLBACK_CARRIER_MISSING",
         "Selected reduce call has no exact callback argument or callback target template.",
@@ -731,32 +1139,32 @@ export function prepareRustDeferredCheckedCall(
   }
   if (actual.some((carrier) => carrier === undefined)) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CALLBACK_CARRIER_MISSING",
-      `Selected JavaScript call '${deferred.sourceName}' has no closed callback/result carrier from exact target analysis.`,
+      `Selected callback call '${deferred.sourceName}' has no closed callback/result carrier from exact target analysis.`,
     );
   }
-  const finalized = finalizeJsCallbackOperation({
+  const finalized = finalizeRustCallbackOperation({
     fact: deferred.template,
     parameterCarriers: deferred.parameterCarriers,
     callback: deferred.callback,
   }, actual as TargetTypeRef[]);
   if (finalized?.fact.kind !== "provider-operation") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CALLBACK_CARRIER_CONFLICT",
-      `Selected JavaScript call '${deferred.sourceName}' has callback argument carriers incompatible with its exact target operation row.`,
+      `Selected callback call '${deferred.sourceName}' has callback argument carriers incompatible with its exact target operation row.`,
     );
   }
   const parameterCarriers = finalized.parameterCarriers;
   if (parameterCarriers === undefined || parameterCarriers.some((carrier) => carrier === undefined)) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CALLBACK_PARAMETER_CARRIER_MISSING",
-      `Selected JavaScript call '${deferred.sourceName}' did not finalize every callback parameter carrier.`,
+      `Selected callback call '${deferred.sourceName}' did not finalize every callback parameter carrier.`,
     );
   }
   const optionalResult = selectRustOptionalCallResult(
@@ -767,7 +1175,7 @@ export function prepareRustDeferredCheckedCall(
   );
   if (optionalResult.kind === "rejected") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_OPTIONAL_CALL_CONTRACT_INVALID",
       optionalResult.message,
@@ -775,6 +1183,9 @@ export function prepareRustDeferredCheckedCall(
   }
   return acceptRustPolicy({
     sourceName: deferred.sourceName,
+    ...(deferred.providerDeclaration === undefined
+      ? {}
+      : { providerDeclaration: deferred.providerDeclaration }),
     callback: deferred.callback,
     template: finalized.fact,
     parameterCarriers: parameterCarriers as readonly TargetTypeRef[],
@@ -794,6 +1205,7 @@ export function finalizeRustPreparedCheckedCall(
         ...prepared.template,
         target: prepared.callback.fallibleTarget,
         isFallible: true,
+        errorBoundary: "source-program" as const,
       }
     : prepared.template;
   return acceptSelectedCall(
@@ -802,7 +1214,12 @@ export function finalizeRustPreparedCheckedCall(
     prepared.parameterCarriers,
     context,
     options,
-    { sourceName: prepared.sourceName },
+    {
+      sourceName: prepared.sourceName,
+      ...(prepared.providerDeclaration === undefined
+        ? {}
+        : { providerDeclaration: prepared.providerDeclaration }),
+    },
   );
 }
 
@@ -847,31 +1264,31 @@ function mapRustSourceMarkerCall(
     markerName !== "move"
   ) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SOURCE_MARKER_UNSUPPORTED",
       `Rust does not support selected source marker '${markerName}' in this operation lane.`,
     );
   }
-  const flow = context.facts.resolve(request.call, flowStateFactKey) ??
-    context.facts.get(request.call, flowStateFactKey);
+  const flow = context.facts.resolve(request.source.call, flowStateFactKey) ??
+    context.facts.get(request.source.call, flowStateFactKey);
   const expectedState = markerName === "shared-borrow"
     ? "borrowed-shared"
     : markerName === "mutable-borrow" ? "borrowed-mut" : "moved";
   if (flow?.state !== expectedState) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_FLOW_MARKER_FACT_NOT_PROVEN",
       `Selected Rust flow marker '${markerName}' requires finalized TSTS flow state '${expectedState}'.`,
     );
   }
-  const [argument] = request.arguments;
-  const carrier = resolveRustTargetTypeRef(request.sourceReturnType ?? argument, context, options) ??
+  const [argument] = selectedCallArgumentNodes(request);
+  const carrier = resolveRustTargetTypeRef(request.source.sourceResultType ?? argument, context, options) ??
     resolveRustTargetTypeRef(argument, context, options);
   if (argument === undefined || carrier === undefined) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_FLOW_MARKER_CARRIER_NOT_PROVEN",
       `Selected Rust flow marker '${markerName}' has no closed target carrier from TSTS evidence.`,
@@ -883,7 +1300,7 @@ function mapRustSourceMarkerCall(
     state: expectedState,
   };
   const evidence = [{ message: `rust selected flow marker ${markerName}` }];
-  context.facts.set(request.call, rustTargetOperationFactKey, fact, evidence);
+  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
   return acceptRustPolicy({
     selectedSignature: {
       member: {
@@ -896,13 +1313,13 @@ function mapRustSourceMarkerCall(
         providerDeclaration: provider,
       },
       providerDeclaration: provider,
-      ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
+      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
       ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-      ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-      ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-      sourceArgumentBindings: request.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
+      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+      sourceArgumentBindings: request.source.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     },
   }, evidence);
 }
@@ -974,7 +1391,7 @@ function mapSelectedRegExpConstruction(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  const [patternNode, flagsNode] = request.arguments.map((argument) => asNode(argument, context));
+  const [patternNode, flagsNode] = selectedCallArgumentNodes(request).map((argument) => asNode(argument, context));
   const ast = context.ast;
   const pattern = patternNode !== undefined && ast.kindName(patternNode) === "KindStringLiteral"
     ? ast.text(patternNode)
@@ -983,11 +1400,11 @@ function mapSelectedRegExpConstruction(
     ? ""
     : ast.kindName(flagsNode) === "KindStringLiteral" ? ast.text(flagsNode) : undefined;
   if (pattern === undefined || flags === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_REGEXP_DYNAMIC_UNSUPPORTED", "Rust RegExp construction requires TSTS-selected RegExp constructor evidence and compile-time string pattern/flags.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_REGEXP_DYNAMIC_UNSUPPORTED", "Rust RegExp construction requires TSTS-selected RegExp constructor evidence and compile-time string pattern/flags.");
   }
   const violation = options.regExpSubsetViolation(pattern, flags);
   if (violation !== undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_REGEXP_UNSUPPORTED", violation);
+    return rejectSelectedOperation(request.source.call, context, "RUST_REGEXP_UNSUPPORTED", violation);
   }
   const resultCarrier: TargetTypeRef = { kind: "target-named", id: "rust.js.JsRegExp" };
   const fact: RustTargetOperationFact = {
@@ -997,19 +1414,19 @@ function mapSelectedRegExpConstruction(
     flags,
   };
   const evidence = [{ message: "rust selected RegExp constructor" }];
-  context.facts.set(request.call, rustTargetOperationFactKey, fact, evidence);
-  context.facts.set(request.call, rustSelectedOperationKey, {
+  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
+  context.facts.set(request.source.call, rustSelectedOperationKey, {
     operationId: fact.operationId,
     operationKind: "constructor",
     targetOperation: "js_abi::JsRegExp::new",
     resultType: resultCarrier,
     provenance: {
-      sourceExpression: request.call,
-      sourceCallee: request.callee,
-      sourceSelectedSignature: request.sourceSelectedSignature,
+      sourceExpression: request.source.call,
+      sourceCallee: request.source.sourceCallee.expression,
+      sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration,
-      sourceSelectedSymbol: request.sourceCalleeSymbol,
-      sourceResultType: request.sourceReturnType,
+      sourceSelectedSymbol: selectedCallCalleeSymbol(request),
+      sourceResultType: request.source.sourceResultType,
     },
   }, evidence);
   return acceptRustPolicy({
@@ -1025,13 +1442,13 @@ function mapSelectedRegExpConstruction(
         ],
         returnType: resultCarrier,
       },
-      ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
+      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
       ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-      ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-      ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-      sourceArgumentBindings: request.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
+      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+      sourceArgumentBindings: request.source.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     },
   }, evidence);
 }
@@ -1044,13 +1461,13 @@ function mapSelectedJsSpecialCall(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   if (ownerName === "String" && memberName === "match") {
-    const [argument] = request.arguments;
+    const [argument] = selectedCallArgumentNodes(request);
     const creation = argument === undefined
       ? undefined
       : context.facts.resolve(argument, rustTargetOperationFactKey);
     if (creation === undefined || creation.kind !== "regexp-create") {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_REGEXP_MATCH_PATTERN_NOT_FINALIZED",
         "Rust String.match requires an inline RegExp whose checked construction fact finalizes the result shape.",
@@ -1073,17 +1490,18 @@ function mapSelectedJsSpecialCall(
       resultCarrier,
       isAsync: false,
       isFallible: true,
+      errorBoundary: "provider-native",
     }, [{ kind: "target-named", id: "rust.js.JsRegExp" }], context, options, {
       sourceName: memberName,
     });
   }
-  if (ownerName !== "JSON" || memberName !== "stringify" || request.arguments.length !== 3) {
+  if (ownerName !== "JSON" || memberName !== "stringify" || selectedCallArgumentNodes(request).length !== 3) {
     return undefined;
   }
-  const [valueNode, replacerNode, spaceNode] = request.arguments.map((argument) => asNode(argument, context));
+  const [valueNode, replacerNode, spaceNode] = selectedCallArgumentNodes(request).map((argument) => asNode(argument, context));
   const ast = context.ast;
   if (valueNode === undefined || replacerNode === undefined || spaceNode === undefined || ast.kindName(replacerNode) !== "KindNullKeyword") {
-    return rejectSelectedOperation(request.call, context, "RUST_JSON_STRINGIFY_REPLACER_UNSUPPORTED", "Rust JSON.stringify supports the selected three-argument overload only with a null replacer and compile-time string/number indentation.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_JSON_STRINGIFY_REPLACER_UNSUPPORTED", "Rust JSON.stringify supports the selected three-argument overload only with a null replacer and compile-time string/number indentation.");
   }
   let indent: string | undefined;
   if (ast.kindName(spaceNode) === "KindNumericLiteral") {
@@ -1092,7 +1510,7 @@ function mapSelectedJsSpecialCall(
     indent = ast.text(spaceNode).slice(0, 10);
   }
   if (indent === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_JSON_STRINGIFY_INDENT_UNSUPPORTED", "Rust JSON.stringify indentation must be a compile-time string or number selected by the checked source call.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_JSON_STRINGIFY_INDENT_UNSUPPORTED", "Rust JSON.stringify indentation must be a compile-time string or number selected by the checked source call.");
   }
   const resultCarrier = rustOptionTargetType(rustStringTargetType());
   return acceptSelectedCall(request, {
@@ -1111,6 +1529,7 @@ function mapSelectedJsSpecialCall(
     resultCarrier,
     isAsync: false,
     isFallible: true,
+    errorBoundary: "provider-native",
   }, [rustJsValueTargetType()], context, options, {
     sourceName: memberName,
   });
@@ -1127,9 +1546,9 @@ function acceptProjectSourceCall(
   const construction = checkedCallIsConstruction(request, context) ||
     selectedKind === "KindConstructor";
   if (construction && selectedKind !== "KindClassDeclaration" && selectedKind !== "KindConstructor") {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_INVALID", "Project-source construction evidence is not an exact constructor declaration or an implicit-constructor class declaration.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_INVALID", "Project-source construction evidence is not an exact constructor declaration or an implicit-constructor class declaration.");
   }
-  const selectedCalleeDeclaration = asNode(request.sourceCalleeDeclaration, context);
+  const selectedCalleeDeclaration = asNode(selectedCallCalleeDeclaration(request), context);
   const selectedOwner = construction && selectedCalleeDeclaration !== undefined &&
       ast.kindName(selectedCalleeDeclaration) === "KindClassDeclaration"
     ? selectedCalleeDeclaration
@@ -1146,15 +1565,15 @@ function acceptProjectSourceCall(
     : undefined;
   if (construction && selectedConstructor === undefined) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CONSTRUCTOR_SIGNATURE_MISSING",
       "Project construction requires one exact effective constructor signature from shared source-program navigation.",
     );
   }
   if (selectedConstructor !== undefined &&
-    (request.sourceSelectedSignatureParameters.length !== selectedConstructor.parameters.length ||
-      request.sourceSelectedSignatureParameters.some((parameter, index) => {
+    (request.source.sourceSelectedSignatureParameters.length !== selectedConstructor.parameters.length ||
+      request.source.sourceSelectedSignatureParameters.some((parameter, index) => {
         const expected = selectedConstructor.parameters[index];
         return expected === undefined ||
           parameter.parameterDeclaration !== expected.parameterDeclaration ||
@@ -1162,7 +1581,7 @@ function acceptProjectSourceCall(
           parameter.rest !== expected.rest;
       }))) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SELECTED_CONSTRUCTOR_PARAMETER_EVIDENCE_CONFLICT",
       "The selected constructor parameter evidence conflicts with the exact effective constructor signature.",
@@ -1187,7 +1606,7 @@ function acceptProjectSourceCall(
     callableImplementation?.kind !== "resolved" &&
     !selectedContractHasNoBody) {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_SOURCE_CALL_IMPLEMENTATION_MISSING",
       callableImplementation?.kind === "unresolved"
@@ -1199,11 +1618,11 @@ function acceptProjectSourceCall(
     ? callableImplementation.implementation.declaration
     : selectedCallableDeclaration;
   const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
-  if (targetTypeArguments === undefined && (request.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
+  if (targetTypeArguments === undefined && (request.source.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
   }
   const containingDefinition = options.projectTypes.definitionContainingDeclaration(
-    asNode(request.call, context),
+    asNode(request.source.call, context),
   );
   const selectedOwnerRelationship = selectedOwnerDefinition === undefined ||
       containingDefinition?.kind !== "class"
@@ -1215,10 +1634,10 @@ function acceptProjectSourceCall(
   const ownerCarrier = construction
     ? selectedOwnerRelationship?.kind === "related"
       ? selectedOwnerRelationship.targetType
-      : resolveRustTargetTypeRef(request.sourceReturnType, context, options)
-    : resolveRustTargetTypeRef(request.sourceReceiver?.type, context, options);
+      : resolveRustTargetTypeRef(request.source.sourceResultType, context, options)
+    : resolveRustTargetTypeRef(request.source.sourceReceiver?.type, context, options);
   const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration"
-    ? request.sourceSelectedSignatureParameters.map((parameter) =>
+    ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
         parameter.parameterDeclaration)
     : ast.parameters(callableDeclaration);
   const parameters = sourceParameters.map((parameter, index) => {
@@ -1255,17 +1674,17 @@ function acceptProjectSourceCall(
     };
   });
   if (parameters.some((parameter) => parameter === undefined)) {
-    return rejectSelectedOperation(request.call, context, "RUST_SOURCE_CALL_PARAMETER_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has a parameter without a closed Rust target carrier.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_PARAMETER_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has a parameter without a closed Rust target carrier.");
   }
   let returnType: TargetTypeRef | undefined;
   if (construction) {
     returnType = resolveRustTargetTypeRef(
-      request.sourceReturnType,
+      request.source.sourceResultType,
       context,
       options,
     );
   } else {
-    const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.sourceReturnType;
+    const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.source.sourceResultType;
     const declaredReturnType = sourceReturn === undefined
       ? undefined
       : resolveRustTargetTypeRef(sourceReturn, context, options);
@@ -1278,7 +1697,7 @@ function acceptProjectSourceCall(
         );
   }
   if (returnType === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
+    return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
@@ -1288,7 +1707,7 @@ function acceptProjectSourceCall(
   );
   if (optionalResult.kind === "rejected") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_OPTIONAL_CALL_CONTRACT_INVALID",
       optionalResult.message,
@@ -1313,36 +1732,42 @@ function acceptProjectSourceCall(
   };
   const selectedSignature = {
     member,
+    ...(construction || ownerCarrier === undefined
+      ? {}
+      : { sourceSelectedReceiverCarrier: ownerCarrier }),
     sourceDeclaration: callableDeclaration,
-    ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
-    ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-    ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-    ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-    sourceArgumentBindings: request.sourceArgumentBindings,
-    sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
-    ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
+    ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
+    ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+    ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+    ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+    sourceArgumentBindings: request.source.sourceArgumentBindings,
+    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+    ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
     ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
   };
   if (optionalResult.fact !== undefined) {
     context.facts.set(
-      request.call,
+      request.source.call,
       rustOptionalChainFactKey,
       optionalResult.fact,
       [{ message: `rust optional call ${optionalResult.fact.lowering}` }],
     );
   }
-  context.facts.set(request.call, rustSelectedCallKey, selectedSignature);
+  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature);
   return acceptRustPolicy({
     selectedSignature: {
       member,
+      ...(construction || ownerCarrier === undefined
+        ? {}
+        : { sourceSelectedReceiverCarrier: ownerCarrier }),
       sourceDeclaration: callableDeclaration,
-      ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
-      ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-      ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-      ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-      sourceArgumentBindings: request.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
-      ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
+      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
+      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+      sourceArgumentBindings: request.source.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+      ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
     },
   }, [{ message: `rust selected project-source call ${member.id}` }]);
@@ -1355,15 +1780,15 @@ function selectedProjectConstructor(
 ): import("./project-type-policy.js").RustProjectConstructorSignature | undefined {
   const exact = options.projectTypes.constructorForSignature(
     definition,
-    request.sourceSelectedSignature,
+    request.source.selectedSignature,
   );
   if (exact !== undefined) {
     return exact;
   }
   const candidates = options.projectTypes.constructorsForDefinition(definition).filter((candidate) =>
-    candidate.parameters.length === request.sourceSelectedSignatureParameters.length &&
+    candidate.parameters.length === request.source.sourceSelectedSignatureParameters.length &&
     candidate.parameters.every((parameter, index) => {
-      const selected = request.sourceSelectedSignatureParameters[index];
+      const selected = request.source.sourceSelectedSignatureParameters[index];
       return selected !== undefined &&
         parameter.parameterDeclaration === selected.parameterDeclaration &&
         parameter.acceptsOmission === selected.acceptsOmission &&
@@ -1377,7 +1802,7 @@ function mapSelectedTargetTypeArguments(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): readonly TargetTypeRef[] | undefined {
-  const sourceArguments = request.sourceSelectedMethodTypeArguments;
+  const sourceArguments = request.source.sourceSelectedMethodTypeArguments;
   if (sourceArguments === undefined || sourceArguments.length === 0) {
     return undefined;
   }
@@ -1386,6 +1811,41 @@ function mapSelectedTargetTypeArguments(
   return mapped.every((argument) => argument !== undefined)
     ? mapped as TargetTypeRef[]
     : undefined;
+}
+
+function instantiateSelectedCallTemplate(
+  request: RustCheckedCallSelectionInput,
+  template: RustProviderOperationTemplate,
+  context: RustOperationPolicyContext,
+  resolutionOptions: RustOperationsProviderOptions,
+): InstantiatedProviderOperationTemplate | undefined {
+  const rawReceiverCarrier = selectedCallReceiverValueCarrier(
+    request,
+    context,
+    resolutionOptions,
+  );
+  const selectedParameterCarriers = request.source.sourceSelectedSignatureParameters.map((parameter) =>
+    resolveRustTargetTypeRef(parameter.selectedType, context, resolutionOptions));
+  const selectedResultCarrier = request.source.sourceResultType === undefined
+    ? undefined
+    : resolveRustTargetTypeRef(request.source.sourceResultType, context, resolutionOptions);
+  const directTypeArguments = new Map<string, TargetTypeRef>();
+  for (const argument of request.source.sourceSelectedMethodTypeArguments ?? []) {
+    const carrier = resolveRustTargetTypeRef(
+      argument.explicitTypeNode ?? argument.selectedType,
+      context,
+      resolutionOptions,
+    );
+    if (carrier !== undefined) {
+      directTypeArguments.set(argument.typeParameterName, carrier);
+    }
+  }
+  return instantiateProviderOperationTemplate(template, {
+    sourceReceiverCarrier: rawReceiverCarrier,
+    sourceParameterCarriers: selectedParameterCarriers,
+    sourceResultCarrier: selectedResultCarrier,
+    directTypeArguments,
+  });
 }
 
 function acceptSelectedCall(
@@ -1399,36 +1859,16 @@ function acceptSelectedCall(
     readonly providerDeclaration?: ProviderDeclarationIdentity;
   },
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  const rawReceiverCarrier = selectedCallReceiverValueCarrier(
+  const instantiation = instantiateSelectedCallTemplate(
     request,
+    template,
     context,
     resolutionOptions,
   );
-  const selectedParameterCarriers = request.sourceSelectedSignatureParameters.map((parameter) =>
-    resolveRustTargetTypeRef(parameter.selectedType, context, resolutionOptions));
-  const selectedResultCarrier = request.sourceReturnType === undefined
-    ? undefined
-    : resolveRustTargetTypeRef(request.sourceReturnType, context, resolutionOptions);
-  const directTypeArguments = new Map<string, TargetTypeRef>();
-  for (const argument of request.sourceSelectedMethodTypeArguments ?? []) {
-    const carrier = resolveRustTargetTypeRef(
-      argument.explicitTypeNode ?? argument.selectedType,
-      context,
-      resolutionOptions,
-    );
-    if (carrier !== undefined) {
-      directTypeArguments.set(argument.typeParameterName, carrier);
-    }
+  if (instantiation === undefined) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${callIdentity.sourceName}' does not prove one closed instantiation of its Rust provider type parameters.`);
   }
-  const instantiatedTemplate = instantiateProviderOperationTemplate(template, {
-    sourceReceiverCarrier: rawReceiverCarrier,
-    sourceParameterCarriers: selectedParameterCarriers,
-    sourceResultCarrier: selectedResultCarrier,
-    directTypeArguments,
-  });
-  if (instantiatedTemplate === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${callIdentity.sourceName}' does not prove one closed instantiation of its Rust provider type parameters.`);
-  }
+  const instantiatedTemplate = instantiation.template;
   const sourceArguments = selectedCallSourceCarriers(
     request,
     instantiatedTemplate,
@@ -1437,14 +1877,17 @@ function acceptSelectedCall(
     resolutionOptions,
   );
   if (sourceArguments.kind === "missing") {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_PARAMETER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust carrier for every target parameter.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PARAMETER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust carrier for every target parameter.`);
   }
   if (sourceArguments.kind === "incompatible") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
       "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
+      [{
+        message: `sourceArgumentIndex=${sourceArguments.sourceIndex}; actual=${JSON.stringify(sourceArguments.actual)}; expected=${JSON.stringify(sourceArguments.expected)}`,
+      }],
     );
   }
   const selectedReceiverCarrier = selectedCallReceiverCarrier(
@@ -1454,16 +1897,16 @@ function acceptSelectedCall(
     resolutionOptions,
   );
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && selectedReceiverCarrier === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver carrier.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver carrier.`);
   }
   const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier);
   if (fact === undefined) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
   }
-  const targetTypeArguments = request.sourceSelectedMethodTypeArguments?.map((argument) =>
+  const targetTypeArguments = request.source.sourceSelectedMethodTypeArguments?.map((argument) =>
     resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, resolutionOptions));
   if (targetTypeArguments?.some((argument) => argument === undefined) === true) {
-    return rejectSelectedOperation(request.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", `Selected generic call '${callIdentity.sourceName}' has a source-selected type argument that cannot map to a closed Rust target type.`);
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", `Selected generic call '${callIdentity.sourceName}' has a source-selected type argument that cannot map to a closed Rust target type.`);
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
@@ -1473,34 +1916,53 @@ function acceptSelectedCall(
   );
   if (optionalResult.kind === "rejected") {
     return rejectSelectedOperation(
-      request.call,
+      request.source.call,
       context,
       "RUST_OPTIONAL_CALL_CONTRACT_INVALID",
       optionalResult.message,
     );
   }
   const resultCarrier = optionalResult.resultCarrier;
+  const preparedResult = context.facts.resolve(
+    request.source.call,
+    rustPreparedOperationResultFactKey,
+  );
+  if (preparedResult !== undefined && (
+    preparedResult.operationId !== fact.operationId ||
+    preparedResult.operationKind !== fact.abi.operationKind ||
+    !rustTargetTypeRefEquals(preparedResult.resultCarrier, resultCarrier)
+  )) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_PREPARED_OPERATION_RESULT_CONFLICT",
+      `Finalized call '${callIdentity.sourceName}' conflicts with its exact prepared Rust operation result.`,
+      [{
+        message: `prepared=${JSON.stringify(preparedResult)}; finalized=${JSON.stringify({ operationId: fact.operationId, operationKind: fact.abi.operationKind, resultCarrier })}`,
+      }],
+    );
+  }
   const operation: RustTargetOperationSelection = {
     operationId: fact.operationId,
     operationKind: fact.abi.operationKind,
     targetOperation: rustTargetOperationText(fact),
     resultType: resultCarrier,
     provenance: {
-      sourceExpression: request.call,
-      sourceCallee: request.callee,
-      sourceSelectedSignature: request.sourceSelectedSignature,
+      sourceExpression: request.source.call,
+      sourceCallee: request.source.sourceCallee.expression,
+      sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration,
-      sourceSelectedSymbol: request.sourceCalleeSymbol,
-      sourceResultType: request.sourceReturnType,
+      sourceSelectedSymbol: selectedCallCalleeSymbol(request),
+      sourceResultType: request.source.sourceResultType,
       ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
     },
   };
   const evidence = [{ message: `rust selected call ${fact.operationId}` }];
-  for (const pending of sourceArguments.conversions) {
-    const argument = request.arguments[pending.sourceIndex];
+  for (const pending of sourceArguments.reconciliations) {
+    const argument = selectedCallArgumentNodes(request)[pending.sourceIndex];
     if (argument === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_ARGUMENT_BINDING_MISSING",
         `Selected call '${callIdentity.sourceName}' has no exact source argument ${pending.sourceIndex}.`,
@@ -1512,10 +1974,10 @@ function acceptSelectedCall(
     if (sourceArgument.disposition !== "runtime") {
       continue;
     }
-    const argument = request.arguments[sourceArgument.sourceIndex];
+    const argument = selectedCallArgumentNodes(request)[sourceArgument.sourceIndex];
     if (argument === undefined) {
       return rejectSelectedOperation(
-        request.call,
+        request.source.call,
         context,
         "RUST_SELECTED_ARGUMENT_BINDING_MISSING",
         `Selected call '${callIdentity.sourceName}' has no exact source argument ${sourceArgument.sourceIndex}.`,
@@ -1529,18 +1991,18 @@ function acceptSelectedCall(
         : {}),
     }, [{ message: `rust selected argument ${sourceArgument.sourceIndex} passes as ${mode}` }]);
   }
-  context.facts.set(request.call, rustTargetOperationFactKey, {
+  context.facts.set(request.source.call, rustTargetOperationFactKey, {
     ...fact,
   }, evidence);
   if (optionalResult.fact !== undefined) {
     context.facts.set(
-      request.call,
+      request.source.call,
       rustOptionalChainFactKey,
       optionalResult.fact,
       [{ message: `rust optional call ${optionalResult.fact.lowering}` }],
     );
   }
-  context.facts.set(request.call, rustSelectedOperationKey, operation, evidence);
+  context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
   const member: RustTargetMember = {
     id: fact.operationId,
     sourceName: callIdentity.sourceName,
@@ -1556,18 +2018,18 @@ function acceptSelectedCall(
   };
   const selectedSignature = {
       member,
-      ...(request.sourceSelectedSignature === undefined ? {} : { sourceSignature: request.sourceSelectedSignature }),
+      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
       ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(request.sourceCalleeSymbol === undefined ? {} : { sourceCalleeSymbol: request.sourceCalleeSymbol }),
-      ...(request.sourceCalleeDeclaration === undefined ? {} : { sourceCalleeDeclaration: request.sourceCalleeDeclaration }),
-      ...(request.sourceReturnType === undefined ? {} : { sourceReturnType: request.sourceReturnType }),
-      sourceArgumentBindings: request.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.sourceSelectedSignatureParameters,
-      ...(request.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.sourceSelectedMethodTypeArguments }),
+      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
+      sourceArgumentBindings: request.source.sourceArgumentBindings,
+      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+      ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments: targetTypeArguments as TargetTypeRef[] }),
       ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
     };
-  context.facts.set(request.call, rustSelectedCallKey, selectedSignature, evidence);
+  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
@@ -1575,13 +2037,18 @@ type SelectedCallSourceCarriers =
   | {
       readonly kind: "resolved";
       readonly carriers: readonly TargetTypeRef[];
-      readonly conversions: readonly {
+      readonly reconciliations: readonly {
         readonly sourceIndex: number;
-        readonly reconciliation: Extract<RustValueCarrierReconciliation, { readonly kind: "conversion" }>;
+        readonly reconciliation: RustAppliedValueCarrierReconciliation;
       }[];
     }
   | { readonly kind: "missing" }
-  | { readonly kind: "incompatible"; readonly sourceIndex: number };
+  | {
+      readonly kind: "incompatible";
+      readonly sourceIndex: number;
+      readonly actual?: TargetTypeRef;
+      readonly expected?: TargetTypeRef;
+    };
 
 function selectedCallSourceCarriers(
   request: RustCheckedCallSelectionInput,
@@ -1591,50 +2058,54 @@ function selectedCallSourceCarriers(
   options: RustOperationsProviderOptions,
 ): SelectedCallSourceCarriers {
   const compileTimeIndexes = new Set(fact.compileTimeSourceArgumentIndexes ?? []);
-  const runtimeIndexes = request.arguments
+  const runtimeIndexes = selectedCallArgumentNodes(request)
     .map((_argument, index) => index)
     .filter((index) => !compileTimeIndexes.has(index));
   const declaredBySourceIndex = new Map<number, TargetTypeRef | undefined>();
   for (const sourceIndex of runtimeIndexes) {
-    const bindings = request.sourceArgumentBindings.filter((binding) =>
+    const bindings = request.source.sourceArgumentBindings.filter((binding) =>
       binding.sourceArgumentIndex === sourceIndex);
     const first = bindings[0];
     if (first === undefined || bindings.some((binding) =>
       binding.sourceParameterIndex !== first.sourceParameterIndex ||
       binding.sourceForm !== first.sourceForm) ||
-      request.sourceSelectedSignatureParameters[first.sourceParameterIndex] === undefined) {
+      request.source.sourceSelectedSignatureParameters[first.sourceParameterIndex] === undefined) {
       return { kind: "missing" };
     }
     declaredBySourceIndex.set(sourceIndex, declared?.[first.sourceParameterIndex]);
   }
-  let incompatibleIndex: number | undefined;
-  const conversions: {
+  let incompatibility: Extract<SelectedCallSourceCarriers, { readonly kind: "incompatible" }> | undefined;
+  const reconciliations: {
     readonly sourceIndex: number;
-    readonly reconciliation: Extract<RustValueCarrierReconciliation, { readonly kind: "conversion" }>;
+    readonly reconciliation: RustAppliedValueCarrierReconciliation;
   }[] = [];
-  const actual = request.arguments.map((argument, index) => {
-    const expected = declaredBySourceIndex.get(index);
-    const resolved = resolveRustTargetTypeRef(argument, context, options);
+  const actual = request.source.sourceArguments.map((sourceArgument, index) => {
+    const argument = sourceArgument.expression;
+    const targetExpected = selectedCallArgumentTargetCarrier(fact.target, index);
+    const expected = targetExpected ?? declaredBySourceIndex.get(index);
+    const resolved = selectedSourceValueCarrier(sourceArgument, context, options);
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
-    const converted = context.facts.getTargetConversionFact(argument)?.convertedType;
-    let effective = converted ?? normalized;
-    if (converted === undefined && normalized !== undefined && expected !== undefined &&
-      !rustTargetTypeRefEquals(normalized, expected)) {
-      const reconciliation = selectRustValueCarrierReconciliation(normalized, expected);
-      if (reconciliation.kind === "conversion") {
-        conversions.push({ sourceIndex: index, reconciliation });
-        effective = expected;
-      } else if (reconciliation.kind === "incompatible") {
-        incompatibleIndex ??= index;
-      }
-    } else if (effective !== undefined && expected !== undefined &&
+    let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
+    if (effective !== undefined && expected !== undefined &&
       !rustTargetTypeRefEquals(effective, expected)) {
-      incompatibleIndex ??= index;
+      const reconciliation = selectRustValueCarrierReconciliation(
+        effective,
+        expected,
+        options.projectTypes,
+      );
+      if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+        if (reconciliation.kind === "project-upcast" || targetExpected === undefined) {
+          reconciliations.push({ sourceIndex: index, reconciliation });
+          effective = expected;
+        }
+      } else if (reconciliation.kind === "incompatible") {
+        incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: effective, expected };
+      }
     }
     return effective ?? expected;
   });
-  if (incompatibleIndex !== undefined) {
-    return { kind: "incompatible", sourceIndex: incompatibleIndex };
+  if (incompatibility !== undefined) {
+    return incompatibility;
   }
   if (actual.some((carrier) => carrier === undefined)) {
     return { kind: "missing" };
@@ -1642,7 +2113,7 @@ function selectedCallSourceCarriers(
   if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {
     const stringCarrier = rustStringTargetType();
     return actual.every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, stringCarrier))
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], conversions }
+      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
       : { kind: "incompatible", sourceIndex: 0 };
   }
   if (fact.target.form === "call-value-slice" || fact.target.form === "call-value-array" ||
@@ -1651,19 +2122,7 @@ function selectedCallSourceCarriers(
     if (actual.length < form.leadingArguments.length) {
       return { kind: "incompatible", sourceIndex: actual.length };
     }
-    const incompatible = actual.findIndex((carrier, sourceIndex) => {
-      if (carrier === undefined) {
-        return true;
-      }
-      const target = sourceIndex < form.leadingArguments.length
-        ? form.leadingArguments[sourceIndex]!.carrier
-        : form.elementCarrier;
-      return !rustTargetTypeRefEquals(carrier, target) &&
-        selectRustSourceValueConversion(carrier, target) === undefined;
-    });
-    return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], conversions }
-      : { kind: "incompatible", sourceIndex: incompatible };
+    return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
   }
   if (fact.target.form === "receiver-tagged-array") {
     const form = fact.target;
@@ -1688,10 +2147,29 @@ function selectedCallSourceCarriers(
       return (exact.length > 0 ? exact : convertible).length !== 1;
     });
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], conversions }
+      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
       : { kind: "incompatible", sourceIndex: incompatible };
   }
-  return { kind: "resolved", carriers: actual as TargetTypeRef[], conversions };
+  return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+}
+
+function selectedCallArgumentTargetCarrier(
+  form: RustProviderOperationForm,
+  sourceIndex: number,
+): TargetTypeRef | undefined {
+  if (form.form === "call-str-slice" || form.form === "free-call-str-slice") {
+    return rustStringTargetType();
+  }
+  if (form.form === "call-value-slice" || form.form === "call-value-array" ||
+    form.form === "receiver-value-array") {
+    return sourceIndex < form.leadingArguments.length
+      ? form.leadingArguments[sourceIndex]!.carrier
+      : form.elementCarrier;
+  }
+  if (form.form === "receiver-tagged-array" && sourceIndex < form.leadingArguments.length) {
+    return form.leadingArguments[sourceIndex]!.carrier;
+  }
+  return undefined;
 }
 
 function selectedCallReceiverCarrier(
@@ -1711,26 +2189,23 @@ function selectedCallReceiverValueCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
-  const receiver = request.sourceReceiver;
+  const receiver = request.source.sourceReceiver;
   if (receiver === undefined) {
     return undefined;
   }
-  const sourceCarrier = resolveRustTargetTypeRef(
-    receiver.expression,
-    context,
-    options,
-  );
-  if (!request.optionalChain) {
-    return sourceCarrier;
+  const storedCarrier = resolveRustTargetTypeRef(receiver.expression, context, options);
+  const selectedCarrier = selectedSourceValueCarrier(receiver, context, options);
+  if (!request.source.optionalChain) {
+    return selectedCarrier ?? storedCarrier;
   }
-  const optionElement = rustOptionElementCarrier(sourceCarrier);
-  if (optionElement !== undefined) {
-    return optionElement;
+  if (storedCarrier !== undefined && selectedCarrier !== undefined &&
+    rustTargetTypeRefEquals(storedCarrier, selectedCarrier)) {
+    return selectedCarrier;
   }
-  const selectedCarrier = resolveRustTargetTypeRef(receiver.type, context, options);
-  return sourceCarrier !== undefined && selectedCarrier !== undefined &&
-      rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)
-    ? selectedCarrier
+  const optionElement = rustOptionElementCarrier(storedCarrier);
+  return optionElement !== undefined &&
+      (selectedCarrier === undefined || rustTargetTypeRefEquals(optionElement, selectedCarrier))
+    ? selectedCarrier ?? optionElement
     : undefined;
 }
 
@@ -1748,14 +2223,14 @@ function selectRustOptionalCallResult(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustOptionalCallResult {
-  if (!request.optionalChain) {
+  if (!request.source.optionalChain) {
     return { kind: "resolved", resultCarrier: innerResultCarrier };
   }
-  const receiver = request.sourceReceiver;
-  const guard = receiver?.expression ?? request.callee;
+  const receiver = request.source.sourceReceiver;
+  const guard = receiver?.expression ?? request.source.sourceCallee.expression;
   const sourceGuardCarrier = receiver === undefined
     ? resolveRustTargetTypeRef(
-        request.sourceCalleeDeclaration ?? request.callee,
+        selectedCallCalleeDeclaration(request) ?? request.source.sourceCallee.expression,
         context,
         options,
       )
@@ -1779,7 +2254,7 @@ function selectRustOptionalCallResult(
     };
   }
   const selection = selectRustOptionalChain({
-    expression: request.call,
+    expression: request.source.call,
     guard,
     operationKind: "method",
     sourceGuardCarrier,
@@ -1810,18 +2285,27 @@ function providerFormRequiresSourceReceiver(form: RustProviderOperationForm): bo
     form.form === "arg-receiver-method";
 }
 
-function instantiateProviderOperationTemplate(
-  template: RustProviderOperationTemplate,
+interface InstantiatedProviderOperationTemplate<
+  OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
+> {
+  readonly template: RustProviderOperationTemplate<OperationKind>;
+  readonly substitutions: ReadonlyMap<string, TargetTypeRef>;
+}
+
+function instantiateProviderOperationTemplate<
+  OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind,
+>(
+  template: RustProviderOperationTemplate<OperationKind>,
   evidence: {
     readonly sourceReceiverCarrier?: TargetTypeRef;
     readonly sourceParameterCarriers?: readonly (TargetTypeRef | undefined)[];
     readonly sourceResultCarrier?: TargetTypeRef;
     readonly directTypeArguments?: ReadonlyMap<string, TargetTypeRef>;
   },
-): RustProviderOperationTemplate | undefined {
+): InstantiatedProviderOperationTemplate<OperationKind> | undefined {
   const parameterNames = new Set(template.typeParameters ?? []);
   if (parameterNames.size === 0) {
-    return template;
+    return { template, substitutions: new Map() };
   }
   const bindings = new Map<string, TargetTypeRef>();
   for (const [name, carrier] of evidence.directTypeArguments ?? []) {
@@ -1846,17 +2330,20 @@ function instantiateProviderOperationTemplate(
     return undefined;
   }
   return {
-    ...template,
-    target: substituteProviderOperationForm(template.target, bindings),
-    resultCarrier: substituteRustTargetTypeParameters(template.resultCarrier, bindings),
-    ...(template.parameterCarriers === undefined
-      ? {}
-      : { parameterCarriers: template.parameterCarriers.map((carrier) =>
-          carrier === undefined ? undefined : substituteRustTargetTypeParameters(carrier, bindings)) }),
-    ...(template.receiverCarrier === undefined
-      ? {}
-      : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
-    typeParameters: [],
+    template: {
+      ...template,
+      target: substituteProviderOperationForm(template.target, bindings),
+      resultCarrier: substituteRustTargetTypeParameters(template.resultCarrier, bindings),
+      ...(template.parameterCarriers === undefined
+        ? {}
+        : { parameterCarriers: template.parameterCarriers.map((carrier) =>
+            carrier === undefined ? undefined : substituteRustTargetTypeParameters(carrier, bindings)) }),
+      ...(template.receiverCarrier === undefined
+        ? {}
+        : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
+      typeParameters: [],
+    },
+    substitutions: bindings,
   };
 
   function inferTemplateBindings(
@@ -1954,6 +2441,7 @@ function finalizeProviderOperationFact(
     ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
     isAsync: template.isAsync,
     isFallible: template.isFallible,
+    ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     isUnsafe: template.isUnsafe,
   });
   if (abi === undefined) {
@@ -1971,8 +2459,13 @@ function checkedCallIsConstruction(
   request: RustCheckedCallSelectionInput,
   context: RustOperationPolicyContext,
 ): boolean {
-  const call = asNode(request.call, context);
-  return call !== undefined && context.ast.kindName(call) === "KindNewExpression";
+  const call = asNode(request.source.call, context);
+  const callee = asNode(request.source.sourceCallee.expression, context);
+  return call !== undefined && (
+    context.ast.kindName(call) === "KindNewExpression" ||
+    (context.ast.kindName(call) === "KindCallExpression" &&
+      callee !== undefined && context.ast.kindName(callee) === "KindSuperKeyword")
+  );
 }
 
 export function selectRustCheckedDelete(
@@ -2046,12 +2539,70 @@ export function selectRustCheckedDelete(
   });
 }
 
+function selectExternalProjectFieldAccess(
+  request: RustCheckedPropertySelectionInput,
+  selectedReceiverCarrier: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
+  const externalField = options.projectTypes.externalFieldForReceiver(
+    request.sourceSelectedDeclaration,
+    selectedReceiverCarrier,
+  );
+  if (externalField === undefined || selectedReceiverCarrier === undefined) {
+    return undefined;
+  }
+  const operationId = sourceOperationId(context, externalField.field.declaration, "external-field");
+  const readSlot = rustProjectMemberSlotName(
+    context.ast,
+    externalField.field.declaration,
+    "read",
+  );
+  const writeSlot = rustProjectMemberSlotName(
+    context.ast,
+    externalField.field.declaration,
+    "write",
+  );
+  if (readSlot === undefined || writeSlot === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_EXTERNAL_PROJECT_FIELD_SLOT_IDENTITY_MISSING",
+      "Selected external project field has no deterministic Rust dispatch-slot identity.",
+    );
+  }
+  return acceptRustMemberOperation(request, "property", {
+    kind: "source-field",
+    operationId,
+    receiverCarrier: selectedReceiverCarrier,
+    storage: "project-object",
+    storageIndex: externalField.field.storageIndex,
+    resultCarrier: externalField.field.carrier,
+    dispatch: {
+      read: readSlot,
+      write: writeSlot,
+      ownerCarrier: externalField.ownerCarrier,
+    },
+  }, context, options, {
+    sourceExpression: request.expression,
+    sourceReceiver: request.receiver,
+    sourceSelectedSymbol: request.sourceSelectedSymbol,
+    sourceSelectedDeclaration: externalField.field.declaration,
+    sourceResultType: request.sourceResultType,
+  });
+}
+
 export function selectRustCheckedPropertyAccess(
   request: RustCheckedPropertySelectionInput,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const selectedReceiverCarrier = selectedMemberReceiverCarrier(request, context, options);
+  const runtimeReceiverCarrier = resolveRustTargetTypeRef(
+    request.receiver,
+    context,
+    options,
+  );
   if (request.optionalChain === true && selectedReceiverCarrier === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_EVIDENCE_MISSING", "Optional-chain property access has no exact TSTS-selected non-null receiver type.");
   }
@@ -2083,10 +2634,11 @@ export function selectRustCheckedPropertyAccess(
     options.sourceProfiles,
   );
   if (sourceProfileMembers !== undefined) {
-    const receiverCarrier = selectedReceiverCarrier;
     const generator = selectRustGeneratorSourceProperty({
       sourceMembers: sourceProfileMembers.members,
-      ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
+      ...(runtimeReceiverCarrier === undefined
+        ? {}
+        : { receiverCarrier: runtimeReceiverCarrier }),
     });
     if (generator.kind === "rejected") {
       return rejectSelectedOperation(
@@ -2103,7 +2655,7 @@ export function selectRustCheckedPropertyAccess(
         [],
         context,
         options,
-        selectedReceiverCarrier,
+        runtimeReceiverCarrier,
       );
       if (fact === undefined) {
         return rejectSelectedOperation(
@@ -2123,6 +2675,16 @@ export function selectRustCheckedPropertyAccess(
     }
   }
 
+  const externalProjectField = selectExternalProjectFieldAccess(
+    request,
+    selectedReceiverCarrier,
+    context,
+    options,
+  );
+  if (externalProjectField !== undefined) {
+    return externalProjectField;
+  }
+
   const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
   if (jsIdentity !== undefined) {
     if (!options.jsEnabled) {
@@ -2136,7 +2698,12 @@ export function selectRustCheckedPropertyAccess(
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-      return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript property '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust operation row for this receiver carrier.`);
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SELECTED_OPERATION_UNSUPPORTED",
+        `The selected JavaScript property '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust operation row for this receiver carrier.`,
+      );
     }
     const fact = finalizeProviderOperationFromSubjects(selection.fact, request.receiver, [], context, options, selectedReceiverCarrier);
     if (fact === undefined) {
@@ -2252,9 +2819,13 @@ export function selectRustCheckedPropertyAccess(
           selectedReceiverCarrier,
           declaredCarrier,
         );
-    if (field !== undefined && resultCarrier !== undefined) {
+    if (field !== undefined && resultCarrier !== undefined && selectedReceiverCarrier !== undefined) {
       const operationId = sourceOperationId(context, declaration, "field");
       const owner = options.projectTypes.definitionContainingDeclaration(declaration);
+      const storageIndex = field.storageIndex +
+        (owner === undefined
+          ? 0
+          : options.projectTypes.externalBaseForDefinition(owner)?.fields.length ?? 0);
       const ownerRelationship = owner === undefined || selectedReceiverCarrier === undefined
         ? undefined
         : options.projectTypes.relationship(selectedReceiverCarrier, owner);
@@ -2279,8 +2850,9 @@ export function selectRustCheckedPropertyAccess(
       return acceptRustMemberOperation(request, "property", {
         kind: "source-field",
         operationId,
+        receiverCarrier: selectedReceiverCarrier,
         storage: "project-object",
-        storageIndex: field.storageIndex,
+        storageIndex,
         resultCarrier,
         ...(readSlot === undefined || writeSlot === undefined
           ? {}
@@ -2617,6 +3189,7 @@ function selectStructuralSourceProperty(
   return acceptRustMemberOperation(request, "property", {
     kind: "source-field",
     operationId,
+    receiverCarrier,
     storage: shape.storage,
     storageIndex: field.storageIndex,
     resultCarrier,
@@ -2781,7 +3354,12 @@ export function selectRustCheckedElementAccess(
     if (!isRustCopyCarrier(fixedReceiver.element)) {
       return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY", "Dynamic fixed-array element access requires an exact Copy element carrier so a borrowed Rust index result can preserve source value semantics.");
     }
-    const dynamicIndexCarrier = resolveRustTargetTypeRef(request.argument, context, options);
+    const dynamicIndexCarrier = selectedValueCarrier(
+      request.argument,
+      request.sourceArgumentType,
+      context,
+      options,
+    );
     if (dynamicIndexCarrier === undefined ||
       !rustTargetTypeRefEquals(dynamicIndexCarrier, rustSourcePrimitiveTargetType("int32"))) {
       return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED", "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.");
@@ -2795,6 +3373,7 @@ export function selectRustCheckedElementAccess(
       parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     };
     const fact = finalizeProviderOperationFromSubjects(
       template,
@@ -2803,6 +3382,7 @@ export function selectRustCheckedElementAccess(
       context,
       options,
       selectedReceiverCarrier,
+      [dynamicIndexCarrier],
     );
     if (fact === undefined) {
       return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", "Dynamic fixed-array indexing cannot finalize one total Rust index ABI.");
@@ -2836,6 +3416,7 @@ export function selectRustCheckedElementAccess(
       parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
       isAsync: false,
       isFallible: false,
+      errorBoundary: "none",
     };
     const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.argument], context, options, selectedReceiverCarrier);
     if (fact === undefined) {
@@ -2849,18 +3430,40 @@ export function selectRustCheckedElementAccess(
     if (!options.jsEnabled) {
       return rejectSelectedOperation(request.expression, context, "RUST_JS_SURFACE_REQUIRED", "The selected index signature belongs to the explicit JavaScript source profile, which is not active.");
     }
+    const selectedArgumentCarrier = selectedValueCarrier(
+      request.argument,
+      request.sourceArgumentType,
+      context,
+      options,
+    );
     const selection = selectJsSurfaceOperation({
       ownerName: jsIdentity.ownerName,
       memberName: jsIdentity.memberName,
       operationKind: "indexer",
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
-      argumentCarriers: [resolveRustTargetTypeRef(request.argument, context, options)],
+      argumentCarriers: [selectedArgumentCarrier],
       argumentCompatibility: selectedArgumentCompatibility([request.argument], context, options),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
-      return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_UNSUPPORTED", `The selected JavaScript index signature '${jsIdentity.ownerName}' has no closed Rust operation row for this receiver carrier.`);
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SELECTED_OPERATION_UNSUPPORTED",
+        `The selected JavaScript index signature '${jsIdentity.ownerName}' has no closed Rust operation row for this receiver carrier.`,
+        [{
+          message: `receiver=${JSON.stringify(receiverCarrier)}; argument=${JSON.stringify(selectedArgumentCarrier)}`,
+        }],
+      );
     }
-    const fact = finalizeProviderOperationFromSubjects(selection.fact, request.receiver, [request.argument], context, options, selectedReceiverCarrier);
+    const fact = finalizeProviderOperationFromSubjects(
+      selection.fact,
+      request.receiver,
+      [request.argument],
+      context,
+      options,
+      selectedReceiverCarrier,
+      [selectedArgumentCarrier],
+    );
     if (fact === undefined) {
       return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `The selected JavaScript indexer '${jsIdentity.ownerName}.${jsIdentity.memberName}' cannot finalize one total Rust operation ABI.`);
     }
@@ -3133,7 +3736,8 @@ export function selectRustCheckedConversion(
         { message: "rust deferred the selected generic source-call argument carrier to post-check target substitution" },
       ]);
     }
-    const sourceCarrier = resolveRustTargetTypeRef(request.expression, context, options);
+    const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.expression) ??
+      resolveRustTargetTypeRef(request.expression, context, options);
     if (sourceCarrier !== undefined && rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
       return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected call argument already has the selected target parameter carrier" },
@@ -3141,10 +3745,11 @@ export function selectRustCheckedConversion(
     }
     const sourceNode = asNode(request.expression, context);
     const sourceKind = sourceNode === undefined ? "" : context.ast.kindName(sourceNode);
-    if ((targetCarrier.kind === "function-pointer" || targetCarrier.kind === "closure") &&
+    if ((targetCarrier.kind === "function-pointer" || targetCarrier.kind === "closure" ||
+      rustCallableProtocol(targetCarrier) !== undefined) &&
       (sourceKind === "KindArrowFunction" || sourceKind === "KindFunctionExpression")) {
       return acceptRustPolicy({ convertedType: targetCarrier }, [
-        { message: `rust selected function expression uses the selected target ${targetCarrier.kind} carrier` },
+        { message: "rust selected function expression uses the selected target callable carrier" },
       ]);
     }
     if (targetCarrier.kind === "source-primitive" && sourceNode !== undefined &&
@@ -3159,13 +3764,11 @@ export function selectRustCheckedConversion(
         { message: "rust selected call argument borrows into the selected target pointer carrier" },
       ]);
     }
-    if (sourceCarrier !== undefined && selectProjectUpcast(
-      request.expression,
-      sourceCarrier,
-      targetCarrier,
-      context,
-      options,
-    )) {
+    const reconciliation = sourceCarrier === undefined
+      ? undefined
+      : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
+    if (reconciliation?.kind === "project-upcast") {
+      recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
       return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected call argument uses an exact project-type upcast" },
       ]);
@@ -3198,7 +3801,8 @@ export function selectRustCheckedConversion(
     );
   }
   const targetCarrier = resolveRustTargetTypeRef(request.explicitTargetTypeNode, context, options);
-  const sourceCarrier = resolveRustTargetTypeRef(request.sourceExpression, context, options);
+  const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.sourceExpression) ??
+    resolveRustTargetTypeRef(request.sourceExpression, context, options);
   if (targetCarrier === undefined || sourceCarrier === undefined) {
     return rejectSelectedOperation(
       request.expression,
@@ -3208,15 +3812,24 @@ export function selectRustCheckedConversion(
     );
   }
   const identity = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
-  const projectUpcast = !identity && selectProjectUpcast(
+  const reconciliation = identity
+    ? { kind: "identity" as const }
+    : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
+  const projectUpcast = reconciliation.kind === "project-upcast";
+  if (projectUpcast) {
+    recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
+  }
+  const projectDowncast = !identity && !projectUpcast && selectProjectDowncast(
     request.expression,
     sourceCarrier,
     targetCarrier,
     context,
     options,
   );
-  const conversion = identity || projectUpcast ? undefined : selectRustSourceValueConversion(sourceCarrier, targetCarrier);
-  if (!identity && !projectUpcast && conversion === undefined) {
+  const conversion = identity || projectUpcast || projectDowncast
+    ? undefined
+    : selectRustSourceValueConversion(sourceCarrier, targetCarrier);
+  if (!identity && !projectUpcast && !projectDowncast && conversion === undefined) {
     return rejectSelectedOperation(
       request.expression,
       context,
@@ -3228,6 +3841,8 @@ export function selectRustCheckedConversion(
     ? "tsonic.rust.conversion.identity"
     : projectUpcast
       ? "tsonic.rust.conversion.project-upcast"
+      : projectDowncast
+        ? "tsonic.rust.conversion.project-downcast"
     : `tsonic.rust.conversion.${rustValueConversionIdentity(conversion!)}`;
   const fact: RustTargetOperationFact = {
     kind: "source-conversion",
@@ -3238,7 +3853,13 @@ export function selectRustCheckedConversion(
   const operation: RustTargetOperationSelection = {
     operationId,
     operationKind: "operator",
-    targetOperation: identity ? "identity" : projectUpcast ? "project-upcast" : "runtime-conversion",
+    targetOperation: identity
+      ? "identity"
+      : projectUpcast
+        ? "project-upcast"
+        : projectDowncast
+          ? "project-downcast"
+          : "runtime-conversion",
     resultType: targetCarrier,
     provenance: {
       sourceExpression: request.sourceExpression,
@@ -3251,38 +3872,45 @@ export function selectRustCheckedConversion(
     ? "rust selected assertion identity conversion"
     : projectUpcast
       ? "rust selected assertion project-type upcast"
+      : projectDowncast
+        ? "rust selected assertion project-type downcast"
       : `rust selected assertion conversion '${rustValueConversionIdentity(conversion!)}'` }];
   context.facts.set(request.expression, rustTargetOperationFactKey, fact, evidence);
   context.facts.set(request.expression, rustSelectedOperationKey, operation, evidence);
   return acceptRustPolicy({ convertedType: targetCarrier, operation }, evidence);
 }
 
-function selectProjectUpcast(
+function selectProjectDowncast(
   subject: Node,
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): boolean {
+  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForCarrier(targetCarrier);
-  const relationship = targetDefinition === undefined
+  const relationship = sourceDefinition === undefined || targetDefinition === undefined ||
+      targetDefinition.kind !== "class" || targetDefinition.typeParameterNames.length !== 0
     ? { kind: "unrelated" as const }
-    : options.projectTypes.relationship(sourceCarrier, targetDefinition);
-  if (relationship.kind !== "related" ||
-    !rustTargetTypeRefEquals(relationship.targetType, targetCarrier)) {
+    : options.projectTypes.relationship(targetCarrier, sourceDefinition);
+  if (sourceDefinition === undefined || relationship.kind !== "related" ||
+    !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
+    options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) === undefined) {
     return false;
   }
-  context.facts.set(subject, rustProjectUpcastFactKey, {
+  context.facts.set(subject, rustProjectDowncastFactKey, {
     sourceCarrier,
+    dispatchCarrier,
     targetCarrier,
-  }, [{ message: "rust exact project-type upcast" }]);
+  }, [{ message: "rust exact project-type downcast" }]);
   return true;
 }
 
 function mapProviderCheckedOperation(
   expression: ExtensionFactSubject,
   identity: ProviderDeclarationIdentity,
-  operationKind: RustProviderOperationRow["operationKind"],
+  operationKind: RustProviderFactOperationKind,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
   sourceReceiver: ExtensionFactSubject | undefined,
@@ -3309,10 +3937,21 @@ function mapProviderCheckedOperation(
   if (fact === undefined) {
     return rejectSelectedOperation(expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected provider declaration '${providerIdentityText(identity)}' cannot finalize one total Rust operation ABI.`);
   }
-  const provenance = {
-    sourceExpression: expression,
-    providerDeclaration: identity,
-  };
+  const provenance = memberRequest === undefined
+    ? {
+        sourceExpression: expression,
+        providerDeclaration: identity,
+      }
+    : {
+        sourceExpression: expression,
+        sourceReceiver: memberRequest.receiver,
+        sourceSelectedSymbol: memberRequest.sourceSelectedSymbol,
+        sourceSelectedDeclaration: memberRequest.sourceSelectedDeclaration,
+        sourceSelectedReadDeclaration: memberRequest.sourceSelectedReadDeclaration,
+        sourceSelectedWriteDeclaration: memberRequest.sourceSelectedWriteDeclaration,
+        sourceResultType: memberRequest.sourceResultType,
+        providerDeclaration: identity,
+      };
   return memberRequest === undefined
     ? acceptRustOperation(expression, fact, context, provenance)
     : acceptRustMemberOperation(
@@ -3332,22 +3971,34 @@ function finalizeProviderOperationFromSubjects(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
   selectedReceiverCarrier?: TargetTypeRef,
+  selectedArgumentCarriers?: readonly (TargetTypeRef | undefined)[],
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
-  const rawArgumentCarriers = sourceArguments.map((argument) =>
-    resolveRustTargetTypeRef(argument, context, options));
+  const rawArgumentCarriers = sourceArguments.map((argument, index) =>
+    selectedArgumentCarriers?.[index] ??
+      rustEffectiveValueCarrier(context.facts, argument) ??
+      resolveRustTargetTypeRef(argument, context, options));
   const rawReceiverCarrier = selectedReceiverCarrier ?? (sourceReceiver === undefined
     ? undefined
     : resolveRustTargetTypeRef(sourceReceiver, context, options));
-  const instantiatedTemplate = instantiateProviderOperationTemplate(template, {
+  const instantiation = instantiateProviderOperationTemplate(template, {
     sourceReceiverCarrier: rawReceiverCarrier,
     sourceParameterCarriers: rawArgumentCarriers,
   });
-  if (instantiatedTemplate === undefined) {
+  if (instantiation === undefined) {
     return undefined;
   }
+  const instantiatedTemplate = instantiation.template;
   const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
-    const resolved = resolveRustTargetTypeRef(argument, context, options);
-    return normalizeSelectedLiteralCarrier(argument, resolved, instantiatedTemplate.parameterCarriers?.[index], context, options);
+    const resolved = selectedArgumentCarriers?.[index] ??
+      rustEffectiveValueCarrier(context.facts, argument) ??
+      resolveRustTargetTypeRef(argument, context, options);
+    return normalizeSelectedOperationInputCarrier(
+      argument,
+      resolved,
+      instantiatedTemplate.parameterCarriers?.[index],
+      context,
+      options,
+    );
   });
   if (sourceArgumentCarriers.some((carrier) => carrier === undefined)) {
     return undefined;
@@ -3388,25 +4039,73 @@ function selectedMemberReceiverCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
+  const receiver = asNode(request.receiver, context);
   const sourceCarrier = resolveRustTargetTypeRef(
     request.receiver,
     context,
     options,
   );
-  if (request.optionalChain !== true) {
-    return sourceCarrier;
+  if (receiver === undefined || sourceCarrier === undefined) {
+    return undefined;
+  }
+  const optionElement = rustOptionElementCarrier(sourceCarrier);
+  if (request.optionalChain === true && optionElement !== undefined) {
+    return optionElement;
   }
   if (request.sourceReceiverType === undefined) {
     return undefined;
   }
-  const optionElement = rustOptionElementCarrier(sourceCarrier);
-  if (optionElement !== undefined) {
-    return optionElement;
+  const selectedCarrier = resolveRustTargetTypeRef(
+    request.sourceReceiverType,
+    context,
+    options,
+  );
+  if (selectedCarrier === undefined) {
+    return undefined;
   }
-  const selectedCarrier = resolveRustTargetTypeRef(request.sourceReceiverType, context, options);
-  return rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)
-    ? selectedCarrier
-    : undefined;
+  if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
+    return sourceCarrier;
+  }
+  if (isRustProgramErrorCarrier(sourceCarrier)) {
+    const selectedDefinition = options.projectTypes.definitionForCarrier(selectedCarrier);
+    return selectedDefinition !== undefined &&
+        options.projectTypes.programErrorVariant(selectedDefinition) !== undefined
+      ? selectedCarrier
+      : undefined;
+  }
+  const selectedOperation = context.facts.resolve(receiver, rustTargetOperationFactKey);
+  const preparedOperation = context.facts.resolve(receiver, rustPreparedOperationResultFactKey);
+  const selectedOperationResult = selectedOperation === undefined
+    ? preparedOperation?.resultCarrier
+    : rustTargetOperationResultCarrier(selectedOperation);
+  if (request.optionalChain !== true && selectedOperationResult !== undefined &&
+    rustTargetTypeRefEquals(sourceCarrier, selectedOperationResult)) {
+    return sourceCarrier;
+  }
+  const declaredCarrier = optionElement ?? sourceCarrier;
+  const declaredDefinition = options.projectTypes.definitionForCarrier(declaredCarrier);
+  const selectedDefinition = options.projectTypes.definitionForCarrier(selectedCarrier);
+  const selectedRelationship = declaredDefinition === undefined || selectedDefinition === undefined
+    ? { kind: "unrelated" as const }
+    : options.projectTypes.relationship(selectedCarrier, declaredDefinition);
+  if (selectedRelationship.kind === "related" &&
+    rustTargetTypeRefEquals(selectedRelationship.targetType, declaredCarrier)) {
+    return selectedCarrier;
+  }
+  if (optionElement !== undefined) {
+    return rustTargetTypeRefEquals(optionElement, selectedCarrier)
+      ? optionElement
+      : undefined;
+  }
+  const refinement = context.source.semantics.selectValueTypeRefinement(receiver);
+  if (refinement.kind === "resolved" && refinement.refinement.kind === "exact") {
+    return sourceCarrier;
+  }
+  if (refinement.kind === "resolved" && refinement.refinement.kind === "members" &&
+    options.sourceTypes.sourceUnionForCarrier(sourceCarrier) !== undefined) {
+    return sourceCarrier;
+  }
+  return undefined;
 }
 
 function acceptRustMemberOperation(
@@ -3418,6 +4117,36 @@ function acceptRustMemberOperation(
   provenance: NonNullable<RustTargetOperationSelection["provenance"]>,
   innerResultCarrier: TargetTypeRef | undefined = rustTargetOperationResultCarrier(fact),
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const sourceReceiverCarrier = resolveRustTargetTypeRef(
+    request.receiver,
+    context,
+    options,
+  );
+  const operationReceiverCarrier = request.optionalChain === true
+    ? rustOptionElementCarrier(sourceReceiverCarrier) ?? sourceReceiverCarrier
+    : sourceReceiverCarrier;
+  const selectedReceiverCarrier = fact.kind === "provider-operation" &&
+      fact.abi.sourceReceiver.kind === "receiver"
+    ? fact.abi.sourceReceiver.carrier
+    : selectedMemberReceiverCarrier(request, context, options);
+  if (operationReceiverCarrier !== undefined && selectedReceiverCarrier !== undefined) {
+    const projection = selectRustFlowReadProjection(
+      operationReceiverCarrier,
+      selectedReceiverCarrier,
+      options.projectTypes,
+    );
+    if (projection.kind === "incompatible") {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_SELECTED_RECEIVER_PROJECTION_UNSUPPORTED",
+        "The checked member receiver cannot project from its exact runtime carrier to its TSTS-selected carrier.",
+      );
+    }
+    if (projection.kind === "projection") {
+      recordRustFlowReadProjection(context.facts, request.receiver, projection.fact);
+    }
+  }
   if (request.optionalChain !== true) {
     return acceptRustOperation(request.expression, fact, context, provenance, innerResultCarrier);
   }
@@ -3479,6 +4208,7 @@ function rejectSelectedOperation<T>(
   context: RustOperationPolicyContext,
   extensionCode: string,
   message: string,
+  evidence: readonly { readonly message: string }[] = [],
 ): RustPolicySelection<T> {
   return rejectRustPolicy({
     extensionId: context.extensionId,
@@ -3487,15 +4217,26 @@ function rejectSelectedOperation<T>(
     category: "error",
     message,
     nodeOrSpan,
-    evidence: [{ message: "target.capability=rust.selected-operation" }],
+    evidence: [{ message: "target.capability=rust.selected-operation" }, ...evidence],
   });
 }
 
-function providerOperationFact(row: RustProviderOperationRow): RustProviderOperationTemplate {
+function providerOperationFact(
+  row: RustProviderOperationRow<RustProviderFactOperationKind>,
+): RustProviderOperationTemplate {
+  return providerOperationTemplate(row, row.operationKind);
+}
+
+function providerOperationTemplate<
+  OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind,
+>(
+  row: RustProviderOperationRow<OperationKind>,
+  operationKind: OperationKind,
+): RustProviderOperationTemplate<OperationKind> {
   return {
     kind: "provider-operation",
     operationId: providerOperationId(row),
-    operationKind: row.operationKind,
+    operationKind,
     target: row.target,
     resultCarrier: row.resultCarrier,
     ...(row.parameterCarriers === undefined ? {} : { parameterCarriers: row.parameterCarriers }),
@@ -3504,6 +4245,7 @@ function providerOperationFact(row: RustProviderOperationRow): RustProviderOpera
     ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,
+    errorBoundary: row.isFallible === true ? row.errorBoundary : "none",
     isUnsafe: row.isUnsafe === true,
   };
 }
@@ -3681,6 +4423,38 @@ function normalizeSelectedLiteralCarrier(
   return expected;
 }
 
+function normalizeSelectedOperationInputCarrier(
+  subject: ExtensionFactSubject | undefined,
+  actual: TargetTypeRef | undefined,
+  expected: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  const direct = normalizeSelectedLiteralCarrier(
+    subject,
+    actual,
+    expected,
+    context,
+    options,
+  );
+  const optionElement = rustOptionElementCarrier(expected);
+  if (optionElement === undefined || direct === undefined ||
+    rustTargetTypeRefEquals(direct, expected)) {
+    return direct;
+  }
+  if (isRustDefinitelyNullishCarrier(direct)) {
+    return expected;
+  }
+  const inner = normalizeSelectedLiteralCarrier(
+    subject,
+    direct,
+    optionElement,
+    context,
+    options,
+  );
+  return rustTargetTypeRefEquals(inner, optionElement) ? expected : direct;
+}
+
 function normalizeSelectedArgumentCarrier(
   subject: ExtensionFactSubject | undefined,
   actual: TargetTypeRef | undefined,
@@ -3689,7 +4463,8 @@ function normalizeSelectedArgumentCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const literal = normalizeSelectedLiteralCarrier(subject, actual, expected, context, options);
-  if (literal !== actual || (expected?.kind !== "function-pointer" && expected?.kind !== "closure")) {
+  if (literal !== actual || (expected?.kind !== "function-pointer" && expected?.kind !== "closure" &&
+    rustCallableProtocol(expected) === undefined)) {
     return literal;
   }
   const node = asNode(subject, context);
@@ -3715,12 +4490,24 @@ function selectedArgumentCompatibility(
       return 1;
     }
     const kind = context.ast.kindName(node);
-    if ((expected.kind === "function-pointer" || expected.kind === "closure") &&
+    const callable = rustCallableProtocol(expected);
+    if ((expected.kind === "function-pointer" || expected.kind === "closure" || callable !== undefined) &&
       (kind === "KindArrowFunction" || kind === "KindFunctionExpression")) {
-      return context.ast.parameters(node).length === expected.args.length ? 1 : undefined;
+      const parameterCount = expected.kind === "function-pointer" || expected.kind === "closure"
+        ? expected.args.length
+        : callable!.parameters.length;
+      return context.ast.parameters(node).length === parameterCount ? 1 : undefined;
     }
     if (actual === undefined) {
       return 10;
+    }
+    const reconciliation = selectRustValueCarrierReconciliation(
+      actual,
+      expected,
+      options.projectTypes,
+    );
+    if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+      return 1;
     }
     return expected.kind === "source-primitive" && isRustNumericCarrier(expected) &&
       sourceLiteralIsRepresentableAsPrimitive(node, expected.name, context)

@@ -8,7 +8,11 @@ import type {
   RustValueConversionId,
 } from "./keys.js";
 import {
+  isRustNeverCarrier,
   isRustNumericCarrier,
+  rustNeverTargetType,
+  rustOptionElementCarrier,
+  rustOptionTargetType,
   rustIsizeTargetType,
   rustJsValueTargetType,
   rustPrimitiveTypeName,
@@ -55,6 +59,10 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "source-union-variant";
       readonly variantName: string;
     }
+  | {
+      readonly lowering: "option-map";
+      readonly element: RustValueConversionContract;
+    }
 );
 
 function conversion(id: RustValueConversionId): RustValueConversion {
@@ -81,6 +89,32 @@ export const rustJsValueCloneConversion = conversion("js-value-clone");
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "option-map") {
+    const element = rustValueConversionContract(value.elementConversion);
+    return element === undefined
+      ? undefined
+      : {
+          category: element.category,
+          lowering: "option-map",
+          sourceMode: "value",
+          source: rustOptionTargetType(element.source),
+          target: rustOptionTargetType(element.target),
+          element,
+          fallible: element.fallible,
+        };
+  }
+  if (value.kind === "bottom-coercion") {
+    return isRustNeverCarrier(value.source) && isRustTargetTypeRef(value.target)
+      ? {
+          category: "exact",
+          lowering: "identity",
+          sourceMode: "value",
+          source: rustNeverTargetType(),
+          target: value.target,
+          fallible: false,
+        }
+      : undefined;
+  }
   if (value.kind === "source-union-variant") {
     const union = rustSourceUnionCarrierValue(value.target);
     const matches = union?.variants.filter((variant) =>
@@ -197,13 +231,32 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
       ? `numeric-promotion.${value.source}.${value.target}`
       : value.kind === "raw-pointer-mut-to-const"
         ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
-        : `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
+        : value.kind === "source-union-variant"
+          ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`
+          : value.kind === "bottom-coercion"
+            ? `bottom-coercion.${JSON.stringify(value.target)}`
+            : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }
 
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustValueConversion | undefined {
+  const sourceOptionElement = rustOptionElementCarrier(source);
+  const targetOptionElement = rustOptionElementCarrier(target);
+  if (sourceOptionElement !== undefined && targetOptionElement !== undefined) {
+    const elementConversion = selectRustSourceValueConversion(
+      sourceOptionElement,
+      targetOptionElement,
+    );
+    if (elementConversion === undefined || elementConversion.kind === "option-map") {
+      return undefined;
+    }
+    return { kind: "option-map", elementConversion };
+  }
+  if (isRustNeverCarrier(source)) {
+    return Object.freeze({ kind: "bottom-coercion", source, target });
+  }
   const targetUnion = rustSourceUnionCarrierValue(target);
   const matchingUnionVariants = targetUnion?.variants.filter((variant) =>
     rustTargetTypeRefEquals(variant.carrier, source)) ?? [];

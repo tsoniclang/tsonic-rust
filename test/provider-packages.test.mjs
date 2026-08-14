@@ -39,7 +39,7 @@ export function load(path: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /acme_files::read_text\(path\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /acme_files::read_text\(path\.clone\(\)\)/u);
   const manifest = artifactText(result, "Cargo.toml");
   assert.match(manifest, /acme_files = \{ path = ".*acme_files" \}/u);
   assert.match(manifest, /tsonic_rust_runtime = \{ path = /u);
@@ -153,6 +153,51 @@ export function storeProbe(): int32 {
   assert.match(text, /store\.get\(2\)/u);
 });
 
+test("provider-owned writable properties and indexers lower through exact setter rows", () => {
+  const { result } = compileRust({
+    packages: [acmePlatformPackage({ includeSetters: true })],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+
+export function update(): int32 {
+  let store = new Store("seed");
+  store.count = 9;
+  store[2] = 11;
+  return store.count + store[2];
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /store\.set_count\(9\)/u);
+  assert.match(text, /store\.set\(2, 11\)/u);
+});
+
+test("provider fields remain direct writable locations when no setter row is declared", () => {
+  const { result } = compileRust({
+    packages: [acmePlatformPackage()],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { Store } from "@acme/platform";
+
+export function update(): int32 {
+  let store = new Store("seed");
+  store.count = 9;
+  return store.count;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /store\.count = 9/u);
+});
+
 test("source checking remains target-neutral for an unmapped Rust provider operation", () => {
   const strippedPackage = acmePlatformPackage({ includeHomeDir: false });
   const harness = createRustSession({
@@ -223,6 +268,9 @@ test("provider paths and named carriers materialize before facts reach the backe
     }],
     aliasImports: [{ alias: "api", path: "acme_runtime::api" }],
     carrierPaths: { "acme.materialized.Value": "acme_runtime::Value" },
+    carrierTraits: {
+      "acme.materialized.Value": { clone: "always", copy: "never" },
+    },
     crates: [],
   });
 
@@ -244,6 +292,7 @@ test("provider paths and named carriers materialize before facts reach the backe
     value: {
       id: "acme.materialized.Value",
       path: "acme_runtime::Value",
+      traits: { clone: "always", copy: "never" },
       typeArguments: [],
     },
   });
@@ -266,5 +315,26 @@ test("conflicting provider carrier paths fail before operation facts are recorde
       packageWithPath("acme-second", "@acme/second", "acme_second::Shared"),
     ])),
     /conflicting target paths 'acme_first::Shared' and 'acme_second::Shared'/u,
+  );
+});
+
+test("conflicting provider carrier trait contracts fail before operation facts are recorded", () => {
+  const packageWithTraits = (id, moduleSpecifier, traits) => createRustProviderPackage({
+    id,
+    displayName: id,
+    version: "1.0.0",
+    modules: [{ moduleSpecifier, providerModuleId: id, exports: [] }],
+    operations: [],
+    carrierPaths: { "acme.Shared": "acme_shared::Shared" },
+    carrierTraits: { "acme.Shared": traits },
+    crates: [],
+  });
+
+  assert.throws(
+    () => collectRustProviderSemantics(providerContext([
+      packageWithTraits("acme-first", "@acme/first", { clone: "always", copy: "never" }),
+      packageWithTraits("acme-second", "@acme/second", { clone: "never", copy: "never" }),
+    ])),
+    /conflicting native trait contracts/u,
   );
 });

@@ -80,7 +80,7 @@ export function planRustSourceUnionFieldProjection(
       pattern: {
         kind: "tuple-variant",
         path: `${typePath}::${variant.name}`,
-        bindings: [binding],
+        elements: [{ kind: "binding", name: binding }],
       },
       expression: value,
     });

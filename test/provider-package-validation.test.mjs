@@ -6,6 +6,8 @@ import {
   createRustProviderPackage,
   createRustProviderPackageSourceProvider,
   rustInt32ToFloat64ValueConversion,
+  rustCallableTargetType,
+  rustClosureTargetType,
 } from "../dist/index.js";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
@@ -211,6 +213,117 @@ test("provider operation carriers are closed and renderable", () => {
           target: { form: "call", path: "acme_validation::run" },
           resultCarrier: item.cast === true ? int32Carrier : item.carrier,
           ...(item.cast === true ? { resultConversion: rustInt32ToFloat64ValueConversion } : {}),
+        }],
+      })),
+      item.pattern,
+      item.label,
+    );
+  }
+});
+
+test("runtime Callable is a built-in generic carrier and needs no provider-owned path", () => {
+  const providerPackage = createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: rustCallableTargetType([], int32Carrier),
+    }],
+  }));
+  const [contribution] = providerPackage.createTargetContributions({});
+  assert.deepEqual(contribution.definition.operations[0].resultCarrier,
+    rustCallableTargetType([], int32Carrier));
+});
+
+test("provider immediate-callback metadata declares one exact fallible target ABI", () => {
+  const callbackCarrier = rustClosureTargetType([], { kind: "tuple", elements: [] });
+  const callbackExport = {
+    id: "@acme/validation::withCallback",
+    name: "withCallback",
+    kind: "function",
+    signatures: [{
+      id: "@acme/validation::withCallback(callback)",
+      name: "withCallback",
+      parameters: [{
+        name: "callback",
+        type: {
+          kind: "function",
+          id: "@acme/validation::withCallback.callback",
+          parameters: [],
+          returnType: { kind: "void" },
+        },
+      }],
+      returnType: { kind: "void" },
+    }],
+  };
+  const providerPackage = createRustProviderPackage(definition({
+    modules: [{
+      moduleSpecifier: "@acme/validation",
+      providerModuleId: "acme.validation",
+      exports: [callbackExport],
+    }],
+    operations: [{
+      exportId: callbackExport.id,
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::with_callback" },
+      resultCarrier: { kind: "tuple", elements: [] },
+      parameterCarriers: [callbackCarrier],
+      immediateCallback: {
+        sourceArgumentIndex: 0,
+        fallibleTarget: { form: "call", path: "acme_validation::with_fallible_callback" },
+      },
+    }],
+  }));
+  const [contribution] = providerPackage.createTargetContributions({});
+  assert.deepEqual(contribution.definition.operations[0].immediateCallback, {
+    sourceArgumentIndex: 0,
+    fallibleTarget: { form: "call", path: "acme_validation::with_fallible_callback" },
+  });
+});
+
+test("provider immediate-callback metadata fails closed on an inexact callback contract", () => {
+  const cases = [
+    {
+      label: "missing callback parameter",
+      parameterCarriers: [],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /must select one declared parameter carrier/u,
+    },
+    {
+      label: "non-callable parameter",
+      parameterCarriers: [int32Carrier],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /must select one exact native closure carrier/u,
+    },
+    {
+      label: "retained callable cannot use immediate metadata",
+      parameterCarriers: [rustCallableTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" } },
+      pattern: /must select one exact native closure carrier/u,
+    },
+    {
+      label: "unknown callback field",
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" }, fallback: true },
+      pattern: /unsupported field 'fallback'/u,
+    },
+    {
+      label: "raw fallible target",
+      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible\(\)" } },
+      pattern: /not a closed Rust path/u,
+    },
+  ];
+  for (const item of cases) {
+    assert.throws(
+      () => createRustProviderPackage(definition({
+        operations: [{
+          exportId: "@acme/validation::run",
+          operationKind: "method",
+          target: { form: "call", path: "acme_validation::run" },
+          resultCarrier: int32Carrier,
+          parameterCarriers: item.parameterCarriers,
+          immediateCallback: item.immediateCallback,
         }],
       })),
       item.pattern,
@@ -792,6 +905,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
       value: {
         id: "acme.validation.Value",
         path: "acme_validation::Value",
+        traits: { clone: "never", copy: "never" },
         typeArguments: [],
       },
     },
@@ -813,6 +927,20 @@ test("provider type relations remain target-owned and require closed Rust paths"
   assert.throws(
     () => createRustProviderPackage({ ...valid, carrierPaths: {} }),
     /target type 'acme\.validation\.Value' has no closed Rust carrier path/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage({
+      ...valid,
+      carrierTraits: { "acme.validation.Missing": { clone: "always", copy: "never" } },
+    }),
+    /carrier trait contract 'acme\.validation\.Missing' has no rendered carrier path/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage({
+      ...valid,
+      carrierTraits: { "acme.validation.Value": { clone: "never", copy: "always" } },
+    }),
+    /invalid native trait contract/u,
   );
   assert.throws(
     () => createRustProviderPackage({ ...definition(), targetIdentities: { "@acme/validation::Value": "acme.validation.Value" } }),

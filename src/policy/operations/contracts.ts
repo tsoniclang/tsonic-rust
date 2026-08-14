@@ -3,7 +3,6 @@ import type {
   Node,
   ProviderDeclarationIdentity,
   ResolvedSourceIterationInfo,
-  Signature,
   SourceFile,
   Symbol,
   Type,
@@ -32,9 +31,6 @@ type ResolvedSourceCallInfo = NonNullable<
 type ResolvedSourcePropertyAccessInfo = NonNullable<
   ReturnType<SourceFileSemantics["getResolvedPropertyAccessInfo"]>
 >;
-
-export type RustSourceSelectedMethodTypeArguments =
-  ResolvedSourceCallInfo["sourceSelectedMethodTypeArguments"];
 
 export interface RustOperationPolicyContext extends RustSourcePolicyContext {
   readonly currentSourceFile: SourceFile;
@@ -96,20 +92,8 @@ export function rustPolicyTargetDiagnostic(
 
 export interface RustCheckedCallSelectionInput {
   readonly target?: "rust";
-  readonly call: Node;
-  readonly callee: Node;
-  readonly arguments: readonly Node[];
-  readonly sourceArgumentBindings: ResolvedSourceCallInfo["sourceArgumentBindings"];
-  readonly sourceSelectedSignatureParameters: ResolvedSourceCallInfo["sourceSelectedSignatureParameters"];
-  readonly optionalChain: ResolvedSourceCallInfo["optionalChain"];
-  readonly sourceReceiver?: ResolvedSourceCallInfo["sourceReceiver"];
-  readonly sourceCalleeAccess?: ResolvedSourceCallInfo["sourceCalleeAccess"];
-  readonly sourceSelectedSignature?: Signature;
+  readonly source: ResolvedSourceCallInfo;
   readonly sourceSelectedDeclaration?: Node;
-  readonly sourceCalleeSymbol?: Symbol;
-  readonly sourceCalleeDeclaration?: Node;
-  readonly sourceReturnType?: Type;
-  readonly sourceSelectedMethodTypeArguments?: RustSourceSelectedMethodTypeArguments;
 }
 
 export interface RustCheckedValueSelectionInput {
@@ -129,6 +113,7 @@ export type RustCheckedCallSelectionResult =
       readonly kind: "deferred-callback";
       readonly callback: RustCallbackOperationTemplate;
       readonly sourceName: string;
+      readonly providerDeclaration?: ProviderDeclarationIdentity;
       readonly template: RustProviderOperationTemplate;
       readonly parameterCarriers: readonly (TargetTypeRef | undefined)[];
     }
@@ -159,6 +144,7 @@ export interface RustCheckedPropertySelectionInput {
 export interface RustCheckedElementSelectionInput
   extends RustCheckedPropertySelectionInput {
   readonly argument: Node;
+  readonly sourceArgumentType: Type;
   readonly sourceSelectedElementIndex?: number;
 }
 
@@ -178,6 +164,7 @@ export interface RustCheckedOperatorSelectionInput {
   readonly operator: string;
   readonly left?: Node;
   readonly right?: Node;
+  readonly sourceRightDeclaration?: Node;
 }
 
 export interface RustCheckedIterationSelectionInput {

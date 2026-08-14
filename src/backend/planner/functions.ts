@@ -4,13 +4,13 @@ import {
   Node_Name,
   Node_Type,
 } from "../../common/source-ast.js";
-import { isRustUnitCarrier } from "../../source/rust-target-types.js";
+import { isRustNeverCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustItem, RustTypeParameter } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrierInContext } from "./render-types.js";
+import { rustReturnTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
 import {
   applyRustGenericRequirements,
@@ -63,12 +63,8 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const nameNode = Node_Name(ast, node);
   const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const isExported = ast.hasModifierKind(node, "export");
-  // Naming policy: user-authored names are preserved verbatim; items with
-  // non-snake identifiers carry a scoped lint allowance.
-  const publicName = rustPublicName(sourceName);
-  const name = publicName.name;
-  const nonSnakeSeen = { value: publicName.needsAllow };
-  let context: RustPlanContext = { ...outerContext, nonSnakeSeen };
+  const name = rustPublicName(sourceName);
+  let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -113,9 +109,13 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const returnTypeNode = Node_Type(ast, node);
   const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
     context.input.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
+  const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
   const isUnit = isRustUnitCarrier(returnCarrier);
-  const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
-  if (!isUnit && returnType === undefined) {
+  const isNever = isRustNeverCarrier(returnCarrier);
+  const returnType = isUnit || fallible && isNever
+    ? undefined
+    : rustReturnTypeFromCarrierInContext(returnCarrier, context);
+  if (!isUnit && !(fallible && isNever) && returnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode ?? node),
       "rust.backend.function",
@@ -132,7 +132,6 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
-  const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
   if (generatorFact !== undefined && ![
     generatorFact.yieldType,
     generatorFact.returnType,
@@ -214,15 +213,10 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
       name,
-      visibility: isExported ? "public" : "private",
-      ...(!nonSnakeSeen.value && safetyAttributes.length === 0
+      visibility: isExported ? "public" : "crate",
+      ...(safetyAttributes.length === 0
         ? {}
-        : {
-            attrs: [
-              ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
-              ...safetyAttributes,
-            ],
-          }),
+        : { attrs: safetyAttributes }),
       ...(isUnsafe ? { isUnsafe: true } : {}),
       ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
       params,
@@ -243,8 +237,11 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
               async: true,
               body: applyFallibleShape(
                 applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
-                true,
-                !isRustUnitCarrier(generatorFact.returnType),
+                {
+                  fallible: true,
+                  hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
+                  errorDomain: context.errorDomain,
+                },
               ),
             }],
           },
@@ -253,7 +250,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     };
     return publishRustSourceCallableContract(node, item, context) ? item : undefined;
   }
-  if (returnType !== undefined && !rustBlockTerminates(body)) {
+  if (!isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
       "rust.backend.return-flow",
@@ -268,15 +265,10 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
-    visibility: isExported ? "public" : "private",
-    ...(!nonSnakeSeen.value && safetyAttributes.length === 0
+    visibility: isExported ? "public" : "crate",
+    ...(safetyAttributes.length === 0
       ? {}
-      : {
-          attrs: [
-            ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
-            ...safetyAttributes,
-          ],
-        }),
+      : { attrs: safetyAttributes }),
     ...(isAsync ? { isAsync: true } : {}),
     ...(isUnsafe ? { isUnsafe: true } : {}),
     ...(fallible ? { fallible: true } : {}),
@@ -287,9 +279,12 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ...(returnType === undefined ? {} : { returnType }),
     body: {
       ...applyFallibleShape(
-      applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-      fallible,
-      returnType !== undefined,
+        applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
+        {
+          fallible,
+          hasReturnValue: returnType !== undefined,
+          errorDomain: context.errorDomain,
+        },
       ),
       ...(parameterPlan.bodyInnerAttrs.length === 0
         ? {}

@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  acmeFilesPackage,
+  acmePlatformPackage,
   artifactText,
   compileRust,
 } from "./helpers/rust-session.mjs";
@@ -44,8 +46,13 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const main = artifactText(result, "src/main.rs");
   assert.equal(
-    main.indexOf("module_order_proof::state::__tsonic_module_init()") <
-      main.indexOf("module_order_proof::index::__tsonic_module_init()"),
+    main.includes("module_order_proof::__tsonic_initialize()"),
+    true,
+  );
+  const library = artifactText(result, "src/lib.rs");
+  assert.equal(
+    library.indexOf("crate::state::__tsonic_module_init()") <
+      library.indexOf("crate::index::__tsonic_module_init()"),
     true,
   );
   const index = artifactText(result, "src/index.rs");
@@ -200,7 +207,7 @@ export function main(): void {
   );
   assert.match(
     artifactText(result, "src/main.rs"),
-    /tsonic_rust_runtime::block_on\(async_module_proof::index::__tsonic_module_init\(\)\)/u,
+    /tsonic_rust_runtime::block_on\(async_module_proof::__tsonic_initialize\(\)\)/u,
   );
   validateGeneratedProject("async-module-proof", result.artifacts, { run: true });
 });
@@ -224,11 +231,107 @@ export function main(): void {}
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn __tsonic_module_init\(\) -> rt::TsonicResult<\(\)>[\s\S]*?json_parse\("1"\)\?/u,
+    /pub fn __tsonic_module_init\(\) -> rt::TsonicResult<\(\)>[\s\S]*?json_parse\("1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
   );
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fallible_module_proof::index::__tsonic_module_init\(\)\?;/u,
+    /fallible_module_proof::__tsonic_initialize\(\)\?;/u,
   );
   validateGeneratedProject("fallible-module-proof", result.artifacts, { run: true });
+});
+
+test("an active provider crate runs its declared binary epilogue after authored main", () => {
+  const { result } = compileRust({
+    packages: [acmeFilesPackage({
+      binaryEpilogues: [{
+        id: "drain-runtime",
+        path: "acme_files::drain_runtime",
+        requiredCrate: "acme_files",
+      }],
+    })],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "provider_epilogue_proof" },
+    },
+    files: {
+      "index.ts": `
+import { readText } from "@acme/files";
+
+export function main(): void {
+  readText("unused");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const main = artifactText(result, "src/main.rs");
+  assert.equal(main.indexOf("provider_epilogue_proof::index::main()") <
+    main.indexOf("acme_files::drain_runtime()"), true);
+  validateGeneratedProject("provider-epilogue-proof", result.artifacts);
+});
+
+test("a type-only provider selection does not activate its binary epilogue", () => {
+  const { result } = compileRust({
+    packages: [acmePlatformPackage({
+      binaryEpilogues: [{
+        id: "drain-runtime",
+        path: "acme_platform::drain_runtime",
+        requiredCrate: "acme_platform",
+      }],
+    })],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "inactive_epilogue_proof" },
+    },
+    files: {
+      "index.ts": `
+import type { Store } from "@acme/platform";
+
+export function accept(_value: Store): void {}
+export function main(): void {}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.doesNotMatch(artifactText(result, "src/main.rs"), /drain_runtime/u);
+  assert.doesNotMatch(artifactText(result, "Cargo.toml"), /acme_platform/u);
+});
+
+test("a fallible provider epilogue makes binary completion explicitly fallible", () => {
+  const { result } = compileRust({
+    packages: [acmeFilesPackage({
+      binaryEpilogues: [{
+        id: "drain-runtime",
+        path: "acme_files::drain_runtime_fallible",
+        requiredCrate: "acme_files",
+        isFallible: true,
+        errorBoundary: "provider-native",
+      }],
+    })],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "fallible_epilogue_proof" },
+    },
+    files: {
+      "index.ts": `
+import { readText } from "@acme/files";
+
+export function main(): void {
+  readText("unused");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const main = artifactText(result, "src/main.rs");
+  assert.match(main, /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)>/u);
+  assert.match(
+    main,
+    /acme_files::drain_runtime_fallible\(\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u,
+  );
+  assert.match(main, /Ok\(\(\)\)/u);
+  validateGeneratedProject("fallible-epilogue-proof", result.artifacts);
 });

@@ -4,3 +4,7 @@
 pub fn check(condition: bool) {
     assert!(condition, "acme_testing::check failed");
 }
+
+pub fn fail(message: String) -> ! {
+    panic!("{message}");
+}

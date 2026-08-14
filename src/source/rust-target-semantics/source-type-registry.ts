@@ -246,6 +246,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       }
       const normalized = freezeSourceObjectShape(shape);
       const pendingDeclarationsBySymbol = new Map<Symbol, readonly Node[]>();
+      const pendingFieldsByDeclaration = new Map<Node, RustStructuralFieldRegistration[]>();
       for (const field of normalized.fields) {
         for (const symbol of field.symbols) {
           const existingDeclarations = pendingDeclarationsBySymbol.get(symbol) ??
@@ -256,21 +257,29 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
           }
           pendingDeclarationsBySymbol.set(symbol, field.declarations);
         }
+        const registration = Object.freeze({ shape: normalized, field });
+        for (const declaration of field.declarations) {
+          const entries = pendingFieldsByDeclaration.get(declaration) ??
+            [...(structuralFieldsByDeclaration.get(declaration) ?? [])];
+          const sameCarrier = entries.filter((entry) =>
+            rustTargetTypeRefEquals(entry.shape.carrier, normalized.carrier));
+          if (sameCarrier.length > 1 ||
+            (sameCarrier.length === 1 &&
+              !sourceObjectFieldProjectionEquals(sameCarrier[0]!, registration))) {
+            return false;
+          }
+          if (sameCarrier.length === 0) {
+            entries.push(registration);
+          }
+          pendingFieldsByDeclaration.set(declaration, entries);
+        }
       }
       structuralObjectsByType.set(shape.sourceType, normalized);
       for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
         selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
       }
-      for (const field of normalized.fields) {
-        for (const declaration of field.declarations) {
-          const entries = structuralFieldsByDeclaration.get(declaration) ?? [];
-          if (!entries.some((entry) =>
-            sourceObjectShapeEquals(entry.shape, normalized) &&
-            sourceObjectFieldEquals(entry.field, field))) {
-            entries.push(Object.freeze({ shape: normalized, field }));
-            structuralFieldsByDeclaration.set(declaration, entries);
-          }
-        }
+      for (const [declaration, entries] of pendingFieldsByDeclaration) {
+        structuralFieldsByDeclaration.set(declaration, entries);
       }
       return true;
     },
@@ -468,6 +477,18 @@ function sourceObjectFieldEquals(
     rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) &&
     nodeListsEqual(left.declarations, right.declarations) &&
     symbolListsEqual(left.symbols, right.symbols);
+}
+
+function sourceObjectFieldProjectionEquals(
+  left: RustStructuralFieldRegistration,
+  right: RustStructuralFieldRegistration,
+): boolean {
+  return left.shape.storage === right.shape.storage &&
+    rustTargetTypeRefEquals(left.shape.carrier, right.shape.carrier) &&
+    left.field.sourceName === right.field.sourceName &&
+    left.field.storageIndex === right.field.storageIndex &&
+    rustTargetTypeRefEquals(left.field.resultCarrier, right.field.resultCarrier) &&
+    nodeListsEqual(left.field.declarations, right.field.declarations);
 }
 
 function sourceObjectShapeEquals(

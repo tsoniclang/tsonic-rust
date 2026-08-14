@@ -40,14 +40,14 @@ export function probe(): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::buffer::Buffer::from_string_enc\("hi", "utf8"\)\?/u);
+  assert.match(text, /tsonic_rust_node::buffer::Buffer::from_string_enc\("hi", "utf8"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(buf\.len\(\)\)\?/u);
-  assert.match(text, /tsonic_rust_node::url::Url::parse\("https:\/\/example\.com\/a\?b=1", None\)\?/u);
-  assert.match(text, /tsonic_rust_node::url::UrlSearchParams::new_from\("x=1"\)\?/u);
-  assert.match(text, /h\.update_str\("abc"\)\?/u);
-  assert.match(text, /h\.digest_string\("hex"\)\?/u);
+  assert.match(text, /tsonic_rust_node::url::Url::parse\(\s*"https:\/\/example\.com\/a\?b=1",\s*None,?\s*\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /tsonic_rust_node::url::UrlSearchParams::new_from\("x=1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /h\.update_str_owned\("abc"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /h\.digest_string\("hex"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /tsonic_rust_runtime::conversions::u32_to_i32\(tsonic_rust_node::process::pid\(\)\)\?/u);
-  assert.match(text, /tsonic_rust_node::process::env_get\("PATH"\)\.unwrap_or\(/u);
+  assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::env_get\("PATH"\),\s*std::convert::identity,/u);
 });
 
 test("generated cargo binary proves the multi-module node closure at runtime", { timeout: 300_000 }, async () => {
@@ -72,7 +72,7 @@ import type { int32 } from "@tsonic/core/types.js";
 export function main(): void {
   const dir = join(cwd(), "r7_proof_dir");
   if (existsSync(dir)) {
-    rmSync(dir);
+    rmSync(dir, true);
   }
   mkdirSync(dir);
   const file = join(dir, "data.txt");
@@ -90,12 +90,12 @@ export function main(): void {
   check(existsSync(renamed));
   check(realpathSync(dir).length > 0);
   unlinkSync(renamed);
-  rmSync(dir);
+  rmSync(dir, true);
   check(!existsSync(dir));
 
   const path_var = env["PATH"] ?? "";
   check(path_var.length > 0);
-  check(env["R7_UNSET_VAR_PROOF"] === null);
+  check(env["R7_UNSET_VAR_PROOF"] === undefined);
   check(platform.length > 0);
   check(arch.length > 0);
   check(pid > 0);
@@ -193,8 +193,8 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir, true\)\.await\?/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir, true\)\s*\.await\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\s*\.await\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
@@ -223,7 +223,7 @@ export function bad(): void {
   }]);
 });
 
-test("absent env and search-param reads preserve null", async () => {
+test("absent env reads preserve undefined", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
@@ -233,7 +233,7 @@ import { env } from "node:process";
 
 export function read(name: string): string {
   const value = env[name];
-  if (value === null) {
+  if (value === undefined) {
     return "";
   }
   return value ?? "";

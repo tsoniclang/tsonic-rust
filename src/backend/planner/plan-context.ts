@@ -2,15 +2,22 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
 import type { RustGenericRequirementSet } from "./generic-requirements.js";
-import type { RustGeneratorFact } from "../../source/rust-facts/keys.js";
+import type { RustGeneratorFact, RustSourceBindingFact } from "../../source/rust-facts/keys.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
-import type { RustBlock, RustExpr, RustType } from "../rust-ast/nodes.js";
+import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../rust-ast/nodes.js";
 
-export interface RustExpressionOverride {
+export interface RustEffectiveExpressionOverride {
   readonly expression: RustExpr;
   readonly carrier: TargetTypeRef;
-  readonly valueForm: "value" | "shared-reference";
+  readonly valueForm: "value" | "shared-reference" | "storage";
+}
+
+export interface RustCapturedBinding {
+  readonly declaration: Node;
+  readonly path: string;
+  readonly storage: "value" | "location";
+  readonly valueCarrier: import("../../policy/types.js").TargetTypeRef;
 }
 
 interface RustControlTargetBase {
@@ -25,6 +32,7 @@ export type RustControlTarget =
   | (RustControlTargetBase & {
       readonly kind: "loop";
       readonly continuePrelude: readonly import("../rust-ast/nodes.js").RustStmt[];
+      readonly breakUsed: { value: boolean };
     })
   | (RustControlTargetBase & { readonly kind: "switch" | "label" });
 
@@ -49,6 +57,7 @@ export interface RustPlanContext {
   readonly moduleName: string;
   readonly moduleNameByFileName: ReadonlyMap<string, string>;
   readonly diagnostics: TargetDiagnostic[];
+  readonly errorDomain: RustErrorDomain;
   readonly planBlock: (node: Node, context: RustPlanContext) => RustBlock | undefined;
   // Identifier names with a proven write (assignment or increment) in the
   // enclosing function body. `let mut` is emitted only for proven writes.
@@ -66,8 +75,6 @@ export interface RustPlanContext {
   // Structured import requirements: runtime alias prefixes used by planned
   // operations and rendered types. Never inferred from printed text.
   readonly usedAliases?: Set<string>;
-  // Per-item flag: a non-snake_case user identifier was emitted.
-  readonly nonSnakeSeen?: { value: boolean };
   // Rust-native obligations discovered while planning one generic function.
   // The finalized signature is rendered only after the complete body has been
   // planned, so late requirements cannot produce an invalid partial contract.
@@ -77,8 +84,8 @@ export interface RustPlanContext {
     readonly controllerName: string;
     readonly protocol: RustGeneratorFact;
   };
-  readonly expressionOverrides?: ReadonlyMap<Node, RustExpressionOverride>;
-  readonly capturedBindingPaths?: ReadonlyMap<Node, string>;
+  readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
+  readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly projectDispatchRoot?: RustExpr;
   readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../policy/types.js").TargetTypeRef>;
 }
@@ -106,37 +113,45 @@ export function registerAliasFromPath(
 }
 
 // Naming policy: every user-authored identifier is preserved verbatim
-// wherever Rust can represent it; items containing non-snake_case names
-// carry scoped #[allow(non_snake_case)]. This conversion exists ONLY for
+// wherever Rust can represent it. This conversion exists ONLY for
 // compiler-generated temporaries with no TypeScript source identity.
 // Provider, library, and capability API identity flows exclusively through
 // operation-row metadata, which the backend emits verbatim.
 export function rustLocalBindingName(name: string): string {
-  if (/^[A-Z][A-Z0-9_]*$/u.test(name)) {
+  const semanticName = name.startsWith("r#") ? name.slice(2) : name;
+  if (/^[A-Z][A-Z0-9_]*$/u.test(semanticName)) {
     // UPPER_SNAKE names are constant references and pass through unchanged.
-    return name;
+    return semanticName;
   }
-  return name
+  return semanticName
     .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
     .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
     .toLowerCase();
 }
 
-// Verbatim user-authored name plus whether the containing item needs a
-// scoped #[allow(non_snake_case)].
-export function rustPublicName(name: string): { readonly name: string; readonly needsAllow: boolean } {
-  return { name, needsAllow: name !== rustLocalBindingName(name) };
+export function rustPublicName(name: string): string {
+  return rustTargetIdentifier(name);
 }
 
-// Verbatim user identifier; records non-snake usage so the enclosing item
-// carries a scoped lint allowance.
-export function rustSourceName(context: { readonly nonSnakeSeen?: { value: boolean } }, name: string): string {
-  if (name !== rustLocalBindingName(name)) {
-    if (context.nonSnakeSeen !== undefined) {
-      context.nonSnakeSeen.value = true;
-    }
+export function rustSourceName(name: string): string {
+  return rustTargetIdentifier(name);
+}
+
+export function rustSourceBindingPath(
+  context: RustPlanContext,
+  binding: RustSourceBindingFact,
+): string | undefined {
+  const name = rustSourceName(binding.sourceName);
+  if (!isValidRustIdentifier(name)) {
+    return undefined;
   }
-  return name;
+  if (binding.scope === "lexical") {
+    return name;
+  }
+  const declarationModule = context.moduleNameByFileName.get(binding.fileName);
+  return declarationModule !== undefined && declarationModule !== context.moduleName
+    ? `crate::${declarationModule}::${name}`
+    : name;
 }
 
 export function isUpperSnakeName(name: string): boolean {
@@ -153,8 +168,26 @@ export const rustReservedIdentifiers: ReadonlySet<string> = new Set([
 ]);
 
 const rustIdentifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+const rustRawIdentifierPattern = /^r#[A-Za-z_][A-Za-z0-9_]*$/u;
+const rustRawIdentifierForbidden: ReadonlySet<string> = new Set([
+  "crate", "self", "Self", "super",
+]);
+
+function rustTargetIdentifier(name: string): string {
+  if (rustRawIdentifierPattern.test(name)) {
+    return name;
+  }
+  return rustReservedIdentifiers.has(name) && !rustRawIdentifierForbidden.has(name)
+    ? `r#${name}`
+    : name;
+}
 
 export function isValidRustIdentifier(name: string): boolean {
+  if (rustRawIdentifierPattern.test(name)) {
+    const semanticName = name.slice(2);
+    return rustReservedIdentifiers.has(semanticName) &&
+      !rustRawIdentifierForbidden.has(semanticName);
+  }
   return rustIdentifierPattern.test(name) && !rustReservedIdentifiers.has(name);
 }
 

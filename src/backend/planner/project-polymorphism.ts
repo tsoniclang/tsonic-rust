@@ -1,5 +1,7 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustItem } from "../rust-ast/nodes.js";
+import type { RustItem, RustType } from "../rust-ast/nodes.js";
+import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
+import { rustProjectMemberSlotName } from "../../source/rust-target-semantics/project-type-policy.js";
 import { missingFactDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
@@ -7,6 +9,7 @@ import {
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
   rustProjectObjectStateField,
+  readRustProjectDispatchedField,
 } from "./project-objects.js";
 import { planProjectClassConstructor } from "./project-polymorphism-construction.js";
 import {
@@ -64,7 +67,12 @@ export function planPolymorphicClassDeclaration(
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
   const staticMethods = planProjectStaticMethods(definition, context);
-  if (staticMethods === undefined) {
+  const externalErrorImplementations = planProjectExternalErrorImplementations(
+    definition,
+    wrapperType,
+    context,
+  );
+  if (staticMethods === undefined || externalErrorImplementations === undefined) {
     return undefined;
   }
   return [
@@ -72,7 +80,12 @@ export function planPolymorphicClassDeclaration(
     {
       kind: "struct",
       name: definition.sourceName,
-      visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "private",
+      visibility: context.input.projectTypes.programErrorVariant(definition) !== undefined
+        ? "public"
+        : context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
+      ...(context.input.projectTypes.programErrorVariant(definition) === undefined
+        ? {}
+        : { attrs: ["#[doc(hidden)]"] }),
       derives: ["Clone"],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
@@ -123,7 +136,84 @@ export function planPolymorphicClassDeclaration(
       functions: [constructor.initialize, constructor.construct, ...staticMethods],
     },
     ...rootImplementations,
+    ...externalErrorImplementations,
   ];
+}
+
+function planProjectExternalErrorImplementations(
+  definition: RustProjectTypeDefinition,
+  wrapperType: RustType,
+  context: RustPlanContext,
+): readonly RustItem[] | undefined {
+  const external = context.input.projectTypes.externalBaseForDefinition(definition);
+  if (external === undefined) {
+    return [];
+  }
+  const name = external.fields.find((field) => field.sourceName === "name");
+  const message = external.fields.find((field) => field.sourceName === "message");
+  if (name === undefined || message === undefined) {
+    return undefined;
+  }
+  const nameRead = rustProjectMemberSlotName(context.input.ast, name.declaration, "read");
+  const messageRead = rustProjectMemberSlotName(context.input.ast, message.declaration, "read");
+  if (nameRead === undefined || messageRead === undefined) {
+    return undefined;
+  }
+  const self = { kind: "path" as const, path: "self" };
+  return [{
+    kind: "impl",
+    trait: { kind: "named", path: "std::fmt::Display" },
+    target: wrapperType,
+    functions: [{
+      name: "fmt",
+      visibility: "private",
+      selfParam: "ref",
+      params: [{
+        name: "formatter",
+        type: {
+          kind: "reference",
+          mutable: true,
+          referent: {
+            kind: "named",
+            path: "std::fmt::Formatter",
+            lifetimeArguments: ["_"],
+          },
+        },
+      }],
+      returnType: { kind: "named", path: "std::fmt::Result" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "format-write",
+            writer: { kind: "path", path: "formatter" },
+            format: "{}: {}",
+            args: [
+              readRustProjectDispatchedField(self, nameRead),
+              readRustProjectDispatchedField(self, messageRead),
+            ],
+          },
+        }],
+      },
+    }],
+  }, {
+    kind: "impl",
+    trait: { kind: "named", path: "rt::ToSourceString" },
+    target: wrapperType,
+    functions: [{
+      name: "to_source_string",
+      visibility: "private",
+      selfParam: "ref",
+      params: [],
+      returnType: { kind: "string" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: { kind: "method-call", receiver: self, method: "to_string", args: [] },
+        }],
+      },
+    }],
+  }];
 }
 
 export function planPolymorphicInterfaceDeclaration(
@@ -153,7 +243,7 @@ export function planPolymorphicInterfaceDeclaration(
     {
       kind: "struct",
       name: definition.sourceName,
-      visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "private",
+      visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
       ...(context.input.ast.hasModifierKind(declaration, "export")
         ? {}
         : { attrs: ["#[allow(dead_code)]"] }),

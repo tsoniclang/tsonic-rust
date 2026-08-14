@@ -109,12 +109,14 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       modulePath: [],
       requestedExports: [
         "ANSWER",
+        "CheckedWidget",
         "GLOBAL_COUNT",
         "Mode",
         "Pair",
         "SimpleMode",
         "apply",
         "byte_ptr",
+        "checked_double",
         "dangerous",
         "double",
         "featured",
@@ -130,12 +132,14 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       functionModule.exports.map(({ name }) => name),
       [
         "ANSWER",
+        "CheckedWidget",
         "GLOBAL_COUNT",
         "Mode",
         "Pair",
         "SimpleMode",
         "apply",
         "byte_ptr",
+        "checked_double",
         "dangerous",
         "double",
         "featured",
@@ -185,6 +189,17 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       requestedExports: ["mode_code"],
     });
     assert.deepEqual(closedFunctionModule.exports.map(({ name }) => name), ["Mode", "mode_code"]);
+    const explicitlyRequestedClosureModule = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["Mode", "mode_code"],
+    });
+    assert.deepEqual(
+      explicitlyRequestedClosureModule.exports.map(({ name }) => name),
+      ["Mode", "mode_code"],
+      "an explicitly requested export is emitted once when another requested export also depends on it",
+    );
     const unsupportedModule = worker.module({
       snapshot,
       dependency,
@@ -227,6 +242,18 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       pointee: { kind: "source-primitive", name: "uint8" },
       mutability: "const",
     }]);
+    const checkedDoubleOperation = functionProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::checked_double"),
+    );
+    assert.equal(checkedDoubleOperation?.isFallible, true);
+    assert.deepEqual(checkedDoubleOperation?.resultCarrier, {
+      kind: "source-primitive",
+      name: "int32",
+    });
+    const checkedWidgetConstructor = functionProjection.operations.find(
+      ({ exportId, operationKind }) => exportId.endsWith("::CheckedWidget") && operationKind === "constructor",
+    );
+    assert.equal(checkedWidgetConstructor?.isFallible, true);
     assert.deepEqual(
       functionProjection.declarationModel.imports,
       [
@@ -270,7 +297,7 @@ import type { FunctionPointer } from "@tsonic/core/types.js";
 import { unsafeContext } from "@tsonic/core/lang.js";
 import type { constPtr, mutPtr, u8 } from "@tsonic/rust/types.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
-import { ANSWER, GLOBAL_COUNT, Mode, SimpleMode, Widget, apply, byte_ptr, dangerous, double, duplicate, featured, fill, first_byte, identity, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum } from "@tsonic/rust/crates/widget_alias/index.js";
+import { ANSWER, CheckedWidget, GLOBAL_COUNT, Mode, SimpleMode, Widget, apply, byte_ptr, checked_double, dangerous, double, duplicate, featured, fill, first_byte, identity, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 
@@ -290,6 +317,10 @@ export function invokePointer(
 }
 
 export function main(): void {
+  const checked = new CheckedWidget(6);
+  if (checked.value !== 6 || checked_double(4) !== 8) {
+    throw new Error("fallible compiler-provider mapping failed");
+  }
   const widget = new Widget<int32>(7);
   const previous = widget.replace(9);
   widget.count = 2;
@@ -360,6 +391,8 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.equal(result.artifacts.some(({ path }) => path === "Cargo.toml"), false);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::new\(7\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::CheckedWidget::new\(6\)\?/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::checked_double\(4\)\?/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::first_byte\(widget_alias::byte_ptr\(\)\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
@@ -400,6 +433,20 @@ export function invalid(widget: Widget<int32>): int32 {
   assert.match(rustSourceDiagnostics(unsupportedMember), /Property 'value' does not exist on type 'Widget<number>'/u);
 });
 
+test("compiler provider rejects fallible results with a non-runtime error carrier", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const harness = createRustSession({
+    target: { id: "rust", options: { projectFile: project.manifestPath } },
+    files: {
+      "index.ts": `import { foreign_result } from "@tsonic/rust/crates/widget_alias/index.js";\nexport const selected = foreign_result;\n`,
+    },
+  });
+  assert.match(
+    rustSourceDiagnostics(harness),
+    /fallible compiler-provider functions must use tsonic_rust_runtime::TsonicResult<T>/u,
+  );
+});
+
 test("unsafe Cargo provider calls fail closed without an explicit source unsafe region", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
   const { result } = compileRustThroughTargetPack({
@@ -419,6 +466,13 @@ export function rejected(value: int32): int32 { return dangerous(value); }
 test("dependency-closure mutation after snapshot is rejected before rustdoc reuse", { timeout: 300_000 }, () => {
   const copiedCrate = uniquePath("mutable-crate");
   cpSync(fixtureCrate, copiedCrate, { recursive: true });
+  writeFileSync(
+    resolve(copiedCrate, "Cargo.toml"),
+    readFileSync(resolve(copiedCrate, "Cargo.toml"), "utf8").replace(
+      'path = "../../../../../rust-runtime/crates/tsonic_rust_runtime"',
+      `path = "${tomlPath(runtimeCrate)}"`,
+    ),
+  );
   const project = createUserCargoProject({ dependencyPath: copiedCrate });
   const worker = createRustCompilerWorkerClient(uniquePath("worker-mutation"));
   const snapshot = worker.snapshot(project.manifestPath);

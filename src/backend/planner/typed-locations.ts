@@ -23,7 +23,6 @@ import {
 import {
   isRustCopyCarrier,
   rustCarrierSupportsClone,
-  rustValueCarrierRequiresCloneOnRead,
 } from "../../source/rust-target-types.js";
 import type { RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
@@ -34,6 +33,7 @@ import {
 import {
   diagnosticInput,
   isValidRustIdentifier,
+  rustSourceBindingPath,
   rustSourceName,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
@@ -113,7 +113,10 @@ export function planRustTypedLocationCall(
         kind: "associated-call",
         owner: locationType,
         method: "same",
-        args: [optionReference(left), optionReference(right)],
+        args: [
+          optionReference(planRustNonConsumingValue(plan.leftExpression, left, context)),
+          optionReference(planRustNonConsumingValue(plan.rightExpression, right, context)),
+        ],
       };
     }
   }
@@ -124,19 +127,32 @@ export function planRustIdentifierValue(
   path: string,
   context: RustPlanContext,
 ): RustExpr {
+  const captured = rustCapturedBinding(node, context);
   const storage = rustLocationStorageForReference(node, context);
   const value: RustExpr = {
     kind: "path",
-    path: rustCapturedBindingPath(node, context) ?? path,
+    path: captured?.path ?? path,
   };
+  if (captured?.storage === "location") {
+    context.usedAliases?.add("rt");
+    return { kind: "method-call", receiver: value, method: "load", args: [] };
+  }
   if (storage !== undefined) {
     context.usedAliases?.add("rt");
     return storage.storage === "module-cell"
       ? rustModuleCellAccess(value, "load", [])
       : { kind: "method-call", receiver: value, method: "load", args: [] };
   }
+  return planRustValueRead(node, value, context);
+}
+
+export function planRustValueRead(
+  node: Node,
+  value: RustExpr,
+  context: RustPlanContext,
+): RustExpr {
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustReadRequiresClone(node, carrier, context)
+  return rustReadRequiresClone(carrier)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : value;
 }
@@ -144,11 +160,11 @@ export function planRustIdentifierValue(
 export function planRustCaptureValue(
   node: Node,
   path: string,
+  storage: "value" | "location",
   context: RustPlanContext,
 ): RustExpr {
-  const capturedPath = rustCapturedBindingPath(node, context) ?? path;
-  const storage = rustLocationStorageForReference(node, context);
-  if (storage?.storage === "local-location") {
+  const capturedPath = rustCapturedBinding(node, context)?.path ?? path;
+  if (storage === "location") {
     return {
       kind: "method-call",
       receiver: { kind: "path", path: capturedPath },
@@ -170,21 +186,15 @@ export function planRustNonConsumingValue(
   context: RustPlanContext,
 ): RustExpr {
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustReadRequiresClone(node, carrier, context) &&
+  return rustReadRequiresClone(carrier) &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver
     : expression;
 }
 
-function rustReadRequiresClone(
-  node: Node,
-  carrier: TargetTypeRef | undefined,
-  context: RustPlanContext,
-): boolean {
-  return rustValueCarrierRequiresCloneOnRead(carrier) ||
-    (rustCapturedBindingPath(node, context) !== undefined &&
-      !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier));
+function rustReadRequiresClone(carrier: TargetTypeRef | undefined): boolean {
+  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier);
 }
 
 export function rustLocationStorageForReference(
@@ -195,10 +205,20 @@ export function rustLocationStorageForReference(
   readonly storage: "local-location" | "module-cell";
   readonly valueCarrier: TargetTypeRef;
 } | undefined {
-  const reference = context.input.source.navigation.sourceReferenceFor(node);
-  const declaration = reference?.project === true
-    ? reference.declaration
-    : undefined;
+  const declaration = context.input.facts.getFact(node, rustSourceBindingFactKey)
+    ?.sourceDeclaration;
+  const captured = declaration === undefined
+    ? undefined
+    : rustCapturedBindingForDeclaration(declaration, context);
+  if (declaration !== undefined && captured !== undefined) {
+    return captured.storage === "location"
+      ? {
+          declaration,
+          storage: "local-location",
+          valueCarrier: captured.valueCarrier,
+        }
+      : undefined;
+  }
   const localStorage = declaration === undefined
     ? undefined
     : context.input.facts.getFact(declaration, rustLocationStorageFactKey);
@@ -239,16 +259,16 @@ export function rustRawLocationRoot(
   if (binding === undefined) {
     return undefined;
   }
-  const name = rustSourceName(context, binding.sourceName);
+  const name = rustSourceName(binding.sourceName);
   if (!isValidRustIdentifier(name) ||
     rustLocationStorageForReference(expression, context) === undefined) {
     return undefined;
   }
-  const declarationModule = context.moduleNameByFileName.get(binding.fileName);
-  const path = rustCapturedBindingPath(expression, context) ??
-    (declarationModule !== undefined && declarationModule !== context.moduleName
-      ? `crate::${declarationModule}::${name}`
-      : name);
+  const sourcePath = rustSourceBindingPath(context, binding);
+  if (sourcePath === undefined) {
+    return undefined;
+  }
+  const path = rustCapturedBinding(expression, context)?.path ?? sourcePath;
   const storage = rustLocationStorageForReference(expression, context);
   const value: RustExpr = { kind: "path", path };
   return storage?.storage === "module-cell"
@@ -256,14 +276,27 @@ export function rustRawLocationRoot(
     : value;
 }
 
-function rustCapturedBindingPath(
+function rustCapturedBinding(
   node: Node,
   context: RustPlanContext,
-): string | undefined {
-  const declaration = context.input.source.navigation.sourceReferenceFor(node)?.declaration;
+): import("./plan-context.js").RustCapturedBinding | undefined {
+  const declaration = context.input.facts.getFact(node, rustSourceBindingFactKey)
+    ?.sourceDeclaration ?? context.input.source.navigation.sourceReferenceFor(node)?.declaration;
   return declaration === undefined
     ? undefined
-    : context.capturedBindingPaths?.get(declaration);
+    : rustCapturedBindingForDeclaration(declaration, context);
+}
+
+function rustCapturedBindingForDeclaration(
+  declaration: Node,
+  context: RustPlanContext,
+): import("./plan-context.js").RustCapturedBinding | undefined {
+  return context.capturedBindings?.find((binding) =>
+    binding.declaration === declaration ||
+    (context.input.ast.getSourceFile(binding.declaration) === context.input.ast.getSourceFile(declaration) &&
+      context.input.ast.kind(binding.declaration) === context.input.ast.kind(declaration) &&
+      context.input.ast.pos(binding.declaration) === context.input.ast.pos(declaration) &&
+      context.input.ast.end(binding.declaration) === context.input.ast.end(declaration)));
 }
 
 export type RustPromotedStorageWritePlan =
@@ -393,6 +426,16 @@ function assignmentBinaryOperator(
       return "/";
     case "%=":
       return "%";
+    case "&=":
+      return "&";
+    case "|=":
+      return "|";
+    case "^=":
+      return "^";
+    case "<<=":
+      return "<<";
+    case ">>=":
+      return ">>";
     case "=":
       return undefined;
   }

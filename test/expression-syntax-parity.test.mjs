@@ -22,6 +22,45 @@ export function choose(condition: boolean, left: int32, right: int32): int32 {
   validateGeneratedProject("expression-conditional", result.artifacts);
 });
 
+test("conditional expressions own exact Option branch projections", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export class Value {
+  kind: string;
+
+  constructor(kind: string) {
+    this.kind = kind;
+  }
+}
+
+export class TextValue extends Value {
+  value: string;
+
+  constructor(value: string) {
+    super("text");
+    this.value = value;
+  }
+}
+
+export function read(value: Value): string | undefined {
+  return value instanceof TextValue ? value.value : undefined;
+}
+
+export function parenthesized(value: string, present: boolean): string | undefined {
+  return (present ? value : undefined);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /if[\s\S]*Some\([\s\S]*\)[\s\S]*else[\s\S]*None/u);
+  validateGeneratedProject("expression-conditional-option", result.artifacts);
+});
+
 test("no-substitution templates retain their exact string value", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
@@ -36,6 +75,34 @@ export function text(): string {
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /String::from\("line one\\nline two"\)/u);
   validateGeneratedProject("expression-template-literal", result.artifacts);
+});
+
+test("string relational operators preserve TypeScript UTF-16 ordering", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "string_ordering_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const supplementary = "\u{10000}";
+  const privateUse = "\u{e000}";
+  check("alpha" < "beta");
+  check("alpha" <= "alpha");
+  check("beta" > "alpha");
+  check("alpha" >= "alpha");
+  check(supplementary < privateUse);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::source_string_less_than\("alpha", "beta"\)/u);
+  assert.match(source, /rt::source_string_less_than\(&supplementary, &privateUse\)/u);
+  validateGeneratedProject("expression-string-ordering", result.artifacts, { run: true });
 });
 
 test("satisfies and redundant non-null syntax erase through exact identity facts", { timeout: 300_000 }, () => {
@@ -59,21 +126,38 @@ export function identity(value: int32): int32 {
   validateGeneratedProject("expression-erased-wrappers", result.artifacts);
 });
 
-test("non-null syntax does not guess through an Option carrier", () => {
+test("non-null syntax projects the exact Option element carrier", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "non_null_projection" } },
     files: {
       "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
 export function require(value: string | null): string {
   return value!;
+}
+
+export function selected(values: string[], index: int32 | undefined): string {
+  if (index === undefined) return "";
+  return values[index]!;
+}
+
+export function main(): void {
+  check(require("ready") === "ready");
+  check(selected(["zero", "one"], 1) === "one");
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.message.includes("identity operation") ||
-    diagnostic.message.includes("Expression planning returned no Rust AST")));
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value\.clone\(\)\.unwrap\(\)/u);
+  assert.match(source, /get_number[\s\S]*Some\(__tsonic_flow_value\)/u);
+  assert.equal(validateGeneratedProject("non-null-projection", result.artifacts, { run: true }).status, 0);
 });
 
 test("arrow and function-expression callbacks share one exact block-body contract", { timeout: 300_000 }, () => {
@@ -139,7 +223,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /values\.map\(\|value\| value \+ 1\)/u);
-  assert.match(source, /Callable::<\(i32,\), i32>::recursive/u);
+  assert.match(source, /Callable::<\(i32,\), rt::TsonicResult<i32>>::recursive/u);
   validateGeneratedProject("named-callable-expression", result.artifacts, { run: true });
 });
 
@@ -169,6 +253,84 @@ export function main(): void {
   assert.match(source, /rt::source_string\(&enabled\)/u);
   assert.match(source, /rt::source_string\(&negativeZero\)/u);
   validateGeneratedProject("expression-substituted-template", result.artifacts, { run: true });
+});
+
+test("flow-selected optional values project before direct template and arithmetic use", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "flow_read_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+class Diagnostic {
+  file: string | undefined;
+  line: int32 | undefined;
+
+  constructor(file: string | undefined, line: int32 | undefined) {
+    this.file = file;
+    this.line = line;
+  }
+
+  format(): string {
+    if (this.file === undefined) return "";
+    if (this.line === undefined) return \`${"${this.file}"}: \`;
+    return \`${"${this.file}"}:${"${this.line + 1}"}\`;
+  }
+}
+
+function direct(value: string | undefined): string {
+  if (value === undefined) return "missing";
+  return \`value=${"${value}"}\`;
+}
+
+export function main(): void {
+  check(new Diagnostic(undefined, undefined).format() === "");
+  check(new Diagnostic("index.ts", undefined).format() === "index.ts: ");
+  check(new Diagnostic("index.ts", 4).format() === "index.ts:5");
+  check(direct(undefined) === "missing");
+  check(direct("ready") === "value=ready");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /match .*\.as_ref\(\)/su);
+  assert.match(source, /checked flow selected a missing optional value/u);
+  validateGeneratedProject("flow-read-projection", result.artifacts, { run: true });
+});
+
+test("optional value equality applies one exact option projection", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "option_value_equality" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class Artifact {
+  output_path: string | undefined;
+
+  constructor(output_path: string | undefined) {
+    this.output_path = output_path;
+  }
+}
+
+export function main(): void {
+  const expected = "site.css";
+  const artifact = new Artifact(expected);
+  check(artifact.output_path === \`site.\${"css"}\`);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /Some\(Some\(/u);
+  validateGeneratedProject("option-value-equality", result.artifacts, { run: true });
 });
 
 test("typeof consumes exact carriers and preserves operand evaluation without moves", { timeout: 300_000 }, () => {
@@ -215,7 +377,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let discarded = \{\s+acme_testing::check\(true\);\s+rt::Undefined\s+\};/u);
+  assert.match(source, /let discarded: rt::Undefined = \{\s+acme_testing::check\(true\);\s+rt::Undefined\s+\};/u);
   validateGeneratedProject("expression-void", result.artifacts, { run: true });
 });
 
@@ -420,7 +582,10 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /values\.delete_at\(/u);
+  assert.match(
+    source,
+    /values\.delete_number\(tsonic_rust_runtime::conversions::i32_to_f64\(1\)\)/u,
+  );
   validateGeneratedProject("expression-delete-js-array", result.artifacts, { run: true });
 });
 

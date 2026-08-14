@@ -41,6 +41,7 @@ import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { planBlockLike, planStatement } from "./statements.js";
 import { applyFallibleShape } from "./fallible-shape.js";
+import { rustAuthoredSourceInnerAttributes } from "./generated-source-lints.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -49,7 +50,7 @@ import {
   planClassDeclaration,
   planEnumDeclaration,
   planInterfaceDeclaration,
-  planUnionAliasDeclaration,
+  planTypeAliasDeclaration,
 } from "./declarations-nominal.js";
 import {
   planPolymorphicClassDeclaration,
@@ -87,6 +88,7 @@ export function planRustSourceFile(
     moduleName,
     moduleNameByFileName,
     diagnostics,
+    errorDomain: input.projectTypes.programErrorDefinitions.length === 0 ? "runtime" : "project",
     usedAliases,
     planBlock: planBlockLike,
   };
@@ -94,14 +96,19 @@ export function planRustSourceFile(
   const aliases = Object.freeze(new Set(usedAliases));
   const useItems: RustItem[] = [...aliases]
     .sort((left, right) => left.localeCompare(right, "en"))
-    .map((alias) => rustRuntimeAliasImports.get(alias))
+    .map((alias) => alias === "rt" && input.projectTypes.programErrorDefinitions.length > 0
+      ? { path: "crate::__tsonic_program", alias: "rt" }
+      : rustRuntimeAliasImports.get(alias))
     .filter((entry): entry is { path: string; alias: string } =>
       entry !== undefined)
     .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
   return Object.freeze({
     sourceFile,
     moduleName,
-    model: createRustSourceFile([...useItems, ...plannedModule.items]),
+    model: createRustSourceFile(
+      [...useItems, ...plannedModule.items],
+      rustAuthoredSourceInnerAttributes,
+    ),
     ...(plannedModule.initialization === undefined
       ? {}
       : { moduleInitialization: plannedModule.initialization }),
@@ -133,10 +140,8 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     context.sourceFile,
     rustFallibleFactKey,
   ) !== undefined;
-  const nonSnakeSeen = { value: false };
   const initializationContext: RustPlanContext = {
     ...context,
-    nonSnakeSeen,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },
@@ -240,7 +245,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
     if (kind === "KindTypeAliasDeclaration") {
       const diagnosticCount = context.diagnostics.length;
-      const planned = planUnionAliasDeclaration(statement, context);
+      const planned = planTypeAliasDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
       } else {
@@ -290,15 +295,17 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     visibility: "public",
     attrs: [
       "#[doc(hidden)]",
-      ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
     ],
     ...(asynchronous ? { isAsync: true } : {}),
     ...(fallible ? { fallible: true } : {}),
     params: [],
     body: applyFallibleShape(
       { statements: initializationStatements },
-      fallible,
-      false,
+      {
+        fallible,
+        hasReturnValue: false,
+        errorDomain: context.errorDomain,
+      },
     ),
   });
   return { items, initialization };
@@ -358,7 +365,7 @@ function planTopLevelVariableStatement(
     const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier
       ? ast.text(nameNode)
       : "";
-    const name = rustSourceName(context, sourceName);
+    const name = rustSourceName(sourceName);
     const initializer = Node_Initializer(ast, declaration);
     const binding = context.input.facts.getFact(declaration, rustModuleBindingFactKey);
     const rustType = rustTypeFromCarrierInContext(binding?.valueCarrier, context);
@@ -377,7 +384,7 @@ function planTopLevelVariableStatement(
     }
     const visibility = ast.hasModifierKind(statement, "export")
       ? "public" as const
-      : "private" as const;
+      : "crate" as const;
     if (binding.storage === "native-const") {
       items.push({
         kind: "const",

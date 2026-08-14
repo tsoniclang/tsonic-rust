@@ -31,7 +31,7 @@ export function preserve(
   validateGeneratedProject("callable-native-pointer", result.artifacts);
 });
 
-test("ordinary callable parameters and local arrows use one closed callable carrier", { timeout: 300_000 }, () => {
+test("ordinary callable parameters use one fallible first-class callable ABI", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "callable_value" } },
@@ -54,9 +54,148 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::Callable<\(i32,\), i32>/u);
+  assert.match(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
   assert.match(source, /action\.call\(\(value,\)\)/u);
   validateGeneratedProject("callable-value", result.artifacts, { run: true });
+});
+
+test("arbitrary first-class callables propagate throws through their stable ABI", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "callable_throw" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+function invoke(action: (value: int32) => int32, value: int32): int32 {
+  return action(value);
+}
+
+function risky(value: int32): int32 {
+  if (value < 0) {
+    throw new Error("negative");
+  }
+  return value + 1;
+}
+
+export function main(): void {
+  let caught = false;
+  try {
+    invoke(risky, -1);
+  } catch (_error) {
+    caught = true;
+  }
+  check(caught);
+  check(invoke(risky, 4) === 5);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /fn invoke\([^)]*Callable<\(i32,\), rt::TsonicResult<i32>>[^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.match(source, /action\.call\(\(value,\)\)/u);
+  assert.match(source, /rt::Callable::<\(i32,\), rt::TsonicResult<i32>>::new/u);
+  validateGeneratedProject("callable-throw", result.artifacts, { run: true });
+});
+
+test("fallible top-level callable values keep module initialization infallible", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "callable_top_level" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+const parsePositive = (value: int32): int32 => {
+  if (value < 0) {
+    throw new Error("negative");
+  }
+  return value;
+};
+
+export function main(): void {
+  let caught = false;
+  try {
+    parsePositive(-1);
+  } catch (_error) {
+    caught = true;
+  }
+  check(caught);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
+  assert.match(source, /Err\(rt::TsonicError::from\(rt::JsError::error\("negative"\)\)\)/u);
+  validateGeneratedProject("callable-top-level", result.artifacts, { run: true });
+});
+
+test("representation-preserving callable aliases close top-level callable values", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "callable_alias" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+type TextTransform = (value: string) => string;
+
+const apply = (value: string, transform: TextTransform): string => transform(value);
+
+export function main(): void {
+  check(apply("rust", (value: string): string => value.toUpperCase()) === "RUST");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(source, /type TextTransform/u);
+  assert.match(source, /rt::Callable<\(String,\), rt::TsonicResult<String>>/u);
+  validateGeneratedProject("callable-alias", result.artifacts, { run: true });
+});
+
+test("computed authored type syntax closes callable signatures", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "computed_type_syntax" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class Box {
+  value: string;
+
+  constructor(value: string) {
+    this.value = value;
+  }
+}
+
+const makeBox = (value: string): Box => new Box(value);
+const describe = (
+  box: ReturnType<typeof makeBox>,
+  suffix: Box["value"],
+): { text: string } => ({ text: box.value + suffix });
+
+export function main(): void {
+  check(describe(makeBox("rust"), "!").text === "rust!");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("computed-type-syntax", result.artifacts, { run: true });
 });
 
 test("escaping closures preserve shared mutable captures", { timeout: 300_000 }, () => {
@@ -88,7 +227,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::Location::allocate\(seed\)/u);
-  assert.match(source, /rt::Callable::<\(\), i32>::new/u);
+  assert.match(source, /rt::Callable::<\(\), rt::TsonicResult<i32>>::new/u);
   validateGeneratedProject("callable-capture", result.artifacts, { run: true });
 });
 
@@ -148,7 +287,9 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /action\s*\.as_ref\(\)\s*\.map/u);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /action\s*\.as_ref\(\)\s*\.map/u);
+  assert.doesNotMatch(source, /action\s*\.clone\(\)/u);
   validateGeneratedProject("callable-optional", result.artifacts, { run: true });
 });
 
@@ -179,6 +320,48 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("callable-parameters", result.artifacts, { run: true });
+});
+
+test("project-source optional and default parameters compose exact value conversions before Option wrapping", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "source_call_optional_conversion" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+function optional(value?: number): number {
+  return value ?? 0;
+}
+
+function defaulted(value: number = 3.5): number {
+  return value;
+}
+
+function optionalBridge(value: int32 | undefined): number {
+  return optional(value);
+}
+
+export function main(): void {
+  const value: int32 = 8;
+  check(optional(value) === 8);
+  check(defaulted(value) === 8);
+  check(optionalBridge(value) === 8);
+  check(optionalBridge(undefined) === 0);
+  check(optional() === 0);
+  check(defaulted() === 3.5);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /optional\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
+  assert.match(source, /defaulted\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
+  assert.match(source, /value\.map\(\|__tsonic_option_value\|\s*\{\s*tsonic_rust_runtime::conversions::i32_to_f64\(__tsonic_option_value\)/u);
+  validateGeneratedProject("source-call-optional-conversion", result.artifacts, { run: true });
 });
 
 test("project-source spread calls preserve exact bindings, single evaluation, and order", { timeout: 300_000 }, () => {
@@ -258,7 +441,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /rt::Callable::<\(i32,\), i32>::recursive/u,
+    /rt::Callable::<\(i32,\), rt::TsonicResult<i32>>::recursive/u,
   );
   validateGeneratedProject("callable-recursive", result.artifacts, { run: true });
 });

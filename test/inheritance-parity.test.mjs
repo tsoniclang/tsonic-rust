@@ -5,6 +5,7 @@ import {
   artifactText,
   compileRust,
 } from "./helpers/rust-session.mjs";
+import { rustModuleNameForSourcePath } from "../dist/index.js";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 function compileExecutable(files, crateName) {
@@ -177,6 +178,7 @@ export function main(): void {
 
 test("project heritage closes across source modules independent of file order", () => {
   const { result } = compileRust({
+    entryPoint: "a-consumer.ts",
     files: {
       "a-consumer.ts": `
 import { Derived } from "./z-models.js";
@@ -195,6 +197,54 @@ export class Derived extends Base<string> {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/z_models.rs"), /struct Derived/u);
-  assert.match(artifactText(result, "src/a_consumer.rs"), /Derived::new/u);
+  const modelsModule = rustModuleNameForSourcePath("z-models.ts");
+  const consumerModule = rustModuleNameForSourcePath("a-consumer.ts");
+  assert.notEqual(modelsModule, undefined);
+  assert.notEqual(consumerModule, undefined);
+  assert.match(artifactText(result, `src/${modelsModule}.rs`), /struct Derived/u);
+  assert.match(artifactText(result, `src/${consumerModule}.rs`), /Derived::new/u);
+});
+
+test("inherited method bodies retain lexical bindings when emitted for a derived module", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable({
+    "base.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Base {
+  format(input: string, count: int32): string {
+    const separator = ":";
+    const value = input + separator;
+    let index: int32 = 0;
+    let output = "";
+    while (index < count) {
+      output += value;
+      index += 1;
+    }
+    return output;
+  }
+}
+`,
+    "derived.ts": `
+import { Base } from "./base.js";
+
+export class Derived extends Base {}
+`,
+    "index.ts": `
+import { check } from "@acme/testing";
+import { Derived } from "./derived.js";
+
+export function main(): void {
+  const value = new Derived();
+  check(value.format("x", 2) === "x:x:");
+}
+`,
+  }, "rust_inherited_lexical_binding_proof");
+
+  assert.deepEqual(result.diagnostics, []);
+  const derivedModule = rustModuleNameForSourcePath("derived.ts");
+  assert.notEqual(derivedModule, undefined);
+  const derived = artifactText(result, `src/${derivedModule}.rs`);
+  assert.doesNotMatch(derived, /crate::base::(?:input|count|separator|value|index|output)/u);
+  const run = validateGeneratedProject("inherited-lexical-binding", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
 });

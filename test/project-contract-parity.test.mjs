@@ -113,8 +113,8 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.equal(source.match(/fn combine\s*\(/gu)?.length ?? 0, 1);
   assert.equal(source.match(/fn total\s*\(/gu)?.length ?? 0, 1);
-  assert.match(source, /let __tsonic_field_copied(?:_[0-9]+)? = __tsonic_field_label(?:_[0-9]+)?\.clone\(\);/u);
-  assert.match(source, /let __tsonic_field_second(?:_[0-9]+)? = __tsonic_base_state\.1 \+ 2;/u);
+  assert.match(source, /__tsonic_field_copied(?:_[0-9]+)? = __tsonic_field_label(?:_[0-9]+)?\.clone\(\);/u);
+  assert.match(source, /__tsonic_field_second(?:_[0-9]+)? = __tsonic_base_state\.1 \+ 2;/u);
   assert.match(source, /fn letter\(\) -> u16 \{\s*65\s*\}/u);
   assert.match(source, /fn signedMaximum\(\) -> i128/u);
   assert.match(source, /fn signedMinimum\(\) -> i128/u);
@@ -122,6 +122,75 @@ export function main(): void {
   assert.match(source, /unsafe fn __tsonic_virtual_/u);
 
   const run = validateGeneratedProject("project-contract-parity", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("constructors lower local control flow through exact preconstruction field storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "constructor_control_flow" },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Values {
+  total: int32;
+  complete: boolean;
+
+  constructor(limit: int32) {
+    const initial: int32 = 0;
+    this.total = initial;
+    for (let index: int32 = 0; index < limit; index++) {
+      this.total += index;
+    }
+    if (limit === 3) {
+      this.total += 1;
+      this.complete = true;
+    } else {
+      this.total = -1;
+      this.complete = false;
+    }
+  }
+}
+
+class Base {
+  value: int32;
+  constructor(value: int32) { this.value = value; }
+}
+
+class Derived extends Base {
+  doubled: int32;
+
+  constructor(value: int32) {
+    super(value);
+    const doubled = this.value * 2;
+    this.doubled = doubled;
+  }
+}
+
+export function main(): void {
+  const values = new Values(3);
+  check(values.total === 4);
+  check(values.complete);
+  const derived = new Derived(21);
+  check(derived.value === 21);
+  check(derived.doubled === 42);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let mut __tsonic_field_total(?:_[0-9]+)?: i32;/u);
+  assert.match(source, /__tsonic_field_total(?:_[0-9]+)? \+= index;/u);
+  assert.match(source, /let doubled: i32 = __tsonic_base_state\.0 \* 2;/u);
+
+  const run = validateGeneratedProject("constructor-control-flow", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
 
@@ -205,6 +274,75 @@ export function render(value: char): string {
       message: "Template substitution requires an exact closed primitive, string, or undefined carrier.",
     }],
   );
+});
+
+test("uncontextualized TypeScript numeric literals retain the number carrier", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export function render(): string {
+  let result = "";
+  for (let index = 0; index < 2; index++) {
+    result = \`\${result}\${index}\`;
+  }
+  return result;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let mut index: f64 = 0\.0;/u);
+  assert.match(source, /rt::source_string\(&index\)/u);
+  validateGeneratedProject("inferred-number-carrier", result.artifacts);
+});
+
+test("strict equality for disjoint nullish carriers preserves operand evaluation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "disjoint_nullish_equality" },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Counter {
+  value: int32 = 0;
+}
+
+function left(counter: Counter): string {
+  counter.value = counter.value * 10 + 1;
+  return "value";
+}
+
+function right(counter: Counter): void {
+  counter.value = counter.value * 10 + 2;
+}
+
+export function main(): void {
+  const counter = new Counter();
+  const equal = left(counter) === void right(counter);
+  check(!equal);
+  check(counter.value === 12);
+
+  const unequal = left(counter) !== void right(counter);
+  check(unequal);
+  check(counter.value === 1212);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let equal: bool = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*false\s*\}\s*\};/u);
+  assert.match(source, /let unequal: bool = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*true\s*\}\s*\};/u);
+  const run = validateGeneratedProject("disjoint-nullish-equality", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
 });
 
 test("bodyless unsafe contracts require matching implementation ABI facts", () => {

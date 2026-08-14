@@ -15,7 +15,11 @@ export {
 } from "./options/rust-target-options.js";
 export type { RustEdition, RustOutputType } from "./options/rust-target-options.js";
 export { createRustBackend } from "./backend/rust-backend.js";
-export { planRustArtifacts, rustModuleNameForFile } from "./backend/planner/rust-planner.js";
+export { planRustArtifacts } from "./backend/planner/rust-planner.js";
+export {
+  planRustSourceOutputIdentities,
+  rustModuleNameForSourcePath,
+} from "./translate/artifacts/source-output-identities.js";
 export {
   cargoCrateAttributeName,
   cargoCratesIoRegistry,
@@ -70,6 +74,9 @@ export {
 } from "./source/provider-packages/index.js";
 export type {
   RustProviderCrateDefinition,
+  RustProviderBinaryEpilogueDefinition,
+  RustProviderBinaryEpilogueRow,
+  RustProviderImmediateCallbackDefinition,
   RustProviderModuleDefinition,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
@@ -111,13 +118,17 @@ export {
   isRustBoolCarrier,
   isRustIntegerCarrier,
   isRustNumericCarrier,
+  isRustNeverCarrier,
   isRustSignedNumericCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
   rustPrimitiveTypeName,
   rustJsArrayTargetType,
+  rustCallableTargetType,
+  rustClosureTargetType,
   rustJsArrayConcatItemTargetType,
   rustOptionTargetType,
+  rustNeverTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetId,
   rustStringTargetType,

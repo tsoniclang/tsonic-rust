@@ -41,8 +41,67 @@ export function bothMissing(): boolean {
   assert.match(output, /pointer\.store\(value\);\s*pointer\.load\(\)/u);
   assert.match(output, /pub fn same<T>\(left: Option<rt::Location<T>>, right: Option<rt::Location<T>>\) -> bool/u);
   assert.match(output, /rt::Location::<T>::same\(left\.as_ref\(\), right\.as_ref\(\)\)/u);
-  assert.match(output, /rt::Location::<i32>::same\(None\.as_ref\(\), None\.as_ref\(\)\)/u);
+  assert.match(output, /rt::Location::<i32>::same\(\s*Option::<rt::Location<i32>>::None\.as_ref\(\),\s*Option::<rt::Location<i32>>::None\.as_ref\(\),?\s*\)/u);
+  assert.doesNotMatch(output, /(?:left|right)\.clone\(\)/u);
   assert.doesNotMatch(output, /equalPointer|loadPointer|storePointer/u);
+});
+
+test("captured string compound assignments retain their shared location across iterations", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "captured_string_updates" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+export function main(): void {
+  let value = "";
+  for (let index: int32 = 0; index < 3; index++) value += "[";
+  const read = (): string => value;
+  check(read() === "[[[");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /value\.clone\(\)/u);
+  validateGeneratedProject("captured-string-updates", result.artifacts, { run: true });
+});
+
+test("closures observe binding writes that occur after capture", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "captured_future_writes" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+export function main(): void {
+  let ready = false;
+  let value = "";
+  const read = (): string => ready ? value : "waiting";
+  const write = (next: string): void => {
+    value = next;
+    ready = true;
+  };
+
+  write("first");
+  check(read() === "first");
+  value = "second";
+  check(read() === "second");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /rt::Location::allocate\(false\)/u);
+  assert.match(output, /rt::Location::allocate\(String::from\(""\)\)/u);
+  assert.match(output, /\.store\(/u);
+  validateGeneratedProject("captured-future-writes", result.artifacts, { run: true });
 });
 
 test("generated Rust locations preserve aliases and projected storage", { timeout: 300_000 }, () => {

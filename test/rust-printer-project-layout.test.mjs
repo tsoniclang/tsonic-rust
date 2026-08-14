@@ -26,11 +26,67 @@ function field(receiver, name) {
   return { kind: "field", receiver, name };
 }
 
+function nestedTryScopeSource(returnType, flowName, bodyName) {
+  return printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      fallible: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: { kind: "bool-literal", value: true },
+          then: {
+            statements: [{
+              kind: "try-scope",
+              bodyName,
+              flowName,
+              returnType,
+              fallible: true,
+              asynchronous: false,
+              body: { statements: [] },
+              bodyFallible: true,
+              bodyTerminates: false,
+              catchClause: {
+                binding: "_",
+                body: { statements: [] },
+                fallible: true,
+                terminates: false,
+              },
+              propagate: false,
+              dispatchReturn: false,
+              dispatchTargets: [],
+              terminates: false,
+            }],
+          },
+        }],
+      },
+    }],
+  });
+}
+
 test("nested tuple fields use one edition-neutral rustfmt-stable form", () => {
   const text = projectFunction(field(field(field({ kind: "path", path: "state" }, "0"), "1"), "0"));
 
   assert.match(text, /\(\(state\.0\)\.1\)\.0/u);
   assert.doesNotMatch(text, /state\.0 \.1|state\.0\.1/u);
+});
+
+test("exact pattern predicates use the native matches expression", () => {
+  const text = projectFunction({
+    kind: "matches",
+    expression: { kind: "method-call", receiver: { kind: "path", path: "error" }, method: "clone", args: [] },
+    pattern: {
+      kind: "tuple-variant",
+      path: "rt::TsonicError::Project0",
+      elements: [{ kind: "wildcard" }],
+    },
+  });
+
+  assert.match(text, /matches!\(error\.clone\(\), rt::TsonicError::Project0\(_\)\)/u);
 });
 
 test("long tuple values use rustfmt-compatible element layout", () => {
@@ -46,6 +102,120 @@ test("long tuple values use rustfmt-compatible element layout", () => {
     text,
     /\(\n        first_value_with_an_intentionally_long_identifier,\n        second_value_with_an_intentionally_long_identifier,\n    \)/u,
   );
+});
+
+test("long typed bindings expand the type before attaching the initializer", () => {
+  const callableType = {
+    kind: "named",
+    path: "rt::Callable",
+    typeArguments: [{
+      kind: "tuple",
+      elements: [
+        { kind: "named", path: "tsonic_rust_node::http::IncomingMessage" },
+        { kind: "named", path: "tsonic_rust_node::http::ServerResponseHandle" },
+      ],
+    }, {
+      kind: "named",
+      path: "rt::TsonicResult",
+      typeArguments: [{ kind: "unit" }],
+    }],
+  };
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "aliasedHandle",
+          mutable: false,
+          type: callableType,
+          init: { kind: "path", path: "handler_factory" },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /let aliasedHandle: rt::Callable<\n {8}\(\n {12}tsonic_rust_node::http::IncomingMessage,\n {12}tsonic_rust_node::http::ServerResponseHandle,\n {8}\),\n {8}rt::TsonicResult<\(\)>,\n {4}> = handler_factory;/u,
+  );
+});
+
+test("fallible await chains budget postfix syntax on its selected line", () => {
+  const text = projectFunction({
+    kind: "try",
+    expr: {
+      kind: "method-call",
+      receiver: {
+        kind: "await",
+        expr: {
+          kind: "call",
+          path: "tsonic_rust_node::fs_promises::mkdir_async",
+          args: [
+            { kind: "reference", expr: { kind: "path", path: "dir" } },
+            { kind: "bool-literal", value: true },
+          ],
+        },
+      },
+      method: "map_err",
+      args: [{ kind: "path", path: "rt::TsonicError::from" }],
+    },
+  });
+
+  assert.match(
+    text,
+    /mkdir_async\(&dir, true\)\n {8}\.await\n {8}\.map_err\(rt::TsonicError::from\)\?/u,
+  );
+});
+
+test("fallible nested calls remain compact when their selected line fits", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "bytes",
+          mutable: false,
+          type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
+          init: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "call",
+                path: "tsonic_rust_node::crypto::random_bytes",
+                args: [{
+                  kind: "try",
+                  expr: {
+                    kind: "call",
+                    path: "tsonic_rust_runtime::conversions::i32_to_usize",
+                    args: [{ kind: "int-literal", text: "8" }],
+                  },
+                }],
+              },
+              method: "map_err",
+              args: [{ kind: "path", path: "rt::TsonicError::from" }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(8\)\?\)\n {12}\.map_err\(rt::TsonicError::from\)\?;/u,
+  );
+  assert.doesNotMatch(text, /i32_to_usize\(\s*\n/u);
 });
 
 test("logical block operands keep the following operator on the closing brace", () => {
@@ -101,6 +271,36 @@ test("logical block operands keep the following operator on the closing brace", 
   assert.match(text, /\n    \} \|\| second != \{/u);
   assert.match(text, /\n    \} \|\| third != \{/u);
   assert.doesNotMatch(text, /\n            let value/u);
+});
+
+test("logical chains attach a fitting trailing block to the first operand", () => {
+  const text = projectFunction({
+    kind: "binary",
+    operator: "&&",
+    left: { kind: "path", path: "ready" },
+    right: {
+      kind: "evaluate-then",
+      effect: { kind: "path", path: "source" },
+      discard: "value",
+      value: { kind: "bool-literal", value: true },
+    },
+  });
+
+  assert.match(text, /ready && \{\n        let _ = source;\n        true\n    \}/u);
+});
+
+test("associated values preserve their exact generic owner", () => {
+  const text = projectFunction({
+    kind: "associated-value",
+    owner: {
+      kind: "named",
+      path: "Option",
+      typeArguments: [{ kind: "string" }],
+    },
+    name: "None",
+  });
+
+  assert.match(text, /Option::<String>::None/u);
 });
 
 test("detached logical block operands use the continuation indentation", () => {
@@ -193,8 +393,8 @@ test("format macro arguments keep borrowed nested calls attached to their call",
           expr: {
             kind: "associated-call",
             owner: { kind: "named", path: "Self" },
-            trait: { kind: "named", path: "__TsonicDispatch_Base" },
-            method: "__tsonic_exact_489_549",
+            trait: { kind: "named", path: "__TsonicDispatch_Middle" },
+            method: "__tsonic_exact_692_761",
             args: [clone({ kind: "path", path: "self" })],
           },
         }],
@@ -219,10 +419,48 @@ test("format macro arguments keep borrowed nested calls attached to their call",
 
   assert.match(
     text,
-    /rt::source_string\(&<Self as __TsonicDispatch_Base>::__tsonic_exact_489_549\(\n/u,
+    /rt::source_string\(&<Self as __TsonicDispatch_Middle>::__tsonic_exact_692_761\(\n/u,
   );
   assert.match(text, /self\.clone\(\)\n\s+\),\),/u);
   assert.doesNotMatch(text, /rt::source_string\(\n/u);
+});
+
+test("expanded format macros separate call-valued arguments", () => {
+  const text = projectFunction({
+    kind: "string-concat",
+    parts: [
+      { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "" }] },
+      {
+        kind: "call",
+        path: "rt::source_string",
+        args: [{ kind: "reference", expr: { kind: "path", path: "error" } }],
+      },
+      { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "" }] },
+    ],
+  });
+
+  assert.match(
+    text,
+    /"\{\}\{\}\{\}",\n\s+String::from\(""\),\n\s+rt::source_string\(&error\),\n\s+String::from\(""\),/u,
+  );
+});
+
+test("expanded format macros pack fitting source values", () => {
+  const text = projectFunction({
+    kind: "string-concat",
+    parts: [
+      { kind: "path", path: "text" },
+      { kind: "path", path: "text_kind" },
+      { kind: "path", path: "count_kind" },
+      { kind: "path", path: "wide_kind" },
+      { kind: "path", path: "enabled_kind" },
+    ],
+  });
+
+  assert.match(
+    text,
+    /"\{\}\{\}\{\}\{\}\{\}",\n\s+text, text_kind, count_kind, wide_kind, enabled_kind,/u,
+  );
 });
 
 test("multiline awaited match-arm expressions use a canonical arm block", () => {
@@ -314,6 +552,28 @@ test("multiline synchronous match-arm expressions remain direct", () => {
   assert.doesNotMatch(text, /Err\(_\) => \{\n\s+rt::completion_region/u);
 });
 
+test("try-scope match bindings follow all rustfmt width boundaries", () => {
+  const exactWidth = nestedTryScopeSource(
+    { kind: "primitive", name: "i32" },
+    "__tsonic_try_flow_11",
+    "__tsonic_try_body_10",
+  );
+  assert.match(
+    exactWidth,
+    /let __tsonic_try_flow_11: rt::TsonicResult<rt::Completion<i32>> = match __tsonic_try_body_10\n        \{/u,
+  );
+
+  const overWidth = nestedTryScopeSource(
+    { kind: "named", path: "Option", typeArguments: [{ kind: "string" }] },
+    "__tsonic_try_flow_2",
+    "__tsonic_try_body_1",
+  );
+  assert.match(
+    overWidth,
+    /let __tsonic_try_flow_2: rt::TsonicResult<rt::Completion<Option<String>>> =\n            match __tsonic_try_body_1 \{/u,
+  );
+});
+
 test("method chains in logical continuations use the continuation body indent", () => {
   const selected = {
     kind: "method-call",
@@ -364,4 +624,144 @@ test("method chains in logical continuations use the continuation body indent", 
 
   assert.match(text, /\n        \|\| secondLocation\n            \.with/u);
   assert.match(text, /\n            \.load\(\)\n            != 4/u);
+});
+
+test("fallible method chains in logical continuations start from their receiver", () => {
+  const tested = {
+    kind: "try",
+    expr: {
+      kind: "method-call",
+      receiver: {
+        kind: "method-call",
+        receiver: { kind: "path", path: "digits" },
+        method: "test",
+        args: [{ kind: "str-literal", value: "a12" }],
+      },
+      method: "map_err",
+      args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+    },
+  };
+  const text = projectFunction({
+    kind: "binary",
+    operator: "&&",
+    left: {
+      kind: "call",
+      path: "js_string::includes_from_start",
+      args: [
+        { kind: "reference", expr: { kind: "path", path: "rendered" } },
+        { kind: "str-literal", value: "tsonic" },
+      ],
+    },
+    right: {
+      kind: "binary",
+      operator: "&&",
+      left: tested,
+      right: {
+        kind: "binary",
+        operator: "==",
+        left: {
+          kind: "method-call",
+          receiver: { kind: "path", path: "date" },
+          method: "get_time",
+          args: [],
+        },
+        right: { kind: "float-literal", text: "86400000.0" },
+      },
+    },
+  });
+
+  assert.match(text, /\n {8}&& digits\n {12}\.test\("a12"\)\n {12}\.map_err/u);
+});
+
+test("expanded call arguments start fallible method chains from their receiver", () => {
+  const convertedByte = (receiver) => ({
+    kind: "call",
+    path: "tsonic_rust_runtime::conversions::u8_to_i32",
+    args: [{
+      kind: "try",
+      expr: {
+        kind: "method-call",
+        receiver: {
+          kind: "method-call",
+          receiver: { kind: "path", path: receiver },
+          method: "read_u8",
+          args: [{
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::i32_to_usize",
+              args: [{ kind: "int-literal", text: "0" }],
+            },
+          }],
+        },
+        method: "map_err",
+        args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+      },
+    }],
+  });
+  const text = projectFunction({
+    kind: "binary",
+    operator: "&&",
+    left: {
+      kind: "binary",
+      operator: "==",
+      left: {
+        kind: "try",
+        expr: {
+          kind: "call",
+          path: "tsonic_rust_runtime::conversions::usize_to_i32",
+          args: [{
+            kind: "method-call",
+            receiver: { kind: "path", path: "buffer" },
+            method: "len",
+            args: [],
+          }],
+        },
+      },
+      right: { kind: "int-literal", text: "3" },
+    },
+    right: {
+      kind: "binary",
+      operator: "==",
+      left: convertedByte("buffer"),
+      right: { kind: "int-literal", text: "97" },
+    },
+  });
+
+  assert.match(
+    text,
+    /u8_to_i32\(\n {12}buffer\n {16}\.read_u8\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\)\n {16}\.map_err/u,
+  );
+
+  const attached = projectFunction(convertedByte("buf"));
+  assert.match(
+    attached,
+    /u8_to_i32\(\n {8}buf\.read_u8\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\)\n {12}\.map_err/u,
+  );
+});
+
+test("short fallible call arguments break before their first selector", () => {
+  const text = projectFunction({
+    kind: "call",
+    path: "acme_testing::check",
+    args: [{
+      kind: "try",
+      expr: {
+        kind: "method-call",
+        receiver: {
+          kind: "method-call",
+          receiver: { kind: "path", path: "digits" },
+          method: "test",
+          args: [{ kind: "str-literal", value: "a12" }],
+        },
+        method: "map_err",
+        args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /acme_testing::check\(\n {8}digits\n {12}\.test\("a12"\)\n {12}\.map_err/u,
+  );
 });

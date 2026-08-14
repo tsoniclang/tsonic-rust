@@ -41,6 +41,54 @@ test("fitting method-call arguments remain on one rustfmt line", () => {
   );
 });
 
+test("multi-argument calls follow rustfmt argument width independently of callable width", () => {
+  const longArguments = {
+    kind: "path",
+    path: "__tsonic_callable_arguments_1",
+  };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "tsonic_rust_node::buffer::Buffer::from_string_enc",
+            args: [
+              { kind: "str-literal", value: "ok" },
+              { kind: "str-literal", value: "utf8" },
+            ],
+          },
+        }, {
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "handle",
+            args: [
+              { kind: "field", receiver: longArguments, name: "0" },
+              { kind: "field", receiver: longArguments, name: "1" },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /tsonic_rust_node::buffer::Buffer::from_string_enc\("ok", "utf8"\);/u,
+  );
+  assert.match(
+    source,
+    /handle\(\n {8}__tsonic_callable_arguments_1\.0,\n {8}__tsonic_callable_arguments_1\.1,\n {4}\);/u,
+  );
+});
+
 test("single projection calls keep a short receiver attached when closure arguments expand", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -160,6 +208,108 @@ test("fallible calls on the left of comparisons expand their arguments before th
   assert.match(source, /divide\(\n {12}rt::BigInt::from_decimal_literal\("7"\),\n {12}rt::BigInt::from_decimal_literal\("3"\),\n {8}\)\? ==/u);
 });
 
+test("long calls on the left of comparisons expand before the operator", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "call",
+                path: "rt::option_coalesce",
+                args: [
+                  {
+                    kind: "try",
+                    expr: {
+                      kind: "call",
+                      path: "length",
+                      args: [{
+                        kind: "call",
+                        path: "Some",
+                        args: [{
+                          kind: "call",
+                          path: "String::from",
+                          args: [{ kind: "str-literal", value: "rust" }],
+                        }],
+                      }],
+                    },
+                  },
+                  { kind: "path", path: "std::convert::identity" },
+                  {
+                    kind: "closure",
+                    params: [],
+                    body: { kind: "int-literal", text: "-1" },
+                  },
+                ],
+              },
+              right: { kind: "int-literal", text: "4" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /rt::option_coalesce\(\n {12}length\(Some\(String::from\("rust"\)\)\)\?,\n {12}std::convert::identity,\n {12}\|\| -1,\n {8}\) == 4,/u,
+  );
+});
+
+test("unary expressions expand long nested calls before outer attachment", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "unary",
+              operator: "!",
+              operand: {
+                kind: "call",
+                path: "rt::option_coalesce",
+                args: [
+                  { kind: "call", path: "includes", args: [{ kind: "path", path: "None" }] },
+                  { kind: "path", path: "std::convert::identity" },
+                  {
+                    kind: "closure",
+                    params: [],
+                    body: { kind: "bool-literal", value: false },
+                  },
+                ],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /acme_testing::check\(!rt::option_coalesce\(\n {8}includes\(None\),\n {8}std::convert::identity,\n {8}\|\| false,\n {4}\)\);/u,
+  );
+});
+
 test("fallible conversion wrappers own multiline callback method chains", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -213,6 +363,119 @@ test("fallible conversion wrappers own multiline callback method chains", () => 
     source,
     /usize_to_i32\(\n {8}values\n {12}\.try_map_with_array\(\|value, index, owner\| risky\(value\)\)\?\n {12}\.len\(\),\n {4}\)\?;/u,
   );
+});
+
+test("fallible conversion wrappers stay attached to one callback method", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "call",
+                path: "tsonic_rust_runtime::conversions::isize_to_f64",
+                args: [{
+                  kind: "try",
+                  expr: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "values" },
+                    method: "try_find_index_with_index",
+                    args: [{
+                      kind: "closure",
+                      params: [
+                        { name: "value", byRefCopy: false },
+                        { name: "_index", byRefCopy: false },
+                      ],
+                      body: {
+                        kind: "call",
+                        path: "Ok::<_, rt::TsonicError>",
+                        args: [{
+                          kind: "binary",
+                          operator: "==",
+                          left: {
+                            kind: "try",
+                            expr: {
+                              kind: "call",
+                              path: "risky",
+                              args: [{ kind: "path", path: "value" }],
+                            },
+                          },
+                          right: { kind: "int-literal", text: "2" },
+                        }],
+                      },
+                    }],
+                  },
+                }],
+              },
+              right: { kind: "float-literal", text: "1.0" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /isize_to_f64\(values\.try_find_index_with_index\(\n {12}\|value, _index\| Ok::<_, rt::TsonicError>\(risky\(value\)\? == 2\),\n {8}\)\?\) == 1\.0,/u);
+});
+
+test("conversion wrappers retain rustfmt layout for one block-valued array argument", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "method-call",
+                receiver: { kind: "path", path: "values" },
+                method: "push_many",
+                args: [{
+                  kind: "slice-literal",
+                  elements: [{
+                    kind: "block",
+                    bindings: [{
+                      name: "derived",
+                      value: { kind: "call", path: "Derived::new", args: [] },
+                    }],
+                    value: {
+                      kind: "struct-literal",
+                      path: "Base",
+                      fields: [{
+                        name: "identity",
+                        value: { kind: "field", receiver: { kind: "path", path: "derived" }, name: "identity" },
+                      }],
+                    },
+                  }],
+                }],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /usize_to_i32\(values\.push_many\(\[\{\n {8}let derived = Derived::new\(\);\n {8}Base \{\n {12}identity: derived\.identity,\n {8}\}\n {4}\}\]\)\)\?;/u);
 });
 
 test("method chains inside expanded call comparisons use argument indentation", () => {
@@ -308,6 +571,117 @@ test("field and closure method chains retain rustfmt vertical layout", () => {
   assert.match(
     source,
     /__tsonic_receiver\n        \.__tsonic_state\n        \.with_mut/u,
+  );
+});
+
+test("long indexes continue after one-line method-chain receivers", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "index",
+            receiver: {
+              kind: "method-call",
+              receiver: {
+                kind: "field",
+                receiver: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "holder" },
+                  method: "clone",
+                  args: [],
+                },
+                name: "__tsonic_state",
+              },
+              method: "with",
+              args: [{
+                kind: "closure",
+                params: [{ name: "state", byRefCopy: false }],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "state.0" },
+                  method: "clone",
+                  args: [],
+                },
+              }],
+            },
+            index: {
+              kind: "try",
+              expr: {
+                kind: "call",
+                path: "tsonic_rust_runtime::conversions::i32_to_usize",
+                args: [{ kind: "int-literal", text: "1" }],
+              },
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /holder\.clone\(\)\.__tsonic_state\.with\(\|state\| state\.0\.clone\(\)\)\n        \[tsonic_rust_runtime::conversions::i32_to_usize\(1\)\?\];/u,
+  );
+});
+
+test("multiline method-call match arms use rustfmt block arms", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "match",
+            expression: { kind: "path", path: "shape" },
+            arms: [{
+              pattern: {
+                kind: "tuple-variant",
+                path: "Shape::Variant0",
+                elements: [{
+                  kind: "binding",
+                  name: "__tsonic_union_variant_with_a_long_identity",
+                }],
+              },
+              expression: {
+                kind: "method-call",
+                receiver: {
+                  kind: "path",
+                  path: "__tsonic_union_variant_with_a_long_identity",
+                },
+                method: "with",
+                args: [{
+                  kind: "closure",
+                  params: [{ name: "state", byRefCopy: false }],
+                  body: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "state.0" },
+                    method: "clone",
+                    args: [],
+                  },
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /Shape::Variant0\(__tsonic_union_variant_with_a_long_identity\) => \{\n            __tsonic_union_variant_with_a_long_identity\.with\(\|state\| state\.0\.clone\(\)\)\n        \}/u,
   );
 });
 
@@ -456,6 +830,367 @@ test("long multiline let initializers reflow from their continuation column", ()
     source,
     /let textFunction =\n        rt::Callable::<\(String,\), String>::new\(move \|__tsonic_callable_arguments_5\| \{/u,
   );
+});
+
+test("borrowed method-chain let initializers reflow as one continuation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "__tsonic_location",
+          mutable: false,
+          init: {
+            kind: "reference",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "defaultEvaluations" },
+              method: "with",
+              args: [{
+                kind: "closure",
+                params: [{ name: "__tsonic_module_binding", mutable: false }],
+                move: false,
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "__tsonic_module_binding" },
+                  method: "location",
+                  args: [],
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let __tsonic_location =\n        &defaultEvaluations\.with\(\|__tsonic_module_binding\| __tsonic_module_binding\.location\(\)\);/u,
+  );
+});
+
+test("typed let bindings keep fitting call openings before expanded arrays", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "concatenated",
+          mutable: false,
+          type: {
+            kind: "named",
+            path: "js_abi::JsArray",
+            typeArguments: [{ kind: "primitive", name: "i32" }],
+          },
+          init: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "concatLeft" },
+            method: "concat",
+            args: [{
+              kind: "slice-literal",
+              elements: [
+                {
+                  kind: "call",
+                  path: "js_abi::JsArrayConcatItem::Value",
+                  args: [{ kind: "int-literal", text: "4" }],
+                },
+                {
+                  kind: "call",
+                  path: "js_abi::JsArrayConcatItem::Array",
+                  args: [{ kind: "path", path: "concatRight" }],
+                },
+              ],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let concatenated: js_abi::JsArray<i32> = concatLeft\.concat\(\[\n/u,
+  );
+});
+
+test("typed let bindings keep expanded ordinary calls attached", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "point",
+          mutable: false,
+          type: { kind: "primitive", name: "f64" },
+          init: {
+            kind: "call",
+            path: "rt::option_coalesce",
+            args: [{
+              kind: "call",
+              path: "js_string::code_point_at",
+              args: [
+                { kind: "reference", expr: { kind: "path", path: "text" } },
+                { kind: "float-literal", text: "0.0" },
+              ],
+            }, {
+              kind: "path",
+              path: "std::convert::identity",
+            }, {
+              kind: "closure",
+              params: [],
+              body: { kind: "float-literal", text: "0.0" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let point: f64 = rt::option_coalesce\(\n {8}js_string::code_point_at\(&text, 0\.0\),\n {8}std::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
+  );
+});
+
+test("typed let bindings keep a fitting call base before a fallible selector", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "temporary",
+          mutable: false,
+          type: { kind: "string" },
+          init: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "call",
+                path: "tsonic_rust_node::fs::mkdtemp_sync",
+                args: [{ kind: "reference", expr: { kind: "path", path: "root" } }],
+              },
+              method: "map_err",
+              args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let temporary: String = tsonic_rust_node::fs::mkdtemp_sync\(&root\)\n        \.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u,
+  );
+});
+
+test("typed let bindings move an expanded call base to one continuation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "merged",
+          mutable: false,
+          type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
+          init: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "associated-call",
+                owner: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
+                method: "concat",
+                args: [{
+                  kind: "reference",
+                  expr: {
+                    kind: "call",
+                    path: "js_abi::JsArray::from_dense",
+                    args: [{
+                      kind: "vec-literal",
+                      elements: [
+                        { kind: "call", path: "clone_first", args: [] },
+                        { kind: "call", path: "clone_second", args: [] },
+                      ],
+                    }],
+                  },
+                }],
+              },
+              method: "map_err",
+              args: [{ kind: "path", path: "rt::TsonicError::from" }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let merged: tsonic_rust_node::buffer::Buffer =\n        tsonic_rust_node::buffer::Buffer::concat\(&js_abi::JsArray::from_dense\(vec!\[/u,
+  );
+});
+
+test("fitting string concatenations remain on typed binding lines", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "file",
+          mutable: false,
+          type: { kind: "string" },
+          init: {
+            kind: "string-concat",
+            parts: [
+              { kind: "path", path: "temporary" },
+              { kind: "path", path: "separator" },
+              {
+                kind: "call",
+                path: "String::from",
+                args: [{ kind: "str-literal", value: "payload.bin" }],
+              },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let file: String = format!\("\{\}\{\}\{\}", temporary, separator, String::from\("payload\.bin"\)\);/u,
+  );
+});
+
+test("fallible method calls keep short receivers attached to block arguments", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "values" },
+              method: "try_for_each",
+              args: [{
+                kind: "block",
+                bindings: [{
+                  name: "captured",
+                  value: { kind: "path", path: "source" },
+                }],
+                value: {
+                  kind: "closure",
+                  params: [{ name: "value", mutable: false }],
+                  move: true,
+                  body: {
+                    kind: "call",
+                    path: "consume",
+                    args: [
+                      { kind: "path", path: "captured" },
+                      { kind: "path", path: "value" },
+                    ],
+                  },
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /values\.try_for_each\(\{\n/u);
+  assert.doesNotMatch(source, /values\n\s+\.try_for_each/u);
+});
+
+test("fallible method calls keep short receivers attached to closure blocks", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "values" },
+              method: "try_sort",
+              args: [{
+                kind: "closure-block",
+                params: [
+                  { name: "left", mutable: false },
+                  { name: "right", mutable: false },
+                ],
+                move: false,
+                async: false,
+                body: {
+                  statements: [{
+                    kind: "tail",
+                    expr: {
+                      kind: "call",
+                      path: "compare_with_a_deliberately_long_checked_operation",
+                      args: [
+                        { kind: "path", path: "left" },
+                        { kind: "path", path: "right" },
+                      ],
+                    },
+                  }],
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /values\.try_sort\(\|left, right\| \{/u);
+  assert.doesNotMatch(source, /values\n\s+\.try_sort/u);
 });
 
 test("long expression closures use a vertical receiver before expanding the closure body", () => {

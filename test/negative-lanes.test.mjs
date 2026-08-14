@@ -52,7 +52,7 @@ export function mix(a: int32, b: float64): float64 {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_runtime::conversions::i32_to_f64\(a\) \+ b/u);
+  assert.match(text, /a as f64 \+ b/u);
 });
 
 test("dynamic any member access fails closed in strict-native mode", () => {

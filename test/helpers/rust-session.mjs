@@ -42,9 +42,10 @@ export const stringCarrier = { kind: "target-named", id: "rust.std.String" };
 export const unitCarrier = { kind: "tuple", elements: [] };
 export const int32Carrier = { kind: "source-primitive", name: "int32" };
 export const boolCarrier = { kind: "source-primitive", name: "bool" };
+export const neverCarrier = { kind: "target-specific", target: "rust", name: "never" };
 export const storeCarrier = { kind: "target-named", id: "acme.platform.Store" };
 
-export function acmeFilesPackage() {
+export function acmeFilesPackage({ binaryEpilogues } = {}) {
   return createRustProviderPackage({
     id: "acme-files",
     displayName: "Acme files",
@@ -71,6 +72,7 @@ export function acmeFilesPackage() {
       resultCarrier: stringCarrier,
       parameterCarriers: [stringCarrier],
     }],
+    ...(binaryEpilogues === undefined ? {} : { binaryEpilogues }),
     crates: [{ crateName: "acme_files", cargoPath: resolve(fixtureCratesRoot, "acme_files") }],
   });
 }
@@ -83,30 +85,52 @@ export function acmeTestingPackage() {
     modules: [{
       moduleSpecifier: "@acme/testing",
       providerModuleId: "acme.testing",
-      exports: [{
-        id: "@acme/testing::check",
-        name: "check",
-        kind: "function",
-        signatures: [{
-          id: "@acme/testing::check(condition)",
+      exports: [
+        {
+          id: "@acme/testing::check",
           name: "check",
-          parameters: [{ name: "condition", type: { kind: "boolean" } }],
-          returnType: { kind: "void" },
-        }],
-      }],
+          kind: "function",
+          signatures: [{
+            id: "@acme/testing::check(condition)",
+            name: "check",
+            parameters: [{ name: "condition", type: { kind: "boolean" } }],
+            returnType: { kind: "void" },
+          }],
+        },
+        {
+          id: "@acme/testing::fail",
+          name: "fail",
+          kind: "function",
+          signatures: [{
+            id: "@acme/testing::fail(message)",
+            name: "fail",
+            parameters: [{ name: "message", type: { kind: "string" } }],
+            returnType: { kind: "never" },
+          }],
+        },
+      ],
     }],
-    operations: [{
-      exportId: "@acme/testing::check",
-      operationKind: "method",
-      target: { form: "call", path: "acme_testing::check" },
-      resultCarrier: unitCarrier,
-      parameterCarriers: [boolCarrier],
-    }],
+    operations: [
+      {
+        exportId: "@acme/testing::check",
+        operationKind: "method",
+        target: { form: "call", path: "acme_testing::check" },
+        resultCarrier: unitCarrier,
+        parameterCarriers: [boolCarrier],
+      },
+      {
+        exportId: "@acme/testing::fail",
+        operationKind: "method",
+        target: { form: "call", path: "acme_testing::fail" },
+        resultCarrier: neverCarrier,
+        parameterCarriers: [stringCarrier],
+      },
+    ],
     crates: [{ crateName: "acme_testing", cargoPath: resolve(fixtureCratesRoot, "acme_testing") }],
   });
 }
 
-export function acmePlatformPackage({ includeHomeDir = true } = {}) {
+export function acmePlatformPackage({ includeHomeDir = true, includeSetters = false, binaryEpilogues } = {}) {
   return createRustProviderPackage({
     id: "acme-platform",
     displayName: "Acme platform",
@@ -181,8 +205,30 @@ export function acmePlatformPackage({ includeHomeDir = true } = {}) {
         resultCarrier: int32Carrier,
         parameterCarriers: [int32Carrier],
       },
+      ...(includeSetters
+        ? [
+            {
+              exportId: "@acme/platform::Store",
+              memberId: "@acme/platform::Store.count",
+              operationKind: "property-set",
+              target: { form: "receiver-method", name: "set_count" },
+              resultCarrier: unitCarrier,
+              parameterCarriers: [int32Carrier],
+            },
+            {
+              exportId: "@acme/platform::Store",
+              memberId: "@acme/platform::Store.indexer",
+              signatureId: "@acme/platform::Store.indexer(index)",
+              operationKind: "index-set",
+              target: { form: "receiver-method", name: "set" },
+              resultCarrier: unitCarrier,
+              parameterCarriers: [int32Carrier, int32Carrier],
+            },
+          ]
+        : []),
     ].filter((row) => includeHomeDir || row.memberId !== "@acme/platform::Env.homeDir"),
     carrierPaths: { "acme.platform.Store": "acme_platform::Store" },
+    ...(binaryEpilogues === undefined ? {} : { binaryEpilogues }),
     crates: [{ crateName: "acme_platform", cargoPath: resolve(fixtureCratesRoot, "acme_platform") }],
   });
 }
@@ -194,10 +240,10 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
     : { ...target, surfaces };
   const project = { entryPoint, targets: [target] };
   const paths = {
-    projectFilePath: "tsonic.json",
-    projectRoot: ".",
-    outputRoot: "out",
-    targetOutputRoot: "out/rust",
+    projectFilePath: "/src/tsonic.json",
+    projectRoot: "/src",
+    outputRoot: "/src/out",
+    targetOutputRoot: "/src/out/rust",
   };
   const activation = collectCapabilityActivation(files, [...packages, ...capabilities], target.id);
   const selectedSurfaces = (pack.surfaces ?? []).filter((surface) => surfaces.includes(surface.id));
@@ -878,8 +924,8 @@ export function acmeTelemetryCapability() {
     }],
     types: [{ exportId: "telemetry::Meter", targetCarrier: { kind: "target-named", id: "acme.telemetry.Meter" } }],
     operations: [
-      { exportId: "telemetry::createMeter", operationKind: "method", target: { form: "call", path: "acme_telemetry::create_meter", argModes: ["ref"] }, resultCarrier: meterCarrier, parameterCarriers: [stringCarrier], isFallible: true },
-      { exportId: "telemetry::Meter", memberId: "telemetry::Meter.record", operationKind: "method", target: { form: "receiver-method", name: "record", mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [{ kind: "source-primitive", name: "float64" }], isFallible: true, isAsync: true },
+      { exportId: "telemetry::createMeter", operationKind: "method", target: { form: "call", path: "acme_telemetry::create_meter", argModes: ["ref"] }, resultCarrier: meterCarrier, parameterCarriers: [stringCarrier], isFallible: true, errorBoundary: "source-program" },
+      { exportId: "telemetry::Meter", memberId: "telemetry::Meter.record", operationKind: "method", target: { form: "receiver-method", name: "record", mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [{ kind: "source-primitive", name: "float64" }], isFallible: true, errorBoundary: "source-program", isAsync: true },
       { exportId: "telemetry::Meter", memberId: "telemetry::Meter.total", operationKind: "method", target: { form: "receiver-method", name: "total" }, resultCarrier: int32Carrier },
     ],
     carrierPaths: { "acme.telemetry.Meter": "acme_telemetry::Meter" },
@@ -915,7 +961,7 @@ export function acmeLogsinkCapability() {
     operations: [
       { exportId: "logsink::openSink", operationKind: "method", target: { form: "call", path: "acme_logsink::open_sink" }, resultCarrier: sinkCarrier },
       { exportId: "logsink::openSinkNamed", operationKind: "method", target: { form: "call", path: "acme_logsink::openSinkNamed", argModes: ["ref"] }, resultCarrier: sinkCarrier, parameterCarriers: [stringCarrier] },
-      { exportId: "logsink::Sink", memberId: "logsink::Sink.path", operationKind: "property", target: { form: "receiver-method", name: "path" }, resultCarrier: stringCarrier, isFallible: true },
+      { exportId: "logsink::Sink", memberId: "logsink::Sink.path", operationKind: "property", target: { form: "receiver-method", name: "path" }, resultCarrier: stringCarrier, isFallible: true, errorBoundary: "source-program" },
       { exportId: "logsink::Sink", memberId: "logsink::Sink.write", operationKind: "method", target: { form: "receiver-method", name: "write", argModes: ["ref"], mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [stringCarrier] },
     ],
     carrierPaths: { "acme.logsink.Sink": "acme_logsink::Sink" },

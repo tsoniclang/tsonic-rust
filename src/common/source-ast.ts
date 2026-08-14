@@ -76,7 +76,13 @@ export const KindEqualsEqualsEqualsToken = "KindEqualsEqualsEqualsToken";
 export const KindExclamationEqualsEqualsToken = "KindExclamationEqualsEqualsToken";
 export const KindQuestionQuestionToken = "KindQuestionQuestionToken";
 export const KindAmpersandAmpersandToken = "KindAmpersandAmpersandToken";
+export const KindAmpersandToken = "KindAmpersandToken";
 export const KindBarBarToken = "KindBarBarToken";
+export const KindBarToken = "KindBarToken";
+export const KindCaretToken = "KindCaretToken";
+export const KindLessThanLessThanToken = "KindLessThanLessThanToken";
+export const KindGreaterThanGreaterThanToken = "KindGreaterThanGreaterThanToken";
+export const KindGreaterThanGreaterThanGreaterThanToken = "KindGreaterThanGreaterThanGreaterThanToken";
 export const KindEqualsToken = "KindEqualsToken";
 export const KindPlusEqualsToken = "KindPlusEqualsToken";
 export const KindMinusEqualsToken = "KindMinusEqualsToken";
@@ -321,6 +327,16 @@ export function VariableDeclarationList_Declarations(
     return undefined;
   }
   return ast.as.AsVariableDeclarationList(node)?.Declarations?.Nodes;
+}
+
+export function VariableStatement_DeclarationList(
+  ast: AstReader,
+  node: Node | undefined,
+): Node | undefined {
+  if (node === undefined || ast.kindName(node) !== KindVariableStatement) {
+    return undefined;
+  }
+  return ast.as.AsVariableStatement(node)?.DeclarationList;
 }
 
 export function BinaryExpression_Left(ast: AstReader, node: Node | undefined): Node | undefined {

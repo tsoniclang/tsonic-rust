@@ -38,20 +38,22 @@ import {
   rustJsDateTargetType,
   rustJsMapTargetType,
   rustJsSetTargetType,
+  rustJsErrorTargetType,
   rustLocationTargetType,
+  rustNullTargetType,
   rustNullishSourceTargetType,
+  rustNeverTargetType,
   rustOptionTargetType,
   rustSliceMutRefTargetType,
   rustSliceRefTargetType,
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
-  rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
-  rustStructuralObjectCarrierValue,
   rustStructuralObjectTargetType,
   rustStringTargetType,
   rustTupleTargetType,
   rustUnitTargetType,
+  rustUndefinedTargetType,
   rustVecTargetType,
   substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
@@ -74,6 +76,9 @@ export interface RustTargetTypeResolutionOptions {
   readonly providerCarrierPaths: ReadonlyMap<string, string>;
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
+  readonly resolveProjectUnionCarrier: (
+    memberCarriers: readonly TargetTypeRef[],
+  ) => TargetTypeRef | undefined;
 }
 
 export interface RustTargetTypeResolutionContext extends RustSourcePolicyContext {
@@ -133,7 +138,7 @@ export function resolveRustTargetTypeRef(
     if (parameterType === undefined) {
       return undefined;
     }
-    const carrier = resolveRustTargetTypeSyntax(parameterType, context, options, new Set<object>());
+    const carrier = resolveRustAuthoredTargetType(parameterType, context, options, new Set<object>());
     return rustParameterLaneTargetType(carrier, parameterType, context, options);
   }
   const syntax = node === undefined
@@ -164,8 +169,8 @@ function resolveRustTargetTypeSyntax(
     context.facts.get(node, functionPointerFactKey);
   if (functionPointer !== undefined) {
     const parameters = functionPointer.parameters.map((parameter) =>
-      resolveRustTargetTypeSyntax(parameter, context, options, resolving));
-    const result = resolveRustTargetTypeSyntax(functionPointer.result, context, options, resolving);
+      resolveRustAuthoredTargetType(parameter, context, options, resolving));
+    const result = resolveRustAuthoredTargetType(functionPointer.result, context, options, resolving);
     return result === undefined || parameters.some((parameter) => parameter === undefined)
       ? undefined
       : {
@@ -187,8 +192,17 @@ function resolveRustTargetTypeSyntax(
   }
   const { ast, checker } = context;
   const kind = ast.kindName(node);
-  if (kind === "KindNullKeyword" || kind === "KindUndefinedKeyword") {
-    return rustNullishSourceTargetType();
+  if (kind === "KindNullKeyword") {
+    return rustNullTargetType();
+  }
+  if (kind === "KindUndefinedKeyword") {
+    return rustUndefinedTargetType();
+  }
+  if (kind === "KindLiteralType") {
+    const literal = ast.as.AsLiteralTypeNode(node)?.Literal;
+    if (literal !== undefined && ast.kindName(literal) === "KindNullKeyword") {
+      return rustNullTargetType();
+    }
   }
   if (kind === "KindStringKeyword") {
     return rustStringTargetType();
@@ -205,6 +219,9 @@ function resolveRustTargetTypeSyntax(
   if (kind === "KindVoidKeyword") {
     return rustUnitTargetType();
   }
+  if (kind === "KindNeverKeyword") {
+    return rustNeverTargetType();
+  }
   if (kind === "KindFunctionType") {
     return resolveRustTargetType(
       context.semanticsFor(node).getTypeAtLocation(node),
@@ -217,13 +234,13 @@ function resolveRustTargetTypeSyntax(
     const inner = ast.as.AsParenthesizedTypeNode(node)?.Type;
     return inner === undefined
       ? undefined
-      : resolveRustTargetTypeSyntax(inner, context, options, resolving);
+      : resolveRustAuthoredTargetType(inner, context, options, resolving);
   }
   if (kind === "KindArrayType") {
     const elementNode = ArrayTypeNode_ElementType(ast, node);
     const element = elementNode === undefined
       ? undefined
-      : resolveRustTargetTypeSyntax(elementNode, context, options, resolving);
+      : resolveRustAuthoredTargetType(elementNode, context, options, resolving);
     return element === undefined
       ? undefined
       : options.jsEnabled
@@ -234,14 +251,14 @@ function resolveRustTargetTypeSyntax(
     const inner = TypeOperatorNode_Type(ast, node);
     return inner === undefined
       ? undefined
-      : resolveRustTargetTypeSyntax(inner, context, options, resolving);
+      : resolveRustAuthoredTargetType(inner, context, options, resolving);
   }
   if (kind === "KindTupleType") {
     const elementNodes = denseDefined(ast.elements(node));
     if (elementNodes === undefined) {
       return undefined;
     }
-    const elements = elementNodes.map((element) => resolveRustTargetTypeSyntax(element, context, options, resolving));
+    const elements = elementNodes.map((element) => resolveRustAuthoredTargetType(element, context, options, resolving));
     return elements.length > 0 && elements.every((element) => element !== undefined)
       ? rustTupleTargetType(elements as TargetTypeRef[])
       : undefined;
@@ -279,12 +296,17 @@ function resolveRustTargetTypeSyntax(
       const value = semanticMembers.find((member) => member !== nullish);
       const valueCarrier = nullish === undefined || value === undefined
         ? undefined
-        : resolveRustTargetTypeSyntax(value, context, options, resolving);
+        : resolveRustAuthoredTargetType(value, context, options, resolving);
       if (valueCarrier !== undefined) {
         return rustOptionTargetType(valueCarrier);
       }
     }
-    return undefined;
+    return resolveRustTargetType(
+      context.semanticsFor(node).getTypeAtLocation(node),
+      context,
+      options,
+      resolving,
+    );
   }
   if (kind !== "KindTypeReference") {
     return undefined;
@@ -294,7 +316,7 @@ function resolveRustTargetTypeSyntax(
     return undefined;
   }
   const typeArguments = typeArgumentNodes.map((argument) =>
-    resolveRustTargetTypeSyntax(argument, context, options, resolving));
+    resolveRustAuthoredTargetType(argument, context, options, resolving));
   if (typeArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
@@ -321,6 +343,9 @@ function resolveRustTargetTypeSyntax(
     typeArguments as readonly TargetTypeRef[],
     context,
     options,
+    typeName === undefined
+      ? undefined
+      : context.source.navigation.sourceReferenceFor(typeName)?.declaration,
   );
   if (sourceType !== undefined) {
     return sourceType;
@@ -330,6 +355,21 @@ function resolveRustTargetTypeSyntax(
     return typeParameter;
   }
   return undefined;
+}
+
+function resolveRustAuthoredTargetType(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  return resolveRustTargetTypeSyntax(node, context, options, resolving) ??
+    resolveRustTargetType(
+      context.semanticsFor(node).getTypeAtLocation(node),
+      context,
+      options,
+      resolving,
+    );
 }
 
 function resolveReferencedDeclarationType(
@@ -354,7 +394,7 @@ function resolveReferencedDeclarationType(
       }
       const typeNode = Node_Type(ast, declaration);
       if (typeNode !== undefined) {
-        const target = resolveRustTargetTypeSyntax(typeNode, context, options, new Set<object>());
+        const target = resolveRustAuthoredTargetType(typeNode, context, options, new Set<object>());
         if (target !== undefined) {
           return ast.kindName(declaration) === "KindParameter"
             ? rustParameterLaneTargetType(target, typeNode, context, options)
@@ -427,7 +467,10 @@ function resolveRustTargetType(
   resolving.add(type);
   try {
     const { checker, typeShape } = context;
-    if (typeShape.isAny(type) || typeShape.isUnknown(type) || typeShape.isNever(type)) {
+    if (typeShape.isNever(type)) {
+      return rustNeverTargetType();
+    }
+    if (typeShape.isAny(type) || typeShape.isUnknown(type)) {
       return undefined;
     }
     const symbol = checker.getTypeAliasSymbol(type) ?? checker.getTypeSymbol(type);
@@ -520,6 +563,18 @@ function resolveRustTargetType(
   }
 }
 
+export function resolveRustExactNullishValueCarrier(
+  type: Type,
+  queries: SourceFileSemantics,
+): TargetTypeRef | undefined {
+  if (!queries.isNullish(type)) {
+    return undefined;
+  }
+  return queries.isNever(queries.removeMissingOrUndefined(type))
+    ? rustUndefinedTargetType()
+    : rustNullTargetType();
+}
+
 function resolveStructuralObjectType(
   type: Type,
   context: RustTargetTypeResolutionContext,
@@ -545,7 +600,7 @@ function resolveStructuralObjectType(
       Node_Type(context.ast, declaration)).filter((node) => node !== undefined) ?? [];
     const authoredCarriers = authoredTypeNodes.length === projectDeclarations?.length
       ? authoredTypeNodes.map((node) =>
-          resolveRustTargetTypeSyntax(node, context, options, resolving))
+          resolveRustAuthoredTargetType(node, context, options, resolving))
       : [];
     const authoredCarrier = authoredCarriers.length > 0 &&
         authoredCarriers.every((carrier) =>
@@ -630,7 +685,7 @@ function resolveCallableType(
           options,
           resolving,
         )
-      : resolveRustTargetTypeSyntax(authoredType, context, options, resolving);
+      : resolveRustAuthoredTargetType(authoredType, context, options, resolving);
     if (selected === undefined || parameterDeclaration === undefined ||
       context.ast.as.AsParameterDeclaration(parameterDeclaration)?.DotDotDotToken !== undefined) {
       return selected;
@@ -647,7 +702,7 @@ function resolveCallableType(
   const authoredReturn = Node_Type(context.ast, declaration);
   const result = authoredReturn === undefined
     ? resolveRustTargetType(returnType, context, options, resolving)
-    : resolveRustTargetTypeSyntax(authoredReturn, context, options, resolving);
+    : resolveRustAuthoredTargetType(authoredReturn, context, options, resolving);
   return result === undefined
     ? undefined
     : rustCallableTargetType(parameterCarriers as TargetTypeRef[], result);
@@ -711,9 +766,12 @@ function resolveUnion(
   }
   const valueMembers = members.filter((member) => !context.typeShape.isNullish(member));
   const nullishMembers = members.filter((member) => context.typeShape.isNullish(member));
-  if (valueMembers.length === 1 && nullishMembers.length > 0) {
+  if (valueMembers.length === 1 && nullishMembers.length === 1) {
     const value = resolveRustTargetType(valueMembers[0], context, options, resolving);
     return value === undefined ? undefined : rustOptionTargetType(value);
+  }
+  if (valueMembers.length === 1 && nullishMembers.length > 1) {
+    return undefined;
   }
   if (members.length > 0 && members.every((member) => context.typeShape.isStringLike(member))) {
     return rustStringTargetType();
@@ -723,6 +781,13 @@ function resolveUnion(
   }
   if (members.length > 0 && members.every((member) => context.typeShape.isBooleanLike(member))) {
     return rustSourcePrimitiveTargetType("bool");
+  }
+  const memberCarriers = members.map((member) =>
+    resolveRustTargetType(member, context, options, resolving));
+  if (memberCarriers.length > 1 && memberCarriers.every((carrier) => carrier !== undefined)) {
+    return options.resolveProjectUnionCarrier(
+      memberCarriers as readonly TargetTypeRef[],
+    );
   }
   return undefined;
 }
@@ -915,6 +980,9 @@ function resolveSourceProfileCarrierFromArguments(
   if (name === "String") {
     return rustStringTargetType();
   }
+  if (name === "Error" && arguments_.length === 0) {
+    return rustJsErrorTargetType();
+  }
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;
     return output === undefined ? undefined : rustFutureTargetType(output);
@@ -968,14 +1036,20 @@ function resolveProjectSourceCarrier(
   typeArguments: readonly TargetTypeRef[],
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
+  selectedDeclaration?: Node,
 ): TargetTypeRef | undefined {
-  if (symbol === undefined) {
+  const symbolDeclarations = symbol === undefined
+    ? []
+    : denseDefined(context.checker.getSymbolDeclarations(symbol));
+  if (symbolDeclarations === undefined) {
     return undefined;
   }
-  const declarations = denseDefined(context.checker.getSymbolDeclarations(symbol));
-  if (declarations === undefined) {
-    return undefined;
-  }
+  const declarations = selectedDeclaration === undefined
+    ? symbolDeclarations
+    : [
+        selectedDeclaration,
+        ...symbolDeclarations.filter((declaration) => declaration !== selectedDeclaration),
+      ];
   for (const declaration of declarations) {
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
     const sourceType = rustSourceTypeCarrierValue(carrier);
@@ -987,9 +1061,7 @@ function resolveProjectSourceCarrier(
         typeArguments,
       );
     }
-    if (carrier !== undefined && typeArguments.length === 0 &&
-      (rustSourceUnionCarrierValue(carrier) !== undefined ||
-        rustStructuralObjectCarrierValue(carrier) !== undefined)) {
+    if (carrier !== undefined && typeArguments.length === 0) {
       return carrier;
     }
   }

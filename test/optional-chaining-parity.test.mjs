@@ -80,8 +80,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /values\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u);
-  assert.match(source, /\.transpose\(\)\?\s*\.flatten\(\)/u);
+  assert.match(source, /values\s*\.as_ref\(\)\s*\.and_then\(\s*\|__tsonic_optional_receiver/u);
+  assert.doesNotMatch(source, /\.transpose\(\)|\.flatten\(\)/u);
   assert.match(source, /index\(\)/u);
   validateGeneratedProject("optional-element", result.artifacts, { run: true });
 });

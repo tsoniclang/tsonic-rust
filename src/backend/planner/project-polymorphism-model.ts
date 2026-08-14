@@ -14,6 +14,7 @@ import { rustProjectObjectLayout } from "../../source/rust-target-semantics/proj
 import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
 import {
   isRustUnitCarrier,
+  isRustNeverCarrier,
   rustSourceTypeCarrierValue,
 } from "../../source/rust-target-types.js";
 import type {
@@ -30,7 +31,7 @@ import {
   diagnosticInput,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrierInContext } from "./render-types.js";
+import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
 import { planRustCallableParameters } from "./callable-parameters.js";
 import { createRustSyntheticNameState } from "./synthetic-names.js";
 import { planProjectMethod } from "./declarations-nominal.js";
@@ -43,6 +44,7 @@ export interface ProjectFieldPlan {
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
+  readonly origin: "project" | "external";
   readonly initializer?: Node;
 }
 
@@ -93,6 +95,22 @@ export function projectOwnFields(
     return undefined;
   }
   const fields: ProjectFieldPlan[] = [];
+  const externalBase = context.input.projectTypes.externalBaseForDefinition(definition);
+  for (const field of externalBase?.fields ?? []) {
+    const type = rustTypeFromCarrierInContext(field.carrier, context);
+    if (type === undefined) {
+      return undefined;
+    }
+    fields.push({
+      declaration: field.declaration,
+      sourceName: field.sourceName,
+      storageIndex: field.storageIndex,
+      carrier: field.carrier,
+      type,
+      origin: "external",
+    });
+  }
+  const externalFieldCount = fields.length;
   for (const layoutField of layout.fields) {
     const declared = context.input.facts.getRuntimeCarrierFact(layoutField.declaration)?.carrier ??
       context.input.facts.getRuntimeCarrierFact(Node_Type(context.input.ast, layoutField.declaration))?.carrier;
@@ -111,9 +129,10 @@ export function projectOwnFields(
     fields.push({
       declaration: layoutField.declaration,
       sourceName: layoutField.sourceName,
-      storageIndex: layoutField.storageIndex,
+      storageIndex: externalFieldCount + layoutField.storageIndex,
       carrier,
       type,
+      origin: "project",
       ...(initializer === undefined ? {} : { initializer }),
     });
   }
@@ -161,16 +180,17 @@ export function projectCallableShape(
   if (parameterPlan === undefined || returnCarrier === undefined) {
     return undefined;
   }
-  const returnType = isRustUnitCarrier(returnCarrier)
+  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  const returnType = isRustUnitCarrier(returnCarrier) || fallible && isRustNeverCarrier(returnCarrier)
     ? undefined
-    : rustTypeFromCarrierInContext(returnCarrier, context);
-  if (!isRustUnitCarrier(returnCarrier) && returnType === undefined) {
+    : rustReturnTypeFromCarrierInContext(returnCarrier, context);
+  if (!isRustUnitCarrier(returnCarrier) && !(fallible && isRustNeverCarrier(returnCarrier)) && returnType === undefined) {
     return undefined;
   }
   return {
     params: parameterPlan.params,
     ...(returnType === undefined ? {} : { returnType }),
-    fallible: context.input.facts.getFact(member, rustFallibleFactKey) !== undefined,
+    fallible,
     isUnsafe: rustDeclarationRequiresUnsafe(
       member,
       "declaration",
@@ -201,16 +221,16 @@ export function projectMemberImplementation(
 export function projectFieldStoragePath(
   implementation: Node,
   layers: readonly ProjectClassStateLayer[],
-  context: RustPlanContext,
+  _context: RustPlanContext,
 ): readonly number[] | undefined {
-  const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
-  const ownerIndex = layers.findIndex((layer) => layer.definition === owner);
-  const field = ownerIndex < 0
-    ? undefined
-    : layers[ownerIndex]!.fields.find((candidate) => candidate.declaration === implementation);
-  if (field === undefined) {
+  const matches = layers.flatMap((layer, ownerIndex) =>
+    layer.fields
+      .filter((candidate) => candidate.declaration === implementation)
+      .map((field) => ({ ownerIndex, field })));
+  if (matches.length !== 1) {
     return undefined;
   }
+  const { ownerIndex, field } = matches[0]!;
   const path: number[] = [];
   for (let depth = layers.length - 1; depth > ownerIndex; depth -= 1) {
     path.push(0);
@@ -284,6 +304,7 @@ function rustTypeEquals(left: RustType | undefined, right: RustType | undefined)
     case "string":
     case "str-ref":
     case "unit":
+    case "never":
       return true;
     case "named":
       return right.kind === "named" && left.path === right.path &&

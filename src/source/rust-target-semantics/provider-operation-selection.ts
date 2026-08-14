@@ -3,6 +3,7 @@ import type {
 } from "@tsonic/tsts";
 import type {
   RustProviderExportRow,
+  RustProviderOperationKind,
   RustProviderOperationRow,
 } from "../provider-packages/index.js";
 
@@ -13,10 +14,12 @@ interface RustProviderOwnerIdentity {
   readonly moduleSpecifier: string;
 }
 
-export type RustProviderOperationSelection =
-  | { readonly kind: "selected"; readonly row: RustProviderOperationRow }
+export type RustProviderOperationSelection<
+  OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
+> =
+  | { readonly kind: "selected"; readonly row: RustProviderOperationRow<OperationKind> }
   | { readonly kind: "missing" }
-  | { readonly kind: "ambiguous"; readonly rows: readonly RustProviderOperationRow[] };
+  | { readonly kind: "ambiguous"; readonly rows: readonly RustProviderOperationRow<OperationKind>[] };
 
 export type RustProviderExportSelection =
   | { readonly kind: "selected"; readonly row: RustProviderExportRow }
@@ -33,15 +36,15 @@ export function rustProviderOperationOwnerMatches(
     row.moduleSpecifier === identity.moduleSpecifier;
 }
 
-export function selectRustProviderOperation(
+export function selectRustProviderOperation<OperationKind extends RustProviderOperationKind>(
   rows: readonly RustProviderOperationRow[],
   identity: ProviderDeclarationIdentity,
-  operationKind: RustProviderOperationRow["operationKind"],
-): RustProviderOperationSelection {
+  operationKind: OperationKind,
+): RustProviderOperationSelection<OperationKind> {
   if (identity.exportId === undefined) {
     return { kind: "missing" };
   }
-  const identityCandidates = rows.filter((row) =>
+  const identityCandidates = rows.filter((row): row is RustProviderOperationRow<OperationKind> =>
     rustProviderOperationOwnerMatches(row, identity) &&
     row.operationKind === operationKind &&
     row.exportId === identity.exportId &&
@@ -77,7 +80,9 @@ export function selectRustProviderExport(
   return { kind: "ambiguous", rows: candidates };
 }
 
-function uniqueSelection(rows: readonly RustProviderOperationRow[]): RustProviderOperationSelection {
+function uniqueSelection<OperationKind extends RustProviderOperationKind>(
+  rows: readonly RustProviderOperationRow<OperationKind>[],
+): RustProviderOperationSelection<OperationKind> {
   if (rows.length === 0) {
     return { kind: "missing" };
   }

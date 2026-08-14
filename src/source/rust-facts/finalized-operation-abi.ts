@@ -119,6 +119,7 @@ export interface RustFinalizedOperationAbi {
   readonly effects: {
     readonly invocation: "infallible" | "fallible";
     readonly awaiting: "not-applicable" | "infallible" | "fallible";
+    readonly errorBoundary: "none" | "provider-native" | "source-program";
     readonly safety: "safe" | "requires-unsafe";
   };
 }
@@ -142,6 +143,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly errorBoundary?: "provider-native" | "source-program";
   readonly isUnsafe?: boolean;
 }
 
@@ -161,6 +163,9 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
         options.compileTimeSourceArgumentIndexes.some((index) =>
           !Number.isSafeInteger(index) || index < 0 || index >= options.sourceArgumentCarriers.length))) ||
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
+    (options.errorBoundary !== undefined && options.errorBoundary !== "provider-native" &&
+      options.errorBoundary !== "source-program") ||
+    (!options.isFallible && options.errorBoundary !== undefined) ||
     (options.isUnsafe !== undefined && typeof options.isUnsafe !== "boolean")) {
     return undefined;
   }
@@ -235,6 +240,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       awaiting: options.isAsync
         ? options.isFallible ? "fallible" : "infallible"
         : "not-applicable",
+      errorBoundary: options.isFallible ? options.errorBoundary ?? "provider-native" : "none",
       safety: options.isUnsafe ? "requires-unsafe" : "safe",
     },
   };
@@ -254,6 +260,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   ) !== undefined ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
     (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
+    (abi.effects.errorBoundary !== "none" && abi.effects.errorBoundary !== "provider-native" &&
+      abi.effects.errorBoundary !== "source-program") ||
     (abi.effects.safety !== "safe" && abi.effects.safety !== "requires-unsafe")) {
     return false;
   }
@@ -349,12 +357,16 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   }
   if (abi.result.kind === "sync") {
     return abi.effects.awaiting === "not-applicable" &&
+      ((abi.effects.invocation === "infallible" && abi.effects.errorBoundary === "none") ||
+        (abi.effects.invocation === "fallible" && abi.effects.errorBoundary !== "none")) &&
       finalizedConversionIsValid(abi.result.conversion) &&
       rustTargetTypeRefEquals(abi.result.rawCarrier, abi.result.conversion.sourceCarrier) &&
       rustTargetTypeRefEquals(abi.result.carrier, abi.result.conversion.targetCarrier);
   }
   return abi.effects.invocation === "infallible" &&
     (abi.effects.awaiting === "infallible" || abi.effects.awaiting === "fallible") &&
+    ((abi.effects.awaiting === "infallible" && abi.effects.errorBoundary === "none") ||
+      (abi.effects.awaiting === "fallible" && abi.effects.errorBoundary !== "none")) &&
     finalizedConversionIsValid(abi.result.awaitedConversion) &&
     rustTargetTypeRefEquals(abi.result.awaitedRawCarrier, abi.result.awaitedConversion.sourceCarrier) &&
     rustTargetTypeRefEquals(abi.result.awaitedCarrier, abi.result.awaitedConversion.targetCarrier) &&
@@ -478,9 +490,36 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
       isRustTargetTypeRef(value.conversion.source) &&
       isRustTargetTypeRef(value.conversion.target) &&
       typeof value.conversion.variantName === "string" &&
-      value.conversion.variantName.length > 0)) &&
+      value.conversion.variantName.length > 0) ||
+    (value.conversion.kind === "bottom-coercion" &&
+      hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.conversion.source) &&
+      isRustTargetTypeRef(value.conversion.target)) ||
+    (value.conversion.kind === "option-map" &&
+      hasExactKeys(value.conversion, ["kind", "elementConversion"]) &&
+      isNonOptionValueConversion(value.conversion.elementConversion))) &&
     rustValueConversionContract(value.conversion as RustValueConversion) !== undefined &&
     typeof value.fallible === "boolean";
+}
+
+function isNonOptionValueConversion(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (value.kind === "semantic-conversion" &&
+      hasExactKeys(value, ["kind", "id"]) && typeof value.id === "string") ||
+    (value.kind === "numeric-promotion" &&
+      hasExactKeys(value, ["kind", "source", "target"]) &&
+      typeof value.source === "string" && typeof value.target === "string") ||
+    (value.kind === "raw-pointer-mut-to-const" &&
+      hasExactKeys(value, ["kind", "pointee"]) && isRustTargetTypeRef(value.pointee)) ||
+    (value.kind === "source-union-variant" &&
+      hasExactKeys(value, ["kind", "source", "target", "variantName"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      typeof value.variantName === "string" && value.variantName.length > 0) ||
+    (value.kind === "bottom-coercion" &&
+      hasExactKeys(value, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target));
 }
 
 function isProviderConstant(value: unknown): value is RustProviderConstantArgument {
@@ -517,9 +556,11 @@ function isOperationResult(value: unknown): value is RustFinalizedOperationResul
 }
 
 function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"] {
-  return isRecord(value) && hasExactKeys(value, ["invocation", "awaiting", "safety"]) &&
+  return isRecord(value) && hasExactKeys(value, ["invocation", "awaiting", "errorBoundary", "safety"]) &&
     (value.invocation === "infallible" || value.invocation === "fallible") &&
     (value.awaiting === "not-applicable" || value.awaiting === "infallible" || value.awaiting === "fallible") &&
+    (value.errorBoundary === "none" || value.errorBoundary === "provider-native" ||
+      value.errorBoundary === "source-program") &&
     (value.safety === "safe" || value.safety === "requires-unsafe");
 }
 

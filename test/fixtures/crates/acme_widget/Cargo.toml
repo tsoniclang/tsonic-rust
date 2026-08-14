@@ -10,3 +10,6 @@ path = "src/lib.rs"
 [features]
 default = []
 extras = []
+
+[dependencies]
+tsonic_rust_runtime = { path = "../../../../../rust-runtime/crates/tsonic_rust_runtime" }

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustProviderPackage } from "../dist/index.js";
 import {
+  acmeTestingPackage,
   artifactText,
   compileRust,
 } from "./helpers/rust-session.mjs";
@@ -94,6 +95,29 @@ export function identity(value: int32): int32 {
   assert.doesNotMatch(text, / as /u);
 });
 
+test("assertion results finalize before their containing call selects argument carriers", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+function accept(value: int32): int32 {
+  return value;
+}
+
+export function use(): int32 {
+  return accept(250 as int32);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.equal(text.match(/f64_to_i32/gu)?.length, 1);
+  validateGeneratedProject("selected-assertion-call-argument", result.artifacts);
+});
+
 test("unsupported checked assertions fail closed at Rust target analysis", () => {
   const { result } = compileRust({
     files: {
@@ -153,6 +177,37 @@ export function pick(pair: [int32, int32], flag: boolean): int32 {
   }]);
 });
 
+test("flow-narrowed indexes consume the exact selected argument type", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+function parseIndex(text: string): int32 | undefined {
+  if (text.length === 0) return undefined;
+  return 0;
+}
+
+export function read(values: readonly int32[], text: string): int32 {
+  const index = parseIndex(text);
+  if (index !== undefined) {
+    return values[index];
+  }
+  return 0;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /i32_to_f64\(\s*match index\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => \*__tsonic_flow_value/u,
+  );
+  validateGeneratedProject("selected-flow-narrowed-index", result.artifacts);
+});
+
 test("for-of lowers only from selected iteration element evidence", () => {
   const { result } = compileRust({
     files: {
@@ -190,11 +245,297 @@ export function length(value: string | null): int32 | undefined {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(
-    artifactText(result, "src/index.rs"),
-    /value\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u,
-  );
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u);
+  assert.doesNotMatch(source, /value\s*\.clone\(\)/u);
   validateGeneratedProject("selected-optional-property", result.artifacts);
+});
+
+test("project property access consumes the checker-selected narrowed receiver", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Counter {
+  value: int32 = 1;
+}
+
+export function read(value: Counter | undefined): int32 {
+  if (value === undefined) return 0;
+  return value.value + value.value;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(
+    source,
+    /match value\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => __tsonic_flow_value\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\}\s*\.__tsonic_state/su,
+  );
+  assert.equal(
+    source.match(/match value\.as_ref\(\)/gsu)?.length,
+    2,
+  );
+  assert.doesNotMatch(source, /value\.clone\(\)\.as_ref\(\)/u);
+  validateGeneratedProject("selected-narrowed-project-property", result.artifacts);
+});
+
+test("project instanceof and assertions use closed generated downcast routes", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "selected_project_downcast" },
+    },
+    files: {
+      "model.ts": `
+export class JsonValue { constructor() {} }
+
+export class JsonTagged extends JsonValue { constructor() { super(); } }
+
+export class JsonString extends JsonTagged {
+  value: string;
+  constructor(value: string) { super(); this.value = value; }
+}
+
+export class JsonArray extends JsonValue {}
+
+export class JsonObject extends JsonValue {
+  value: JsonValue | undefined;
+  constructor(value: JsonValue | undefined) { super(); this.value = value; }
+  getValue(): JsonValue | undefined { return this.value; }
+}
+`,
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+import { JsonArray, JsonObject, JsonString as SelectedString, JsonTagged, JsonValue } from "./model.js";
+
+function read(value: JsonValue): string {
+  if (value instanceof SelectedString) return value.value;
+  if (value instanceof JsonArray) return "array";
+  return "other";
+}
+
+function asserted(value: JsonValue): string {
+  return (value as SelectedString).value;
+}
+
+function readTagged(value: JsonTagged): string {
+  return value instanceof SelectedString ? value.value : "other";
+}
+
+function present(value: SelectedString | undefined): boolean {
+  return value instanceof SelectedString;
+}
+
+function isValue(value: SelectedString): boolean {
+  return value instanceof JsonValue;
+}
+
+function readNested(value: JsonValue): string {
+  if (value instanceof JsonObject) {
+    const selected = value.getValue();
+    if (selected instanceof SelectedString) return selected.value;
+  }
+  return "other";
+}
+
+let evaluations: int32 = 0;
+
+function selected(value: JsonValue): JsonValue {
+  evaluations += 1;
+  return value;
+}
+
+export function main(): void {
+  const text: JsonValue = new SelectedString("selected");
+  const array: JsonValue = new JsonArray();
+  check(read(text) === "selected");
+  check(read(array) === "array");
+  check(asserted(text) === "selected");
+  check(readTagged(new SelectedString("tagged")) === "tagged");
+  check(present(text as SelectedString));
+  check(!present(undefined));
+  check(isValue(text as SelectedString));
+  check(readNested(new JsonObject(text)) === "selected");
+  check(selected(text) instanceof SelectedString);
+  check(evaluations === 1);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const model = artifactText(result, "src/model.rs");
+  const index = artifactText(result, "src/index.rs");
+  assert.match(model, /fn __tsonic_downcast(?:_[0-9]+)+\(\s*self: std::rc::Rc<Self>,?\s*\)/u);
+  assert.match(index, /__tsonic_downcast(?:_[0-9]+)+\(\)\s*\.is_some\(\)/u);
+  assert.match(index, /__tsonic_downcast(?:_[0-9]+)+\(\)\s*\.unwrap\(\)/u);
+  const run = validateGeneratedProject("selected-project-downcast", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
+test("narrowed project values remain reusable across repeated selected reads", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "repeated_project_downcast" },
+    },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class Value {}
+
+class TextValue extends Value {
+  text: string;
+  constructor(text: string) { super(); this.text = text; }
+}
+
+function readTwice(value: Value): string {
+  if (value instanceof TextValue) {
+    return value.text + value.text;
+  }
+  return "";
+}
+
+export function main(): void {
+  check(readTwice(new TextValue("a")) === "aa");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let __tsonic_downcast_value_[0-9]+ = &value;/u);
+  assert.equal(validateGeneratedProject("repeated-project-downcast", result.artifacts, { run: true }).status, 0);
+});
+
+test("exact null values remain closed inside project polymorphic state", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "project_null_state" },
+    },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class Value {}
+
+class NullValue extends Value {
+  value: null;
+
+  constructor() {
+    super();
+    this.value = null;
+  }
+}
+
+function isNull(value: Value): boolean {
+  return value instanceof NullValue && value.value === null;
+}
+
+function isExactlyUndefined(value: string | undefined): boolean {
+  return value === undefined && value !== null;
+}
+
+function isExactlyNull(value: string | null): boolean {
+  return value === null && value !== undefined;
+}
+
+function isAlwaysPresent(value: string): boolean {
+  return value !== undefined;
+}
+
+export function main(): void {
+  check(isNull(new NullValue()));
+  check(isExactlyUndefined(undefined));
+  check(isExactlyNull(null));
+  check(isAlwaysPresent("present"));
+  check(\`value=\${null}\` === "value=null");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value: rt::Null/u);
+  assert.match(source, /rt::Null/u);
+  assert.equal(validateGeneratedProject("project-null-state", result.artifacts, { run: true }).status, 0);
+});
+
+test("recursive project calls consume their finalized selected signature", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "project_recursion" },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+function sumTo(value: int32): int32 {
+  if (value <= 0) return 0;
+  return value + sumTo(value - 1);
+}
+
+const sumToArrow = (value: int32): int32 => {
+  if (value <= 0) return 0;
+  return value + sumToArrow(value - 1);
+};
+
+function localSumTo(value: int32): int32 {
+  const visit = (current: int32): int32 =>
+    current <= 0 ? 0 : current + visit(current - 1);
+  return visit(value);
+}
+
+export function main(): void {
+  check(sumTo(4) === 10);
+  check(sumToArrow(4) === 10);
+  check(localSumTo(4) === 10);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /sumTo\(value - 1\)/u);
+  assert.match(source, /sumToArrow/u);
+  assert.equal(validateGeneratedProject("project-recursion", result.artifacts, { run: true }).status, 0);
+});
+
+test("generic project downcasts fail closed without a closed target carrier", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+class Value {}
+class Box<T> extends Value { value!: T; }
+
+export function isBox(value: Value): boolean {
+  return value instanceof Box;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
+    code: "RUST_PROJECT_TYPE_TEST_EVIDENCE_MISSING",
+    message: "Checked instanceof requires exact project source, concrete class declaration, and closed target carrier evidence.",
+  }]);
 });
 
 test("optional-chain selection fails closed without every exact carrier", () => {
@@ -264,7 +605,7 @@ export function currentPlatform(platform: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /pub fn currentPlatform\(platform: String\) -> String \{\n    platform\n\}/u);
+  assert.match(artifactText(result, "src/index.rs"), /pub fn currentPlatform\(platform: String\) -> String \{\n    platform\.clone\(\)\n\}/u);
 });
 
 test("a selected provider value without a target relation fails closed", () => {

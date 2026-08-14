@@ -11,3 +11,12 @@ export type {
   RustArtifactSnapshot,
   RustSourceCallableContract,
 } from "./contracts.js";
+export {
+  planRustSourceOutputIdentities,
+  rustModuleNameForSourcePath,
+} from "./source-output-identities.js";
+export type {
+  RustSourceFileOutputIdentity,
+  RustSourceOutputIdentityPlan,
+  RustSourceOutputIdentityPlannerHost,
+} from "./source-output-identities.js";

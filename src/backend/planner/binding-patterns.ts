@@ -99,7 +99,7 @@ export function planRustBindingPattern(
       return undefined;
     }
     if (nameKind === KindIdentifier) {
-      const bindingName = rustSourceName(context, context.input.ast.text(name));
+      const bindingName = rustSourceName(context.input.ast.text(name));
       if (!isValidRustIdentifier(bindingName)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, name),
@@ -410,6 +410,7 @@ function normalizeBindingValue(
   });
   return {
     kind: "try",
+    errorDomain: context.errorDomain,
     expr: {
       kind: "method-call",
       receiver: flattened,

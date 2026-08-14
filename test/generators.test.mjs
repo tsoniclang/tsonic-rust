@@ -310,7 +310,7 @@ export function close(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /generator\.throw_value\(rt::JsError::error/u);
+  assert.match(source, /generator\s*\.throw_value\(rt::JsError::error/u);
   validateGeneratedProject("generator-throw", result.artifacts);
 });
 

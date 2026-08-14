@@ -1,11 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import {
-  BinaryExpression_Left,
-  BinaryExpression_OperatorToken,
-  BinaryExpression_Right,
-  KindEqualsToken,
   KindIdentifier,
-  Node_Expression,
   Node_Initializer,
   Node_Name,
   Node_Type,
@@ -20,14 +15,14 @@ import type {
 } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
-import { planBlockLike } from "./statements.js";
+import { planBlockLike, planStatementSequence } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
-import { rustTypeFromCarrierInContext } from "./render-types.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustUnionDeclarationFactKey } from "../../source/rust-facts/keys.js";
+import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustTypeAliasDeclarationFactKey } from "../../source/rust-facts/keys.js";
 import { applyRustTailShape, rustBlockTerminates } from "./functions.js";
 import { applyFallibleShape } from "./fallible-shape.js";
-import { isRustUnitCarrier } from "../../source/rust-target-types.js";
+import { isRustNeverCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";
 import { rustProjectMemberSlotName } from "../../source/rust-target-semantics/project-type-policy.js";
@@ -50,7 +45,7 @@ import {
 import { rustProjectTypeParameters } from "./project-polymorphism-names.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
-  prepareRustPreconstructionExpression,
+  prepareRustPreconstructionNode,
   type RustPreconstructionFieldValue,
 } from "./preconstruction-fields.js";
 
@@ -140,14 +135,19 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       if (ast.hasModifierKind(member, "static")) {
         continue;
       }
-      const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
+      const fieldNameNode = ast.name(member);
+      const sourceFieldName = ast.text(fieldNameNode ?? member);
+      const privateField = fieldNameNode !== undefined && ast.is.IsPrivateIdentifier(fieldNameNode);
+      const fieldName = privateField
+        ? "private_field"
+        : rustPublicName(sourceFieldName);
       const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
       const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
       if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, member),
           "rust.backend.class",
-          `Class field '${fieldName}' has no supported Rust carrier fact.`,
+          `Class field '${sourceFieldName}' has no supported Rust storage identity or carrier fact.`,
         ));
         failed = true;
         continue;
@@ -266,7 +266,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   context.usedAliases?.add("rt");
   const exported = ast.hasModifierKind(node, "export");
   const generatedStructAttributes = [
-    ...(structAttributes(className, fields.map((field) => ({ name: field.targetName }))) ?? []),
+    ...(structAttributes(className) ?? []),
     ...(exported ? [] : ["#[allow(dead_code)]"]),
   ];
   const stateField: RustStructField = {
@@ -278,7 +278,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: className,
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
-    visibility: exported ? "public" : "private",
+    visibility: exported ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [stateField],
@@ -331,11 +331,19 @@ function planConstructor(
     return undefined;
   }
   const params = parameterPlan.params;
+  const fallible = context.input.facts.getFact(
+    member ?? classDeclaration,
+    rustFallibleFactKey,
+  ) !== undefined;
+  if (fallible) {
+    context.usedAliases?.add("rt");
+  }
   const constructorContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "named", path: className },
+    ...(fallible ? { fallibleContext: true } : {}),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -345,11 +353,34 @@ function planConstructor(
   if (parameterStatements === undefined) {
     return undefined;
   }
-  const values = new Map<string, RustExpr>();
+  const values = new Map<Node, RustExpr>();
+  const fieldSlots: RustPreconstructionFieldValue[] = [];
   const availableFields: RustPreconstructionFieldValue[] = [];
   const statements: RustStmt[] = [...parameterStatements];
+  for (const field of fields) {
+    const valueName = allocateRustSyntheticName(
+      syntheticNames,
+      `field_${rustLocalBindingName(field.targetName)}`,
+    );
+    const expression: RustExpr = { kind: "path", path: valueName };
+    const slot = {
+      declaration: field.declaration,
+      storageIndex: field.storageIndex,
+      carrier: field.carrier,
+      expression,
+    };
+    statements.push({
+      kind: "let",
+      name: valueName,
+      mutable: true,
+      type: field.type,
+      attrs: ["#[allow(unused_mut)]"],
+    });
+    values.set(field.declaration, expression);
+    fieldSlots.push(slot);
+  }
   const evaluateField = (field: PlannedProjectObjectField, expression: Node): boolean => {
-    const expressionContext = prepareRustPreconstructionExpression(
+    const expressionContext = prepareRustPreconstructionNode(
       expression,
       availableFields,
       constructorContext,
@@ -361,25 +392,17 @@ function planConstructor(
     if (value === undefined) {
       return false;
     }
-    const valueName = allocateRustSyntheticName(
-      syntheticNames,
-      `field_${rustLocalBindingName(field.targetName)}`,
-    );
-    statements.push({ kind: "let", name: valueName, mutable: false, init: value });
-    const fieldValue: RustExpr = { kind: "path", path: valueName };
-    values.set(field.sourceName, fieldValue);
+    const slot = fieldSlots.find((candidate) => candidate.declaration === field.declaration);
+    if (slot === undefined) {
+      return false;
+    }
+    statements.push({ kind: "assign", target: slot.expression, operator: "=", value });
     const existing = availableFields.findIndex((candidate) =>
       candidate.declaration === field.declaration);
-    const available = {
-      declaration: field.declaration,
-      storageIndex: field.storageIndex,
-      carrier: field.carrier,
-      expression: fieldValue,
-    };
     if (existing < 0) {
-      availableFields.push(available);
+      availableFields.push(slot);
     } else {
-      availableFields[existing] = available;
+      availableFields[existing] = slot;
     }
     return true;
   };
@@ -389,56 +412,24 @@ function planConstructor(
     }
   }
   const bodyStatements = body === undefined ? [] : ast.statements(body);
-  for (const statement of bodyStatements) {
-    if (statement === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, body ?? classDeclaration),
-        "rust.backend.constructor-statement",
-        "Constructor body contains an undefined statement slot.",
-      ));
+  if (body !== undefined) {
+    const bodyContext = prepareRustPreconstructionNode(
+      body,
+      fieldSlots,
+      constructorContext,
+    );
+    if (bodyContext === undefined) {
       return undefined;
     }
-    const expression = ast.kindName(statement) === "KindExpressionStatement" ? Node_Expression(ast, statement) : undefined;
-    const operatorToken = expression === undefined ? undefined : BinaryExpression_OperatorToken(ast, expression);
-    const left = expression === undefined ? undefined : BinaryExpression_Left(ast, expression);
-    const right = expression === undefined ? undefined : BinaryExpression_Right(ast, expression);
-    const receiver = left === undefined ? undefined : Node_Expression(ast, left);
-    const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
-    const fieldNameNode = left === undefined ? undefined : Node_Name(ast, left);
-    const sourceFieldName = fieldNameNode === undefined ? "" : ast.text(fieldNameNode);
-    const field = fields.find((candidate) => candidate.sourceName === sourceFieldName);
-    const isFieldInit =
-      expression !== undefined &&
-      operatorToken !== undefined &&
-      ast.kindName(operatorToken) === KindEqualsToken &&
-      left !== undefined &&
-      ast.kindName(left) === "KindPropertyAccessExpression" &&
-      (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") &&
-      field !== undefined &&
-      right !== undefined;
-    if (!isFieldInit) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, statement),
-        "rust.backend.class",
-        "Constructors support field initialization statements whose exact target is `this.<field>`.",
-      ));
+    const bodyPlan = planStatementSequence(bodyStatements, body, bodyContext);
+    if (bodyPlan === undefined) {
       return undefined;
     }
-    if (!evaluateField(field, right)) {
-      return undefined;
-    }
-  }
-  if (values.size !== fields.length) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, member ?? classDeclaration),
-      "rust.backend.class",
-      "Construction must initialize every declared field through a field initializer or constructor assignment.",
-    ));
-    return undefined;
+    statements.push(...bodyPlan.statements);
   }
   const fieldValues: RustExpr[] = [];
   for (const field of fields) {
-    const value = values.get(field.sourceName);
+    const value = values.get(field.declaration);
     if (value === undefined) {
       return undefined;
     }
@@ -461,13 +452,18 @@ function planConstructor(
       ? "public"
       : "private",
     ...(constructorAttributes.length === 0 ? {} : { attrs: constructorAttributes }),
+    ...(fallible ? { fallible: true } : {}),
     params,
     returnType: { kind: "named", path: className },
     body: {
       ...(parameterPlan.bodyInnerAttrs.length === 0
         ? {}
         : { innerAttrs: parameterPlan.bodyInnerAttrs }),
-      statements,
+      ...applyFallibleShape({ statements }, {
+        fallible,
+        hasReturnValue: true,
+        errorDomain: context.errorDomain,
+      }),
     },
   };
 }
@@ -493,9 +489,7 @@ export function planProjectMethod(
     isUnsafe,
     context.input,
   );
-  const methodName = rustPublicName(sourceMethodName ?? "").name;
-  const nonSnakeSeen = { value: rustPublicName(sourceMethodName ?? "").needsAllow };
-  context = { ...context, nonSnakeSeen };
+  const methodName = rustPublicName(sourceMethodName ?? "");
   if (!isValidRustIdentifier(methodName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -543,9 +537,13 @@ export function planProjectMethod(
     ));
     return undefined;
   }
+  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const isUnit = isRustUnitCarrier(returnCarrier);
-  const returnType = isUnit ? undefined : rustTypeFromCarrierInContext(returnCarrier, context);
-  if (!isUnit && returnType === undefined) {
+  const isNever = isRustNeverCarrier(returnCarrier);
+  const returnType = isUnit || fallible && isNever
+    ? undefined
+    : rustReturnTypeFromCarrierInContext(returnCarrier, context);
+  if (!isUnit && !(fallible && isNever) && returnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode ?? member),
       "rust.backend.class",
@@ -553,10 +551,8 @@ export function planProjectMethod(
     ));
     return undefined;
   }
-  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const isStatic = ast.hasModifierKind(member, "static");
   const methodAttributes = [
-    ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
     ...(isStatic && methodName === "new" ? ["#[allow(clippy::new_ret_no_self)]"] : []),
     ...(ast.hasModifierKind(ast.parent(member) ?? member, "export") ? [] : ["#[allow(dead_code)]"]),
     ...safetyAttributes,
@@ -617,7 +613,7 @@ export function planProjectMethod(
   if (body === undefined) {
     return undefined;
   }
-  if (generatorFact === undefined && returnType !== undefined && !rustBlockTerminates(body)) {
+  if (generatorFact === undefined && !isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
       "rust.backend.return-flow",
@@ -681,8 +677,11 @@ export function planProjectMethod(
               async: true,
               body: applyFallibleShape(
                 applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
-                true,
-                !isRustUnitCarrier(generatorFact.returnType),
+                {
+                  fallible: true,
+                  hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
+                  errorDomain: context.errorDomain,
+                },
               ),
             }],
           },
@@ -703,8 +702,11 @@ export function planProjectMethod(
     body: {
       ...applyFallibleShape(
         applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-        fallible,
-        returnType !== undefined,
+        {
+          fallible,
+          hasReturnValue: returnType !== undefined,
+          errorDomain: context.errorDomain,
+        },
       ),
       ...(parameterPlan.bodyInnerAttrs.length === 0
         ? {}
@@ -785,7 +787,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
   return [{
     kind: "enum",
     name: enumName,
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
+    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
     variants,
   }];
@@ -848,7 +850,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
+    const fieldName = rustPublicName(ast.text(ast.name(member) ?? member));
     const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
     const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
     if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -884,10 +886,10 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   return [{
     kind: "struct",
     name: interfaceName,
-    ...(structAttributes(interfaceName, fields.map((field) => ({ name: field.targetName }))) === undefined
+    ...(structAttributes(interfaceName) === undefined
       ? {}
-      : { attrs: structAttributes(interfaceName, fields.map((field) => ({ name: field.targetName }))) }),
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
+      : { attrs: structAttributes(interfaceName) }),
+    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [{
@@ -898,16 +900,16 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   }];
 }
 
-export function planUnionAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  const fact = context.input.facts.getFact(node, rustUnionDeclarationFactKey);
+  const fact = context.input.facts.getFact(node, rustTypeAliasDeclarationFactKey);
   const nameNode = Node_Name(ast, node);
   const aliasName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
-      "rust.backend.union",
+      "rust.backend.type-alias",
       "Type aliases require one finalized Rust alias representation.",
     ));
     return undefined;
@@ -930,7 +932,7 @@ export function planUnionAliasDeclaration(node: Node, context: RustPlanContext):
   return [{
     kind: "enum",
     name: aliasName,
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "private",
+    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
     derives: fact.kind === "string-literal"
       ? ["Clone", "Copy", "Debug", "PartialEq"]
       : ["Clone", "Debug", "PartialEq"],
@@ -943,13 +945,8 @@ export function planUnionAliasDeclaration(node: Node, context: RustPlanContext):
   }];
 }
 
-// Scoped lint allowances for a generated struct: field names may be
-// non-snake, and the authored type name may be non-CamelCase.
-function structAttributes(typeName: string, fields: readonly { readonly name: string }[]): readonly string[] | undefined {
+function structAttributes(typeName: string): readonly string[] | undefined {
   const attrs: string[] = [];
-  if (fields.some((field) => rustPublicName(field.name).needsAllow)) {
-    attrs.push("#[allow(non_snake_case)]");
-  }
   if (!/^[A-Z][A-Za-z0-9]*$/u.test(typeName)) {
     attrs.push("#[allow(non_camel_case_types)]");
   }

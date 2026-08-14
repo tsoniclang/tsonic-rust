@@ -77,6 +77,7 @@ import {
   isRustStringCarrier,
   isRustUnitCarrier,
   rustLocationTargetType,
+  rustOptionElementCarrier,
 } from "../../source/rust-target-types.js";
 import { validateRustFinalizedOperationAbi } from "../../source/rust-facts/finalized-operation-abi.js";
 import { rustTargetOperationIsDirectLocation } from "../../source/rust-facts/target-operation.js";
@@ -92,7 +93,6 @@ import {
   finishRustSourceAccessorCall,
   planRustSourceAccessorCall,
   providerSelectedCallMatches,
-  requireProviderArgumentPassingFacts,
   sourceAccessorSelectedOperationMatches,
   sourceFieldSelectedOperationMatches,
   sourceStaticFieldSelectedOperationMatches,
@@ -226,7 +226,7 @@ export function planBlockLike(node: Node, context: RustPlanContext): RustBlock |
   return planStatementSequence(children, node, context);
 }
 
-function planStatementSequence(
+export function planStatementSequence(
   children: readonly (Node | undefined)[],
   diagnosticNode: Node,
   context: RustPlanContext,
@@ -333,7 +333,7 @@ function planResourceDeclarationScope(
   const nameNode = Node_Name(context.input.ast, declaration);
   const resourceName = nameNode === undefined
     ? ""
-    : rustSourceName(context, context.input.ast.text(nameNode));
+    : rustSourceName(context.input.ast.text(nameNode));
   if (declarations === undefined || !isValidRustIdentifier(resourceName)) {
     return undefined;
   }
@@ -523,7 +523,22 @@ function planResourceCleanup(
     disposal = { kind: "await", expr: disposal };
   }
   if (fact.disposal.fallible) {
-    disposal = { kind: "try", expr: disposal };
+    if (fact.disposal.target.form === "provider" &&
+      fact.disposal.errorBoundary === "provider-native") {
+      disposal = {
+        kind: "method-call",
+        receiver: disposal,
+        method: "map_err",
+        args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+      };
+    }
+    disposal = {
+      kind: "try",
+      expr: disposal,
+      errorDomain: fact.disposal.target.form === "source-method"
+        ? context.errorDomain
+        : "runtime",
+    };
   }
   const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };
   if (!fact.nullable) {
@@ -620,6 +635,9 @@ function planLoopExitStatement(
     return undefined;
   }
   target.used.value = true;
+  if (completion === "break" && target.kind === "loop") {
+    target.breakUsed.value = true;
+  }
   if (context.completionBoundary === target.resourceBoundary) {
     return completion === "continue"
       ? [...(target.kind === "loop" ? target.continuePrelude : []), { kind: "continue", label: target.label }]
@@ -657,6 +675,9 @@ function rustBlockDefinitelyExits(block: RustBlock): boolean {
   if (last.kind === "return" || last.kind === "tail" || last.kind === "throw" ||
     last.kind === "break" || last.kind === "continue" ||
     last.kind === "completion-exit") {
+    return true;
+  }
+  if (last.kind === "expr" && last.expr.kind === "bottom") {
     return true;
   }
   if (last.kind === "scope" || last.kind === "unsafe-scope") {
@@ -726,7 +747,7 @@ function planVariableDeclaration(
     return planBindingVariableDeclaration(declaration, nameNode, context);
   }
   const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const name = rustSourceName(context, sourceName);
+  const name = rustSourceName(sourceName);
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -777,9 +798,12 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  if (initializer === undefined && rustType === undefined) {
-    rustType = rustTypeFromCarrierInContext(declarationCarrier, context);
-    if (rustType === undefined) {
+  if (rustType === undefined) {
+    const renderedCarrier = locationStorage === undefined
+      ? declarationCarrier
+      : rustLocationTargetType(locationStorage.valueCarrier);
+    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
+    if (rustType === undefined && initializer === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, declaration),
         "rust.backend.variable",
@@ -823,6 +847,8 @@ function planVariableDeclaration(
       context.usedAliases?.add("rt");
       init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
     }
+  } else if (rustOptionElementCarrier(declarationCarrier) !== undefined && rustType !== undefined) {
+    init = { kind: "associated-value", owner: rustType, name: "None" };
   }
   if (initializer !== undefined && init === undefined) {
     return undefined;
@@ -932,9 +958,12 @@ function planExpressionAsStatement(
         return undefined;
       }
       const sourceField = context.input.facts.getFact(left, rustTargetOperationFactKey);
-      const target = ast.kindName(left) === KindIdentifier
+      const storageOverride = context.expressionOverrides?.get(left);
+      const target = storageOverride?.valueForm === "storage"
+        ? storageOverride.expression
+        : ast.kindName(left) === KindIdentifier
         ? (() => {
-            const path = rustSourceName(context, ast.text(left));
+            const path = rustSourceName(ast.text(left));
             return isValidRustIdentifier(path) ? { kind: "path" as const, path } : undefined;
           })()
         : rustTargetOperationIsDirectLocation(
@@ -1115,7 +1144,7 @@ function planExpressionAsStatement(
               },
             }];
       }
-      if (sourceField?.kind === "source-field") {
+      if (storageOverride?.valueForm !== "storage" && sourceField?.kind === "source-field") {
         if (!sourceFieldSelectedOperationMatches(left, sourceField, context)) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, left),
@@ -1125,7 +1154,10 @@ function planExpressionAsStatement(
           return undefined;
         }
         const receiverNode = Node_Expression(ast, left);
-        const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+        const plannedReceiver = receiverNode === undefined
+          ? undefined
+          : planExpression(receiverNode, context);
+        const receiver = plannedReceiver;
         if (receiver === undefined) {
           return undefined;
         }
@@ -1310,7 +1342,6 @@ function planExpressionAsStatement(
           left,
           context,
           planExpression,
-          false,
         );
         if (promotedLocation.kind === "promoted") {
           if (promotedLocation.expression === undefined) {
@@ -1608,6 +1639,16 @@ function rustBinaryOperatorForAssignment(
       return "/";
     case "%=":
       return "%";
+    case "&=":
+      return "&";
+    case "|=":
+      return "|";
+    case "^=":
+      return "^";
+    case "<<=":
+      return "<<";
+    case ">>=":
+      return ">>";
     case "=":
       return undefined;
   }
@@ -2035,12 +2076,22 @@ function planWhileStatement(
     IterationStatement_Statement(context.input.ast, node),
     withRustControlTarget(context, target),
   );
-  return body === undefined ? undefined : [{
-    kind: "while",
-    ...(target.used.value ? { label: target.label } : {}),
-    condition: planned,
-    body,
-  }];
+  if (body === undefined) {
+    return undefined;
+  }
+  return planned.kind === "bool-literal" && planned.value
+    ? [{
+        kind: "loop",
+        ...(target.used.value ? { label: target.label } : {}),
+        body,
+        ...(!target.breakUsed.value ? { neverFallsThrough: true } : {}),
+      }]
+    : [{
+        kind: "while",
+        ...(target.used.value ? { label: target.label } : {}),
+        condition: planned,
+        body,
+      }];
 }
 
 function planDoStatement(
@@ -2147,14 +2198,23 @@ function planForStatement(
     const loopBody: RustBlock = rustBlockDefinitelyExits(body)
       ? body
       : { statements: [...body.statements, ...incrementStatements] };
-    return {
-      statements: [{
-        kind: "while",
-        ...(target.used.value ? { label: target.label } : {}),
-        condition: conditionExpr,
-        body: loopBody,
-      }],
-    };
+    return conditionExpr.kind === "bool-literal" && conditionExpr.value
+      ? {
+          statements: [{
+            kind: "loop",
+            ...(target.used.value ? { label: target.label } : {}),
+            body: loopBody,
+            ...(!target.breakUsed.value ? { neverFallsThrough: true } : {}),
+          }],
+        }
+      : {
+          statements: [{
+            kind: "while",
+            ...(target.used.value ? { label: target.label } : {}),
+            condition: conditionExpr,
+            body: loopBody,
+          }],
+        };
   };
 
   if (initializer === undefined) {
@@ -2181,7 +2241,7 @@ function planForStatement(
   const nameNode = Node_Name(context.input.ast, resourceDeclaration);
   const resourceName = nameNode === undefined
     ? ""
-    : rustSourceName(context, context.input.ast.text(nameNode));
+    : rustSourceName(context.input.ast.text(nameNode));
   if (fact === undefined || !isValidRustIdentifier(resourceName)) {
     return undefined;
   }
@@ -2219,6 +2279,7 @@ function createRustLoopTarget(
       ? {}
       : { resourceBoundary: context.completionBoundary }),
     used: { value: false },
+    breakUsed: { value: false },
     continuePrelude,
   };
   context.controlFlow.nextLoopId += 1;
@@ -2329,29 +2390,22 @@ function planRuntimeSetStatement(
     return undefined;
   }
   const receiverNode = Node_Expression(context.input.ast, left);
-  const expectedReceiverMode = fact.abi.target.form === "index"
-    ? "mut-ref"
-    : fact.abi.target.form === "receiver-method"
-      ? fact.abi.target.mutatesReceiver === true ? "mut-ref" : "ref"
-      : undefined;
-  if (receiverNode === undefined || fact.abi.targetReceiver.kind !== "input" ||
-    expectedReceiverMode === undefined || fact.abi.targetReceiver.input.mode !== expectedReceiverMode) {
+  const receiver = fact.abi.targetReceiver.kind === "input" && receiverNode !== undefined
+    ? planFinalizedSourceInput(
+        context,
+        fact.abi.targetReceiver.input,
+        receiverNode,
+        sourceArgumentNodes,
+        expression,
+        "target-receiver",
+      )
+    : undefined;
+  if (fact.abi.targetReceiver.kind === "input" && receiver === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
       "rust.backend.runtime-set-receiver",
       "Runtime setter ABI has no finalized target receiver input.",
     ));
-    return undefined;
-  }
-  const receiver = planFinalizedSourceInput(
-    context,
-    fact.abi.targetReceiver.input,
-    receiverNode,
-    sourceArgumentNodes,
-    expression,
-    "target-receiver",
-  );
-  if (receiver === undefined) {
     return undefined;
   }
   const targetArguments: RustExpr[] = [];
@@ -2364,7 +2418,8 @@ function planRuntimeSetStatement(
   }
   if (fact.abi.target.form === "index") {
     const [index, value] = targetArguments;
-    if (index === undefined || value === undefined || targetArguments.length !== 2) {
+    if (receiver === undefined || index === undefined || value === undefined ||
+      targetArguments.length !== 2) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, expression),
         "rust.backend.runtime-index-set-abi",
@@ -2379,10 +2434,67 @@ function planRuntimeSetStatement(
       value,
     }];
   }
-  if (fact.abi.target.form === "receiver-method") {
+  if (fact.abi.target.form === "call" || fact.abi.target.form === "free-call" ||
+    fact.abi.target.form === "call-str-slice" ||
+    fact.abi.target.form === "free-call-str-slice" ||
+    fact.abi.target.form === "call-value-slice" ||
+    fact.abi.target.form === "call-value-array") {
+    registerAliasFromPath(context, fact.abi.target.path);
+    let call: RustExpr = {
+      kind: "call",
+      path: fact.abi.target.path,
+      args: targetArguments,
+    };
+    if (fact.abi.target.form === "call") {
+      for (const step of fact.abi.target.chain ?? []) {
+        if (step.kind !== "method") {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.runtime-set-chain",
+            "Runtime setter call chain contains a non-method step after ABI validation.",
+          ));
+          return undefined;
+        }
+        call = { kind: "method-call", receiver: call, method: step.name, args: [] };
+      }
+    }
+    return [{ kind: "expr", expr: call }];
+  }
+  if (fact.abi.target.form === "receiver-method" || fact.abi.target.form === "method" ||
+    fact.abi.target.form === "arg-method" ||
+    fact.abi.target.form === "arg-receiver-method" ||
+    fact.abi.target.form === "receiver-value-array" ||
+    fact.abi.target.form === "receiver-tagged-array") {
+    if (receiver === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.runtime-set-receiver",
+        "Runtime setter method form has no finalized target receiver input.",
+      ));
+      return undefined;
+    }
+    let call: RustExpr = {
+      kind: "method-call",
+      receiver,
+      method: fact.abi.target.name,
+      args: targetArguments,
+    };
+    if (fact.abi.target.form === "receiver-method") {
+      for (const step of fact.abi.target.chain ?? []) {
+        if (step.kind !== "method") {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.runtime-set-chain",
+            "Runtime setter method chain contains a non-method step after ABI validation.",
+          ));
+          return undefined;
+        }
+        call = { kind: "method-call", receiver: call, method: step.name, args: [] };
+      }
+    }
     return [{
       kind: "expr",
-      expr: { kind: "method-call", receiver, method: fact.abi.target.name, args: targetArguments },
+      expr: call,
     }];
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -2455,7 +2567,7 @@ function planForOfStatement(
     : undefined;
   let binding = "";
   if (bindingNameNode !== undefined && bindingNameKind === KindIdentifier) {
-    binding = rustSourceName(context, ast.text(bindingNameNode));
+    binding = rustSourceName(ast.text(bindingNameNode));
   } else if (bindingPattern !== undefined && context.syntheticNames !== undefined) {
     binding = allocateRustSyntheticName(context.syntheticNames, "binding_element");
   }
@@ -2758,7 +2870,7 @@ function planForInBinding(
     const sourceName = nameNode === undefined || context.input.ast.kindName(nameNode) !== KindIdentifier
       ? ""
       : context.input.ast.text(nameNode);
-    const directName = rustSourceName(context, sourceName);
+    const directName = rustSourceName(sourceName);
     const carrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
     const declarationKind = context.input.ast.variableDeclarationKind(declaration);
     if (!isValidRustIdentifier(directName) || carrier === undefined ||
@@ -2776,7 +2888,7 @@ function planForInBinding(
     return rejectForInBinding(initializer, context, "for-in assignment targets require one exact identifier location.");
   }
   const sourceName = context.input.ast.text(initializer);
-  const assignmentName = rustSourceName(context, sourceName);
+  const assignmentName = rustSourceName(sourceName);
   const carrier = context.input.facts.getRuntimeCarrierFact(initializer)?.carrier;
   if (!isValidRustIdentifier(assignmentName) || carrier === undefined ||
     !rustTargetTypeRefEquals(carrier, elementCarrier)) {
@@ -2819,7 +2931,7 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.error.throw",
-      "throw supports only `throw new Error(message)` with a finalized throw fact.",
+      "throw requires one finalized runtime, project-error, or exact rethrow fact.",
     ));
     return undefined;
   }
@@ -2831,38 +2943,42 @@ function planThrowStatement(node: Node, context: RustPlanContext): readonly Rust
     ));
     return undefined;
   }
-  const { ast } = context.input;
-  const newExpression = Node_Expression(context.input.ast, node);
-  const arguments_ = newExpression === undefined ? [] : ast.arguments(newExpression);
-  const [messageNode] = arguments_;
-  if (newExpression === undefined || ast.kindName(newExpression) !== "KindNewExpression" ||
-    messageNode === undefined || arguments_.length !== 1) {
+  const expression = Node_Expression(context.input.ast, node);
+  if (expression === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.throw-shape",
-      "Finalized throw fact must correspond to exactly `throw new Error(message)`.",
+      "Finalized throw fact has no exact source expression.",
     ));
     return undefined;
   }
-  const constructor = context.input.facts.getFact(newExpression, rustTargetOperationFactKey);
-  if (constructor === undefined || constructor.kind !== "provider-operation" ||
-    constructor.operationId !== fact.constructorOperationId || constructor.abi.operationKind !== "constructor" ||
-    !providerSelectedCallMatches(newExpression, constructor, context)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, newExpression),
-      "rust.backend.throw-constructor",
-      "Finalized throw fact conflicts with the selected provider Error constructor ABI.",
-    ));
+  if (fact.error.kind === "runtime") {
+    const constructor = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+    if (constructor === undefined || constructor.kind !== "provider-operation" ||
+      constructor.operationId !== fact.error.constructorOperationId ||
+      constructor.abi.operationKind !== "constructor" ||
+      !providerSelectedCallMatches(expression, constructor, context)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.throw-constructor",
+        "Finalized runtime throw fact conflicts with the selected provider Error constructor ABI.",
+      ));
+      return undefined;
+    }
+  }
+  const value = planExpression(expression, context);
+  if (value === undefined) {
     return undefined;
   }
-  if (!requireProviderArgumentPassingFacts(context, constructor, arguments_)) {
-    return undefined;
-  }
-  const message = planExpression(messageNode, context);
-  if (message !== undefined) {
-    context.usedAliases?.add("rt");
-  }
-  return message === undefined ? undefined : [{ kind: "throw", message }];
+  context.usedAliases?.add("rt");
+  const error: RustExpr = fact.error.kind === "program"
+    ? value
+    : {
+        kind: "call",
+        path: "rt::TsonicError::from",
+        args: [value],
+      };
+  return [{ kind: "throw", error }];
 }
 
 function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -2917,7 +3033,7 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
       CatchClause_VariableDeclaration(context.input.ast, catchClause),
     );
     const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
-    let binding = bindingSource.length === 0 ? "_" : rustSourceName(context, bindingSource);
+    let binding = bindingSource.length === 0 ? "_" : rustSourceName(bindingSource);
     if (binding !== "_") {
       let used = false;
       const findUse = (candidate: Node): void => {

@@ -8,6 +8,9 @@ export function rustBlockTerminates(block: RustBlock): boolean {
   if (last.kind === "return" || last.kind === "tail" || last.kind === "throw") {
     return true;
   }
+  if (last.kind === "expr" && last.expr.kind === "bottom") {
+    return true;
+  }
   if (last.kind === "scope" || last.kind === "unsafe-scope") {
     return rustBlockTerminates(last.body);
   }
@@ -16,6 +19,9 @@ export function rustBlockTerminates(block: RustBlock): boolean {
   }
   if (last.kind === "try-scope") {
     return last.terminates;
+  }
+  if (last.kind === "loop" && last.neverFallsThrough === true) {
+    return true;
   }
   return last.kind === "if" && last.else !== undefined &&
     rustBlockTerminates(last.then) && rustBlockTerminates(last.else);
@@ -37,8 +43,8 @@ export function applyRustTailShape(body: RustBlock, hasReturnValue: boolean): Ru
     tail = { ...last, tail: true };
   } else if (last.kind === "scope" || last.kind === "unsafe-scope") {
     tail = { ...last, body: applyRustTailShape(last.body, hasReturnValue) };
-  } else if (last.kind === "try-scope") {
-    tail = last;
+  } else if (last.kind === "try-scope" || last.kind === "resource-scope") {
+    tail = { ...last, tail: true };
   } else if (last.kind === "if" && last.else !== undefined &&
     rustBlockTerminates(last.then) && rustBlockTerminates(last.else)) {
     tail = {

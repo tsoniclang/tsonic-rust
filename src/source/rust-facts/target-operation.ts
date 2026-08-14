@@ -36,6 +36,7 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     return "+";
   }
   if (fact.kind === "conditional" || fact.kind === "identity-expression" ||
+    fact.kind === "non-null-expression" ||
     fact.kind === "template-string" || fact.kind === "typeof" ||
     fact.kind === "void-expression") {
     return fact.operationId;
@@ -45,6 +46,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   }
   if (fact.kind === "source-conversion") {
     return fact.conversion === undefined ? "identity" : "runtime-conversion";
+  }
+  if (fact.kind === "project-type-test" || fact.kind === "program-error-type-test") {
+    return fact.kind;
   }
   return fact.operationId;
 }
@@ -82,6 +86,9 @@ export function rustTargetOperationIsFallible(fact: RustTargetOperationFact | un
   }
   if (fact.kind === "operator-call") {
     return fact.fallible;
+  }
+  if (fact.kind === "source-call" && fact.target.form === "callable") {
+    return fact.target.carrier.kind !== "function-pointer";
   }
   if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
     return rustOperationAbiInvocationIsFallible(fact.abi);

@@ -68,6 +68,11 @@ export function rustStdProviderDefinition(): RustProviderPackageDefinition {
       "rust.std.collections.HashSet": "std::collections::HashSet",
       "rust.std.vec.Vec": "std::vec::Vec",
     }),
+    carrierTraits: Object.freeze({
+      "rust.std.collections.HashMap": Object.freeze({ clone: "all-type-arguments", copy: "never" }),
+      "rust.std.collections.HashSet": Object.freeze({ clone: "all-type-arguments", copy: "never" }),
+      "rust.std.vec.Vec": Object.freeze({ clone: "all-type-arguments", copy: "never" }),
+    }),
   });
 }
 

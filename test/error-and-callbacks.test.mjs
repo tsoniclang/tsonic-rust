@@ -3,6 +3,77 @@ import assert from "node:assert/strict";
 import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
+test("Error subclasses retain exact inherited field selection for reads and writes", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "error_subclass_fields" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class NamedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NamedError";
+  }
+}
+
+export function main(): void {
+  const error = new NamedError("failure");
+  check(error.name === "NamedError" && error.message === "failure");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("error-subclass-fields", result.artifacts, { run: true }).status, 0);
+});
+
+test("caught project errors narrow through exact closed program variants", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "caught_project_error" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class NamedError extends Error {
+  value: int32;
+
+  constructor(value: int32) {
+    super("named");
+    this.value = value;
+  }
+}
+
+function read(named: boolean): string {
+  try {
+    if (named) throw new NamedError(42);
+    throw new Error("ordinary");
+  } catch (error) {
+    return error instanceof NamedError ? \`value=\${error.value}\` : \`\${error}\`;
+  }
+}
+
+export function main(): void {
+  check(read(true) === "value=42");
+  check(read(false).includes("ordinary"));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /matches!\(error\.clone\(\), rt::TsonicError::Project[0-9]+\(_\)\)/u);
+  assert.match(source, /rt::TsonicError::Project[0-9]+\(__tsonic_program_error\)/u);
+  assert.equal(validateGeneratedProject("caught-project-error", result.artifacts, { run: true }).status, 0);
+});
+
 test("array callbacks lower to Rust closures over the canonical JS array carrier", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
@@ -107,8 +178,8 @@ export function main(): void {
   assert.match(text, /values\s*\.try_for_each/u);
   assert.match(text, /values\s*\.try_reduce_with_array\(0,/u);
   assert.match(text, /values\s*\.try_reduce_from_first_accumulator/u);
-  assert.match(text, /map\.try_for_each/u);
-  assert.match(text, /set\.try_for_each_value_key/u);
+  assert.match(text, /map\s*\.try_for_each/u);
+  assert.match(text, /set\s*\.try_for_each_value_key/u);
   assert.equal(validateGeneratedProject("fallible-callbacks", result.artifacts, { run: true }).status, 0);
 });
 
@@ -128,8 +199,8 @@ export function roundtrip(text: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn roundtrip\(text: String\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /js_abi::json_parse\(&text\)\?/u);
-  assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
+  assert.match(text, /js_abi::json_parse\(&text\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
 });
 
 test("node fs read lowers through the fallible provider row", async () => {
@@ -181,7 +252,7 @@ export function forwards(text: string): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn catches\(text: String\) -> String \{/u);
   assert.match(text, /pub fn forwards\(text: String\) -> String \{/u);
-  assert.match(text, /catches\(text\)/u);
+  assert.match(text, /catches\(text\.clone\(\)\)/u);
   assert.doesNotMatch(text, /pub fn (?:catches|forwards)[^{]+TsonicResult/u);
   assert.doesNotMatch(text, /catches\(text\)\?/u);
 });
@@ -208,8 +279,11 @@ export function inspectJson(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let value = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
-  assert.match(text, /let rendered = js_abi::json_stringify\(&value\)\?\.unwrap_or\(String::from\(""\)\);/u);
+  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u);
+  assert.match(
+    text,
+    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
+  );
   assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });
 
@@ -340,6 +414,73 @@ export function drive(): int32 {
   assert.doesNotMatch(text, /Ok\(Machine::risky\(false\)\?\)/u);
 });
 
+test("constructor and virtual-call fallibility close over exact project dependencies", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "project_fallibility_closure" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+function checkedValue(value: int32): int32 {
+  if (value < 0) {
+    throw new Error("negative");
+  }
+  return value;
+}
+
+class Base {
+  value: int32;
+
+  constructor(value: int32) {
+    this.value = checkedValue(value);
+  }
+
+  read(): int32 {
+    return this.value;
+  }
+}
+
+class Derived extends Base {
+  constructor(value: int32) {
+    super(value);
+  }
+
+  read(): int32 {
+    return checkedValue(this.value + 1);
+  }
+}
+
+class Inherited extends Base {}
+
+class Initialized {
+  value: int32 = checkedValue(40);
+}
+
+function readThroughBase(value: Base): int32 {
+  return value.read();
+}
+
+export function main(): void {
+  check(readThroughBase(new Derived(41)) === 42);
+  check(readThroughBase(new Inherited(41)) === 41);
+  check(new Initialized().value === 40);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn __tsonic_initialize[^\n]*-> rt::TsonicResult</u);
+  assert.match(text, /pub fn new\([^)]*\) -> rt::TsonicResult<Derived>/u);
+  assert.match(text, /pub fn new\(\) -> rt::TsonicResult<Initialized>/u);
+  assert.match(text, /fn __tsonic_virtual_[^(]+\([^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn readThroughBase\([^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.equal(validateGeneratedProject("project-fallibility-closure", result.artifacts, { run: true }).status, 0);
+});
+
 test("catch returns propagate through exact completion state in fallible functions", async () => {
   const { result } = compileRust({
     files: {
@@ -373,6 +514,49 @@ export function fallback(flag: boolean): int32 {
   assert.match(text, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
   assert.match(text, /return risky\(\);/u);
   assert.doesNotMatch(text, /return Ok\(risky\(\)\?\);/u);
+});
+
+test("terminating try scopes nested in non-tail branches return through the enclosing function", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "nested_try_return" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class DomainError extends Error {
+  constructor(message: string) { super(message); }
+}
+
+function fail(): void {
+  throw new DomainError("domain");
+}
+
+function recover(active: boolean): string | undefined {
+  if (active) {
+    try {
+      fail();
+      return "unreachable";
+    } catch (error) {
+      if (error instanceof DomainError) return error.message;
+      throw error;
+    }
+  }
+  return undefined;
+}
+
+export function main(): void {
+  check(recover(true) === "domain");
+  check(recover(false) === undefined);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
+  assert.equal(validateGeneratedProject("nested-try-return", result.artifacts, { run: true }).status, 0);
 });
 
 test("nested arrow returns do not trip the try escape scan", async () => {
@@ -439,9 +623,50 @@ test("fallible provider rows are restricted to method, constructor, and property
         resultCarrier: { kind: "source-primitive", name: "int32" },
         parameterCarriers: [{ kind: "source-primitive", name: "float64" }],
         isFallible: true,
+        errorBoundary: "provider-native",
       }],
       crates: [],
     }),
     /isFallible is supported only on method, constructor, and property operations/u,
   );
+});
+
+test("concise fallible callables convert provider errors into the closed program error", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "concise_program_error" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class DomainError extends Error {
+  constructor(message: string) { super(message); }
+}
+
+const normalize = (value: string): string => value.replaceAll("a", "b");
+
+function fail(): void {
+  throw new DomainError("domain");
+}
+
+export function main(): void {
+  check(normalize("a") === "b");
+  try {
+    fail();
+  } catch (_error) {
+    check(true);
+  }
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(
+    source,
+    /Ok::<_, rt::TsonicError>\(\s*js_string::replace_all\(&value, "a", "b"\)[\s\S]*\?\s*,?\s*\)/u,
+  );
+  assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });

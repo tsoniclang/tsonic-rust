@@ -45,14 +45,61 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32,\)>,\n\}/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
-  assert.match(text, /let __tsonic_field_value = value;/u);
+  assert.match(text, /let mut __tsonic_field_value: i32;\n        __tsonic_field_value = value;/u);
   assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(__tsonic_field_value,\)\)/u);
   assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
   assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value(?:_[0-9]+)?\)/u);
   assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
-  assert.match(text, /let counter = Counter::new\(10\);/u);
+  assert.match(text, /let counter: Counter = Counter::new\(10\);/u);
   assert.match(text, /counter\.clone\(\)\.add\(5\);/u);
   assert.match(text, /counter\.clone\(\)\.current\(\)/u);
+});
+
+test("ECMAScript private fields retain declaration identity and closed storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "private_field_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Left {
+  #value: int32 = 1;
+
+  increment(): int32 {
+    this.#value += 1;
+    return this.#value;
+  }
+}
+
+class Right {
+  #value: int32;
+
+  constructor(value: int32) {
+    this.#value = value;
+  }
+
+  current(): int32 {
+    return this.#value;
+  }
+}
+
+export function main(): void {
+  const left = new Left();
+  const right = new Right(9);
+  check(left.increment() === 2);
+  check(right.current() === 9);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(text, /#value/u);
+  assert.match(text, /__tsonic_field_private_field/u);
+  assert.equal(validateGeneratedProject("private-field-bin", result.artifacts, { run: true }).status, 0);
 });
 
 test("class accessors preserve exact read write and update semantics", { timeout: 300_000 }, () => {
@@ -184,7 +231,7 @@ export function create(): Initialized {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /impl Initialized \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Initialized/u);
-  assert.match(text, /let __tsonic_field_value = 42;/u);
+  assert.match(text, /let mut __tsonic_field_value: i32;\n        __tsonic_field_value = 42;/u);
   assert.match(text, /impl Empty \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Empty/u);
 });
 
@@ -251,9 +298,11 @@ export class Initialized {
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let mut __tsonic_field_second(?:_[0-9]+)?: i32;/u);
   assert.match(
-    artifactText(result, "src/index.rs"),
-    /let __tsonic_field_second(?:_[0-9]+)? = __tsonic_field_first(?:_[0-9]+)?;/u,
+    text,
+    /__tsonic_field_second(?:_[0-9]+)? = __tsonic_field_first(?:_[0-9]+)?;/u,
   );
 });
 
@@ -471,8 +520,8 @@ export function drive(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn bump\(xs: js_abi::JsArray<i32>\)/u);
-  assert.match(text, /xs\.set\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?, 42\);/u);
-  assert.match(text, /bump\(values\.clone\(\)\)\?;/u);
+  assert.match(text, /xs\.set_number\(0\.0, 42\);/u);
+  assert.match(text, /bump\(values\.clone\(\)\);/u);
 });
 
 test("native array parameters preserve caller storage through exact slice ABIs", { timeout: 300_000 }, () => {
@@ -562,10 +611,11 @@ export function grow(xs: int32[]): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn grow\(xs: js_abi::JsArray<i32>\)/u);
-  assert.match(text, /xs\s*\.push_many\(\[tsonic_rust_runtime::conversions::f64_to_i32\(4\.0\)\?\]\)/u);
+  assert.match(text, /xs\s*\.push_many\(\[4\]\)/u);
+  assert.doesNotMatch(text, /f64_to_i32/u);
 });
 
-test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
+test("user-authored identifiers are preserved verbatim under generated-source policy", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -588,9 +638,8 @@ export function caller(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  // Every user-authored identifier is verbatim; the item carries a scoped
-  // lint allowance because non-snake names appear in it.
-  assert.match(text, /#\[allow\(non_snake_case\)\]\npub fn pickMode\(flagValue: bool\) -> i32/u);
+  assert.match(text, /#!\[allow\(non_snake_case\)\]/u);
+  assert.match(text, /pub fn pickMode\(flagValue: bool\) -> i32/u);
   assert.match(text, /let mut chosenValue: i32 = 0;/u);
   assert.match(text, /pickMode\(true\)/u);
 });
@@ -614,6 +663,59 @@ export function collide(): int32 {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let fooBar: i32 = 1;/u);
   assert.match(text, /let foo_bar: i32 = 2;/u);
+});
+
+test("Rust keyword-shaped source identifiers use exact raw identifiers", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export class Label {
+  type: string;
+
+  constructor(type: string) {
+    this.type = type;
+  }
+}
+
+export function read(type: string): string {
+  const label = new Label(type);
+  return label.type;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn new\(r#type: String\)/u);
+  assert.match(text, /pub fn read\(r#type: String\) -> String/u);
+  assert.match(text, /Label::new\(r#type\.clone\(\)\)/u);
+  validateGeneratedProject("native-raw-identifiers", result.artifacts);
+});
+
+test("Rust keyword-shaped project methods use one raw identifier at declaration and call", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+export class Matcher {
+  match(value: string): string {
+    return value;
+  }
+}
+
+export function read(value: string): string {
+  const matcher = new Matcher();
+  return matcher.match(value);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn r#match\(&self, value: String\) -> String/u);
+  assert.match(text, /matcher\.clone\(\)\.r#match\(value\.clone\(\)\)/u);
+  validateGeneratedProject("native-raw-method-identifiers", result.artifacts);
 });
 
 test("class decorators fail closed", () => {
@@ -660,9 +762,64 @@ export function some_value(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32 \{/u);
-  assert.match(text, /value\.unwrap_or\(0\)/u);
+  assert.match(text, /rt::option_coalesce\(value, std::convert::identity, \|\| 0\)/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
-  assert.match(text, /value_or_zero\(None\)/u);
+  assert.match(text, /value_or_zero\(Option::<i32>::None\)/u);
+});
+
+test("nullish coalescing preserves lazy value and optional fallback evaluation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "nullish_lazy_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+let fallbackCalls: int32 = 0;
+
+function fallback(): int32 {
+  fallbackCalls += 1;
+  return 7;
+}
+
+function optionalFallback(): int32 | undefined {
+  fallbackCalls += 1;
+  return undefined;
+}
+
+function choose(left: int32 | undefined, right: int32 | undefined): int32 | undefined {
+  return left ?? right;
+}
+
+function withFallback(left: int32 | undefined): int32 {
+  return left ?? fallback();
+}
+
+function withOptionalFallback(left: int32 | undefined): int32 | undefined {
+  return left ?? optionalFallback();
+}
+
+export function main(): void {
+  check(withFallback(3) === 3);
+  check(fallbackCalls === 0);
+  check(withFallback(undefined) === 7);
+  check(fallbackCalls === 1);
+  check(choose(4, undefined) === 4);
+  check(fallbackCalls === 1);
+  check(withOptionalFallback(4) === 4);
+  check(fallbackCalls === 1);
+  check(withOptionalFallback(undefined) === undefined);
+  check(fallbackCalls === 2);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /rt::option_coalesce\(left, Some, \|\| right\)/u);
+  assert.equal(validateGeneratedProject("nullish-lazy-proof", result.artifacts, { run: true }).status, 0);
 });
 
 test("undefined-typed unions lower to Option in the native profile", () => {
@@ -686,7 +843,7 @@ export function some_value(): int32 {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
-  assert.match(text, /value_or_zero\(None\)/u);
+  assert.match(text, /value_or_zero\(Option::<i32>::None\)/u);
 });
 
 test("interfaces lower to reference-backed object wrappers with annotated object literals", () => {
@@ -822,9 +979,9 @@ export function first(entry: [int32, string]): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pair\(a: i32, label: String\) -> \(i32, String\)/u);
-  assert.match(text, /let entry: \(i32, String\) = \(a, label\);/u);
+  assert.match(text, /let entry: \(i32, String\) = \(a, label\.clone\(\)\);/u);
   assert.match(text, /pub fn first\(entry: \(i32, String\)\) -> i32/u);
-  assert.match(text, /entry\.0/u);
+  assert.match(text, /entry\.clone\(\)\.0/u);
 });
 
 test("homogeneous tuple carriers support checked dynamic indexing", { timeout: 300_000 }, () => {
@@ -988,7 +1145,11 @@ export function drive(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pass_through<T>\(value: T\) -> T \{/u);
-  assert.match(text, /pass_through\(41\)/u);
+  assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32>/u);
+  assert.match(
+    text,
+    /tsonic_rust_runtime::conversions::f64_to_i32\(pass_through\(41\.0\) \+ 1\.0\)/u,
+  );
 });
 
 test("operations on unconstrained type parameters stay invalid TypeScript", () => {
@@ -1094,7 +1255,7 @@ export function caller(flag: boolean): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::new\(/u);
+  assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);
   assert.match(text, /Ok\(7\)/u);
   assert.match(text, /let __tsonic_try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
   assert.match(text, /outcome = risky\(flag\)\?;/u);
@@ -1147,7 +1308,7 @@ export function bad(xs: int32[]): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn bad\(xs: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
-  assert.match(text, /xs\.try_some\(\|x\| Ok\(risky\(x\)\? == 1\)\)/u);
+  assert.match(text, /xs\.try_some\(\|x\| Ok::<_, rt::TsonicError>\(risky\(x\)\? == 1\)\)/u);
 });
 
 test("string literals mentioning runtime aliases do not create imports", () => {

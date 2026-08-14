@@ -28,7 +28,7 @@ export function combine(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let c = a \+ b;/u);
+  assert.match(text, /let c: acme_vectors::Vector = a \+ b;/u);
   assert.match(text, /acme_vectors::Vector::new\(1, 2\)/u);
   assert.match(text, /c\.x \+ c\.y/u);
 });
