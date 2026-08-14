@@ -483,7 +483,10 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /copied\.join\("-"\)/u);
   assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /js_string::repeat\(text, 2\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /rt::option_coalesce\(js_string::code_point_at\(text, 0\.0\), std::convert::identity, \|\| 0\.0\)/u);
+  assert.match(
+    text,
+    /let point: f64 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}std::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
+  );
 });
 
 test("complete closed string rows consume selected overloads and preserve exact ABI shapes", () => {

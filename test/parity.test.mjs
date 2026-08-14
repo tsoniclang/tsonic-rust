@@ -155,7 +155,10 @@ export function scrub(text: string): int32 {
   assert.match(text, /spaces\s*\.replace\(&text, "-"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /\.split\(&joined\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /\.search\(&joined\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /spaces\.test\(&text\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(
+    text,
+    /if spaces\n {8}\.test\(&text\)\n {8}\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
+  );
 
   const constructed = compileRust({
     surfaces: ["js"],

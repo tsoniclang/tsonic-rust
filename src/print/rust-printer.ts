@@ -18,6 +18,7 @@ const rustFormatWidth = 100;
 const rustStructLiteralWidth = 18;
 const rustNestedCallWidth = 60;
 const rustMethodChainWidth = 60;
+const rustNestedMethodFirstSegmentWidth = 64;
 const rustInlineFieldReceiverWidth = 28;
 
 interface RustFunctionParameterPrint {
@@ -2503,8 +2504,8 @@ function printRustLetInitializer(
 ): string {
   const flat = printRustExpr(initializer);
   const fittedAtPrefix = printRustExprFitted(initializer, depth, prefix.length + 1);
-  const trailingClosure = initializer.kind === "call" || initializer.kind === "associated-call" ||
-      initializer.kind === "method-call"
+  const trailingClosure = initializer.kind === "call" || initializer.kind === "invoke" ||
+      initializer.kind === "associated-call" || initializer.kind === "method-call"
     ? initializer.args[initializer.args.length - 1]
     : undefined;
   if (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block") {
@@ -2522,6 +2523,7 @@ function printRustLetInitializer(
   }
   const directCallOpeningFits = (initializer.kind === "call" ||
       initializer.kind === "invoke" || initializer.kind === "associated-call") &&
+    trailingClosure?.kind === "closure" &&
     fittedAtPrefix.includes("\n") &&
     prefix.length + firstLine(fittedAtPrefix).length + 1 <= rustFormatWidth;
   if (directCallOpeningFits) {
@@ -2979,6 +2981,26 @@ function rustMethodChainBreaksReceiverWhenExpanded(chain: RustMethodChain): bool
       step.kind === "try" && chain.steps[index + 1]?.kind === "method");
 }
 
+function rustMethodChainFirstSegmentWidth(chain: RustMethodChain): number {
+  let width = printRustExpr(chain.base).length;
+  for (const step of chain.steps) {
+    if (step.kind === "try") {
+      width += 1;
+      continue;
+    }
+    if (step.kind === "await") {
+      width += ".await".length;
+      continue;
+    }
+    if (step.kind === "field") {
+      width += step.name.length + 1;
+      continue;
+    }
+    return width + step.name.length + step.args.map(printRustExpr).join(", ").length + 3;
+  }
+  return width;
+}
+
 function rustMethodChainFirstMethodRequiresExpansion(
   chain: RustMethodChain,
   depth: number,
@@ -3134,13 +3156,17 @@ function printFittedCall(
     soleFallibleSelectorCount > 1 && printRustExpr(soleArgument).length > rustNestedCallWidth) {
     const argumentIndent = indentText(depth + 1);
     const selectorIndent = indentText(depth + 2);
+    const firstSegmentWidth = rustMethodChainFirstSegmentWidth(soleFallibleChain);
+    const attachFirstSelector = firstSegmentWidth > rustMethodChainWidth &&
+      firstSegmentWidth <= rustNestedMethodFirstSegmentWidth;
     const rendered = appendToLastLine(
       printFittedMethodChain(
         soleFallibleChain,
         depth + 1,
         argumentIndent.length,
-        true,
+        !attachFirstSelector,
         selectorIndent,
+        attachFirstSelector,
       ),
       "?",
     );

@@ -674,7 +674,7 @@ test("fallible method chains in logical continuations start from their receiver"
 });
 
 test("expanded call arguments start fallible method chains from their receiver", () => {
-  const convertedByte = {
+  const convertedByte = (receiver) => ({
     kind: "call",
     path: "tsonic_rust_runtime::conversions::u8_to_i32",
     args: [{
@@ -683,7 +683,7 @@ test("expanded call arguments start fallible method chains from their receiver",
         kind: "method-call",
         receiver: {
           kind: "method-call",
-          receiver: { kind: "path", path: "buffer" },
+          receiver: { kind: "path", path: receiver },
           method: "read_u8",
           args: [{
             kind: "try",
@@ -698,7 +698,7 @@ test("expanded call arguments start fallible method chains from their receiver",
         args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
       },
     }],
-  };
+  });
   const text = projectFunction({
     kind: "binary",
     operator: "&&",
@@ -723,7 +723,7 @@ test("expanded call arguments start fallible method chains from their receiver",
     right: {
       kind: "binary",
       operator: "==",
-      left: convertedByte,
+      left: convertedByte("buffer"),
       right: { kind: "int-literal", text: "97" },
     },
   });
@@ -731,5 +731,37 @@ test("expanded call arguments start fallible method chains from their receiver",
   assert.match(
     text,
     /u8_to_i32\(\n {12}buffer\n {16}\.read_u8\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\)\n {16}\.map_err/u,
+  );
+
+  const attached = projectFunction(convertedByte("buf"));
+  assert.match(
+    attached,
+    /u8_to_i32\(\n {8}buf\.read_u8\(tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\)\n {12}\.map_err/u,
+  );
+});
+
+test("short fallible call arguments break before their first selector", () => {
+  const text = projectFunction({
+    kind: "call",
+    path: "acme_testing::check",
+    args: [{
+      kind: "try",
+      expr: {
+        kind: "method-call",
+        receiver: {
+          kind: "method-call",
+          receiver: { kind: "path", path: "digits" },
+          method: "test",
+          args: [{ kind: "str-literal", value: "a12" }],
+        },
+        method: "map_err",
+        args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /acme_testing::check\(\n {8}digits\n {12}\.test\("a12"\)\n {12}\.map_err/u,
   );
 });
