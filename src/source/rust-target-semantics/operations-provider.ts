@@ -80,6 +80,7 @@ import {
   isRustCopyCarrier,
   getRustGeneratorProtocol,
   isRustJsArrayCarrier,
+  isRustDefinitelyNullishCarrier,
   isRustProgramErrorCarrier,
   isRustNullishSourceCarrier,
   isRustNumericCarrier,
@@ -426,7 +427,22 @@ function mapSelectedAssignment(
   }
   const selectedLeft = context.facts.getSelectedTargetOperator(request.left);
   const selectedDeclaration = selectedLeft?.provenance?.sourceSelectedDeclaration;
-  const providerIdentity = selectedLeft?.provenance?.providerDeclaration;
+  const selectedWriteDeclaration = selectedLeft?.provenance?.sourceSelectedWriteDeclaration;
+  const providerWriteEvidence = resolveSelectedProviderDeclaration(
+    context,
+    selectedWriteDeclaration,
+  );
+  if (providerWriteEvidence.kind === "conflict") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_SELECTED_PROVIDER_WRITE_EVIDENCE_CONFLICT",
+      "Checked assignment carries conflicting selected provider write-declaration identities.",
+    );
+  }
+  const providerIdentity = providerWriteEvidence.kind === "selected"
+    ? providerWriteEvidence.identity
+    : selectedLeft?.provenance?.providerDeclaration;
   const jsIdentity = resolveSelectedJsSourceMember(context, selectedDeclaration, options.sourceProfiles);
   const receiver = selectedLeft?.provenance?.sourceReceiver;
   const receiverCarrier = resolveRustTargetTypeRef(receiver, context, options);
@@ -438,11 +454,6 @@ function mapSelectedAssignment(
   if (operationKind === undefined) {
     return undefined;
   }
-  if (receiverCarrier === undefined) {
-    return providerIdentity !== undefined || (jsIdentity !== undefined && options.jsEnabled)
-      ? rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_EVIDENCE_MISSING", "Selected assignment has no closed receiver carrier in its finalized operation evidence.")
-      : undefined;
-  }
   if (providerIdentity !== undefined) {
     const providerSelection = mapSelectedProviderAssignment(
       request,
@@ -450,7 +461,7 @@ function mapSelectedAssignment(
       providerIdentity,
       operationKind,
       receiver,
-      selectedDeclaration,
+      selectedWriteDeclaration ?? selectedDeclaration,
       receiverCarrier,
       context,
       options,
@@ -458,6 +469,11 @@ function mapSelectedAssignment(
     if (providerSelection !== undefined) {
       return providerSelection;
     }
+  }
+  if (receiverCarrier === undefined) {
+    return jsIdentity !== undefined && options.jsEnabled
+      ? rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_EVIDENCE_MISSING", "Selected JavaScript assignment has no closed receiver carrier in its finalized operation evidence.")
+      : undefined;
   }
   if (jsIdentity === undefined || !options.jsEnabled) {
     return undefined;
@@ -542,7 +558,7 @@ function mapSelectedProviderAssignment(
   operationKind: RustRuntimeSetOperationKind,
   receiver: ExtensionFactSubject | undefined,
   selectedDeclaration: ExtensionFactSubject | undefined,
-  receiverCarrier: TargetTypeRef,
+  receiverCarrier: TargetTypeRef | undefined,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
@@ -578,11 +594,19 @@ function mapSelectedProviderAssignment(
   const instantiation = instantiateProviderOperationTemplate(
     providerOperationTemplate(selection.row, operationKind),
     {
-      sourceReceiverCarrier: receiverCarrier,
+      ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
       sourceParameterCarriers: rawArgumentCarriers,
     },
   );
   const template = instantiation?.template;
+  if (template !== undefined && providerFormRequiresSourceReceiver(template.target) && receiverCarrier === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_PROVIDER_SET_EVIDENCE_MISSING",
+      `Selected provider declaration '${providerIdentityText(identity)}' requires a closed source receiver carrier for its Rust ${operationKind} operation.`,
+    );
+  }
   if (template === undefined || template.parameterCarriers === undefined ||
     template.parameterCarriers.length !== sourceArguments.length) {
     return rejectSelectedOperation(
@@ -593,7 +617,7 @@ function mapSelectedProviderAssignment(
     );
   }
   const sourceArgumentCarriers = sourceArguments.map((argument, index) =>
-    normalizeSelectedLiteralCarrier(
+    normalizeSelectedOperationInputCarrier(
       argument,
       rawArgumentCarriers[index],
       template.parameterCarriers?.[index],
@@ -616,7 +640,7 @@ function mapSelectedProviderAssignment(
   const abi = finalizeRustProviderOperationAbi({
     operationKind,
     form: template.target,
-    sourceReceiverCarrier: receiverCarrier,
+    ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
     sourceArgumentCarriers: finalizedSourceArgumentCarriers,
     declaredSourceArgumentCarriers: template.parameterCarriers,
     resultCarrier: template.resultCarrier,
@@ -634,6 +658,7 @@ function mapSelectedProviderAssignment(
     );
   }
   const selectedRight = finalizedSourceArgumentCarriers[finalizedSourceArgumentCarriers.length - 1];
+  const sourceResultCarrier = context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right;
   return acceptRustOperation(request.expression, {
     kind: "runtime-set",
     operationId: template.operationId,
@@ -644,7 +669,7 @@ function mapSelectedProviderAssignment(
     sourceSelectedDeclaration: selectedDeclaration,
     sourceResultType: request.right,
     providerDeclaration: identity,
-  }, selectedRight ?? right);
+  }, sourceResultCarrier ?? selectedRight);
 }
 
 function operatorFact(operator: RustOperatorToken, resultCarrier: TargetTypeRef): Extract<RustTargetOperationFact, { readonly kind: "operator-token" }> {
@@ -3967,7 +3992,13 @@ function finalizeProviderOperationFromSubjects(
     const resolved = selectedArgumentCarriers?.[index] ??
       rustEffectiveValueCarrier(context.facts, argument) ??
       resolveRustTargetTypeRef(argument, context, options);
-    return normalizeSelectedLiteralCarrier(argument, resolved, instantiatedTemplate.parameterCarriers?.[index], context, options);
+    return normalizeSelectedOperationInputCarrier(
+      argument,
+      resolved,
+      instantiatedTemplate.parameterCarriers?.[index],
+      context,
+      options,
+    );
   });
   if (sourceArgumentCarriers.some((carrier) => carrier === undefined)) {
     return undefined;
@@ -4390,6 +4421,38 @@ function normalizeSelectedLiteralCarrier(
     });
   }
   return expected;
+}
+
+function normalizeSelectedOperationInputCarrier(
+  subject: ExtensionFactSubject | undefined,
+  actual: TargetTypeRef | undefined,
+  expected: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  const direct = normalizeSelectedLiteralCarrier(
+    subject,
+    actual,
+    expected,
+    context,
+    options,
+  );
+  const optionElement = rustOptionElementCarrier(expected);
+  if (optionElement === undefined || direct === undefined ||
+    rustTargetTypeRefEquals(direct, expected)) {
+    return direct;
+  }
+  if (isRustDefinitelyNullishCarrier(direct)) {
+    return expected;
+  }
+  const inner = normalizeSelectedLiteralCarrier(
+    subject,
+    direct,
+    optionElement,
+    context,
+    options,
+  );
+  return rustTargetTypeRefEquals(inner, optionElement) ? expected : direct;
 }
 
 function normalizeSelectedArgumentCarrier(

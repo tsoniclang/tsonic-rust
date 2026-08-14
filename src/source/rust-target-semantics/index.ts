@@ -2539,12 +2539,11 @@ function resolveBinaryOperandCarriers(
     }
     return { left, right, leftNode, rightNode, operatorKind };
   }
-  const operandExpected = expected;
   let left = resolveExpressionCarrier(
     walk,
     leftNode,
     sourceFile,
-    operandExpected,
+    undefined,
   );
   if (left === undefined) {
     const leftSemanticCarrier = resolveRustTargetTypeRef(
@@ -2556,17 +2555,17 @@ function resolveBinaryOperandCarriers(
       walk,
       leftNode,
       sourceFile,
-      operandExpected ?? leftSemanticCarrier,
+      leftSemanticCarrier,
     );
   }
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
     ? rustOptionElementCarrier(left) ?? expected
     : operatorKind === KindEqualsToken
       ? selectedAssignmentValueCarrier ??
-        (useAssignmentReadCarrier ? left ?? operandExpected : operandExpected)
+        (useAssignmentReadCarrier ? left : undefined)
       : rustBinaryRightCarrierIsIndependentOfLeft(operatorKind)
         ? undefined
-        : left ?? operandExpected;
+        : left;
   let right = resolveExpressionCarrier(
     walk,
     rightNode,

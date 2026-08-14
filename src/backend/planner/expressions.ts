@@ -383,11 +383,29 @@ function applyRustContextualValueConversion(
     node,
   );
   if (!rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
-    context.diagnostics.push(missingFactDiagnostic(
+    const left = context.input.ast.kindName(node) === KindBinaryExpression
+      ? BinaryExpression_Left(context.input.ast, node)
+      : undefined;
+    const right = context.input.ast.kindName(node) === KindBinaryExpression
+      ? BinaryExpression_Right(context.input.ast, node)
+      : undefined;
+    const diagnostic = missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.contextual-value-conversion",
       "Contextual Rust value conversion conflicts with its finalized source and target carriers.",
-    ));
+    );
+    context.diagnostics.push({
+      ...diagnostic,
+      evidence: [
+        ...(diagnostic.evidence ?? []),
+        `carrier.current=${JSON.stringify(sourceCarrier)}`,
+        `carrier.source=${JSON.stringify(fact.sourceCarrier)}`,
+        `carrier.target=${JSON.stringify(fact.targetCarrier)}`,
+        `carrier.left=${JSON.stringify(context.input.facts.getRuntimeCarrierFact(left)?.carrier)}`,
+        `carrier.right=${JSON.stringify(context.input.facts.getRuntimeCarrierFact(right)?.carrier)}`,
+        `operation=${JSON.stringify(context.input.facts.getFact(node, rustTargetOperationFactKey))}`,
+      ],
+    });
     return undefined;
   }
   return applyRustValueConversion(context, expression, fact.conversion, node, false);

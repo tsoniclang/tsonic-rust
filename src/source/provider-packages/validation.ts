@@ -684,12 +684,15 @@ function validateOperationRows(
       fail(`row '${label}' declares a provider value operation for non-value export kind '${String(exported?.declaration.kind)}'`);
     }
     if (row.memberId === undefined && exported?.declaration.kind === "value" &&
-      row.operationKind !== "property") {
-      fail(`row '${label}' must represent provider value export '${row.exportId}' as a property operation`);
+      row.operationKind !== "property" && row.operationKind !== "property-set") {
+      fail(`row '${label}' must represent provider value export '${row.exportId}' as a property read or property-set operation`);
     }
     if (row.operationKind === "property-set" || row.operationKind === "index-set") {
       const expectedMemberKind = row.operationKind === "property-set" ? "property" : "indexer";
-      if (member?.declaration.kind !== expectedMemberKind || member.declaration.readonly === true) {
+      const selectedValueProjection = row.operationKind === "property-set" &&
+        member === undefined && exported?.declaration.kind === "value";
+      if (!selectedValueProjection &&
+        (member?.declaration.kind !== expectedMemberKind || member.declaration.readonly === true)) {
         fail(`row '${label}' requires a writable provider ${expectedMemberKind} declaration`);
       }
       if (row.signatureId !== undefined && row.operationKind === "property-set") {

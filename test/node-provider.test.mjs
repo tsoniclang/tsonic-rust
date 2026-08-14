@@ -41,6 +41,51 @@ export function probe(dir: string, file: string): boolean {
   assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_node = \{ path = ".*rust-nodejs\/rust\/crates\/tsonic_rust_node" \}/u);
 });
 
+test("writable provider projections lower through their exact selected write evidence", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import process from "node:process";
+
+export function setExitStatus(): void {
+  process.exitCode = 2;
+  process.exitCode = null;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /tsonic_rust_node::process::set_exit_code\(Some\(2\)\)/u);
+  assert.match(text, /tsonic_rust_node::process::set_exit_code\(Option::<i32>::None\)/u);
+});
+
+test("provider argument conversion does not change nested source operator semantics", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { Buffer } from "node:buffer";
+import type { int32 } from "@tsonic/core/types.js";
+
+export function readOffset(bytes: Buffer): int32 {
+  let index = 2;
+  return bytes.readUInt8(index + 1);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /f64_to_i32\(index \+ 1\.0\)\?/u);
+  assert.match(text, /u8_to_i32\([\s\S]*read_u8/u);
+});
+
 test("node path, filesystem, and crypto overloads lower through exact provider signatures", async () => {
   const { result } = compileRust({
     surfaces: ["js"],

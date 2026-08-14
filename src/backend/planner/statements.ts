@@ -2367,29 +2367,22 @@ function planRuntimeSetStatement(
     return undefined;
   }
   const receiverNode = Node_Expression(context.input.ast, left);
-  const expectedReceiverMode = fact.abi.target.form === "index"
-    ? "mut-ref"
-    : fact.abi.target.form === "receiver-method"
-      ? fact.abi.target.mutatesReceiver === true ? "mut-ref" : "ref"
-      : undefined;
-  if (receiverNode === undefined || fact.abi.targetReceiver.kind !== "input" ||
-    expectedReceiverMode === undefined || fact.abi.targetReceiver.input.mode !== expectedReceiverMode) {
+  const receiver = fact.abi.targetReceiver.kind === "input" && receiverNode !== undefined
+    ? planFinalizedSourceInput(
+        context,
+        fact.abi.targetReceiver.input,
+        receiverNode,
+        sourceArgumentNodes,
+        expression,
+        "target-receiver",
+      )
+    : undefined;
+  if (fact.abi.targetReceiver.kind === "input" && receiver === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
       "rust.backend.runtime-set-receiver",
       "Runtime setter ABI has no finalized target receiver input.",
     ));
-    return undefined;
-  }
-  const receiver = planFinalizedSourceInput(
-    context,
-    fact.abi.targetReceiver.input,
-    receiverNode,
-    sourceArgumentNodes,
-    expression,
-    "target-receiver",
-  );
-  if (receiver === undefined) {
     return undefined;
   }
   const targetArguments: RustExpr[] = [];
@@ -2402,7 +2395,8 @@ function planRuntimeSetStatement(
   }
   if (fact.abi.target.form === "index") {
     const [index, value] = targetArguments;
-    if (index === undefined || value === undefined || targetArguments.length !== 2) {
+    if (receiver === undefined || index === undefined || value === undefined ||
+      targetArguments.length !== 2) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, expression),
         "rust.backend.runtime-index-set-abi",
@@ -2417,10 +2411,67 @@ function planRuntimeSetStatement(
       value,
     }];
   }
-  if (fact.abi.target.form === "receiver-method") {
+  if (fact.abi.target.form === "call" || fact.abi.target.form === "free-call" ||
+    fact.abi.target.form === "call-str-slice" ||
+    fact.abi.target.form === "free-call-str-slice" ||
+    fact.abi.target.form === "call-value-slice" ||
+    fact.abi.target.form === "call-value-array") {
+    registerAliasFromPath(context, fact.abi.target.path);
+    let call: RustExpr = {
+      kind: "call",
+      path: fact.abi.target.path,
+      args: targetArguments,
+    };
+    if (fact.abi.target.form === "call") {
+      for (const step of fact.abi.target.chain ?? []) {
+        if (step.kind !== "method") {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.runtime-set-chain",
+            "Runtime setter call chain contains a non-method step after ABI validation.",
+          ));
+          return undefined;
+        }
+        call = { kind: "method-call", receiver: call, method: step.name, args: [] };
+      }
+    }
+    return [{ kind: "expr", expr: call }];
+  }
+  if (fact.abi.target.form === "receiver-method" || fact.abi.target.form === "method" ||
+    fact.abi.target.form === "arg-method" ||
+    fact.abi.target.form === "arg-receiver-method" ||
+    fact.abi.target.form === "receiver-value-array" ||
+    fact.abi.target.form === "receiver-tagged-array") {
+    if (receiver === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.runtime-set-receiver",
+        "Runtime setter method form has no finalized target receiver input.",
+      ));
+      return undefined;
+    }
+    let call: RustExpr = {
+      kind: "method-call",
+      receiver,
+      method: fact.abi.target.name,
+      args: targetArguments,
+    };
+    if (fact.abi.target.form === "receiver-method") {
+      for (const step of fact.abi.target.chain ?? []) {
+        if (step.kind !== "method") {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, expression),
+            "rust.backend.runtime-set-chain",
+            "Runtime setter method chain contains a non-method step after ABI validation.",
+          ));
+          return undefined;
+        }
+        call = { kind: "method-call", receiver: call, method: step.name, args: [] };
+      }
+    }
     return [{
       kind: "expr",
-      expr: { kind: "method-call", receiver, method: fact.abi.target.name, args: targetArguments },
+      expr: call,
     }];
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(

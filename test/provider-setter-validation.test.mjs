@@ -74,6 +74,32 @@ test("writable provider property and index signatures accept exact setter ABIs",
   ));
 });
 
+test("a checked writable projection may retain its exact provider value identity", () => {
+  assert.doesNotThrow(() => createRustProviderPackage({
+    id: "acme-module-setter",
+    displayName: "Acme module setter",
+    version: "1.0.0",
+    modules: [{
+      moduleSpecifier: "@acme/module-setter",
+      providerModuleId: "acme.module.setter",
+      exports: [{
+        id: "acme.module.exitCode",
+        name: "exitCode",
+        kind: "value",
+        type: { kind: "source-primitive", name: "int32" },
+      }],
+    }],
+    operations: [{
+      exportId: "acme.module.exitCode",
+      operationKind: "property-set",
+      target: { form: "call", path: "acme_module::set_exit_code" },
+      resultCarrier: unit,
+      parameterCarriers: [int32],
+    }],
+    crates: [],
+  }));
+});
+
 test("provider setter metadata rejects readonly, non-unit, and incomplete contracts", () => {
   assert.throws(
     () => createRustProviderPackage(storeDefinition([propertySetter()], { readonlyProperty: true })),
