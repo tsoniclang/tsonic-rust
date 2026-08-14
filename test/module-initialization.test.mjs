@@ -231,7 +231,7 @@ export function main(): void {}
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn __tsonic_module_init\(\) -> rt::TsonicResult<\(\)>[\s\S]*?json_parse\("1"\)\?/u,
+    /pub fn __tsonic_module_init\(\) -> rt::TsonicResult<\(\)>[\s\S]*?json_parse\("1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
   );
   assert.match(
     artifactText(result, "src/main.rs"),

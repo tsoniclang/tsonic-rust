@@ -287,7 +287,9 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /action\s*\.clone\(\)\s*\.as_ref\(\)\s*\.map/u);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /action\s*\.as_ref\(\)\s*\.map/u);
+  assert.doesNotMatch(source, /action\s*\.clone\(\)/u);
   validateGeneratedProject("callable-optional", result.artifacts, { run: true });
 });
 

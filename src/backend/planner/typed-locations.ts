@@ -113,7 +113,10 @@ export function planRustTypedLocationCall(
         kind: "associated-call",
         owner: locationType,
         method: "same",
-        args: [optionReference(left), optionReference(right)],
+        args: [
+          optionReference(planRustNonConsumingValue(plan.leftExpression, left, context)),
+          optionReference(planRustNonConsumingValue(plan.rightExpression, right, context)),
+        ],
       };
     }
   }

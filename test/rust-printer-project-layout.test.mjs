@@ -62,6 +62,120 @@ test("long tuple values use rustfmt-compatible element layout", () => {
   );
 });
 
+test("long typed bindings expand the type before attaching the initializer", () => {
+  const callableType = {
+    kind: "named",
+    path: "rt::Callable",
+    typeArguments: [{
+      kind: "tuple",
+      elements: [
+        { kind: "named", path: "tsonic_rust_node::http::IncomingMessage" },
+        { kind: "named", path: "tsonic_rust_node::http::ServerResponseHandle" },
+      ],
+    }, {
+      kind: "named",
+      path: "rt::TsonicResult",
+      typeArguments: [{ kind: "unit" }],
+    }],
+  };
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "aliasedHandle",
+          mutable: false,
+          type: callableType,
+          init: { kind: "path", path: "handler_factory" },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /let aliasedHandle: rt::Callable<\n {8}\(\n {12}tsonic_rust_node::http::IncomingMessage,\n {12}tsonic_rust_node::http::ServerResponseHandle,\n {8}\),\n {8}rt::TsonicResult<\(\)>,\n {4}> = handler_factory;/u,
+  );
+});
+
+test("fallible await chains budget postfix syntax on its selected line", () => {
+  const text = projectFunction({
+    kind: "try",
+    expr: {
+      kind: "method-call",
+      receiver: {
+        kind: "await",
+        expr: {
+          kind: "call",
+          path: "tsonic_rust_node::fs_promises::mkdir_async",
+          args: [
+            { kind: "reference", expr: { kind: "path", path: "dir" } },
+            { kind: "bool-literal", value: true },
+          ],
+        },
+      },
+      method: "map_err",
+      args: [{ kind: "path", path: "rt::TsonicError::from" }],
+    },
+  });
+
+  assert.match(
+    text,
+    /mkdir_async\(&dir, true\)\n {8}\.await\n {8}\.map_err\(rt::TsonicError::from\)\?/u,
+  );
+});
+
+test("fallible nested calls remain compact when their selected line fits", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "bytes",
+          mutable: false,
+          type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
+          init: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "call",
+                path: "tsonic_rust_node::crypto::random_bytes",
+                args: [{
+                  kind: "try",
+                  expr: {
+                    kind: "call",
+                    path: "tsonic_rust_runtime::conversions::i32_to_usize",
+                    args: [{ kind: "int-literal", text: "8" }],
+                  },
+                }],
+              },
+              method: "map_err",
+              args: [{ kind: "path", path: "rt::TsonicError::from" }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(8\)\?\)\n {12}\.map_err\(rt::TsonicError::from\)\?;/u,
+  );
+  assert.doesNotMatch(text, /i32_to_usize\(\s*\n/u);
+});
+
 test("logical block operands keep the following operator on the closing brace", () => {
   const upcast = () => ({
     kind: "block",
@@ -267,6 +381,44 @@ test("format macro arguments keep borrowed nested calls attached to their call",
   );
   assert.match(text, /self\.clone\(\)\n\s+\),\),/u);
   assert.doesNotMatch(text, /rt::source_string\(\n/u);
+});
+
+test("expanded format macros separate call-valued arguments", () => {
+  const text = projectFunction({
+    kind: "string-concat",
+    parts: [
+      { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "" }] },
+      {
+        kind: "call",
+        path: "rt::source_string",
+        args: [{ kind: "reference", expr: { kind: "path", path: "error" } }],
+      },
+      { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "" }] },
+    ],
+  });
+
+  assert.match(
+    text,
+    /"\{\}\{\}\{\}",\n\s+String::from\(""\),\n\s+rt::source_string\(&error\),\n\s+String::from\(""\),/u,
+  );
+});
+
+test("expanded format macros pack fitting source values", () => {
+  const text = projectFunction({
+    kind: "string-concat",
+    parts: [
+      { kind: "path", path: "text" },
+      { kind: "path", path: "text_kind" },
+      { kind: "path", path: "count_kind" },
+      { kind: "path", path: "wide_kind" },
+      { kind: "path", path: "enabled_kind" },
+    ],
+  });
+
+  assert.match(
+    text,
+    /"\{\}\{\}\{\}\{\}\{\}",\n\s+text, text_kind, count_kind, wide_kind, enabled_kind,/u,
+  );
 });
 
 test("multiline awaited match-arm expressions use a canonical arm block", () => {

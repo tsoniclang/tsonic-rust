@@ -224,7 +224,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let values = js_abi::JsMap::new\(\);/u);
+  assert.match(source, /let values: js_abi::JsMap<String, Item> = js_abi::JsMap::new\(\);/u);
   assert.equal(validateGeneratedProject("js-map-project-values", result.artifacts, { run: true }).status, 0);
 });
 
@@ -324,7 +324,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /values\.try_sort\(/u);
+  assert.match(source, /values\s*\.try_sort\(/u);
   assert.match(source, /unary\.sort_value\(/u);
   assert.match(source, /zero\.sort_zero\(/u);
   assert.equal(validateGeneratedProject("js-array-comparator-sort", result.artifacts, { run: true }).status, 0);

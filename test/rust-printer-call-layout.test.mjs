@@ -832,6 +832,323 @@ test("long multiline let initializers reflow from their continuation column", ()
   );
 });
 
+test("borrowed method-chain let initializers reflow as one continuation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "__tsonic_location",
+          mutable: false,
+          init: {
+            kind: "reference",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "defaultEvaluations" },
+              method: "with",
+              args: [{
+                kind: "closure",
+                params: [{ name: "__tsonic_module_binding", mutable: false }],
+                move: false,
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "__tsonic_module_binding" },
+                  method: "location",
+                  args: [],
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let __tsonic_location =\n        &defaultEvaluations\.with\(\|__tsonic_module_binding\| __tsonic_module_binding\.location\(\)\);/u,
+  );
+});
+
+test("typed let bindings keep fitting call openings before expanded arrays", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "concatenated",
+          mutable: false,
+          type: {
+            kind: "named",
+            path: "js_abi::JsArray",
+            typeArguments: [{ kind: "primitive", name: "i32" }],
+          },
+          init: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "concatLeft" },
+            method: "concat",
+            args: [{
+              kind: "slice-literal",
+              elements: [
+                {
+                  kind: "call",
+                  path: "js_abi::JsArrayConcatItem::Value",
+                  args: [{ kind: "int-literal", text: "4" }],
+                },
+                {
+                  kind: "call",
+                  path: "js_abi::JsArrayConcatItem::Array",
+                  args: [{ kind: "path", path: "concatRight" }],
+                },
+              ],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let concatenated: js_abi::JsArray<i32> = concatLeft\.concat\(\[\n/u,
+  );
+});
+
+test("typed let bindings keep a fitting call base before a fallible selector", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "temporary",
+          mutable: false,
+          type: { kind: "string" },
+          init: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "call",
+                path: "tsonic_rust_node::fs::mkdtemp_sync",
+                args: [{ kind: "reference", expr: { kind: "path", path: "root" } }],
+              },
+              method: "map_err",
+              args: [{ kind: "path", path: "rt::TsonicError::from" }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let temporary: String = tsonic_rust_node::fs::mkdtemp_sync\(&root\)\n        \.map_err\(rt::TsonicError::from\)\?;/u,
+  );
+});
+
+test("typed let bindings move an expanded call base to one continuation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "merged",
+          mutable: false,
+          type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
+          init: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "associated-call",
+                owner: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
+                method: "concat",
+                args: [{
+                  kind: "reference",
+                  expr: {
+                    kind: "call",
+                    path: "js_abi::JsArray::from_dense",
+                    args: [{
+                      kind: "vec-literal",
+                      elements: [
+                        { kind: "call", path: "clone_first", args: [] },
+                        { kind: "call", path: "clone_second", args: [] },
+                      ],
+                    }],
+                  },
+                }],
+              },
+              method: "map_err",
+              args: [{ kind: "path", path: "rt::TsonicError::from" }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let merged: tsonic_rust_node::buffer::Buffer =\n        tsonic_rust_node::buffer::Buffer::concat\(&js_abi::JsArray::from_dense\(vec!\[/u,
+  );
+});
+
+test("fitting string concatenations remain on typed binding lines", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "file",
+          mutable: false,
+          type: { kind: "string" },
+          init: {
+            kind: "string-concat",
+            parts: [
+              { kind: "path", path: "temporary" },
+              { kind: "path", path: "separator" },
+              {
+                kind: "call",
+                path: "String::from",
+                args: [{ kind: "str-literal", value: "payload.bin" }],
+              },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let file: String = format!\("\{\}\{\}\{\}", temporary, separator, String::from\("payload\.bin"\)\);/u,
+  );
+});
+
+test("fallible method calls keep short receivers attached to block arguments", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "values" },
+              method: "try_for_each",
+              args: [{
+                kind: "block",
+                bindings: [{
+                  name: "captured",
+                  value: { kind: "path", path: "source" },
+                }],
+                value: {
+                  kind: "closure",
+                  params: [{ name: "value", mutable: false }],
+                  move: true,
+                  body: {
+                    kind: "call",
+                    path: "consume",
+                    args: [
+                      { kind: "path", path: "captured" },
+                      { kind: "path", path: "value" },
+                    ],
+                  },
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /values\.try_for_each\(\{\n/u);
+  assert.doesNotMatch(source, /values\n\s+\.try_for_each/u);
+});
+
+test("fallible method calls keep short receivers attached to closure blocks", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "values" },
+              method: "try_sort",
+              args: [{
+                kind: "closure-block",
+                params: [
+                  { name: "left", mutable: false },
+                  { name: "right", mutable: false },
+                ],
+                move: false,
+                async: false,
+                body: {
+                  statements: [{
+                    kind: "tail",
+                    expr: {
+                      kind: "call",
+                      path: "compare_with_a_deliberately_long_checked_operation",
+                      args: [
+                        { kind: "path", path: "left" },
+                        { kind: "path", path: "right" },
+                      ],
+                    },
+                  }],
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /values\.try_sort\(\|left, right\| \{/u);
+  assert.doesNotMatch(source, /values\n\s+\.try_sort/u);
+});
+
 test("long expression closures use a vertical receiver before expanding the closure body", () => {
   const source = printRustSourceFile({
     headerComment,

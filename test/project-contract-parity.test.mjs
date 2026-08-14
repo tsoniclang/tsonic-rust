@@ -188,7 +188,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let mut __tsonic_field_total(?:_[0-9]+)?: i32;/u);
   assert.match(source, /__tsonic_field_total(?:_[0-9]+)? \+= index;/u);
-  assert.match(source, /let doubled = __tsonic_base_state\.0 \* 2;/u);
+  assert.match(source, /let doubled: i32 = __tsonic_base_state\.0 \* 2;/u);
 
   const run = validateGeneratedProject("constructor-control-flow", result.artifacts, { run: true });
   assert.equal(run.status, 0);
@@ -293,7 +293,7 @@ export function render(): string {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let mut index = 0\.0;/u);
+  assert.match(source, /let mut index: f64 = 0\.0;/u);
   assert.match(source, /rt::source_string\(&index\)/u);
   validateGeneratedProject("inferred-number-carrier", result.artifacts);
 });
@@ -339,8 +339,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let equal = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*false\s*\}\s*\};/u);
-  assert.match(source, /let unequal = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*true\s*\}\s*\};/u);
+  assert.match(source, /let equal: bool = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*false\s*\}\s*\};/u);
+  assert.match(source, /let unequal: bool = \{\s*let _ = left\(counter\.clone\(\)\);\s*\{\s*let _ = \{\s*right\(counter\.clone\(\)\);\s*rt::Undefined\s*\};\s*true\s*\}\s*\};/u);
   const run = validateGeneratedProject("disjoint-nullish-equality", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

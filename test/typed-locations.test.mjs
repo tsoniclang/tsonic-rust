@@ -41,7 +41,8 @@ export function bothMissing(): boolean {
   assert.match(output, /pointer\.store\(value\);\s*pointer\.load\(\)/u);
   assert.match(output, /pub fn same<T>\(left: Option<rt::Location<T>>, right: Option<rt::Location<T>>\) -> bool/u);
   assert.match(output, /rt::Location::<T>::same\(left\.as_ref\(\), right\.as_ref\(\)\)/u);
-  assert.match(output, /rt::Location::<i32>::same\(None\.as_ref\(\), None\.as_ref\(\)\)/u);
+  assert.match(output, /rt::Location::<i32>::same\(\s*Option::<rt::Location<i32>>::None\.as_ref\(\),\s*Option::<rt::Location<i32>>::None\.as_ref\(\),?\s*\)/u);
+  assert.doesNotMatch(output, /(?:left|right)\.clone\(\)/u);
   assert.doesNotMatch(output, /equalPointer|loadPointer|storePointer/u);
 });
 

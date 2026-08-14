@@ -215,7 +215,12 @@ export function planExpression(
   let flowSelected = planned;
   if (flowRead !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, flowRead.sourceCarrier)) {
-      const selected = planRustFlowReadProjection(node, flowSelected, flowRead, context);
+      const selected = planRustFlowReadProjection(
+        node,
+        planRustNonConsumingValue(node, flowSelected, context),
+        flowRead,
+        context,
+      );
       if (selected === undefined) {
         return undefined;
       }
@@ -555,10 +560,11 @@ function planExpressionInner(
     }
     case KindIdentifier: {
       const identifierFact = rustOperationFact(node, context);
+      const binding = context.input.facts.getFact(node, rustSourceBindingFactKey);
       if (identifierFact !== undefined && identifierFact.kind === "option-none") {
         return { kind: "none" };
       }
-      if (isRustUndefinedCarrier(expressionCarrier(node, context))) {
+      if (binding === undefined && isRustUndefinedCarrier(expressionCarrier(node, context))) {
         context.usedAliases?.add("rt");
         return { kind: "path", path: "rt::Undefined" };
       }
@@ -651,7 +657,6 @@ function planExpressionInner(
           args: [implementation],
         };
       }
-      const binding = context.input.facts.getFact(node, rustSourceBindingFactKey);
       if (binding === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
@@ -778,12 +783,15 @@ function planExpressionInner(
         return undefined;
       }
       const operand = planExpression(operandNode, context);
+      const discard = isRustUnitCarrier(expressionCarrier(operandNode, context)) ? "unit" : "value";
       return operand === undefined
         ? undefined
         : {
             kind: "evaluate-then",
-            effect: operand,
-            discard: isRustUnitCarrier(expressionCarrier(operandNode, context)) ? "unit" : "value",
+            effect: discard === "value"
+              ? planRustNonConsumingValue(operandNode, operand, context)
+              : operand,
+            discard,
             value: { kind: "string-literal", value: fact.result },
           };
     }
@@ -1550,7 +1558,10 @@ function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr 
     parts.push({
       kind: "call",
       path: "rt::source_string",
-      args: [{ kind: "reference", expr: value }],
+      args: [{
+        kind: "reference",
+        expr: planRustNonConsumingValue(expression, value, context),
+      }],
     });
     parts.push({ kind: "string-literal", value: context.input.ast.text(literal) });
   }
@@ -2738,10 +2749,15 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const rightNode = BinaryExpression_Right(context.input.ast, node);
     const optionNode = fact.optionOperand === "left" ? leftNode : rightNode;
     const value = optionNode === undefined ? undefined : planExpression(optionNode, context);
-    if (value === undefined) {
+    if (optionNode === undefined || value === undefined) {
       return undefined;
     }
-    return { kind: "method-call", receiver: value, method: fact.negated ? "is_some" : "is_none", args: [] };
+    return {
+      kind: "method-call",
+      receiver: planRustNonConsumingValue(optionNode, value, context),
+      method: fact.negated ? "is_some" : "is_none",
+      args: [],
+    };
   }
   if (fact !== undefined && fact.kind === "option-value-equality") {
     const leftNode = BinaryExpression_Left(context.input.ast, node);
@@ -2750,18 +2766,18 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const valueNode = fact.optionOperand === "left" ? rightNode : leftNode;
     const option = optionNode === undefined ? undefined : planExpression(optionNode, context);
     const value = valueNode === undefined ? undefined : planExpression(valueNode, context);
-    if (option === undefined || value === undefined) {
+    if (optionNode === undefined || valueNode === undefined || option === undefined || value === undefined) {
       return undefined;
     }
     return {
       kind: "binary",
       operator: fact.negated ? "!=" : "==",
       left: fact.optionOperand === "left"
-        ? option
+        ? planRustNonConsumingValue(optionNode, option, context)
         : { kind: "call", path: "Some", args: [value] },
       right: fact.optionOperand === "left"
         ? { kind: "call", path: "Some", args: [value] }
-        : option,
+        : planRustNonConsumingValue(optionNode, option, context),
     };
   }
   if (fact !== undefined && fact.kind === "disjoint-equality") {
@@ -2809,16 +2825,16 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
   const rightNode = BinaryExpression_Right(context.input.ast, node);
   const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
   const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
-  if (left === undefined || right === undefined) {
+  if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined) {
     return undefined;
   }
   if (fact.kind === "string-concat") {
     const parts: RustExpr[] = [];
-    for (const side of [left, right]) {
+    for (const [sideNode, side] of [[leftNode, left], [rightNode, right]] as const) {
       if (side.kind === "string-concat") {
         parts.push(...side.parts);
       } else {
-        parts.push(side);
+        parts.push(planRustNonConsumingValue(sideNode, side, context));
       }
     }
     return { kind: "string-concat", parts };

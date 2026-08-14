@@ -5,7 +5,7 @@ import { artifactText, compileRust } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 const syncResource = `
-class Resource {
+export class Resource {
   constructor() {}
   [Symbol.dispose](): void {}
 }
@@ -25,7 +25,7 @@ export function run(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let resource = Resource::new\(\);/u);
+  assert.match(source, /let resource: Resource = Resource::new\(\);/u);
   assert.match(source, /rt::Completion<\(\)>/u);
   assert.match(source, /resource\.dispose\(\);/u);
   validateGeneratedProject("resource-management-normal", result.artifacts);
@@ -145,7 +145,7 @@ export async function run(fail: boolean): Promise<void> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.equal([...source.matchAll(/let resource =/gu)].length, 2);
+  assert.equal([...source.matchAll(/let resource: (?:Resource|AsyncResource) =/gu)].length, 2);
   assert.match(source, /resource\.dispose\(\)/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
   assert.match(source, /let __tsonic_resource_flow(?:_\d+)?: rt::TsonicResult<rt::Completion<\(\)>> =\n\s+Ok\(rt::Completion::Normal\);/u);
@@ -157,8 +157,7 @@ test("using skips null resources through the exact Option carrier", { timeout: 3
     files: {
       "index.ts": `
 ${syncResource}
-export function run(): void {
-  const resource: Resource | null = new Resource();
+export function run(resource: Resource | null): void {
   using active = resource;
 }
 `,

@@ -178,8 +178,8 @@ export function main(): void {
   assert.match(text, /values\s*\.try_for_each/u);
   assert.match(text, /values\s*\.try_reduce_with_array\(0,/u);
   assert.match(text, /values\s*\.try_reduce_from_first_accumulator/u);
-  assert.match(text, /map\.try_for_each/u);
-  assert.match(text, /set\.try_for_each_value_key/u);
+  assert.match(text, /map\s*\.try_for_each/u);
+  assert.match(text, /set\s*\.try_for_each_value_key/u);
   assert.equal(validateGeneratedProject("fallible-callbacks", result.artifacts, { run: true }).status, 0);
 });
 
@@ -199,8 +199,8 @@ export function roundtrip(text: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn roundtrip\(text: String\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /js_abi::json_parse\(&text\)\?/u);
-  assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
+  assert.match(text, /js_abi::json_parse\(&text\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
 });
 
 test("node fs read lowers through the fallible provider row", async () => {
@@ -252,7 +252,7 @@ export function forwards(text: string): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn catches\(text: String\) -> String \{/u);
   assert.match(text, /pub fn forwards\(text: String\) -> String \{/u);
-  assert.match(text, /catches\(text\)/u);
+  assert.match(text, /catches\(text\.clone\(\)\)/u);
   assert.doesNotMatch(text, /pub fn (?:catches|forwards)[^{]+TsonicResult/u);
   assert.doesNotMatch(text, /catches\(text\)\?/u);
 });
@@ -279,10 +279,10 @@ export function inspectJson(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let value = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
+  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u);
   assert.match(
     text,
-    /let rendered = rt::option_coalesce\(\n            js_abi::json_stringify\(&value\)\?,\n            std::convert::identity,\n            \|\| String::from\(""\),\n        \);/u,
+    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
   );
   assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });

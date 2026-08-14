@@ -1842,13 +1842,14 @@ function resolveIndependentCallArgumentOperation(
   const { ast } = walk.context;
   const kind = ast.kindName(argument);
   if (kind === KindCallExpression || kind === KindNewExpression ||
-    kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
+    kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
+    kind === KindNonNullExpression || kind === "KindAsExpression" ||
+    kind === "KindTypeAssertionExpression") {
     resolveExpressionCarrier(walk, argument, sourceFile, undefined);
     return;
   }
-  if (kind === KindParenthesizedExpression || kind === KindNonNullExpression ||
-    kind === KindSatisfiesExpression || kind === "KindAsExpression" ||
-    kind === "KindTypeAssertionExpression" || kind === KindSpreadElement) {
+  if (kind === KindParenthesizedExpression || kind === KindSatisfiesExpression ||
+    kind === KindSpreadElement) {
     const inner = Node_Expression(ast, argument);
     if (inner !== undefined) {
       resolveIndependentCallArgumentOperation(walk, inner, sourceFile);

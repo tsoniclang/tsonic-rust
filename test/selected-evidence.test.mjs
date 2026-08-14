@@ -95,6 +95,29 @@ export function identity(value: int32): int32 {
   assert.doesNotMatch(text, / as /u);
 });
 
+test("assertion results finalize before their containing call selects argument carriers", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+function accept(value: int32): int32 {
+  return value;
+}
+
+export function use(): int32 {
+  return accept(250 as int32);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.equal(text.match(/f64_to_i32/gu)?.length, 1);
+  validateGeneratedProject("selected-assertion-call-argument", result.artifacts);
+});
+
 test("unsupported checked assertions fail closed at Rust target analysis", () => {
   const { result } = compileRust({
     files: {
@@ -222,10 +245,9 @@ export function length(value: string | null): int32 | undefined {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(
-    artifactText(result, "src/index.rs"),
-    /value\s*\.clone\(\)\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u,
-  );
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u);
+  assert.doesNotMatch(source, /value\s*\.clone\(\)/u);
   validateGeneratedProject("selected-optional-property", result.artifacts);
 });
 

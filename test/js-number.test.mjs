@@ -76,8 +76,8 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /js_abi::number_parse_int_radix\("ff", 16\.0\)/u);
-  assert.match(source, /js_abi::number_to_fixed_digits\(value, 2\.0\)\?/u);
-  assert.match(source, /js_abi::number_to_string_radix\(integer, 16\.0\)\?/u);
+  assert.match(source, /js_abi::number_to_fixed_digits\(value, 2\.0\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(source, /js_abi::number_to_string_radix\(integer, 16\.0\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(source, /js_abi::NUMBER_MAX_VALUE/u);
   assert.equal(validateGeneratedProject("js-number", result.artifacts, { run: true }).status, 0);
 });

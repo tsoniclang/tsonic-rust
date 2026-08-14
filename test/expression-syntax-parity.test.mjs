@@ -155,7 +155,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /value\.unwrap\(\)/u);
+  assert.match(source, /value\.clone\(\)\.unwrap\(\)/u);
   assert.match(source, /get_number[\s\S]*Some\(__tsonic_flow_value\)/u);
   assert.equal(validateGeneratedProject("non-null-projection", result.artifacts, { run: true }).status, 0);
 });
@@ -347,7 +347,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let discarded = \{\s+acme_testing::check\(true\);\s+rt::Undefined\s+\};/u);
+  assert.match(source, /let discarded: rt::Undefined = \{\s+acme_testing::check\(true\);\s+rt::Undefined\s+\};/u);
   validateGeneratedProject("expression-void", result.artifacts, { run: true });
 });
 

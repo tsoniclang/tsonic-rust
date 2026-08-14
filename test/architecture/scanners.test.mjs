@@ -375,7 +375,8 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
     "function planPropertyAccess(",
   );
   assert.match(planner, /getFact\(node, rustOptionalChainFactKey\)/u);
-  assert.match(planner, /planExpression\(fact\.guard, context\)/u);
+  assert.match(planner, /planRawExpression\(fact\.guard, context, "value"\)/u);
+  assert.match(planner, /planRustNonConsumingValue\(fact\.guard, plannedGuard, context\)/u);
   assert.match(planner, /overrides\.set\(fact\.guard/u);
   assert.doesNotMatch(planner, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
 });
@@ -539,10 +540,12 @@ test("backend operation facts cannot override runtime carriers or selected sourc
 test("malformed compiler collection slots fail closed instead of disappearing", () => {
   const expressions = readFileSync(join(sourceRoot, "backend/planner/expressions.ts"), "utf8");
   const declarations = readFileSync(join(sourceRoot, "backend/planner/declarations-nominal.ts"), "utf8");
+  const statements = readFileSync(join(sourceRoot, "backend/planner/statements.ts"), "utf8");
   const semantics = readFileSync(join(sourceRoot, "source/rust-target-semantics/index.ts"), "utf8");
   assert.match(expressions, /Fixed-array literal contains a missing or omitted element slot/u);
   assert.match(expressions, /Callable expression contains an undefined parameter slot/u);
-  assert.match(declarations, /Constructor body contains an undefined statement slot/u);
+  assert.match(declarations, /planStatementSequence\(bodyStatements, body, bodyContext\)/u);
+  assert.match(statements, /Source block contains an undefined statement slot/u);
   assert.match(declarations, /Enum declaration contains an undefined member slot/u);
   assert.match(declarations, /Interface declaration contains an undefined member slot/u);
   assert.match(semantics, /RUST_SOURCE_AST_INCOMPLETE/u);
