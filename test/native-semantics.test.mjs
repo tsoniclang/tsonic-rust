@@ -615,7 +615,7 @@ export function grow(xs: int32[]): void {
   assert.doesNotMatch(text, /f64_to_i32/u);
 });
 
-test("user-authored identifiers are preserved verbatim with scoped allowances", () => {
+test("user-authored identifiers are preserved verbatim under generated-source policy", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -638,9 +638,8 @@ export function caller(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  // Every user-authored identifier is verbatim; the item carries a scoped
-  // lint allowance because non-snake names appear in it.
-  assert.match(text, /#\[allow\(non_snake_case\)\]\npub fn pickMode\(flagValue: bool\) -> i32/u);
+  assert.match(text, /#!\[allow\(non_snake_case\)\]/u);
+  assert.match(text, /pub fn pickMode\(flagValue: bool\) -> i32/u);
   assert.match(text, /let mut chosenValue: i32 = 0;/u);
   assert.match(text, /pickMode\(true\)/u);
 });

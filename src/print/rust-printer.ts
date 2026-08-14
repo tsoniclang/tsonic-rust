@@ -31,6 +31,9 @@ function printRustVisibility(visibility: RustVisibility): string {
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
   const parts: string[] = [`// ${model.headerComment}`];
+  if (model.innerAttrs !== undefined) {
+    parts.push(...model.innerAttrs);
+  }
   for (const item of model.items) {
     parts.push("");
     parts.push(printRustItem(item));

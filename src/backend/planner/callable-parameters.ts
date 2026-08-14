@@ -82,7 +82,7 @@ export function planRustCallableParameters(
     const parameterCarrier = abi?.parameterCarrier;
     const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
     const parameterName = pattern === undefined
-      ? rustSourceName(context, nameNode !== undefined && nameKind === KindIdentifier ? ast.text(nameNode) : "")
+      ? rustSourceName(nameNode !== undefined && nameKind === KindIdentifier ? ast.text(nameNode) : "")
       : allocateRustSyntheticName(syntheticNames, "binding_parameter");
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(

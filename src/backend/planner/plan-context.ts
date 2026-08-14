@@ -75,8 +75,6 @@ export interface RustPlanContext {
   // Structured import requirements: runtime alias prefixes used by planned
   // operations and rendered types. Never inferred from printed text.
   readonly usedAliases?: Set<string>;
-  // Per-item flag: a non-snake_case user identifier was emitted.
-  readonly nonSnakeSeen?: { value: boolean };
   // Rust-native obligations discovered while planning one generic function.
   // The finalized signature is rendered only after the complete body has been
   // planned, so late requirements cannot produce an invalid partial contract.
@@ -115,8 +113,7 @@ export function registerAliasFromPath(
 }
 
 // Naming policy: every user-authored identifier is preserved verbatim
-// wherever Rust can represent it; items containing non-snake_case names
-// carry scoped #[allow(non_snake_case)]. This conversion exists ONLY for
+// wherever Rust can represent it. This conversion exists ONLY for
 // compiler-generated temporaries with no TypeScript source identity.
 // Provider, library, and capability API identity flows exclusively through
 // operation-row metadata, which the backend emits verbatim.
@@ -132,32 +129,19 @@ export function rustLocalBindingName(name: string): string {
     .toLowerCase();
 }
 
-// Verbatim user-authored name plus whether the containing item needs a
-// scoped #[allow(non_snake_case)].
-export function rustPublicName(name: string): { readonly name: string; readonly needsAllow: boolean } {
-  const targetName = rustTargetIdentifier(name);
-  const semanticName = targetName.startsWith("r#") ? targetName.slice(2) : targetName;
-  return { name: targetName, needsAllow: semanticName !== rustLocalBindingName(targetName) };
+export function rustPublicName(name: string): string {
+  return rustTargetIdentifier(name);
 }
 
-// Verbatim user identifier; records non-snake usage so the enclosing item
-// carries a scoped lint allowance.
-export function rustSourceName(context: { readonly nonSnakeSeen?: { value: boolean } }, name: string): string {
-  const targetName = rustTargetIdentifier(name);
-  const semanticName = targetName.startsWith("r#") ? targetName.slice(2) : targetName;
-  if (semanticName !== rustLocalBindingName(targetName)) {
-    if (context.nonSnakeSeen !== undefined) {
-      context.nonSnakeSeen.value = true;
-    }
-  }
-  return targetName;
+export function rustSourceName(name: string): string {
+  return rustTargetIdentifier(name);
 }
 
 export function rustSourceBindingPath(
   context: RustPlanContext,
   binding: RustSourceBindingFact,
 ): string | undefined {
-  const name = rustSourceName(context, binding.sourceName);
+  const name = rustSourceName(binding.sourceName);
   if (!isValidRustIdentifier(name)) {
     return undefined;
   }

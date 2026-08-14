@@ -259,7 +259,7 @@ export function rustRawLocationRoot(
   if (binding === undefined) {
     return undefined;
   }
-  const name = rustSourceName(context, binding.sourceName);
+  const name = rustSourceName(binding.sourceName);
   if (!isValidRustIdentifier(name) ||
     rustLocationStorageForReference(expression, context) === undefined) {
     return undefined;

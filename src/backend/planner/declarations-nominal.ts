@@ -140,7 +140,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       const privateField = fieldNameNode !== undefined && ast.is.IsPrivateIdentifier(fieldNameNode);
       const fieldName = privateField
         ? "private_field"
-        : rustPublicName(sourceFieldName).name;
+        : rustPublicName(sourceFieldName);
       const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
       const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
       if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -266,7 +266,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   context.usedAliases?.add("rt");
   const exported = ast.hasModifierKind(node, "export");
   const generatedStructAttributes = [
-    ...(structAttributes(className, fields.map((field) => ({ name: field.targetName }))) ?? []),
+    ...(structAttributes(className) ?? []),
     ...(exported ? [] : ["#[allow(dead_code)]"]),
   ];
   const stateField: RustStructField = {
@@ -489,9 +489,7 @@ export function planProjectMethod(
     isUnsafe,
     context.input,
   );
-  const methodName = rustPublicName(sourceMethodName ?? "").name;
-  const nonSnakeSeen = { value: rustPublicName(sourceMethodName ?? "").needsAllow };
-  context = { ...context, nonSnakeSeen };
+  const methodName = rustPublicName(sourceMethodName ?? "");
   if (!isValidRustIdentifier(methodName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -555,7 +553,6 @@ export function planProjectMethod(
   }
   const isStatic = ast.hasModifierKind(member, "static");
   const methodAttributes = [
-    ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
     ...(isStatic && methodName === "new" ? ["#[allow(clippy::new_ret_no_self)]"] : []),
     ...(ast.hasModifierKind(ast.parent(member) ?? member, "export") ? [] : ["#[allow(dead_code)]"]),
     ...safetyAttributes,
@@ -853,7 +850,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
+    const fieldName = rustPublicName(ast.text(ast.name(member) ?? member));
     const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
     const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
     if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -889,9 +886,9 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   return [{
     kind: "struct",
     name: interfaceName,
-    ...(structAttributes(interfaceName, fields.map((field) => ({ name: field.targetName }))) === undefined
+    ...(structAttributes(interfaceName) === undefined
       ? {}
-      : { attrs: structAttributes(interfaceName, fields.map((field) => ({ name: field.targetName }))) }),
+      : { attrs: structAttributes(interfaceName) }),
     visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
@@ -948,13 +945,8 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
   }];
 }
 
-// Scoped lint allowances for a generated struct: field names may be
-// non-snake, and the authored type name may be non-CamelCase.
-function structAttributes(typeName: string, fields: readonly { readonly name: string }[]): readonly string[] | undefined {
+function structAttributes(typeName: string): readonly string[] | undefined {
   const attrs: string[] = [];
-  if (fields.some((field) => rustPublicName(field.name).needsAllow)) {
-    attrs.push("#[allow(non_snake_case)]");
-  }
   if (!/^[A-Z][A-Za-z0-9]*$/u.test(typeName)) {
     attrs.push("#[allow(non_camel_case_types)]");
   }

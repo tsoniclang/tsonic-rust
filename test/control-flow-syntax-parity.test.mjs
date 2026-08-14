@@ -33,6 +33,49 @@ export function main(): void {
   validateGeneratedProject("control-flow-constant-loop", result.artifacts);
 });
 
+test("constant-true loops remain idiomatic across break and fallible return flow", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "constant_loop_break" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function count(values: string[]): int32 {
+  let current: int32 = 0;
+  while (true) {
+    if (current === values.length) break;
+    current++;
+  }
+  return current;
+}
+
+export function visit(values: string[]): void {
+  let current: int32 = 0;
+  while (true) {
+    if (current === values.length) return;
+    current++;
+  }
+}
+
+export function main(): void {
+  const values = ["a", "b"];
+  if (count(values) !== 2) throw new Error("constant loop count failed");
+  visit(values);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.equal(source.match(/loop \{/gu)?.length, 2);
+  assert.doesNotMatch(source, /while true/u);
+  assert.doesNotMatch(source, /loop \{[\s\S]*?\}\n\s+Ok\(\(\)\)/u);
+  const run = validateGeneratedProject("control-flow-constant-loop-break", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
 test("top-level callable values keep nested mutable bindings local", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     target: { id: "rust", options: { outputType: "bin", crateName: "callable_local_binding" } },

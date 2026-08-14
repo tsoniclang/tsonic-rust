@@ -63,12 +63,8 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   const nameNode = Node_Name(ast, node);
   const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const isExported = ast.hasModifierKind(node, "export");
-  // Naming policy: user-authored names are preserved verbatim; items with
-  // non-snake identifiers carry a scoped lint allowance.
-  const publicName = rustPublicName(sourceName);
-  const name = publicName.name;
-  const nonSnakeSeen = { value: publicName.needsAllow };
-  let context: RustPlanContext = { ...outerContext, nonSnakeSeen };
+  const name = rustPublicName(sourceName);
+  let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -218,14 +214,9 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       kind: "function",
       name,
       visibility: isExported ? "public" : "crate",
-      ...(!nonSnakeSeen.value && safetyAttributes.length === 0
+      ...(safetyAttributes.length === 0
         ? {}
-        : {
-            attrs: [
-              ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
-              ...safetyAttributes,
-            ],
-          }),
+        : { attrs: safetyAttributes }),
       ...(isUnsafe ? { isUnsafe: true } : {}),
       ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
       params,
@@ -275,14 +266,9 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     kind: "function",
     name,
     visibility: isExported ? "public" : "crate",
-    ...(!nonSnakeSeen.value && safetyAttributes.length === 0
+    ...(safetyAttributes.length === 0
       ? {}
-      : {
-          attrs: [
-            ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
-            ...safetyAttributes,
-          ],
-        }),
+      : { attrs: safetyAttributes }),
     ...(isAsync ? { isAsync: true } : {}),
     ...(isUnsafe ? { isUnsafe: true } : {}),
     ...(fallible ? { fallible: true } : {}),

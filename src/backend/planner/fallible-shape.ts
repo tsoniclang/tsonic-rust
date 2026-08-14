@@ -4,6 +4,7 @@ import type {
   RustExpr,
   RustStmt,
 } from "../rust-ast/nodes.js";
+import { rustBlockTerminates } from "./block-flow.js";
 
 export interface RustFallibleBoundary {
   readonly errorDomain: RustErrorDomain;
@@ -173,16 +174,7 @@ export function applyFallibleShape(
     return statement;
   };
   const wrapped = body.statements.map(wrap);
-  const last = wrapped[wrapped.length - 1];
-  const endsWithExit = last !== undefined && (
-    last.kind === "tail" ||
-    last.kind === "return" ||
-    last.kind === "throw" ||
-    (last.kind === "expr" && last.expr.kind === "bottom") ||
-    (last.kind === "resource-scope" && last.terminates) ||
-    (last.kind === "try-scope" && last.terminates)
-  );
-  if (!options.hasReturnValue && !endsWithExit) {
+  if (!options.hasReturnValue && !rustBlockTerminates({ statements: wrapped })) {
     wrapped.push({
       kind: "tail",
       expr: options.errorTypePath === undefined

@@ -599,7 +599,7 @@ function planImplicitProjectConstructorParameters(
           abi.parameterCarrier,
         );
     const type = rustTypeFromCarrierInContext(carrier, context);
-    const name = rustSourceName(context, parameter.parameterName);
+    const name = rustSourceName(parameter.parameterName);
     if (type === undefined || !isValidRustIdentifier(name)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, parameter.parameterDeclaration),

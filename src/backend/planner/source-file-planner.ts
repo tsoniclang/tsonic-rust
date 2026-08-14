@@ -41,6 +41,7 @@ import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { planBlockLike, planStatement } from "./statements.js";
 import { applyFallibleShape } from "./fallible-shape.js";
+import { rustAuthoredSourceInnerAttributes } from "./generated-source-lints.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -104,7 +105,10 @@ export function planRustSourceFile(
   return Object.freeze({
     sourceFile,
     moduleName,
-    model: createRustSourceFile([...useItems, ...plannedModule.items]),
+    model: createRustSourceFile(
+      [...useItems, ...plannedModule.items],
+      rustAuthoredSourceInnerAttributes,
+    ),
     ...(plannedModule.initialization === undefined
       ? {}
       : { moduleInitialization: plannedModule.initialization }),
@@ -136,10 +140,8 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     context.sourceFile,
     rustFallibleFactKey,
   ) !== undefined;
-  const nonSnakeSeen = { value: false };
   const initializationContext: RustPlanContext = {
     ...context,
-    nonSnakeSeen,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },
@@ -293,7 +295,6 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     visibility: "public",
     attrs: [
       "#[doc(hidden)]",
-      ...(nonSnakeSeen.value ? ["#[allow(non_snake_case)]"] : []),
     ],
     ...(asynchronous ? { isAsync: true } : {}),
     ...(fallible ? { fallible: true } : {}),
@@ -364,7 +365,7 @@ function planTopLevelVariableStatement(
     const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier
       ? ast.text(nameNode)
       : "";
-    const name = rustSourceName(context, sourceName);
+    const name = rustSourceName(sourceName);
     const initializer = Node_Initializer(ast, declaration);
     const binding = context.input.facts.getFact(declaration, rustModuleBindingFactKey);
     const rustType = rustTypeFromCarrierInContext(binding?.valueCarrier, context);

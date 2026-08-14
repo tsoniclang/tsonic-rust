@@ -333,7 +333,7 @@ function planResourceDeclarationScope(
   const nameNode = Node_Name(context.input.ast, declaration);
   const resourceName = nameNode === undefined
     ? ""
-    : rustSourceName(context, context.input.ast.text(nameNode));
+    : rustSourceName(context.input.ast.text(nameNode));
   if (declarations === undefined || !isValidRustIdentifier(resourceName)) {
     return undefined;
   }
@@ -747,7 +747,7 @@ function planVariableDeclaration(
     return planBindingVariableDeclaration(declaration, nameNode, context);
   }
   const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const name = rustSourceName(context, sourceName);
+  const name = rustSourceName(sourceName);
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -963,7 +963,7 @@ function planExpressionAsStatement(
         ? storageOverride.expression
         : ast.kindName(left) === KindIdentifier
         ? (() => {
-            const path = rustSourceName(context, ast.text(left));
+            const path = rustSourceName(ast.text(left));
             return isValidRustIdentifier(path) ? { kind: "path" as const, path } : undefined;
           })()
         : rustTargetOperationIsDirectLocation(
@@ -2079,12 +2079,12 @@ function planWhileStatement(
   if (body === undefined) {
     return undefined;
   }
-  return planned.kind === "bool-literal" && planned.value && !target.breakUsed.value
+  return planned.kind === "bool-literal" && planned.value
     ? [{
         kind: "loop",
         ...(target.used.value ? { label: target.label } : {}),
         body,
-        neverFallsThrough: true,
+        ...(!target.breakUsed.value ? { neverFallsThrough: true } : {}),
       }]
     : [{
         kind: "while",
@@ -2198,14 +2198,23 @@ function planForStatement(
     const loopBody: RustBlock = rustBlockDefinitelyExits(body)
       ? body
       : { statements: [...body.statements, ...incrementStatements] };
-    return {
-      statements: [{
-        kind: "while",
-        ...(target.used.value ? { label: target.label } : {}),
-        condition: conditionExpr,
-        body: loopBody,
-      }],
-    };
+    return conditionExpr.kind === "bool-literal" && conditionExpr.value
+      ? {
+          statements: [{
+            kind: "loop",
+            ...(target.used.value ? { label: target.label } : {}),
+            body: loopBody,
+            ...(!target.breakUsed.value ? { neverFallsThrough: true } : {}),
+          }],
+        }
+      : {
+          statements: [{
+            kind: "while",
+            ...(target.used.value ? { label: target.label } : {}),
+            condition: conditionExpr,
+            body: loopBody,
+          }],
+        };
   };
 
   if (initializer === undefined) {
@@ -2232,7 +2241,7 @@ function planForStatement(
   const nameNode = Node_Name(context.input.ast, resourceDeclaration);
   const resourceName = nameNode === undefined
     ? ""
-    : rustSourceName(context, context.input.ast.text(nameNode));
+    : rustSourceName(context.input.ast.text(nameNode));
   if (fact === undefined || !isValidRustIdentifier(resourceName)) {
     return undefined;
   }
@@ -2558,7 +2567,7 @@ function planForOfStatement(
     : undefined;
   let binding = "";
   if (bindingNameNode !== undefined && bindingNameKind === KindIdentifier) {
-    binding = rustSourceName(context, ast.text(bindingNameNode));
+    binding = rustSourceName(ast.text(bindingNameNode));
   } else if (bindingPattern !== undefined && context.syntheticNames !== undefined) {
     binding = allocateRustSyntheticName(context.syntheticNames, "binding_element");
   }
@@ -2861,7 +2870,7 @@ function planForInBinding(
     const sourceName = nameNode === undefined || context.input.ast.kindName(nameNode) !== KindIdentifier
       ? ""
       : context.input.ast.text(nameNode);
-    const directName = rustSourceName(context, sourceName);
+    const directName = rustSourceName(sourceName);
     const carrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
     const declarationKind = context.input.ast.variableDeclarationKind(declaration);
     if (!isValidRustIdentifier(directName) || carrier === undefined ||
@@ -2879,7 +2888,7 @@ function planForInBinding(
     return rejectForInBinding(initializer, context, "for-in assignment targets require one exact identifier location.");
   }
   const sourceName = context.input.ast.text(initializer);
-  const assignmentName = rustSourceName(context, sourceName);
+  const assignmentName = rustSourceName(sourceName);
   const carrier = context.input.facts.getRuntimeCarrierFact(initializer)?.carrier;
   if (!isValidRustIdentifier(assignmentName) || carrier === undefined ||
     !rustTargetTypeRefEquals(carrier, elementCarrier)) {
@@ -3024,7 +3033,7 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
       CatchClause_VariableDeclaration(context.input.ast, catchClause),
     );
     const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
-    let binding = bindingSource.length === 0 ? "_" : rustSourceName(context, bindingSource);
+    let binding = bindingSource.length === 0 ? "_" : rustSourceName(bindingSource);
     if (binding !== "_") {
       let used = false;
       const findUse = (candidate: Node): void => {
