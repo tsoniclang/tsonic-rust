@@ -27,7 +27,11 @@ test("value-returning fallible bodies never synthesize an invalid Ok unit", () =
 
   assert.equal(rustBlockTerminates(incomplete), false);
   assert.equal(rustBlockTerminates(complete), true);
-  assert.deepEqual(applyFallibleShape(incomplete, true, true), incomplete);
+  assert.deepEqual(applyFallibleShape(incomplete, {
+    fallible: true,
+    hasReturnValue: true,
+    errorDomain: "runtime",
+  }), incomplete);
 });
 
 test("fallible result expressions preserve conversion into the enclosing program error", () => {
@@ -35,14 +39,28 @@ test("fallible result expressions preserve conversion into the enclosing program
 
   assert.deepEqual(
     applyRustFallibleResultExpression(
-      { kind: "try", expr: providerCall },
-      "rt::TsonicError",
+      { kind: "try", expr: providerCall, errorDomain: "runtime" },
+      { errorDomain: "project", errorTypePath: "rt::TsonicError" },
     ),
     {
       kind: "call",
       path: "Ok::<_, rt::TsonicError>",
-      args: [{ kind: "try", expr: providerCall }],
+      args: [{ kind: "try", expr: providerCall, errorDomain: "runtime" }],
     },
+  );
+  assert.deepEqual(
+    applyRustFallibleResultExpression(
+      { kind: "try", expr: providerCall, errorDomain: "runtime" },
+      { errorDomain: "runtime" },
+    ),
+    providerCall,
+  );
+  assert.deepEqual(
+    applyRustFallibleResultExpression(
+      { kind: "try", expr: providerCall, errorDomain: "project" },
+      { errorDomain: "project" },
+    ),
+    providerCall,
   );
 });
 

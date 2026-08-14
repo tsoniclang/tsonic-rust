@@ -140,17 +140,29 @@ export interface RustProviderSourceDependency {
   readonly exportedNames: readonly string[];
 }
 
-export interface RustProviderBinaryEpilogueDefinition {
+interface RustProviderBinaryEpilogueDefinitionBase {
   readonly id: string;
   readonly path: string;
   readonly requiredCrate: string;
-  readonly isFallible?: boolean;
 }
 
-export interface RustProviderBinaryEpilogueRow extends RustProviderBinaryEpilogueDefinition {
+export type RustProviderBinaryEpilogueDefinition =
+  & RustProviderBinaryEpilogueDefinitionBase
+  & (
+    | {
+        readonly isFallible: true;
+        readonly errorBoundary: "provider-native" | "source-program";
+      }
+    | {
+        readonly isFallible?: false;
+        readonly errorBoundary?: never;
+      }
+  );
+
+export type RustProviderBinaryEpilogueRow = RustProviderBinaryEpilogueDefinition & {
   readonly providerPackageId: string;
   readonly providerVersion: string;
-}
+};
 
 export interface RustProviderPackageDefinition {
   readonly id: string;

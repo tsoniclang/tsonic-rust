@@ -90,6 +90,34 @@ test("binary epilogues require exact paths, declared crates, unique ids, and tru
       }],
       pattern: /invalid isFallible value/u,
     },
+    {
+      epilogues: [{
+        id: "drain",
+        path: "runtime::drain",
+        requiredCrate: "acme_lifecycle",
+        isFallible: true,
+      }],
+      pattern: /requires an exact errorBoundary/u,
+    },
+    {
+      epilogues: [{
+        id: "drain",
+        path: "runtime::drain",
+        requiredCrate: "acme_lifecycle",
+        errorBoundary: "source-program",
+      }],
+      pattern: /cannot declare an errorBoundary/u,
+    },
+    {
+      epilogues: [{
+        id: "drain",
+        path: "runtime::drain",
+        requiredCrate: "acme_lifecycle",
+        isFallible: true,
+        errorBoundary: "guess",
+      }],
+      pattern: /requires an exact errorBoundary/u,
+    },
   ];
 
   for (const { epilogues, pattern } of invalid) {

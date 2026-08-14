@@ -523,7 +523,22 @@ function planResourceCleanup(
     disposal = { kind: "await", expr: disposal };
   }
   if (fact.disposal.fallible) {
-    disposal = { kind: "try", expr: disposal };
+    if (fact.disposal.target.form === "provider" &&
+      fact.disposal.errorBoundary === "provider-native") {
+      disposal = {
+        kind: "method-call",
+        receiver: disposal,
+        method: "map_err",
+        args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
+      };
+    }
+    disposal = {
+      kind: "try",
+      expr: disposal,
+      errorDomain: fact.disposal.target.form === "source-method"
+        ? context.errorDomain
+        : "runtime",
+    };
   }
   const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };
   if (!fact.nullable) {

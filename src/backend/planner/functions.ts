@@ -246,8 +246,11 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
               async: true,
               body: applyFallibleShape(
                 applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
-                true,
-                !isRustUnitCarrier(generatorFact.returnType),
+                {
+                  fallible: true,
+                  hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
+                  errorDomain: context.errorDomain,
+                },
               ),
             }],
           },
@@ -290,9 +293,12 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ...(returnType === undefined ? {} : { returnType }),
     body: {
       ...applyFallibleShape(
-      applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-      fallible,
-      returnType !== undefined,
+        applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
+        {
+          fallible,
+          hasReturnValue: returnType !== undefined,
+          errorDomain: context.errorDomain,
+        },
       ),
       ...(parameterPlan.bodyInnerAttrs.length === 0
         ? {}

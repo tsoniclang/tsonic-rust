@@ -539,7 +539,13 @@ function validateBinaryEpilogues(definition: RustProviderPackageDefinition, fail
   const ids = new Set<string>();
   const crates = new Set(definition.crates.map((crate) => crate.crateName));
   for (const epilogue of definition.binaryEpilogues ?? []) {
-    requireExactKeys(asRecord(epilogue), ["id", "path", "requiredCrate", "isFallible"], "binary epilogue", fail);
+    const record = asRecord(epilogue);
+    requireExactKeys(
+      record,
+      ["id", "path", "requiredCrate", "isFallible", "errorBoundary"],
+      "binary epilogue",
+      fail,
+    );
     requireNonEmpty(epilogue.id, "binary epilogue id", fail);
     requireRustPath(epilogue.path, `path for binary epilogue '${epilogue.id}'`, fail);
     requireRustIdentifier(epilogue.requiredCrate, `required crate for binary epilogue '${epilogue.id}'`, fail);
@@ -548,6 +554,13 @@ function validateBinaryEpilogues(definition: RustProviderPackageDefinition, fail
     }
     if (epilogue.isFallible !== undefined && epilogue.isFallible !== true) {
       fail(`binary epilogue '${epilogue.id}' has invalid isFallible value`);
+    }
+    if (epilogue.isFallible === true && epilogue.errorBoundary !== "provider-native" &&
+      epilogue.errorBoundary !== "source-program") {
+      fail(`fallible binary epilogue '${epilogue.id}' requires an exact errorBoundary`);
+    }
+    if (epilogue.isFallible !== true && record.errorBoundary !== undefined) {
+      fail(`infallible binary epilogue '${epilogue.id}' cannot declare an errorBoundary`);
     }
     if (ids.has(epilogue.id)) {
       fail(`duplicate binary epilogue id '${epilogue.id}'`);

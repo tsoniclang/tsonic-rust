@@ -5,7 +5,7 @@ import type { RustGenericRequirementSet } from "./generic-requirements.js";
 import type { RustGeneratorFact, RustSourceBindingFact } from "../../source/rust-facts/keys.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
-import type { RustBlock, RustExpr, RustType } from "../rust-ast/nodes.js";
+import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../rust-ast/nodes.js";
 
 export interface RustEffectiveExpressionOverride {
   readonly expression: RustExpr;
@@ -57,6 +57,7 @@ export interface RustPlanContext {
   readonly moduleName: string;
   readonly moduleNameByFileName: ReadonlyMap<string, string>;
   readonly diagnostics: TargetDiagnostic[];
+  readonly errorDomain: RustErrorDomain;
   readonly planBlock: (node: Node, context: RustPlanContext) => RustBlock | undefined;
   // Identifier names with a proven write (assignment or increment) in the
   // enclosing function body. `let mut` is emitted only for proven writes.

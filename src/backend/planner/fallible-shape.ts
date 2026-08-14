@@ -1,4 +1,19 @@
-import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
+import type {
+  RustBlock,
+  RustErrorDomain,
+  RustExpr,
+  RustStmt,
+} from "../rust-ast/nodes.js";
+
+export interface RustFallibleBoundary {
+  readonly errorDomain: RustErrorDomain;
+  readonly errorTypePath?: string;
+}
+
+export interface RustFallibleShapeOptions extends RustFallibleBoundary {
+  readonly fallible: boolean;
+  readonly hasReturnValue: boolean;
+}
 
 export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): boolean {
   switch (expression.kind) {
@@ -88,17 +103,17 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
 
 export function applyRustFallibleResultExpression(
   expression: RustExpr,
-  errorTypePath?: string,
+  boundary: RustFallibleBoundary,
 ): RustExpr {
   if (expression.kind === "bottom") {
     return expression;
   }
-  if (expression.kind === "try") {
+  if (expression.kind === "try" && expression.errorDomain === boundary.errorDomain) {
     return expression.expr;
   }
   return {
     kind: "call",
-    path: errorTypePath === undefined ? "Ok" : `Ok::<_, ${errorTypePath}>`,
+    path: boundary.errorTypePath === undefined ? "Ok" : `Ok::<_, ${boundary.errorTypePath}>`,
     args: [expression],
   };
 }
@@ -118,27 +133,25 @@ export function rustBottomAfterEffect(effect: RustExpr, message: string): RustEx
 
 export function applyFallibleShape(
   body: RustBlock,
-  fallible: boolean,
-  hasReturnValue: boolean,
-  errorTypePath?: string,
+  options: RustFallibleShapeOptions,
 ): RustBlock {
-  if (!fallible) {
+  if (!options.fallible) {
     return body;
   }
   const wrap = (statement: RustStmt): RustStmt => {
     if (statement.kind === "return" && statement.expr !== undefined) {
-      return { kind: "return", expr: applyRustFallibleResultExpression(statement.expr, errorTypePath) };
+      return { kind: "return", expr: applyRustFallibleResultExpression(statement.expr, options) };
     }
     if (statement.kind === "return") {
       return {
         kind: "return",
-        expr: errorTypePath === undefined
+        expr: options.errorTypePath === undefined
           ? { kind: "path", path: "Ok(())" }
-          : { kind: "call", path: `Ok::<_, ${errorTypePath}>`, args: [{ kind: "path", path: "()" }] },
+          : { kind: "call", path: `Ok::<_, ${options.errorTypePath}>`, args: [{ kind: "path", path: "()" }] },
       };
     }
     if (statement.kind === "tail") {
-      return { kind: "tail", expr: applyRustFallibleResultExpression(statement.expr, errorTypePath) };
+      return { kind: "tail", expr: applyRustFallibleResultExpression(statement.expr, options) };
     }
     if (statement.kind === "if") {
       return {
@@ -169,12 +182,12 @@ export function applyFallibleShape(
     (last.kind === "resource-scope" && last.terminates) ||
     (last.kind === "try-scope" && last.terminates)
   );
-  if (!hasReturnValue && !endsWithExit) {
+  if (!options.hasReturnValue && !endsWithExit) {
     wrapped.push({
       kind: "tail",
-      expr: errorTypePath === undefined
+      expr: options.errorTypePath === undefined
         ? { kind: "path", path: "Ok(())" }
-        : { kind: "call", path: `Ok::<_, ${errorTypePath}>`, args: [{ kind: "path", path: "()" }] },
+        : { kind: "call", path: `Ok::<_, ${options.errorTypePath}>`, args: [{ kind: "path", path: "()" }] },
     });
   }
   return { ...body, statements: wrapped };

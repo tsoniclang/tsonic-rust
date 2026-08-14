@@ -653,7 +653,9 @@ function planExpressionInner(
         };
         const callableResult = fallible
           ? invocation
-          : applyRustFallibleResultExpression(invocation);
+          : applyRustFallibleResultExpression(invocation, {
+              errorDomain: context.errorDomain,
+            });
         const mutableArguments = callableValue.argumentModes.some((mode) => mode === "mut-ref");
         const implementation: RustExpr = mutableArguments
           ? {
@@ -1157,7 +1159,10 @@ function planExpressionInner(
           return undefined;
         }
         const resultBody = resultIsFallible
-          ? applyRustFallibleResultExpression(body, "rt::TsonicError")
+          ? applyRustFallibleResultExpression(body, {
+              errorDomain: context.errorDomain,
+              errorTypePath: "rt::TsonicError",
+            })
           : body;
         const closure: RustExpr = bindingStatements.length === 0 &&
             closureParams.every((parameter) => !parameter.mutable)
@@ -1230,7 +1235,12 @@ function planExpressionInner(
       const finalizedBlock = applyFallibleShape(applyRustTailShape(
         { statements: [...bindingStatements, ...block.statements] },
         !isRustUnitCarrier(resultCarrier),
-      ), resultIsFallible, !isRustUnitCarrier(resultCarrier), "rt::TsonicError");
+      ), {
+        fallible: resultIsFallible,
+        hasReturnValue: !isRustUnitCarrier(resultCarrier),
+        errorDomain: context.errorDomain,
+        errorTypePath: "rt::TsonicError",
+      });
       const onlyStatement = finalizedBlock.statements.length === 1
         ? finalizedBlock.statements[0]
         : undefined;
@@ -1333,7 +1343,11 @@ function planExpressionInner(
             args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
           };
         }
-        awaited = { kind: "try", expr: awaited };
+        awaited = {
+          kind: "try",
+          expr: awaited,
+          errorDomain: future.errorDomain === "current" ? context.errorDomain : "runtime",
+        };
       }
       const converted = applyFinalizedValueConversion(
         context,
@@ -1496,6 +1510,7 @@ function planGeneratorResumeExpression(
       },
       expression: {
         kind: "try",
+        errorDomain: "runtime",
         expr: {
           kind: "call",
           path: "Err",
@@ -2728,7 +2743,10 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
           kind: "closure",
           params: [],
           body: fallbackIsFallible
-            ? applyRustFallibleResultExpression(right, "rt::TsonicError")
+            ? applyRustFallibleResultExpression(right, {
+                errorDomain: context.errorDomain,
+                errorTypePath: "rt::TsonicError",
+              })
             : right,
         };
     const present: RustExpr = fallbackIsFallible
@@ -2760,7 +2778,7 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       return coalesced;
     }
     context.usedAliases?.add("rt");
-    return { kind: "try", expr: coalesced };
+    return { kind: "try", expr: coalesced, errorDomain: context.errorDomain };
   }
   if (fact !== undefined && fact.kind === "option-check") {
     const leftNode = BinaryExpression_Left(context.input.ast, node);
@@ -2992,7 +3010,7 @@ export function planRustOperatorCallExpression(
     path: fact.path,
     args: operands as readonly RustExpr[],
   };
-  return fact.fallible ? { kind: "try", expr: call } : call;
+  return fact.fallible ? { kind: "try", expr: call, errorDomain: "runtime" } : call;
 }
 
 function planBooleanLiteralComparison(
@@ -3149,7 +3167,7 @@ export function applyRustValueConversion(
     ));
     return undefined;
   }
-  return { kind: "try", expr: converted };
+  return { kind: "try", expr: converted, errorDomain: "runtime" };
 }
 
 function lowerRustValueConversion(
@@ -3491,6 +3509,7 @@ function finishProviderOperationExpression(
     }
     raw = {
       kind: "try",
+      errorDomain: "runtime",
       expr: fact.abi.effects.errorBoundary === "provider-native"
         ? {
             kind: "method-call",
@@ -4129,7 +4148,11 @@ function planSelectedSourceCall(
     ));
     return undefined;
   }
-  const propagated: RustExpr = { kind: "try", expr: planned };
+  const propagated: RustExpr = {
+    kind: "try",
+    expr: planned,
+    errorDomain: context.errorDomain,
+  };
   return isRustNeverCarrier(fact.resultCarrier)
     ? rustBottomAfterEffect(propagated, "fallible never call returned")
     : propagated;
@@ -4656,6 +4679,7 @@ function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr | unde
   registerAliasFromPath(context, "js_abi::JsRegExp::new");
   return {
     kind: "try",
+    errorDomain: "runtime",
     expr: {
       kind: "call",
       path: "js_abi::JsRegExp::new",
@@ -4832,7 +4856,10 @@ function planOptionalChainExpression(
   if (innerFallible) {
     context.usedAliases?.add("rt");
   }
-  const fallibleBody = applyRustFallibleResultExpression(body, "rt::TsonicError");
+  const fallibleBody = applyRustFallibleResultExpression(body, {
+    errorDomain: context.errorDomain,
+    errorTypePath: "rt::TsonicError",
+  });
   const mapped: RustExpr = {
     kind: "method-call",
     receiver: { kind: "method-call", receiver: guard, method: "as_ref", args: [] },
@@ -4848,6 +4875,7 @@ function planOptionalChainExpression(
   }
   const transposed: RustExpr = {
     kind: "try",
+    errorDomain: context.errorDomain,
     expr: { kind: "method-call", receiver: mapped, method: "transpose", args: [] },
   };
   return fact.lowering === "and-then"
@@ -5180,7 +5208,7 @@ export function finishRustSourceAccessorCall(
     ));
     return undefined;
   }
-  return { kind: "try", expr: expression };
+  return { kind: "try", expr: expression, errorDomain: context.errorDomain };
 }
 
 export function sourceUnionFieldSelectedOperationMatches(

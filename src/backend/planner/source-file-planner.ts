@@ -87,6 +87,7 @@ export function planRustSourceFile(
     moduleName,
     moduleNameByFileName,
     diagnostics,
+    errorDomain: input.projectTypes.programErrorDefinitions.length === 0 ? "runtime" : "project",
     usedAliases,
     planBlock: planBlockLike,
   };
@@ -299,8 +300,11 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     params: [],
     body: applyFallibleShape(
       { statements: initializationStatements },
-      fallible,
-      false,
+      {
+        fallible,
+        hasReturnValue: false,
+        errorDomain: context.errorDomain,
+      },
     ),
   });
   return { items, initialization };

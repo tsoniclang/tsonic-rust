@@ -93,11 +93,13 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
+  const errorDomain = programErrorModel === undefined ? "runtime" as const : "project" as const;
   const crateInitializer = planRustCrateInitializer(
     moduleInitializers ?? [],
     programErrorModel === undefined
       ? "tsonic_rust_runtime::TsonicResult"
       : "crate::__tsonic_program::TsonicResult",
+    errorDomain,
   );
   const artifacts: TargetArtifact[] = cargoProject.project.kind === "generated"
     ? [{
@@ -167,8 +169,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
           kind: "expr" as const,
           expr: crateInitializer.fallible
             ? {
-                kind: "try" as const,
-                expr: crateInitializer.asynchronous
+              kind: "try" as const,
+              errorDomain,
+              expr: crateInitializer.asynchronous
                   ? {
                       kind: "call" as const,
                       path: "tsonic_rust_runtime::block_on",
@@ -206,22 +209,34 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
     }));
     const activeEpilogues = input.providerSemantics.binaryEpilogues.filter((epilogue) =>
       activeCrates.has(epilogue.requiredCrate));
-    const epilogueStatements = activeEpilogues.map((epilogue) => ({
-      kind: "expr" as const,
-      expr: epilogue.isFallible === true
+    const epilogueStatements = activeEpilogues.map((epilogue) => {
+      const call = { kind: "call" as const, path: epilogue.path, args: [] };
+      if (epilogue.isFallible !== true) {
+        return { kind: "expr" as const, expr: call };
+      }
+      const result = epilogue.errorBoundary === "provider-native"
         ? {
-            kind: "try" as const,
-            expr: { kind: "call" as const, path: epilogue.path, args: [] },
+            kind: "method-call" as const,
+            receiver: call,
+            method: "map_err",
+            args: [{
+              kind: "path" as const,
+              path: "tsonic_rust_runtime::TsonicError::from",
+            }],
           }
-        : { kind: "call" as const, path: epilogue.path, args: [] },
-    }));
+        : call;
+      return {
+        kind: "expr" as const,
+        expr: { kind: "try" as const, expr: result, errorDomain: "runtime" as const },
+      };
+    });
     const mainFallible = entryFunction.fallible ||
       crateInitializer?.fallible === true ||
       activeEpilogues.some((epilogue) => epilogue.isFallible === true);
     const entryStatement = {
       kind: "expr" as const,
       expr: entryFunction.fallible
-        ? { kind: "try" as const, expr: entryExecution }
+        ? { kind: "try" as const, expr: entryExecution, errorDomain }
         : entryExecution,
     };
     const completionStatements = mainFallible

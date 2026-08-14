@@ -1081,9 +1081,17 @@ export interface RustResourceManagementFact {
   readonly nullable: boolean;
   readonly disposal: {
     readonly kind: "sync" | "async";
-    readonly fallible: boolean;
     readonly target: RustResourceDisposalTarget;
-  };
+  } & (
+    | {
+        readonly fallible: true;
+        readonly errorBoundary: "provider-native" | "source-program";
+      }
+    | {
+        readonly fallible: false;
+        readonly errorBoundary: "none";
+      }
+  );
 }
 
 export const rustResourceManagementFactKey: RustPlanKey<RustResourceManagementFact> =
@@ -1134,6 +1142,7 @@ export interface RustFutureValueFact {
   readonly awaitedConversion: RustFinalizedValueConversion;
   readonly awaiting: "infallible" | "fallible";
   readonly errorBoundary: "none" | "provider-native" | "source-program";
+  readonly errorDomain: "none" | "runtime" | "current";
 }
 
 // Exact await behavior for one first-class future value. Unlike its runtime

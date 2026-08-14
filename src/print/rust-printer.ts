@@ -3173,7 +3173,8 @@ function printFittedCall(
       true,
     );
     const attached = appendToLastLine(`${prefix}${nested}`, ")");
-    if (nested.includes("\n") && renderedFits(attached, column)) {
+    if (soleArgument.expr.kind !== "method-call" && nested.includes("\n") &&
+      renderedFits(attached, column)) {
       return attached;
     }
     const argumentIndent = indentText(depth + 1);

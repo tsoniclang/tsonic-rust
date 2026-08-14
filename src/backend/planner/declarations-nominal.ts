@@ -454,7 +454,11 @@ function planConstructor(
       ...(parameterPlan.bodyInnerAttrs.length === 0
         ? {}
         : { innerAttrs: parameterPlan.bodyInnerAttrs }),
-      ...applyFallibleShape({ statements }, fallible, true),
+      ...applyFallibleShape({ statements }, {
+        fallible,
+        hasReturnValue: true,
+        errorDomain: context.errorDomain,
+      }),
     },
   };
 }
@@ -671,8 +675,11 @@ export function planProjectMethod(
               async: true,
               body: applyFallibleShape(
                 applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
-                true,
-                !isRustUnitCarrier(generatorFact.returnType),
+                {
+                  fallible: true,
+                  hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
+                  errorDomain: context.errorDomain,
+                },
               ),
             }],
           },
@@ -693,8 +700,11 @@ export function planProjectMethod(
     body: {
       ...applyFallibleShape(
         applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-        fallible,
-        returnType !== undefined,
+        {
+          fallible,
+          hasReturnValue: returnType !== undefined,
+          errorDomain: context.errorDomain,
+        },
       ),
       ...(parameterPlan.bodyInnerAttrs.length === 0
         ? {}

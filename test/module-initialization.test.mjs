@@ -304,9 +304,10 @@ test("a fallible provider epilogue makes binary completion explicitly fallible",
     packages: [acmeFilesPackage({
       binaryEpilogues: [{
         id: "drain-runtime",
-        path: "acme_files::drain_runtime",
+        path: "acme_files::drain_runtime_fallible",
         requiredCrate: "acme_files",
         isFallible: true,
+        errorBoundary: "provider-native",
       }],
     })],
     target: {
@@ -327,6 +328,10 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const main = artifactText(result, "src/main.rs");
   assert.match(main, /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)>/u);
-  assert.match(main, /acme_files::drain_runtime\(\)\?;/u);
+  assert.match(
+    main,
+    /acme_files::drain_runtime_fallible\(\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u,
+  );
   assert.match(main, /Ok\(\(\)\)/u);
+  validateGeneratedProject("fallible-epilogue-proof", result.artifacts);
 });

@@ -1,7 +1,7 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
-import type { RustItem, RustStmt } from "../rust-ast/nodes.js";
+import type { RustErrorDomain, RustItem, RustStmt } from "../rust-ast/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file-planner.js";
 
 export interface RustModuleInitializer {
@@ -68,6 +68,7 @@ export interface RustCrateInitializer {
 export function planRustCrateInitializer(
   initializers: readonly RustModuleInitializer[],
   resultTypePath: string,
+  errorDomain: RustErrorDomain,
 ): RustCrateInitializer | undefined {
   if (initializers.length === 0) {
     return undefined;
@@ -86,7 +87,7 @@ export function planRustCrateInitializer(
     return {
       kind: "expr" as const,
       expr: initializer.fallible
-        ? { kind: "try" as const, expr: execution }
+        ? { kind: "try" as const, expr: execution, errorDomain }
         : execution,
     };
   });

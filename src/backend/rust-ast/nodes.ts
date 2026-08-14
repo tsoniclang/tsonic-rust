@@ -96,11 +96,17 @@ export type RustExpr =
       readonly body: RustBlock;
     }
   | { readonly kind: "await"; readonly expr: RustExpr }
-  | { readonly kind: "try"; readonly expr: RustExpr }
+  | {
+      readonly kind: "try";
+      readonly expr: RustExpr;
+      readonly errorDomain: RustErrorDomain;
+    }
   | { readonly kind: "return-expression"; readonly expr?: RustExpr }
   | { readonly kind: "unreachable"; readonly message: string }
   | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
+
+export type RustErrorDomain = "runtime" | "project";
 
 export type RustStmt =
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init?: RustExpr; readonly attrs?: readonly string[] }

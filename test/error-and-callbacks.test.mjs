@@ -512,7 +512,8 @@ export function fallback(flag: boolean): int32 {
   assert.match(text, /pub fn fallback\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
   assert.match(text, /Ok\(rt::Completion::Return\(2\)\)/u);
   assert.match(text, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
-  assert.match(text, /return Ok\(risky\(\)\?\);/u);
+  assert.match(text, /return risky\(\);/u);
+  assert.doesNotMatch(text, /return Ok\(risky\(\)\?\);/u);
 });
 
 test("terminating try scopes nested in non-tail branches return through the enclosing function", { timeout: 300_000 }, () => {

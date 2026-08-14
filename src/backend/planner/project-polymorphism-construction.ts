@@ -286,7 +286,11 @@ export function planProjectClassConstructor(
       return undefined;
     }
     if (baseFallible) {
-      baseInitialization = { kind: "try", expr: baseInitialization };
+      baseInitialization = {
+        kind: "try",
+        expr: baseInitialization,
+        errorDomain: context.errorDomain,
+      };
     }
     statements.push({
       kind: "let",
@@ -457,7 +461,11 @@ export function planProjectClassConstructor(
     returnType: stateType,
     body: {
       ...(parameterPlan.bodyInnerAttrs.length === 0 ? {} : { innerAttrs: parameterPlan.bodyInnerAttrs }),
-      ...applyFallibleShape({ statements }, fallible, true),
+      ...applyFallibleShape({ statements }, {
+        fallible,
+        hasReturnValue: true,
+        errorDomain: context.errorDomain,
+      }),
     },
   };
   const forwardArgs = parameterPlan.params.map((parameter) => ({
@@ -493,6 +501,7 @@ export function planProjectClassConstructor(
           mutable: false,
           init: fallible ? {
             kind: "try",
+            errorDomain: context.errorDomain,
             expr: {
               kind: "associated-call",
               owner: wrapperType,
@@ -557,7 +566,11 @@ export function planProjectClassConstructor(
           },
         },
       ],
-    }, fallible, true),
+    }, {
+      fallible,
+      hasReturnValue: true,
+      errorDomain: context.errorDomain,
+    }),
   };
   return { initialize, construct };
 }

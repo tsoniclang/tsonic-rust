@@ -67,10 +67,11 @@ export function selectRustResourceManagement(
   const alternatives = selectedAlternatives as readonly SelectedDisposalAlternative[];
   const [first] = alternatives;
   if (first === undefined || alternatives.some((alternative) =>
-    !rustTargetTypeRefEquals(alternative.resourceCarrier, first.resourceCarrier) ||
-    alternative.disposal.kind !== first.disposal.kind ||
-    alternative.disposal.fallible !== first.disposal.fallible ||
-    !resourceDisposalTargetsEqual(alternative.disposal.target, first.disposal.target))) {
+      !rustTargetTypeRefEquals(alternative.resourceCarrier, first.resourceCarrier) ||
+      alternative.disposal.kind !== first.disposal.kind ||
+      alternative.disposal.fallible !== first.disposal.fallible ||
+      alternative.disposal.errorBoundary !== first.disposal.errorBoundary ||
+      !resourceDisposalTargetsEqual(alternative.disposal.target, first.disposal.target))) {
     return rejected("Rust resource alternatives must resolve to one identical carrier and disposal operation.");
   }
   const storageCarrier = context.facts.getRuntimeCarrierFact(declaration)?.carrier;
@@ -146,9 +147,19 @@ function selectDisposalAlternative(
     return {
       kind: "selected",
       resourceCarrier,
-      disposal: {
+      disposal: effects.fallible ? {
         kind: alternative.kind,
-        fallible: effects.fallible,
+        fallible: true,
+        errorBoundary: "source-program",
+        target: {
+          form: "source-method",
+          name: alternative.kind === "sync" ? "dispose" : "dispose_async",
+          receiverMode: effects.selfMode.mode,
+        },
+      } : {
+        kind: alternative.kind,
+        fallible: false,
+        errorBoundary: "none",
         target: {
           form: "source-method",
           name: alternative.kind === "sync" ? "dispose" : "dispose_async",
@@ -190,9 +201,15 @@ function selectDisposalAlternative(
   return {
     kind: "selected",
     resourceCarrier,
-    disposal: {
+    disposal: row.isFallible === true ? {
       kind: alternative.kind,
-      fallible: row.isFallible === true,
+      fallible: true,
+      errorBoundary: row.errorBoundary,
+      target: { form: "provider", target: row.target },
+    } : {
+      kind: alternative.kind,
+      fallible: false,
+      errorBoundary: "none",
       target: { form: "provider", target: row.target },
     },
   };

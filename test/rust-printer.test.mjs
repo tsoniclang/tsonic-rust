@@ -245,6 +245,50 @@ test("an outer call stays attached to an expanded fallible inner call", () => {
   assert.doesNotMatch(source, /receiver\.write_value\(\n/u);
 });
 
+test("a multiline fallible method chain expands inside its outer call", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: "Ok::<_, rt::TsonicError>",
+            args: [{
+              kind: "try",
+              expr: {
+                kind: "method-call",
+                receiver: {
+                  kind: "call",
+                  path: "js_string::replace_all",
+                  args: [
+                    { kind: "reference", expr: { kind: "path", path: "value" } },
+                    { kind: "string-literal", value: "a" },
+                    { kind: "string-literal", value: "b" },
+                  ],
+                },
+                method: "map_err",
+                args: [{
+                  kind: "path",
+                  path: "tsonic_rust_runtime::TsonicError::from",
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /Ok::<_, rt::TsonicError>\(\n        js_string::replace_all/u);
+  assert.match(source, /\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?,\n    \)/u);
+});
+
 test("a long outer call expands before a jointly fitting method argument", () => {
   const clone = (name) => ({
     kind: "method-call",

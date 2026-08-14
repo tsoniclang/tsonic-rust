@@ -410,6 +410,7 @@ function normalizeBindingValue(
   });
   return {
     kind: "try",
+    errorDomain: context.errorDomain,
     expr: {
       kind: "method-call",
       receiver: flattened,
