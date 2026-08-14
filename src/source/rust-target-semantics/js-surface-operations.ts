@@ -1262,6 +1262,7 @@ const jsConstructorRows: readonly JsConstructorRowData[] = [
   { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_fixed_array", result: "set", argModes: ["ref"], inputShape: "fixed-array-of-element", variant: "fixed-array" },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::JsDate::new", result: "date" },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_millis", result: "date", params: [{ ref: "float64" }] },
+  { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_string", result: "date", params: [{ ref: "string" }], argModes: ["ref"] },
 ];
 
 export interface JsConstructorRequest {

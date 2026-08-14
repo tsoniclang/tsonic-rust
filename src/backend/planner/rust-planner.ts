@@ -1,4 +1,5 @@
 import type { SourceFile } from "@tsonic/tsts";
+import { resolve } from "node:path";
 import type {
   TargetArtifact,
   TargetCompileResult,
@@ -265,11 +266,10 @@ function resolveProjectEntrySourceFile(
   input: RustTranslationContext,
   diagnostics: TargetDiagnostic[],
 ): SourceFile | undefined {
-  const entryPoint = input.project.entryPoint;
-  const sourceFile = input.sourceFiles.find((candidate) => {
-    const fileName = input.ast.getFileName(candidate);
-    return fileName === entryPoint || fileName.endsWith(`/${entryPoint}`);
-  });
+  const entryPoint = normalizeSourcePath(resolve(input.paths.projectRoot, input.project.entryPoint));
+  const sourceFile = input.sourceFiles.find((candidate) =>
+    normalizeSourcePath(resolve(input.ast.getFileName(candidate))) === entryPoint
+  );
   if (sourceFile === undefined) {
     diagnostics.push({
       code: "RUST_MISSING_ENTRYPOINT",
@@ -281,6 +281,10 @@ function resolveProjectEntrySourceFile(
     return undefined;
   }
   return sourceFile;
+}
+
+function normalizeSourcePath(path: string): string {
+  return path.split("\\").join("/");
 }
 
 function resolveBinaryEntry(

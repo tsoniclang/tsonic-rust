@@ -633,6 +633,24 @@ export function timing(): boolean {
   assert.match(text, /d\.get_time\(\) == 1000\.0/u);
 });
 
+test("Date string construction selects the exact string constructor row", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function timing(): boolean {
+  const d = new Date("1970-01-02T00:00:00.000Z");
+  return d.getTime() === 86400000;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::JsDate::from_string\("1970-01-02T00:00:00.000Z"\)/u);
+});
+
 test("mutable JS object assignments preserve reference identity", () => {
   const { result } = compileRust({
     surfaces: ["js"],

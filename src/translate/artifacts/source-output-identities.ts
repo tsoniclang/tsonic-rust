@@ -115,29 +115,29 @@ export function rustModuleNameForSourcePath(
   }
 
   const parts = sourcePath.split("/");
-  const canonical = parts.every((part) =>
-    /^[a-z_][a-z0-9_]*$/u.test(part) && !part.includes("__"));
-  let moduleName = canonical ? parts.join("__") : undefined;
+  const canonical = parts.length === 1 && /^[a-z_][a-z0-9_]*$/u.test(parts[0]!) &&
+    !parts[0]!.includes("__");
+  let moduleName = canonical ? parts[0] : undefined;
   if (moduleName === undefined) {
     const readable = sourcePath
       .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
       .toLowerCase()
-      .replace(/\//gu, "__")
+      .replace(/\//gu, "_")
       .replace(/[^a-z0-9_]/gu, "_")
       .replace(/_+/gu, "_")
       .replace(/^_+|_+$/gu, "") || "module";
     const digest = createHash("sha256").update(normalized).digest("hex");
-    moduleName = `${readable.slice(0, 120)}__id_${digest}`;
+    moduleName = `${readable.slice(0, 120)}_id_${digest}`;
   }
   if (/^[0-9]/u.test(moduleName) || moduleName === "main" || moduleName === "lib" ||
     rustReservedIdentifiers.has(moduleName)) {
-    moduleName = `source__${moduleName}`;
+    moduleName = `source_${moduleName}`;
   }
   if (!/^[a-z_][a-z0-9_]*$/u.test(moduleName)) {
     return undefined;
   }
   if (moduleName.length > 240) {
-    moduleName = `source__id_${createHash("sha256").update(normalized).digest("hex")}`;
+    moduleName = `source_id_${createHash("sha256").update(normalized).digest("hex")}`;
   }
   return moduleName;
 }

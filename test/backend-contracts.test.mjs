@@ -310,6 +310,31 @@ export function main(): void {}
   validateGeneratedProject("backend-structured-main", result.artifacts, { run: true });
 });
 
+test("binary entry selection uses the exact project-root path rather than a matching basename", () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "exact_entry_path" } },
+    files: {
+      "dependency/index.ts": `
+export function helper(): void {}
+`,
+      "index.ts": `
+import { helper } from "./dependency/index.js";
+
+export function main(): void {
+  helper();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/main.rs"),
+    /exact_entry_path::index::main\(\);/u,
+  );
+  validateGeneratedProject("backend-exact-entry-path", result.artifacts, { run: true });
+});
+
 test("fallible binary entry modules preserve structured Result return types", () => {
   const { result } = compileRust({
     packages: [acmeTelemetryCapability()],
