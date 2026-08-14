@@ -2525,23 +2525,25 @@ function printRustLetInitializer(
         );
     const chainBaseIsInvocation = methodChain?.base.kind === "call" ||
       methodChain?.base.kind === "associated-call" || methodChain?.base.kind === "invoke";
-    const initializerIsInvocation = initializer.kind === "call" ||
-      initializer.kind === "associated-call" || initializer.kind === "invoke";
-    const expandedCollectionInitializer =
-      rustExpressionContainsExpandedCollectionLiteral(initializer);
+    const initializerHasNestedCollectionInvocation =
+      rustInvocationHasNestedExpandedCollection(initializer);
+    const chainBaseHasNestedCollectionInvocation = methodChain !== undefined &&
+      rustInvocationHasNestedExpandedCollection(methodChain.base);
     const compactContinuationLimit = methodChain === undefined
       ? rustFormatWidth
       : rustFormatWidth - 4;
     const bindingLineOwnsChainBase = chainBaseAtPrefix !== undefined &&
       (chainBaseAtPrefix.includes("\n")
         ? prefix.length + firstLine(chainBaseAtPrefix).length + 1 <= rustFormatWidth &&
-          !(longBindingPrefix && chainBaseIsInvocation && expandedCollectionInitializer)
+          !(longBindingPrefix && chainBaseIsInvocation &&
+            chainBaseHasNestedCollectionInvocation)
         : prefix.length + chainBaseAtPrefix.length + 1 <= rustFormatWidth);
     const continuationPacksMoreSource =
       !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit ||
-      longBindingPrefix && expandedCollectionInitializer &&
-        (initializerIsInvocation || !bindingLineOwnsChainBase && chainBaseIsInvocation &&
-          chainBaseAtPrefix?.includes("\n") === true) ||
+      longBindingPrefix &&
+        (initializerHasNestedCollectionInvocation ||
+          !bindingLineOwnsChainBase && chainBaseIsInvocation &&
+          chainBaseHasNestedCollectionInvocation && chainBaseAtPrefix?.includes("\n") === true) ||
       longBindingPrefix && chainBaseAtPrefix?.includes("\n") === true &&
         chainBaseAtContinuation?.includes("\n") === false;
     if (continuationPacksMoreSource && renderedFits(continuation, continuationIndent.length)) {
@@ -3998,6 +4000,32 @@ function rustExpressionContainsExpandedCollectionLiteral(expression: RustExpr): 
     default:
       return false;
   }
+}
+
+function rustInvocationHasNestedExpandedCollection(expression: RustExpr): boolean {
+  const invocation = rustTransparentInvocationOperand(expression);
+  const arguments_ = invocation.kind === "call" || invocation.kind === "associated-call" ||
+      invocation.kind === "method-call"
+    ? invocation.args
+    : invocation.kind === "invoke"
+      ? invocation.args
+      : undefined;
+  return arguments_?.some((argument) => {
+    const nested = rustTransparentInvocationOperand(argument);
+    return (nested.kind === "call" || nested.kind === "associated-call" ||
+      nested.kind === "method-call" || nested.kind === "invoke") &&
+      rustExpressionContainsExpandedCollectionLiteral(nested);
+  }) === true;
+}
+
+function rustTransparentInvocationOperand(expression: RustExpr): RustExpr {
+  if (expression.kind === "bottom") {
+    return rustTransparentInvocationOperand(expression.expression);
+  }
+  if (expression.kind === "reference" || expression.kind === "await" || expression.kind === "try") {
+    return rustTransparentInvocationOperand(expression.expr);
+  }
+  return expression;
 }
 
 function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
