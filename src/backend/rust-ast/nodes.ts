@@ -133,6 +133,7 @@ export type RustStmt =
       readonly asynchronous: boolean;
       readonly body: RustBlock;
       readonly cleanup: RustBlock;
+      readonly tail?: true;
       readonly propagate: boolean;
       readonly dispatchReturn: boolean;
       readonly dispatchTargets: readonly {
@@ -158,6 +159,7 @@ export type RustStmt =
       readonly body: RustBlock;
       readonly bodyFallible: boolean;
       readonly bodyTerminates: boolean;
+      readonly tail?: true;
       readonly catchClause?: {
         readonly binding: string;
         readonly body: RustBlock;

@@ -614,6 +614,13 @@ function collectNestedCallExpressionChain(
       : `${printRustAssociatedOwner(current.owner)}::${current.method}`);
     if (current.args.length !== 1 ||
       (current.args[0]?.kind !== "call" && current.args[0]?.kind !== "associated-call")) {
+      if (current.args.length === 1 && current.args[0]?.kind === "string-literal") {
+        callables.push("String::from");
+        return {
+          callables,
+          arguments: [{ kind: "str-literal", value: current.args[0].value }],
+        };
+      }
       return current.args.length === 0 ? undefined : { callables, arguments: current.args };
     }
     current = current.args[0];
@@ -671,10 +678,11 @@ function printRustTryScope(
     const flowType = catchClause.fallible
       ? `rt::TsonicResult<${completionType}>`
       : completionType;
-    const inlineFlowMatchPrefix = `${indent}let ${statement.flowName}: ${flowType} = match ${statement.bodyName}`;
+    const flowAssignment = `${indent}let ${statement.flowName}: ${flowType} =`;
+    const inlineFlowMatchPrefix = `${flowAssignment} match ${statement.bodyName}`;
     const catchUsesBlock = statement.asynchronous;
-    const braceContinues = !renderedFits(`${inlineFlowMatchPrefix} {`, 0);
-    const matchDepth = depth;
+    const matchContinues = !renderedFits(`${inlineFlowMatchPrefix} {`, 0);
+    const matchDepth = depth + (matchContinues ? 1 : 0);
     const matchIndent = indentText(matchDepth);
     const armIndent = indentText(matchDepth + 1);
     const catchExpression = printRustCompletionCaptureExpression(
@@ -700,8 +708,8 @@ function printRustTryScope(
             `${catchExpression[catchExpression.length - 1]},`,
           ];
     lines.push(
-      ...(braceContinues
-        ? [inlineFlowMatchPrefix, `${matchIndent}{`]
+      ...(matchContinues
+        ? [flowAssignment, `${matchIndent}match ${statement.bodyName} {`]
         : [`${inlineFlowMatchPrefix} {`]),
       `${armIndent}Ok(completion) => ${catchClause.fallible ? "Ok(completion)" : "completion"},`,
       ...catchArm,
@@ -962,6 +970,7 @@ function printCompletionDispatch(
   statement: {
     readonly flowName: string;
     readonly fallible: boolean;
+    readonly tail?: true;
     readonly propagate: boolean;
     readonly dispatchReturn: boolean;
     readonly dispatchTargets: readonly {
@@ -976,6 +985,7 @@ function printCompletionDispatch(
 ): readonly string[] {
   const indent = indentText(depth);
   const armIndent = indentText(depth + 1);
+  const returnsAsTail = statement.tail === true && statement.terminates;
   const arms: string[] = statement.terminates
     ? [
         `${armIndent}rt::Completion::Normal => {`,
@@ -985,12 +995,12 @@ function printCompletionDispatch(
     : [`${armIndent}rt::Completion::Normal => {}`];
   if (statement.propagate) {
     arms.push(
-      `${armIndent}completion => ${statement.terminates ? "" : "return "}${statement.fallible ? "Ok(completion)" : "completion"},`,
+      `${armIndent}completion => ${returnsAsTail ? "" : "return "}${statement.fallible ? "Ok(completion)" : "completion"},`,
     );
   } else {
     if (statement.dispatchReturn) {
       arms.push(
-        `${armIndent}rt::Completion::Return(value) => ${statement.terminates ? "" : "return "}${statement.fallible ? "Ok(value)" : "value"},`,
+        `${armIndent}rt::Completion::Return(value) => ${returnsAsTail ? "" : "return "}${statement.fallible ? "Ok(value)" : "value"},`,
       );
     }
     for (const target of statement.dispatchTargets) {
@@ -3146,9 +3156,27 @@ function printFittedCall(
       column + prefix.length,
     ), "?");
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
-    if (firstLine(attached).length + column <= rustFormatWidth) {
+    const multilineCallback = soleFallibleMethod!.args.some((argument) =>
+      argument.kind === "closure" || argument.kind === "closure-block");
+    if ((!rendered.includes("\n") || multilineCallback) &&
+      firstLine(attached).length + column <= rustFormatWidth) {
       return attached;
     }
+  }
+  if (!forceExpanded && arguments_.length === 1 && soleArgument?.kind === "try" &&
+    !renderedFits(flat, column)) {
+    const argumentIndent = indentText(depth + 1);
+    const rendered = printRustExprFitted(
+      soleArgument,
+      depth + 1,
+      argumentIndent.length,
+      indentText(depth + 2),
+    );
+    return [
+      `${callable}(`,
+      appendToLastLine(`${argumentIndent}${rendered}`, ","),
+      `${indentText(depth)})`,
+    ].join("\n");
   }
   const trailingClosure = arguments_[arguments_.length - 1];
   if (!forceExpanded &&
@@ -3594,6 +3622,40 @@ function printFittedNestedCallWrapper(
   depth: number,
   column: number,
 ): string | undefined {
+  const singleArgumentChain = collectNestedCallExpressionChain(nested);
+  if (singleArgumentChain !== undefined && singleArgumentChain.arguments.length === 1 &&
+    singleArgumentChain.callables.length > 1) {
+    const opening = `${outerCallable}(${singleArgumentChain.callables.map((callable) =>
+      `${callable}(`).join("")}`;
+    const closing = ")".repeat(singleArgumentChain.callables.length + 1);
+    const terminalArgument = singleArgumentChain.arguments[0]!;
+    const terminalFlat = printRustExpr(terminalArgument);
+    if (terminalArgument.kind === "block" || terminalArgument.kind === "evaluate-then") {
+      const terminal = printRustExprFitted(
+        terminalArgument,
+        depth,
+        column + opening.length,
+      );
+      const attached = appendToLastLine(`${opening}${terminal}`, closing);
+      if (column + firstLine(attached).length <= rustFormatWidth) {
+        return attached;
+      }
+    }
+    if (opening.length + terminalFlat.length + closing.length > rustNestedCallWidth &&
+      renderedFits(opening, column)) {
+      const argumentIndent = indentText(depth + 1);
+      const terminal = printRustExprFitted(
+        terminalArgument,
+        depth + 1,
+        argumentIndent.length,
+      );
+      return [
+        opening,
+        appendToLastLine(`${argumentIndent}${terminal}`, ","),
+        `${indentText(depth)}${closing}`,
+      ].join("\n");
+    }
+  }
   if (nested.kind === "associated-call" && nested.args.length === 1 &&
     (nested.args[0]?.kind === "closure" || nested.args[0]?.kind === "closure-block")) {
     const owner = printRustAssociatedCallOwnerFitted(

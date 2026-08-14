@@ -43,8 +43,8 @@ export function applyRustTailShape(body: RustBlock, hasReturnValue: boolean): Ru
     tail = { ...last, tail: true };
   } else if (last.kind === "scope" || last.kind === "unsafe-scope") {
     tail = { ...last, body: applyRustTailShape(last.body, hasReturnValue) };
-  } else if (last.kind === "try-scope") {
-    tail = last;
+  } else if (last.kind === "try-scope" || last.kind === "resource-scope") {
+    tail = { ...last, tail: true };
   } else if (last.kind === "if" && last.else !== undefined &&
     rustBlockTerminates(last.then) && rustBlockTerminates(last.else)) {
     tail = {

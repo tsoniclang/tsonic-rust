@@ -6,6 +6,7 @@ import type {
   RustTargetOperationFact,
 } from "../../source/rust-facts/keys.js";
 import {
+  isRustCopyCarrier,
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
@@ -71,40 +72,28 @@ export function planRustProjectDowncastValue(
     ));
     return undefined;
   }
-  if (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.project-downcast-clone",
-      "Optional project downcast requires a selected receiver carrier with a proven non-consuming clone contract.",
-    ));
-    return undefined;
-  }
-  const sourceValue = optionalElement === undefined
-    ? expression
-    : {
-        kind: "method-call" as const,
-        receiver: {
-          kind: "method-call" as const,
-          receiver: {
-            kind: "method-call" as const,
-            receiver: expression,
-            method: "as_ref",
-            args: [],
-          },
-          method: "unwrap",
-          args: [],
-        },
-        method: "clone",
-        args: [],
-      };
   const valueName = allocateRustSyntheticName(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
     "downcast_value",
   );
-  const valuePath: RustExpr = { kind: "path", path: valueName };
+  const sourceExpression = planRustNonConsumingProjectValue(node, expression, context);
+  const sourceReference: RustExpr = { kind: "reference", expr: sourceExpression };
+  const valuePath: RustExpr = optionalElement === undefined
+    ? { kind: "path", path: valueName }
+    : {
+        kind: "method-call",
+        receiver: {
+          kind: "method-call",
+          receiver: { kind: "path", path: valueName },
+          method: "as_ref",
+          args: [],
+        },
+        method: "unwrap",
+        args: [],
+      };
   return {
     kind: "block",
-    bindings: [{ name: valueName, value: sourceValue }],
+    bindings: [{ name: valueName, value: sourceReference }],
     value: {
       kind: "struct-literal",
       path: targetPath,
@@ -125,6 +114,19 @@ export function planRustProjectDowncastValue(
       ],
     },
   };
+}
+
+function planRustNonConsumingProjectValue(
+  node: Node,
+  expression: RustExpr,
+  context: RustPlanContext,
+): RustExpr {
+  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier) &&
+      expression.kind === "method-call" && expression.method === "clone" &&
+      expression.args.length === 0
+    ? expression.receiver
+    : expression;
 }
 
 export function planRustProjectTypeTest(

@@ -379,6 +379,44 @@ export function main(): void {
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });
 
+test("narrowed project values remain reusable across repeated selected reads", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "repeated_project_downcast" },
+    },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class Value {}
+
+class TextValue extends Value {
+  text: string;
+  constructor(text: string) { super(); this.text = text; }
+}
+
+function readTwice(value: Value): string {
+  if (value instanceof TextValue) {
+    return value.text + value.text;
+  }
+  return "";
+}
+
+export function main(): void {
+  check(readTwice(new TextValue("a")) === "aa");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let __tsonic_downcast_value_[0-9]+ = &value;/u);
+  assert.equal(validateGeneratedProject("repeated-project-downcast", result.artifacts, { run: true }).status, 0);
+});
+
 test("exact null values remain closed inside project polymorphic state", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

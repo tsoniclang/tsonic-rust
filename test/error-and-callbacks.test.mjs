@@ -512,8 +512,50 @@ export function fallback(flag: boolean): int32 {
   assert.match(text, /pub fn fallback\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
   assert.match(text, /Ok\(rt::Completion::Return\(2\)\)/u);
   assert.match(text, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
-  assert.match(text, /return risky\(\);/u);
-  assert.doesNotMatch(text, /return Ok\(risky\(\)\?\);/u);
+  assert.match(text, /return Ok\(risky\(\)\?\);/u);
+});
+
+test("terminating try scopes nested in non-tail branches return through the enclosing function", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "nested_try_return" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class DomainError extends Error {
+  constructor(message: string) { super(message); }
+}
+
+function fail(): void {
+  throw new DomainError("domain");
+}
+
+function recover(active: boolean): string | undefined {
+  if (active) {
+    try {
+      fail();
+      return "unreachable";
+    } catch (error) {
+      if (error instanceof DomainError) return error.message;
+      throw error;
+    }
+  }
+  return undefined;
+}
+
+export function main(): void {
+  check(recover(true) === "domain");
+  check(recover(false) === undefined);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
+  assert.equal(validateGeneratedProject("nested-try-return", result.artifacts, { run: true }).status, 0);
 });
 
 test("nested arrow returns do not trip the try escape scan", async () => {
@@ -586,4 +628,44 @@ test("fallible provider rows are restricted to method, constructor, and property
     }),
     /isFallible is supported only on method, constructor, and property operations/u,
   );
+});
+
+test("concise fallible callables convert provider errors into the closed program error", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "concise_program_error" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class DomainError extends Error {
+  constructor(message: string) { super(message); }
+}
+
+const normalize = (value: string): string => value.replaceAll("a", "b");
+
+function fail(): void {
+  throw new DomainError("domain");
+}
+
+export function main(): void {
+  check(normalize("a") === "b");
+  try {
+    fail();
+  } catch (_error) {
+    check(true);
+  }
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(
+    source,
+    /Ok::<_, rt::TsonicError>\(\s*js_string::replace_all\(&value, "a", "b"\)[\s\S]*\?\s*,?\s*\)/u,
+  );
+  assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });

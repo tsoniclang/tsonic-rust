@@ -4,7 +4,10 @@ import { acmeTelemetryCapability, artifactText, compileRust } from "./helpers/ru
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 import { rustTargetOperationFactKey } from "../dist/index.js";
 import { finalizeRustProviderOperationAbi } from "../dist/source/rust-facts/finalized-operation-abi.js";
-import { applyFallibleShape } from "../dist/backend/planner/fallible-shape.js";
+import {
+  applyFallibleShape,
+  applyRustFallibleResultExpression,
+} from "../dist/backend/planner/fallible-shape.js";
 import { rustBlockTerminates } from "../dist/backend/planner/functions.js";
 import {
   requireProviderArgumentPassingFacts,
@@ -25,6 +28,22 @@ test("value-returning fallible bodies never synthesize an invalid Ok unit", () =
   assert.equal(rustBlockTerminates(incomplete), false);
   assert.equal(rustBlockTerminates(complete), true);
   assert.deepEqual(applyFallibleShape(incomplete, true, true), incomplete);
+});
+
+test("fallible result expressions preserve conversion into the enclosing program error", () => {
+  const providerCall = { kind: "call", path: "provider::read", args: [] };
+
+  assert.deepEqual(
+    applyRustFallibleResultExpression(
+      { kind: "try", expr: providerCall },
+      "rt::TsonicError",
+    ),
+    {
+      kind: "call",
+      path: "Ok::<_, rt::TsonicError>",
+      args: [{ kind: "try", expr: providerCall }],
+    },
+  );
 });
 
 test("operation fact equality is structural and independent of metadata key order", () => {

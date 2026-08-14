@@ -1256,6 +1256,41 @@ test("nested single-argument wrappers stay attached to the expanded inner call",
   assert.match(text, /check\(js_abi::number_is_nan\(js_abi::math_pow\(\n        1\.0,\n        js_abi::NUMBER_POSITIVE_INFINITY,\n    \)\)\);/u);
 });
 
+test("nested single-argument error wrappers expand at the exact innermost value", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: "Err",
+            args: [{
+              kind: "call",
+              path: "rt::TsonicError::from",
+              args: [{
+                kind: "call",
+                path: "DomainError::new",
+                args: [{ kind: "string-literal", value: "domain" }],
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /Err\(rt::TsonicError::from\(DomainError::new\(String::from\(\n {8}"domain",\n {4}\)\)\)\)/u,
+  );
+});
+
 test("fallible nested calls in comparisons use rustfmt-compatible wrapper layout", () => {
   const text = printRustSourceFile({
     headerComment,
