@@ -1145,7 +1145,11 @@ export function drive(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pass_through<T>\(value: T\) -> T \{/u);
-  assert.match(text, /pass_through\(41\)/u);
+  assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32>/u);
+  assert.match(
+    text,
+    /tsonic_rust_runtime::conversions::f64_to_i32\(pass_through\(41\.0\) \+ 1\.0\)/u,
+  );
 });
 
 test("operations on unconstrained type parameters stay invalid TypeScript", () => {

@@ -95,7 +95,7 @@ export function main(): void {
 
   const path_var = env["PATH"] ?? "";
   check(path_var.length > 0);
-  check(env["R7_UNSET_VAR_PROOF"] === null);
+  check(env["R7_UNSET_VAR_PROOF"] === undefined);
   check(platform.length > 0);
   check(arch.length > 0);
   check(pid > 0);
@@ -223,7 +223,7 @@ export function bad(): void {
   }]);
 });
 
-test("absent env and search-param reads preserve null", async () => {
+test("absent env reads preserve undefined", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
@@ -233,7 +233,7 @@ import { env } from "node:process";
 
 export function read(name: string): string {
   const value = env[name];
-  if (value === null) {
+  if (value === undefined) {
     return "";
   }
   return value ?? "";

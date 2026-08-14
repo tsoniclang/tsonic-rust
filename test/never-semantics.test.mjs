@@ -99,6 +99,8 @@ export class InvalidNeverStorage {
 
   assert.ok(result.diagnostics.some((diagnostic) =>
     diagnostic.code === "RUST_MISSING_TARGET_FACT" &&
-    /Class field 'value' has no supported Rust carrier fact/u.test(diagnostic.message)));
+    diagnostic.message ===
+      "Class field 'value' has no supported Rust storage identity or carrier fact. " +
+        "Node kind: KindPropertyDeclaration."));
   assert.equal(result.artifacts.length, 0);
 });

@@ -144,7 +144,7 @@ import {
   parseSourceBigIntLiteral,
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustTypeAliasDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustTypeAliasDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
@@ -157,6 +157,7 @@ import {
   rustTargetOperationText,
 } from "../rust-facts/target-operation.js";
 import { rustArgumentPassingMode } from "../rust-facts/parameter-passing.js";
+import { rustValueConversionIsFallible } from "../rust-facts/value-conversions.js";
 import type { RustProviderOperationRow } from "../provider-packages/index.js";
 import {
   isRustAssignmentOperator,
@@ -2501,30 +2502,13 @@ function resolveBinaryOperandCarriers(
   if (rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)) {
     const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken;
-    const leftUsesContext = expressionUsesContextualLiteralCarrier(walk.context.ast, leftNode);
-    const rightUsesContext = expressionUsesContextualLiteralCarrier(walk.context.ast, rightNode);
-    let left: TargetTypeRef | undefined;
-    let right: TargetTypeRef | undefined;
-    if (leftUsesContext && !rightUsesContext) {
-      right = resolveExpressionCarrier(walk, rightNode, sourceFile, undefined);
-      left = resolveExpressionCarrier(
-        walk,
-        leftNode,
-        sourceFile,
-        isRustNullishSourceCarrier(right) ? undefined : right,
-      );
-    } else if (rightUsesContext && !leftUsesContext) {
-      left = resolveExpressionCarrier(walk, leftNode, sourceFile, undefined);
-      right = resolveExpressionCarrier(
-        walk,
-        rightNode,
-        sourceFile,
-        isRustNullishSourceCarrier(left) ? undefined : left,
-      );
-    } else {
-      left = resolveExpressionCarrier(walk, leftNode, sourceFile, undefined);
-      right = resolveExpressionCarrier(walk, rightNode, sourceFile, undefined);
-    }
+    let { left, right } = resolveContextualBinaryOperandCarriers(
+      walk,
+      leftNode,
+      rightNode,
+      sourceFile,
+      undefined,
+    );
     if (strictEquality && left !== undefined && right !== undefined &&
       selectRustBinaryOperator(operatorKind, left, right) === undefined) {
       const rightAsLeft = resolveExpressionCarrier(walk, rightNode, sourceFile, left);
@@ -2539,6 +2523,18 @@ function resolveBinaryOperandCarriers(
         }
       }
     }
+    return { left, right, leftNode, rightNode, operatorKind };
+  }
+  if (operatorKind !== KindQuestionQuestionToken &&
+    !isRustAssignmentOperator(operatorKind) &&
+    !rustBinaryRightCarrierIsIndependentOfLeft(operatorKind)) {
+    const { left, right } = resolveContextualBinaryOperandCarriers(
+      walk,
+      leftNode,
+      rightNode,
+      sourceFile,
+      expected,
+    );
     return { left, right, leftNode, rightNode, operatorKind };
   }
   let left = resolveExpressionCarrier(
@@ -2587,6 +2583,54 @@ function resolveBinaryOperandCarriers(
     leftNode,
     rightNode,
     operatorKind,
+  };
+}
+
+function resolveContextualBinaryOperandCarriers(
+  walk: RustFactWalk,
+  leftNode: Node,
+  rightNode: Node,
+  sourceFile: SourceFile,
+  expected: TargetTypeRef | undefined,
+): {
+  readonly left: TargetTypeRef | undefined;
+  readonly right: TargetTypeRef | undefined;
+} {
+  const leftUsesContext = expressionUsesContextualLiteralCarrier(walk.context.ast, leftNode);
+  const rightUsesContext = expressionUsesContextualLiteralCarrier(walk.context.ast, rightNode);
+  if (leftUsesContext && rightUsesContext && expected !== undefined) {
+    return {
+      left: resolveExpressionCarrier(walk, leftNode, sourceFile, expected),
+      right: resolveExpressionCarrier(walk, rightNode, sourceFile, expected),
+    };
+  }
+  if (leftUsesContext && !rightUsesContext) {
+    const right = resolveExpressionCarrier(walk, rightNode, sourceFile, undefined);
+    return {
+      left: resolveExpressionCarrier(
+        walk,
+        leftNode,
+        sourceFile,
+        isRustNullishSourceCarrier(right) ? undefined : right,
+      ),
+      right,
+    };
+  }
+  if (rightUsesContext && !leftUsesContext) {
+    const left = resolveExpressionCarrier(walk, leftNode, sourceFile, undefined);
+    return {
+      left,
+      right: resolveExpressionCarrier(
+        walk,
+        rightNode,
+        sourceFile,
+        isRustNullishSourceCarrier(left) ? undefined : left,
+      ),
+    };
+  }
+  return {
+    left: resolveExpressionCarrier(walk, leftNode, sourceFile, undefined),
+    right: resolveExpressionCarrier(walk, rightNode, sourceFile, undefined),
   };
 }
 
@@ -5337,9 +5381,14 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
       : undefined;
   };
   const operationIsFallible = (node: Node): boolean => {
-    const fact = walk.context.facts.get(node, rustTargetOperationFactKey) ??
+    const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(node, rustTargetOperationFactKey);
-    return rustTargetOperationIsFallible(fact);
+    const contextualConversion = walk.context.facts.get(
+      node,
+      rustContextualValueConversionFactKey,
+    ) ?? walk.context.facts.resolve(node, rustContextualValueConversionFactKey);
+    return rustTargetOperationIsFallible(operation) ||
+      rustValueConversionIsFallible(contextualConversion?.conversion);
   };
   const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
