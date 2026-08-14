@@ -135,14 +135,19 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       if (ast.hasModifierKind(member, "static")) {
         continue;
       }
-      const fieldName = rustPublicName(ast.text(ast.name(member) ?? member)).name;
+      const fieldNameNode = ast.name(member);
+      const sourceFieldName = ast.text(fieldNameNode ?? member);
+      const privateField = fieldNameNode !== undefined && ast.is.IsPrivateIdentifier(fieldNameNode);
+      const fieldName = privateField
+        ? "private_field"
+        : rustPublicName(sourceFieldName).name;
       const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
       const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
       if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, member),
           "rust.backend.class",
-          `Class field '${fieldName}' has no supported Rust carrier fact.`,
+          `Class field '${sourceFieldName}' has no supported Rust storage identity or carrier fact.`,
         ));
         failed = true;
         continue;

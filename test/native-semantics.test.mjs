@@ -55,6 +55,53 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /counter\.clone\(\)\.current\(\)/u);
 });
 
+test("ECMAScript private fields retain declaration identity and closed storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "private_field_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Left {
+  #value: int32 = 1;
+
+  increment(): int32 {
+    this.#value += 1;
+    return this.#value;
+  }
+}
+
+class Right {
+  #value: int32;
+
+  constructor(value: int32) {
+    this.#value = value;
+  }
+
+  current(): int32 {
+    return this.#value;
+  }
+}
+
+export function main(): void {
+  const left = new Left();
+  const right = new Right(9);
+  check(left.increment() === 2);
+  check(right.current() === 9);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(text, /#value/u);
+  assert.match(text, /__tsonic_field_private_field/u);
+  assert.equal(validateGeneratedProject("private-field-bin", result.artifacts, { run: true }).status, 0);
+});
+
 test("class accessors preserve exact read write and update semantics", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
