@@ -684,8 +684,9 @@ function printRustTryScope(
     const flowAssignment = `${indent}let ${statement.flowName}: ${flowType} =`;
     const inlineFlowMatchPrefix = `${flowAssignment} match ${statement.bodyName}`;
     const catchUsesBlock = statement.asynchronous;
-    const matchContinues = !renderedFits(`${inlineFlowMatchPrefix} {`, 0);
-    const matchDepth = depth;
+    const matchWithBraceFits = renderedFits(`${inlineFlowMatchPrefix} {`, 0);
+    const matchHeaderFits = renderedFits(inlineFlowMatchPrefix, 0);
+    const matchDepth = matchHeaderFits ? depth : depth + 1;
     const matchIndent = indentText(matchDepth);
     const armIndent = indentText(matchDepth + 1);
     const catchExpression = printRustCompletionCaptureExpression(
@@ -711,9 +712,11 @@ function printRustTryScope(
             `${catchExpression[catchExpression.length - 1]},`,
           ];
     lines.push(
-      ...(matchContinues
-        ? [inlineFlowMatchPrefix, `${matchIndent}{`]
-        : [`${inlineFlowMatchPrefix} {`]),
+      ...(matchWithBraceFits
+        ? [`${inlineFlowMatchPrefix} {`]
+        : matchHeaderFits
+          ? [inlineFlowMatchPrefix, `${matchIndent}{`]
+          : [flowAssignment, `${matchIndent}match ${statement.bodyName} {`]),
       `${armIndent}Ok(completion) => ${catchClause.fallible ? "Ok(completion)" : "completion"},`,
       ...catchArm,
       `${matchIndent}};`,

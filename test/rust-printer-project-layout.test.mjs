@@ -26,6 +26,48 @@ function field(receiver, name) {
   return { kind: "field", receiver, name };
 }
 
+function nestedTryScopeSource(returnType, flowName, bodyName) {
+  return printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      fallible: true,
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: { kind: "bool-literal", value: true },
+          then: {
+            statements: [{
+              kind: "try-scope",
+              bodyName,
+              flowName,
+              returnType,
+              fallible: true,
+              asynchronous: false,
+              body: { statements: [] },
+              bodyFallible: true,
+              bodyTerminates: false,
+              catchClause: {
+                binding: "_",
+                body: { statements: [] },
+                fallible: true,
+                terminates: false,
+              },
+              propagate: false,
+              dispatchReturn: false,
+              dispatchTargets: [],
+              terminates: false,
+            }],
+          },
+        }],
+      },
+    }],
+  });
+}
+
 test("nested tuple fields use one edition-neutral rustfmt-stable form", () => {
   const text = projectFunction(field(field(field({ kind: "path", path: "state" }, "0"), "1"), "0"));
 
@@ -508,6 +550,28 @@ test("multiline synchronous match-arm expressions remain direct", () => {
 
   assert.match(text, /Err\(_\) => rt::completion_region\(\|\| \{/u);
   assert.doesNotMatch(text, /Err\(_\) => \{\n\s+rt::completion_region/u);
+});
+
+test("try-scope match bindings follow all rustfmt width boundaries", () => {
+  const exactWidth = nestedTryScopeSource(
+    { kind: "primitive", name: "i32" },
+    "__tsonic_try_flow_11",
+    "__tsonic_try_body_10",
+  );
+  assert.match(
+    exactWidth,
+    /let __tsonic_try_flow_11: rt::TsonicResult<rt::Completion<i32>> = match __tsonic_try_body_10\n        \{/u,
+  );
+
+  const overWidth = nestedTryScopeSource(
+    { kind: "named", path: "Option", typeArguments: [{ kind: "string" }] },
+    "__tsonic_try_flow_2",
+    "__tsonic_try_body_1",
+  );
+  assert.match(
+    overWidth,
+    /let __tsonic_try_flow_2: rt::TsonicResult<rt::Completion<Option<String>>> =\n            match __tsonic_try_body_1 \{/u,
+  );
 });
 
 test("method chains in logical continuations use the continuation body indent", () => {
