@@ -72,7 +72,7 @@ import type { int32 } from "@tsonic/core/types.js";
 export function main(): void {
   const dir = join(cwd(), "r7_proof_dir");
   if (existsSync(dir)) {
-    rmSync(dir);
+    rmSync(dir, true);
   }
   mkdirSync(dir);
   const file = join(dir, "data.txt");
@@ -90,7 +90,7 @@ export function main(): void {
   check(existsSync(renamed));
   check(realpathSync(dir).length > 0);
   unlinkSync(renamed);
-  rmSync(dir);
+  rmSync(dir, true);
   check(!existsSync(dir));
 
   const path_var = env["PATH"] ?? "";

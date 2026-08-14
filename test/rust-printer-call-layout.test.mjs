@@ -365,6 +365,70 @@ test("fallible conversion wrappers own multiline callback method chains", () => 
   );
 });
 
+test("fallible conversion wrappers stay attached to one callback method", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "call",
+                path: "tsonic_rust_runtime::conversions::isize_to_f64",
+                args: [{
+                  kind: "try",
+                  expr: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "values" },
+                    method: "try_find_index_with_index",
+                    args: [{
+                      kind: "closure",
+                      params: [
+                        { name: "value", byRefCopy: false },
+                        { name: "_index", byRefCopy: false },
+                      ],
+                      body: {
+                        kind: "call",
+                        path: "Ok::<_, rt::TsonicError>",
+                        args: [{
+                          kind: "binary",
+                          operator: "==",
+                          left: {
+                            kind: "try",
+                            expr: {
+                              kind: "call",
+                              path: "risky",
+                              args: [{ kind: "path", path: "value" }],
+                            },
+                          },
+                          right: { kind: "int-literal", text: "2" },
+                        }],
+                      },
+                    }],
+                  },
+                }],
+              },
+              right: { kind: "float-literal", text: "1.0" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /isize_to_f64\(values\.try_find_index_with_index\(\n {12}\|value, _index\| Ok::<_, rt::TsonicError>\(risky\(value\)\? == 2\),\n {8}\)\?\) == 1\.0,/u);
+});
+
 test("conversion wrappers retain rustfmt layout for one block-valued array argument", () => {
   const source = printRustSourceFile({
     headerComment,
