@@ -413,6 +413,8 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly negated: boolean;
       readonly optionOperand: "left" | "right";
+      readonly optionCarrier: TargetTypeRef;
+      readonly valueCarrier: TargetTypeRef;
     }
   | {
       readonly kind: "disjoint-equality";

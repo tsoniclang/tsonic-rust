@@ -1327,7 +1327,6 @@ function planExpressionAsStatement(
           left,
           context,
           planExpression,
-          false,
         );
         if (promotedLocation.kind === "promoted") {
           if (promotedLocation.expression === undefined) {

@@ -269,6 +269,7 @@ interface RustFactWalk {
     readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput;
     readonly prepared: RustPreparedDeferredCheckedCall;
   }>;
+  readonly capturedBindingStorage: Map<Node, "value" | "location">;
   currentThisCarrier?: TargetTypeRef;
   currentSuperCarrier?: TargetTypeRef;
   currentMethodDeclaration?: Node;
@@ -648,6 +649,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     operationOptions,
     operationAttempts: new WeakSet<object>(),
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
+    capturedBindingStorage: new Map<Node, "value" | "location">(),
     deferredCallbackCalls: new WeakMap(),
     preparedCallbackCalls: new Map(),
   };
@@ -2743,6 +2745,11 @@ function resolvePostCheckBinaryCarrier(
     };
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken) && optionValueOperand !== undefined) {
+    const optionCarrier = optionValueOperand === "left" ? left : right;
+    const valueCarrier = optionValueOperand === "left" ? right : left;
+    if (optionCarrier === undefined || valueCarrier === undefined) {
+      return undefined;
+    }
     fact = {
       kind: "option-value-equality",
       operationId: operatorKind === KindExclamationEqualsEqualsToken
@@ -2750,6 +2757,8 @@ function resolvePostCheckBinaryCarrier(
         : "tsonic.rust.option.value-equal",
       negated: operatorKind === KindExclamationEqualsEqualsToken,
       optionOperand: optionValueOperand,
+      optionCarrier,
+      valueCarrier,
     };
   } else if (operatorKind === KindEqualsToken &&
     (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact)) &&
@@ -6047,8 +6056,12 @@ function collectRustClosureCaptures(
             valid = false;
             return;
           }
-          const location = walk.context.facts.get(declaration, rustMutatedBindingFactKey) !== undefined;
-          if (location) {
+          const storage = rustCapturedBindingStorage(walk, declaration, node);
+          if (storage === undefined) {
+            valid = false;
+            return;
+          }
+          if (storage === "location") {
             walk.context.facts.set(declaration, rustLocationStorageFactKey, {
               valueCarrier: carrier,
             }, [{ message: "rust captured mutable binding storage" }]);
@@ -6057,7 +6070,7 @@ function collectRustClosureCaptures(
             declaration,
             reference: node,
             carrier,
-            storage: location ? "location" : "value",
+            storage,
           });
         }
       }
@@ -6075,6 +6088,27 @@ function collectRustClosureCaptures(
         ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }),
       }
     : undefined;
+}
+
+function rustCapturedBindingStorage(
+  walk: RustFactWalk,
+  declaration: Node,
+  reference: Node,
+): "value" | "location" | undefined {
+  const cached = walk.capturedBindingStorage.get(declaration);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const selected = walk.context.source.navigation.sourceReferenceFor(reference);
+  const sourceFile = walk.context.ast.getSourceFile(declaration);
+  if (selected?.declaration !== declaration || sourceFile === undefined) {
+    return undefined;
+  }
+  const mutated = walk.context.facts.get(declaration, rustMutatedBindingFactKey) !== undefined ||
+    walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
+  const storage = mutated ? "location" : "value";
+  walk.capturedBindingStorage.set(declaration, storage);
+  return storage;
 }
 
 function callableExpressionValueDeclaration(

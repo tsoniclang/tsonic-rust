@@ -3165,6 +3165,17 @@ function printFittedCall(
   }
   if (!forceExpanded && arguments_.length === 1 && soleArgument?.kind === "try" &&
     !renderedFits(flat, column)) {
+    const prefix = `${callable}(`;
+    const nested = printNestedCallArgument(
+      soleArgument,
+      depth,
+      column + prefix.length,
+      true,
+    );
+    const attached = appendToLastLine(`${prefix}${nested}`, ")");
+    if (nested.includes("\n") && renderedFits(attached, column)) {
+      return attached;
+    }
     const argumentIndent = indentText(depth + 1);
     const rendered = printRustExprFitted(
       soleArgument,
@@ -3305,6 +3316,17 @@ function printFittedCall(
       )}`,
       ")",
     );
+  }
+  if (arguments_.length === 1 && arguments_[0]?.kind === "string-concat") {
+    const prefix = `${callable}(`;
+    const rendered = printRustExprFitted(
+      arguments_[0],
+      depth,
+      column + prefix.length,
+    );
+    if (rendered.includes("\n")) {
+      return appendToLastLine(`${prefix}${rendered}`, ")");
+    }
   }
   if (arguments_.length === 1 && arguments_[0]?.kind === "method-call") {
     const prefix = `${callable}(`;
@@ -3622,6 +3644,22 @@ function printFittedNestedCallWrapper(
   depth: number,
   column: number,
 ): string | undefined {
+  if (nested.args.length > 1) {
+    const nestedCallable = nested.kind === "call"
+      ? nested.path
+      : `${printRustAssociatedOwner(nested.owner)}::${nested.method}`;
+    const renderedNested = printFittedCall(
+      nestedCallable,
+      nested.args,
+      depth,
+      column + outerCallable.length + 1,
+      true,
+    );
+    const attached = appendToLastLine(`${outerCallable}(${renderedNested}`, ")");
+    if (renderedNested.includes("\n")) {
+      return attached;
+    }
+  }
   const singleArgumentChain = collectNestedCallExpressionChain(nested);
   if (singleArgumentChain !== undefined && singleArgumentChain.arguments.length === 1 &&
     singleArgumentChain.callables.length > 1) {

@@ -208,6 +208,43 @@ test("a fitting fallible nested call remains horizontal", () => {
   );
 });
 
+test("an outer call stays attached to an expanded fallible inner call", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "receiver" },
+            method: "write_value",
+            args: [{
+              kind: "try",
+              expr: {
+                kind: "call",
+                path: "checked_operation_with_a_deliberately_long_name",
+                args: [
+                  { kind: "path", path: "first_value_with_a_deliberately_long_name" },
+                  { kind: "path", path: "second_value_with_a_deliberately_long_name" },
+                ],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /receiver\.write_value\(checked_operation_with_a_deliberately_long_name\(\n/u);
+  assert.match(source, /\n    \)\?\);/u);
+  assert.doesNotMatch(source, /receiver\.write_value\(\n/u);
+});
+
 test("a long outer call expands before a jointly fitting method argument", () => {
   const clone = (name) => ({
     kind: "method-call",

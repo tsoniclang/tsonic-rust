@@ -2784,17 +2784,41 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const valueNode = fact.optionOperand === "left" ? rightNode : leftNode;
     const option = optionNode === undefined ? undefined : planExpression(optionNode, context);
     const value = valueNode === undefined ? undefined : planExpression(valueNode, context);
-    if (optionNode === undefined || valueNode === undefined || option === undefined || value === undefined) {
+    const valueProjection = valueNode === undefined
+      ? undefined
+      : context.input.facts.getFact(valueNode, rustOptionProjectionFactKey);
+    const optionCarrier = optionNode === undefined
+      ? undefined
+      : rustEffectiveValueCarrier(context.input.facts, optionNode);
+    const valueCarrier = valueNode === undefined
+      ? undefined
+      : rustValueCarrierBeforeOptionProjection(context.input.facts, valueNode);
+    if (optionNode === undefined || valueNode === undefined || option === undefined || value === undefined ||
+      !rustTargetTypeRefEquals(optionCarrier, fact.optionCarrier) ||
+      !rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) ||
+      !rustTargetTypeRefEquals(rustOptionElementCarrier(fact.optionCarrier), fact.valueCarrier) ||
+      (valueProjection !== undefined &&
+        (valueProjection.kind !== "some" ||
+          !rustTargetTypeRefEquals(valueProjection.sourceCarrier, fact.valueCarrier) ||
+          !rustTargetTypeRefEquals(valueProjection.resultCarrier, fact.optionCarrier)))) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.option-value-equality",
+        "Option/value equality conflicts with its exact finalized operand carriers and projection.",
+      ));
       return undefined;
     }
+    const comparableValue: RustExpr = valueProjection === undefined
+      ? { kind: "call", path: "Some", args: [value] }
+      : value;
     return {
       kind: "binary",
       operator: fact.negated ? "!=" : "==",
       left: fact.optionOperand === "left"
         ? planRustNonConsumingValue(optionNode, option, context)
-        : { kind: "call", path: "Some", args: [value] },
+        : comparableValue,
       right: fact.optionOperand === "left"
-        ? { kind: "call", path: "Some", args: [value] }
+        ? comparableValue
         : planRustNonConsumingValue(optionNode, option, context),
     };
   }

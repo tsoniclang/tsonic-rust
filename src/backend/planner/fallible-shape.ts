@@ -93,6 +93,9 @@ export function applyRustFallibleResultExpression(
   if (expression.kind === "bottom") {
     return expression;
   }
+  if (expression.kind === "try") {
+    return expression.expr;
+  }
   return {
     kind: "call",
     path: errorTypePath === undefined ? "Ok" : `Ok::<_, ${errorTypePath}>`,

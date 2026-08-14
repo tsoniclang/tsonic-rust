@@ -303,6 +303,36 @@ export function main(): void {
   validateGeneratedProject("flow-read-projection", result.artifacts, { run: true });
 });
 
+test("optional value equality applies one exact option projection", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "option_value_equality" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+
+class Artifact {
+  output_path: string | undefined;
+
+  constructor(output_path: string | undefined) {
+    this.output_path = output_path;
+  }
+}
+
+export function main(): void {
+  const expected = "site.css";
+  const artifact = new Artifact(expected);
+  check(artifact.output_path === \`site.\${"css"}\`);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /Some\(Some\(/u);
+  validateGeneratedProject("option-value-equality", result.artifacts, { run: true });
+});
+
 test("typeof consumes exact carriers and preserves operand evaluation without moves", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
