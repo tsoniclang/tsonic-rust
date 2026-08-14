@@ -948,7 +948,7 @@ test("typed let bindings keep a fitting call base before a fallible selector", (
                 args: [{ kind: "reference", expr: { kind: "path", path: "root" } }],
               },
               method: "map_err",
-              args: [{ kind: "path", path: "rt::TsonicError::from" }],
+              args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
             },
           },
         }],
@@ -958,7 +958,7 @@ test("typed let bindings keep a fitting call base before a fallible selector", (
 
   assert.match(
     source,
-    /let temporary: String = tsonic_rust_node::fs::mkdtemp_sync\(&root\)\n        \.map_err\(rt::TsonicError::from\)\?;/u,
+    /let temporary: String = tsonic_rust_node::fs::mkdtemp_sync\(&root\)\n        \.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u,
   );
 });
 

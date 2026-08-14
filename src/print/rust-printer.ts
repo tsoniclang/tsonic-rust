@@ -1832,7 +1832,10 @@ function printRustExprFitted(
       ].join("\n");
     }
     case "string-concat": {
-      if (expression.parts.length <= 4 && !flat.includes("\n") &&
+      const complexPartCount = expression.parts.filter((part) =>
+        part.kind === "string-literal" || !rustFormatArgumentCanShareLine(part)).length;
+      if (expression.parts.length <= 4 &&
+        (expression.parts.length < 3 || complexPartCount <= 1) && !flat.includes("\n") &&
         renderedFits(flat, column)) {
         return flat;
       }
@@ -2031,7 +2034,8 @@ function printRustExprFitted(
     case "await": {
       const rendered = printRustExprFitted(expression.expr, depth, column);
       const attached = appendToLastLine(rendered, ".await");
-      return renderedFits(attached, column)
+      return !rendered.includes("\n") && renderedFits(attached, column) &&
+          printRustExpr(expression.expr).length <= rustMethodChainWidth
         ? attached
         : `${rendered}\n${indentText(depth + 1)}.await`;
     }
@@ -2067,6 +2071,9 @@ function printRustExprFitted(
       const prefix = expression.mutable === true ? "&mut " : "&";
       const parenthesized = !expressionIsRightHandBlock(expression.expr) &&
         expressionNeedsParentheses(expression.expr, RustPrecedence.Unary, false);
+      if (!parenthesized && !flat.includes("\n") && renderedFits(flat, column)) {
+        return flat;
+      }
       const rendered = printRustExprFitted(
         expression.expr,
         depth,
@@ -2500,30 +2507,25 @@ function printRustLetInitializer(
       continuationIndent.length,
     );
     const compactContinuationWidth = continuationIndent.length + firstLine(continuation).length + 1;
-    const continuationLineCount = continuation.split("\n").length;
-    const prefixLineCount = fittedAtPrefix.split("\n").length;
     const longBindingPrefix = prefix.length > 40;
     const methodChain = rustMethodChain(initializer);
     const chainBaseAtPrefix = methodChain === undefined
       ? undefined
       : printRustExprFitted(methodChain.base, depth, prefix.length + 1);
-    const chainBaseAtContinuation = methodChain === undefined
-      ? undefined
-      : printRustExprFitted(
-          methodChain.base,
-          depth + 1,
-          continuationIndent.length,
-        );
+    const chainBaseIsInvocation = methodChain?.base.kind === "call" ||
+      methodChain?.base.kind === "associated-call" || methodChain?.base.kind === "invoke";
+    const compactContinuationLimit = methodChain === undefined
+      ? rustFormatWidth
+      : rustFormatWidth - 4;
     const bindingLineOwnsChainBase = chainBaseAtPrefix !== undefined &&
       (chainBaseAtPrefix.includes("\n")
-        ? prefix.length + firstLine(chainBaseAtPrefix).length + 1 <= rustFormatWidth
-        : !longBindingPrefix && prefix.length + chainBaseAtPrefix.length + 1 <= rustFormatWidth);
+        ? prefix.length + firstLine(chainBaseAtPrefix).length + 1 <= rustFormatWidth &&
+          !(longBindingPrefix && chainBaseIsInvocation)
+        : prefix.length + chainBaseAtPrefix.length + 1 <= rustFormatWidth);
     const continuationPacksMoreSource =
-      !continuation.includes("\n") && compactContinuationWidth <= rustFormatWidth ||
-      longBindingPrefix && continuationLineCount < prefixLineCount &&
-        (!bindingLineOwnsChainBase ||
-          chainBaseAtPrefix?.includes("\n") === true &&
-            chainBaseAtContinuation?.includes("\n") === false);
+      !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit ||
+      !bindingLineOwnsChainBase && longBindingPrefix && chainBaseIsInvocation &&
+        chainBaseAtPrefix?.includes("\n") === true;
     if (continuationPacksMoreSource && renderedFits(continuation, continuationIndent.length)) {
       return appendToLastLine(
         `${prefix.trimEnd()}\n${continuationIndent}${continuation}`,
@@ -3601,24 +3603,6 @@ function printFittedNestedCallWrapper(
     ? nested.path
     : `${printRustAssociatedOwner(nested.owner)}::${nested.method}`;
   const argumentIndent = indentText(depth + 1);
-  const flatNested = printRustExpr(nested);
-  const nestedArgumentOwnsBreak = nested.args.some((argument) =>
-    argument.kind === "call" || argument.kind === "associated-call" ||
-    argument.kind === "method-call" || argument.kind === "try" ||
-    argument.kind === "reference" &&
-      (argument.expr.kind === "call" || argument.expr.kind === "associated-call" ||
-        argument.expr.kind === "method-call" || argument.expr.kind === "try"));
-  if (!nestedArgumentOwnsBreak && !flatNested.includes("\n") &&
-    renderedFits(`${flatNested},`, argumentIndent.length)) {
-    const expanded = [
-      `${outerCallable}(`,
-      `${argumentIndent}${flatNested},`,
-      `${indentText(depth)})`,
-    ].join("\n");
-    if (renderedFits(expanded, column)) {
-      return expanded;
-    }
-  }
   const nestedClosureChain = collectNestedClosureCallChain(nested);
   if (nestedClosureChain !== undefined) {
     const opening = `${outerCallable}(${nestedClosureChain.callables.map((callable) => `${callable}(`).join("")}`;
@@ -3667,6 +3651,24 @@ function printFittedNestedCallWrapper(
     const attached = appendToLastLine(`${outerCallable}(${nestedRendered}`, ")");
     if (nestedRendered.includes("\n") && renderedFits(attached, column)) {
       return attached;
+    }
+  }
+  const flatNested = printRustExpr(nested);
+  const nestedArgumentOwnsBreak = nested.args.some((argument) =>
+    argument.kind === "call" || argument.kind === "associated-call" ||
+    argument.kind === "method-call" || argument.kind === "try" ||
+    argument.kind === "reference" &&
+      (argument.expr.kind === "call" || argument.expr.kind === "associated-call" ||
+        argument.expr.kind === "method-call" || argument.expr.kind === "try"));
+  if (!nestedArgumentOwnsBreak && !flatNested.includes("\n") &&
+    renderedFits(`${flatNested},`, argumentIndent.length)) {
+    const expanded = [
+      `${outerCallable}(`,
+      `${argumentIndent}${flatNested},`,
+      `${indentText(depth)})`,
+    ].join("\n");
+    if (renderedFits(expanded, column)) {
+      return expanded;
     }
   }
   const nestedRendered = printFittedCall(

@@ -518,7 +518,7 @@ export function probe(text: string, index: int32): string {
   assert.match(text, /js_string::substring\(text, 1\.0, 3\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /js_string::substr\(text, -2\.0, 1\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /js_string::replace\(text, "a", "\[\$&\]"\)/u);
-  assert.match(text, /js_string::replace_all\([\s\S]*&js_string::replace\(text, "a", "\[\$&\]"\),[\s\S]*"b",[\s\S]*"B",[\s\S]*\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_string::replace_all\(&js_string::replace\(text, "a", "\[\$&\]"\), "b", "B"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /js_string::concat\(text, &\["-", section\.as_str\(\)\]\)/u);
   assert.match(text, /js_string::from_char_code\(&\[65\.0, 66\.0\]\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(text, /js_string::from_code_point\(&\[128512\.0\]\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);

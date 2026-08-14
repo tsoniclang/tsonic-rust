@@ -273,12 +273,13 @@ export function read(value: Counter | undefined): int32 {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /match value\.clone\(\)\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => __tsonic_flow_value\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\}\s*\.__tsonic_state/su,
+    /match value\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => __tsonic_flow_value\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\}\s*\.__tsonic_state/su,
   );
   assert.equal(
-    source.match(/match value\.clone\(\)\.as_ref\(\)/gsu)?.length,
+    source.match(/match value\.as_ref\(\)/gsu)?.length,
     2,
   );
+  assert.doesNotMatch(source, /value\.clone\(\)\.as_ref\(\)/u);
   validateGeneratedProject("selected-narrowed-project-property", result.artifacts);
 });
 

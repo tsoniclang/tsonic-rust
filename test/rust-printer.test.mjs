@@ -165,7 +165,7 @@ test("a nested call owns the fitting break inside a wider expression", () => {
   assert.match(text, /usize_to_i32\(js_string::js_len\(\n            &tsonic_rust_node::os::platform\(\),\n        \)\)\? > 0/u);
 });
 
-test("a fallible nested call owns the fitting break", () => {
+test("a fitting fallible nested call remains horizontal", () => {
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -202,7 +202,10 @@ test("a fallible nested call owns the fitting break", () => {
     }],
   });
 
-  assert.match(text, /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(\n            16,\n        \)\?\)\?/u);
+  assert.match(
+    text,
+    /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(16\)\?\)\?/u,
+  );
 });
 
 test("a long outer call expands before a jointly fitting method argument", () => {
