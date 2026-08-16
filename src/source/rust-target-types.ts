@@ -226,6 +226,14 @@ export function rustStringTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustStringTargetId };
 }
 
+export function rustBorrowedStrTargetType(): TargetTypeRef {
+  return {
+    kind: "pointer",
+    pointee: rustStringTargetType(),
+    mutability: "const",
+  };
+}
+
 export function rustBigIntTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustBigIntTargetId };
 }

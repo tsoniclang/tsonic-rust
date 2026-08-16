@@ -160,6 +160,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
     resultCarrier: string,
     isAsync: false,
     isFallible: true,
+    errorBoundary: "provider-native",
   });
   assert.ok(abi);
   const runtimeArgument = {};

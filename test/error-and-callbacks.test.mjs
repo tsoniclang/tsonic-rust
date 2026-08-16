@@ -670,3 +670,32 @@ export function main(): void {
   );
   assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });
+
+test("source-program callback operations retain the current project error domain", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+class DomainError extends Error {
+  constructor(message: string) { super(message); }
+}
+
+function risky(value: int32): int32 {
+  if (value < 0) throw new DomainError("negative");
+  return value;
+}
+
+export function sorted(values: int32[]): int32[] {
+  return values.sort((left, right) => risky(left) - risky(right));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /pub fn sorted[\s\S]*?\{\n\s*values\s*\.try_sort/u);
+  assert.doesNotMatch(source, /Ok::<_, rt::TsonicError>\(\s*values\s*\.try_sort/u);
+});

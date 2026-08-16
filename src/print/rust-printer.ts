@@ -9,6 +9,8 @@ import type {
   RustVisibility,
 } from "../backend/rust-ast/nodes.js";
 import type { RustAssignmentOperator } from "../common/rust-syntax.js";
+import { finalizeRustSourceStyle } from "../backend/rust-ast/source-style.js";
+import { rustExpressionContainsStatementBlock } from "../backend/rust-ast/expressions.js";
 
 // Deterministic printer. Output must be `cargo fmt --check` clean for the
 // supported construct set: 4-space indent, no trailing whitespace, one blank
@@ -32,11 +34,12 @@ function printRustVisibility(visibility: RustVisibility): string {
 }
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
-  const parts: string[] = [`// ${model.headerComment}`];
-  if (model.innerAttrs !== undefined) {
-    parts.push(...model.innerAttrs);
+  const finalized = finalizeRustSourceStyle(model);
+  const parts: string[] = [`// ${finalized.headerComment}`];
+  if (finalized.innerAttrs !== undefined) {
+    parts.push(...finalized.innerAttrs);
   }
-  for (const item of model.items) {
+  for (const item of finalized.items) {
     parts.push("");
     parts.push(printRustItem(item));
   }
@@ -466,15 +469,17 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     }
     case "if": {
       const rendered = printRustConditionalBlock("if", statement.condition, statement.then, depth);
+      const attributes = printRustStatementAttributes(statement.attrs, depth);
       if (statement.else === undefined) {
-        return rendered;
+        return `${attributes}${rendered}`;
       }
       const elseBody = printRustBlockStatements(statement.else, depth + 1);
       const indentStr = indentText(depth);
       const withoutTrailing = rendered.endsWith("{}") ? `${rendered.slice(0, -2)}{\n${indentStr}}` : rendered;
-      return elseBody.length === 0
+      const complete = elseBody.length === 0
         ? `${withoutTrailing} else {}`
         : `${withoutTrailing} else {\n${elseBody}\n${indentStr}}`;
+      return `${attributes}${complete}`;
     }
     case "loop": {
       return printRustBlock(
@@ -485,9 +490,10 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     }
     case "while": {
       const rendered = printRustConditionalBlock("while", statement.condition, statement.body, depth);
-      return statement.label === undefined
+      const complete = statement.label === undefined
         ? rendered
         : `${indent}'${statement.label}: ${rendered.slice(indent.length)}`;
+      return `${printRustStatementAttributes(statement.attrs, depth)}${complete}`;
     }
     case "while-let-some": {
       return printRustBlock(
@@ -497,7 +503,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       );
     }
     case "for": {
-      return printRustForBlock(statement, depth);
+      return `${printRustStatementAttributes(statement.attrs, depth)}${printRustForBlock(statement, depth)}`;
     }
     case "if-let-some": {
       return printRustBlock(
@@ -603,6 +609,14 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return printRustTryScope(statement, depth);
     }
   }
+}
+
+function printRustStatementAttributes(
+  attrs: readonly string[] | undefined,
+  depth: number,
+): string {
+  const indent = indentText(depth);
+  return attrs?.map((attribute) => `${indent}${attribute}\n`).join("") ?? "";
 }
 
 function collectNestedCallExpressionChain(
@@ -1354,6 +1368,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "bottom": {
       return printRustExpr(expression.expression);
     }
+    case "owned-string-from-borrowed-str": {
+      return `String::from(${printRustExpr(expression.expression)})`;
+    }
     case "unary": {
       return `${expression.operator}${printOperand(expression.operand, RustPrecedence.Unary, false)}`;
     }
@@ -1369,7 +1386,7 @@ export function printRustExpr(expression: RustExpr): string {
       return `${left} ${expression.operator} ${right}`;
     }
     case "range": {
-      return `${printOperand(expression.start, RustPrecedence.Or, false)}..${printOperand(expression.end, RustPrecedence.Or, true)}`;
+      return `${printOperand(expression.start, RustPrecedence.Or, false)}..${expression.inclusive === true ? "=" : ""}${printOperand(expression.end, RustPrecedence.Or, true)}`;
     }
     case "conditional": {
       return `if ${printRustExpr(expression.condition)} { ${printRustExpr(expression.whenTrue)} } else { ${printRustExpr(expression.whenFalse)} }`;
@@ -1485,71 +1502,6 @@ export function printRustExpr(expression: RustExpr): string {
   }
 }
 
-function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
-  switch (expression.kind) {
-    case "block":
-    case "evaluate-then":
-    case "match":
-      return true;
-    case "unary":
-      return rustExpressionContainsStatementBlock(expression.operand);
-    case "bottom":
-      return rustExpressionContainsStatementBlock(expression.expression);
-    case "dereference":
-      return rustExpressionContainsStatementBlock(expression.pointer);
-    case "unsafe":
-      return rustExpressionContainsStatementBlock(expression.expression);
-    case "numeric-cast":
-      return rustExpressionContainsStatementBlock(expression.expression);
-    case "binary":
-      return rustExpressionContainsStatementBlock(expression.left) ||
-        rustExpressionContainsStatementBlock(expression.right);
-    case "range":
-      return rustExpressionContainsStatementBlock(expression.start) ||
-        rustExpressionContainsStatementBlock(expression.end);
-    case "conditional":
-      return rustExpressionContainsStatementBlock(expression.condition) ||
-        rustExpressionContainsStatementBlock(expression.whenTrue) ||
-        rustExpressionContainsStatementBlock(expression.whenFalse);
-    case "matches":
-      return rustExpressionContainsStatementBlock(expression.expression);
-    case "assignment":
-      return rustExpressionContainsStatementBlock(expression.target) ||
-        rustExpressionContainsStatementBlock(expression.value);
-    case "call":
-    case "invoke":
-    case "associated-call":
-      return (expression.kind === "invoke" && rustExpressionContainsStatementBlock(expression.callee)) ||
-        expression.args.some(rustExpressionContainsStatementBlock);
-    case "method-call":
-      return rustExpressionContainsStatementBlock(expression.receiver) ||
-        expression.args.some(rustExpressionContainsStatementBlock);
-    case "field":
-      return rustExpressionContainsStatementBlock(expression.receiver);
-    case "index":
-      return rustExpressionContainsStatementBlock(expression.receiver) ||
-        rustExpressionContainsStatementBlock(expression.index);
-    case "string-concat":
-      return expression.parts.some(rustExpressionContainsStatementBlock);
-    case "vec-literal":
-    case "slice-literal":
-    case "tuple-literal":
-      return expression.elements.some(rustExpressionContainsStatementBlock);
-    case "reference":
-    case "await":
-    case "try":
-      return rustExpressionContainsStatementBlock(expression.expr);
-    case "return-expression":
-      return expression.expr !== undefined && rustExpressionContainsStatementBlock(expression.expr);
-    case "closure":
-      return rustExpressionContainsStatementBlock(expression.body);
-    case "struct-literal":
-      return expression.fields.some((field) => rustExpressionContainsStatementBlock(field.value));
-    default:
-      return false;
-  }
-}
-
 function rustExpressionContainsClosure(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "closure":
@@ -1558,6 +1510,8 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
     case "unary":
       return rustExpressionContainsClosure(expression.operand);
     case "bottom":
+      return rustExpressionContainsClosure(expression.expression);
+    case "owned-string-from-borrowed-str":
       return rustExpressionContainsClosure(expression.expression);
     case "dereference":
       return rustExpressionContainsClosure(expression.pointer);
@@ -1625,6 +1579,8 @@ function rustExpressionContainsPreferredVerticalMethodChain(expression: RustExpr
     case "unary":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.operand);
     case "bottom":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
+    case "owned-string-from-borrowed-str":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
     case "dereference":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.pointer);
@@ -1709,6 +1665,8 @@ function printRustExprFitted(
         methodChainContinuationIndent,
         grammarPosition,
       );
+    case "owned-string-from-borrowed-str":
+      return printFittedCall("String::from", [expression.expression], depth, column);
     case "match":
       return printRustMatchExpression(expression, depth, column);
     case "matches": {
@@ -4099,6 +4057,8 @@ function rustExpressionContainsExpandedStructLiteral(expression: RustExpr): bool
   switch (expression.kind) {
     case "bottom":
       return rustExpressionContainsExpandedStructLiteral(expression.expression);
+    case "owned-string-from-borrowed-str":
+      return rustExpressionContainsExpandedStructLiteral(expression.expression);
     case "unary":
       return rustExpressionContainsExpandedStructLiteral(expression.operand);
     case "dereference":
@@ -4184,6 +4144,8 @@ function rustExpressionContainsExpandedCollectionLiteral(expression: RustExpr): 
     case "tuple-literal":
       return expression.elements.some(rustExpressionContainsExpandedCollectionLiteral);
     case "bottom":
+      return rustExpressionContainsExpandedCollectionLiteral(expression.expression);
+    case "owned-string-from-borrowed-str":
       return rustExpressionContainsExpandedCollectionLiteral(expression.expression);
     case "unary":
       return rustExpressionContainsExpandedCollectionLiteral(expression.operand);

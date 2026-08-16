@@ -309,6 +309,15 @@ function readConstPointer(pointer: constPtr<u8>): u8 {
   return unsafeContext(first_byte(pointer));
 }
 
+class DomainError extends Error {
+  constructor(message: string) { super(message); }
+}
+
+function checkedInProjectDomain(value: int32): int32 {
+  if (value < 0) throw new DomainError("negative");
+  return checked_double(value);
+}
+
 export function invokePointer(
   callback: FunctionPointer<[int32], int32>,
   value: int32,
@@ -318,7 +327,7 @@ export function invokePointer(
 
 export function main(): void {
   const checked = new CheckedWidget(6);
-  if (checked.value !== 6 || checked_double(4) !== 8) {
+  if (checked.value !== 6 || checked_double(4) !== 8 || checkedInProjectDomain(5) !== 10) {
     throw new Error("fallible compiler-provider mapping failed");
   }
   const widget = new Widget<int32>(7);

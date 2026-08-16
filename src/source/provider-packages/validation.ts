@@ -18,6 +18,7 @@ import type {
   RustValueConversion,
 } from "../rust-facts/keys.js";
 import { rustValueConversionContract } from "../rust-facts/value-conversions.js";
+import { isRustFallibleErrorBoundary } from "../rust-facts/error-boundary.js";
 import {
   isRustBinaryOperator,
   rustBinaryOperatorTraitPath,
@@ -555,8 +556,7 @@ function validateBinaryEpilogues(definition: RustProviderPackageDefinition, fail
     if (epilogue.isFallible !== undefined && epilogue.isFallible !== true) {
       fail(`binary epilogue '${epilogue.id}' has invalid isFallible value`);
     }
-    if (epilogue.isFallible === true && epilogue.errorBoundary !== "provider-native" &&
-      epilogue.errorBoundary !== "source-program") {
+    if (epilogue.isFallible === true && !isRustFallibleErrorBoundary(epilogue.errorBoundary)) {
       fail(`fallible binary epilogue '${epilogue.id}' requires an exact errorBoundary`);
     }
     if (epilogue.isFallible !== true && record.errorBoundary !== undefined) {
@@ -723,8 +723,7 @@ function validateOperationRows(
     if (row.isFallible !== undefined && row.isFallible !== true) {
       fail(`isFallible must be true when present (row '${label}').`);
     }
-    if (row.isFallible === true &&
-      row.errorBoundary !== "provider-native" && row.errorBoundary !== "source-program") {
+    if (row.isFallible === true && !isRustFallibleErrorBoundary(row.errorBoundary)) {
       fail(`fallible row '${label}' requires an exact errorBoundary.`);
     }
     if (row.isFallible !== true && row.errorBoundary !== undefined) {

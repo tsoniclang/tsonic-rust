@@ -91,7 +91,14 @@ import {
   rustArgumentPassingMode,
 } from "../../source/rust-facts/parameter-passing.js";
 import type { RustExpr, RustStmt, RustType } from "../rust-ast/nodes.js";
+import {
+  negateRustBooleanExpression,
+  rustBorrowedStringView,
+  rustExpressionContainsStatementBlock,
+  rustStringConcat,
+} from "../rust-ast/expressions.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
+import { applyRustErrorBoundary } from "./error-boundary.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceBindingPath, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
@@ -798,9 +805,25 @@ function planExpressionInner(
       const condition = planExpression(conditionNode, context);
       const whenTrue = planExpression(whenTrueNode, context);
       const whenFalse = planExpression(whenFalseNode, context);
-      return condition === undefined || whenTrue === undefined || whenFalse === undefined
-        ? undefined
-        : { kind: "conditional", condition, whenTrue, whenFalse };
+      if (condition === undefined || whenTrue === undefined || whenFalse === undefined) {
+        return undefined;
+      }
+      const conditional: RustExpr = { kind: "conditional", condition, whenTrue, whenFalse };
+      if (!rustExpressionContainsStatementBlock(condition)) {
+        return conditional;
+      }
+      const conditionName = allocateRustSyntheticName(
+        context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+        "conditional_test",
+      );
+      return {
+        kind: "block",
+        bindings: [{ name: conditionName, value: condition }],
+        value: {
+          ...conditional,
+          condition: { kind: "path", path: conditionName },
+        },
+      };
     }
     case KindTemplateExpression: {
       return planTemplateExpression(node, context);
@@ -1355,20 +1378,15 @@ function planExpressionInner(
           ));
           return undefined;
         }
-        if (future.errorBoundary === "provider-native") {
-          context.usedAliases?.add("rt");
-          awaited = {
-            kind: "method-call",
-            receiver: awaited,
-            method: "map_err",
-            args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
-          };
+        if (future.errorBoundary === "none") {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node),
+            "rust.backend.await-error-boundary",
+            "A finalized fallible Rust future requires one exact error boundary.",
+          ));
+          return undefined;
         }
-        awaited = {
-          kind: "try",
-          expr: awaited,
-          errorDomain: future.errorDomain === "current" ? context.errorDomain : "runtime",
-        };
+        awaited = applyRustErrorBoundary(awaited, future.errorBoundary, context.errorDomain);
       }
       const converted = applyFinalizedValueConversion(
         context,
@@ -1619,7 +1637,7 @@ function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr 
     });
     parts.push({ kind: "string-literal", value: context.input.ast.text(literal) });
   }
-  return { kind: "string-concat", parts };
+  return rustStringConcat(parts);
 }
 
 function planDeleteExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -1904,7 +1922,11 @@ function planUnaryExpression(
     : context.input.ast.kindName(operandNode) === KindNumericLiteral
       ? planNumericLiteralWithCarrier(operandNode, fact.resultCarrier, context)
       : planExpression(operandNode, context);
-  return operand === undefined ? undefined : { kind: "unary", operator: fact.operator, operand };
+  return operand === undefined
+    ? undefined
+    : fact.operator === "!"
+      ? negateRustBooleanExpression(operand)
+      : { kind: "unary", operator: fact.operator, operand };
 }
 
 function planRustUpdateExpression(
@@ -2779,22 +2801,24 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
       "present_value",
     );
-    const present: RustExpr = fallbackIsFallible
-      ? {
-          kind: "closure",
-          params: [{ name: presentValueName, byRefCopy: false }],
-          body: {
-            kind: "call",
-            path: "Ok::<_, rt::TsonicError>",
-            args: [fact.rightOperand === "option"
-              ? { kind: "call", path: "Some", args: [{ kind: "path", path: presentValueName }] }
-              : { kind: "path", path: presentValueName }],
-          },
-        }
-      : {
-          kind: "path",
-          path: fact.rightOperand === "option" ? "Some" : "std::convert::identity",
-        };
+    const present: RustExpr = fallbackIsFallible && fact.rightOperand !== "option"
+      ? { kind: "path", path: "Ok::<_, rt::TsonicError>" }
+      : fallbackIsFallible
+        ? {
+            kind: "closure",
+            params: [{ name: presentValueName, byRefCopy: false }],
+            body: {
+              kind: "call",
+              path: "Ok::<_, rt::TsonicError>",
+              args: [fact.rightOperand === "option"
+                ? { kind: "call", path: "Some", args: [{ kind: "path", path: presentValueName }] }
+                : { kind: "path", path: presentValueName }],
+            },
+          }
+        : {
+            kind: "path",
+            path: fact.rightOperand === "option" ? "Some" : "std::convert::identity",
+          };
     const coalesced: RustExpr = {
       kind: "call",
       path: "rt::option_coalesce",
@@ -2927,7 +2951,7 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
         parts.push(planRustNonConsumingValue(sideNode, side, context));
       }
     }
-    return { kind: "string-concat", parts };
+    return rustStringConcat(parts);
   }
   if (fact.kind === "operator-call") {
     return planRustOperatorCallExpression(
@@ -2955,8 +2979,12 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const comparisonRight = comparison && rightNode !== undefined
       ? planRustNonConsumingValue(rightNode, convertedRight, context)
       : convertedRight;
-    const borrowLiteral = (side: RustExpr): RustExpr =>
-      comparison && side.kind === "string-literal" ? { kind: "str-literal", value: side.value } : side;
+    const borrowLiteral = (side: RustExpr): RustExpr => {
+      const borrowed = comparison ? rustBorrowedStringView(side) : side;
+      return comparison && borrowed.kind === "string-literal"
+        ? { kind: "str-literal", value: borrowed.value }
+        : borrowed;
+    };
     if (!isRustBinaryOperator(fact.operator)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
@@ -2986,6 +3014,14 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     );
     if (emptyStringComparison !== undefined) {
       return emptyStringComparison;
+    }
+    const rangeContainment = planRustRangeContainment(
+      fact.operator,
+      comparisonLeft,
+      comparisonRight,
+    );
+    if (rangeContainment !== undefined) {
+      return rangeContainment;
     }
     return {
       kind: "binary",
@@ -3074,7 +3110,7 @@ function planEmptyStringComparison(
       ? { expression: left, node: leftNode }
       : undefined;
   if (selected?.node === undefined ||
-    !isRustStringCarrier(expressionCarrier(selected.node, context))) {
+    !isRustStringCarrier(effectivePlannedExpressionCarrier(selected.node, context))) {
     return undefined;
   }
   const isEmpty: RustExpr = {
@@ -3085,7 +3121,135 @@ function planEmptyStringComparison(
   };
   return operator === "=="
     ? isEmpty
-    : { kind: "unary", operator: "!", operand: isEmpty };
+    : negateRustBooleanExpression(isEmpty);
+}
+
+function planRustRangeContainment(
+  operator: string,
+  left: RustExpr,
+  right: RustExpr,
+): RustExpr | undefined {
+  if (operator !== "&&" && operator !== "||") {
+    return undefined;
+  }
+  const direct = planRustRangeComparisonPair(operator, left, right);
+  if (direct !== undefined) {
+    return direct;
+  }
+  if (left.kind === "binary" && left.operator === operator) {
+    const trailing = planRustRangeComparisonPair(operator, left.right, right);
+    if (trailing !== undefined) {
+      return {
+        kind: "binary",
+        operator,
+        left: left.left,
+        right: trailing,
+      };
+    }
+  }
+  if (right.kind === "binary" && right.operator === operator) {
+    const leading = planRustRangeComparisonPair(operator, left, right.left);
+    if (leading !== undefined) {
+      return {
+        kind: "binary",
+        operator,
+        left: leading,
+        right: right.right,
+      };
+    }
+  }
+  return undefined;
+}
+
+function planRustRangeComparisonPair(
+  operator: "&&" | "||",
+  left: RustExpr,
+  right: RustExpr,
+): RustExpr | undefined {
+  if (left.kind !== "binary" || right.kind !== "binary") {
+    return undefined;
+  }
+  const inclusive = operator === "&&" &&
+    (left.operator === ">=" || left.operator === "<=") &&
+    (right.operator === ">=" || right.operator === "<=");
+  const exclusive = operator === "||" &&
+    (left.operator === ">" || left.operator === "<") &&
+    (right.operator === ">" || right.operator === "<");
+  if (!inclusive && !exclusive) {
+    return undefined;
+  }
+  const first = comparisonSubjectAndBound(left, exclusive);
+  const second = comparisonSubjectAndBound(right, exclusive);
+  if (first === undefined || second === undefined ||
+    first.subject.path !== second.subject.path ||
+    !isRustNumericLiteral(first.bound) || !isRustNumericLiteral(second.bound)) {
+    return undefined;
+  }
+  const lower = first.relationship === "lower" ? first.bound
+    : second.relationship === "lower" ? second.bound
+      : undefined;
+  const upper = first.relationship === "upper" ? first.bound
+    : second.relationship === "upper" ? second.bound
+      : undefined;
+  if (lower === undefined || upper === undefined) {
+    return undefined;
+  }
+  if (exclusive && (!isRustIntegerLiteral(lower) || !isRustIntegerLiteral(upper))) {
+    return undefined;
+  }
+  const contains: RustExpr = {
+    kind: "method-call",
+    receiver: { kind: "range", start: lower, end: upper, inclusive: true },
+    method: "contains",
+    args: [{ kind: "reference", expr: first.subject }],
+  };
+  return inclusive ? contains : negateRustBooleanExpression(contains);
+}
+
+function comparisonSubjectAndBound(
+  expression: Extract<RustExpr, { readonly kind: "binary" }>,
+  outsideRange: boolean,
+): {
+  readonly subject: Extract<RustExpr, { readonly kind: "path" }>;
+  readonly bound: RustExpr;
+  readonly relationship: "lower" | "upper";
+} | undefined {
+  if (expression.left.kind === "path" && isRustNumericLiteral(expression.right)) {
+    const relationship = outsideRange
+      ? expression.operator === "<" ? "lower"
+        : expression.operator === ">" ? "upper"
+          : undefined
+      : expression.operator === ">=" ? "lower"
+        : expression.operator === "<=" ? "upper"
+          : undefined;
+    return relationship === undefined
+      ? undefined
+      : { subject: expression.left, bound: expression.right, relationship };
+  }
+  if (expression.right.kind === "path" && isRustNumericLiteral(expression.left)) {
+    const relationship = outsideRange
+      ? expression.operator === ">" ? "lower"
+        : expression.operator === "<" ? "upper"
+          : undefined
+      : expression.operator === "<=" ? "lower"
+        : expression.operator === ">=" ? "upper"
+          : undefined;
+    return relationship === undefined
+      ? undefined
+      : { subject: expression.right, bound: expression.left, relationship };
+  }
+  return undefined;
+}
+
+function isRustNumericLiteral(expression: RustExpr): boolean {
+  return expression.kind === "int-literal" || expression.kind === "float-literal" ||
+    expression.kind === "unary" && expression.operator === "-" &&
+      (expression.operand.kind === "int-literal" || expression.operand.kind === "float-literal");
+}
+
+function isRustIntegerLiteral(expression: RustExpr): boolean {
+  return expression.kind === "int-literal" || expression.kind === "unary" &&
+    expression.operator === "-" && expression.operand.kind === "int-literal";
 }
 
 function planBooleanLiteralComparison(
@@ -3110,7 +3274,7 @@ function planBooleanLiteralComparison(
   }
   const negated = operator === "==" ? !literal.value : literal.value;
   return negated
-    ? { kind: "unary", operator: "!", operand: literal.other }
+    ? negateRustBooleanExpression(literal.other)
     : literal.other;
 }
 
@@ -3137,6 +3301,10 @@ function planArguments(node: Node, context: RustPlanContext): readonly RustExpr[
 // An expression already borrowing (&str-carried identifiers) is passed
 // bare; owned expressions take &.
 function refShape(context: RustPlanContext, argument: RustExpr, node: Node | undefined): RustExpr {
+  const borrowedString = rustBorrowedStringView(argument);
+  if (borrowedString !== argument) {
+    return borrowedString;
+  }
   if (node !== undefined &&
     context.expressionOverrides?.get(node)?.valueForm === "shared-reference") {
     return argument;
@@ -3259,6 +3427,8 @@ function lowerRustValueConversion(
       return { kind: "call", path: contract.path, args: [source] };
     case "numeric-cast":
       return { kind: "numeric-cast", expression: source, target: contract.targetType };
+    case "owned-string-from-borrowed-str":
+      return { kind: "owned-string-from-borrowed-str", expression: source };
     case "source-union-variant": {
       const union = rustSourceUnionCarrierValue(contract.target);
       const typePath = union === undefined ? undefined : sourceTypePath(context, union);
@@ -3594,18 +3764,15 @@ function finishProviderOperationExpression(
       ));
       return undefined;
     }
-    raw = {
-      kind: "try",
-      errorDomain: "runtime",
-      expr: fact.abi.effects.errorBoundary === "provider-native"
-        ? {
-            kind: "method-call",
-            receiver: raw,
-            method: "map_err",
-            args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
-          }
-        : raw,
-    };
+    if (fact.abi.effects.errorBoundary === "none") {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.provider-error-boundary",
+        "A finalized fallible Rust operation requires one exact error boundary.",
+      ));
+      return undefined;
+    }
+    raw = applyRustErrorBoundary(raw, fact.abi.effects.errorBoundary, context.errorDomain);
   }
   if (fact.abi.result.kind === "async") {
     return raw;
@@ -3798,6 +3965,10 @@ function applyFinalizedArgumentMode(
   }
   if (input.mode === "mut-ref") {
     return { kind: "reference", expr: expression, mutable: true };
+  }
+  const borrowedString = rustBorrowedStringView(expression);
+  if (borrowedString !== expression) {
+    return borrowedString;
   }
   if (expression.kind === "string-literal") {
     return { kind: "str-literal", value: expression.value };

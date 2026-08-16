@@ -22,6 +22,8 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
       return true;
     case "bottom":
       return rustExpressionUsesTryInCurrentRegion(expression.expression);
+    case "owned-string-from-borrowed-str":
+      return rustExpressionUsesTryInCurrentRegion(expression.expression);
     case "unary":
       return rustExpressionUsesTryInCurrentRegion(expression.operand);
     case "dereference":

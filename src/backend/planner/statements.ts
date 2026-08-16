@@ -82,7 +82,12 @@ import {
 import { validateRustFinalizedOperationAbi } from "../../source/rust-facts/finalized-operation-abi.js";
 import { rustTargetOperationIsDirectLocation } from "../../source/rust-facts/target-operation.js";
 import type { RustBlock, RustExpr, RustStmt } from "../rust-ast/nodes.js";
+import {
+  negateRustBooleanExpression,
+  rustStringConcat,
+} from "../rust-ast/expressions.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
+import { applyRustErrorBoundary } from "./error-boundary.js";
 import {
   applyRustArgumentMode,
   expressionCarrier,
@@ -520,22 +525,7 @@ function planResourceCleanup(
     disposal = { kind: "await", expr: disposal };
   }
   if (fact.disposal.fallible) {
-    if (fact.disposal.target.form === "provider" &&
-      fact.disposal.errorBoundary === "provider-native") {
-      disposal = {
-        kind: "method-call",
-        receiver: disposal,
-        method: "map_err",
-        args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
-      };
-    }
-    disposal = {
-      kind: "try",
-      expr: disposal,
-      errorDomain: fact.disposal.target.form === "source-method"
-        ? context.errorDomain
-        : "runtime",
-    };
+    disposal = applyRustErrorBoundary(disposal, fact.disposal.errorBoundary, context.errorDomain);
   }
   const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };
   if (!fact.nullable) {
@@ -1131,13 +1121,10 @@ function planExpressionAsStatement(
                 payload,
                 field.storageIndex,
                 "=",
-                {
-                  kind: "string-concat",
-                  parts: [
-                    { kind: "path", path: currentName },
-                    selectedValue,
-                  ],
-                },
+                rustStringConcat([
+                  { kind: "path", path: currentName },
+                  selectedValue,
+                ]),
                 context,
               );
               if (written === undefined) {
@@ -1282,13 +1269,10 @@ function planExpressionAsStatement(
                 context,
               )
             : readRustProjectDispatchedField(selectedReceiver, sourceField.dispatch.read);
-          const concatenated: RustExpr = {
-            kind: "string-concat",
-            parts: [
-              { kind: "path", path: currentName },
-              value,
-            ],
-          };
+          const concatenated = rustStringConcat([
+            { kind: "path", path: currentName },
+            value,
+          ]);
           const written = sourceField.dispatch === undefined
             ? writeRustStoredObjectField(
                 sourceField.storage,
@@ -1378,13 +1362,10 @@ function planExpressionAsStatement(
           return undefined;
         }
         const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
-        const concatenated: RustExpr = {
-          kind: "string-concat",
-          parts: [
-            { kind: "path", path: currentName },
-            value,
-          ],
-        };
+        const concatenated = rustStringConcat([
+          { kind: "path", path: currentName },
+          value,
+        ]);
         const promotedLocation = planRustPromotedStorageLocation(
           left,
           context,
@@ -1856,7 +1837,7 @@ function planRustCompoundAssignmentValue(
     return value;
   }
   if (operator === "+=" && isRustStringCarrier(assignment.resultCarrier)) {
-    return { kind: "string-concat", parts: [current, value] };
+    return rustStringConcat([current, value]);
   }
   const binary = rustBinaryOperatorForAssignment(operator);
   if (binary === undefined) {
@@ -2092,7 +2073,7 @@ function switchCaseComparisonExpression(expression: RustExpr): RustExpr {
 function switchGuardCondition(discriminantName: string, expression: RustExpr): RustExpr {
   const discriminant: RustExpr = { kind: "path", path: discriminantName };
   if (expression.kind === "bool-literal") {
-    return expression.value ? discriminant : negateRustCondition(discriminant);
+    return expression.value ? discriminant : negateRustBooleanExpression(discriminant);
   }
   return {
     kind: "binary",
@@ -2163,7 +2144,7 @@ function planDoStatement(
   }
   const conditionExit: RustStmt = {
     kind: "if",
-    condition: negateRustCondition(plannedCondition),
+    condition: negateRustBooleanExpression(plannedCondition),
     then: { statements: [{ kind: "break" }] },
   };
   const target: RustLoopTarget = {
@@ -2184,33 +2165,6 @@ function planDoStatement(
       ? body
       : { statements: [...body.statements, conditionExit] },
   }];
-}
-
-function negateRustCondition(condition: RustExpr): RustExpr {
-  if (condition.kind === "unary" && condition.operator === "!") {
-    return condition.operand;
-  }
-  if (condition.kind === "binary") {
-    const inverse = condition.operator === "==" ? "!="
-      : condition.operator === "!=" ? "=="
-        : condition.operator === "<" ? ">="
-          : condition.operator === "<=" ? ">"
-            : condition.operator === ">" ? "<="
-              : condition.operator === ">=" ? "<"
-                : undefined;
-    if (inverse !== undefined) {
-      return { ...condition, operator: inverse };
-    }
-    if (condition.operator === "&&" || condition.operator === "||") {
-      return {
-        kind: "binary",
-        operator: condition.operator === "&&" ? "||" : "&&",
-        left: negateRustCondition(condition.left),
-        right: negateRustCondition(condition.right),
-      };
-    }
-  }
-  return { kind: "unary", operator: "!", operand: condition };
 }
 
 function planForStatement(

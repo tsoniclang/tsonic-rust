@@ -23,6 +23,44 @@ const sourceNullish = { kind: "target-specific", target: "rust", name: "source-n
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "target-named", id: "rust.core.usize" };
 
+test("provider results preserve exact borrowed-string ownership conversion", () => {
+  const borrowedString = {
+    kind: "pointer",
+    pointee: string,
+    mutability: "const",
+  };
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "property",
+    form: { form: "call", path: "acme::separator" },
+    sourceArgumentCarriers: [],
+    resultCarrier: string,
+    resultConversion: {
+      kind: "semantic-conversion",
+      id: "owned-string-from-borrowed-str",
+    },
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(abi);
+  assert.deepEqual(abi.result, {
+    kind: "sync",
+    rawCarrier: borrowedString,
+    conversion: {
+      kind: "semantic",
+      conversion: {
+        kind: "semantic-conversion",
+        id: "owned-string-from-borrowed-str",
+      },
+      sourceCarrier: borrowedString,
+      targetCarrier: string,
+      fallible: false,
+    },
+    carrier: string,
+  });
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+});
+
 test("provider methods finalize receiver, source order, passing modes, conversions, and result", () => {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",
@@ -93,6 +131,7 @@ test("compile-time source arguments must be declared explicitly and remain in th
     resultCarrier: string,
     isAsync: false,
     isFallible: true,
+    errorBoundary: "provider-native",
   };
 
   assert.equal(finalizeRustProviderOperationAbi(options), undefined);
@@ -432,13 +471,14 @@ test("async ABI separates invocation, await fallibility, and post-await conversi
     resultConversion: { kind: "semantic-conversion", id: "checked-isize-to-i32" },
     isAsync: true,
     isFallible: true,
+    errorBoundary: "target-runtime",
   });
 
   assert.ok(abi);
   assert.deepEqual(abi.effects, {
     invocation: "infallible",
     awaiting: "fallible",
-    errorBoundary: "provider-native",
+    errorBoundary: "target-runtime",
     safety: "safe",
   });
   assert.equal(abi.result.kind, "async");

@@ -167,6 +167,7 @@ export function isEmpty(text: string): boolean {
 export function isNotEmpty(text: string): boolean {
   return "" !== text;
 }
+
 `,
     },
   });
@@ -177,6 +178,60 @@ export function isNotEmpty(text: string): boolean {
   assert.match(text, /text\.is_empty\(\)/u);
   assert.match(text, /!text\.is_empty\(\)/u);
   assert.doesNotMatch(text, /(?:==|!=) ""/u);
+});
+
+test("Rust expression construction canonicalizes proven native boolean, range, and concat forms", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function missing(value: string | undefined): boolean {
+  return !(value !== undefined);
+}
+
+export function inRange(value: int32): boolean {
+  return value >= 10 && value <= 20;
+}
+
+export function checkedInRange(valid: boolean, value: int32): boolean {
+  return valid && value >= 10 && value <= 20;
+}
+
+export function outsideRange(value: int32): boolean {
+  return value < 10 || value > 20;
+}
+
+export function outsideFloatRange(value: number): boolean {
+  return value < 10 || value > 20;
+}
+
+export function negateFloatComparison(value: number): boolean {
+  return !(value < 10);
+}
+
+export function joined(left: string, right: string): string {
+  return left + ("/" + right);
+}
+
+export function explicitUnitReturn(): void {
+  return;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /value\.is_none\(\)/u);
+  assert.match(text, /\(10\.\.=20\)\.contains\(&value\)/u);
+  assert.match(text, /valid\s*&&\s*\(10\.\.=20\)\.contains\(&value\)/u);
+  assert.match(text, /!\(10\.\.=20\)\.contains\(&value\)/u);
+  assert.match(text, /value < 10\.0 \|\| value > 20\.0/u);
+  assert.match(text, /!\(value < 10\.0\)/u);
+  assert.match(text, /format!\("\{\}\{\}\{\}", left, String::from\("\/"\), right\)/u);
+  assert.match(text, /pub fn explicit_unit_return\(\) \{\}/u);
+  assert.doesNotMatch(text, /format!\([^\n]*format!/u);
 });
 
 test("module imports and exports lower to crate-qualified calls", () => {

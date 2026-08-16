@@ -30,6 +30,7 @@ import {
   planRustSourceOutputIdentities,
 } from "../../translate/artifacts/source-output-identities.js";
 import { planRustProgramErrorModule } from "./program-errors.js";
+import { applyRustErrorBoundary } from "./error-boundary.js";
 import { planRustStructuralShapeModule } from "./structural-shapes.js";
 
 export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
@@ -265,20 +266,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
       if (epilogue.isFallible !== true) {
         return { kind: "expr" as const, expr: call };
       }
-      const result = epilogue.errorBoundary === "provider-native"
-        ? {
-            kind: "method-call" as const,
-            receiver: call,
-            method: "map_err",
-            args: [{
-              kind: "path" as const,
-              path: "tsonic_rust_runtime::TsonicError::from",
-            }],
-          }
-        : call;
       return {
         kind: "expr" as const,
-        expr: { kind: "try" as const, expr: result, errorDomain: "runtime" as const },
+        expr: applyRustErrorBoundary(call, epilogue.errorBoundary, errorDomain),
       };
     });
     const mainFallible = entryFunction.fallible ||

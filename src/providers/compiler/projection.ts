@@ -417,7 +417,7 @@ function projectFunction(
       ? operationRow({
           ...operation,
           isFallible: true,
-          errorBoundary: "source-program",
+          errorBoundary: "target-runtime",
         })
       : operationRow(operation),
   };
