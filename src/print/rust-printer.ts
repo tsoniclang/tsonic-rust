@@ -1700,7 +1700,8 @@ function printRustExprFitted(
       ].join("\n");
     }
     case "conditional": {
-      if (!flat.includes("\n") && flat.length <= rustSingleLineConditionalWidth &&
+      if (grammarPosition === "expression" && !flat.includes("\n") &&
+        flat.length <= rustSingleLineConditionalWidth &&
         renderedFits(flat, column)) {
         return flat;
       }
