@@ -150,3 +150,42 @@ export function main(): void {
     0,
   );
 });
+
+test("object literal methods satisfy inherited contracts through exact redeclarations", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Readable {
+  value: int32;
+  read(): int32;
+}
+
+interface Counter extends Readable {
+  value: int32;
+  read(): int32;
+  add(delta: int32): int32;
+}
+
+export function main(): void {
+  const counter: Counter = {
+    value: 2,
+    read() { return this.value; },
+    add(delta) {
+      this.value += delta;
+      return this.read();
+    },
+  };
+  const readable: Readable = counter;
+  check(readable.read() === 2);
+  check(counter.add(3) === 5);
+  check(readable.value === 5);
+}
+`, "rust_object_method_redeclarations");
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(
+    validateGeneratedProject("object-method-redeclarations", result.artifacts, { run: true }).status,
+    0,
+  );
+});

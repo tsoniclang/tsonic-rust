@@ -546,7 +546,8 @@ export type RustTargetOperationFact =
       readonly storage: "project-object" | "object-handle";
       readonly resultCarrier: TargetTypeRef;
       readonly fields: readonly {
-        readonly declaration?: Node;
+        readonly implementationDeclaration?: Node;
+        readonly contractDeclarations: readonly Node[];
         readonly sourceName: string;
         readonly storageIndex: number;
         readonly carrier: TargetTypeRef;
@@ -561,7 +562,7 @@ export type RustTargetOperationFact =
         | {
             readonly kind: "method";
             readonly property: Node;
-            readonly sourceSelectedDeclarations: readonly Node[];
+            readonly contractDeclarations: readonly Node[];
           }
         | {
             readonly kind: "spread";

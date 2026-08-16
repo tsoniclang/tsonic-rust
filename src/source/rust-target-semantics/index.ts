@@ -4937,8 +4937,10 @@ function resolveRecordLiteralCarrier(
   const structuralExpected = rustStructuralObjectCarrierValue(selectedExpected);
   let resultCarrier: TargetTypeRef;
   let storage: "project-object" | "object-handle";
+  let selectedProjectDefinition: import("./project-type-policy.js").RustProjectTypeDefinition | undefined;
   let selectedFields: readonly {
-    readonly declaration?: Node;
+    readonly implementationDeclaration?: Node;
+    readonly contractDeclarations: readonly Node[];
     readonly sourceName: string;
     readonly storageIndex: number;
     readonly carrier: TargetTypeRef;
@@ -4956,12 +4958,16 @@ function resolveRecordLiteralCarrier(
     if (definition?.kind !== "interface" || contracts === undefined) {
       return undefined;
     }
-    const projectFields = contracts.flatMap((contract) => {
+    const contractFields = contracts.flatMap((contract) => {
       const layout = rustProjectObjectLayout(contract.definition.declaration, ast);
       if (layout?.kind !== "interface") {
         return [undefined];
       }
       return layout.fields.map((field) => {
+        const implementation = walk.context.projectTypes.memberImplementation(
+          definition,
+          field.declaration,
+        );
         const declared = walk.context.facts.get(field.declaration, rustRuntimeCarrierKey)?.carrier ??
           resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration));
         const carrier = declared === undefined
@@ -4971,26 +4977,58 @@ function resolveRecordLiteralCarrier(
               selectedExpected,
               declared,
             );
-        return carrier === undefined
+        return carrier === undefined || implementation.kind !== "resolved"
           ? undefined
           : {
-              declaration: field.declaration,
+              contractDeclaration: field.declaration,
+              implementationDeclaration: implementation.implementation.declaration,
               sourceName: field.sourceName,
               carrier,
             };
       });
-    }).map((field, storageIndex) =>
-      field === undefined ? undefined : { ...field, storageIndex });
-    if (projectFields.some((field) => field === undefined)) {
+    });
+    if (contractFields.some((field) => field === undefined)) {
       return undefined;
+    }
+    const projectFields: {
+      readonly implementationDeclaration: Node;
+      readonly contractDeclarations: Node[];
+      readonly sourceName: string;
+      readonly storageIndex: number;
+      readonly carrier: TargetTypeRef;
+    }[] = [];
+    for (const field of contractFields as readonly {
+      readonly contractDeclaration: Node;
+      readonly implementationDeclaration: Node;
+      readonly sourceName: string;
+      readonly carrier: TargetTypeRef;
+    }[]) {
+      const existing = projectFields.find((candidate) =>
+        candidate.implementationDeclaration === field.implementationDeclaration);
+      if (existing !== undefined) {
+        if (!rustTargetTypeRefEquals(existing.carrier, field.carrier)) {
+          return undefined;
+        }
+        existing.contractDeclarations.push(field.contractDeclaration);
+        continue;
+      }
+      projectFields.push({
+        implementationDeclaration: field.implementationDeclaration,
+        contractDeclarations: [field.contractDeclaration],
+        sourceName: field.sourceName,
+        storageIndex: projectFields.length,
+        carrier: field.carrier,
+      });
     }
     resultCarrier = selectedExpected;
     storage = "project-object";
+    selectedProjectDefinition = definition;
     selectedMethodDeclarations = contracts.flatMap((contract) =>
       ast.members(contract.definition.declaration).filter((member): member is Node =>
         member !== undefined && ast.kindName(member) === "KindMethodSignature"));
     selectedFields = projectFields as readonly {
-      readonly declaration: Node;
+      readonly implementationDeclaration: Node;
+      readonly contractDeclarations: readonly Node[];
       readonly sourceName: string;
       readonly storageIndex: number;
       readonly carrier: TargetTypeRef;
@@ -5026,6 +5064,7 @@ function resolveRecordLiteralCarrier(
     resultCarrier = structuralCarrier;
     storage = "object-handle";
     selectedFields = structuralValue.fields.map((field, storageIndex) => ({
+      contractDeclarations: Object.freeze([]),
       sourceName: field.sourceName,
       storageIndex,
       carrier: field.type,
@@ -5108,8 +5147,17 @@ function resolveRecordLiteralCarrier(
       const selectedResultCarrier = selectedMemberCarrier?.kind === "function-pointer"
         ? selectedMemberCarrier.result
         : selectedCallable?.result ?? selectedClosure?.result;
-      const matchedDeclarations = selectedDeclarations.filter((declaration) =>
-        selectedMethodDeclarations.includes(declaration));
+      const matchedDeclarations = selectedMethodDeclarations.filter((declaration) => {
+        const implementation = selectedProjectDefinition === undefined
+          ? undefined
+          : walk.context.projectTypes.memberImplementation(
+              selectedProjectDefinition,
+              declaration,
+            );
+        return implementation?.kind === "resolved" && selectedDeclarations.includes(
+          implementation.implementation.declaration,
+        );
+      });
       if (storage !== "project-object" || selectedElement?.elementKind !== "method" ||
         selectedDeclaration === undefined || !selectedMethodDeclarations.includes(selectedDeclaration) ||
         matchedDeclarations.length === 0 || selectedParameterCarriers === undefined ||
@@ -5129,7 +5177,7 @@ function resolveRecordLiteralCarrier(
       contributions.push({
         kind: "method",
         property,
-        sourceSelectedDeclarations: Object.freeze([...matchedDeclarations]),
+        contractDeclarations: Object.freeze([...matchedDeclarations]),
       });
       for (const declaration of matchedDeclarations) {
         assignedMethodDeclarations.add(declaration);
@@ -5140,9 +5188,9 @@ function resolveRecordLiteralCarrier(
     const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
     const targetField = storage === "project-object"
       ? selectedFields.find((field) =>
-          field.declaration !== undefined &&
-          (selectedElement?.sourceSelectedDeclaration === field.declaration ||
-            selectedElement?.sourceSelectedDeclarations.includes(field.declaration)))
+          field.implementationDeclaration !== undefined &&
+          (selectedElement?.sourceSelectedDeclaration === field.implementationDeclaration ||
+            selectedElement?.sourceSelectedDeclarations.includes(field.implementationDeclaration)))
       : selectedFieldByName.get(sourceName);
     const initializer = ObjectLiteralProperty_Value(ast, property);
     if (targetField === undefined || initializer === undefined ||
@@ -5162,7 +5210,10 @@ function resolveRecordLiteralCarrier(
     return undefined;
   }
   const fields = selectedFields.map((field) => ({
-    ...(field.declaration === undefined ? {} : { declaration: field.declaration }),
+    ...(field.implementationDeclaration === undefined
+      ? {}
+      : { implementationDeclaration: field.implementationDeclaration }),
+    contractDeclarations: Object.freeze([...field.contractDeclarations]),
     sourceName: field.sourceName,
     storageIndex: field.storageIndex,
     carrier: field.carrier,
@@ -5954,7 +6005,7 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
             continue;
           }
           addRegion(contribution.property, ast.body(contribution.property));
-          for (const declaration of contribution.sourceSelectedDeclarations) {
+          for (const declaration of contribution.contractDeclarations) {
             relateDeclarations(contribution.property, declaration);
           }
         }

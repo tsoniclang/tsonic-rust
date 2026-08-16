@@ -61,7 +61,8 @@ export interface RustObjectLiteralImplementationPlan {
   readonly rootName: string;
   readonly stateName: string;
   readonly stateFields: readonly {
-    readonly declaration: Node;
+    readonly implementationDeclaration: Node;
+    readonly contractDeclarations: readonly Node[];
     readonly storageIndex: number;
     readonly targetName: string;
     readonly type: RustType;
@@ -134,7 +135,7 @@ function createImplementationPlan(
   const stateName = allocateRustSyntheticTypeName(names, `${definition.targetName}ObjectLiteralState`);
   const stateFieldNames = new Set<string>();
   const stateFields = fact.fields.map((field) => {
-    const declaration = field.declaration;
+    const declaration = field.implementationDeclaration;
     const type = rustTypeFromCarrierInContext(field.carrier, context);
     const owner = context.input.projectTypes.definitionContainingDeclaration(declaration);
     const preferred = declaration === undefined || owner === undefined
@@ -146,7 +147,8 @@ function createImplementationPlan(
     return declaration === undefined || type === undefined || targetName === undefined
       ? undefined
       : {
-          declaration,
+          implementationDeclaration: declaration,
+          contractDeclarations: field.contractDeclarations,
           storageIndex: field.storageIndex,
           targetName,
           type,
@@ -161,7 +163,7 @@ function createImplementationPlan(
     if (contribution.kind !== "method") {
       continue;
     }
-    for (const contractMethod of contribution.sourceSelectedDeclarations) {
+    for (const contractMethod of contribution.contractDeclarations) {
       const owner = context.input.projectTypes.definitionContainingDeclaration(contractMethod);
       const ownerRelation = owner === undefined
         ? undefined
@@ -345,7 +347,8 @@ function planContractImplementation(
     });
   }
   for (const field of fields) {
-    const stateField = stateFields.find((candidate) => candidate.declaration === field.declaration);
+    const stateField = stateFields.find((candidate) =>
+      candidate.contractDeclarations.includes(field.declaration));
     const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
     const write = context.input.projectTypes.memberSlotName(field.declaration, "write");
     if (stateField === undefined || read === undefined || write === undefined) {
