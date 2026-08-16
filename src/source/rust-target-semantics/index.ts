@@ -12,6 +12,7 @@ import type { RustAssignmentOperator } from "../../common/rust-syntax.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import {
+  ClassStaticBlock_Body,
   ElementAccessExpression_ArgumentExpression,
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -46,6 +47,7 @@ import {
   KindBlock,
   KindCallExpression,
   KindCaseClause,
+  KindClassStaticBlockDeclaration,
   KindConditionalExpression,
   KindDeleteExpression,
   KindDoStatement,
@@ -55,6 +57,7 @@ import {
   KindEqualsToken,
   KindExclamationEqualsEqualsToken,
   KindExpressionStatement,
+  KindExportAssignment,
   KindFalseKeyword,
   KindForInStatement,
   KindForOfStatement,
@@ -747,6 +750,8 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
         recordVariableStatementFacts(walk, statement, sourceFile);
       } else if (kind === "KindClassDeclaration") {
         recordClassBodyFacts(walk, statement, sourceFile);
+      } else if (kind === KindExportAssignment) {
+        recordExportAssignmentFacts(walk, statement);
       } else if (kind !== "KindImportDeclaration" &&
         kind !== "KindExportDeclaration" &&
         kind !== "KindInterfaceDeclaration" &&
@@ -1216,6 +1221,47 @@ function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourc
       }
     }
   }
+}
+
+function recordExportAssignmentFacts(
+  walk: RustFactWalk,
+  declaration: Node,
+): TargetTypeRef | undefined {
+  const { ast } = walk.context;
+  const assignment = ast.as.AsExportAssignment(declaration);
+  const sourceFile = ast.getSourceFile(declaration);
+  if (assignment === undefined || assignment.IsExportEquals === true ||
+    assignment.Expression === undefined || sourceFile === undefined) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_EXPORT_ASSIGNMENT_NOT_CLOSED",
+      "Default exports require one exact ESM export expression in project source.",
+      declaration,
+      ["target.capability=rust.source.default-export"],
+    );
+    return undefined;
+  }
+  const existing = walk.context.facts.get(declaration, rustRuntimeCarrierKey) ??
+    walk.context.facts.resolve(declaration, rustRuntimeCarrierKey);
+  const carrier = existing?.carrier ?? resolveExpressionCarrier(
+    walk,
+    assignment.Expression,
+    sourceFile,
+    undefined,
+  );
+  if (carrier === undefined) {
+    return undefined;
+  }
+  const finalized = setCarrierFact(walk, declaration, carrier);
+  if (finalized === undefined) {
+    return undefined;
+  }
+  walk.context.facts.set(declaration, rustModuleBindingFactKey, {
+    declarationKind: "const",
+    storage: "module-cell",
+    valueCarrier: finalized,
+  }, [{ message: "rust finalized default export snapshot storage" }]);
+  return finalized;
 }
 
 function recordNativeModuleFunctionBodyFacts(
@@ -3227,6 +3273,12 @@ function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFi
   if (reference !== undefined && declaration !== undefined && reference.project) {
     const declarationKind = ast.kindName(declaration);
     recordProjectSourceBinding(walk, identifier);
+    if (declarationKind === KindExportAssignment) {
+      const exportCarrier = recordExportAssignmentFacts(walk, declaration);
+      if (exportCarrier !== undefined) {
+        return setCarrierFact(walk, identifier, exportCarrier);
+      }
+    }
     if (declarationKind === KindParameter) {
       const parameterAbi = walk.context.facts.get(declaration, rustSourceParameterAbiFactKey) ??
         walk.context.facts.resolve(declaration, rustSourceParameterAbiFactKey);
@@ -3308,12 +3360,15 @@ function recordProjectSourceBinding(
     isImportBindingDeclarationKind(ast.kindName(declaration))) {
     return undefined;
   }
+  const declarationKind = ast.kindName(declaration);
   const declarationName = ast.name(declaration);
-  if (declarationName === undefined) {
-    return undefined;
-  }
-  const sourceName = ast.text(declarationName);
-  if (sourceName.length === 0) {
+  const sourceName = declarationKind === KindExportAssignment
+    ? "default"
+    : declarationName === undefined
+      ? ""
+      : ast.text(declarationName);
+  if (sourceName.length === 0 ||
+    walk.context.names.nameForDeclaration(declaration) === undefined) {
     return undefined;
   }
   const binding: RustSourceBindingFact = declarationIsModuleScoped(declaration, ast)
@@ -4624,6 +4679,9 @@ function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node): void 
   }
   for (const member of members) {
     const memberKind = ast.kindName(member);
+    if (memberKind === KindClassStaticBlockDeclaration) {
+      continue;
+    }
     if (memberKind === "KindPropertyDeclaration") {
       const fieldCarrier = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member));
       if (fieldCarrier !== undefined) {
@@ -4677,6 +4735,33 @@ function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile:
   }
   for (const member of members) {
     const memberKind = ast.kindName(member);
+    if (memberKind === KindClassStaticBlockDeclaration) {
+      const previousStaticThis: TargetTypeRef | undefined = walk.currentThisCarrier;
+      const previousStaticSuper: TargetTypeRef | undefined = walk.currentSuperCarrier;
+      walk.currentThisCarrier = undefined;
+      walk.currentSuperCarrier = undefined;
+      const body = ClassStaticBlock_Body(ast, member);
+      const statements = body === undefined
+        ? undefined
+        : requireDenseSourceNodes(
+            walk,
+            ast.statements(body),
+            "Class static block contains an undefined or non-data statement slot.",
+          );
+      if (body === undefined) {
+        appendMalformedSourceAst(
+          walk,
+          "Class static block has no exact body node.",
+        );
+      } else if (statements !== undefined) {
+        for (const statement of statements) {
+          recordStatementFacts(walk, statement, sourceFile, undefined);
+        }
+      }
+      walk.currentThisCarrier = previousStaticThis;
+      walk.currentSuperCarrier = previousStaticSuper;
+      continue;
+    }
     if (memberKind === "KindPropertyDeclaration") {
       const initializer = Node_Initializer(ast, member);
       const fieldCarrier = walk.context.facts.get(member, rustRuntimeCarrierKey)?.carrier ??
@@ -6450,7 +6535,8 @@ function declarationIsModuleScoped(
         const declarationKind = ast.kindName(declaration);
         return declarationKind === KindFunctionDeclaration ||
           declarationKind === "KindClassDeclaration" ||
-          declarationKind === "KindEnumDeclaration";
+          declarationKind === "KindEnumDeclaration" ||
+          declarationKind === KindExportAssignment;
       }
       const declarationKind = ast.kindName(declaration);
       return ast.kindName(current) === KindVariableStatement &&

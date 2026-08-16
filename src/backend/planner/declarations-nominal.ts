@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import {
+  KindClassStaticBlockDeclaration,
   Node_Initializer,
   Node_Type,
 } from "../../common/source-ast.js";
@@ -146,6 +147,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       continue;
     }
     const memberKind = ast.kindName(member);
+    if (memberKind === KindClassStaticBlockDeclaration) {
+      continue;
+    }
     if (memberKind === "KindPropertyDeclaration") {
       if (ast.hasModifierKind(member, "static")) {
         continue;

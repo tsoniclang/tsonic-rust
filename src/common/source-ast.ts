@@ -9,6 +9,7 @@ export const KindBreakStatement = "KindBreakStatement";
 export const KindBooleanKeyword = "KindBooleanKeyword";
 export const KindCallExpression = "KindCallExpression";
 export const KindCaseClause = "KindCaseClause";
+export const KindClassStaticBlockDeclaration = "KindClassStaticBlockDeclaration";
 export const KindConditionalExpression = "KindConditionalExpression";
 export const KindContinueStatement = "KindContinueStatement";
 export const KindDebuggerStatement = "KindDebuggerStatement";
@@ -18,6 +19,7 @@ export const KindDoStatement = "KindDoStatement";
 export const KindElementAccessExpression = "KindElementAccessExpression";
 export const KindEmptyStatement = "KindEmptyStatement";
 export const KindExpressionStatement = "KindExpressionStatement";
+export const KindExportAssignment = "KindExportAssignment";
 export const KindExportDeclaration = "KindExportDeclaration";
 export const KindFalseKeyword = "KindFalseKeyword";
 export const KindForStatement = "KindForStatement";
@@ -157,9 +159,29 @@ export function Node_Expression(ast: AstReader, node: Node | undefined): Node | 
       return ast.as.AsYieldExpression(node)?.Expression;
     case "KindSpreadElement":
       return ast.as.AsSpreadElement(node)?.Expression;
+    case "KindExportAssignment":
+      return ast.as.AsExportAssignment(node)?.Expression;
     default:
       return undefined;
   }
+}
+
+export function ClassStaticBlock_Body(
+  ast: AstReader,
+  node: Node | undefined,
+): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindClassStaticBlockDeclaration
+    ? undefined
+    : ast.as.AsClassStaticBlockDeclaration(node)?.Body;
+}
+
+export function ExportAssignment_IsExportEquals(
+  ast: AstReader,
+  node: Node | undefined,
+): boolean | undefined {
+  return node === undefined || ast.kindName(node) !== KindExportAssignment
+    ? undefined
+    : ast.as.AsExportAssignment(node)?.IsExportEquals === true;
 }
 
 export function ConditionalExpression_Condition(ast: AstReader, node: Node | undefined): Node | undefined {
