@@ -172,7 +172,7 @@ export function main(): void {
   assert.match(source, /for entry in map\.entries\(\)/u);
   assert.match(source, /for value in set\.values\(\)/u);
   assert.match(source, /for key in map\.keys\(\)/u);
-  assert.match(source, /for key in rt::iter_cloned\(&storedKeys\)/u);
+  assert.match(source, /for key in rt::iter_cloned\(&stored_keys\)/u);
   assert.match(source, /map\.for_each_zero\(\|\|/u);
   assert.match(source, /map\.for_each\(\|value, key, owner\|/u);
   assert.match(source, /set\.for_each_zero\(\|\|/u);

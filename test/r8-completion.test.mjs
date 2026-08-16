@@ -127,8 +127,11 @@ export function area(shape: Shape): int32 {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub enum Shape \{\n    Variant0\(rt::ObjectHandle<\(String, i32\)>\),\n    Variant1\(rt::ObjectHandle<\(String, i32\)>\),\n\}/u);
-  assert.match(text, /Shape::Variant0\(rt::ObjectHandle::new\(\(String::from\("circle"\), 1\)\)\)/u);
+  const shapes = artifactText(result, "src/shapes.rs");
+  assert.match(text, /pub enum Shape \{\n    Variant0\(rt::ObjectHandle<crate::shapes::KindRadiusShape>\),\n    Variant1\(rt::ObjectHandle<crate::shapes::KindSizeShape>\),\n\}/u);
+  assert.match(shapes, /pub struct KindRadiusShape \{\s*pub kind: String,\s*pub radius: i32,/u);
+  assert.match(shapes, /pub struct KindSizeShape \{\s*pub kind: String,\s*pub size: i32,/u);
+  assert.match(text, /Shape::Variant0\(rt::ObjectHandle::new\(crate::shapes::KindRadiusShape \{\s*kind: String::from\("circle"\),\s*radius: 1,/u);
   assert.match(text, /match &shape/u);
   assert.match(text, /unreachable!\("TSTS-selected source refinement excluded this union variant"\)/u);
 });
@@ -151,8 +154,11 @@ export function added(value: int32): Event {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /Event::Variant0\(rt::ObjectHandle::new\(\(String::from\("added"\), value\)\)\)/u);
-  assert.doesNotMatch(text, /Event::Variant1\(rt::ObjectHandle::new\(\(String::from\("added"\), value\)\)\)/u);
+  const shapes = artifactText(result, "src/shapes.rs");
+  assert.match(shapes, /pub struct KindValueShape \{\s*pub kind: String,\s*pub value: i32,/u);
+  assert.match(shapes, /pub struct KindValueShape2 \{\s*pub kind: String,\s*pub value: u8,/u);
+  assert.match(text, /Event::Variant0\(rt::ObjectHandle::new\(crate::shapes::KindValueShape \{\s*kind: String::from\("added"\),\s*value,/u);
+  assert.doesNotMatch(text, /Event::Variant1\(rt::ObjectHandle::new\(crate::shapes::KindValueShape2/u);
 });
 
 test("fixed-array indexing accepts only exact in-range integer literal indexes", async () => {

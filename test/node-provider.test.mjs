@@ -167,7 +167,7 @@ export function verify(value: boolean): void {
   assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(
     text,
-    /tsonic_rust_node::assert::ok_with_message\(\s*sumIsFour\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
+    /tsonic_rust_node::assert::ok_with_message\(\s*sum_is_four\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
   );
 });
 

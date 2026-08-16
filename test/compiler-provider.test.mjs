@@ -395,8 +395,8 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::checked_double\(4\)\?/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::first_byte\(widget_alias::byte_ptr\(\)\) \}/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /readConstPointer\(widget_alias::byte_ptr\(\)\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn read_mutable_pointer\(pointer: \*mut u8\) -> u8/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /read_const_pointer\(widget_alias::byte_ptr\(\)\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);

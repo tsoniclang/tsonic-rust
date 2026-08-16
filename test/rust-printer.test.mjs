@@ -79,6 +79,42 @@ test("fitted multi-argument calls stay horizontal inside assignments", () => {
   assert.match(text, /manifest = tsonic_rust_node::fs::read_file_sync_string\("Cargo.toml", "utf8"\)\?;/u);
 });
 
+test("assignment continuations keep newly fitting nested calls horizontal", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "assign",
+          target: { kind: "path", path: "stored_collection_key_length" },
+          operator: "+=",
+          value: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::usize_to_i32",
+              args: [{
+                kind: "call",
+                path: "js_string::js_len",
+                args: [{ kind: "reference", expr: { kind: "path", path: "key" } }],
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /stored_collection_key_length \+=\n        tsonic_rust_runtime::conversions::usize_to_i32\(js_string::js_len\(&key\)\)\?;/u,
+  );
+});
+
 test("a fitted outer call stays attached to its multiline nested call", () => {
   const text = printRustSourceFile({
     headerComment,
@@ -951,7 +987,10 @@ test("optional closure chains and nested struct arguments stay rustfmt-stable", 
                         value: {
                           kind: "call",
                           path: "ObjectHandle::new",
-                          args: [{ kind: "int-literal", text: "7" }],
+                          args: [{
+                            kind: "path",
+                            path: "a_deliberately_long_value_name_that_forces_nested_layout",
+                          }],
                         },
                       }],
                     }],
@@ -970,7 +1009,7 @@ test("optional closure chains and nested struct arguments stay rustfmt-stable", 
 
   assert.match(source, /value\.as_ref\(\)\.map\(\|selected\| \{\n/u);
   assert.match(source, /read\(Some\(Box \{\n        state: ObjectHandle::new\(7\),\n    \}\)\);/u);
-  assert.match(source, /read\(Some\(Box \{\n        state: ObjectHandle::new\(7\),\n    \}\)\)\n    \.unwrap_or\(-1\)\n        == 7;/u);
+  assert.match(source, /read\(Some\(Box \{\n        state: ObjectHandle::new\(a_deliberately_long_value_name_that_forces_nested_layout\),\n    \}\)\)\n    \.unwrap_or\(-1\)\n        == 7;/u);
 });
 
 test("long logical chains use rustfmt-compatible operand-per-line layout", () => {

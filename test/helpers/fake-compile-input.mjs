@@ -13,10 +13,12 @@ export function fakeStatement({ pos = 0, end = 0, kindName = "ExpressionStatemen
 
 export function fakeAstReader(sourceFiles = []) {
   const sourceFileByNode = new Map();
+  const parentByNode = new Map();
   for (const sourceFile of sourceFiles) {
     sourceFileByNode.set(sourceFile, sourceFile);
     for (const statement of sourceFile.statements ?? []) {
       sourceFileByNode.set(statement, sourceFile);
+      parentByNode.set(statement, sourceFile);
     }
   }
   return {
@@ -27,6 +29,7 @@ export function fakeAstReader(sourceFiles = []) {
     getFileName: (sourceFile) => sourceFile?.fileName ?? "",
     getPath: (sourceFile) => sourceFile?.fileName ?? "",
     getSourceFile: (node) => sourceFileByNode.get(node) ?? node?.sourceFile ?? node,
+    parent: (node) => parentByNode.get(node),
     getSourceText: (sourceFile) => sourceFile.text ?? "",
     isDeclarationFile: () => false,
     forEachChild: () => {},

@@ -1073,16 +1073,19 @@ function printRustAssignment(
   const renderedTarget = printRustExprFitted(target, depth, indent.length);
   const inlinePrefix = `${indent}${renderedTarget} ${operator} `;
   const inlineValue = printRustExprFitted(value, depth, lastLineLength(inlinePrefix));
+  const continuationIndent = indentText(depth + 1);
+  const continuationValue = printRustExprFitted(value, depth + 1, continuationIndent.length);
+  const continuationAvoidsNestedExpansion = inlineValue.includes("\n") &&
+    !continuationValue.includes("\n");
   const multilineValueCanFollowAssignment = value.kind !== "binary" ||
     value.operator === "&&" || value.operator === "||";
   if (!renderedTarget.includes("\n") &&
-    (!inlineValue.includes("\n") || multilineValueCanFollowAssignment) &&
+    (!inlineValue.includes("\n") ||
+      multilineValueCanFollowAssignment && !continuationAvoidsNestedExpansion) &&
     inlinePrefix.length + firstLine(inlineValue).length <= rustFormatWidth) {
     return `${inlinePrefix}${inlineValue};`;
   }
-  const continuationIndent = indentText(depth + 1);
-  const renderedValue = printRustExprFitted(value, depth + 1, continuationIndent.length);
-  return `${indent}${renderedTarget} ${operator}\n${continuationIndent}${renderedValue};`;
+  return `${indent}${renderedTarget} ${operator}\n${continuationIndent}${continuationValue};`;
 }
 
 function printRustStatementExpr(
@@ -1853,10 +1856,10 @@ function printRustExprFitted(
       ].join("\n");
     }
     case "string-concat": {
-      const allPartsAreAtomic = expression.parts.every(rustFormatArgumentIsAtomic);
+      const allPartsCanShareLine = expression.parts.every(rustFormatArgumentCanShareLine);
       if (expression.parts.length <= 4 &&
         (flat.length <= rustNestedCallWidth ||
-          expression.parts.length <= 2 && allPartsAreAtomic) &&
+          allPartsCanShareLine && flat.length < rustInlineFormatArgumentWidth * 2) &&
         !flat.includes("\n") &&
         renderedFits(flat, column)) {
         return flat;
@@ -4276,6 +4279,30 @@ function rustFormatArgumentIsAtomic(expression: RustExpr): boolean {
     expression.kind === "bool-literal" || expression.kind === "none" ||
     expression.kind === "string-literal" || expression.kind === "str-literal" ||
     expression.kind === "path" || expression.kind === "associated-value";
+}
+
+function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
+  if (rustFormatArgumentIsAtomic(expression)) {
+    return true;
+  }
+  switch (expression.kind) {
+    case "call":
+    case "associated-call":
+      return expression.args.every(rustFormatArgumentCanShareLine);
+    case "field":
+      return rustFormatArgumentCanShareLine(expression.receiver);
+    case "index":
+      return rustFormatArgumentCanShareLine(expression.receiver) &&
+        rustFormatArgumentCanShareLine(expression.index);
+    case "reference":
+      return rustFormatArgumentCanShareLine(expression.expr);
+    case "slice-literal":
+    case "vec-literal":
+    case "tuple-literal":
+      return expression.elements.every(rustFormatArgumentCanShareLine);
+    default:
+      return false;
+  }
 }
 
 function printRustPattern(pattern: RustPattern): string {

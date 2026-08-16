@@ -752,9 +752,9 @@ test("selectors after multiline call bases align with the base", () => {
                     kind: "struct-literal",
                     path: "Box",
                     fields: [
-                      { name: "left", value: { kind: "int-literal", text: "1" } },
-                      { name: "middle", value: { kind: "int-literal", text: "2" } },
-                      { name: "right", value: { kind: "int-literal", text: "3" } },
+                      { name: "first_component", value: { kind: "string-literal", value: "first-long-component" } },
+                      { name: "second_component", value: { kind: "string-literal", value: "second-long-component" } },
+                      { name: "third_component", value: { kind: "string-literal", value: "third-long-component" } },
                     ],
                   }],
                 },
