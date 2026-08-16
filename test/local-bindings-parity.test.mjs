@@ -48,7 +48,7 @@ export function choose(flag: boolean): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let result: i32 = if flag \{\n\s*10\n\s*\} else \{\n\s*20\n\s*\};/u);
+  assert.match(source, /let result: i32 = if flag \{ 10 \} else \{ 20 \};/u);
   assert.doesNotMatch(source, /allow\(unused_mut\)/u);
   assert.doesNotMatch(source, /result = (?:10|20);/u);
   validateGeneratedProject("local-definite-assignment", result.artifacts);

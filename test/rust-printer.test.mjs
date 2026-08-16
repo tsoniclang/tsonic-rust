@@ -940,6 +940,32 @@ test("conditional expressions move the brace after a multiline method chain", ()
   assert.match(source, /\.is_some\(\)\n    \{\n        String::from\("yes"\)/u);
 });
 
+test("short conditional expressions use rustfmt's single-line form", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "choose",
+      visibility: "public",
+      params: [{ name: "flag", type: { kind: "primitive", name: "bool" } }],
+      returnType: { kind: "primitive", name: "i32" },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "conditional",
+            condition: { kind: "path", path: "flag" },
+            whenTrue: { kind: "int-literal", text: "10" },
+            whenFalse: { kind: "int-literal", text: "20" },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /if flag \{ 10 \} else \{ 20 \}/u);
+});
+
 test("comparisons follow multiline arithmetic operands", () => {
   const source = printRustSourceFile({
     headerComment,

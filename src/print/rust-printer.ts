@@ -17,6 +17,7 @@ import { rustExpressionContainsStatementBlock } from "../backend/rust-ast/expres
 // line between items, trailing newline.
 
 const rustFormatWidth = 100;
+const rustSingleLineConditionalWidth = 50;
 const rustStructLiteralWidth = 18;
 const rustNestedCallWidth = 60;
 const rustInlineFormatArgumentWidth = 40;
@@ -1699,6 +1700,10 @@ function printRustExprFitted(
       ].join("\n");
     }
     case "conditional": {
+      if (!flat.includes("\n") && flat.length <= rustSingleLineConditionalWidth &&
+        renderedFits(flat, column)) {
+        return flat;
+      }
       const condition = printRustExprFitted(
         expression.condition,
         depth,
