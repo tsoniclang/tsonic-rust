@@ -505,7 +505,12 @@ export type RustTargetOperationFact =
       readonly kind: "source-call";
       readonly operationId: string;
       readonly target:
-        | { readonly form: "function"; readonly fileName: string; readonly name: string }
+        | {
+            readonly form: "function";
+            readonly fileName: string;
+            readonly name: string;
+            readonly selectedTargetName: string;
+          }
         | {
             readonly form: "method";
             readonly name: string;
@@ -796,17 +801,34 @@ export const rustSourceCallableValueFactKey: RustPlanKey<RustSourceCallableValue
     rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier),
 );
 
-export interface RustModuleBindingFact {
-  readonly declarationKind: "const" | "let" | "var";
-  readonly storage: "native-const" | "module-cell";
-  readonly valueCarrier: TargetTypeRef;
-}
+export type RustModuleBindingFact =
+  | {
+      readonly declarationKind: "const";
+      readonly storage: "native-const";
+      readonly valueCarrier: TargetTypeRef;
+    }
+  | {
+      readonly declarationKind: "const";
+      readonly storage: "native-function";
+      readonly callableDeclaration: Node;
+      readonly name: string;
+    }
+  | {
+      readonly declarationKind: "const" | "let" | "var";
+      readonly storage: "module-cell";
+      readonly valueCarrier: TargetTypeRef;
+    };
 
 export const rustModuleBindingFactKey: RustPlanKey<RustModuleBindingFact> = defineRustPlanKey(
   "moduleBinding",
   (left, right) => left.declarationKind === right.declarationKind &&
     left.storage === right.storage &&
-    rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
+    (left.storage === "native-function"
+      ? right.storage === "native-function" &&
+        left.callableDeclaration === right.callableDeclaration &&
+        left.name === right.name
+      : right.storage !== "native-function" &&
+        rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier)),
 );
 
 function rustTypedLocationPlanEquals(

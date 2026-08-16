@@ -216,6 +216,57 @@ test("multiline method-chain arguments use rustfmt-compatible outer-call layout"
   assert.match(text, /acme_testing::check\(\n        values\n            \.get\(tsonic_rust_runtime::conversions::i32_to_usize\(1\)\?\)\n            \.copied\(\)\n            \.is_none\(\),\n    \);/u);
 });
 
+test("nested collection initializers reserve the trailing semicolon at continuation width", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "scope",
+          body: {
+            statements: [{
+              kind: "let",
+              name: "module_value_3",
+              mutable: false,
+              init: {
+                kind: "call",
+                path: "js_abi::JsArray::from_dense",
+                args: [{
+                  kind: "vec-literal",
+                  elements: [{
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "SELECTED" },
+                    method: "with",
+                    args: [{
+                      kind: "closure",
+                      params: [{ name: "module_binding", byRefCopy: false }],
+                      body: {
+                        kind: "method-call",
+                        receiver: { kind: "path", path: "module_binding" },
+                        method: "load",
+                        args: [],
+                      },
+                    }],
+                  }],
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /let module_value_3 =\n            js_abi::JsArray::from_dense\(\n                vec!\[SELECTED\.with\(\|module_binding\| module_binding\.load\(\)\)\],\n            \);/u,
+  );
+});
+
 test("fitted multi-argument calls stay horizontal inside assignments", () => {
   const text = printRustSourceFile({
     headerComment,

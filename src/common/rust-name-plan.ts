@@ -7,6 +7,7 @@ import {
 
 export interface RustNamePlan {
   nameForDeclaration(declaration: Node | undefined): string | undefined;
+  functionNameForDeclaration(declaration: Node | undefined): string | undefined;
   nameForSourceType(fileName: string, sourceName: string): string | undefined;
 }
 
@@ -30,6 +31,7 @@ export function createRustNamePlan(input: {
     collectNameCandidates(sourceFile, sourceFile, input.ast, candidates);
   }
   const names = new WeakMap<Node, string>();
+  const functionNames = new WeakMap<Node, string>();
   const sourceTypeNames = new Map<string, string>();
   const scopes = groupCandidates(candidates);
   for (const bases of scopes.values()) {
@@ -48,9 +50,50 @@ export function createRustNamePlan(input: {
       });
     }
   }
+  const reservedFunctionNames = new Map<Node, Set<string>>();
+  for (const candidate of candidates) {
+    if (input.ast.kindName(candidate.scope) !== "KindSourceFile" ||
+      input.ast.kindName(candidate.declaration) !== "KindFunctionDeclaration") {
+      continue;
+    }
+    const name = names.get(candidate.declaration);
+    if (name !== undefined) {
+      functionNames.set(candidate.declaration, name);
+      const reserved = reservedFunctionNames.get(candidate.scope) ?? new Set<string>();
+      reserved.add(name);
+      reservedFunctionNames.set(candidate.scope, reserved);
+    }
+  }
+  const moduleValueCandidates = candidates
+    .filter((candidate) => input.ast.kindName(candidate.scope) === "KindSourceFile" &&
+      input.ast.kindName(candidate.declaration) === "KindVariableDeclaration")
+    .map((candidate): RustNameCandidate => ({ ...candidate, role: "value" }));
+  for (const [scope, bases] of groupCandidates(moduleValueCandidates)) {
+    const reserved = reservedFunctionNames.get(scope) ?? new Set<string>();
+    for (const [base, sourceGroups] of bases) {
+      const orderedGroups = [...sourceGroups.entries()].sort(([left], [right]) =>
+        compareSourceNames(left, right, base));
+      let suffix = 1;
+      orderedGroups.forEach(([, group]) => {
+        let name = suffix === 1 ? base : `${base}_${suffix}`;
+        while (reserved.has(name)) {
+          suffix += 1;
+          name = `${base}_${suffix}`;
+        }
+        reserved.add(name);
+        suffix += 1;
+        for (const candidate of group) {
+          functionNames.set(candidate.declaration, name);
+        }
+      });
+    }
+  }
   return Object.freeze({
     nameForDeclaration(declaration: Node | undefined) {
       return declaration === undefined ? undefined : names.get(declaration);
+    },
+    functionNameForDeclaration(declaration: Node | undefined) {
+      return declaration === undefined ? undefined : functionNames.get(declaration);
     },
     nameForSourceType(fileName: string, sourceName: string) {
       return sourceTypeNames.get(sourceTypeIdentity(fileName, sourceName));

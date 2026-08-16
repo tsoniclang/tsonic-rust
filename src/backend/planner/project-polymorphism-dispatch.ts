@@ -134,10 +134,10 @@ export function planProjectDispatchTrait(
     if (read === undefined || write === undefined) {
       return undefined;
     }
-    functions.push({ name: read, selfParam: "rc", params: [], returnType: field.type });
+    functions.push({ name: read, selfParam: "ref", params: [], returnType: field.type });
     functions.push({
       name: write,
-      selfParam: "rc",
+      selfParam: "ref",
       params: [{ name: "value", type: field.type }],
     });
   }
@@ -309,7 +309,7 @@ function planRootContractFunctions(
     functions.push({
       name: read,
       visibility: "private",
-      selfParam: "rc",
+      selfParam: "ref",
       params: [],
       returnType: field.type,
       body: {
@@ -322,7 +322,7 @@ function planRootContractFunctions(
     functions.push({
       name: write,
       visibility: "private",
-      selfParam: "rc",
+      selfParam: "ref",
       params: [{ name: "value", type: field.type }],
       body: {
         statements: [{

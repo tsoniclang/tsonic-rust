@@ -36,6 +36,39 @@ import { applyFallibleShape } from "./fallible-shape.js";
 export { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 
 export function planFunctionDeclaration(node: Node, outerContext: RustPlanContext): RustItem | undefined {
+  return planRustFunctionItem({
+    callableDeclaration: node,
+    nameDeclaration: node,
+    name: outerContext.input.names.functionNameForDeclaration(node),
+    exported: outerContext.input.ast.hasModifierKind(node, "export"),
+  }, outerContext);
+}
+
+export function planNativeModuleFunction(
+  declaration: Node,
+  callableDeclaration: Node,
+  name: string,
+  exported: boolean,
+  outerContext: RustPlanContext,
+): RustItem | undefined {
+  return planRustFunctionItem({
+    callableDeclaration,
+    nameDeclaration: declaration,
+    name,
+    exported,
+  }, outerContext);
+}
+
+function planRustFunctionItem(
+  source: {
+    readonly callableDeclaration: Node;
+    readonly nameDeclaration: Node;
+    readonly name?: string;
+    readonly exported: boolean;
+  },
+  outerContext: RustPlanContext,
+): RustItem | undefined {
+  const node = source.callableDeclaration;
   const { ast } = outerContext.input;
   const isAsync = ast.hasModifierKind(node, "async");
   const generatorFact = outerContext.input.facts.getFact(node, rustGeneratorFactKey);
@@ -58,8 +91,9 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
-  const isExported = ast.hasModifierKind(node, "export");
-  const name = outerContext.input.names.nameForDeclaration(node) ?? "";
+  const isExported = source.exported;
+  const name = source.name ??
+    outerContext.input.names.nameForDeclaration(source.nameDeclaration) ?? "";
   let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -188,7 +222,14 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
   if (parameterStatements === undefined) {
     return undefined;
   }
-  const plannedBody = planBlockLike(bodyNode, bodyContext);
+  const plannedBody = ast.kindName(bodyNode) === "KindBlock"
+    ? planBlockLike(bodyNode, bodyContext)
+    : (() => {
+        const expression = planExpression(bodyNode, bodyContext);
+        return expression === undefined
+          ? undefined
+          : { statements: [{ kind: "tail" as const, expr: expression }] };
+      })();
   if (plannedBody === undefined) {
     return undefined;
   }

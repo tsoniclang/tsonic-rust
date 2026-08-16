@@ -443,6 +443,25 @@ test("backend and provider metadata layers never query the TypeScript checker", 
   }
 });
 
+test("native module-function eligibility is finalized before backend planning", () => {
+  const semantics = readFileSync(
+    join(sourceRoot, "source/rust-target-semantics/module-binding-policy.ts"),
+    "utf8",
+  );
+  assert.match(semantics, /referencesToDeclaration\(declaration\)/u);
+  assert.match(semantics, /storage: "module-cell"/u);
+  for (const { path, text } of sourceFiles) {
+    if (!path.includes("/backend/")) {
+      continue;
+    }
+    assert.doesNotMatch(
+      text,
+      /referencesToDeclaration|referenceAllowsNativeFunction/u,
+      `${path} reconstructs native module-function eligibility`,
+    );
+  }
+});
+
 test("provider-backed backend lanes require finalized operation facts", () => {
   const text = readFileSync(join(sourceRoot, "backend/planner/expressions.ts"), "utf8");
   const lanes = [

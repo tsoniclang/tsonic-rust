@@ -513,7 +513,9 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /sum_to\(value - 1\)/u);
-  assert.match(source, /SUM_TO_ARROW/u);
+  assert.match(source, /fn sum_to_arrow\(value: i32\) -> i32/u);
+  assert.match(source, /sum_to_arrow\(value - 1\)/u);
+  assert.doesNotMatch(source, /SUM_TO_ARROW|ModuleCell<.*sum_to_arrow/u);
   assert.equal(validateGeneratedProject("project-recursion", result.artifacts, { run: true }).status, 0);
 });
 

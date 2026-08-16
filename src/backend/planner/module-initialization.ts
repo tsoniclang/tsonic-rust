@@ -1,6 +1,7 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api";
 import type { RustTranslationContext } from "../../translate/context.js";
+import { stronglyConnectedSourceFiles } from "../../common/source-module-graph.js";
 import type { RustErrorDomain, RustItem, RustStmt } from "../rust-ast/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file-planner.js";
 
@@ -131,7 +132,7 @@ function validateRuntimeModuleGraph(
   diagnostics: TargetDiagnostic[],
 ): boolean {
   const reachable = collectReachableSourceFiles(input, entrySourceFile);
-  const components = stronglyConnectedSourceFiles(input, reachable);
+  const components = stronglyConnectedSourceFiles(input.source.navigation, reachable);
   let valid = true;
   for (const component of components) {
     const cyclic = component.length > 1 || input.source.navigation
@@ -183,62 +184,4 @@ function collectReachableSourceFiles(
   };
   visit(entrySourceFile);
   return reachable;
-}
-
-function stronglyConnectedSourceFiles(
-  input: RustTranslationContext,
-  sourceFiles: ReadonlySet<SourceFile>,
-): readonly (readonly SourceFile[])[] {
-  let nextIndex = 0;
-  const indexBySourceFile = new Map<SourceFile, number>();
-  const lowLinkBySourceFile = new Map<SourceFile, number>();
-  const stack: SourceFile[] = [];
-  const onStack = new Set<SourceFile>();
-  const components: SourceFile[][] = [];
-  const visit = (sourceFile: SourceFile): void => {
-    const index = nextIndex;
-    nextIndex += 1;
-    indexBySourceFile.set(sourceFile, index);
-    lowLinkBySourceFile.set(sourceFile, index);
-    stack.push(sourceFile);
-    onStack.add(sourceFile);
-    for (const dependency of input.source.navigation.moduleDependencies(sourceFile)) {
-      const target = dependency.sourceFile;
-      if (!sourceFiles.has(target)) {
-        continue;
-      }
-      const targetIndex = indexBySourceFile.get(target);
-      if (targetIndex === undefined) {
-        visit(target);
-        lowLinkBySourceFile.set(
-          sourceFile,
-          Math.min(lowLinkBySourceFile.get(sourceFile)!, lowLinkBySourceFile.get(target)!),
-        );
-      } else if (onStack.has(target)) {
-        lowLinkBySourceFile.set(
-          sourceFile,
-          Math.min(lowLinkBySourceFile.get(sourceFile)!, targetIndex),
-        );
-      }
-    }
-    if (lowLinkBySourceFile.get(sourceFile) !== index) {
-      return;
-    }
-    const component: SourceFile[] = [];
-    while (stack.length > 0) {
-      const member = stack.pop()!;
-      onStack.delete(member);
-      component.push(member);
-      if (member === sourceFile) {
-        break;
-      }
-    }
-    components.push(component);
-  };
-  for (const sourceFile of sourceFiles) {
-    if (!indexBySourceFile.has(sourceFile)) {
-      visit(sourceFile);
-    }
-  }
-  return components;
 }

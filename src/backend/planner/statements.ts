@@ -111,6 +111,7 @@ import { planRustBindingPattern } from "./binding-patterns.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import {
   planRustNonConsumingValue,
+  planRustSharedReceiver,
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
   rustLocationStorageForDeclaration,
@@ -1178,7 +1179,9 @@ function planExpressionAsStatement(
         const plannedReceiver = receiverNode === undefined
           ? undefined
           : planExpression(receiverNode, context);
-        const receiver = plannedReceiver;
+        const receiver = receiverNode === undefined || plannedReceiver === undefined
+          ? plannedReceiver
+          : planRustSharedReceiver(receiverNode, plannedReceiver, context);
         if (receiver === undefined) {
           return undefined;
         }
@@ -1751,11 +1754,14 @@ function planRustSourceAccessorAssignment(
     const plannedReceiver = receiverNode === undefined
       ? undefined
       : planExpression(receiverNode, context);
-    if (plannedReceiver === undefined) {
+    if (receiverNode === undefined || plannedReceiver === undefined) {
       return undefined;
     }
     const receiverName = allocateRustSyntheticName(context.syntheticNames, "accessor_receiver");
-    bindings.push({ name: receiverName, value: plannedReceiver });
+    bindings.push({
+      name: receiverName,
+      value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+    });
     receiver = { kind: "path", path: receiverName };
   }
   let current: RustExpr | undefined;

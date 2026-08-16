@@ -101,7 +101,7 @@ export function main(): void {
   validateGeneratedProject("callable-throw", result.artifacts, { run: true });
 });
 
-test("fallible top-level callable values keep module initialization infallible", { timeout: 300_000 }, () => {
+test("fallible direct-only top-level callables use native functions without fallible initialization", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "callable_top_level" } },
@@ -132,7 +132,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
+  assert.match(source, /fn parse_positive\(value: i32\) -> rt::TsonicResult<i32>/u);
+  assert.doesNotMatch(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
   assert.match(source, /Err\(rt::TsonicError::from\(rt::JsError::error\("negative"\)\)\)/u);
   validateGeneratedProject("callable-top-level", result.artifacts, { run: true });
 });

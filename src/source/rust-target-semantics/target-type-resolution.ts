@@ -12,7 +12,10 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
-import type { SourceFileSemantics } from "@tsonic/target-api";
+import {
+  sourceNodesEqual,
+  type SourceFileSemantics,
+} from "@tsonic/target-api";
 import {
   ArrayTypeNode_ElementType,
   Node_Initializer,
@@ -350,7 +353,12 @@ function resolveRustTargetTypeSyntax(
   if (sourceType !== undefined) {
     return sourceType;
   }
-  const typeParameter = resolveSourceTypeParameter(symbol, context);
+  const referencedDeclaration = context.source.navigation.sourceReferenceFor(node)?.declaration;
+  const typeParameter = resolveSourceTypeParameter(
+    symbol,
+    referencedDeclaration,
+    context,
+  );
   if (typeParameter !== undefined) {
     return typeParameter;
   }
@@ -509,7 +517,7 @@ function resolveRustTargetType(
       return sourceType;
     }
 
-    const typeParameter = resolveSourceTypeParameter(symbol, context);
+    const typeParameter = resolveSourceTypeParameter(symbol, undefined, context);
     if (typeParameter !== undefined) {
       return typeParameter;
     }
@@ -710,12 +718,17 @@ function resolveCallableType(
 
 function resolveSourceTypeParameter(
   symbol: Symbol | undefined,
+  referencedDeclaration: Node | undefined,
   context: RustTargetTypeResolutionContext,
 ): TargetTypeRef | undefined {
-  if (symbol === undefined) {
+  const symbolDeclaration = symbol === undefined
+    ? undefined
+    : context.checker.getPrimarySymbolDeclaration(symbol);
+  if (referencedDeclaration !== undefined && symbolDeclaration !== undefined &&
+    !sourceNodesEqual(context.ast, referencedDeclaration, symbolDeclaration)) {
     return undefined;
   }
-  const declaration = context.checker.getPrimarySymbolDeclaration(symbol);
+  const declaration = referencedDeclaration ?? symbolDeclaration;
   if (declaration === undefined || context.ast.kindName(declaration) !== "KindTypeParameter") {
     return undefined;
   }

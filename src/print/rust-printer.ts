@@ -1736,8 +1736,10 @@ function printRustExprFitted(
       const flatFormatArguments = expression.args.map(printRustExpr).join(", ");
       const fittedFormatArguments = expression.args.length === 0
         ? []
-        : !flatFormatArguments.includes("\n") && renderedFits(flatFormatArguments, argumentIndent.length)
-        ? [`${argumentIndent}${flatFormatArguments}`]
+        : expression.args.every(rustFormatArgumentIsAtomic) &&
+            !flatFormatArguments.includes("\n") &&
+            renderedFits(flatFormatArguments, argumentIndent.length)
+          ? [`${argumentIndent}${flatFormatArguments}`]
         : expression.args.map((argument, index) =>
           appendToLastLine(
             `${argumentIndent}${printRustExprFitted(argument, depth + 1, argumentIndent.length)}`,
@@ -1947,7 +1949,7 @@ function printRustExprFitted(
         if (attached.includes("\n") &&
           (chain === undefined || attachedArgumentsPreferExpansion ||
             !rustMethodChainBreaksReceiverWhenExpanded(chain)) &&
-          (!columnRequiresVerticalLayout || attachedArgumentsPreferExpansion) &&
+          !columnRequiresVerticalLayout &&
           (!verticalLayout ||
           chain !== undefined && (!rustMethodChainContainsClosure(chain) ||
             expression.args.length === 1 && expression.args[0]?.kind === "tuple-literal"))) {
@@ -2053,10 +2055,20 @@ function printRustExprFitted(
         : `${prefix}\n${body}\n${indentText(depth)}}`;
     }
     case "await": {
+      const chain = rustMethodChain(expression);
+      if (chain !== undefined && flat.length > rustMethodChainWidth) {
+        return printFittedMethodChain(
+          chain,
+          depth,
+          column,
+          true,
+          methodChainContinuationIndent,
+        );
+      }
       const rendered = printRustExprFitted(expression.expr, depth, column);
       const attached = appendToLastLine(rendered, ".await");
       return !rendered.includes("\n") && renderedFits(attached, column) &&
-          printRustExpr(expression.expr).length <= rustMethodChainWidth
+          flat.length <= rustMethodChainWidth
         ? attached
         : `${rendered}\n${indentText(depth + 1)}.await`;
     }
@@ -2542,6 +2554,14 @@ function printRustLetInitializer(
       depth + 1,
       continuationIndent.length,
     );
+    const collectionCallContinuation = printRustSingleCollectionCallContinuation(
+      initializer,
+      depth + 1,
+      continuationIndent.length,
+    );
+    if (collectionCallContinuation !== undefined) {
+      return `${prefix.trimEnd()}\n${continuationIndent}${collectionCallContinuation};`;
+    }
     const compactContinuationWidth = continuationIndent.length + firstLine(continuation).length + 1;
     const longBindingPrefix = prefix.length > 40;
     const methodChain = rustMethodChain(initializer);
@@ -2616,6 +2636,43 @@ function printRustLetInitializer(
     return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
   }
   return `${prefix}${printRustExprFitted(initializer, depth, prefix.length + 1)};`;
+}
+
+function printRustSingleCollectionCallContinuation(
+  initializer: RustExpr,
+  depth: number,
+  column: number,
+): string | undefined {
+  const invocation = initializer.kind === "call"
+    ? { callable: initializer.path, arguments: initializer.args }
+    : initializer.kind === "associated-call"
+      ? {
+          callable: `${printRustAssociatedOwner(initializer.owner)}::${initializer.method}`,
+          arguments: initializer.args,
+        }
+      : undefined;
+  const argument = invocation?.arguments.length === 1
+    ? invocation.arguments[0]
+    : undefined;
+  if (invocation === undefined || argument === undefined ||
+    (argument.kind !== "vec-literal" && argument.kind !== "slice-literal") ||
+    argument.elements.length !== 1) {
+    return undefined;
+  }
+  const flat = printRustExpr(initializer);
+  const argumentFlat = printRustExpr(argument);
+  const argumentIndent = indentText(depth + 1);
+  if (flat.includes("\n") || argumentFlat.includes("\n") ||
+    renderedFits(`${flat};`, column) ||
+    !renderedFits(`${invocation.callable}(`, column) ||
+    !renderedFits(`${argumentFlat},`, argumentIndent.length)) {
+    return undefined;
+  }
+  return [
+    `${invocation.callable}(`,
+    `${argumentIndent}${argumentFlat},`,
+    `${indentText(depth)})`,
+  ].join("\n");
 }
 
 function printRustFlatLetInitializer(
