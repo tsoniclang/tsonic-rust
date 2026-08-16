@@ -163,6 +163,10 @@ export function greet(name: string): string {
 export function isEmpty(text: string): boolean {
   return text === "";
 }
+
+export function isNotEmpty(text: string): boolean {
+  return "" !== text;
+}
 `,
     },
   });
@@ -170,7 +174,9 @@ export function isEmpty(text: string): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /format!\("\{\}\{\}", String::from\("hello "\), name\)/u);
-  assert.match(text, /text == ""/u);
+  assert.match(text, /text\.is_empty\(\)/u);
+  assert.match(text, /!text\.is_empty\(\)/u);
+  assert.doesNotMatch(text, /(?:==|!=) ""/u);
 });
 
 test("module imports and exports lower to crate-qualified calls", () => {

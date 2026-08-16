@@ -95,7 +95,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceBindingPath, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -2976,6 +2976,17 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     if (booleanComparison !== undefined) {
       return booleanComparison;
     }
+    const emptyStringComparison = planEmptyStringComparison(
+      fact.operator,
+      comparisonLeft,
+      comparisonRight,
+      leftNode,
+      rightNode,
+      context,
+    );
+    if (emptyStringComparison !== undefined) {
+      return emptyStringComparison;
+    }
     return {
       kind: "binary",
       operator: fact.operator,
@@ -3041,6 +3052,40 @@ export function planRustOperatorCallExpression(
     args: operands as readonly RustExpr[],
   };
   return fact.fallible ? { kind: "try", expr: call, errorDomain: "runtime" } : call;
+}
+
+function planEmptyStringComparison(
+  operator: string,
+  left: RustExpr,
+  right: RustExpr,
+  leftNode: Node | undefined,
+  rightNode: Node | undefined,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (operator !== "==" && operator !== "!=") {
+    return undefined;
+  }
+  const emptyLiteral = (expression: RustExpr): boolean =>
+    (expression.kind === "string-literal" || expression.kind === "str-literal") &&
+    expression.value.length === 0;
+  const selected = emptyLiteral(left)
+    ? { expression: right, node: rightNode }
+    : emptyLiteral(right)
+      ? { expression: left, node: leftNode }
+      : undefined;
+  if (selected?.node === undefined ||
+    !isRustStringCarrier(expressionCarrier(selected.node, context))) {
+    return undefined;
+  }
+  const isEmpty: RustExpr = {
+    kind: "method-call",
+    receiver: selected.expression,
+    method: "is_empty",
+    args: [],
+  };
+  return operator === "=="
+    ? isEmpty
+    : { kind: "unary", operator: "!", operand: isEmpty };
 }
 
 function planBooleanLiteralComparison(

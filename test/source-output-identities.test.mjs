@@ -90,6 +90,64 @@ test("source path collisions receive local readable suffixes without hash names"
   );
 });
 
+test("source path allocation reserves sibling bases before assigning collision suffixes", () => {
+  const files = [
+    fakeSourceFile({ fileName: "/project/foo-bar.ts" }),
+    fakeSourceFile({ fileName: "/project/foo_bar.ts" }),
+    fakeSourceFile({ fileName: "/project/foo_bar_2.ts" }),
+  ];
+  const plan = planRustSourceOutputIdentities({
+    ast: fakeAstReader(files),
+    sourceFiles: files,
+    paths: {
+      projectFilePath: "/project/tsonic.json",
+      projectRoot: "/project",
+      outputRoot: "/project/out",
+      targetOutputRoot: "/project/out/rust",
+    },
+  });
+
+  assert.equal(plan.kind, "accepted");
+  assert.equal(plan.identities.get("/project/foo_bar.ts")?.moduleName, "foo_bar");
+  assert.equal(plan.identities.get("/project/foo_bar_2.ts")?.moduleName, "foo_bar_2");
+  assert.equal(plan.identities.get("/project/foo-bar.ts")?.moduleName, "foo_bar_3");
+});
+
+test("a same-named child receives a readable non-inception module identity", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { parentValue } from "./template.js";
+import { childValue } from "./template/template.js";
+
+export function combined(): string {
+  return parentValue() + childValue();
+}
+`,
+      "template.ts": `
+export function parentValue(): string { return "parent"; }
+`,
+      "template/template.ts": `
+export function childValue(): string { return "child"; }
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.artifacts.map((artifact) => artifact.path), [
+    "Cargo.toml",
+    "src/lib.rs",
+    "src/index.rs",
+    "src/template.rs",
+    "src/template/template_2.rs",
+  ]);
+  assert.match(artifactText(result, "src/template.rs"), /pub mod template_2;/u);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /crate::template::parent_value\(\).*crate::template::template_2::child_value\(\)/su,
+  );
+});
+
 test("an authored parent module owns its child declaration", () => {
   const { result } = compileRust({
     files: {

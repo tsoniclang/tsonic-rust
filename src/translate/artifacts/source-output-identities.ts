@@ -203,7 +203,10 @@ function sourceModuleSegments(relativeSourcePath: string): readonly string[] | u
     : Object.freeze(segments);
 }
 
-function assignRustModuleSegmentNames(node: ModuleSegmentNode): void {
+function assignRustModuleSegmentNames(
+  node: ModuleSegmentNode,
+  parentRustName?: string,
+): void {
   const groups = new Map<string, { sourceName: string; node: ModuleSegmentNode }[]>();
   for (const [sourceName, child] of node.children) {
     const base = rustModuleSegmentBase(sourceName);
@@ -211,17 +214,42 @@ function assignRustModuleSegmentNames(node: ModuleSegmentNode): void {
     group.push({ sourceName, node: child });
     groups.set(base, group);
   }
-  for (const [base, group] of groups) {
+  const reservedBaseNames = new Set(groups.keys());
+  const usedNames = new Set<string>();
+  for (const [base, group] of [...groups].sort(([left], [right]) => compareNames(left, right))) {
     group.sort((left, right) => compareNames(left.sourceName, right.sourceName));
     const canonicalIndex = group.findIndex((entry) => entry.sourceName === base);
     if (canonicalIndex > 0) {
       const [canonical] = group.splice(canonicalIndex, 1);
       group.unshift(canonical!);
     }
-    group.forEach((entry, index) => {
-      entry.node.rustName = index === 0 ? base : `${base}_${index + 1}`;
-      assignRustModuleSegmentNames(entry.node);
-    });
+    for (const [index, entry] of group.entries()) {
+      const preserveBase = index === 0 && base !== parentRustName;
+      const rustName = preserveBase
+        ? base
+        : allocateRustModuleSegmentName(base, reservedBaseNames, usedNames, parentRustName);
+      entry.node.rustName = rustName;
+      usedNames.add(rustName);
+      assignRustModuleSegmentNames(entry.node, rustName);
+    }
+  }
+}
+
+function allocateRustModuleSegmentName(
+  base: string,
+  reservedBaseNames: ReadonlySet<string>,
+  usedNames: ReadonlySet<string>,
+  parentRustName: string | undefined,
+): string {
+  let suffix = 2;
+  while (true) {
+    const candidate = `${base}_${suffix}`;
+    if (candidate !== parentRustName &&
+      !reservedBaseNames.has(candidate) &&
+      !usedNames.has(candidate)) {
+      return candidate;
+    }
+    suffix += 1;
   }
 }
 
