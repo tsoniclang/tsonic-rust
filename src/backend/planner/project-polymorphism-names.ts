@@ -23,7 +23,7 @@ export function rustProjectRootName(
 export function rustProjectTypeParameters(
   definition: RustProjectTypeDefinition,
 ): readonly RustTypeParameter[] {
-  return definition.typeParameterNames.map((name) => ({
+  return definition.targetTypeParameterNames.map((name) => ({
     name,
     bounds: [
       { kind: "trait", path: "Clone" },

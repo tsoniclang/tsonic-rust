@@ -1,14 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import {
-  KindIdentifier,
-  Node_Name,
   Node_Type,
 } from "../../common/source-ast.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
 import type { RustBlock, RustItem, RustTypeParameter } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustPublicName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
@@ -60,10 +58,8 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
     ));
     return undefined;
   }
-  const nameNode = Node_Name(ast, node);
-  const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
   const isExported = ast.hasModifierKind(node, "export");
-  const name = rustPublicName(sourceName);
+  const name = outerContext.input.names.nameForDeclaration(node) ?? "";
   let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -83,7 +79,7 @@ export function planFunctionDeclaration(node: Node, outerContext: RustPlanContex
       ));
       return undefined;
     }
-    const typeParameterName = ast.text(ast.name(typeParameter) ?? typeParameter);
+    const typeParameterName = context.input.names.nameForDeclaration(typeParameter) ?? "";
     if (!isValidRustIdentifier(typeParameterName)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, typeParameter),

@@ -234,6 +234,7 @@ export function rustTypeFromCarrierInContext(
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
     readonly usedAliases?: Set<string>;
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly input: { readonly names: import("../../common/rust-name-plan.js").RustNamePlan };
   },
 ): RustType | undefined {
   const selectedCarrier = carrier === undefined || context.typeParameterSubstitutions === undefined
@@ -244,7 +245,10 @@ export function rustTypeFromCarrierInContext(
     if (moduleName === undefined) {
       return undefined;
     }
-    return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
+    const typeName = context.input.names.nameForSourceType(value.fileName, value.typeName);
+    return typeName === undefined
+      ? undefined
+      : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
   });
   collectAliasesFromRustType(rendered, (path) => {
     registerAliasFromPath(context, path);
@@ -259,6 +263,7 @@ export function rustReturnTypeFromCarrierInContext(
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
     readonly usedAliases?: Set<string>;
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly input: { readonly names: import("../../common/rust-name-plan.js").RustNamePlan };
   },
 ): RustType | undefined {
   const selectedCarrier = carrier === undefined || context.typeParameterSubstitutions === undefined
@@ -269,7 +274,10 @@ export function rustReturnTypeFromCarrierInContext(
     if (moduleName === undefined) {
       return undefined;
     }
-    return moduleName === context.moduleName ? value.typeName : `crate::${moduleName}::${value.typeName}`;
+    const typeName = context.input.names.nameForSourceType(value.fileName, value.typeName);
+    return typeName === undefined
+      ? undefined
+      : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
   });
   collectAliasesFromRustType(rendered, (path) => {
     registerAliasFromPath(context, path);

@@ -10,12 +10,14 @@ import type {
   TargetSourceProgram,
 } from "@tsonic/target-api";
 import type { RustSemanticModel } from "./model.js";
+import type { RustNamePlan } from "../common/rust-name-plan.js";
 
 export interface RustSourcePolicyContext {
   readonly source: TargetSourceProgram;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustSemanticModel;
+  readonly names: RustNamePlan;
   readonly diagnostics: TargetDiagnostic[];
   semantics(sourceFile: SourceFile): SourceFileSemantics;
   semanticsFor(node: Node): SourceFileSemantics;

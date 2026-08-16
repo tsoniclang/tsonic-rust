@@ -34,7 +34,6 @@ import {
   diagnosticInput,
   isValidRustIdentifier,
   rustSourceBindingPath,
-  rustSourceName,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustModuleCellAccess } from "./module-storage.js";
@@ -259,7 +258,7 @@ export function rustRawLocationRoot(
   if (binding === undefined) {
     return undefined;
   }
-  const name = rustSourceName(binding.sourceName);
+  const name = context.input.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
   if (!isValidRustIdentifier(name) ||
     rustLocationStorageForReference(expression, context) === undefined) {
     return undefined;

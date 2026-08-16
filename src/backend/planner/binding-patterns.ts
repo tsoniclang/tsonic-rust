@@ -33,7 +33,6 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnos
 import {
   diagnosticInput,
   isValidRustIdentifier,
-  rustSourceName,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { allocateRustSyntheticName } from "./synthetic-names.js";
@@ -99,7 +98,7 @@ export function planRustBindingPattern(
       return undefined;
     }
     if (nameKind === KindIdentifier) {
-      const bindingName = rustSourceName(context.input.ast.text(name));
+      const bindingName = context.input.names.nameForDeclaration(element) ?? "";
       if (!isValidRustIdentifier(bindingName)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, name),

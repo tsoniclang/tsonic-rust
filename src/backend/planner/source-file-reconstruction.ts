@@ -13,6 +13,7 @@ import type {
   RustArtifactSnapshot,
 } from "../../translate/artifacts/index.js";
 import type { RustTranslationContext } from "../../translate/context.js";
+import type { RustSourceFileOutputIdentity } from "../../translate/artifacts/source-output-identities.js";
 import {
   rustSourceFileContractCandidate,
 } from "./source-file-artifact-contract.js";
@@ -28,7 +29,7 @@ const maximumReconstructionsPerSourceFile = 32;
 
 export function reconstructRustSourceFiles(
   input: RustTranslationContext,
-  moduleNameByFileName: ReadonlyMap<string, string>,
+  identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
   diagnostics: TargetDiagnostic[],
 ): readonly PlannedRustSourceFile[] | undefined {
   const sourceFilesByOwner = new Map<string, SourceFile>();
@@ -79,8 +80,8 @@ export function reconstructRustSourceFiles(
         return input.artifacts.reconstructArtifact(owner);
       }
       const fileName = input.ast.getFileName(sourceFile);
-      const moduleName = moduleNameByFileName.get(fileName);
-      if (moduleName === undefined) {
+      const identity = identitiesByFileName.get(fileName);
+      if (identity === undefined) {
         return {
           kind: "rejected",
           code: "RUST_SOURCE_FILE_MODULE_IDENTITY_MISSING",
@@ -92,8 +93,12 @@ export function reconstructRustSourceFiles(
       const captured = input.artifacts.captureDependencies(owner, () =>
         planRustSourceFile(
           sourceFile,
-          moduleName,
-          moduleNameByFileName,
+          identity.moduleName,
+          new Map(
+            [...identitiesByFileName].map(([candidateFileName, candidate]) =>
+              [candidateFileName, candidate.moduleName] as const),
+          ),
+          identity.childModuleNames,
           input,
           candidateDiagnostics,
         )

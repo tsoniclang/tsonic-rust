@@ -43,7 +43,7 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
 
   const plannedSources = reconstructRustSourceFiles(
     input,
-    moduleNameByFileName,
+    identityPlan.identities,
     diagnostics,
   );
   if (plannedSources === undefined) {
@@ -84,7 +84,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
 
   const sortedSources = [...plannedSources].sort((left, right) =>
     left.moduleName.localeCompare(right.moduleName, "en"));
-  const sortedModuleNames = sortedSources.map((source) => source.moduleName);
+  const sortedTopLevelModuleNames = [...new Set(
+    [...identityPlan.identities.values()].map((identity) => identity.moduleSegments[0]!),
+  )].sort(compareRustArtifactNames);
   const programErrorModel = planRustProgramErrorModule(
     input,
     moduleNameByFileName,
@@ -118,7 +120,7 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
             visibility: "public" as const,
             attrs: ["#[doc(hidden)]"],
           }]),
-      ...sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
+      ...sortedTopLevelModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
       ...(crateInitializer === undefined ? [] : [crateInitializer.item]),
     ],
   );
@@ -129,6 +131,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
       printRustSourceFile(programErrorModel),
     ));
   }
+  const sourceArtifacts: TargetSourceFile[] = planSyntheticModuleArtifacts(
+    identityPlan.identities,
+  );
   for (const source of sortedSources) {
     const identity = identityPlan.identities.get(input.ast.getFileName(source.sourceFile));
     if (identity === undefined) {
@@ -141,11 +146,13 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
       });
       continue;
     }
-    artifacts.push(rustSourceArtifact(
+    sourceArtifacts.push(rustSourceArtifact(
       identity.artifactPath,
       printRustSourceFile(source.model),
     ));
   }
+  sourceArtifacts.sort((left, right) => compareRustArtifactNames(left.path, right.path));
+  artifacts.push(...sourceArtifacts);
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
@@ -263,6 +270,42 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
     artifacts.push(rustSourceArtifact("src/main.rs", printRustSourceFile(createRustSourceFile([mainItem]))));
   }
   return { artifacts, diagnostics: [] };
+}
+
+function planSyntheticModuleArtifacts(
+  identities: ReadonlyMap<string, import("../../translate/artifacts/source-output-identities.js").RustSourceFileOutputIdentity>,
+): TargetSourceFile[] {
+  const authoredModules = new Set(
+    [...identities.values()].map((identity) => identity.moduleName),
+  );
+  const childNamesByParent = new Map<string, Set<string>>();
+  for (const identity of identities.values()) {
+    for (let depth = 1; depth < identity.moduleSegments.length; depth += 1) {
+      const parent = identity.moduleSegments.slice(0, depth).join("::");
+      const children = childNamesByParent.get(parent) ?? new Set<string>();
+      children.add(identity.moduleSegments[depth]!);
+      childNamesByParent.set(parent, children);
+    }
+  }
+  return [...childNamesByParent]
+    .filter(([moduleName]) => !authoredModules.has(moduleName))
+    .sort(([left], [right]) => compareRustArtifactNames(left, right))
+    .map(([moduleName, children]) => rustSourceArtifact(
+      `src/${moduleName.split("::").join("/")}.rs`,
+      printRustSourceFile(createRustSourceFile(
+        [...children]
+          .sort(compareRustArtifactNames)
+          .map((name): RustItem => ({
+            kind: "mod-decl",
+            name,
+            visibility: "public",
+          })),
+      )),
+    ));
+}
+
+function compareRustArtifactNames(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function rustSourceArtifact(path: string, text: string): TargetSourceFile {

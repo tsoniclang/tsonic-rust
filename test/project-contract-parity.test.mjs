@@ -116,9 +116,9 @@ export function main(): void {
   assert.match(source, /__tsonic_field_copied(?:_[0-9]+)? = __tsonic_field_label(?:_[0-9]+)?\.clone\(\);/u);
   assert.match(source, /__tsonic_field_second(?:_[0-9]+)? = __tsonic_base_state\.1 \+ 2;/u);
   assert.match(source, /fn letter\(\) -> u16 \{\s*65\s*\}/u);
-  assert.match(source, /fn signedMaximum\(\) -> i128/u);
-  assert.match(source, /fn signedMinimum\(\) -> i128/u);
-  assert.match(source, /fn unsignedMaximum\(\) -> u128/u);
+  assert.match(source, /fn signed_maximum\(\) -> i128/u);
+  assert.match(source, /fn signed_minimum\(\) -> i128/u);
+  assert.match(source, /fn unsigned_maximum\(\) -> u128/u);
   assert.match(source, /unsafe fn __tsonic_virtual_/u);
 
   const run = validateGeneratedProject("project-contract-parity", result.artifacts, { run: true });

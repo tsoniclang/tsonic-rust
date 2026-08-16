@@ -52,7 +52,6 @@ import {
 } from "./callable-parameters.js";
 import {
   isValidRustIdentifier,
-  rustSourceName,
 } from "./plan-context.js";
 import {
   allocateRustSyntheticName,
@@ -599,7 +598,7 @@ function planImplicitProjectConstructorParameters(
           abi.parameterCarrier,
         );
     const type = rustTypeFromCarrierInContext(carrier, context);
-    const name = rustSourceName(parameter.parameterName);
+    const name = context.input.names.nameForDeclaration(parameter.parameterDeclaration) ?? "";
     if (type === undefined || !isValidRustIdentifier(name)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, parameter.parameterDeclaration),

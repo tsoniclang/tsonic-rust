@@ -17,6 +17,7 @@ import type { RustAssignmentOperator } from "../common/rust-syntax.js";
 const rustFormatWidth = 100;
 const rustStructLiteralWidth = 18;
 const rustNestedCallWidth = 60;
+const rustInlineFormatArgumentWidth = 40;
 const rustMethodChainWidth = 60;
 const rustNestedMethodFirstSegmentWidth = 64;
 const rustInlineFieldReceiverWidth = 28;
@@ -1850,15 +1851,19 @@ function printRustExprFitted(
     }
     case "string-concat": {
       const complexPartCount = expression.parts.filter((part) =>
-        part.kind === "string-literal" || !rustFormatArgumentCanShareLine(part)).length;
+        !rustFormatArgumentCanShareLine(part)).length;
       if (expression.parts.length <= 4 &&
-        (expression.parts.length < 3 || complexPartCount <= 1) && !flat.includes("\n") &&
+        (complexPartCount === 0 || column + flat.length <= rustNestedCallWidth) &&
+        !flat.includes("\n") &&
         renderedFits(flat, column)) {
         return flat;
       }
       const trailingPart = expression.parts[expression.parts.length - 1];
       const leadingParts = expression.parts.slice(0, -1).map(printRustExpr);
-      if (trailingPart !== undefined && leadingParts.every((part) => !part.includes("\n"))) {
+      if (trailingPart !== undefined &&
+        (trailingPart.kind === "block" ||
+          printRustExpr(trailingPart).length <= rustInlineFormatArgumentWidth) &&
+        leadingParts.every((part) => !part.includes("\n"))) {
         const prefix = `format!("${expression.parts.map(() => "{}").join("")}", ${
           leadingParts.length === 0 ? "" : `${leadingParts.join(", ")}, `
         }`;
@@ -4180,6 +4185,9 @@ function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
     case "path":
     case "associated-value":
       return true;
+    case "call":
+    case "associated-call":
+      return expression.args.every(rustFormatArgumentCanShareLine);
     case "field":
       return rustFormatArgumentCanShareLine(expression.receiver);
     case "index":

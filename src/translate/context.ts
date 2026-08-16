@@ -40,6 +40,12 @@ import {
 import type {
   RustSafetyApplicationFactIndex,
 } from "./safety/application-fact-index.js";
+import {
+  createRustNamePlan,
+} from "../common/rust-name-plan.js";
+import type {
+  RustNamePlan,
+} from "../common/rust-name-plan.js";
 
 export interface RustTranslationContext extends TargetCompileInput {
   readonly backend: TargetBackendContext;
@@ -50,6 +56,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly projectTypes: RustProjectTypePolicyRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
+  readonly names: RustNamePlan;
   readonly diagnostics: TargetDiagnostic[];
   readonly analysis: {
     getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
@@ -80,6 +87,7 @@ export function createRustTranslationContext(
     sourceFacts: input.source.sourceFacts,
     navigation: input.source.navigation,
   });
+  const names = createRustNamePlan({ ast, sourceFiles });
   const diagnostics: TargetDiagnostic[] = [];
   const staticProviderSemantics = mergeRustProviderSemantics(
     rustBuiltInSourceTypeSemantics(),
@@ -98,6 +106,7 @@ export function createRustTranslationContext(
     artifacts,
     projectTypes,
     safetyApplications,
+    names,
     providerSemantics,
     diagnostics,
     analysis: Object.freeze({

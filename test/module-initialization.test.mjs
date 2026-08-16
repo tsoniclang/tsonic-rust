@@ -58,8 +58,8 @@ export function main(): void {
   const index = artifactText(result, "src/index.rs");
   const initializationBody = index.slice(index.indexOf("pub fn __tsonic_module_init"));
   const firstInitialization = initializationBody.indexOf("crate::state::next()");
-  const secondInitialization = initializationBody.indexOf("first.with(");
-  const thirdInitialization = initializationBody.indexOf("second.with(");
+  const secondInitialization = initializationBody.indexOf("FIRST.with(");
+  const thirdInitialization = initializationBody.indexOf("SECOND.with(");
   const finalWrite = initializationBody.lastIndexOf(".store(");
   assert.equal(firstInitialization >= 0, true);
   assert.equal(firstInitialization < secondInitialization, true);

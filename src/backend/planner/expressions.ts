@@ -92,7 +92,7 @@ import {
 } from "../../source/rust-facts/parameter-passing.js";
 import type { RustExpr, RustStmt, RustType } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustPublicName, rustSourceBindingPath, rustSourceName, sourceTypePath } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceBindingPath, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
 import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
@@ -625,14 +625,17 @@ function planExpressionInner(
           context,
         );
         const declarationModule = context.moduleNameByFileName.get(callableValue.fileName);
+        const callableName = context.input.names.nameForDeclaration(
+          callableValue.sourceDeclaration,
+        );
         if (callableType === undefined || declarationModule === undefined ||
-          !isValidRustIdentifier(callableValue.name)) {
+          callableName === undefined || !isValidRustIdentifier(callableName)) {
           return undefined;
         }
         const argumentsName = allocateRustSyntheticName(context.syntheticNames, "callable_arguments");
         const path = declarationModule === context.moduleName
-          ? callableValue.name
-          : `crate::${declarationModule}::${callableValue.name}`;
+          ? callableName
+          : `crate::${declarationModule}::${callableName}`;
         context.usedAliases?.add("rt");
         const invocation: RustExpr = {
           kind: "call",
@@ -685,7 +688,7 @@ function planExpressionInner(
         ));
         return undefined;
       }
-      const name = rustSourceName(binding.sourceName);
+      const name = context.input.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, node),
@@ -979,7 +982,7 @@ function planExpressionInner(
           return undefined;
         }
         const parameterName = bindingPattern === undefined
-          ? rustSourceName(nameNode !== undefined && nameKind === KindIdentifier ? ast.text(nameNode) : "")
+          ? context.input.names.nameForDeclaration(parameter) ?? ""
           : allocateRustSyntheticName(context.syntheticNames!, "binding_parameter");
         if (!isValidRustIdentifier(parameterName)) {
           return undefined;
@@ -1052,7 +1055,7 @@ function planExpressionInner(
         if (binding === undefined) {
           return undefined;
         }
-        const sourceName = rustSourceName(binding.sourceName);
+        const sourceName = context.input.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
         const sourcePath = rustSourceBindingPath(context, binding);
         if (!isValidRustIdentifier(sourceName)) {
           return undefined;
@@ -2586,8 +2589,9 @@ function planRustDirectUpdateTarget(
 ): RustExpr | undefined {
   const { ast } = context.input;
   if (ast.kindName(operand) === KindIdentifier) {
-    const path = rustSourceName(ast.text(operand));
-    return isValidRustIdentifier(path) ? { kind: "path", path } : undefined;
+    const binding = context.input.facts.getFact(operand, rustSourceBindingFactKey);
+    const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
+    return path !== undefined && isValidRustIdentifier(path) ? { kind: "path", path } : undefined;
   }
   const fact = context.input.facts.getFact(operand, rustTargetOperationFactKey);
   if (!rustTargetOperationIsDirectLocation(fact)) {
@@ -3959,7 +3963,7 @@ function planSelectedSourceCall(
   switch (fact.target.form) {
     case "function": {
       const moduleName = context.moduleNameByFileName.get(fact.target.fileName);
-      const targetName = rustPublicName(fact.target.name);
+      const targetName = fact.target.name;
       if (moduleName === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
@@ -3973,7 +3977,7 @@ function planSelectedSourceCall(
       break;
     }
     case "method": {
-      const targetName = rustPublicName(fact.target.name);
+      const targetName = fact.target.name;
       if (!isValidRustIdentifier(targetName)) {
         break;
       }
@@ -4083,7 +4087,7 @@ function planSelectedSourceCall(
     case "static-method": {
       const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-      const targetName = rustPublicName(fact.target.name);
+      const targetName = fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
         planned = { kind: "call", path: `${typePath}::${targetName}`, args: shaped };
       }
@@ -4092,7 +4096,7 @@ function planSelectedSourceCall(
     case "constructor": {
       const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-      const targetName = rustPublicName(fact.target.name);
+      const targetName = fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
         planned = { kind: "call", path: `${typePath}::${targetName}`, args: shaped };
       }

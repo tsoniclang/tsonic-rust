@@ -2,12 +2,10 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api";
 import {
   KindFunctionDeclaration,
-  KindIdentifier,
   KindImportDeclaration,
   KindExportDeclaration,
   KindVariableStatement,
   Node_Initializer,
-  Node_Name,
 } from "../../common/source-ast.js";
 import {
   rustFallibleFactKey,
@@ -34,7 +32,6 @@ import {
   diagnosticInput,
   isUpperSnakeName,
   isValidRustIdentifier,
-  rustSourceName,
   rustRuntimeAliasImports,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
@@ -77,6 +74,7 @@ export function planRustSourceFile(
   sourceFile: SourceFile,
   moduleName: string,
   moduleNameByFileName: ReadonlyMap<string, string>,
+  childModuleNames: readonly string[],
   input: RustTranslationContext,
   diagnostics: TargetDiagnostic[],
 ): PlannedRustSourceFile {
@@ -106,7 +104,15 @@ export function planRustSourceFile(
     sourceFile,
     moduleName,
     model: createRustSourceFile(
-      [...useItems, ...plannedModule.items],
+      [
+        ...useItems,
+        ...childModuleNames.map((name): RustItem => ({
+          kind: "mod-decl",
+          name,
+          visibility: "public",
+        })),
+        ...plannedModule.items,
+      ],
       rustAuthoredSourceInnerAttributes,
     ),
     ...(plannedModule.initialization === undefined
@@ -361,11 +367,7 @@ function planTopLevelVariableStatement(
   const items: RustItem[] = [];
   const initialization: import("../rust-ast/nodes.js").RustStmt[] = [];
   for (const declaration of declarations) {
-    const nameNode = Node_Name(ast, declaration);
-    const sourceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier
-      ? ast.text(nameNode)
-      : "";
-    const name = rustSourceName(sourceName);
+    const name = context.input.names.nameForDeclaration(declaration) ?? "";
     const initializer = Node_Initializer(ast, declaration);
     const binding = context.input.facts.getFact(declaration, rustModuleBindingFactKey);
     const rustType = rustTypeFromCarrierInContext(binding?.valueCarrier, context);

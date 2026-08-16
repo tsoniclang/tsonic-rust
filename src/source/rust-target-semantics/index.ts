@@ -661,6 +661,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
   }
   const projectTypes = context.projectTypes.initialize({
     ast,
+    names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
     resolveSelectedType(authoredTypeNode, selectedType, heritage) {
@@ -3710,9 +3711,9 @@ function applySelectedProjectSourceCall(
       };
     }
   } else if (declarationKind === KindFunctionDeclaration) {
-    const name = ast.text(ast.name(selectedDeclaration));
+    const name = walk.context.names.nameForDeclaration(selectedDeclaration);
     const fileName = ast.getFileName(ast.getSourceFile(selectedDeclaration));
-    if (name.length === 0 || fileName.length === 0) {
+    if (name === undefined || fileName.length === 0) {
       return undefined;
     }
     target = { form: "function", fileName, name };

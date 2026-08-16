@@ -1,8 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import {
-  KindIdentifier,
   Node_Initializer,
-  Node_Name,
   Node_Type,
 } from "../../common/source-ast.js";
 import type {
@@ -16,7 +14,7 @@ import type {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planBlockLike, planStatementSequence } from "./statements.js";
-import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName, rustPublicName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustTypeAliasDeclarationFactKey } from "../../source/rust-facts/keys.js";
@@ -66,8 +64,7 @@ function carrierOf(context: RustPlanContext, node: Node | undefined) {
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
   const definition = context.input.projectTypes.definitionForDeclaration(node);
-  const nameNode = Node_Name(ast, node);
-  const className = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  const className = context.input.names.nameForDeclaration(node) ?? "";
   if (!isValidRustIdentifier(className)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -137,10 +134,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       }
       const fieldNameNode = ast.name(member);
       const sourceFieldName = ast.text(fieldNameNode ?? member);
-      const privateField = fieldNameNode !== undefined && ast.is.IsPrivateIdentifier(fieldNameNode);
-      const fieldName = privateField
-        ? "private_field"
-        : rustPublicName(sourceFieldName);
+      const fieldName = context.input.names.nameForDeclaration(member) ?? "";
       const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
       const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
       if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -478,6 +472,7 @@ export function planProjectMethod(
 ): RustImplFunction | undefined {
   const { ast } = context.input;
   const sourceMethodName = options?.targetName ??
+    context.input.names.nameForDeclaration(member) ??
     rustProjectCallableTargetName(member, context.input);
   const isUnsafe = rustDeclarationRequiresUnsafe(
     member,
@@ -489,7 +484,7 @@ export function planProjectMethod(
     isUnsafe,
     context.input,
   );
-  const methodName = rustPublicName(sourceMethodName ?? "");
+  const methodName = sourceMethodName ?? "";
   if (!isValidRustIdentifier(methodName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -732,8 +727,7 @@ function borrowedGeneratorType(
 
 export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
-  const nameNode = Node_Name(ast, node);
-  const enumName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  const enumName = context.input.names.nameForDeclaration(node) ?? "";
   if (!isValidRustIdentifier(enumName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -753,7 +747,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       ));
       return undefined;
     }
-    const memberName = ast.text(ast.name(member) ?? member);
+    const memberName = context.input.names.nameForDeclaration(member) ?? "";
     if (!isValidRustIdentifier(memberName)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, member),
@@ -796,8 +790,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
 export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
   const definition = context.input.projectTypes.definitionForDeclaration(node);
-  const nameNode = Node_Name(ast, node);
-  const interfaceName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  const interfaceName = context.input.names.nameForDeclaration(node) ?? "";
   if (!isValidRustIdentifier(interfaceName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -850,7 +843,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    const fieldName = rustPublicName(ast.text(ast.name(member) ?? member));
+    const fieldName = context.input.names.nameForDeclaration(member) ?? "";
     const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
     const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
     if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -904,8 +897,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
   const { ast } = context.input;
   const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
   const fact = context.input.facts.getFact(node, rustTypeAliasDeclarationFactKey);
-  const nameNode = Node_Name(ast, node);
-  const aliasName = nameNode !== undefined && ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
+  const aliasName = context.input.names.nameForDeclaration(node) ?? "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),

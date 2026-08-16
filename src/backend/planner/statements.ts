@@ -69,7 +69,7 @@ import {
   Node_Name,
   Node_Type,
 } from "../../common/source-ast.js";
-import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustResourceManagementFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import { rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustResourceManagementFactKey, rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
 import type { RustResourceManagementFact, RustTargetOperationFact } from "../../source/rust-facts/keys.js";
 import {
   isRustBoolCarrier,
@@ -98,7 +98,7 @@ import {
   sourceStaticFieldSelectedOperationMatches,
   sourceUnionFieldSelectedOperationMatches,
 } from "./expressions.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceName } from "./plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath } from "./plan-context.js";
 import type { RustCompletionBoundary, RustControlTarget, RustLoopTarget, RustPlanContext } from "./plan-context.js";
 import { allocateRustSyntheticName } from "./synthetic-names.js";
 import { planRustBindingPattern } from "./binding-patterns.js";
@@ -330,10 +330,7 @@ function planResourceDeclarationScope(
     return undefined;
   }
   const declarations = planVariableStatement(statement, context);
-  const nameNode = Node_Name(context.input.ast, declaration);
-  const resourceName = nameNode === undefined
-    ? ""
-    : rustSourceName(context.input.ast.text(nameNode));
+  const resourceName = context.input.names.nameForDeclaration(declaration) ?? "";
   if (declarations === undefined || !isValidRustIdentifier(resourceName)) {
     return undefined;
   }
@@ -746,8 +743,7 @@ function planVariableDeclaration(
   if (nameNode !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern)) {
     return planBindingVariableDeclaration(declaration, nameNode, context);
   }
-  const sourceName = nameNode === undefined ? "" : ast.kindName(nameNode) === KindIdentifier ? ast.text(nameNode) : "";
-  const name = rustSourceName(sourceName);
+  const name = context.input.names.nameForDeclaration(declaration) ?? "";
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -963,7 +959,11 @@ function planExpressionAsStatement(
         ? storageOverride.expression
         : ast.kindName(left) === KindIdentifier
         ? (() => {
-            const path = rustSourceName(ast.text(left));
+            const declaration = context.input.facts.getFact(
+              left,
+              rustSourceBindingFactKey,
+            )?.sourceDeclaration;
+            const path = context.input.names.nameForDeclaration(declaration) ?? "";
             return isValidRustIdentifier(path) ? { kind: "path" as const, path } : undefined;
           })()
         : rustTargetOperationIsDirectLocation(
@@ -2238,10 +2238,7 @@ function planForStatement(
       : [{ kind: "scope", body: { statements: [...initStatements, ...loop.statements] } }];
   }
   const fact = resourceFactForPlanning(resourceDeclaration, context);
-  const nameNode = Node_Name(context.input.ast, resourceDeclaration);
-  const resourceName = nameNode === undefined
-    ? ""
-    : rustSourceName(context.input.ast.text(nameNode));
+  const resourceName = context.input.names.nameForDeclaration(resourceDeclaration) ?? "";
   if (fact === undefined || !isValidRustIdentifier(resourceName)) {
     return undefined;
   }
@@ -2567,7 +2564,7 @@ function planForOfStatement(
     : undefined;
   let binding = "";
   if (bindingNameNode !== undefined && bindingNameKind === KindIdentifier) {
-    binding = rustSourceName(ast.text(bindingNameNode));
+    binding = context.input.names.nameForDeclaration(bindingDeclaration) ?? "";
   } else if (bindingPattern !== undefined && context.syntheticNames !== undefined) {
     binding = allocateRustSyntheticName(context.syntheticNames, "binding_element");
   }
@@ -2866,11 +2863,7 @@ function planForInBinding(
   const declarations = collectVariableDeclarations(initializer, context);
   if (declarations.length === 1) {
     const declaration = declarations[0]!;
-    const nameNode = Node_Name(context.input.ast, declaration);
-    const sourceName = nameNode === undefined || context.input.ast.kindName(nameNode) !== KindIdentifier
-      ? ""
-      : context.input.ast.text(nameNode);
-    const directName = rustSourceName(sourceName);
+    const directName = context.input.names.nameForDeclaration(declaration) ?? "";
     const carrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
     const declarationKind = context.input.ast.variableDeclarationKind(declaration);
     if (!isValidRustIdentifier(directName) || carrier === undefined ||
@@ -2887,8 +2880,11 @@ function planForInBinding(
   if (context.input.ast.kindName(initializer) !== KindIdentifier) {
     return rejectForInBinding(initializer, context, "for-in assignment targets require one exact identifier location.");
   }
-  const sourceName = context.input.ast.text(initializer);
-  const assignmentName = rustSourceName(sourceName);
+  const assignmentDeclaration = context.input.facts.getFact(
+    initializer,
+    rustSourceBindingFactKey,
+  )?.sourceDeclaration;
+  const assignmentName = context.input.names.nameForDeclaration(assignmentDeclaration) ?? "";
   const carrier = context.input.facts.getRuntimeCarrierFact(initializer)?.carrier;
   if (!isValidRustIdentifier(assignmentName) || carrier === undefined ||
     !rustTargetTypeRefEquals(carrier, elementCarrier)) {
@@ -3028,12 +3024,12 @@ function planTryStatement(node: Node, context: RustPlanContext): readonly RustSt
     if (catchBody === undefined) {
       return undefined;
     }
-    const bindingNode = Node_Name(
-      context.input.ast,
-      CatchClause_VariableDeclaration(context.input.ast, catchClause),
-    );
+    const catchDeclaration = CatchClause_VariableDeclaration(context.input.ast, catchClause);
+    const bindingNode = Node_Name(context.input.ast, catchDeclaration);
     const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
-    let binding = bindingSource.length === 0 ? "_" : rustSourceName(bindingSource);
+    let binding = bindingSource.length === 0
+      ? "_"
+      : context.input.names.nameForDeclaration(catchDeclaration) ?? "";
     if (binding !== "_") {
       let used = false;
       const findUse = (candidate: Node): void => {
