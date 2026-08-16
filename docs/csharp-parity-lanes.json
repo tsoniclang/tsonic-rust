@@ -176,13 +176,49 @@
     "action": "record each spread projection and override in source evaluation order, evaluating every source expression once"
   },
   {
-    "id": "objects.method-members",
+    "id": "objects.contextual-method-declarations",
     "area": "objects",
     "source": "const counter: Counter = { value: 1, next() { return this.value + 1; } };",
+    "classification": "implemented",
+    "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-methods.ts",
+    "rustProof": "test/object-method-parity.test.mjs",
+    "action": "retain exact contextual declarations, this identity, captures, inheritance, recursion, and finite generic specializations"
+  },
+  {
+    "id": "objects.callable-property-values",
+    "area": "objects",
+    "source": "const counter: Counter = { value: 1, next: function () { return this.value + 1; } };",
     "classification": "implementation-gap",
     "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-methods.ts",
     "rustProof": "src/source/rust-target-semantics/index.ts",
-    "action": "lower the selected method signature to a closed callable field with exact this binding"
+    "action": "lower exact callable-valued property evidence without treating function syntax as a data field"
+  },
+  {
+    "id": "objects.method-value-operations",
+    "area": "objects",
+    "source": "const next = counter.next; counter.next = replacement;",
+    "classification": "implementation-gap",
+    "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-methods.ts",
+    "rustProof": "src/backend/planner/object-literal-implementations.ts",
+    "action": "represent methods as mutable runtime properties so reads preserve this semantics and writes replace the exact property value"
+  },
+  {
+    "id": "objects.method-spread",
+    "area": "objects",
+    "source": "const derived: Counter = { ...counter, value: 2 };",
+    "classification": "implementation-gap",
+    "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-spread.ts",
+    "rustProof": "src/backend/planner/object-literal-implementations.ts",
+    "action": "copy exact callable property storage alongside data fields in source evaluation order"
+  },
+  {
+    "id": "objects.overloaded-method-declarations",
+    "area": "objects",
+    "source": "const parser: Parser = { parse(value: string | number) { return value; } };",
+    "classification": "implementation-gap",
+    "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-methods.ts",
+    "rustProof": "src/source/rust-target-semantics/index.ts",
+    "action": "bind one authored implementation to every exact selected overload and close each target ABI independently"
   },
   {
     "id": "objects.accessor-members",

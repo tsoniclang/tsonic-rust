@@ -65,6 +65,7 @@ import {
   type PlannedRustModuleCell,
 } from "./module-storage.js";
 import { planRustClassInitialization } from "./class-static-fields.js";
+import { createRustObjectLiteralImplementationRegistry } from "./object-literal-implementations.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -147,6 +148,16 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     syntheticNames,
     "module_init",
   );
+  const objectLiteralImplementations = createRustObjectLiteralImplementationRegistry(
+    context.sourceFile,
+    { ...context, syntheticNames },
+    syntheticNames,
+  );
+  context = {
+    ...context,
+    objectLiteralImplementations,
+  };
+  items.push(...objectLiteralImplementations.items);
   const asynchronous = context.input.source.navigation.moduleHasTopLevelAwait(
     context.sourceFile,
   );

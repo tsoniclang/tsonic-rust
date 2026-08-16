@@ -832,6 +832,88 @@ test("long multiline let initializers reflow from their continuation column", ()
   );
 });
 
+test("fitting callable closures move below long let bindings without expanding", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "record_method_2",
+          mutable: false,
+          init: {
+            kind: "associated-call",
+            owner: {
+              kind: "named",
+              path: "rt::Callable",
+              typeArguments: [
+                { kind: "tuple", elements: [{ kind: "named", path: "TextReader" }] },
+                { kind: "string" },
+              ],
+            },
+            method: "new",
+            args: [{
+              kind: "closure",
+              params: [{ name: "object_this_2", mutable: false }],
+              body: {
+                kind: "call",
+                path: "String::from",
+                args: [{ kind: "str-literal", value: "seven" }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let record_method_2 =\n        rt::Callable::<\(TextReader,\), String>::new\(\|object_this_2\| String::from\("seven"\)\);/u,
+  );
+});
+
+test("short first fields stay attached when later method arguments expand", () => {
+  const receiver = { kind: "path", path: "dispatch_receiver" };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "field", receiver, name: "dispatch" },
+            method: "write_counter_value",
+            args: [{
+              kind: "binary",
+              operator: "+",
+              left: {
+                kind: "method-call",
+                receiver: { kind: "field", receiver, name: "dispatch" },
+                method: "read_counter_value",
+                args: [],
+              },
+              right: { kind: "path", path: "value" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /dispatch_receiver\.dispatch\.write_counter_value\(/u);
+  assert.doesNotMatch(source, /dispatch_receiver\n        \.dispatch/u);
+});
+
 test("borrowed method-chain let initializers reflow as one continuation", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -1452,5 +1534,37 @@ test("string concatenation preserves vertical chains inside trailing blocks", ()
   assert.match(
     source,
     /receiver_with_a_deliberately_long_name\n            \.__tsonic_state_with_a_deliberately_long_name\n            \.load_the_complete_project_state_without_inference\(\)\n            \.clone_the_exact_selected_value\(\)/u,
+  );
+});
+
+test("long struct field types use rustfmt-compatible continuation indentation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "struct",
+      name: "DispatchRoot",
+      visibility: "private",
+      derives: [],
+      fields: [{
+        name: "dispatch_identity_identity_specialization_1_implementation",
+        visibility: "private",
+        type: {
+          kind: "named",
+          path: "rt::Callable",
+          typeArguments: [{
+            kind: "tuple",
+            elements: [
+              { kind: "named", path: "Identity" },
+              { kind: "named", path: "String" },
+            ],
+          }, { kind: "named", path: "String" }],
+        },
+      }],
+    }],
+  });
+
+  assert.match(
+    source,
+    /dispatch_identity_identity_specialization_1_implementation:\n {8}rt::Callable<\(Identity, String\), String>,/u,
   );
 });

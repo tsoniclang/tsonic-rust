@@ -129,6 +129,7 @@ import {
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
+  rustClosureTargetType,
   rustJsArrayTargetType,
   rustProgramErrorTargetType,
   rustNullTargetType,
@@ -240,6 +241,7 @@ import type { RustOperationPolicyContext } from "../../policy/operations/contrac
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { selectRustResourceManagement } from "./resource-management.js";
 import {
+  rustProjectInterfaceContracts,
   rustInheritedProjectConstructor,
 } from "./project-type-policy.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
@@ -4917,6 +4919,9 @@ function resolveRecordLiteralCarrier(
       containsSpread = true;
       continue;
     }
+    if (kind === "KindMethodDeclaration") {
+      continue;
+    }
     if (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment") {
       return undefined;
     }
@@ -4933,39 +4938,59 @@ function resolveRecordLiteralCarrier(
   let resultCarrier: TargetTypeRef;
   let storage: "project-object" | "object-handle";
   let selectedFields: readonly {
+    readonly declaration?: Node;
     readonly sourceName: string;
     readonly storageIndex: number;
     readonly carrier: TargetTypeRef;
   }[];
+  let selectedMethodDeclarations: readonly Node[] = [];
   if (sourceValue?.shape === "object") {
-    const shapeDeclaration = walk.sourceTypes.declarationForCarrier(selectedExpected);
-    const layout = shapeDeclaration === undefined
+    const definition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
+    const contracts = definition === undefined
       ? undefined
-      : rustProjectObjectLayout(shapeDeclaration, ast);
-    if (layout?.kind !== "interface") {
+      : rustProjectInterfaceContracts(
+          walk.context.projectTypes,
+          definition,
+          selectedExpected,
+        );
+    if (definition?.kind !== "interface" || contracts === undefined) {
       return undefined;
     }
-    const projectFields = layout.fields.map((field) => ({
-      sourceName: field.sourceName,
-      storageIndex: field.storageIndex,
-      carrier: (() => {
+    const projectFields = contracts.flatMap((contract) => {
+      const layout = rustProjectObjectLayout(contract.definition.declaration, ast);
+      if (layout?.kind !== "interface") {
+        return [undefined];
+      }
+      return layout.fields.map((field) => {
         const declared = walk.context.facts.get(field.declaration, rustRuntimeCarrierKey)?.carrier ??
           resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration));
-        return declared === undefined
+        const carrier = declared === undefined
           ? undefined
           : walk.context.projectTypes.instantiateMemberCarrier(
               field.declaration,
               selectedExpected,
               declared,
             );
-      })(),
-    }));
-    if (projectFields.some((field) => field.carrier === undefined)) {
+        return carrier === undefined
+          ? undefined
+          : {
+              declaration: field.declaration,
+              sourceName: field.sourceName,
+              carrier,
+            };
+      });
+    }).map((field, storageIndex) =>
+      field === undefined ? undefined : { ...field, storageIndex });
+    if (projectFields.some((field) => field === undefined)) {
       return undefined;
     }
     resultCarrier = selectedExpected;
     storage = "project-object";
+    selectedMethodDeclarations = contracts.flatMap((contract) =>
+      ast.members(contract.definition.declaration).filter((member): member is Node =>
+        member !== undefined && ast.kindName(member) === "KindMethodSignature"));
     selectedFields = projectFields as readonly {
+      readonly declaration: Node;
       readonly sourceName: string;
       readonly storageIndex: number;
       readonly carrier: TargetTypeRef;
@@ -5015,6 +5040,7 @@ function resolveRecordLiteralCarrier(
     { readonly kind: "record-literal" }
   >["contributions"][number][] = [];
   const assignedStorageIndexes = new Set<number>();
+  const assignedMethodDeclarations = new Set<Node>();
   for (const property of properties) {
     const kind = ast.kindName(property);
     if (kind === KindSpreadAssignment) {
@@ -5061,9 +5087,63 @@ function resolveRecordLiteralCarrier(
       });
       continue;
     }
+    const selectedElement = walk.context.semanticsFor(property)
+      .getResolvedObjectLiteralElementInfo(property);
+    if (kind === "KindMethodDeclaration") {
+      const selectedDeclarations = selectedElement?.sourceSelectedDeclarations ?? [];
+      const selectedDeclaration = selectedElement?.sourceSelectedDeclaration;
+      const selectedMemberCarrier = selectedElement === undefined || selectedDeclaration === undefined
+        ? undefined
+        : resolveObjectLiteralMethodCarrier(
+            walk,
+            property,
+            selectedElement.sourceSelectedType,
+            selectedDeclaration,
+          );
+      const selectedCallable = rustCallableProtocol(selectedMemberCarrier);
+      const selectedClosure = rustClosureProtocol(selectedMemberCarrier);
+      const selectedParameterCarriers = selectedMemberCarrier?.kind === "function-pointer"
+        ? selectedMemberCarrier.args
+        : selectedCallable?.parameters ?? selectedClosure?.parameters;
+      const selectedResultCarrier = selectedMemberCarrier?.kind === "function-pointer"
+        ? selectedMemberCarrier.result
+        : selectedCallable?.result ?? selectedClosure?.result;
+      const matchedDeclarations = selectedDeclarations.filter((declaration) =>
+        selectedMethodDeclarations.includes(declaration));
+      if (storage !== "project-object" || selectedElement?.elementKind !== "method" ||
+        selectedDeclaration === undefined || !selectedMethodDeclarations.includes(selectedDeclaration) ||
+        matchedDeclarations.length === 0 || selectedParameterCarriers === undefined ||
+        selectedResultCarrier === undefined) {
+        return undefined;
+      }
+      const methodCarrier = rustClosureTargetType(
+        [resultCarrier, ...selectedParameterCarriers],
+        selectedResultCarrier,
+      );
+      if (resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
+        leadingParameters: [{ kind: "this", carrier: resultCarrier }],
+        selectedMethodDeclaration: selectedDeclaration,
+      }) === undefined) {
+        return undefined;
+      }
+      contributions.push({
+        kind: "method",
+        property,
+        sourceSelectedDeclarations: Object.freeze([...matchedDeclarations]),
+      });
+      for (const declaration of matchedDeclarations) {
+        assignedMethodDeclarations.add(declaration);
+      }
+      continue;
+    }
     const nameNode = ast.name(property);
     const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
-    const targetField = selectedFieldByName.get(sourceName);
+    const targetField = storage === "project-object"
+      ? selectedFields.find((field) =>
+          field.declaration !== undefined &&
+          (selectedElement?.sourceSelectedDeclaration === field.declaration ||
+            selectedElement?.sourceSelectedDeclarations.includes(field.declaration)))
+      : selectedFieldByName.get(sourceName);
     const initializer = ObjectLiteralProperty_Value(ast, property);
     if (targetField === undefined || initializer === undefined ||
       resolveExpressionCarrier(walk, initializer, sourceFile, targetField.carrier) === undefined) {
@@ -5077,12 +5157,15 @@ function resolveRecordLiteralCarrier(
     });
     assignedStorageIndexes.add(targetField.storageIndex);
   }
-  if (assignedStorageIndexes.size !== selectedFields.length) {
+  if (assignedStorageIndexes.size !== selectedFields.length ||
+    selectedMethodDeclarations.some((declaration) => !assignedMethodDeclarations.has(declaration))) {
     return undefined;
   }
   const fields = selectedFields.map((field) => ({
+    ...(field.declaration === undefined ? {} : { declaration: field.declaration }),
     sourceName: field.sourceName,
     storageIndex: field.storageIndex,
+    carrier: field.carrier,
   }));
   setRustOperationFact(walk, expression, {
     kind: "record-literal",
@@ -5093,6 +5176,52 @@ function resolveRecordLiteralCarrier(
     contributions,
   });
   return setCarrierFact(walk, expression, resultCarrier);
+}
+
+function resolveObjectLiteralMethodCarrier(
+  walk: RustFactWalk,
+  method: Node,
+  selectedType: Type,
+  selectedDeclaration: Node,
+): TargetTypeRef | undefined {
+  const selected = resolveRustTargetTypeRef(
+    selectedType,
+    rustResolutionContext(walk, method),
+    walk.operationOptions,
+  );
+  if (selected !== undefined) {
+    return selected;
+  }
+  const typeParameters = requireDenseSourceNodes(
+    walk,
+    walk.context.ast.typeParameters(selectedDeclaration),
+    "Selected object-literal method contract contains an undefined type-parameter slot.",
+  );
+  const parameters = requireDenseSourceNodes(
+    walk,
+    walk.context.ast.parameters(selectedDeclaration),
+    "Selected object-literal method contract contains an undefined parameter slot.",
+  );
+  const returnCarrier = walk.context.facts.get(
+    selectedDeclaration,
+    rustSourceCallableReturnFactKey,
+  )?.returnCarrier ?? walk.context.facts.resolve(
+    selectedDeclaration,
+    rustSourceCallableReturnFactKey,
+  )?.returnCarrier;
+  if (typeParameters === undefined || typeParameters.length === 0 ||
+    parameters === undefined || returnCarrier === undefined) {
+    return undefined;
+  }
+  const parameterCarriers = parameters.map((parameter) =>
+    (walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
+      walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey))?.parameterCarrier);
+  return parameterCarriers.some((carrier) => carrier === undefined)
+    ? undefined
+    : rustClosureTargetType(
+        parameterCarriers as readonly TargetTypeRef[],
+        returnCarrier,
+      );
 }
 
 interface RustResolvedRecordShape {
@@ -5815,6 +5944,29 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
       }
     }
   }
+  for (const sourceFile of projectSourceFiles) {
+    const visitObjectLiteralMethods = (node: Node): void => {
+      const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
+        walk.context.facts.resolve(node, rustTargetOperationFactKey);
+      if (operation?.kind === "record-literal") {
+        for (const contribution of operation.contributions) {
+          if (contribution.kind !== "method") {
+            continue;
+          }
+          addRegion(contribution.property, ast.body(contribution.property));
+          for (const declaration of contribution.sourceSelectedDeclarations) {
+            relateDeclarations(contribution.property, declaration);
+          }
+        }
+      }
+      ast.forEachChild(node, (child) => {
+        if (child !== undefined) {
+          visitObjectLiteralMethods(child);
+        }
+      });
+    };
+    visitObjectLiteralMethods(sourceFile);
+  }
   for (const definition of walk.context.projectTypes.definitions) {
     const members = requireDenseSourceNodes(
       walk,
@@ -6413,6 +6565,13 @@ function resolveFunctionExpressionCarrier(
   expression: Node,
   sourceFile: SourceFile,
   expected: TargetTypeRef | undefined,
+  options?: {
+    readonly leadingParameters?: readonly {
+      readonly kind: "this";
+      readonly carrier: TargetTypeRef;
+    }[];
+    readonly selectedMethodDeclaration?: Node;
+  },
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   const selectedExpected = expected ?? resolveRustTargetTypeRef(
@@ -6440,8 +6599,15 @@ function resolveFunctionExpressionCarrier(
   if (selectedParameters === undefined || selectedResult === undefined) {
     return undefined;
   }
+  const leadingParameters = options?.leadingParameters ?? [];
+  if (selectedParameters.length < leadingParameters.length ||
+    !leadingParameters.every((parameter, index) =>
+      rustTargetTypeRefEquals(parameter.carrier, selectedParameters[index]))) {
+    return undefined;
+  }
+  const sourceSelectedParameters = selectedParameters.slice(leadingParameters.length);
   const parameters = ast.parameters(expression);
-  if (parameters.length !== selectedParameters.length) {
+  if (parameters.length !== sourceSelectedParameters.length) {
     return undefined;
   }
   const parameterAbis: import("./source-callable-abi.js").RustSourceParameterAbi[] = [];
@@ -6450,7 +6616,7 @@ function resolveFunctionExpressionCarrier(
     if (parameter === undefined) {
       return undefined;
     }
-    const argCarrier = selectedParameters[index];
+    const argCarrier = sourceSelectedParameters[index];
     if (argCarrier === undefined || (argCarrier.kind === "opaque" && argCarrier.id === "tsonic.rust.infer")) {
       return undefined;
     }
@@ -6512,32 +6678,45 @@ function resolveFunctionExpressionCarrier(
     setCarrierFact(walk, expressionName, recursiveCarrier);
   }
   let bodyCarrier = resultExpectation;
-  if (ast.kindName(body) === KindBlock) {
-    if (bodyCarrier === undefined) {
-      return undefined;
+  const previousCallable = walk.currentCallableDeclaration;
+  const previousGenerator = walk.currentGeneratorDeclaration;
+  const previousMethod = walk.currentMethodDeclaration;
+  const previousThis = walk.currentThisCarrier;
+  walk.currentCallableDeclaration = expression;
+  walk.currentGeneratorDeclaration = undefined;
+  walk.currentMethodDeclaration = options?.selectedMethodDeclaration;
+  walk.currentThisCarrier = leadingParameters.find((parameter) => parameter.kind === "this")?.carrier;
+  try {
+    if (ast.kindName(body) === KindBlock) {
+      if (bodyCarrier === undefined) {
+        return undefined;
+      }
+      const statements = requireDenseSourceNodes(walk, ast.statements(body), "Callable-expression body contains an undefined or non-data statement slot.");
+      if (statements === undefined) {
+        return undefined;
+      }
+      for (const statement of statements) {
+        recordStatementFacts(walk, statement, sourceFile, bodyCarrier);
+      }
+    } else {
+      bodyCarrier = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
+      if (bodyCarrier === undefined) {
+        return undefined;
+      }
     }
-    const statements = requireDenseSourceNodes(walk, ast.statements(body), "Callable-expression body contains an undefined or non-data statement slot.");
-    if (statements === undefined) {
-      return undefined;
-    }
-    const previousCallable = walk.currentCallableDeclaration;
-    const previousGenerator = walk.currentGeneratorDeclaration;
-    walk.currentCallableDeclaration = expression;
-    walk.currentGeneratorDeclaration = undefined;
-    for (const statement of statements) {
-      recordStatementFacts(walk, statement, sourceFile, bodyCarrier);
-    }
+  } finally {
     walk.currentCallableDeclaration = previousCallable;
     walk.currentGeneratorDeclaration = previousGenerator;
-  } else {
-    bodyCarrier = resolveExpressionCarrier(walk, body, sourceFile, resultExpectation);
-    if (bodyCarrier === undefined) {
-      return undefined;
-    }
+    walk.currentMethodDeclaration = previousMethod;
+    walk.currentThisCarrier = previousThis;
   }
+  const finalizedParameterCarriers = [
+    ...leadingParameters.map((parameter) => parameter.carrier),
+    ...parameterCarriers,
+  ];
   const closureCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
-    ? { ...selectedExpected, args: parameterCarriers, result: bodyCarrier }
-    : rustCallableTargetType(parameterCarriers, bodyCarrier);
+    ? { ...selectedExpected, args: finalizedParameterCarriers, result: bodyCarrier }
+    : rustCallableTargetType(finalizedParameterCarriers, bodyCarrier);
   const captures = collectRustClosureCaptures(walk, expression, body);
   if (captures === undefined) {
     return undefined;
@@ -6549,6 +6728,7 @@ function resolveFunctionExpressionCarrier(
     kind: "closure",
     operationId: "tsonic.rust.closure",
     byRefCopyParams,
+    ...(leadingParameters.length === 0 ? {} : { leadingParameters }),
     resultCarrier: closureCarrier,
   });
   return setCarrierFact(walk, expression, closureCarrier);

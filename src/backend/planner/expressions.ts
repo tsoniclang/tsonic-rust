@@ -98,6 +98,7 @@ import {
   rustBorrowedStringView,
   rustExpressionContainsStatementBlock,
   rustStringConcat,
+  tupleRustClosureArguments,
 } from "../rust-ast/expressions.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { applyRustErrorBoundary } from "./error-boundary.js";
@@ -120,6 +121,7 @@ import {
   readRustProjectDispatchedField,
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
+  rustProjectObjectStateField,
   writeRustProjectDispatchedField,
 } from "./project-objects.js";
 import {
@@ -914,7 +916,8 @@ function planExpressionInner(
       return planRecordLiteral(node, context);
     }
     case "KindArrowFunction":
-    case KindFunctionExpression: {
+    case KindFunctionExpression:
+    case "KindMethodDeclaration": {
       const closureFact = rustOperationFact(node, context);
       if (closureFact === undefined || closureFact.kind !== "closure") {
         context.diagnostics.push(missingFactDiagnostic(
@@ -929,7 +932,7 @@ function planExpressionInner(
       }
       const callableProtocol = rustCallableProtocol(closureFact.resultCarrier);
       const nativeClosureProtocol = rustClosureProtocol(closureFact.resultCarrier);
-      const parameterCarriers = closureFact.resultCarrier.kind === "function-pointer"
+      const allParameterCarriers = closureFact.resultCarrier.kind === "function-pointer"
         ? closureFact.resultCarrier.args
         : nativeClosureProtocol?.parameters ?? callableProtocol?.parameters;
       const resultCarrier = closureFact.resultCarrier.kind === "function-pointer"
@@ -962,9 +965,13 @@ function planExpressionInner(
         return undefined;
       }
       const sourceParams = context.input.ast.parameters(node);
-      if (parameterCarriers === undefined || resultCarrier === undefined ||
+      const leadingParameters = closureFact.leadingParameters ?? [];
+      if (allParameterCarriers === undefined || resultCarrier === undefined ||
+        leadingParameters.length > allParameterCarriers.length ||
+        !leadingParameters.every((parameter, index) =>
+          rustTargetTypeRefEquals(parameter.carrier, allParameterCarriers[index])) ||
         closureFact.byRefCopyParams.length !== sourceParams.length ||
-        parameterCarriers.length !== sourceParams.length) {
+        allParameterCarriers.length - leadingParameters.length !== sourceParams.length) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
           "rust.backend.closure-abi",
@@ -972,6 +979,7 @@ function planExpressionInner(
         ));
         return undefined;
       }
+      const parameterCarriers = allParameterCarriers.slice(leadingParameters.length);
       if (callableProtocol !== undefined && context.syntheticNames === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
@@ -1068,6 +1076,51 @@ function planExpressionInner(
       if (resultIsFallible) {
         context.usedAliases?.add("rt");
       }
+      const leadingParameterPlans = leadingParameters.map((parameter) => ({
+        ...parameter,
+        name: context.syntheticNames === undefined
+          ? undefined
+          : allocateRustSyntheticName(context.syntheticNames, "_object_this"),
+      }));
+      if (leadingParameterPlans.some((parameter) => parameter.name === undefined)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.closure-leading-parameter",
+          "Callable expression leading parameters require a finalized hygienic-name scope.",
+        ));
+        return undefined;
+      }
+      const expressionOverrides = new Map(context.expressionOverrides ?? []);
+      for (const parameter of leadingParameterPlans) {
+        if (parameter.kind !== "this") {
+          continue;
+        }
+        const visitThis = (candidate: Node): void => {
+          const kind = context.input.ast.kindName(candidate);
+          if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
+            const carrier = context.input.facts.getRuntimeCarrierFact(candidate)?.carrier;
+            if (rustTargetTypeRefEquals(carrier, parameter.carrier)) {
+              expressionOverrides.set(candidate, {
+                carrier: parameter.carrier,
+                valueForm: "value",
+                expression: { kind: "path", path: parameter.name! },
+              });
+            }
+            return;
+          }
+          if (candidate !== node &&
+            (kind === KindFunctionExpression || kind === "KindFunctionDeclaration" ||
+              kind === "KindMethodDeclaration" || kind === "KindClassDeclaration")) {
+            return;
+          }
+          context.input.ast.forEachChild(candidate, (child) => {
+            if (child !== undefined) {
+              visitThis(child);
+            }
+          });
+        };
+        visitThis(node);
+      }
       const closureContext: RustPlanContext = {
         ...context,
         controlFlow: { nextLoopId: 0 },
@@ -1076,6 +1129,7 @@ function planExpressionInner(
         fallibleContext: resultIsFallible,
         asyncContext: false,
         generator: undefined,
+        expressionOverrides,
       };
       const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
       const capturedBindings = [...(context.capturedBindings ?? [])];
@@ -1139,11 +1193,17 @@ function planExpressionInner(
       let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
       let closureMove = nativeClosureProtocol !== undefined && captureBindings.length > 0;
       if (callableProtocol === undefined) {
-        closureParams = sourceParameterPlans.map((parameter) => ({
-          name: parameter.name,
-          mutable: parameter.mutable,
-          byRefCopy: parameter.byRefCopy,
-        }));
+        closureParams = [
+          ...leadingParameterPlans.map((parameter) => ({
+            name: parameter.name!,
+            mutable: false,
+          })),
+          ...sourceParameterPlans.map((parameter) => ({
+            name: parameter.name,
+            mutable: parameter.mutable,
+            byRefCopy: parameter.byRefCopy,
+          })),
+        ];
       } else {
         const allocatedTupleName = allocateRustSyntheticName(
           context.syntheticNames!,
@@ -5953,10 +6013,27 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       );
       return;
     }
+    if (contribution.kind === "method") {
+      return;
+    }
     for (const field of contribution.fields) {
       finalContributionByStorageIndex.set(field.targetStorageIndex, contributionIndex);
     }
   });
+  const objectLiteralImplementation = fact.contributions.some((contribution) =>
+    contribution.kind === "method")
+    ? context.objectLiteralImplementations?.forExpression(node)
+    : undefined;
+  if (fact.contributions.some((contribution) => contribution.kind === "method") &&
+    objectLiteralImplementation === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.object-literal-method-implementation",
+      "Object literal methods require one exact finalized Rust dispatch implementation plan.",
+    ));
+    return undefined;
+  }
+  const methodValues = new Map<string, RustExpr>();
   for (const [contributionIndex, contribution] of fact.contributions.entries()) {
     if (contribution.kind === "property") {
       const nameNode = ast.name(contribution.property);
@@ -5978,6 +6055,49 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
           contribution.targetStorageIndex,
           { kind: "path", path: bindingName },
         );
+      }
+      continue;
+    }
+    if (contribution.kind === "method") {
+      const methods = objectLiteralImplementation?.methods.filter((method) =>
+        method.sourceMethod === contribution.property) ?? [];
+      if (methods.length === 0) {
+        return undefined;
+      }
+      for (const method of methods) {
+        const closure = planExpression(contribution.property, {
+          ...context,
+          typeParameterSubstitutions: new Map(method.typeParameterSubstitutions),
+        });
+        if (closure === undefined) {
+          return undefined;
+        }
+        const bindingName = allocateRustSyntheticName(
+          context.syntheticNames,
+          "record_method",
+        );
+        const argumentsName = allocateRustSyntheticName(
+          context.syntheticNames,
+          "method_arguments",
+        );
+        const tupledClosure = tupleRustClosureArguments(
+          closure,
+          argumentsName,
+          method.parameters.length + 1,
+        );
+        if (tupledClosure === undefined) {
+          return undefined;
+        }
+        bindings.push({
+          name: bindingName,
+          value: {
+            kind: "associated-call",
+            owner: method.callableType,
+            method: "new",
+            args: [tupledClosure],
+          },
+        });
+        methodValues.set(method.fieldName, { kind: "path", path: bindingName });
       }
       continue;
     }
@@ -6033,7 +6153,7 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       return undefined;
     }
     values.push(value);
-    if (fact.storage === "project-object") {
+    if (fact.storage === "project-object" && objectLiteralImplementation === undefined) {
       const storagePath = rustDirectProjectFieldStoragePath(
         fact.resultCarrier,
         field.storageIndex,
@@ -6049,9 +6169,80 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
   if (stateMarker !== undefined) {
     projectFields.push({ name: stateMarker.name, value: stateMarker.value });
   }
-  const constructed = fact.storage === "project-object"
-    ? createRustProjectObject(typePath!, statePath!, projectFields)
-    : createRustStructuralObjectFromCarrier(fact.resultCarrier, values, context);
+  let constructed: RustExpr | undefined;
+  if (objectLiteralImplementation !== undefined) {
+    if (objectLiteralImplementation.wrapperType.kind !== "named" ||
+      objectLiteralImplementation.stateFields.length !== fact.fields.length ||
+      objectLiteralImplementation.methods.some((method) => !methodValues.has(method.fieldName))) {
+      return undefined;
+    }
+    const implementationFields = [...objectLiteralImplementation.stateFields]
+      .sort((left, right) => left.storageIndex - right.storageIndex)
+      .map((field) => ({
+        name: field.targetName,
+        value: valuesByStorageIndex.get(field.storageIndex),
+      }));
+    if (implementationFields.some((field) => field.value === undefined)) {
+      return undefined;
+    }
+    const identityName = allocateRustSyntheticName(context.syntheticNames, "record_identity");
+    const rootName = allocateRustSyntheticName(context.syntheticNames, "record_root");
+    bindings.push({
+      name: identityName,
+      value: { kind: "call", path: "rt::ObjectIdentity::new", args: [] },
+    }, {
+      name: rootName,
+      value: {
+        kind: "call",
+        path: "std::rc::Rc::new",
+        args: [{
+          kind: "struct-literal",
+          path: objectLiteralImplementation.rootName,
+          fields: [{
+            name: rustProjectObjectIdentityField,
+            value: {
+              kind: "method-call",
+              receiver: { kind: "path", path: identityName },
+              method: "clone",
+              args: [],
+            },
+          }, {
+            name: rustProjectObjectStateField,
+            value: {
+              kind: "call",
+              path: "rt::ObjectHandle::new",
+              args: [{
+                kind: "struct-literal",
+                path: objectLiteralImplementation.stateName,
+                fields: implementationFields.map((field) => ({
+                  name: field.name,
+                  value: field.value!,
+                })),
+              }],
+            },
+          }, ...objectLiteralImplementation.methods.map((method) => ({
+            name: method.fieldName,
+            value: methodValues.get(method.fieldName)!,
+          }))],
+        }],
+      },
+    });
+    constructed = {
+      kind: "struct-literal",
+      path: objectLiteralImplementation.wrapperType.path,
+      fields: [{
+        name: rustProjectObjectIdentityField,
+        value: { kind: "path", path: identityName },
+      }, {
+        name: rustProjectObjectDispatchField,
+        value: { kind: "path", path: rootName },
+      }],
+    };
+  } else {
+    constructed = fact.storage === "project-object"
+      ? createRustProjectObject(typePath!, statePath!, projectFields)
+      : createRustStructuralObjectFromCarrier(fact.resultCarrier, values, context);
+  }
   return constructed === undefined
     ? undefined
     : bindings.length === 0

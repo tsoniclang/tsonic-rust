@@ -5,6 +5,7 @@ import type {
   RustPattern,
   RustSourceFileModel,
   RustStmt,
+  RustStructField,
   RustType,
   RustVisibility,
 } from "../backend/rust-ast/nodes.js";
@@ -83,7 +84,7 @@ export function printRustItem(item: RustItem): string {
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
       const generics = printRustTypeParameters(item.typeParams);
       const header = `${structAttrs}${derives}${printRustVisibility(item.visibility)}struct ${item.name}${generics} {`;
-      const fields = item.fields.map((field) => `    ${printRustVisibility(field.visibility)}${field.name}: ${printRustType(field.type)},`).join("\n");
+      const fields = item.fields.map(printRustStructField).join("\n");
       return fields.length === 0 ? `${header}}` : `${header}\n${fields}\n}`;
     }
     case "enum": {
@@ -179,6 +180,23 @@ export function printRustItem(item: RustItem): string {
       return body.length === 0 ? `${header}}` : `${header}\n${body}\n}`;
     }
   }
+}
+
+function printRustStructField(field: RustStructField): string {
+  const prefix = `    ${printRustVisibility(field.visibility)}${field.name}:`;
+  const flatType = printRustType(field.type);
+  const flat = `${prefix} ${flatType},`;
+  if (!flatType.includes("\n") && renderedFits(flat, 0)) {
+    return flat;
+  }
+  const typeIndent = indentText(2);
+  return [
+    prefix,
+    appendToLastLine(
+      `${typeIndent}${printRustTypeFitted(field.type, 2, typeIndent.length)}`,
+      ",",
+    ),
+  ].join("\n");
 }
 
 function printRustSelfParam(
@@ -1954,14 +1972,28 @@ function printRustExprFitted(
         );
       }
       if (chain !== undefined && verticalLayout) {
+        const firstStep = chain.steps[0];
+        const firstFieldRequiresBreak = firstStep?.kind === "field" &&
+          printRustExpr(chain.base).length + firstStep.name.length + 1 >
+            rustInlineFieldReceiverWidth;
+        const secondStep = chain.steps[1];
+        const attachFirstMethodAfterField = firstStep?.kind === "field" &&
+          !firstFieldRequiresBreak && secondStep?.kind === "method" &&
+          chain.steps.filter((step) =>
+            step.kind === "field" || step.kind === "method" || step.kind === "await").length === 2 &&
+          renderedFits(
+            `${printRustExpr(chain.base)}.${firstStep.name}.${secondStep.name}(`,
+            column,
+          );
         return printFittedMethodChain(
           chain,
           depth,
           column,
-          chain.steps[0]?.kind === "field" ||
+          firstFieldRequiresBreak || selectorCount > 2 ||
             rustMethodChainBreaksReceiverForClosure(chain, flat, column) ||
             column > indentText(depth + 1).length,
           methodChainContinuationIndent,
+          attachFirstMethodAfterField,
         );
       }
       if (chain !== undefined && rustMethodChainBreaksReceiverWhenExpanded(chain) &&
@@ -2584,6 +2616,8 @@ function printRustLetInitializer(
       initializer.kind === "invoke" || initializer.kind === "associated-call") &&
     trailingClosure?.kind === "closure" &&
     fittedAtPrefix.includes("\n") &&
+    !(initializer.kind === "associated-call" && flat.includes("\n") === false &&
+      renderedFits(flat, indentText(depth + 1).length)) &&
     prefix.length + firstLine(fittedAtPrefix).length + 1 <= rustFormatWidth;
   if (directCallOpeningFits) {
     return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");

@@ -546,8 +546,10 @@ export type RustTargetOperationFact =
       readonly storage: "project-object" | "object-handle";
       readonly resultCarrier: TargetTypeRef;
       readonly fields: readonly {
+        readonly declaration?: Node;
         readonly sourceName: string;
         readonly storageIndex: number;
+        readonly carrier: TargetTypeRef;
       }[];
       readonly contributions: readonly (
         | {
@@ -555,6 +557,11 @@ export type RustTargetOperationFact =
             readonly property: Node;
             readonly sourceName: string;
             readonly targetStorageIndex: number;
+          }
+        | {
+            readonly kind: "method";
+            readonly property: Node;
+            readonly sourceSelectedDeclarations: readonly Node[];
           }
         | {
             readonly kind: "spread";
@@ -591,6 +598,10 @@ export type RustTargetOperationFact =
       readonly kind: "closure";
       readonly operationId: string;
       readonly byRefCopyParams: readonly boolean[];
+      readonly leadingParameters?: readonly {
+        readonly kind: "this";
+        readonly carrier: TargetTypeRef;
+      }[];
       readonly resultCarrier: TargetTypeRef;
     }
   | {
