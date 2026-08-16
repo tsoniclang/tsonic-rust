@@ -145,7 +145,11 @@ import {
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
 import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustTypeAliasDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
-import type { RustFutureValueFact, RustTargetOperationFact } from "../rust-facts/keys.js";
+import type {
+  RustFutureValueFact,
+  RustSourceBindingFact,
+  RustTargetOperationFact,
+} from "../rust-facts/keys.js";
 import {
   rustFutureValueForOperation,
   rustFutureValueMatchesCarrier,
@@ -228,7 +232,6 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { selectRustResourceManagement } from "./resource-management.js";
 import {
   rustInheritedProjectConstructor,
-  rustProjectMemberSlotName,
 } from "./project-type-policy.js";
 import { rustProjectCallableTargetName } from "./source-member-name.js";
 import { rustProjectObjectLayout } from "./project-object-layout.js";
@@ -661,6 +664,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
   }
   const projectTypes = context.projectTypes.initialize({
     ast,
+    names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
     resolveSelectedType(authoredTypeNode, selectedType, heritage) {
@@ -748,6 +752,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+  context.structuralShapes.initialize(sourceTypes.structuralObjects());
 }
 
 function promiseInnerCarrier(
@@ -3053,24 +3058,7 @@ function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFi
   const declaration = reference?.declaration;
   if (reference !== undefined && declaration !== undefined && reference.project) {
     const declarationKind = ast.kindName(declaration);
-    const declarationFileName = ast.getFileName(ast.getSourceFile(declaration));
-    const declarationName = ast.name(declaration);
-    if (declarationName !== undefined && !isImportBindingDeclarationKind(declarationKind)) {
-      const sourceName = ast.text(declarationName);
-      if (sourceName.length > 0) {
-        const binding = declarationIsModuleScoped(declaration, ast)
-          ? {
-              scope: "module" as const,
-              sourceName,
-              fileName: declarationFileName,
-              sourceDeclaration: declaration,
-            }
-          : { scope: "lexical" as const, sourceName, sourceDeclaration: declaration };
-        walk.context.facts.set(identifier, rustSourceBindingFactKey, binding, [
-          { message: `rust project-source ${binding.scope} binding` },
-        ]);
-      }
-    }
+    recordProjectSourceBinding(walk, identifier);
     if (declarationKind === KindParameter) {
       const parameterAbi = walk.context.facts.get(declaration, rustSourceParameterAbiFactKey) ??
         walk.context.facts.resolve(declaration, rustSourceParameterAbiFactKey);
@@ -3138,6 +3126,39 @@ function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFi
   return nullishCarrier === undefined
     ? undefined
     : setCarrierFact(walk, identifier, nullishCarrier);
+}
+
+function recordProjectSourceBinding(
+  walk: RustFactWalk,
+  identifier: Node,
+): RustSourceBindingFact | undefined {
+  const { ast } = walk.context;
+  const reference = walk.context.source.navigation.sourceReferenceFor(identifier);
+  const declaration = reference?.declaration;
+  if (reference === undefined || declaration === undefined || !reference.project ||
+    isImportBindingDeclarationKind(ast.kindName(declaration))) {
+    return undefined;
+  }
+  const declarationName = ast.name(declaration);
+  if (declarationName === undefined) {
+    return undefined;
+  }
+  const sourceName = ast.text(declarationName);
+  if (sourceName.length === 0) {
+    return undefined;
+  }
+  const binding: RustSourceBindingFact = declarationIsModuleScoped(declaration, ast)
+    ? {
+        scope: "module",
+        sourceName,
+        fileName: ast.getFileName(ast.getSourceFile(declaration)),
+        sourceDeclaration: declaration,
+      }
+    : { scope: "lexical", sourceName, sourceDeclaration: declaration };
+  walk.context.facts.set(identifier, rustSourceBindingFactKey, binding, [
+    { message: `rust project-source ${binding.scope} binding` },
+  ]);
+  return binding;
 }
 
 function isImportBindingDeclarationKind(kind: string): boolean {
@@ -3683,11 +3704,11 @@ function applySelectedProjectSourceCall(
         ? ownerRelationship.targetType
         : undefined;
       const virtualSlot = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner)
-        ? rustProjectMemberSlotName(ast, selectedDeclaration, "virtual")
+        ? walk.context.projectTypes.memberSlotName(selectedDeclaration, "virtual")
         : undefined;
       const exactSlot = virtualSlot === undefined
         ? undefined
-        : rustProjectMemberSlotName(ast, selectedDeclaration, "exact");
+        : walk.context.projectTypes.memberSlotName(selectedDeclaration, "exact");
       if (owner !== undefined && walk.context.projectTypes.isPolymorphic(owner) &&
         (virtualSlot === undefined || exactSlot === undefined || ownerCarrier === undefined)) {
         return undefined;
@@ -3710,9 +3731,9 @@ function applySelectedProjectSourceCall(
       };
     }
   } else if (declarationKind === KindFunctionDeclaration) {
-    const name = ast.text(ast.name(selectedDeclaration));
+    const name = walk.context.names.nameForDeclaration(selectedDeclaration);
     const fileName = ast.getFileName(ast.getSourceFile(selectedDeclaration));
-    if (name.length === 0 || fileName.length === 0) {
+    if (name === undefined || fileName.length === 0) {
       return undefined;
     }
     target = { form: "function", fileName, name };
@@ -4329,7 +4350,7 @@ function recordForOfFacts(
     const initializer = ForInOrOfStatement_Initializer(walk.context.ast, statement);
     if (initializer !== undefined) {
       if (walk.context.ast.kindName(initializer) === KindIdentifier) {
-        const declaration = walk.context.source.navigation.sourceReferenceFor(initializer)?.declaration;
+        const declaration = recordProjectSourceBinding(walk, initializer)?.sourceDeclaration;
         if (declaration !== undefined) {
           walk.context.facts.set(declaration, rustMutatedBindingFactKey, { mutated: true }, [
             { message: "rust selected iteration assignment writes the existing binding" },

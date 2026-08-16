@@ -63,16 +63,18 @@ export function planRustSourceUnionFieldProjection(
       ));
       return undefined;
     }
-    const binding = allocateRustSyntheticName(
-      context.syntheticNames,
-      `union_${rustLocalBindingName(variant.name)}`,
-    );
+    const binding = variant.field === undefined
+      ? undefined
+      : allocateRustSyntheticName(
+          context.syntheticNames,
+          `union_${rustLocalBindingName(variant.name)}`,
+        );
     const value = variant.field === undefined
       ? {
           kind: "unreachable" as const,
           message: "TSTS-selected source refinement excluded this union variant",
         }
-      : project({ kind: "path", path: binding }, variant.field, variantIndex);
+      : project({ kind: "path", path: binding! }, variant.field, variantIndex);
     if (value === undefined) {
       return undefined;
     }
@@ -80,7 +82,9 @@ export function planRustSourceUnionFieldProjection(
       pattern: {
         kind: "tuple-variant",
         path: `${typePath}::${variant.name}`,
-        elements: [{ kind: "binding", name: binding }],
+        elements: [binding === undefined
+          ? { kind: "wildcard" }
+          : { kind: "binding", name: binding }],
       },
       expression: value,
     });

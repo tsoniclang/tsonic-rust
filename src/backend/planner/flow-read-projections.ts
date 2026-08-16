@@ -11,6 +11,10 @@ import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { planRustProjectDowncastValue } from "./project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./program-error-operations.js";
+import {
+  allocateRustSyntheticName,
+  createRustSyntheticNameState,
+} from "./synthetic-names.js";
 
 export function planRustFlowReadProjection(
   node: Node,
@@ -37,6 +41,10 @@ export function planRustFlowReadProjection(
       ));
       return undefined;
     }
+    const valueName = allocateRustSyntheticName(
+      context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+      "flow_value",
+    );
     return {
       kind: "match",
       expression: {
@@ -50,16 +58,16 @@ export function planRustFlowReadProjection(
           pattern: {
             kind: "tuple-variant",
             path: "Some",
-            elements: [{ kind: "binding", name: "__tsonic_flow_value" }],
+            elements: [{ kind: "binding", name: valueName }],
           },
           expression: isRustCopyCarrier(fact.selectedCarrier)
             ? {
                 kind: "dereference",
-                pointer: { kind: "path", path: "__tsonic_flow_value" },
+                pointer: { kind: "path", path: valueName },
               }
             : {
                 kind: "method-call",
-                receiver: { kind: "path", path: "__tsonic_flow_value" },
+                receiver: { kind: "path", path: valueName },
                 method: "clone",
                 args: [],
               },

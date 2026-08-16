@@ -42,8 +42,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /item\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u);
-  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u);
+  assert.match(source, /item\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
+  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
   validateGeneratedProject("optional-property", result.artifacts, { run: true });
 });
 
@@ -80,7 +80,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /values\s*\.as_ref\(\)\s*\.and_then\(\s*\|__tsonic_optional_receiver/u);
+  assert.match(source, /values\s*\.as_ref\(\)\s*\.and_then\(\s*\|optional_receiver/u);
   assert.doesNotMatch(source, /\.transpose\(\)|\.flatten\(\)/u);
   assert.match(source, /index\(\)/u);
   validateGeneratedProject("optional-element", result.artifacts, { run: true });
@@ -104,7 +104,7 @@ export function count(store: Store | undefined): int32 | undefined {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /store\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver.*__tsonic_optional_receiver\.count/su,
+    /store\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver.*optional_receiver\.count/su,
   );
   validateGeneratedProject("optional-provider-property", result.artifacts);
 });
@@ -127,7 +127,7 @@ export function total(meter: Meter | undefined): int32 | undefined {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /meter\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver.*__tsonic_optional_receiver\.total\(\)/su,
+    /meter\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver.*optional_receiver\.total\(\)/su,
   );
   validateGeneratedProject("optional-provider-method", result.artifacts);
 });
@@ -182,7 +182,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /counter\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver.*__tsonic_optional_receiver\.current\(\)/su,
+    /counter\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver.*optional_receiver\.current\(\)/su,
   );
   validateGeneratedProject("optional-source-method", result.artifacts, { run: true });
 });
@@ -220,10 +220,10 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u);
+  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
   assert.match(
     source,
-    /js_string::includes_from_start\(__tsonic_optional_receiver, &needle\(\)\)/u,
+    /js_string::includes_from_start\(optional_receiver, &needle\(\)\)/u,
   );
   validateGeneratedProject("optional-js-method", result.artifacts, { run: true });
 });

@@ -86,7 +86,7 @@ export function planRustProgramErrorModule(
     return Object.freeze({
       definition,
       variant,
-      type: namedType(`crate::${moduleName}::${definition.sourceName}`),
+      type: namedType(`crate::${moduleName}::${definition.targetName}`),
     });
   });
   if (projectVariants.some((variant) => variant === undefined)) {

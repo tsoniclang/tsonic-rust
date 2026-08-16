@@ -91,11 +91,18 @@ import {
   rustArgumentPassingMode,
 } from "../../source/rust-facts/parameter-passing.js";
 import type { RustExpr, RustStmt, RustType } from "../rust-ast/nodes.js";
+import {
+  negateRustBooleanExpression,
+  rustBorrowedStringView,
+  rustExpressionContainsStatementBlock,
+  rustStringConcat,
+} from "../rust-ast/expressions.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustPublicName, rustSourceBindingPath, rustSourceName, sourceTypePath } from "./plan-context.js";
+import { applyRustErrorBoundary } from "./error-boundary.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceBindingPath, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
@@ -107,13 +114,9 @@ import {
 } from "./typed-locations.js";
 import {
   createRustProjectObject,
-  createRustStructuralObject,
-  mutateRustProjectObjectField,
-  mutateRustStructuralObjectField,
   readRustProjectDispatchedField,
-  readRustProjectObjectField,
-  readRustStructuralObjectField,
   rustProjectObjectDispatchField,
+  rustProjectObjectIdentityField,
   writeRustProjectDispatchedField,
 } from "./project-objects.js";
 import {
@@ -137,7 +140,17 @@ import { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { planRustBindingPattern } from "./binding-patterns.js";
 import { rustTargetOperationIsFallible } from "../../source/rust-facts/target-operation.js";
-import { rustProjectDispatchTraitType } from "./project-polymorphism-names.js";
+import {
+  rustProjectDispatchTraitType,
+  rustProjectStateMarker,
+  rustProjectStateType,
+} from "./project-polymorphism-names.js";
+import {
+  createRustStructuralObjectFromCarrier,
+  mutateRustStoredObjectField,
+  readRustStoredObjectField,
+  rustDirectProjectFieldStoragePath,
+} from "./project-object-storage.js";
 import { planRustFallibleReturnExpression } from "./completion-exits.js";
 import {
   rustSelectedAccessorRequiresUnsafe,
@@ -477,13 +490,13 @@ function planRustProjectUpcast(
       path: targetPath,
       fields: [
         {
-          name: "__tsonic_identity",
+          name: rustProjectObjectIdentityField,
           value: {
             kind: "method-call",
             receiver: {
               kind: "field",
               receiver: { kind: "path", path: valueName },
-              name: "__tsonic_identity",
+              name: rustProjectObjectIdentityField,
             },
             method: "clone",
             args: [],
@@ -625,14 +638,23 @@ function planExpressionInner(
           context,
         );
         const declarationModule = context.moduleNameByFileName.get(callableValue.fileName);
+        const callableName = context.input.names.nameForDeclaration(
+          callableValue.sourceDeclaration,
+        );
         if (callableType === undefined || declarationModule === undefined ||
-          !isValidRustIdentifier(callableValue.name)) {
+          callableName === undefined || !isValidRustIdentifier(callableName)) {
           return undefined;
         }
-        const argumentsName = allocateRustSyntheticName(context.syntheticNames, "callable_arguments");
+        const allocatedArgumentsName = allocateRustSyntheticName(
+          context.syntheticNames,
+          "callable_arguments",
+        );
+        const argumentsName = callableValue.parameterCarriers.length === 0
+          ? `_${allocatedArgumentsName}`
+          : allocatedArgumentsName;
         const path = declarationModule === context.moduleName
-          ? callableValue.name
-          : `crate::${declarationModule}::${callableValue.name}`;
+          ? callableName
+          : `crate::${declarationModule}::${callableName}`;
         context.usedAliases?.add("rt");
         const invocation: RustExpr = {
           kind: "call",
@@ -685,7 +707,7 @@ function planExpressionInner(
         ));
         return undefined;
       }
-      const name = rustSourceName(binding.sourceName);
+      const name = context.input.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, node),
@@ -783,9 +805,25 @@ function planExpressionInner(
       const condition = planExpression(conditionNode, context);
       const whenTrue = planExpression(whenTrueNode, context);
       const whenFalse = planExpression(whenFalseNode, context);
-      return condition === undefined || whenTrue === undefined || whenFalse === undefined
-        ? undefined
-        : { kind: "conditional", condition, whenTrue, whenFalse };
+      if (condition === undefined || whenTrue === undefined || whenFalse === undefined) {
+        return undefined;
+      }
+      const conditional: RustExpr = { kind: "conditional", condition, whenTrue, whenFalse };
+      if (!rustExpressionContainsStatementBlock(condition)) {
+        return conditional;
+      }
+      const conditionName = allocateRustSyntheticName(
+        context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+        "conditional_test",
+      );
+      return {
+        kind: "block",
+        bindings: [{ name: conditionName, value: condition }],
+        value: {
+          ...conditional,
+          condition: { kind: "path", path: conditionName },
+        },
+      };
     }
     case KindTemplateExpression: {
       return planTemplateExpression(node, context);
@@ -979,7 +1017,7 @@ function planExpressionInner(
           return undefined;
         }
         const parameterName = bindingPattern === undefined
-          ? rustSourceName(nameNode !== undefined && nameKind === KindIdentifier ? ast.text(nameNode) : "")
+          ? context.input.names.nameForDeclaration(parameter) ?? ""
           : allocateRustSyntheticName(context.syntheticNames!, "binding_parameter");
         if (!isValidRustIdentifier(parameterName)) {
           return undefined;
@@ -1052,7 +1090,7 @@ function planExpressionInner(
         if (binding === undefined) {
           return undefined;
         }
-        const sourceName = rustSourceName(binding.sourceName);
+        const sourceName = context.input.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
         const sourcePath = rustSourceBindingPath(context, binding);
         if (!isValidRustIdentifier(sourceName)) {
           return undefined;
@@ -1105,7 +1143,13 @@ function planExpressionInner(
           byRefCopy: parameter.byRefCopy,
         }));
       } else {
-        const tupleName = allocateRustSyntheticName(context.syntheticNames!, "callable_arguments");
+        const allocatedTupleName = allocateRustSyntheticName(
+          context.syntheticNames!,
+          "callable_arguments",
+        );
+        const tupleName = sourceParameterPlans.length === 0
+          ? `_${allocatedTupleName}`
+          : allocatedTupleName;
         closureParams = [
           ...(recursiveName === undefined ? [] : [{ name: recursiveName, mutable: false }]),
           { name: tupleName, mutable: false },
@@ -1334,20 +1378,15 @@ function planExpressionInner(
           ));
           return undefined;
         }
-        if (future.errorBoundary === "provider-native") {
-          context.usedAliases?.add("rt");
-          awaited = {
-            kind: "method-call",
-            receiver: awaited,
-            method: "map_err",
-            args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
-          };
+        if (future.errorBoundary === "none") {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node),
+            "rust.backend.await-error-boundary",
+            "A finalized fallible Rust future requires one exact error boundary.",
+          ));
+          return undefined;
         }
-        awaited = {
-          kind: "try",
-          expr: awaited,
-          errorDomain: future.errorDomain === "current" ? context.errorDomain : "runtime",
-        };
+        awaited = applyRustErrorBoundary(awaited, future.errorBoundary, context.errorDomain);
       }
       const converted = applyFinalizedValueConversion(
         context,
@@ -1598,7 +1637,7 @@ function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr 
     });
     parts.push({ kind: "string-literal", value: context.input.ast.text(literal) });
   }
-  return { kind: "string-concat", parts };
+  return rustStringConcat(parts);
 }
 
 function planDeleteExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -1634,6 +1673,104 @@ function planDeleteExpression(node: Node, context: RustPlanContext): RustExpr | 
 export function expressionCarrier(node: Node, context: RustPlanContext): TargetTypeRef | undefined {
   return context.expressionOverrides?.get(node)?.carrier ??
     context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+}
+
+function rustPartialComparison(left: RustExpr, right: RustExpr): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: left,
+    method: "partial_cmp",
+    args: [{ kind: "reference", expr: right }],
+  };
+}
+
+function rustOrderingVariant(name: "Less" | "Equal" | "Greater"): RustExpr {
+  return {
+    kind: "associated-value",
+    owner: { kind: "named", path: "std::cmp::Ordering" },
+    name,
+  };
+}
+
+function rustOrderingValue(name: "Less" | "Equal" | "Greater"): RustExpr {
+  return {
+    kind: "call",
+    path: "Some",
+    args: [rustOrderingVariant(name)],
+  };
+}
+
+function rustPartialOrderingTest(
+  left: RustExpr,
+  right: RustExpr,
+  operator: "==" | "!=",
+  ordering: "Less" | "Equal" | "Greater",
+): RustExpr {
+  return {
+    kind: "binary",
+    operator,
+    left: rustPartialComparison(left, right),
+    right: rustOrderingValue(ordering),
+  };
+}
+
+export function negateRustPlannedBooleanExpression(
+  sourceExpression: Node | undefined,
+  planned: RustExpr,
+  context: RustPlanContext,
+): RustExpr {
+  let selectedExpression = sourceExpression;
+  while (selectedExpression !== undefined) {
+    const kind = context.input.ast.kindName(selectedExpression);
+    if (kind !== KindParenthesizedExpression && kind !== KindSatisfiesExpression &&
+      kind !== KindNonNullExpression && kind !== "KindAsExpression" &&
+      kind !== "KindTypeAssertionExpression") {
+      break;
+    }
+    selectedExpression = Node_Expression(context.input.ast, selectedExpression);
+  }
+  if (selectedExpression === undefined ||
+    context.input.ast.kindName(selectedExpression) !== KindBinaryExpression ||
+    planned.kind !== "binary") {
+    return negateRustBooleanExpression(planned);
+  }
+  const left = BinaryExpression_Left(context.input.ast, selectedExpression);
+  const right = BinaryExpression_Right(context.input.ast, selectedExpression);
+  const inverse = planned.operator === "<" ? ">="
+    : planned.operator === "<=" ? ">"
+      : planned.operator === ">" ? "<="
+        : planned.operator === ">=" ? "<"
+          : undefined;
+  if (left === undefined || right === undefined || inverse === undefined) {
+    return negateRustBooleanExpression(planned);
+  }
+  const leftCarrier = expressionCarrier(left, context);
+  const rightCarrier = expressionCarrier(right, context);
+  if (isRustIntegerCarrier(leftCarrier) && isRustIntegerCarrier(rightCarrier)) {
+    return { ...planned, operator: inverse };
+  }
+  if (!isFloatCarrier(leftCarrier) || !isFloatCarrier(rightCarrier)) {
+    return negateRustBooleanExpression(planned);
+  }
+  const orderingName = "ordering";
+  const ordering = { kind: "path" as const, path: orderingName };
+  const boundary = planned.operator === "<" || planned.operator === "<=" ? "Less" : "Greater";
+  const accepted = planned.operator === "<" || planned.operator === ">" ? "!=" : "==";
+  return {
+    kind: "method-call",
+    receiver: rustPartialComparison(planned.left, planned.right),
+    method: "is_none_or",
+    args: [{
+      kind: "closure",
+      params: [{ name: orderingName, byRefCopy: false }],
+      body: {
+        kind: "binary",
+        operator: accepted,
+        left: ordering,
+        right: rustOrderingVariant(boundary),
+      },
+    }],
+  };
 }
 
 function effectivePlannedExpressionCarrier(
@@ -1883,7 +2020,11 @@ function planUnaryExpression(
     : context.input.ast.kindName(operandNode) === KindNumericLiteral
       ? planNumericLiteralWithCarrier(operandNode, fact.resultCarrier, context)
       : planExpression(operandNode, context);
-  return operand === undefined ? undefined : { kind: "unary", operator: fact.operator, operand };
+  return operand === undefined
+    ? undefined
+    : fact.operator === "!"
+      ? negateRustPlannedBooleanExpression(operandNode, operand, context)
+      : { kind: "unary", operator: fact.operator, operand };
 }
 
 function planRustUpdateExpression(
@@ -2177,17 +2318,12 @@ function planRustSourceUnionFieldUpdate(
     { kind: "path", path: receiverName },
     field,
     context,
-    (payload, selectedField) => {
+    (payload, selectedField, variantIndex) => {
       const overrides = new Map(context.expressionOverrides ?? []);
       for (const override of projection.overrides) {
         overrides.set(override.node, override.value);
       }
-      const mutation = (selectedField.storage === "project-object"
-        ? mutateRustProjectObjectField
-        : mutateRustStructuralObjectField)(
-        payload,
-        selectedField.storageIndex,
-        (storage) => {
+      const mutate = (storage: RustExpr): RustExpr | undefined => {
           overrides.set(fieldExpression, {
             expression: storage,
             carrier: field.resultCarrier,
@@ -2208,7 +2344,14 @@ function planRustSourceUnionFieldUpdate(
                 returnsPrevious,
                 context,
               );
-        },
+      };
+      const mutation = mutateRustStoredObjectField(
+        selectedField.storage,
+        field.variants[variantIndex]!.carrier,
+        payload,
+        selectedField.storageIndex,
+        mutate,
+        context,
       );
       return mutation;
     },
@@ -2263,12 +2406,7 @@ function planRustSourceFieldUpdate(
     for (const override of projection.overrides) {
       overrides.set(override.node, override.value);
     }
-    const mutation = (field.storage === "project-object"
-      ? mutateRustProjectObjectField
-      : mutateRustStructuralObjectField)(
-      receiverPath,
-      field.storageIndex,
-      (storage) => {
+    const mutate = (storage: RustExpr): RustExpr | undefined => {
         overrides.set(fieldExpression, {
           expression: storage,
           carrier: field.resultCarrier,
@@ -2289,7 +2427,14 @@ function planRustSourceFieldUpdate(
               returnsPrevious,
               context,
             );
-      },
+    };
+    const mutation = mutateRustStoredObjectField(
+      field.storage,
+      field.receiverCarrier,
+      receiverPath,
+      field.storageIndex,
+      mutate,
+      context,
     );
     if (mutation === undefined) {
       return undefined;
@@ -2586,8 +2731,9 @@ function planRustDirectUpdateTarget(
 ): RustExpr | undefined {
   const { ast } = context.input;
   if (ast.kindName(operand) === KindIdentifier) {
-    const path = rustSourceName(ast.text(operand));
-    return isValidRustIdentifier(path) ? { kind: "path", path } : undefined;
+    const binding = context.input.facts.getFact(operand, rustSourceBindingFactKey);
+    const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
+    return path !== undefined && isValidRustIdentifier(path) ? { kind: "path", path } : undefined;
   }
   const fact = context.input.facts.getFact(operand, rustTargetOperationFactKey);
   if (!rustTargetOperationIsDirectLocation(fact)) {
@@ -2749,22 +2895,28 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
               })
             : right,
         };
-    const present: RustExpr = fallbackIsFallible
-      ? {
-          kind: "closure",
-          params: [{ name: "__tsonic_present_value", byRefCopy: false }],
-          body: {
-            kind: "call",
-            path: "Ok::<_, rt::TsonicError>",
-            args: [fact.rightOperand === "option"
-              ? { kind: "call", path: "Some", args: [{ kind: "path", path: "__tsonic_present_value" }] }
-              : { kind: "path", path: "__tsonic_present_value" }],
-          },
-        }
-      : {
-          kind: "path",
-          path: fact.rightOperand === "option" ? "Some" : "std::convert::identity",
-        };
+    const presentValueName = allocateRustSyntheticName(
+      context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+      "present_value",
+    );
+    const present: RustExpr = fallbackIsFallible && fact.rightOperand !== "option"
+      ? { kind: "path", path: "Ok::<_, rt::TsonicError>" }
+      : fallbackIsFallible
+        ? {
+            kind: "closure",
+            params: [{ name: presentValueName, byRefCopy: false }],
+            body: {
+              kind: "call",
+              path: "Ok::<_, rt::TsonicError>",
+              args: [fact.rightOperand === "option"
+                ? { kind: "call", path: "Some", args: [{ kind: "path", path: presentValueName }] }
+                : { kind: "path", path: presentValueName }],
+            },
+          }
+        : {
+            kind: "path",
+            path: fact.rightOperand === "option" ? "Some" : "std::convert::identity",
+          };
     const coalesced: RustExpr = {
       kind: "call",
       path: "rt::option_coalesce",
@@ -2897,7 +3049,7 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
         parts.push(planRustNonConsumingValue(sideNode, side, context));
       }
     }
-    return { kind: "string-concat", parts };
+    return rustStringConcat(parts);
   }
   if (fact.kind === "operator-call") {
     return planRustOperatorCallExpression(
@@ -2925,8 +3077,12 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const comparisonRight = comparison && rightNode !== undefined
       ? planRustNonConsumingValue(rightNode, convertedRight, context)
       : convertedRight;
-    const borrowLiteral = (side: RustExpr): RustExpr =>
-      comparison && side.kind === "string-literal" ? { kind: "str-literal", value: side.value } : side;
+    const borrowLiteral = (side: RustExpr): RustExpr => {
+      const borrowed = comparison ? rustBorrowedStringView(side) : side;
+      return comparison && borrowed.kind === "string-literal"
+        ? { kind: "str-literal", value: borrowed.value }
+        : borrowed;
+    };
     if (!isRustBinaryOperator(fact.operator)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
@@ -2945,6 +3101,25 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     );
     if (booleanComparison !== undefined) {
       return booleanComparison;
+    }
+    const emptyStringComparison = planEmptyStringComparison(
+      fact.operator,
+      comparisonLeft,
+      comparisonRight,
+      leftNode,
+      rightNode,
+      context,
+    );
+    if (emptyStringComparison !== undefined) {
+      return emptyStringComparison;
+    }
+    const rangeContainment = planRustRangeContainment(
+      fact.operator,
+      comparisonLeft,
+      comparisonRight,
+    );
+    if (rangeContainment !== undefined) {
+      return rangeContainment;
     }
     return {
       kind: "binary",
@@ -3013,6 +3188,181 @@ export function planRustOperatorCallExpression(
   return fact.fallible ? { kind: "try", expr: call, errorDomain: "runtime" } : call;
 }
 
+function planEmptyStringComparison(
+  operator: string,
+  left: RustExpr,
+  right: RustExpr,
+  leftNode: Node | undefined,
+  rightNode: Node | undefined,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (operator !== "==" && operator !== "!=") {
+    return undefined;
+  }
+  const emptyLiteral = (expression: RustExpr): boolean =>
+    (expression.kind === "string-literal" || expression.kind === "str-literal") &&
+    expression.value.length === 0;
+  const selected = emptyLiteral(left)
+    ? { expression: right, node: rightNode }
+    : emptyLiteral(right)
+      ? { expression: left, node: leftNode }
+      : undefined;
+  if (selected?.node === undefined ||
+    !isRustStringCarrier(effectivePlannedExpressionCarrier(selected.node, context))) {
+    return undefined;
+  }
+  const isEmpty: RustExpr = {
+    kind: "method-call",
+    receiver: selected.expression,
+    method: "is_empty",
+    args: [],
+  };
+  return operator === "=="
+    ? isEmpty
+    : negateRustBooleanExpression(isEmpty);
+}
+
+function planRustRangeContainment(
+  operator: string,
+  left: RustExpr,
+  right: RustExpr,
+): RustExpr | undefined {
+  if (operator !== "&&" && operator !== "||") {
+    return undefined;
+  }
+  const direct = planRustRangeComparisonPair(operator, left, right);
+  if (direct !== undefined) {
+    return direct;
+  }
+  if (left.kind === "binary" && left.operator === operator) {
+    const trailing = planRustRangeComparisonPair(operator, left.right, right);
+    if (trailing !== undefined) {
+      return {
+        kind: "binary",
+        operator,
+        left: left.left,
+        right: trailing,
+      };
+    }
+  }
+  if (right.kind === "binary" && right.operator === operator) {
+    const leading = planRustRangeComparisonPair(operator, left, right.left);
+    if (leading !== undefined) {
+      return {
+        kind: "binary",
+        operator,
+        left: leading,
+        right: right.right,
+      };
+    }
+  }
+  return undefined;
+}
+
+function planRustRangeComparisonPair(
+  operator: "&&" | "||",
+  left: RustExpr,
+  right: RustExpr,
+): RustExpr | undefined {
+  if (left.kind !== "binary" || right.kind !== "binary") {
+    return undefined;
+  }
+  const inclusive = operator === "&&" &&
+    (left.operator === ">=" || left.operator === "<=") &&
+    (right.operator === ">=" || right.operator === "<=");
+  const exclusive = operator === "||" &&
+    (left.operator === ">" || left.operator === "<") &&
+    (right.operator === ">" || right.operator === "<");
+  if (!inclusive && !exclusive) {
+    return undefined;
+  }
+  const first = comparisonSubjectAndBound(left, exclusive);
+  const second = comparisonSubjectAndBound(right, exclusive);
+  if (first === undefined || second === undefined ||
+    first.subject.path !== second.subject.path ||
+    !isRustNumericLiteral(first.bound) || !isRustNumericLiteral(second.bound)) {
+    return undefined;
+  }
+  const lower = first.relationship === "lower" ? first.bound
+    : second.relationship === "lower" ? second.bound
+      : undefined;
+  const upper = first.relationship === "upper" ? first.bound
+    : second.relationship === "upper" ? second.bound
+      : undefined;
+  if (lower === undefined || upper === undefined) {
+    return undefined;
+  }
+  if (exclusive && (!isRustIntegerLiteral(lower) || !isRustIntegerLiteral(upper))) {
+    if (!isRustFloatLiteral(lower) || !isRustFloatLiteral(upper)) {
+      return undefined;
+    }
+    return {
+      kind: "binary",
+      operator: "||",
+      left: rustPartialOrderingTest(first.subject, lower, "==", "Less"),
+      right: rustPartialOrderingTest(second.subject, upper, "==", "Greater"),
+    };
+  }
+  const contains: RustExpr = {
+    kind: "method-call",
+    receiver: { kind: "range", start: lower, end: upper, inclusive: true },
+    method: "contains",
+    args: [{ kind: "reference", expr: first.subject }],
+  };
+  return inclusive ? contains : negateRustBooleanExpression(contains);
+}
+
+function comparisonSubjectAndBound(
+  expression: Extract<RustExpr, { readonly kind: "binary" }>,
+  outsideRange: boolean,
+): {
+  readonly subject: Extract<RustExpr, { readonly kind: "path" }>;
+  readonly bound: RustExpr;
+  readonly relationship: "lower" | "upper";
+} | undefined {
+  if (expression.left.kind === "path" && isRustNumericLiteral(expression.right)) {
+    const relationship = outsideRange
+      ? expression.operator === "<" ? "lower"
+        : expression.operator === ">" ? "upper"
+          : undefined
+      : expression.operator === ">=" ? "lower"
+        : expression.operator === "<=" ? "upper"
+          : undefined;
+    return relationship === undefined
+      ? undefined
+      : { subject: expression.left, bound: expression.right, relationship };
+  }
+  if (expression.right.kind === "path" && isRustNumericLiteral(expression.left)) {
+    const relationship = outsideRange
+      ? expression.operator === ">" ? "lower"
+        : expression.operator === "<" ? "upper"
+          : undefined
+      : expression.operator === "<=" ? "lower"
+        : expression.operator === ">=" ? "upper"
+          : undefined;
+    return relationship === undefined
+      ? undefined
+      : { subject: expression.right, bound: expression.left, relationship };
+  }
+  return undefined;
+}
+
+function isRustNumericLiteral(expression: RustExpr): boolean {
+  return expression.kind === "int-literal" || expression.kind === "float-literal" ||
+    expression.kind === "unary" && expression.operator === "-" &&
+      (expression.operand.kind === "int-literal" || expression.operand.kind === "float-literal");
+}
+
+function isRustIntegerLiteral(expression: RustExpr): boolean {
+  return expression.kind === "int-literal" || expression.kind === "unary" &&
+    expression.operator === "-" && expression.operand.kind === "int-literal";
+}
+
+function isRustFloatLiteral(expression: RustExpr): boolean {
+  return expression.kind === "float-literal" || expression.kind === "unary" &&
+    expression.operator === "-" && expression.operand.kind === "float-literal";
+}
+
 function planBooleanLiteralComparison(
   operator: string,
   left: RustExpr,
@@ -3035,7 +3385,7 @@ function planBooleanLiteralComparison(
   }
   const negated = operator === "==" ? !literal.value : literal.value;
   return negated
-    ? { kind: "unary", operator: "!", operand: literal.other }
+    ? negateRustBooleanExpression(literal.other)
     : literal.other;
 }
 
@@ -3062,6 +3412,10 @@ function planArguments(node: Node, context: RustPlanContext): readonly RustExpr[
 // An expression already borrowing (&str-carried identifiers) is passed
 // bare; owned expressions take &.
 function refShape(context: RustPlanContext, argument: RustExpr, node: Node | undefined): RustExpr {
+  const borrowedString = rustBorrowedStringView(argument);
+  if (borrowedString !== argument) {
+    return borrowedString;
+  }
   if (node !== undefined &&
     context.expressionOverrides?.get(node)?.valueForm === "shared-reference") {
     return argument;
@@ -3184,6 +3538,8 @@ function lowerRustValueConversion(
       return { kind: "call", path: contract.path, args: [source] };
     case "numeric-cast":
       return { kind: "numeric-cast", expression: source, target: contract.targetType };
+    case "owned-string-from-borrowed-str":
+      return { kind: "owned-string-from-borrowed-str", expression: source };
     case "source-union-variant": {
       const union = rustSourceUnionCarrierValue(contract.target);
       const typePath = union === undefined ? undefined : sourceTypePath(context, union);
@@ -3205,7 +3561,14 @@ function lowerRustValueConversion(
       };
     }
     case "option-map": {
-      const valueName = "__tsonic_option_value";
+      const valueName = allocateRustSyntheticName(
+        context.syntheticNames ?? createRustSyntheticNameState(
+          context.input.ast,
+          node ?? context.sourceFile,
+          [],
+        ),
+        "option_value",
+      );
       const value: RustExpr = { kind: "path", path: valueName };
       const elementSource: RustExpr = contract.element.sourceMode === "ref"
         ? { kind: "reference", expr: value }
@@ -3219,11 +3582,16 @@ function lowerRustValueConversion(
       if (converted === undefined) {
         return undefined;
       }
+      const directMapper: RustExpr | undefined = converted.kind === "call" &&
+          converted.args.length === 1 && converted.args[0]?.kind === "path" &&
+          converted.args[0].path === valueName
+        ? { kind: "path", path: converted.path }
+        : undefined;
       const mapped: RustExpr = {
         kind: "method-call",
         receiver: source,
         method: "map",
-        args: [{
+        args: [directMapper ?? {
           kind: "closure",
           params: [{ name: valueName, byRefCopy: false }],
           body: converted,
@@ -3507,18 +3875,15 @@ function finishProviderOperationExpression(
       ));
       return undefined;
     }
-    raw = {
-      kind: "try",
-      errorDomain: "runtime",
-      expr: fact.abi.effects.errorBoundary === "provider-native"
-        ? {
-            kind: "method-call",
-            receiver: raw,
-            method: "map_err",
-            args: [{ kind: "path", path: "tsonic_rust_runtime::TsonicError::from" }],
-          }
-        : raw,
-    };
+    if (fact.abi.effects.errorBoundary === "none") {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.provider-error-boundary",
+        "A finalized fallible Rust operation requires one exact error boundary.",
+      ));
+      return undefined;
+    }
+    raw = applyRustErrorBoundary(raw, fact.abi.effects.errorBoundary, context.errorDomain);
   }
   if (fact.abi.result.kind === "async") {
     return raw;
@@ -3711,6 +4076,10 @@ function applyFinalizedArgumentMode(
   }
   if (input.mode === "mut-ref") {
     return { kind: "reference", expr: expression, mutable: true };
+  }
+  const borrowedString = rustBorrowedStringView(expression);
+  if (borrowedString !== expression) {
+    return borrowedString;
   }
   if (expression.kind === "string-literal") {
     return { kind: "str-literal", value: expression.value };
@@ -3959,7 +4328,7 @@ function planSelectedSourceCall(
   switch (fact.target.form) {
     case "function": {
       const moduleName = context.moduleNameByFileName.get(fact.target.fileName);
-      const targetName = rustPublicName(fact.target.name);
+      const targetName = fact.target.name;
       if (moduleName === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
@@ -3973,7 +4342,7 @@ function planSelectedSourceCall(
       break;
     }
     case "method": {
-      const targetName = rustPublicName(fact.target.name);
+      const targetName = fact.target.name;
       if (!isValidRustIdentifier(targetName)) {
         break;
       }
@@ -4056,9 +4425,11 @@ function planSelectedSourceCall(
           break;
         }
         planned = planPromotedSourceMethodCall(
+          node,
           promoted.expression,
           targetName,
           shaped,
+          context,
         );
         break;
       }
@@ -4083,7 +4454,7 @@ function planSelectedSourceCall(
     case "static-method": {
       const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-      const targetName = rustPublicName(fact.target.name);
+      const targetName = fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
         planned = { kind: "call", path: `${typePath}::${targetName}`, args: shaped };
       }
@@ -4092,7 +4463,7 @@ function planSelectedSourceCall(
     case "constructor": {
       const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-      const targetName = rustPublicName(fact.target.name);
+      const targetName = fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
         planned = { kind: "call", path: `${typePath}::${targetName}`, args: shaped };
       }
@@ -4510,14 +4881,18 @@ function rustSpreadElementCarrier(
 }
 
 function planPromotedSourceMethodCall(
+  node: Node,
   location: RustExpr,
   method: string,
   arguments_: readonly RustExpr[],
+  context: RustPlanContext,
 ): RustExpr {
-  const locationName = "__tsonic_location";
-  const ownerName = "__tsonic_location_value";
+  const syntheticNames = context.syntheticNames ??
+    createRustSyntheticNameState(context.input.ast, node, []);
+  const locationName = allocateRustSyntheticName(syntheticNames, "location");
+  const ownerName = allocateRustSyntheticName(syntheticNames, "location_value");
   const argumentBindings = arguments_.map((value, index) => ({
-    name: `__tsonic_location_argument_${index}`,
+    name: allocateRustSyntheticName(syntheticNames, `location_argument_${index}`),
     value,
   }));
   const locationReceiver: RustExpr = arguments_.length === 0
@@ -4970,9 +5345,14 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     if (fact.dispatch === undefined) {
-      return (fact.storage === "project-object"
-        ? readRustProjectObjectField
-        : readRustStructuralObjectField)(receiver, fact.storageIndex, fact.resultCarrier);
+      return readRustStoredObjectField(
+        fact.storage,
+        fact.receiverCarrier,
+        receiver,
+        fact.storageIndex,
+        fact.resultCarrier,
+        context,
+      );
     }
     if (context.syntheticNames === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -5112,9 +5492,16 @@ function planRustSourceUnionFieldRead(
     planRustNonConsumingValue(receiverNode, receiver, context),
     fact,
     context,
-    (payload, field) => (field.storage === "project-object"
-      ? readRustProjectObjectField
-      : readRustStructuralObjectField)(payload, field.storageIndex, fact.resultCarrier),
+    (payload, field, variantIndex) => {
+      return readRustStoredObjectField(
+        field.storage,
+        fact.variants[variantIndex]!.carrier,
+        payload,
+        field.storageIndex,
+        fact.resultCarrier,
+        context,
+      );
+    },
   );
 }
 
@@ -5465,7 +5852,18 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     ? rustSourceTypeCarrierValue(fact.resultCarrier)
     : undefined;
   const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-  if (fact.storage === "project-object" && typePath === undefined) {
+  const stateType = fact.storage === "project-object"
+    ? rustProjectStateType(fact.resultCarrier, context)
+    : undefined;
+  const projectDefinition = fact.storage === "project-object"
+    ? context.input.projectTypes.definitionForCarrier(fact.resultCarrier)
+    : undefined;
+  const stateMarker = projectDefinition === undefined
+    ? undefined
+    : rustProjectStateMarker(projectDefinition, context);
+  const statePath = stateType?.kind === "named" ? stateType.path : undefined;
+  if (fact.storage === "project-object" &&
+    (typePath === undefined || statePath === undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.record",
@@ -5507,15 +5905,30 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     return undefined;
   }
   const values: RustExpr[] = [];
+  const projectFields: { name: string; value: RustExpr }[] = [];
   for (const field of [...fact.fields].sort((left, right) => left.storageIndex - right.storageIndex)) {
     const value = fieldsBySourceName.get(field.sourceName);
     if (field.storageIndex !== values.length || value === undefined) {
       return undefined;
     }
     values.push(value);
+    if (fact.storage === "project-object") {
+      const storagePath = rustDirectProjectFieldStoragePath(
+        fact.resultCarrier,
+        field.storageIndex,
+        context,
+      );
+      if (storagePath?.length !== 1) {
+        return undefined;
+      }
+      projectFields.push({ name: storagePath[0]!, value });
+    }
   }
   context.usedAliases?.add("rt");
+  if (stateMarker !== undefined) {
+    projectFields.push({ name: stateMarker.name, value: stateMarker.value });
+  }
   return fact.storage === "project-object"
-    ? createRustProjectObject(typePath!, values)
-    : createRustStructuralObject(values);
+    ? createRustProjectObject(typePath!, statePath!, projectFields)
+    : createRustStructuralObjectFromCarrier(fact.resultCarrier, values, context);
 }

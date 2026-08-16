@@ -37,7 +37,8 @@ export function probe(dir: string, file: string): boolean {
   assert.match(text, /tsonic_rust_node::path::dirname\(&full\)/u);
   assert.match(text, /tsonic_rust_node::path::basename\(&full, None\)/u);
   assert.match(text, /tsonic_rust_node::os::platform\(\)/u);
-  assert.match(text, /tsonic_rust_node::os::eol\(\)\.to_string\(\)/u);
+  assert.match(text, /tsonic_rust_node::os::eol\(\)/u);
+  assert.doesNotMatch(text, /tsonic_rust_node::os::eol\(\)\.to_string\(\)/u);
   assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_node = \{ path = ".*rust-nodejs\/rust\/crates\/tsonic_rust_node" \}/u);
 });
 
@@ -129,7 +130,7 @@ export function probe(root: string, bytes: Buffer): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::path::relative/u);
-  assert.match(text, /tsonic_rust_node::path::sep\(\)\.to_string\(\)/u);
+  assert.match(text, /String::from\(tsonic_rust_node::path::sep\(\)\)/u);
   assert.match(text, /tsonic_rust_node::fs::read_file_sync_buffer/u);
   assert.match(text, /tsonic_rust_node::fs::read_file_sync_string/u);
   assert.match(text, /tsonic_rust_node::fs::write_file_sync_buffer/u);
@@ -138,6 +139,37 @@ export function probe(root: string, bytes: Buffer): string {
   assert.match(text, /\.digest_string\(/u);
   assert.match(text, /\.is_symbolic_link\(\)/u);
   validateGeneratedProject("node-portable-contracts", result.artifacts);
+});
+
+test("borrowed provider strings materialize ownership only in owned contexts", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { sep } from "node:path";
+
+export function ownedSeparator(): string {
+  return sep;
+}
+
+export function endsWithSeparator(value: string): boolean {
+  return value.endsWith(sep);
+}
+
+export function appendSeparator(value: string): string {
+  return value + sep;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn owned_separator\(\) -> String \{[\s\S]*String::from\(tsonic_rust_node::path::sep\(\)\)/u);
+  assert.match(text, /ends_with_at_end\(value, tsonic_rust_node::path::sep\(\)\)/u);
+  assert.match(text, /format!\("\{\}\{\}", value, tsonic_rust_node::path::sep\(\)\)/u);
+  assert.doesNotMatch(text, /sep\(\)\.to_string\(\)/u);
 });
 
 test("node assert.ok overloads lower through exact selected signatures", async () => {
@@ -167,7 +199,7 @@ export function verify(value: boolean): void {
   assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
   assert.match(
     text,
-    /tsonic_rust_node::assert::ok_with_message\(\s*sumIsFour\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
+    /tsonic_rust_node::assert::ok_with_message\(\s*sum_is_four\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
   );
 });
 

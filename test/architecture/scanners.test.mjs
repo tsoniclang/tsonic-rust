@@ -45,6 +45,37 @@ test("no internal TSTS imports", () => {
   }
 });
 
+test("clean emission has no legacy synthetic prefix or blanket lint policy", () => {
+  const retiredHelper = join(sourceRoot, "backend/planner/generated-source-lints.ts");
+  assert.throws(() => statSync(retiredHelper), /ENOENT/u);
+  const blanketAttributes = [
+    "#![allow(non_snake_case)]",
+    "#![allow(private_interfaces)]",
+    "#![allow(unused_assignments, unused_variables)]",
+    "#![allow(clippy::blocks_in_conditions)]",
+    "#![allow(clippy::collapsible_if)]",
+    "#![allow(clippy::comparison_to_empty)]",
+    "#![allow(clippy::format_in_format_args)]",
+    "#![allow(clippy::manual_range_contains)]",
+    "#![allow(clippy::needless_question_mark)]",
+    "#![allow(clippy::needless_return)]",
+    "#![allow(clippy::never_loop)]",
+    "#![allow(clippy::nonminimal_bool)]",
+    "#![allow(clippy::redundant_closure)]",
+    "#![allow(clippy::too_many_arguments)]",
+    "#![allow(clippy::to_string_in_format_args)]",
+    "#![allow(clippy::type_complexity)]",
+    "#![allow(clippy::unnecessary_to_owned)]",
+  ];
+  for (const { path, text } of sourceFiles) {
+    assert.doesNotMatch(text, /__tsonic_/u, `${path} contains the retired synthetic prefix`);
+    assert.ok(!text.includes("generated-source-lints"), `${path} references the retired lint helper`);
+    for (const attribute of blanketAttributes) {
+      assert.ok(!text.includes(attribute), `${path} contains retired blanket attribute ${attribute}`);
+    }
+  }
+});
+
 test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
   for (const { path, text } of sourceFiles) {
     if (path.includes("/providers/compiler/")) {

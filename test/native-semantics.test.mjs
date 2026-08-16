@@ -42,13 +42,14 @@ test("classes lower to reference-backed object wrappers with fact-backed members
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32,\)>,\n\}/u);
+  assert.match(text, /pub\(crate\) struct CounterState \{\n    pub\(crate\) value: i32,\n\}/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) state: rt::ObjectHandle<CounterState>,\n\}/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
-  assert.match(text, /let mut __tsonic_field_value: i32;\n        __tsonic_field_value = value;/u);
-  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(__tsonic_field_value,\)\)/u);
+  assert.match(text, /let mut field_value: i32;\n        field_value = value;/u);
+  assert.match(text, /state: rt::ObjectHandle::new\(CounterState \{ value: field_value \}\)/u);
   assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
-  assert.match(text, /\.with_mut\(\|state\| state\.0 \+= __tsonic_value(?:_[0-9]+)?\)/u);
+  assert.match(text, /\.with_mut\(\|state\| state\.value \+= value_2\)/u);
   assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
   assert.match(text, /let counter: Counter = Counter::new\(10\);/u);
   assert.match(text, /counter\.clone\(\)\.add\(5\);/u);
@@ -98,7 +99,8 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.doesNotMatch(text, /#value/u);
-  assert.match(text, /__tsonic_field_private_field/u);
+  assert.match(text, /struct LeftState \{\s*pub\(crate\) value: i32,/u);
+  assert.match(text, /struct RightState \{\s*pub\(crate\) value: i32,/u);
   assert.equal(validateGeneratedProject("private-field-bin", result.artifacts, { run: true }).status, 0);
 });
 
@@ -171,8 +173,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn __tsonic_read_[0-9]+_[0-9]+\(&self\) -> i32/u);
-  assert.match(text, /fn __tsonic_write_[0-9]+_[0-9]+\(&self, value: i32\)/u);
+  assert.match(text, /fn read_value_current\(&self\) -> i32/u);
+  assert.match(text, /fn write_value_current\(&self, value: i32\)/u);
   const run = validateGeneratedProject("class-accessor-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -201,10 +203,10 @@ export function write(value: Value, next: int32): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn __tsonic_read_[0-9]+_[0-9]+\(&self\) -> rt::TsonicResult<i32>/u);
-  assert.match(text, /fn __tsonic_write_[0-9]+_[0-9]+\(&self, _value: i32\) -> rt::TsonicResult<\(\)>/u);
-  assert.match(text, /pub fn read\(value: Value\) -> rt::TsonicResult<i32>[\s\S]*__tsonic_read_[0-9]+_[0-9]+\(\)/u);
-  assert.match(text, /__tsonic_write_[0-9]+_[0-9]+\(__tsonic_accessor_value(?:_[0-9]+)?\)\?/u);
+  assert.match(text, /fn read_value_current\(&self\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn write_value_current\(&self, _value: i32\) -> rt::TsonicResult<\(\)>/u);
+  assert.match(text, /pub fn read\(value: Value\) -> rt::TsonicResult<i32>[\s\S]*read_value_current\(\)/u);
+  assert.match(text, /write_value_current\(accessor_value\)\?/u);
   validateGeneratedProject("class-accessor-fallibility", result.artifacts);
 });
 
@@ -231,7 +233,7 @@ export function create(): Initialized {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /impl Initialized \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Initialized/u);
-  assert.match(text, /let mut __tsonic_field_value: i32;\n        __tsonic_field_value = 42;/u);
+  assert.match(text, /let mut field_value: i32;\n        field_value = 42;/u);
   assert.match(text, /impl Empty \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Empty/u);
 });
 
@@ -299,10 +301,10 @@ export class Initialized {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let mut __tsonic_field_second(?:_[0-9]+)?: i32;/u);
+  assert.match(text, /let mut field_second: i32;/u);
   assert.match(
     text,
-    /__tsonic_field_second(?:_[0-9]+)? = __tsonic_field_first(?:_[0-9]+)?;/u,
+    /field_second = field_first;/u,
   );
 });
 
@@ -615,7 +617,7 @@ export function grow(xs: int32[]): void {
   assert.doesNotMatch(text, /f64_to_i32/u);
 });
 
-test("user-authored identifiers are preserved verbatim under generated-source policy", () => {
+test("user-authored identifiers use one idiomatic Rust name plan", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -638,13 +640,13 @@ export function caller(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#!\[allow\(non_snake_case\)\]/u);
-  assert.match(text, /pub fn pickMode\(flagValue: bool\) -> i32/u);
-  assert.match(text, /let mut chosenValue: i32 = 0;/u);
-  assert.match(text, /pickMode\(true\)/u);
+  assert.doesNotMatch(text, /#!\[allow\(non_snake_case\)\]/u);
+  assert.match(text, /pub fn pick_mode\(flag_value: bool\) -> i32/u);
+  assert.match(text, /let mut chosen_value: i32 = 0;/u);
+  assert.match(text, /pick_mode\(true\)/u);
 });
 
-test("verbatim naming keeps distinct authored identifiers distinct", () => {
+test("idiomatic naming resolves collisions by exact declaration identity", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -661,8 +663,9 @@ export function collide(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let fooBar: i32 = 1;/u);
+  assert.match(text, /let foo_bar_2: i32 = 1;/u);
   assert.match(text, /let foo_bar: i32 = 2;/u);
+  assert.match(text, /foo_bar_2 \+ foo_bar/u);
 });
 
 test("Rust keyword-shaped source identifiers use exact raw identifiers", () => {
@@ -871,11 +874,11 @@ export function shift(p: Point, dx: int32): Point {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32, i32\)>,\n\}/u);
+  assert.match(text, /pub\(crate\) struct PointState \{\s*pub\(crate\) x: i32,\s*pub\(crate\) y: i32,/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*pub\(crate\) state: rt::ObjectHandle<PointState>,/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
-  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(0, 0\)\)/u);
-  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(\(/u);
-  assert.match(text, /p\.clone\(\)\.__tsonic_state\.with\(\|state\| state\.0\) \+ dx/u);
+  assert.match(text, /state: rt::ObjectHandle::new\(PointState \{ x: 0, y: 0 \}\)/u);
+  assert.match(text, /p\.clone\(\)\.state\.with\(\|state\| state\.x\) \+ dx/u);
 });
 
 test("generated interface objects preserve aliases, identity, and single receiver evaluation", { timeout: 300_000 }, () => {
@@ -953,7 +956,13 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /rt::ObjectHandle::new\(\(String::from\("start"\), 1\.0\)\)/u);
+  assert.match(
+    artifactText(result, "src/shapes.rs"),
+    /pub struct LabelXShape \{\s*pub label: String,\s*pub x: f64,/u,
+  );
+  assert.match(text, /rt::ObjectHandle<crate::shapes::LabelXShape>/u);
+  assert.match(text, /rt::ObjectHandle::new\(crate::shapes::LabelXShape \{/u);
+  assert.doesNotMatch(text, /state\.\d/u);
   const run = validateGeneratedProject("inferred-object-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -1257,9 +1266,9 @@ export function caller(flag: boolean): int32 {
   assert.match(text, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
   assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);
   assert.match(text, /Ok\(7\)/u);
-  assert.match(text, /let __tsonic_try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
+  assert.match(text, /let try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
   assert.match(text, /outcome = risky\(flag\)\?;/u);
-  assert.match(text, /let __tsonic_try_flow_\d+: rt::Completion<i32> = match __tsonic_try_body \{/u);
+  assert.match(text, /let try_flow: rt::Completion<i32> = match try_body \{/u);
   assert.match(text, /Err\(_error\) => rt::completion_region\(\|\| \{/u);
   assert.match(text, /use tsonic_rust_runtime as rt;/u);
 });

@@ -673,10 +673,10 @@ export function aliases(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let sameDate: js_abi::JsDate = date\.clone\(\);/u);
-  assert.match(text, /let samePattern: js_abi::JsRegExp = pattern\.clone\(\);/u);
-  assert.match(text, /samePattern\.test\("1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /sameDate == date/u);
+  assert.match(text, /let same_date: js_abi::JsDate = date\.clone\(\);/u);
+  assert.match(text, /let same_pattern: js_abi::JsRegExp = pattern\.clone\(\);/u);
+  assert.match(text, /same_pattern\.test\("1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /same_date == date/u);
   assert.match(text, /i32_to_f64\(pattern\.last_index\(\)\) == 1\.0/u);
 });
 

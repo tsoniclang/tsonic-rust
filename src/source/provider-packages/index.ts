@@ -23,6 +23,7 @@ import {
   cargoRegistryPatchAttributeName,
 } from "../../backend/planner/cargo-project.js";
 import type { RustProviderOperationForm, RustValueConversion } from "../rust-facts/keys.js";
+import type { RustFallibleErrorBoundary } from "../rust-facts/error-boundary.js";
 import { validateProviderPackageDefinition } from "./validation.js";
 import {
   materializeClosedMetadata,
@@ -87,7 +88,7 @@ export type RustProviderOperationDefinition<
 > = RustProviderOperationDefinitionBase<OperationKind> & (
   | {
       readonly isFallible: true;
-      readonly errorBoundary: "provider-native" | "source-program";
+      readonly errorBoundary: RustFallibleErrorBoundary;
     }
   | {
       readonly isFallible?: false;
@@ -151,7 +152,7 @@ export type RustProviderBinaryEpilogueDefinition =
   & (
     | {
         readonly isFallible: true;
-        readonly errorBoundary: "provider-native" | "source-program";
+        readonly errorBoundary: RustFallibleErrorBoundary;
       }
     | {
         readonly isFallible?: false;

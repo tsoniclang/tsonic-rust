@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { relative, resolve } from "node:path";
 import type {
   AstReader,
@@ -8,13 +7,15 @@ import type {
   TargetCompilationPaths,
   TargetDiagnostic,
 } from "@tsonic/target-api";
-import { rustReservedIdentifiers } from "../../backend/planner/plan-context.js";
+import { rustReservedIdentifiers } from "../../common/rust-identifiers.js";
 
 export interface RustSourceFileOutputIdentity {
   readonly fileName: string;
   readonly relativeSourcePath: string;
+  readonly moduleSegments: readonly string[];
   readonly moduleName: string;
   readonly artifactPath: string;
+  readonly childModuleNames: readonly string[];
 }
 
 export type RustSourceOutputIdentityPlan =
@@ -36,11 +37,13 @@ export interface RustSourceOutputIdentityPlannerHost {
 export function planRustSourceOutputIdentities(
   host: RustSourceOutputIdentityPlannerHost,
 ): RustSourceOutputIdentityPlan {
-  const byFileName = new Map<string, RustSourceFileOutputIdentity>();
-  const byModuleName = new Map<string, string>();
-  const byArtifactPath = new Map<string, string>();
   const diagnostics: TargetDiagnostic[] = [];
-
+  const sourcePaths: {
+    readonly fileName: string;
+    readonly relativeSourcePath: string;
+    readonly sourceSegments: readonly string[];
+  }[] = [];
+  const seenSourcePaths = new Map<string, string>();
   for (const sourceFile of host.sourceFiles) {
     const fileName = host.ast.getFileName(sourceFile);
     const relativeSourcePath = projectRelativeSourcePath(
@@ -51,8 +54,8 @@ export function planRustSourceOutputIdentities(
     if (relativeSourcePath === undefined) {
       continue;
     }
-    const moduleName = rustModuleNameForSourcePath(relativeSourcePath);
-    if (moduleName === undefined) {
+    const sourceSegments = sourceModuleSegments(relativeSourcePath);
+    if (sourceSegments === undefined) {
       diagnostics.push({
         code: "RUST_SOURCE_MODULE_IDENTITY_UNSUPPORTED",
         category: "error",
@@ -65,7 +68,44 @@ export function planRustSourceOutputIdentities(
       });
       continue;
     }
-    const artifactPath = `src/${moduleName}.rs`;
+    const normalizedSourcePath = sourceSegments.join("/");
+    const existing = seenSourcePaths.get(normalizedSourcePath);
+    if (existing !== undefined && existing !== fileName) {
+      diagnostics.push(identityCollisionDiagnostic(
+        "RUST_SOURCE_MODULE_IDENTITY_COLLISION",
+        fileName,
+        existing,
+        "source module path",
+        normalizedSourcePath,
+      ));
+      continue;
+    }
+    seenSourcePaths.set(normalizedSourcePath, fileName);
+    sourcePaths.push({ fileName, relativeSourcePath, sourceSegments });
+  }
+  if (diagnostics.length > 0) {
+    return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+  }
+
+  const root = createModuleSegmentNode();
+  for (const sourcePath of sourcePaths) {
+    let node = root;
+    for (const segment of sourcePath.sourceSegments) {
+      const child = node.children.get(segment) ?? createModuleSegmentNode();
+      node.children.set(segment, child);
+      node = child;
+    }
+  }
+  assignRustModuleSegmentNames(root);
+
+  const byFileName = new Map<string, RustSourceFileOutputIdentity>();
+  const byModuleName = new Map<string, string>();
+  const byArtifactPath = new Map<string, string>();
+  for (const sourcePath of sourcePaths) {
+    const { fileName, relativeSourcePath } = sourcePath;
+    const moduleSegments = resolveRustModuleSegments(root, sourcePath.sourceSegments);
+    const moduleName = moduleSegments.join("::");
+    const artifactPath = `src/${moduleSegments.join("/")}.rs`;
     const moduleOwner = byModuleName.get(moduleName);
     const artifactOwner = byArtifactPath.get(artifactPath);
     if (moduleOwner !== undefined && moduleOwner !== fileName) {
@@ -90,11 +130,18 @@ export function planRustSourceOutputIdentities(
     }
     byModuleName.set(moduleName, fileName);
     byArtifactPath.set(artifactPath, fileName);
+    const moduleNode = resolveModuleSegmentNode(root, sourcePath.sourceSegments);
     byFileName.set(fileName, Object.freeze({
       fileName,
       relativeSourcePath,
+      moduleSegments: Object.freeze(moduleSegments),
       moduleName,
       artifactPath,
+      childModuleNames: Object.freeze(
+        [...moduleNode.children.values()]
+          .map((child) => child.rustName!)
+          .sort(compareNames),
+      ),
     }));
   }
 
@@ -106,40 +153,147 @@ export function planRustSourceOutputIdentities(
 export function rustModuleNameForSourcePath(
   relativeSourcePath: string,
 ): string | undefined {
+  const segments = sourceModuleSegments(relativeSourcePath);
+  return segments === undefined
+    ? undefined
+    : segments.map(rustModuleSegmentBase).join("::");
+}
+
+export function allocateRustSupportModuleName(
+  identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
+  preferredName: string,
+  additionalReservedNames: readonly string[] = [],
+): string {
+  const usedNames = new Set(additionalReservedNames);
+  for (const identity of identities.values()) {
+    const topLevelName = identity.moduleSegments[0];
+    if (topLevelName !== undefined) {
+      usedNames.add(topLevelName);
+    }
+  }
+  const baseName = rustModuleSegmentBase(preferredName);
+  let candidate = baseName;
+  let suffix = 2;
+  while (usedNames.has(candidate)) {
+    candidate = `${baseName}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+interface ModuleSegmentNode {
+  readonly children: Map<string, ModuleSegmentNode>;
+  rustName?: string;
+}
+
+function createModuleSegmentNode(): ModuleSegmentNode {
+  return { children: new Map() };
+}
+
+function sourceModuleSegments(relativeSourcePath: string): readonly string[] | undefined {
   const normalized = normalizePath(relativeSourcePath);
   const sourcePath = stripTypeScriptExtension(normalized);
   if (sourcePath === undefined || sourcePath.length === 0 ||
-    sourcePath.startsWith("/") || sourcePath.endsWith("/") ||
-    sourcePath.split("/").some((part) => part.length === 0 || part === "." || part === "..")) {
+    sourcePath.startsWith("/") || sourcePath.endsWith("/")) {
     return undefined;
   }
+  const segments = sourcePath.split("/");
+  return segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")
+    ? undefined
+    : Object.freeze(segments);
+}
 
-  const parts = sourcePath.split("/");
-  const canonical = parts.length === 1 && /^[a-z_][a-z0-9_]*$/u.test(parts[0]!) &&
-    !parts[0]!.includes("__");
-  let moduleName = canonical ? parts[0] : undefined;
-  if (moduleName === undefined) {
-    const readable = sourcePath
-      .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
-      .toLowerCase()
-      .replace(/\//gu, "_")
-      .replace(/[^a-z0-9_]/gu, "_")
-      .replace(/_+/gu, "_")
-      .replace(/^_+|_+$/gu, "") || "module";
-    const digest = createHash("sha256").update(normalized).digest("hex");
-    moduleName = `${readable.slice(0, 120)}_id_${digest}`;
+function assignRustModuleSegmentNames(
+  node: ModuleSegmentNode,
+  parentRustName?: string,
+): void {
+  const groups = new Map<string, { sourceName: string; node: ModuleSegmentNode }[]>();
+  for (const [sourceName, child] of node.children) {
+    const base = rustModuleSegmentBase(sourceName);
+    const group = groups.get(base) ?? [];
+    group.push({ sourceName, node: child });
+    groups.set(base, group);
   }
-  if (/^[0-9]/u.test(moduleName) || moduleName === "main" || moduleName === "lib" ||
-    rustReservedIdentifiers.has(moduleName)) {
-    moduleName = `source_${moduleName}`;
+  const reservedBaseNames = new Set(groups.keys());
+  const usedNames = new Set<string>();
+  for (const [base, group] of [...groups].sort(([left], [right]) => compareNames(left, right))) {
+    group.sort((left, right) => compareNames(left.sourceName, right.sourceName));
+    const canonicalIndex = group.findIndex((entry) => entry.sourceName === base);
+    if (canonicalIndex > 0) {
+      const [canonical] = group.splice(canonicalIndex, 1);
+      group.unshift(canonical!);
+    }
+    for (const [index, entry] of group.entries()) {
+      const preserveBase = index === 0 && base !== parentRustName;
+      const rustName = preserveBase
+        ? base
+        : allocateRustModuleSegmentName(base, reservedBaseNames, usedNames, parentRustName);
+      entry.node.rustName = rustName;
+      usedNames.add(rustName);
+      assignRustModuleSegmentNames(entry.node, rustName);
+    }
   }
-  if (!/^[a-z_][a-z0-9_]*$/u.test(moduleName)) {
-    return undefined;
+}
+
+function allocateRustModuleSegmentName(
+  base: string,
+  reservedBaseNames: ReadonlySet<string>,
+  usedNames: ReadonlySet<string>,
+  parentRustName: string | undefined,
+): string {
+  let suffix = 2;
+  while (true) {
+    const candidate = `${base}_${suffix}`;
+    if (candidate !== parentRustName &&
+      !reservedBaseNames.has(candidate) &&
+      !usedNames.has(candidate)) {
+      return candidate;
+    }
+    suffix += 1;
   }
-  if (moduleName.length > 240) {
-    moduleName = `source_id_${createHash("sha256").update(normalized).digest("hex")}`;
+}
+
+function resolveRustModuleSegments(
+  root: ModuleSegmentNode,
+  sourceSegments: readonly string[],
+): string[] {
+  const result: string[] = [];
+  let node = root;
+  for (const sourceSegment of sourceSegments) {
+    node = node.children.get(sourceSegment)!;
+    result.push(node.rustName!);
   }
-  return moduleName;
+  return result;
+}
+
+function resolveModuleSegmentNode(
+  root: ModuleSegmentNode,
+  sourceSegments: readonly string[],
+): ModuleSegmentNode {
+  let node = root;
+  for (const sourceSegment of sourceSegments) {
+    node = node.children.get(sourceSegment)!;
+  }
+  return node;
+}
+
+function rustModuleSegmentBase(sourceName: string): string {
+  let value = sourceName
+    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/gu, "_")
+    .replace(/_+/gu, "_")
+    .replace(/^_+|_+$/gu, "") || "module";
+  if (/^[0-9]/u.test(value) || value === "main" || value === "lib" || value === "mod" ||
+    value.startsWith("__tsonic") || rustReservedIdentifiers.has(value)) {
+    value = `${value}_module`;
+  }
+  return value.length <= 120 ? value : value.slice(0, 120).replace(/_+$/u, "");
+}
+
+function compareNames(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function projectRelativeSourcePath(

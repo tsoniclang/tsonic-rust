@@ -360,7 +360,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /optional\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
   assert.match(source, /defaulted\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
-  assert.match(source, /value\.map\(\|__tsonic_option_value\|\s*\{\s*tsonic_rust_runtime::conversions::i32_to_f64\(__tsonic_option_value\)/u);
+  assert.match(source, /value\.map\(tsonic_rust_runtime::conversions::i32_to_f64\)/u);
   validateGeneratedProject("source-call-optional-conversion", result.artifacts, { run: true });
 });
 
@@ -411,10 +411,10 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let __tsonic_spread_argument/u);
+  assert.match(source, /let spread_argument/u);
   assert.match(
     source,
-    /sum3\(\s*__tsonic_spread_argument,\s*__tsonic_spread_argument_1\[0\],\s*__tsonic_spread_argument_1\[1\],?\s*\)/u,
+    /sum3\(\s*spread_argument,\s*spread_argument_2\[0\],\s*spread_argument_2\[1\],?\s*\)/u,
   );
   validateGeneratedProject("source-call-spread", result.artifacts, { run: true });
 });

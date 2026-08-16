@@ -126,15 +126,23 @@ export function sum(limit: int32): int32 {
   } while (current < limit);
   return total;
 }
+
+export function advance(value: number, limit: number): number {
+  do {
+    value += 1;
+  } while (value < limit);
+  return value;
+}
 `,
     },
   });
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /'__tsonic_loop(?:_\d+)?: loop \{/u);
+  assert.match(source, /'loop_value(?:_\d+)?: loop \{/u);
   assert.match(source, /if current >= limit \{/u);
-  assert.match(source, /continue '__tsonic_loop(?:_\d+)?;/u);
+  assert.match(source, /value\s*\.partial_cmp\(&limit\)\s*\.is_none_or\(\|ordering\| ordering != std::cmp::Ordering::Less\)/u);
+  assert.match(source, /continue 'loop_value(?:_\d+)?;/u);
   validateGeneratedProject("control-flow-do-while", result.artifacts);
 });
 
@@ -194,9 +202,9 @@ export function labeled(limit: int32, skip: boolean): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /continue '__tsonic_loop/u);
-  assert.match(source, /break '__tsonic_loop/u);
-  assert.match(source, /'__tsonic_label(?:_\d+)?: \{/u);
+  assert.match(source, /continue 'loop_value/u);
+  assert.match(source, /break 'loop_value/u);
+  assert.match(source, /'label(?:_\d+)?: \{/u);
   assert.match(source, /rt::Completion::Break\(\d+\)/u);
   validateGeneratedProject("control-flow-labels", result.artifacts);
 });
@@ -247,11 +255,11 @@ export function nested(limit: int32): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let __tsonic_switch_value(?:_\d+)? = value;/u);
-  assert.match(source, /__tsonic_switch_value(?:_\d+)? == 1/u);
-  assert.match(source, /__tsonic_switch_value(?:_\d+)? == "first"/u);
-  assert.match(source, /break '__tsonic_switch/u);
-  assert.match(source, /continue '__tsonic_loop/u);
+  assert.match(source, /let switch_value(?:_\d+)? = value;/u);
+  assert.match(source, /switch_value(?:_\d+)? == 1/u);
+  assert.match(source, /switch_value(?:_\d+)? == "first"/u);
+  assert.match(source, /break 'switch/u);
+  assert.match(source, /continue 'loop_value/u);
   validateGeneratedProject("control-flow-switch", result.artifacts);
 });
 
@@ -280,7 +288,7 @@ export function dispose(value: boolean): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.equal(source.indexOf("resource.dispose()") < source.indexOf("break '__tsonic_switch"), true);
+  assert.equal(source.indexOf("resource.dispose()") < source.indexOf("break 'switch"), true);
   validateGeneratedProject("control-flow-switch-resource", result.artifacts);
 });
 

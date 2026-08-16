@@ -25,7 +25,6 @@ export function rustFutureValueForOperation(
       awaitedConversion: operation.abi.result.awaitedConversion,
       awaiting,
       errorBoundary: operation.abi.effects.errorBoundary,
-      errorDomain: awaiting === "fallible" ? "runtime" : "none",
     };
   }
   if (operation?.kind !== "source-call" || sourceCallEffects === undefined ||
@@ -47,7 +46,6 @@ export function rustFutureValueForOperation(
     },
     awaiting: sourceCallEffects.awaiting,
     errorBoundary: sourceCallEffects.awaiting === "fallible" ? "source-program" : "none",
-    errorDomain: sourceCallEffects.awaiting === "fallible" ? "current" : "none",
   };
 }
 
@@ -56,10 +54,8 @@ export function rustFutureValueMatchesCarrier(
   carrier: TargetTypeRef | undefined,
 ): boolean {
   return carrier !== undefined &&
-    ((fact.awaiting === "infallible" && fact.errorBoundary === "none" &&
-      fact.errorDomain === "none") ||
-      (fact.awaiting === "fallible" && fact.errorBoundary !== "none" &&
-        fact.errorDomain !== "none")) &&
+    ((fact.awaiting === "infallible" && fact.errorBoundary === "none") ||
+      (fact.awaiting === "fallible" && fact.errorBoundary !== "none")) &&
     rustTargetTypeRefEquals(carrier, rustFutureTargetType(fact.outputCarrier)) &&
     rustTargetTypeRefEquals(fact.awaitedConversion.targetCarrier, fact.outputCarrier);
 }

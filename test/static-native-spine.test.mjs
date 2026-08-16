@@ -163,6 +163,11 @@ export function greet(name: string): string {
 export function isEmpty(text: string): boolean {
   return text === "";
 }
+
+export function isNotEmpty(text: string): boolean {
+  return "" !== text;
+}
+
 `,
     },
   });
@@ -170,7 +175,80 @@ export function isEmpty(text: string): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /format!\("\{\}\{\}", String::from\("hello "\), name\)/u);
-  assert.match(text, /text == ""/u);
+  assert.match(text, /text\.is_empty\(\)/u);
+  assert.match(text, /!text\.is_empty\(\)/u);
+  assert.doesNotMatch(text, /(?:==|!=) ""/u);
+});
+
+test("Rust expression construction canonicalizes proven native boolean, range, and concat forms", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function missing(value: string | undefined): boolean {
+  return !(value !== undefined);
+}
+
+export function inRange(value: int32): boolean {
+  return value >= 10 && value <= 20;
+}
+
+export function checkedInRange(valid: boolean, value: int32): boolean {
+  return valid && value >= 10 && value <= 20;
+}
+
+export function outsideRange(value: int32): boolean {
+  return value < 10 || value > 20;
+}
+
+export function outsideFloatRange(value: number): boolean {
+  return value < 10 || value > 20;
+}
+
+export function negateFloatComparison(value: number): boolean {
+  return !(value < 10);
+}
+
+export function negateFloatLessEqual(value: number): boolean {
+  return !(value <= 10);
+}
+
+export function negateFloatGreater(value: number): boolean {
+  return !(value > 10);
+}
+
+export function negateFloatGreaterEqual(value: number): boolean {
+  return !(value >= 10);
+}
+
+export function joined(left: string, right: string): string {
+  return left + ("/" + right);
+}
+
+export function explicitUnitReturn(): void {
+  return;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /value\.is_none\(\)/u);
+  assert.match(text, /\(10\.\.=20\)\.contains\(&value\)/u);
+  assert.match(text, /valid\s*&&\s*\(10\.\.=20\)\.contains\(&value\)/u);
+  assert.match(text, /!\(10\.\.=20\)\.contains\(&value\)/u);
+  assert.match(text, /value\.partial_cmp\(&10\.0\) == Some\(std::cmp::Ordering::Less\)/u);
+  assert.match(text, /value\.partial_cmp\(&20\.0\) == Some\(std::cmp::Ordering::Greater\)/u);
+  assert.doesNotMatch(text, /!\(10\.0\.\.=20\.0\)\.contains\(&value\)/u);
+  assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering != std::cmp::Ordering::Less\)/u);
+  assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering == std::cmp::Ordering::Greater\)/u);
+  assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering != std::cmp::Ordering::Greater\)/u);
+  assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering == std::cmp::Ordering::Less\)/u);
+  assert.match(text, /format!\("\{\}\{\}\{\}", left, String::from\("\/"\), right\)/u);
+  assert.match(text, /pub fn explicit_unit_return\(\) \{\}/u);
+  assert.doesNotMatch(text, /format!\([^\n]*format!/u);
 });
 
 test("module imports and exports lower to crate-qualified calls", () => {

@@ -3,7 +3,6 @@ import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
   KindArrayBindingPattern,
-  KindIdentifier,
   KindObjectBindingPattern,
   Node_Initializer,
   Node_Name,
@@ -22,7 +21,6 @@ import { planRustBindingPattern } from "./binding-patterns.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
-  rustSourceName,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
@@ -82,7 +80,7 @@ export function planRustCallableParameters(
     const parameterCarrier = abi?.parameterCarrier;
     const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
     const parameterName = pattern === undefined
-      ? rustSourceName(nameNode !== undefined && nameKind === KindIdentifier ? ast.text(nameNode) : "")
+      ? context.input.names.nameForDeclaration(parameter) ?? ""
       : allocateRustSyntheticName(syntheticNames, "binding_parameter");
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(

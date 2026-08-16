@@ -25,8 +25,13 @@ import {
   planRustCrateInitializer,
   planRustModuleInitializers,
 } from "./module-initialization.js";
-import { planRustSourceOutputIdentities } from "../../translate/artifacts/source-output-identities.js";
+import {
+  allocateRustSupportModuleName,
+  planRustSourceOutputIdentities,
+} from "../../translate/artifacts/source-output-identities.js";
 import { planRustProgramErrorModule } from "./program-errors.js";
+import { applyRustErrorBoundary } from "./error-boundary.js";
+import { planRustStructuralShapeModule } from "./structural-shapes.js";
 
 export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [...input.diagnostics];
@@ -37,13 +42,38 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const moduleNameByFileName = new Map(
     [...identityPlan.identities].map(([fileName, identity]) => [fileName, identity.moduleName] as const),
   );
+  const structuralShapesModuleName = allocateRustSupportModuleName(
+    identityPlan.identities,
+    "shapes",
+  );
+  const programModuleName = allocateRustSupportModuleName(
+    identityPlan.identities,
+    "program",
+    [structuralShapesModuleName],
+  );
+  const crateInitializerFunctionName = allocateRustSupportModuleName(
+    identityPlan.identities,
+    "initialize",
+    [structuralShapesModuleName, programModuleName],
+  );
+  if (diagnostics.length > 0) {
+    return { artifacts: [], diagnostics };
+  }
+  const structuralShapeModel = planRustStructuralShapeModule(
+    input,
+    moduleNameByFileName,
+    structuralShapesModuleName,
+    diagnostics,
+  );
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
 
   const plannedSources = reconstructRustSourceFiles(
     input,
-    moduleNameByFileName,
+    identityPlan.identities,
+    programModuleName,
+    structuralShapesModuleName,
     diagnostics,
   );
   if (plannedSources === undefined) {
@@ -84,7 +114,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
 
   const sortedSources = [...plannedSources].sort((left, right) =>
     left.moduleName.localeCompare(right.moduleName, "en"));
-  const sortedModuleNames = sortedSources.map((source) => source.moduleName);
+  const sortedTopLevelModuleNames = [...new Set(
+    [...identityPlan.identities.values()].map((identity) => identity.moduleSegments[0]!),
+  )].sort(compareRustArtifactNames);
   const programErrorModel = planRustProgramErrorModule(
     input,
     moduleNameByFileName,
@@ -96,9 +128,10 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const errorDomain = programErrorModel === undefined ? "runtime" as const : "project" as const;
   const crateInitializer = planRustCrateInitializer(
     moduleInitializers ?? [],
+    crateInitializerFunctionName,
     programErrorModel === undefined
       ? "tsonic_rust_runtime::TsonicResult"
-      : "crate::__tsonic_program::TsonicResult",
+      : `crate::${programModuleName}::TsonicResult`,
     errorDomain,
   );
   const artifacts: TargetArtifact[] = cargoProject.project.kind === "generated"
@@ -114,21 +147,38 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
         ? []
         : [{
             kind: "mod-decl" as const,
-            name: "__tsonic_program",
+            name: programModuleName,
             visibility: "public" as const,
             attrs: ["#[doc(hidden)]"],
           }]),
-      ...sortedModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
+      ...(structuralShapeModel === undefined
+        ? []
+        : [{
+            kind: "mod-decl" as const,
+            name: structuralShapesModuleName,
+            visibility: "public" as const,
+            attrs: ["#[doc(hidden)]"],
+          }]),
+      ...sortedTopLevelModuleNames.map((name): RustItem => ({ kind: "mod-decl", name, visibility: "public" })),
       ...(crateInitializer === undefined ? [] : [crateInitializer.item]),
     ],
   );
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
   if (programErrorModel !== undefined) {
     artifacts.push(rustSourceArtifact(
-      "src/__tsonic_program.rs",
+      `src/${programModuleName}.rs`,
       printRustSourceFile(programErrorModel),
     ));
   }
+  if (structuralShapeModel !== undefined) {
+    artifacts.push(rustSourceArtifact(
+      `src/${structuralShapesModuleName}.rs`,
+      printRustSourceFile(structuralShapeModel),
+    ));
+  }
+  const sourceArtifacts: TargetSourceFile[] = planSyntheticModuleArtifacts(
+    identityPlan.identities,
+  );
   for (const source of sortedSources) {
     const identity = identityPlan.identities.get(input.ast.getFileName(source.sourceFile));
     if (identity === undefined) {
@@ -141,11 +191,13 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
       });
       continue;
     }
-    artifacts.push(rustSourceArtifact(
+    sourceArtifacts.push(rustSourceArtifact(
       identity.artifactPath,
       printRustSourceFile(source.model),
     ));
   }
+  sourceArtifacts.sort((left, right) => compareRustArtifactNames(left.path, right.path));
+  artifacts.push(...sourceArtifacts);
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
@@ -214,20 +266,9 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
       if (epilogue.isFallible !== true) {
         return { kind: "expr" as const, expr: call };
       }
-      const result = epilogue.errorBoundary === "provider-native"
-        ? {
-            kind: "method-call" as const,
-            receiver: call,
-            method: "map_err",
-            args: [{
-              kind: "path" as const,
-              path: "tsonic_rust_runtime::TsonicError::from",
-            }],
-          }
-        : call;
       return {
         kind: "expr" as const,
-        expr: { kind: "try" as const, expr: result, errorDomain: "runtime" as const },
+        expr: applyRustErrorBoundary(call, epilogue.errorBoundary, errorDomain),
       };
     });
     const mainFallible = entryFunction.fallible ||
@@ -253,7 +294,7 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
               kind: "named" as const,
               path: programErrorModel === undefined
                 ? "tsonic_rust_runtime::TsonicResult"
-                : `${crateName}::__tsonic_program::TsonicResult`,
+                : `${crateName}::${programModuleName}::TsonicResult`,
               typeArguments: [{ kind: "unit" as const }],
             },
             body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
@@ -263,6 +304,42 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
     artifacts.push(rustSourceArtifact("src/main.rs", printRustSourceFile(createRustSourceFile([mainItem]))));
   }
   return { artifacts, diagnostics: [] };
+}
+
+function planSyntheticModuleArtifacts(
+  identities: ReadonlyMap<string, import("../../translate/artifacts/source-output-identities.js").RustSourceFileOutputIdentity>,
+): TargetSourceFile[] {
+  const authoredModules = new Set(
+    [...identities.values()].map((identity) => identity.moduleName),
+  );
+  const childNamesByParent = new Map<string, Set<string>>();
+  for (const identity of identities.values()) {
+    for (let depth = 1; depth < identity.moduleSegments.length; depth += 1) {
+      const parent = identity.moduleSegments.slice(0, depth).join("::");
+      const children = childNamesByParent.get(parent) ?? new Set<string>();
+      children.add(identity.moduleSegments[depth]!);
+      childNamesByParent.set(parent, children);
+    }
+  }
+  return [...childNamesByParent]
+    .filter(([moduleName]) => !authoredModules.has(moduleName))
+    .sort(([left], [right]) => compareRustArtifactNames(left, right))
+    .map(([moduleName, children]) => rustSourceArtifact(
+      `src/${moduleName.split("::").join("/")}.rs`,
+      printRustSourceFile(createRustSourceFile(
+        [...children]
+          .sort(compareRustArtifactNames)
+          .map((name): RustItem => ({
+            kind: "mod-decl",
+            name,
+            visibility: "public",
+          })),
+      )),
+    ));
+}
+
+function compareRustArtifactNames(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function rustSourceArtifact(path: string, text: string): TargetSourceFile {

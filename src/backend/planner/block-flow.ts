@@ -39,6 +39,8 @@ export function applyRustTailShape(body: RustBlock, hasReturnValue: boolean): Ru
   let tail: RustStmt = last;
   if (hasReturnValue && last.kind === "return" && last.expr !== undefined) {
     tail = { kind: "tail", expr: last.expr };
+  } else if (!hasReturnValue && last.kind === "return" && last.expr === undefined) {
+    return { ...body, statements: body.statements.slice(0, lastIndex) };
   } else if (last.kind === "throw") {
     tail = { ...last, tail: true };
   } else if (last.kind === "scope" || last.kind === "unsafe-scope") {

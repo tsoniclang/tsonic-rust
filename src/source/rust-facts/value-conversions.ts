@@ -18,6 +18,7 @@ import {
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
+  rustBorrowedStrTargetType,
   rustStringTargetType,
   rustUsizeTargetType,
 } from "../rust-target-types.js";
@@ -36,7 +37,7 @@ const stringCarrier = rustStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 
 interface RustValueConversionContractBase {
-  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion";
+  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "ownership";
   readonly sourceMode: "value" | "ref";
   readonly source: TargetTypeRef;
   readonly target: TargetTypeRef;
@@ -63,6 +64,9 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "option-map";
       readonly element: RustValueConversionContract;
     }
+  | {
+      readonly lowering: "owned-string-from-borrowed-str";
+    }
 );
 
 function conversion(id: RustValueConversionId): RustValueConversion {
@@ -85,6 +89,7 @@ export const rustFloat64ToJsValueConversion = conversion("js-value-from-f64");
 export const rustInt32ToJsValueConversion = conversion("js-value-from-i32");
 export const rustStringToJsValueConversion = conversion("js-value-from-string");
 export const rustJsValueCloneConversion = conversion("js-value-clone");
+export const rustBorrowedStrToStringValueConversion = conversion("owned-string-from-borrowed-str");
 
 export function rustValueConversionContract(
   value: RustValueConversion,
@@ -205,6 +210,15 @@ export function rustValueConversionContract(
       return contract(value.id, "exact", "tsonic_rust_js::abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
     case "js-value-clone":
       return contract(value.id, "exact", "tsonic_rust_js::abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
+    case "owned-string-from-borrowed-str":
+      return {
+        category: "ownership",
+        lowering: "owned-string-from-borrowed-str",
+        sourceMode: "value",
+        source: rustBorrowedStrTargetType(),
+        target: stringCarrier,
+        fallible: false,
+      };
   }
 }
 

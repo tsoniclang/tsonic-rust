@@ -309,6 +309,15 @@ function readConstPointer(pointer: constPtr<u8>): u8 {
   return unsafeContext(first_byte(pointer));
 }
 
+class DomainError extends Error {
+  constructor(message: string) { super(message); }
+}
+
+function checkedInProjectDomain(value: int32): int32 {
+  if (value < 0) throw new DomainError("negative");
+  return checked_double(value);
+}
+
 export function invokePointer(
   callback: FunctionPointer<[int32], int32>,
   value: int32,
@@ -318,7 +327,7 @@ export function invokePointer(
 
 export function main(): void {
   const checked = new CheckedWidget(6);
-  if (checked.value !== 6 || checked_double(4) !== 8) {
+  if (checked.value !== 6 || checked_double(4) !== 8 || checkedInProjectDomain(5) !== 10) {
     throw new Error("fallible compiler-provider mapping failed");
   }
   const widget = new Widget<int32>(7);
@@ -395,8 +404,8 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::checked_double\(4\)\?/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::first_byte\(widget_alias::byte_ptr\(\)\) \}/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn readMutablePointer\(pointer: \*mut u8\) -> u8/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /readConstPointer\(widget_alias::byte_ptr\(\)\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /fn read_mutable_pointer\(pointer: \*mut u8\) -> u8/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /read_const_pointer\(widget_alias::byte_ptr\(\)\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);

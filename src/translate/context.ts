@@ -26,6 +26,12 @@ import {
 import type {
   RustProjectTypePolicyRegistry,
 } from "../source/rust-target-semantics/project-type-policy.js";
+import {
+  createRustStructuralShapePlanRegistry,
+} from "../source/rust-target-semantics/structural-shape-plan.js";
+import type {
+  RustStructuralShapePlanRegistry,
+} from "../source/rust-target-semantics/structural-shape-plan.js";
 import type { RustProviderSemantics } from "../source/provider-packages/index.js";
 import {
   collectRustProviderSemantics,
@@ -40,6 +46,12 @@ import {
 import type {
   RustSafetyApplicationFactIndex,
 } from "./safety/application-fact-index.js";
+import {
+  createRustNamePlan,
+} from "../common/rust-name-plan.js";
+import type {
+  RustNamePlan,
+} from "../common/rust-name-plan.js";
 
 export interface RustTranslationContext extends TargetCompileInput {
   readonly backend: TargetBackendContext;
@@ -48,8 +60,10 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly facts: RustSemanticModel;
   readonly artifacts: RustTranslationArtifactGraph;
   readonly projectTypes: RustProjectTypePolicyRegistry;
+  readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
+  readonly names: RustNamePlan;
   readonly diagnostics: TargetDiagnostic[];
   readonly analysis: {
     getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
@@ -74,12 +88,14 @@ export function createRustTranslationContext(
   const facts = new RustSemanticModel(input.source.sourceFacts);
   const artifacts = createRustTranslationArtifactGraph(ast);
   const projectTypes = createRustProjectTypePolicyRegistry();
+  const structuralShapes = createRustStructuralShapePlanRegistry();
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
     sourceFiles,
     sourceFacts: input.source.sourceFacts,
     navigation: input.source.navigation,
   });
+  const names = createRustNamePlan({ ast, sourceFiles });
   const diagnostics: TargetDiagnostic[] = [];
   const staticProviderSemantics = mergeRustProviderSemantics(
     rustBuiltInSourceTypeSemantics(),
@@ -97,7 +113,9 @@ export function createRustTranslationContext(
     facts,
     artifacts,
     projectTypes,
+    structuralShapes,
     safetyApplications,
+    names,
     providerSemantics,
     diagnostics,
     analysis: Object.freeze({

@@ -72,6 +72,13 @@ export function main(): void {
   }, "rust_inheritance_dispatch_proof");
 
   assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.equal(source.match(/let project_this = SteppedCounter \{/gu)?.length ?? 0, 1);
+  assert.equal(source.match(/String::from\("derived"\)/gu)?.length ?? 0, 1);
+  assert.match(
+    source,
+    /fn dispatch_stepped_counter_add[\s\S]*SteppedCounterRoot::exact_stepped_counter_add\(self, delta\)/u,
+  );
   const run = validateGeneratedProject("inheritance-dispatch", result.artifacts, { run: true });
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });

@@ -113,13 +113,13 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.equal(source.match(/fn combine\s*\(/gu)?.length ?? 0, 1);
   assert.equal(source.match(/fn total\s*\(/gu)?.length ?? 0, 1);
-  assert.match(source, /__tsonic_field_copied(?:_[0-9]+)? = __tsonic_field_label(?:_[0-9]+)?\.clone\(\);/u);
-  assert.match(source, /__tsonic_field_second(?:_[0-9]+)? = __tsonic_base_state\.1 \+ 2;/u);
+  assert.match(source, /field_copied = base_state\.label\.clone\(\);/u);
+  assert.match(source, /field_second = base_state\.first \+ 2;/u);
   assert.match(source, /fn letter\(\) -> u16 \{\s*65\s*\}/u);
-  assert.match(source, /fn signedMaximum\(\) -> i128/u);
-  assert.match(source, /fn signedMinimum\(\) -> i128/u);
-  assert.match(source, /fn unsignedMaximum\(\) -> u128/u);
-  assert.match(source, /unsafe fn __tsonic_virtual_/u);
+  assert.match(source, /fn signed_maximum\(\) -> i128/u);
+  assert.match(source, /fn signed_minimum\(\) -> i128/u);
+  assert.match(source, /fn unsigned_maximum\(\) -> u128/u);
+  assert.match(source, /unsafe fn dispatch_unsafe_contract_read/u);
 
   const run = validateGeneratedProject("project-contract-parity", result.artifacts, { run: true });
   assert.equal(run.status, 0);
@@ -186,9 +186,9 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let mut __tsonic_field_total(?:_[0-9]+)?: i32;/u);
-  assert.match(source, /__tsonic_field_total(?:_[0-9]+)? \+= index;/u);
-  assert.match(source, /let doubled: i32 = __tsonic_base_state\.0 \* 2;/u);
+  assert.match(source, /let mut field_total: i32;/u);
+  assert.match(source, /field_total \+= index;/u);
+  assert.match(source, /let doubled: i32 = base_state\.value \* 2;/u);
 
   const run = validateGeneratedProject("constructor-control-flow", result.artifacts, { run: true });
   assert.equal(run.status, 0);

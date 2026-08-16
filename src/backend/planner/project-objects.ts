@@ -3,36 +3,24 @@ import type { RustAssignmentOperator } from "../../common/rust-syntax.js";
 import { isRustCopyCarrier } from "../../source/rust-target-types.js";
 import type { RustExpr, RustType } from "../rust-ast/nodes.js";
 
-export const rustProjectObjectStateField = "__tsonic_state";
-export const rustProjectObjectIdentityField = "__tsonic_identity";
-export const rustProjectObjectDispatchField = "__tsonic_dispatch";
+export const rustProjectObjectStateField = "state";
+export const rustProjectObjectIdentityField = "identity";
+export const rustProjectObjectDispatchField = "dispatch";
 
 const rustProjectObjectStateBinding = "state";
-const rustProjectEmptyObjectStatePath = "rt::EmptyObjectState";
 
-export function rustProjectObjectLayerType(fieldTypes: readonly RustType[]): RustType {
-  return fieldTypes.length === 0
-    ? { kind: "named", path: rustProjectEmptyObjectStatePath }
-    : { kind: "tuple", elements: fieldTypes };
-}
-
-export function createRustProjectObjectLayer(values: readonly RustExpr[]): RustExpr {
-  return values.length === 0
-    ? { kind: "path", path: rustProjectEmptyObjectStatePath }
-    : { kind: "tuple-literal", elements: values };
-}
-
-export function rustProjectObjectType(fieldTypes: readonly RustType[]): RustType {
+export function rustProjectObjectType(stateType: RustType): RustType {
   return {
     kind: "named",
     path: "rt::ObjectHandle",
-    typeArguments: [rustProjectObjectLayerType(fieldTypes)],
+    typeArguments: [stateType],
   };
 }
 
 export function createRustProjectObject(
   typePath: string,
-  values: readonly RustExpr[],
+  statePath: string,
+  fields: readonly { readonly name: string; readonly value: RustExpr }[],
 ): RustExpr {
   return {
     kind: "struct-literal",
@@ -42,23 +30,26 @@ export function createRustProjectObject(
       value: {
         kind: "call",
         path: "rt::ObjectHandle::new",
-        args: [createRustProjectObjectLayer(values)],
+        args: [{ kind: "struct-literal", path: statePath, fields }],
       },
     }],
   };
 }
 
-export function createRustStructuralObject(values: readonly RustExpr[]): RustExpr {
+export function createRustStructuralObject(
+  statePath: string,
+  fields: readonly { readonly name: string; readonly value: RustExpr }[],
+): RustExpr {
   return {
     kind: "call",
     path: "rt::ObjectHandle::new",
-    args: [createRustProjectObjectLayer(values)],
+    args: [{ kind: "struct-literal", path: statePath, fields }],
   };
 }
 
 export function readRustProjectObjectField(
   receiver: RustExpr,
-  storagePath: number | readonly number[],
+  storagePath: string | readonly string[],
   resultCarrier: TargetTypeRef,
 ): RustExpr {
   const field = rustProjectObjectStatePath(storagePath);
@@ -82,10 +73,10 @@ export function readRustProjectObjectField(
 
 export function readRustStructuralObjectField(
   receiver: RustExpr,
-  storagePath: number | readonly number[],
+  storagePath: string | readonly string[],
   resultCarrier: TargetTypeRef,
 ): RustExpr {
-  const field = rustProjectObjectStatePath(storagePath);
+  const field = rustStructuralObjectStatePath(storagePath);
   return {
     kind: "method-call",
     receiver,
@@ -102,7 +93,7 @@ export function readRustStructuralObjectField(
 
 export function writeRustProjectObjectField(
   receiver: RustExpr,
-  storagePath: number | readonly number[],
+  storagePath: string | readonly string[],
   operator: RustAssignmentOperator,
   value: RustExpr,
 ): RustExpr {
@@ -129,7 +120,7 @@ export function writeRustProjectObjectField(
 
 export function writeRustStructuralObjectField(
   receiver: RustExpr,
-  storagePath: number | readonly number[],
+  storagePath: string | readonly string[],
   operator: RustAssignmentOperator,
   value: RustExpr,
 ): RustExpr {
@@ -143,7 +134,7 @@ export function writeRustStructuralObjectField(
       body: {
         kind: "assignment",
         operator,
-        target: rustProjectObjectStatePath(storagePath),
+        target: rustStructuralObjectStatePath(storagePath),
         value,
       },
     }],
@@ -152,7 +143,7 @@ export function writeRustStructuralObjectField(
 
 export function mutateRustProjectObjectField(
   receiver: RustExpr,
-  storagePath: number | readonly number[],
+  storagePath: string | readonly string[],
   mutation: (field: RustExpr) => RustExpr | undefined,
 ): RustExpr | undefined {
   const body = mutation(rustProjectObjectStatePath(storagePath));
@@ -177,10 +168,10 @@ export function mutateRustProjectObjectField(
 
 export function mutateRustStructuralObjectField(
   receiver: RustExpr,
-  storagePath: number | readonly number[],
+  storagePath: string | readonly string[],
   mutation: (field: RustExpr) => RustExpr | undefined,
 ): RustExpr | undefined {
-  const body = mutation(rustProjectObjectStatePath(storagePath));
+  const body = mutation(rustStructuralObjectStatePath(storagePath));
   return body === undefined
     ? undefined
     : {
@@ -196,11 +187,21 @@ export function mutateRustStructuralObjectField(
 }
 
 function rustProjectObjectStatePath(
-  storagePath: number | readonly number[],
+  storagePath: string | readonly string[],
 ): RustExpr {
-  const path = typeof storagePath === "number" ? [storagePath] : storagePath;
+  const path = typeof storagePath === "string" ? [storagePath] : storagePath;
   return path.reduce<RustExpr>(
-    (receiver, index) => ({ kind: "field", receiver, name: String(index) }),
+    (receiver, name) => ({ kind: "field", receiver, name }),
+    { kind: "path", path: rustProjectObjectStateBinding },
+  );
+}
+
+function rustStructuralObjectStatePath(
+  storagePath: string | readonly string[],
+): RustExpr {
+  const path = typeof storagePath === "string" ? [storagePath] : storagePath;
+  return path.reduce<RustExpr>(
+    (receiver, name) => ({ kind: "field", receiver, name }),
     { kind: "path", path: rustProjectObjectStateBinding },
   );
 }

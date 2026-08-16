@@ -88,6 +88,10 @@ export type {
   RustProviderTypeRow,
 } from "./source/provider-packages/index.js";
 export type { RustTargetTypeRef } from "./policy/types.js";
+export type {
+  RustErrorBoundary,
+  RustFallibleErrorBoundary,
+} from "./source/rust-facts/error-boundary.js";
 export { rustExtensionId, rustTargetOperationFactKey } from "./source/rust-facts/keys.js";
 export type {
   RustProviderChainStep,
@@ -98,6 +102,7 @@ export type {
   RustValueConversionId,
 } from "./source/rust-facts/keys.js";
 export {
+  rustBorrowedStrToStringValueConversion,
   rustFloat64ToInt32ValueConversion,
   rustInt32ToFloat64ValueConversion,
   rustInt32ToUint8ValueConversion,
@@ -129,6 +134,7 @@ export {
   rustJsArrayConcatItemTargetType,
   rustOptionTargetType,
   rustNeverTargetType,
+  rustBorrowedStrTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetId,
   rustStringTargetType,

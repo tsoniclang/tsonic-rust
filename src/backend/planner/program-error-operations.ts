@@ -9,6 +9,10 @@ import type { RustExpr } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
+import {
+  allocateRustSyntheticName,
+  createRustSyntheticNameState,
+} from "./synthetic-names.js";
 
 type RustProgramErrorTypeTestFact = Extract<
   RustTargetOperationFact,
@@ -71,6 +75,10 @@ export function planRustProgramErrorFlowRead(
     return undefined;
   }
   context.usedAliases?.add("rt");
+  const valueName = allocateRustSyntheticName(
+    context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+    "program_error",
+  );
   return {
     kind: "match",
     expression,
@@ -79,9 +87,9 @@ export function planRustProgramErrorFlowRead(
         pattern: {
           kind: "tuple-variant",
           path: `rt::TsonicError::${fact.variant}`,
-          elements: [{ kind: "binding", name: "__tsonic_program_error" }],
+          elements: [{ kind: "binding", name: valueName }],
         },
-        expression: { kind: "path", path: "__tsonic_program_error" },
+        expression: { kind: "path", path: valueName },
       },
       {
         pattern: { kind: "wildcard" },

@@ -29,6 +29,10 @@ import {
 import type {
   RustExpressionPlanner,
 } from "./typed-locations.js";
+import {
+  allocateRustSyntheticName,
+  createRustSyntheticNameState,
+} from "./synthetic-names.js";
 
 export interface RustFinalizedInputPlanOverrides {
   readonly sourceValues: ReadonlyMap<Node, RustExpr>;
@@ -87,11 +91,15 @@ export function planRustProviderLocationScope(
   const mutableLocations: { readonly name: string; readonly ownerName: string }[] = [];
   const sourceValues = new Map<Node, RustExpr>();
   const inputOverrides = new Map<RustFinalizedSourceInput, RustExpr>();
+  const nameRoot = receiverNode ?? argumentNodes.find((node): node is Node => node !== undefined) ??
+    context.sourceFile;
+  const syntheticNames = context.syntheticNames ??
+    createRustSyntheticNameState(context.input.ast, nameRoot, []);
   for (const [index, slot] of sourceSlots.entries()) {
     const mutable = mutableInputs.get(slot.key);
     if (mutable !== undefined) {
-      const name = `__tsonic_location_${index}`;
-      const ownerName = `__tsonic_location_value_${index}`;
+      const name = allocateRustSyntheticName(syntheticNames, `location_${index}`);
+      const ownerName = allocateRustSyntheticName(syntheticNames, `location_value_${index}`);
       bindings.push({ name, value: mutable.location });
       mutableLocations.push({ name, ownerName });
       for (const input of mutable.inputs) {
@@ -103,7 +111,7 @@ export function planRustProviderLocationScope(
     if (value === undefined) {
       return { kind: "failed" };
     }
-    const name = `__tsonic_location_input_${index}`;
+    const name = allocateRustSyntheticName(syntheticNames, `location_input_${index}`);
     bindings.push({ name, value });
     sourceValues.set(slot.node, { kind: "path", path: name });
   }

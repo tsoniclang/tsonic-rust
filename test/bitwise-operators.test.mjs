@@ -41,8 +41,8 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /left & right/u);
   assert.match(source, /rt::native_shift_left\(one, width\)/u);
-  assert.match(source, /rt::native_unsigned_shift_right\(negativeOne, one\)/u);
-  assert.match(source, /rt::native_shift_left\(highByte as i32, one\)/u);
+  assert.match(source, /rt::native_unsigned_shift_right\(negative_one, one\)/u);
+  assert.match(source, /rt::native_shift_left\(high_byte as i32, one\)/u);
   validateGeneratedProject("native-bitwise", result.artifacts, { run: true });
 });
 

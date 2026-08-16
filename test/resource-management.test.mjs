@@ -69,8 +69,8 @@ export function doValues(): void {
   assert.match(source, /rt::Completion::Return\(value\)/u);
   assert.match(source, /rt::Completion::Continue\(0\)/u);
   assert.match(source, /rt::Completion::Break\(0\)/u);
-  assert.match(source, /continue '__tsonic_loop/u);
-  assert.match(source, /break '__tsonic_loop/u);
+  assert.match(source, /continue 'loop/u);
+  assert.match(source, /break 'loop/u);
   assert.equal([...source.matchAll(/rt::Completion::Continue\(0\)/gu)].length >= 4, true);
   assert.match(source, /if index >= 3 \{/u);
   validateGeneratedProject("resource-management-control-flow", result.artifacts);
@@ -148,7 +148,7 @@ export async function run(fail: boolean): Promise<void> {
   assert.equal([...source.matchAll(/let resource: (?:Resource|AsyncResource) =/gu)].length, 2);
   assert.match(source, /resource\.dispose\(\)/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
-  assert.match(source, /let __tsonic_resource_flow(?:_\d+)?: rt::TsonicResult<rt::Completion<\(\)>> =\n\s+Ok\(rt::Completion::Normal\);/u);
+  assert.match(source, /let resource_flow(?:_\d+)?: rt::TsonicResult<rt::Completion<\(\)>> =\s+Ok\(rt::Completion::Normal\);/u);
   validateGeneratedProject("resource-management-lexical-scope", result.artifacts);
 });
 
@@ -166,8 +166,8 @@ export function run(resource: Resource | null): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /if let Some\(__tsonic_resource\) = active\.as_ref\(\)/u);
-  assert.match(source, /__tsonic_resource\.dispose\(\)/u);
+  assert.match(source, /if let Some\(resource_2\) = active\.as_ref\(\)/u);
+  assert.match(source, /resource_2\.dispose\(\)/u);
   validateGeneratedProject("resource-management-null", result.artifacts);
 });
 

@@ -1,8 +1,10 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api";
+import type { RustNamePlan } from "../../common/rust-name-plan.js";
 
 export interface RustSourceMemberNameContext {
   readonly ast: AstReader;
+  readonly names: RustNamePlan;
   semanticsFor(node: Node): SourceFileSemantics;
 }
 
@@ -27,6 +29,5 @@ export function rustProjectCallableTargetName(
         ? "dispose_async"
         : undefined;
   }
-  const text = ast.text(name);
-  return text.length === 0 ? undefined : text;
+  return context.names.nameForDeclaration(declaration);
 }

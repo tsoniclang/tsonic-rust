@@ -15,12 +15,12 @@ import {
 
 test("source module identities encode the complete project-relative path", () => {
   assert.equal(rustModuleNameForSourcePath("models.ts"), "models");
-  assert.match(rustModuleNameForSourcePath("docs/models.ts") ?? "", /^docs_models_id_[0-9a-f]{64}$/u);
-  assert.match(rustModuleNameForSourcePath("resources/models.ts") ?? "", /^resources_models_id_[0-9a-f]{64}$/u);
+  assert.equal(rustModuleNameForSourcePath("docs/models.ts"), "docs::models");
+  assert.equal(rustModuleNameForSourcePath("resources/models.ts"), "resources::models");
   assert.equal(rustModuleNameForSourcePath("source_name.ts"), "source_name");
-  assert.match(rustModuleNameForSourcePath("source-name.ts") ?? "", /^source_name_id_[0-9a-f]{64}$/u);
-  assert.equal(rustModuleNameForSourcePath("main.ts"), "source_main");
-  assert.equal(rustModuleNameForSourcePath("lib.ts"), "source_lib");
+  assert.equal(rustModuleNameForSourcePath("source-name.ts"), "source_name");
+  assert.equal(rustModuleNameForSourcePath("main.ts"), "main_module");
+  assert.equal(rustModuleNameForSourcePath("lib.ts"), "lib_module");
   assert.equal(rustModuleNameForSourcePath("missing-extension"), undefined);
 });
 
@@ -55,14 +55,118 @@ export function value(): int32 { return 22; }
   assert.deepEqual(result.artifacts.map((artifact) => artifact.path), [
     "Cargo.toml",
     "src/lib.rs",
-    `src/${docsModule}.rs`,
+    "src/docs.rs",
+    "src/docs/models.rs",
     "src/index.rs",
-    `src/${resourcesModule}.rs`,
+    "src/resources.rs",
+    "src/resources/models.rs",
   ]);
   assert.match(
     artifactText(result, "src/index.rs"),
     new RegExp(`crate::${docsModule}::value\\(\\)\\s*\\+\\s*crate::${resourcesModule}::value\\(\\)`, "u"),
   );
+});
+
+test("source path collisions receive local readable suffixes without hash names", () => {
+  const first = fakeSourceFile({ fileName: "/project/source_name.ts" });
+  const second = fakeSourceFile({ fileName: "/project/source-name.ts" });
+  const plan = planRustSourceOutputIdentities({
+    ast: fakeAstReader([first, second]),
+    sourceFiles: [first, second],
+    paths: {
+      projectFilePath: "/project/tsonic.json",
+      projectRoot: "/project",
+      outputRoot: "/project/out",
+      targetOutputRoot: "/project/out/rust",
+    },
+  });
+
+  assert.equal(plan.kind, "accepted");
+  assert.equal(plan.identities.get("/project/source_name.ts")?.moduleName, "source_name");
+  assert.equal(plan.identities.get("/project/source-name.ts")?.moduleName, "source_name_2");
+  assert.doesNotMatch(
+    [...plan.identities.values()].map((identity) => identity.artifactPath).join("\n"),
+    /[0-9a-f]{64}/u,
+  );
+});
+
+test("source path allocation reserves sibling bases before assigning collision suffixes", () => {
+  const files = [
+    fakeSourceFile({ fileName: "/project/foo-bar.ts" }),
+    fakeSourceFile({ fileName: "/project/foo_bar.ts" }),
+    fakeSourceFile({ fileName: "/project/foo_bar_2.ts" }),
+  ];
+  const plan = planRustSourceOutputIdentities({
+    ast: fakeAstReader(files),
+    sourceFiles: files,
+    paths: {
+      projectFilePath: "/project/tsonic.json",
+      projectRoot: "/project",
+      outputRoot: "/project/out",
+      targetOutputRoot: "/project/out/rust",
+    },
+  });
+
+  assert.equal(plan.kind, "accepted");
+  assert.equal(plan.identities.get("/project/foo_bar.ts")?.moduleName, "foo_bar");
+  assert.equal(plan.identities.get("/project/foo_bar_2.ts")?.moduleName, "foo_bar_2");
+  assert.equal(plan.identities.get("/project/foo-bar.ts")?.moduleName, "foo_bar_3");
+});
+
+test("a same-named child receives a readable non-inception module identity", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { parentValue } from "./template.js";
+import { childValue } from "./template/template.js";
+
+export function combined(): string {
+  return parentValue() + childValue();
+}
+`,
+      "template.ts": `
+export function parentValue(): string { return "parent"; }
+`,
+      "template/template.ts": `
+export function childValue(): string { return "child"; }
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.artifacts.map((artifact) => artifact.path), [
+    "Cargo.toml",
+    "src/lib.rs",
+    "src/index.rs",
+    "src/template.rs",
+    "src/template/template_2.rs",
+  ]);
+  assert.match(artifactText(result, "src/template.rs"), /pub mod template_2;/u);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /crate::template::parent_value\(\).*crate::template::template_2::child_value\(\)/su,
+  );
+});
+
+test("an authored parent module owns its child declaration", () => {
+  const { result } = compileRust({
+    files: {
+      "build.ts": "export const enabled: boolean = true;",
+      "build/site.ts": "export const name: string = \"site\";",
+      "index.ts": "export function ready(): boolean { return true; }",
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.artifacts.map((artifact) => artifact.path), [
+    "Cargo.toml",
+    "src/lib.rs",
+    "src/build.rs",
+    "src/build/site.rs",
+    "src/index.rs",
+  ]);
+  assert.match(artifactText(result, "src/build.rs"), /pub mod site;/u);
+  assert.equal(artifactText(result, "src/lib.rs").match(/pub mod build;/gu)?.length, 1);
 });
 
 test("source output identity rejects files outside the checked project root", () => {

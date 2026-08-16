@@ -24,15 +24,15 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub static value: rt::ModuleCell<i32>/u);
-  assert.match(text, /pub fn __tsonic_module_init/u);
+  assert.match(text, /pub static VALUE: rt::ModuleCell<i32>/u);
+  assert.match(text, /pub fn module_init/u);
   assert.match(
     text,
-    /let (__tsonic_module_value_\d+) = 1;[\s\S]*?\.initialize\(\1\)/u,
+    /let (module_value) = 1;[\s\S]*?\.initialize\(\1\)/u,
   );
   assert.match(
     text,
-    /let (__tsonic_location(?:_\d+)?) =[\s\S]*?let (__tsonic_current_\d+) = \1\.load\(\);[\s\S]*?let (__tsonic_value_\d+) = 2;[\s\S]*?\1\.store\(\2 \+ \3\)/u,
+    /let (location(?:_\d+)?) =[\s\S]*?let (current(?:_\d+)?) = \1\.load\(\);[\s\S]*?let (value_2) = 2;[\s\S]*?\1\.store\(\2 \+ \3\)/u,
   );
   assert.doesNotMatch(text, /\.update_with/u);
   validateGeneratedProject("module-binding-proof", result.artifacts, { run: true });
@@ -157,7 +157,7 @@ export class Box {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn noAnnotation\(a: f64\) -> f64/u);
+  assert.match(text, /pub fn no_annotation\(a: f64\) -> f64/u);
   assert.match(text, /pub fn value\(&self\) -> f64/u);
 });
 

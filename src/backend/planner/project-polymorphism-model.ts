@@ -36,11 +36,12 @@ import { planRustCallableParameters } from "./callable-parameters.js";
 import { createRustSyntheticNameState } from "./synthetic-names.js";
 import { planProjectMethod } from "./declarations-nominal.js";
 import { rustDeclarationRequiresUnsafe } from "./explicit-safety.js";
-import { rustProjectObjectLayerType } from "./project-objects.js";
+import { rustProjectStateType as rustProjectNamedStateType } from "./project-polymorphism-names.js";
 
 export interface ProjectFieldPlan {
   readonly declaration: Node;
   readonly sourceName: string;
+  readonly targetName: string;
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
@@ -98,12 +99,14 @@ export function projectOwnFields(
   const externalBase = context.input.projectTypes.externalBaseForDefinition(definition);
   for (const field of externalBase?.fields ?? []) {
     const type = rustTypeFromCarrierInContext(field.carrier, context);
-    if (type === undefined) {
+    const targetName = context.input.projectTypes.fieldStorageName(definition, field.declaration);
+    if (type === undefined || targetName === undefined) {
       return undefined;
     }
     fields.push({
       declaration: field.declaration,
       sourceName: field.sourceName,
+      targetName,
       storageIndex: field.storageIndex,
       carrier: field.carrier,
       type,
@@ -122,13 +125,18 @@ export function projectOwnFields(
           declared,
         );
     const type = rustTypeFromCarrierInContext(carrier, context);
-    if (carrier === undefined || type === undefined) {
+    const targetName = context.input.projectTypes.fieldStorageName(
+      definition,
+      layoutField.declaration,
+    );
+    if (carrier === undefined || type === undefined || targetName === undefined) {
       return undefined;
     }
     const initializer = Node_Initializer(context.input.ast, layoutField.declaration);
     fields.push({
       declaration: layoutField.declaration,
       sourceName: layoutField.sourceName,
+      targetName,
       storageIndex: externalFieldCount + layoutField.storageIndex,
       carrier,
       type,
@@ -221,8 +229,8 @@ export function projectMemberImplementation(
 export function projectFieldStoragePath(
   implementation: Node,
   layers: readonly ProjectClassStateLayer[],
-  _context: RustPlanContext,
-): readonly number[] | undefined {
+  context: RustPlanContext,
+): readonly string[] | undefined {
   const matches = layers.flatMap((layer, ownerIndex) =>
     layer.fields
       .filter((candidate) => candidate.declaration === implementation)
@@ -231,25 +239,22 @@ export function projectFieldStoragePath(
     return undefined;
   }
   const { ownerIndex, field } = matches[0]!;
-  const path: number[] = [];
+  const path: string[] = [];
   for (let depth = layers.length - 1; depth > ownerIndex; depth -= 1) {
-    path.push(0);
+    path.push(context.input.projectTypes.baseStateFieldName(layers[depth]!.definition));
   }
-  if (layers.length > 1 && ownerIndex > 0) {
-    path.push(1);
-  }
-  path.push(field.storageIndex);
+  path.push(field.targetName);
   return path;
 }
 
-export function projectStateType(layers: readonly ProjectClassStateLayer[]): RustType {
-  const types = layers.map((layer) =>
-    rustProjectObjectLayerType(layer.fields.map((field) => field.type)));
-  let state = types[0]!;
-  for (const own of types.slice(1)) {
-    state = { kind: "tuple", elements: [state, own] };
-  }
-  return state;
+export function projectStateType(
+  layers: readonly ProjectClassStateLayer[],
+  context: RustPlanContext,
+): RustType | undefined {
+  const state = layers[layers.length - 1];
+  return state === undefined
+    ? undefined
+    : rustProjectNamedStateType(state.carrier, context);
 }
 
 export function projectTypeSubstitutions(

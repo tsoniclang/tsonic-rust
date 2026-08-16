@@ -1,6 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
-import { rustProjectMemberSlotName } from "./project-type-policy.js";
 
 export interface RustProjectObjectField {
   readonly declaration: Node;
@@ -71,6 +70,7 @@ export function rustProjectObjectField(
 export function rustProjectStaticFieldStorage(
   declaration: Node,
   ast: AstReader,
+  targetName: string | undefined,
 ): RustProjectStaticFieldStorage | undefined {
   if (ast.kindName(declaration) !== "KindPropertyDeclaration" ||
     !ast.hasModifierKind(declaration, "static")) {
@@ -82,7 +82,6 @@ export function rustProjectStaticFieldStorage(
   }
   const sourceFile = ast.getSourceFile(declaration);
   const fileName = ast.getFileName(sourceFile);
-  const targetName = rustProjectMemberSlotName(ast, declaration, "static");
   if (fileName.length === 0 || targetName === undefined) {
     return undefined;
   }

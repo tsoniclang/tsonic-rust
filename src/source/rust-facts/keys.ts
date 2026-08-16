@@ -13,6 +13,10 @@ import type {
   RustFinalizedOperationAbiFor,
   RustFinalizedValueConversion,
 } from "./finalized-operation-abi.js";
+import type {
+  RustErrorBoundary,
+  RustFallibleErrorBoundary,
+} from "./error-boundary.js";
 
 export type {
   RustAssignmentOperator,
@@ -71,7 +75,8 @@ export type RustValueConversionId =
   | "js-value-from-f64"
   | "js-value-from-i32"
   | "js-value-from-string"
-  | "js-value-clone";
+  | "js-value-clone"
+  | "owned-string-from-borrowed-str";
 
 export type RustNonOptionValueConversion =
   | {
@@ -240,7 +245,7 @@ export interface RustProviderOperationTemplate<
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
-  readonly errorBoundary: "none" | "provider-native" | "source-program";
+  readonly errorBoundary: RustErrorBoundary;
   readonly isUnsafe?: boolean;
 }
 
@@ -1085,7 +1090,7 @@ export interface RustResourceManagementFact {
   } & (
     | {
         readonly fallible: true;
-        readonly errorBoundary: "provider-native" | "source-program";
+        readonly errorBoundary: RustFallibleErrorBoundary;
       }
     | {
         readonly fallible: false;
@@ -1141,8 +1146,7 @@ export interface RustFutureValueFact {
   readonly outputCarrier: TargetTypeRef;
   readonly awaitedConversion: RustFinalizedValueConversion;
   readonly awaiting: "infallible" | "fallible";
-  readonly errorBoundary: "none" | "provider-native" | "source-program";
-  readonly errorDomain: "none" | "runtime" | "current";
+  readonly errorBoundary: RustErrorBoundary;
 }
 
 // Exact await behavior for one first-class future value. Unlike its runtime

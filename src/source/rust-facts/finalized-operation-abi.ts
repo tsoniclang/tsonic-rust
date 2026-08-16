@@ -20,6 +20,11 @@ import {
 } from "./value-conversions.js";
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../../common/closed-metadata.js";
 import { rustProviderOperationFormContractViolation } from "./operation-form-contract.js";
+import type { RustErrorBoundary, RustFallibleErrorBoundary } from "./error-boundary.js";
+import {
+  isRustErrorBoundary,
+  isRustFallibleErrorBoundary,
+} from "./error-boundary.js";
 
 export type RustFinalizedOperationKind =
   | "method"
@@ -119,7 +124,7 @@ export interface RustFinalizedOperationAbi {
   readonly effects: {
     readonly invocation: "infallible" | "fallible";
     readonly awaiting: "not-applicable" | "infallible" | "fallible";
-    readonly errorBoundary: "none" | "provider-native" | "source-program";
+    readonly errorBoundary: RustErrorBoundary;
     readonly safety: "safe" | "requires-unsafe";
   };
 }
@@ -143,7 +148,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;
   readonly isFallible: boolean;
-  readonly errorBoundary?: "provider-native" | "source-program";
+  readonly errorBoundary?: RustFallibleErrorBoundary;
   readonly isUnsafe?: boolean;
 }
 
@@ -163,8 +168,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
         options.compileTimeSourceArgumentIndexes.some((index) =>
           !Number.isSafeInteger(index) || index < 0 || index >= options.sourceArgumentCarriers.length))) ||
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
-    (options.errorBoundary !== undefined && options.errorBoundary !== "provider-native" &&
-      options.errorBoundary !== "source-program") ||
+    (options.isFallible && !isRustFallibleErrorBoundary(options.errorBoundary)) ||
     (!options.isFallible && options.errorBoundary !== undefined) ||
     (options.isUnsafe !== undefined && typeof options.isUnsafe !== "boolean")) {
     return undefined;
@@ -240,7 +244,9 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       awaiting: options.isAsync
         ? options.isFallible ? "fallible" : "infallible"
         : "not-applicable",
-      errorBoundary: options.isFallible ? options.errorBoundary ?? "provider-native" : "none",
+      errorBoundary: options.isFallible && isRustFallibleErrorBoundary(options.errorBoundary)
+        ? options.errorBoundary
+        : "none",
       safety: options.isUnsafe ? "requires-unsafe" : "safe",
     },
   };
@@ -260,8 +266,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   ) !== undefined ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
     (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
-    (abi.effects.errorBoundary !== "none" && abi.effects.errorBoundary !== "provider-native" &&
-      abi.effects.errorBoundary !== "source-program") ||
+    !isRustErrorBoundary(abi.effects.errorBoundary) ||
     (abi.effects.safety !== "safe" && abi.effects.safety !== "requires-unsafe")) {
     return false;
   }
@@ -559,8 +564,7 @@ function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"
   return isRecord(value) && hasExactKeys(value, ["invocation", "awaiting", "errorBoundary", "safety"]) &&
     (value.invocation === "infallible" || value.invocation === "fallible") &&
     (value.awaiting === "not-applicable" || value.awaiting === "infallible" || value.awaiting === "fallible") &&
-    (value.errorBoundary === "none" || value.errorBoundary === "provider-native" ||
-      value.errorBoundary === "source-program") &&
+    isRustErrorBoundary(value.errorBoundary) &&
     (value.safety === "safe" || value.safety === "requires-unsafe");
 }
 

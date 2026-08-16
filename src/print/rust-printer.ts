@@ -9,6 +9,8 @@ import type {
   RustVisibility,
 } from "../backend/rust-ast/nodes.js";
 import type { RustAssignmentOperator } from "../common/rust-syntax.js";
+import { finalizeRustSourceStyle } from "../backend/rust-ast/source-style.js";
+import { rustExpressionContainsStatementBlock } from "../backend/rust-ast/expressions.js";
 
 // Deterministic printer. Output must be `cargo fmt --check` clean for the
 // supported construct set: 4-space indent, no trailing whitespace, one blank
@@ -17,6 +19,7 @@ import type { RustAssignmentOperator } from "../common/rust-syntax.js";
 const rustFormatWidth = 100;
 const rustStructLiteralWidth = 18;
 const rustNestedCallWidth = 60;
+const rustInlineFormatArgumentWidth = 40;
 const rustMethodChainWidth = 60;
 const rustNestedMethodFirstSegmentWidth = 64;
 const rustInlineFieldReceiverWidth = 28;
@@ -31,11 +34,12 @@ function printRustVisibility(visibility: RustVisibility): string {
 }
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
-  const parts: string[] = [`// ${model.headerComment}`];
-  if (model.innerAttrs !== undefined) {
-    parts.push(...model.innerAttrs);
+  const finalized = finalizeRustSourceStyle(model);
+  const parts: string[] = [`// ${finalized.headerComment}`];
+  if (finalized.innerAttrs !== undefined) {
+    parts.push(...finalized.innerAttrs);
   }
-  for (const item of model.items) {
+  for (const item of finalized.items) {
     parts.push("");
     parts.push(printRustItem(item));
   }
@@ -465,15 +469,17 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     }
     case "if": {
       const rendered = printRustConditionalBlock("if", statement.condition, statement.then, depth);
+      const attributes = printRustStatementAttributes(statement.attrs, depth);
       if (statement.else === undefined) {
-        return rendered;
+        return `${attributes}${rendered}`;
       }
       const elseBody = printRustBlockStatements(statement.else, depth + 1);
       const indentStr = indentText(depth);
       const withoutTrailing = rendered.endsWith("{}") ? `${rendered.slice(0, -2)}{\n${indentStr}}` : rendered;
-      return elseBody.length === 0
+      const complete = elseBody.length === 0
         ? `${withoutTrailing} else {}`
         : `${withoutTrailing} else {\n${elseBody}\n${indentStr}}`;
+      return `${attributes}${complete}`;
     }
     case "loop": {
       return printRustBlock(
@@ -484,9 +490,10 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     }
     case "while": {
       const rendered = printRustConditionalBlock("while", statement.condition, statement.body, depth);
-      return statement.label === undefined
+      const complete = statement.label === undefined
         ? rendered
         : `${indent}'${statement.label}: ${rendered.slice(indent.length)}`;
+      return `${printRustStatementAttributes(statement.attrs, depth)}${complete}`;
     }
     case "while-let-some": {
       return printRustBlock(
@@ -496,7 +503,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       );
     }
     case "for": {
-      return printRustForBlock(statement, depth);
+      return `${printRustStatementAttributes(statement.attrs, depth)}${printRustForBlock(statement, depth)}`;
     }
     case "if-let-some": {
       return printRustBlock(
@@ -602,6 +609,14 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return printRustTryScope(statement, depth);
     }
   }
+}
+
+function printRustStatementAttributes(
+  attrs: readonly string[] | undefined,
+  depth: number,
+): string {
+  const indent = indentText(depth);
+  return attrs?.map((attribute) => `${indent}${attribute}\n`).join("") ?? "";
 }
 
 function collectNestedCallExpressionChain(
@@ -915,10 +930,11 @@ function printRustResourceScope(
         statement.asynchronous ? `${indent}})\n${indent}.await;` : `${indent}})();`,
       );
     }
-    lines.push(
-      `${indent}let ${statement.flowName} =`,
-      `${nested}rt::finish_resource(${statement.flowName}, ${statement.cleanupName})?;`,
-    );
+    lines.push(printRustFlatLetInitializer(
+      `${indent}let ${statement.flowName} = `,
+      `rt::finish_resource(${statement.flowName}, ${statement.cleanupName})?`,
+      depth,
+    ));
   } else if (statement.asynchronous) {
     if (nestedCleanup.length > 0) {
       lines.push(
@@ -1071,16 +1087,19 @@ function printRustAssignment(
   const renderedTarget = printRustExprFitted(target, depth, indent.length);
   const inlinePrefix = `${indent}${renderedTarget} ${operator} `;
   const inlineValue = printRustExprFitted(value, depth, lastLineLength(inlinePrefix));
+  const continuationIndent = indentText(depth + 1);
+  const continuationValue = printRustExprFitted(value, depth + 1, continuationIndent.length);
+  const continuationAvoidsNestedExpansion = inlineValue.includes("\n") &&
+    !continuationValue.includes("\n");
   const multilineValueCanFollowAssignment = value.kind !== "binary" ||
     value.operator === "&&" || value.operator === "||";
   if (!renderedTarget.includes("\n") &&
-    (!inlineValue.includes("\n") || multilineValueCanFollowAssignment) &&
+    (!inlineValue.includes("\n") ||
+      multilineValueCanFollowAssignment && !continuationAvoidsNestedExpansion) &&
     inlinePrefix.length + firstLine(inlineValue).length <= rustFormatWidth) {
     return `${inlinePrefix}${inlineValue};`;
   }
-  const continuationIndent = indentText(depth + 1);
-  const renderedValue = printRustExprFitted(value, depth + 1, continuationIndent.length);
-  return `${indent}${renderedTarget} ${operator}\n${continuationIndent}${renderedValue};`;
+  return `${indent}${renderedTarget} ${operator}\n${continuationIndent}${continuationValue};`;
 }
 
 function printRustStatementExpr(
@@ -1147,6 +1166,8 @@ function printRustConditionalBlock(
     condition,
     depth,
     indent.length + prefix.length,
+    undefined,
+    "condition",
   );
   if (!renderedCondition.includes("\n")) {
     const header = `${indent}${prefix}${renderedCondition} {`;
@@ -1289,7 +1310,7 @@ function expressionIsStatementBlockOperand(expression: RustExpr): boolean {
     expression.kind === "evaluate-then";
 }
 
-type RustExpressionGrammarPosition = "expression" | "statement";
+type RustExpressionGrammarPosition = "condition" | "expression" | "statement";
 
 function printBinaryOperand(
   operand: RustExpr,
@@ -1347,6 +1368,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "bottom": {
       return printRustExpr(expression.expression);
     }
+    case "owned-string-from-borrowed-str": {
+      return `String::from(${printRustExpr(expression.expression)})`;
+    }
     case "unary": {
       return `${expression.operator}${printOperand(expression.operand, RustPrecedence.Unary, false)}`;
     }
@@ -1362,7 +1386,7 @@ export function printRustExpr(expression: RustExpr): string {
       return `${left} ${expression.operator} ${right}`;
     }
     case "range": {
-      return `${printOperand(expression.start, RustPrecedence.Or, false)}..${printOperand(expression.end, RustPrecedence.Or, true)}`;
+      return `${printOperand(expression.start, RustPrecedence.Or, false)}..${expression.inclusive === true ? "=" : ""}${printOperand(expression.end, RustPrecedence.Or, true)}`;
     }
     case "conditional": {
       return `if ${printRustExpr(expression.condition)} { ${printRustExpr(expression.whenTrue)} } else { ${printRustExpr(expression.whenFalse)} }`;
@@ -1478,71 +1502,6 @@ export function printRustExpr(expression: RustExpr): string {
   }
 }
 
-function rustExpressionContainsStatementBlock(expression: RustExpr): boolean {
-  switch (expression.kind) {
-    case "block":
-    case "evaluate-then":
-    case "match":
-      return true;
-    case "unary":
-      return rustExpressionContainsStatementBlock(expression.operand);
-    case "bottom":
-      return rustExpressionContainsStatementBlock(expression.expression);
-    case "dereference":
-      return rustExpressionContainsStatementBlock(expression.pointer);
-    case "unsafe":
-      return rustExpressionContainsStatementBlock(expression.expression);
-    case "numeric-cast":
-      return rustExpressionContainsStatementBlock(expression.expression);
-    case "binary":
-      return rustExpressionContainsStatementBlock(expression.left) ||
-        rustExpressionContainsStatementBlock(expression.right);
-    case "range":
-      return rustExpressionContainsStatementBlock(expression.start) ||
-        rustExpressionContainsStatementBlock(expression.end);
-    case "conditional":
-      return rustExpressionContainsStatementBlock(expression.condition) ||
-        rustExpressionContainsStatementBlock(expression.whenTrue) ||
-        rustExpressionContainsStatementBlock(expression.whenFalse);
-    case "matches":
-      return rustExpressionContainsStatementBlock(expression.expression);
-    case "assignment":
-      return rustExpressionContainsStatementBlock(expression.target) ||
-        rustExpressionContainsStatementBlock(expression.value);
-    case "call":
-    case "invoke":
-    case "associated-call":
-      return (expression.kind === "invoke" && rustExpressionContainsStatementBlock(expression.callee)) ||
-        expression.args.some(rustExpressionContainsStatementBlock);
-    case "method-call":
-      return rustExpressionContainsStatementBlock(expression.receiver) ||
-        expression.args.some(rustExpressionContainsStatementBlock);
-    case "field":
-      return rustExpressionContainsStatementBlock(expression.receiver);
-    case "index":
-      return rustExpressionContainsStatementBlock(expression.receiver) ||
-        rustExpressionContainsStatementBlock(expression.index);
-    case "string-concat":
-      return expression.parts.some(rustExpressionContainsStatementBlock);
-    case "vec-literal":
-    case "slice-literal":
-    case "tuple-literal":
-      return expression.elements.some(rustExpressionContainsStatementBlock);
-    case "reference":
-    case "await":
-    case "try":
-      return rustExpressionContainsStatementBlock(expression.expr);
-    case "return-expression":
-      return expression.expr !== undefined && rustExpressionContainsStatementBlock(expression.expr);
-    case "closure":
-      return rustExpressionContainsStatementBlock(expression.body);
-    case "struct-literal":
-      return expression.fields.some((field) => rustExpressionContainsStatementBlock(field.value));
-    default:
-      return false;
-  }
-}
-
 function rustExpressionContainsClosure(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "closure":
@@ -1551,6 +1510,8 @@ function rustExpressionContainsClosure(expression: RustExpr): boolean {
     case "unary":
       return rustExpressionContainsClosure(expression.operand);
     case "bottom":
+      return rustExpressionContainsClosure(expression.expression);
+    case "owned-string-from-borrowed-str":
       return rustExpressionContainsClosure(expression.expression);
     case "dereference":
       return rustExpressionContainsClosure(expression.pointer);
@@ -1618,6 +1579,8 @@ function rustExpressionContainsPreferredVerticalMethodChain(expression: RustExpr
     case "unary":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.operand);
     case "bottom":
+      return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
+    case "owned-string-from-borrowed-str":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.expression);
     case "dereference":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.pointer);
@@ -1702,6 +1665,8 @@ function printRustExprFitted(
         methodChainContinuationIndent,
         grammarPosition,
       );
+    case "owned-string-from-borrowed-str":
+      return printFittedCall("String::from", [expression.expression], depth, column);
     case "match":
       return printRustMatchExpression(expression, depth, column);
     case "matches": {
@@ -1849,16 +1814,20 @@ function printRustExprFitted(
       ].join("\n");
     }
     case "string-concat": {
-      const complexPartCount = expression.parts.filter((part) =>
-        part.kind === "string-literal" || !rustFormatArgumentCanShareLine(part)).length;
+      const allPartsCanShareLine = expression.parts.every(rustFormatArgumentCanShareLine);
       if (expression.parts.length <= 4 &&
-        (expression.parts.length < 3 || complexPartCount <= 1) && !flat.includes("\n") &&
+        (flat.length <= rustNestedCallWidth ||
+          allPartsCanShareLine && flat.length < rustInlineFormatArgumentWidth * 2) &&
+        !flat.includes("\n") &&
         renderedFits(flat, column)) {
         return flat;
       }
       const trailingPart = expression.parts[expression.parts.length - 1];
       const leadingParts = expression.parts.slice(0, -1).map(printRustExpr);
-      if (trailingPart !== undefined && leadingParts.every((part) => !part.includes("\n"))) {
+      if (trailingPart !== undefined &&
+        (trailingPart.kind === "block" ||
+          printRustExpr(trailingPart).length <= rustInlineFormatArgumentWidth) &&
+        leadingParts.every((part) => !part.includes("\n"))) {
         const prefix = `format!("${expression.parts.map(() => "{}").join("")}", ${
           leadingParts.length === 0 ? "" : `${leadingParts.join(", ")}, `
         }`;
@@ -1875,8 +1844,7 @@ function printRustExprFitted(
       const argumentIndent = indentText(depth + 1);
       const placeholders = expression.parts.map(() => "{}").join("");
       const flatParts = expression.parts.map(printRustExpr).join(", ");
-      const renderedParts = expression.parts.every(rustFormatArgumentCanShareLine) &&
-          !flatParts.includes("\n") &&
+      const renderedParts = expression.parts.every(rustFormatArgumentIsAtomic) &&
           renderedFits(`${flatParts},`, argumentIndent.length)
         ? [`${argumentIndent}${flatParts},`]
         : expression.parts.map((part) => {
@@ -1933,25 +1901,59 @@ function printRustExprFitted(
           column,
           owner.includes("\n"),
         );
-      }
+    }
     case "method-call": {
       const chain = rustMethodChain(expression);
-      const verticalLayout = rustMethodChainPrefersVerticalLayout(expression);
+      const selectorCount = chain?.steps.filter((step) =>
+        step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+      const columnRequiresVerticalLayout = chain !== undefined && selectorCount > 1 &&
+        !renderedFits(flat, column);
+      const verticalLayout = rustMethodChainPrefersVerticalLayout(expression) ||
+        columnRequiresVerticalLayout;
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
-      const singleSelectorFits = chain !== undefined &&
-        chain.steps.filter((step) =>
-          step.kind === "method" || step.kind === "field" || step.kind === "await").length === 1 &&
-        expression.receiver.kind === "path" &&
-        expression.args.some((argument) => argument.kind === "try" ||
-          printRustExpr(argument).length > rustNestedCallWidth) &&
-        !rustExpressionContainsExpandedStructLiteral(expression.receiver) &&
-        column + receiver.length + expression.method.length + 2 <= rustFormatWidth;
       if (!flat.includes("\n") && renderedFits(flat, column) && !verticalLayout &&
         !rustExpressionContainsExpandedStructLiteral(expression)) {
         return flat;
       }
       const hasClosure = expression.args.some((argument) =>
         argument.kind === "closure" || argument.kind === "closure-block");
+      const attachedCallable = `${receiver}.${expression.method}`;
+      const attachedArgumentsPreferExpansion = expression.args.some((argument) =>
+        argument.kind === "binary" || argument.kind === "tuple-literal" ||
+        rustExpressionContainsClosure(argument) ||
+        rustExpressionContainsStatementBlock(argument));
+      if (chain !== undefined && selectorCount === 1 && !hasClosure &&
+        !flat.includes("\n") && !renderedFits(flat, column)) {
+        const brokenSelector = printFittedMethodChain(
+          chain,
+          depth,
+          column,
+          true,
+          methodChainContinuationIndent,
+        );
+        if (remainingLines(brokenSelector).length === 1 &&
+          renderedFits(brokenSelector, column)) {
+          return brokenSelector;
+        }
+      }
+      if (!hasClosure && !receiver.includes("\n") && expression.args.length > 0 &&
+        renderedFits(`${attachedCallable}(`, column)) {
+        const attached = printFittedCall(
+          attachedCallable,
+          expression.args,
+          depth,
+          column,
+        );
+        if (attached.includes("\n") &&
+          (chain === undefined || attachedArgumentsPreferExpansion ||
+            !rustMethodChainBreaksReceiverWhenExpanded(chain)) &&
+          (!columnRequiresVerticalLayout || attachedArgumentsPreferExpansion) &&
+          (!verticalLayout ||
+          chain !== undefined && (!rustMethodChainContainsClosure(chain) ||
+            expression.args.length === 1 && expression.args[0]?.kind === "tuple-literal"))) {
+          return attached;
+        }
+      }
       const expandedClosureOpening = rustExpandedMethodClosureOpeningWidth(
         expression,
         depth,
@@ -1968,7 +1970,7 @@ function printRustExprFitted(
           chain,
           depth,
           column,
-          rustMethodChainBreaksReceiverWhenExpanded(chain),
+          rustMethodChainBreaksReceiverForClosure(chain, flat, column),
           methodChainContinuationIndent,
         );
       }
@@ -1977,13 +1979,15 @@ function printRustExprFitted(
           chain,
           depth,
           column,
-          chain.steps[0]?.kind === "field" || rustMethodChainContainsClosure(chain) ||
+          chain.steps[0]?.kind === "field" ||
+            rustMethodChainBreaksReceiverForClosure(chain, flat, column) ||
             column > indentText(depth + 1).length,
           methodChainContinuationIndent,
         );
       }
       if (chain !== undefined && rustMethodChainBreaksReceiverWhenExpanded(chain) &&
-        !singleSelectorFits) {
+        !renderedFits(flat, column) &&
+        (selectorCount > 1 || !renderedFits(`${attachedCallable}(`, column))) {
         return printFittedMethodChain(
           chain,
           depth,
@@ -2124,14 +2128,12 @@ function printRustExprFitted(
         return flat;
       }
       const receiver = printRustExprFitted(expression.receiver, depth, column);
-      if (!receiver.includes("\n")) {
-        const continuation = indentText(depth + 1);
-        const index = printRustExprFitted(
-          expression.index,
-          depth + 1,
-          continuation.length + 1,
-        );
-        return `${receiver}\n${continuation}[${index}]`;
+      const flatIndex = printRustExpr(expression.index);
+      const continuation = indentText(depth + 1);
+      if (!receiver.includes("\n") && !flatIndex.includes("\n") &&
+        !renderedFits(`${receiver}[${flatIndex}]`, column) &&
+        renderedFits(`[${flatIndex}]`, continuation.length)) {
+        return `${receiver}\n${continuation}[${flatIndex}]`;
       }
       const opening = appendToLastLine(receiver, "[");
       const index = printRustExprFitted(
@@ -2295,7 +2297,9 @@ function printRustExprFitted(
         }
       }
       if ((left.includes("\n") || column + left.length >= rustFormatWidth - 1) &&
-        expression.left.kind === "try" && expression.left.expr.kind === "method-call") {
+        expression.left.kind === "try" && expression.left.expr.kind === "method-call" &&
+        !(expression.left.expr.args.length === 1 &&
+          expression.left.expr.args[0]?.kind === "tuple-literal")) {
         const chain = rustMethodChain(expression.left.expr);
         if (chain !== undefined) {
           left = printFittedBinaryOperand(
@@ -2325,9 +2329,11 @@ function printRustExprFitted(
         );
         return appendToLastLine(left, ` ${expression.operator} ${renderedRight}`);
       }
+      const multilineLeftChain = rustMethodChain(expression.left);
       const multilineLeftRequiresOwnOperator = left.includes("\n") &&
         (expression.left.kind === "binary" || expression.left.kind === "index" ||
-          rustMethodChain(expression.left) !== undefined);
+          multilineLeftChain !== undefined &&
+            !firstLine(left).trimEnd().endsWith("("));
       if (!multilineLeftRequiresOwnOperator && renderedFits(joined, column)) {
         return joined;
       }
@@ -2599,7 +2605,11 @@ function printRustLetInitializer(
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
   }
-  if (!flat.includes("\n") && !renderedFits(flat, prefix.length + 1) &&
+  if (!flat.includes("\n") &&
+    (!renderedFits(flat, prefix.length + 1) ||
+      prefix.length + flat.length + 1 > rustFormatWidth ||
+      rustMethodChain(initializer) !== undefined &&
+        prefix.length + flat.length + 1 >= rustFormatWidth) &&
     renderedFits(flat, indentText(depth + 1).length + 1) &&
     initializer.kind !== "struct-literal" &&
     !rustMethodChainPrefersVerticalLayout(initializer)) {
@@ -2741,6 +2751,14 @@ function printRustFormatArgument(
 ): string {
   if ((expression.kind === "call" || expression.kind === "associated-call") &&
     expression.args.length === 1) {
+    const flat = printRustExpr(expression);
+    if (flat.length < rustInlineFormatArgumentWidth * 2 &&
+      !flat.includes("\n") && renderedFits(`${flat},`, column) &&
+      !rustExpressionContainsStatementBlock(expression) &&
+      !rustExpressionContainsPreferredVerticalMethodChain(expression) &&
+      !rustExpressionContainsExpandedStructLiteral(expression)) {
+      return flat;
+    }
     const argument = expression.args[0]!;
     const callable = expression.kind === "call"
       ? expression.path
@@ -2749,7 +2767,6 @@ function printRustFormatArgument(
     const borrowedNested = printBorrowedNestedRustFormatArgument(
       callable,
       argument,
-      expression,
       depth,
       column,
     );
@@ -2776,11 +2793,10 @@ function printRustFormatArgument(
 function printBorrowedNestedRustFormatArgument(
   outerCallable: string,
   argument: RustExpr,
-  expression: RustExpr,
   depth: number,
   column: number,
 ): string | undefined {
-  if (argument.kind !== "reference" || renderedFits(printRustExpr(expression), column)) {
+  if (argument.kind !== "reference") {
     return undefined;
   }
   const nested = argument.expr;
@@ -2815,7 +2831,7 @@ function printBorrowedNestedRustFormatArgument(
   return [
     opening,
     `${argumentIndent}${renderedArgument}`,
-    `${indentText(depth)}),)`,
+    `${indentText(depth)}))`,
   ].join("\n");
 }
 
@@ -3023,6 +3039,56 @@ function rustMethodChainContainsClosure(chain: RustMethodChain): boolean {
     argument.kind === "closure" || argument.kind === "closure-block"));
 }
 
+function rustMethodChainLastSelectorWidth(chain: RustMethodChain): number {
+  let selector: Exclude<RustMethodChainStep, { readonly kind: "try" }> | undefined;
+  for (let index = chain.steps.length - 1; index >= 0; index -= 1) {
+    const step = chain.steps[index];
+    if (step !== undefined && step.kind !== "try") {
+      selector = step;
+      break;
+    }
+  }
+  if (selector === undefined) {
+    return 0;
+  }
+  if (selector.kind === "field") {
+    return selector.name.length + 1;
+  }
+  if (selector.kind === "await") {
+    return ".await".length;
+  }
+  return selector.name.length + selector.args.map(printRustExpr).join(", ").length + 3;
+}
+
+function printRustMethodChain(chain: RustMethodChain): string {
+  let rendered = printRustExpr(chain.base);
+  for (const step of chain.steps) {
+    if (step.kind === "try") {
+      rendered += "?";
+    } else if (step.kind === "await") {
+      rendered += ".await";
+    } else if (step.kind === "field") {
+      rendered += `.${step.name}`;
+    } else {
+      rendered += `.${step.name}(${step.args.map(printRustExpr).join(", ")})`;
+    }
+  }
+  return rendered;
+}
+
+function rustMethodChainBreaksReceiverForClosure(
+  chain: RustMethodChain,
+  flat: string,
+  column: number,
+): boolean {
+  const selectorCount = chain.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field" || step.kind === "await").length;
+  return selectorCount > 1 && rustMethodChainContainsClosure(chain) &&
+    (!renderedFits(flat, column) ||
+      flat.length > rustMethodChainWidth &&
+        rustMethodChainLastSelectorWidth(chain) <= rustMethodChainWidth);
+}
+
 function collectRustMethodChain(expression: RustExpr, steps: RustMethodChainStep[]): RustExpr {
   if (expression.kind === "method-call") {
     const base = collectRustMethodChain(expression.receiver, steps);
@@ -3056,6 +3122,9 @@ function printFittedMethodChain(
   forceAttachFirstSelector = false,
 ): string {
   const flatBase = printRustExpr(chain.base);
+  const flatChain = printRustMethodChain(chain);
+  const selectedBreakBeforeFirstSelector = breakBeforeFirstSelector ||
+    rustMethodChainBreaksReceiverForClosure(chain, flatChain, column);
   let rendered = !flatBase.includes("\n") && renderedFits(flatBase, column) &&
       !rustExpressionContainsExpandedStructLiteral(chain.base)
     ? flatBase
@@ -3063,7 +3132,7 @@ function printFittedMethodChain(
   const selectedContinuationIndent = rendered.includes("\n")
     ? indentText(depth)
     : continuationIndent;
-  const breakBeforeFirstField = breakBeforeFirstSelector && !rustMethodChainContainsClosure(chain);
+  const breakBeforeFirstField = selectedBreakBeforeFirstSelector;
   let emittedCall = false;
   for (const step of chain.steps) {
     if (step.kind === "try") {
@@ -3093,7 +3162,7 @@ function printFittedMethodChain(
       false,
       depth,
     );
-    const inlineFirstMethod = !breakBeforeFirstSelector && !emittedCall &&
+    const inlineFirstMethod = !selectedBreakBeforeFirstSelector && !emittedCall &&
       !rendered.includes("\n") &&
       (forceAttachFirstSelector ||
         lastLineLength(rendered) + firstLine(inlineMethod).length <= rustInlineFieldReceiverWidth);
@@ -3988,6 +4057,8 @@ function rustExpressionContainsExpandedStructLiteral(expression: RustExpr): bool
   switch (expression.kind) {
     case "bottom":
       return rustExpressionContainsExpandedStructLiteral(expression.expression);
+    case "owned-string-from-borrowed-str":
+      return rustExpressionContainsExpandedStructLiteral(expression.expression);
     case "unary":
       return rustExpressionContainsExpandedStructLiteral(expression.operand);
     case "dereference":
@@ -4073,6 +4144,8 @@ function rustExpressionContainsExpandedCollectionLiteral(expression: RustExpr): 
     case "tuple-literal":
       return expression.elements.some(rustExpressionContainsExpandedCollectionLiteral);
     case "bottom":
+      return rustExpressionContainsExpandedCollectionLiteral(expression.expression);
+    case "owned-string-from-borrowed-str":
       return rustExpressionContainsExpandedCollectionLiteral(expression.expression);
     case "unary":
       return rustExpressionContainsExpandedCollectionLiteral(expression.operand);
@@ -4169,17 +4242,21 @@ function rustTransparentInvocationOperand(expression: RustExpr): RustExpr {
   return expression;
 }
 
+function rustFormatArgumentIsAtomic(expression: RustExpr): boolean {
+  return expression.kind === "int-literal" || expression.kind === "float-literal" ||
+    expression.kind === "bool-literal" || expression.kind === "none" ||
+    expression.kind === "string-literal" || expression.kind === "str-literal" ||
+    expression.kind === "path" || expression.kind === "associated-value";
+}
+
 function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
+  if (rustFormatArgumentIsAtomic(expression)) {
+    return true;
+  }
   switch (expression.kind) {
-    case "int-literal":
-    case "float-literal":
-    case "bool-literal":
-    case "none":
-    case "string-literal":
-    case "str-literal":
-    case "path":
-    case "associated-value":
-      return true;
+    case "call":
+    case "associated-call":
+      return expression.args.every(rustFormatArgumentCanShareLine);
     case "field":
       return rustFormatArgumentCanShareLine(expression.receiver);
     case "index":
@@ -4187,6 +4264,10 @@ function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
         rustFormatArgumentCanShareLine(expression.index);
     case "reference":
       return rustFormatArgumentCanShareLine(expression.expr);
+    case "slice-literal":
+    case "vec-literal":
+    case "tuple-literal":
+      return expression.elements.every(rustFormatArgumentCanShareLine);
     default:
       return false;
   }
@@ -4226,7 +4307,7 @@ function printRustMatchExpression(
   const armIndent = indentText(depth + 1);
   const arms = expression.arms.flatMap((arm) => {
     const pattern = printRustPattern(arm.pattern);
-    if (arm.expression.kind === "return-expression" || arm.expression.kind === "try") {
+    if (arm.expression.kind === "return-expression") {
       const valueIndent = indentText(depth + 2);
       const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
       const statement = arm.expression.kind === "return-expression"
@@ -4242,7 +4323,9 @@ function printRustMatchExpression(
     const flatValue = printRustExpr(arm.expression);
     if (flatValue.includes("\n") || !renderedFits(`${prefix}${flatValue},`, 0)) {
       if (arm.expression.kind === "call" || arm.expression.kind === "associated-call" ||
-        arm.expression.kind === "invoke") {
+        arm.expression.kind === "invoke" ||
+        arm.expression.kind === "method-call" &&
+          rustExpressionContainsStatementBlock(arm.expression)) {
         const directValue = printRustExprFitted(
           arm.expression,
           depth + 1,

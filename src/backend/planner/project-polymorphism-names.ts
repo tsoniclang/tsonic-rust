@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../policy/types.js";
 import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
 import { rustSourceTypeCarrierValue } from "../../source/rust-target-types.js";
-import type { RustType, RustTypeParameter } from "../rust-ast/nodes.js";
+import type { RustExpr, RustType, RustTypeParameter } from "../rust-ast/nodes.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 
@@ -23,7 +23,7 @@ export function rustProjectRootName(
 export function rustProjectTypeParameters(
   definition: RustProjectTypeDefinition,
 ): readonly RustTypeParameter[] {
-  return definition.typeParameterNames.map((name) => ({
+  return definition.targetTypeParameterNames.map((name) => ({
     name,
     bounds: [
       { kind: "trait", path: "Clone" },
@@ -44,6 +44,41 @@ export function rustProjectRootType(
   context: RustPlanContext,
 ): RustType | undefined {
   return rustProjectGeneratedType(carrier, context, rustProjectRootName);
+}
+
+export function rustProjectStateType(
+  carrier: TargetTypeRef,
+  context: RustPlanContext,
+): RustType | undefined {
+  return rustProjectGeneratedType(carrier, context, (definition) => definition.stateName);
+}
+
+export function rustProjectStateMarker(
+  definition: RustProjectTypeDefinition,
+  context: RustPlanContext,
+): {
+  readonly name: string;
+  readonly type: RustType;
+  readonly value: RustExpr;
+} | undefined {
+  if (definition.targetTypeParameterNames.length === 0) {
+    return undefined;
+  }
+  return {
+    name: context.input.projectTypes.stateMarkerFieldName(definition),
+    type: {
+      kind: "named",
+      path: "std::marker::PhantomData",
+      typeArguments: [{
+        kind: "tuple",
+        elements: definition.targetTypeParameterNames.map((name) => ({
+          kind: "named",
+          path: name,
+        })),
+      }],
+    },
+    value: { kind: "path", path: "std::marker::PhantomData" },
+  };
 }
 
 function rustProjectGeneratedType(

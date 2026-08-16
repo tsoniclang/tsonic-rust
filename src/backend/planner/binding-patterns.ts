@@ -25,15 +25,13 @@ import {
 } from "../../source/rust-target-types.js";
 import type { RustExpr, RustStmt } from "../rust-ast/nodes.js";
 import {
-  createRustStructuralObject,
-  readRustProjectObjectField,
-  readRustStructuralObjectField,
-} from "./project-objects.js";
+  createRustStructuralObjectFromCarrier,
+  readRustStoredObjectField,
+} from "./project-object-storage.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
-  rustSourceName,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { allocateRustSyntheticName } from "./synthetic-names.js";
@@ -99,7 +97,7 @@ export function planRustBindingPattern(
       return undefined;
     }
     if (nameKind === KindIdentifier) {
-      const bindingName = rustSourceName(context.input.ast.text(name));
+      const bindingName = context.input.names.nameForDeclaration(element) ?? "";
       if (!isValidRustIdentifier(bindingName)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, name),
@@ -170,9 +168,14 @@ function planBindingProjection(
       if (!isRustCopyCarrier(fact.projectedCarrier) && !rustCarrierSupportsClone(fact.projectedCarrier)) {
         return rejectClone(node, context);
       }
-      return (fact.projection.storage === "project-object"
-        ? readRustProjectObjectField
-        : readRustStructuralObjectField)(source, fact.projection.storageIndex, fact.projectedCarrier);
+      return readRustStoredObjectField(
+        fact.projection.storage,
+        fact.sourceCarrier,
+        source,
+        fact.projection.storageIndex,
+        fact.projectedCarrier,
+        context,
+      );
     case "object-rest":
       return planObjectRest(source, fact, node, context);
     case "tuple-element":
@@ -251,17 +254,25 @@ function planObjectRest(
       "Object rest projection conflicts with its exact finalized structural carrier.",
     );
   }
-  const read = fact.projection.storage === "project-object"
-    ? readRustProjectObjectField
-    : readRustStructuralObjectField;
   const values: RustExpr[] = [];
   for (const field of fields) {
     if (!isRustCopyCarrier(field.carrier) && !rustCarrierSupportsClone(field.carrier)) {
       return rejectClone(node, context);
     }
-    values.push(read(source, field.sourceStorageIndex, field.carrier));
+    const value = readRustStoredObjectField(
+      fact.projection.storage,
+      fact.sourceCarrier,
+      source,
+      field.sourceStorageIndex,
+      field.carrier,
+      context,
+    );
+    if (value === undefined) {
+      return undefined;
+    }
+    values.push(value);
   }
-  return createRustStructuralObject(values);
+  return createRustStructuralObjectFromCarrier(fact.bindingCarrier, values, context);
 }
 
 function planTupleRest(
