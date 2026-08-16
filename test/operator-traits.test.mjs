@@ -86,6 +86,11 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /acme_vectors::magnitude\(&c\)/u);
+  assert.match(source, /acme_vectors::scale\(&mut c, 2\)/u);
+  assert.match(source, /acme_vectors::consume\(c\)/u);
+  assert.doesNotMatch(source, /acme_vectors::consume\(c\.clone\(\)\)/u);
   const run = validateGeneratedProject("operator-traits-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

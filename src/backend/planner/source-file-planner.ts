@@ -38,7 +38,6 @@ import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 import { planBlockLike, planStatement } from "./statements.js";
 import { applyFallibleShape } from "./fallible-shape.js";
-import { rustAuthoredSourceInnerAttributes } from "./generated-source-lints.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -74,6 +73,8 @@ export function planRustSourceFile(
   sourceFile: SourceFile,
   moduleName: string,
   moduleNameByFileName: ReadonlyMap<string, string>,
+  programModuleName: string,
+  structuralShapesModuleName: string,
   childModuleNames: readonly string[],
   input: RustTranslationContext,
   diagnostics: TargetDiagnostic[],
@@ -85,6 +86,8 @@ export function planRustSourceFile(
     sourceFile,
     moduleName,
     moduleNameByFileName,
+    programModuleName,
+    structuralShapesModuleName,
     diagnostics,
     errorDomain: input.projectTypes.programErrorDefinitions.length === 0 ? "runtime" : "project",
     usedAliases,
@@ -95,7 +98,7 @@ export function planRustSourceFile(
   const useItems: RustItem[] = [...aliases]
     .sort((left, right) => left.localeCompare(right, "en"))
     .map((alias) => alias === "rt" && input.projectTypes.programErrorDefinitions.length > 0
-      ? { path: "crate::__tsonic_program", alias: "rt" }
+      ? { path: `crate::${programModuleName}`, alias: "rt" }
       : rustRuntimeAliasImports.get(alias))
     .filter((entry): entry is { path: string; alias: string } =>
       entry !== undefined)
@@ -103,18 +106,15 @@ export function planRustSourceFile(
   return Object.freeze({
     sourceFile,
     moduleName,
-    model: createRustSourceFile(
-      [
-        ...useItems,
-        ...childModuleNames.map((name): RustItem => ({
-          kind: "mod-decl",
-          name,
-          visibility: "public",
-        })),
-        ...plannedModule.items,
-      ],
-      rustAuthoredSourceInnerAttributes,
-    ),
+    model: createRustSourceFile([
+      ...useItems,
+      ...childModuleNames.map((name): RustItem => ({
+        kind: "mod-decl",
+        name,
+        visibility: "public",
+      })),
+      ...plannedModule.items,
+    ]),
     ...(plannedModule.initialization === undefined
       ? {}
       : { moduleInitialization: plannedModule.initialization }),

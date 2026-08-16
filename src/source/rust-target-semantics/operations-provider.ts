@@ -174,7 +174,6 @@ import {
 } from "./project-object-layout.js";
 import { selectRustOptionalChain } from "./optional-chains.js";
 import type { RustProjectTypePolicy } from "./project-type-policy.js";
-import { rustProjectMemberSlotName } from "./project-type-policy.js";
 import {
   recordRustValueCarrierReconciliation,
   rustEffectiveValueCarrier,
@@ -2553,13 +2552,11 @@ function selectExternalProjectFieldAccess(
     return undefined;
   }
   const operationId = sourceOperationId(context, externalField.field.declaration, "external-field");
-  const readSlot = rustProjectMemberSlotName(
-    context.ast,
+  const readSlot = options.projectTypes.memberSlotName(
     externalField.field.declaration,
     "read",
   );
-  const writeSlot = rustProjectMemberSlotName(
-    context.ast,
+  const writeSlot = options.projectTypes.memberSlotName(
     externalField.field.declaration,
     "write",
   );
@@ -2729,7 +2726,11 @@ export function selectRustCheckedPropertyAccess(
 
   if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
     const declaration = request.sourceSelectedDeclaration;
-    const storage = rustProjectStaticFieldStorage(declaration, context.ast);
+    const storage = rustProjectStaticFieldStorage(
+      declaration,
+      context.ast,
+      options.projectTypes.memberSlotName(declaration, "static"),
+    );
     if (storage !== undefined) {
       const owner = options.projectTypes.definitionContainingDeclaration(declaration);
       if (owner?.kind !== "class" || request.sourceReceiverValueDeclaration !== owner.declaration) {
@@ -2833,11 +2834,11 @@ export function selectRustCheckedPropertyAccess(
         ? ownerRelationship.targetType
         : undefined;
       const readSlot = owner !== undefined && options.projectTypes.isPolymorphic(owner)
-        ? rustProjectMemberSlotName(context.ast, declaration, "read")
+        ? options.projectTypes.memberSlotName(declaration, "read")
         : undefined;
       const writeSlot = readSlot === undefined
         ? undefined
-        : rustProjectMemberSlotName(context.ast, declaration, "write");
+        : options.projectTypes.memberSlotName(declaration, "write");
       if (owner !== undefined && options.projectTypes.isPolymorphic(owner) &&
         (readSlot === undefined || writeSlot === undefined || ownerCarrier === undefined)) {
         return rejectSelectedOperation(
@@ -2971,10 +2972,10 @@ function selectProjectSourceAccessor(
   }
   const readMethod = readDeclaration === undefined
     ? undefined
-    : rustProjectMemberSlotName(context.ast, readDeclaration, "read");
+    : options.projectTypes.memberSlotName(readDeclaration, "read");
   const writeMethod = writeDeclaration === undefined
     ? undefined
-    : rustProjectMemberSlotName(context.ast, writeDeclaration, "write");
+    : options.projectTypes.memberSlotName(writeDeclaration, "write");
   if ((needsRead && readMethod === undefined) ||
     (needsWrite && writeMethod === undefined)) {
     return rejectSelectedOperation(

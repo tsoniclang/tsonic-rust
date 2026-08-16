@@ -203,7 +203,7 @@ export function read(values: readonly int32[], text: string): int32 {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /i32_to_f64\(\s*match index\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => \*__tsonic_flow_value/u,
+    /i32_to_f64\(\s*match index\.as_ref\(\) \{[\s\S]*Some\(flow_value\) => \*flow_value/u,
   );
   validateGeneratedProject("selected-flow-narrowed-index", result.artifacts);
 });
@@ -246,7 +246,7 @@ export function length(value: string | null): int32 | undefined {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|__tsonic_optional_receiver/u);
+  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
   assert.doesNotMatch(source, /value\s*\.clone\(\)/u);
   validateGeneratedProject("selected-optional-property", result.artifacts);
 });
@@ -273,7 +273,7 @@ export function read(value: Counter | undefined): int32 {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /match value\.as_ref\(\) \{[\s\S]*Some\(__tsonic_flow_value\) => __tsonic_flow_value\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\}\s*\.__tsonic_state/su,
+    /match value\.as_ref\(\) \{[\s\S]*Some\(flow_value\) => flow_value\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\}\s*\.state/su,
   );
   assert.equal(
     source.match(/match value\.as_ref\(\)/gsu)?.length,
@@ -372,9 +372,9 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const model = artifactText(result, "src/model.rs");
   const index = artifactText(result, "src/index.rs");
-  assert.match(model, /fn __tsonic_downcast(?:_[0-9]+)+\(\s*self: std::rc::Rc<Self>,?\s*\)/u);
-  assert.match(index, /__tsonic_downcast(?:_[0-9]+)+\(\)\s*\.is_some\(\)/u);
-  assert.match(index, /__tsonic_downcast(?:_[0-9]+)+\(\)\s*\.unwrap\(\)/u);
+  assert.match(model, /fn downcast_json_value_to_json_string\(\s*self: std::rc::Rc<Self>,?\s*\)/u);
+  assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
+  assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.unwrap\(\)/u);
   const run = validateGeneratedProject("selected-project-downcast", result.artifacts, { run: true });
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });
@@ -413,7 +413,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let __tsonic_downcast_value_[0-9]+ = &value;/u);
+  assert.match(source, /let downcast_value = &value;/u);
   assert.equal(validateGeneratedProject("repeated-project-downcast", result.artifacts, { run: true }).status, 0);
 });
 
@@ -512,8 +512,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /sumTo\(value - 1\)/u);
-  assert.match(source, /sumToArrow/u);
+  assert.match(source, /sum_to\(value - 1\)/u);
+  assert.match(source, /SUM_TO_ARROW/u);
   assert.equal(validateGeneratedProject("project-recursion", result.artifacts, { run: true }).status, 0);
 });
 
@@ -586,7 +586,7 @@ export function currentPlatform(): string {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn currentPlatform\(\) -> String \{\n    acme_environment::platform\(\)\n\}/u,
+    /pub fn current_platform\(\) -> String \{\n    acme_environment::platform\(\)\n\}/u,
   );
 });
 
@@ -605,7 +605,7 @@ export function currentPlatform(platform: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /pub fn currentPlatform\(platform: String\) -> String \{\n    platform\.clone\(\)\n\}/u);
+  assert.match(artifactText(result, "src/index.rs"), /pub fn current_platform\(platform: String\) -> String \{\n    platform\.clone\(\)\n\}/u);
 });
 
 test("a selected provider value without a target relation fails closed", () => {

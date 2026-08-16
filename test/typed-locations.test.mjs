@@ -199,7 +199,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /let local: rt::Location<i32> = rt::Location::allocate\(1\);/u);
-  assert.match(output, /fn allocateGeneric<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u);
+  assert.match(output, /fn allocate_generic<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u);
   assert.match(output, /\.project_member\(/u);
   assert.match(output, /\.project_index\(/u);
   assert.match(output, /rt::Location::<i32>::same/u);
@@ -265,9 +265,9 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /let __tsonic_update_location/u);
-  assert.match(output, /let __tsonic_update_previous/u);
-  assert.match(output, /let __tsonic_update_next/u);
+  assert.match(output, /let update_location/u);
+  assert.match(output, /let update_previous/u);
+  assert.match(output, /let update_next/u);
   const run = validateGeneratedProject("update-location-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -300,8 +300,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub static value: rt::ModuleCell<i32>/u);
-  assert.match(output, /\.with\(\|__tsonic_module_binding\| __tsonic_module_binding\.location\(\)\)/u);
+  assert.match(output, /pub static VALUE: rt::ModuleCell<i32>/u);
+  assert.match(output, /\.with\(\|module_binding\| module_binding\.location\(\)\)/u);
   validateGeneratedProject("module-location-proof", result.artifacts, { run: true });
 });
 
@@ -338,15 +338,15 @@ export function publicValue<V>(value: V): Pointer<V> {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/storage.rs"),
-    /pub fn allocateValue<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u,
+    /pub fn allocate_value<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u,
   );
   assert.match(
     artifactText(result, "src/middle.rs"),
-    /pub fn forwardValue<U: Clone \+ 'static>\(value: U\) -> rt::Location<U>/u,
+    /pub fn forward_value<U: Clone \+ 'static>\(value: U\) -> rt::Location<U>/u,
   );
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn publicValue<V: Clone \+ 'static>\(value: V\) -> rt::Location<V>/u,
+    /pub fn public_value<V: Clone \+ 'static>\(value: V\) -> rt::Location<V>/u,
   );
   validateGeneratedProject("typed-location-transitive-contract-lib", result.artifacts);
 });
@@ -578,7 +578,7 @@ export function run(value: int32): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /fn loadPointer\(value: i32\) -> i32/u);
-  assert.match(output, /loadPointer\(value\)/u);
+  assert.match(output, /fn load_pointer\(value: i32\) -> i32/u);
+  assert.match(output, /load_pointer\(value\)/u);
   assert.doesNotMatch(output, /rt::Location/u);
 });

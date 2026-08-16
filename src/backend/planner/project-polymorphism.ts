@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustType } from "../rust-ast/nodes.js";
 import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
-import { rustProjectMemberSlotName } from "../../source/rust-target-semantics/project-type-policy.js";
 import { missingFactDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
@@ -27,6 +26,8 @@ import {
   rustProjectDispatchTraitType,
   rustProjectRootName,
   rustProjectRootType,
+  rustProjectStateMarker,
+  rustProjectStateType,
   rustProjectTypeParameters,
 } from "./project-polymorphism-names.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
@@ -44,7 +45,9 @@ export function planPolymorphicClassDeclaration(
   const dispatchType = rustProjectDispatchTraitType(openCarrier, context);
   const rootType = rustProjectRootType(openCarrier, context);
   const layers = projectClassStateLayers(definition, openCarrier, context);
-  if (wrapperType === undefined || dispatchType === undefined || rootType === undefined || layers === undefined) {
+  const stateType = layers === undefined ? undefined : projectStateType(layers, context);
+  if (wrapperType === undefined || dispatchType === undefined || rootType === undefined ||
+    layers === undefined || stateType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
       "rust.backend.project-polymorphism-carrier",
@@ -66,6 +69,15 @@ export function planPolymorphicClassDeclaration(
   }
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
+  const stateMarker = rustProjectStateMarker(definition, context);
+  const ownLayer = layers[layers.length - 1]!;
+  const baseLayer = layers[layers.length - 2];
+  const baseStateType = baseLayer === undefined
+    ? undefined
+    : rustProjectStateType(baseLayer.carrier, context);
+  if (baseLayer !== undefined && baseStateType === undefined) {
+    return undefined;
+  }
   const staticMethods = planProjectStaticMethods(definition, context);
   const externalErrorImplementations = planProjectExternalErrorImplementations(
     definition,
@@ -79,13 +91,41 @@ export function planPolymorphicClassDeclaration(
     trait,
     {
       kind: "struct",
+      name: definition.stateName,
+      visibility: "crate",
+      attrs: ["#[allow(dead_code)]"],
+      derives: [],
+      ...(typeParams.length === 0 ? {} : { typeParams }),
+      fields: [
+        ...(baseStateType === undefined
+          ? []
+          : [{
+              name: context.input.projectTypes.baseStateFieldName(definition),
+              type: baseStateType,
+              visibility: "crate" as const,
+            }]),
+        ...ownLayer.fields.map((field) => ({
+          name: field.targetName,
+          type: field.type,
+          visibility: "crate" as const,
+        })),
+        ...(stateMarker === undefined
+          ? []
+          : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
+      ],
+    },
+    {
+      kind: "struct",
       name: definition.targetName,
       visibility: context.input.projectTypes.programErrorVariant(definition) !== undefined
         ? "public"
         : context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
-      ...(context.input.projectTypes.programErrorVariant(definition) === undefined
-        ? {}
-        : { attrs: ["#[doc(hidden)]"] }),
+      attrs: [
+        "#[allow(dead_code)]",
+        ...(context.input.projectTypes.programErrorVariant(definition) === undefined
+          ? []
+          : ["#[doc(hidden)]"]),
+      ],
       derives: ["Clone"],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
@@ -106,6 +146,7 @@ export function planPolymorphicClassDeclaration(
       kind: "struct",
       name: rustProjectRootName(definition),
       visibility: "crate",
+      attrs: ["#[allow(dead_code)]"],
       derives: [],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
@@ -119,7 +160,7 @@ export function planPolymorphicClassDeclaration(
           type: {
             kind: "named",
             path: "rt::ObjectHandle",
-            typeArguments: [projectStateType(layers)],
+            typeArguments: [stateType],
           },
           visibility: "private",
         },
@@ -150,8 +191,8 @@ function planProjectExternalErrorImplementations(
   if (name === undefined || message === undefined) {
     return undefined;
   }
-  const nameRead = rustProjectMemberSlotName(context.input.ast, name.declaration, "read");
-  const messageRead = rustProjectMemberSlotName(context.input.ast, message.declaration, "read");
+  const nameRead = context.input.projectTypes.memberSlotName(name.declaration, "read");
+  const messageRead = context.input.projectTypes.memberSlotName(message.declaration, "read");
   if (nameRead === undefined || messageRead === undefined) {
     return undefined;
   }
@@ -240,9 +281,7 @@ export function planPolymorphicInterfaceDeclaration(
       kind: "struct",
       name: definition.targetName,
       visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
-      ...(context.input.ast.hasModifierKind(declaration, "export")
-        ? {}
-        : { attrs: ["#[allow(dead_code)]"] }),
+      attrs: ["#[allow(dead_code)]"],
       derives: ["Clone"],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [

@@ -25,8 +25,12 @@ import {
   planRustCrateInitializer,
   planRustModuleInitializers,
 } from "./module-initialization.js";
-import { planRustSourceOutputIdentities } from "../../translate/artifacts/source-output-identities.js";
+import {
+  allocateRustSupportModuleName,
+  planRustSourceOutputIdentities,
+} from "../../translate/artifacts/source-output-identities.js";
 import { planRustProgramErrorModule } from "./program-errors.js";
+import { planRustStructuralShapeModule } from "./structural-shapes.js";
 
 export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [...input.diagnostics];
@@ -37,6 +41,29 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const moduleNameByFileName = new Map(
     [...identityPlan.identities].map(([fileName, identity]) => [fileName, identity.moduleName] as const),
   );
+  const structuralShapesModuleName = allocateRustSupportModuleName(
+    identityPlan.identities,
+    "shapes",
+  );
+  const programModuleName = allocateRustSupportModuleName(
+    identityPlan.identities,
+    "program",
+    [structuralShapesModuleName],
+  );
+  const crateInitializerFunctionName = allocateRustSupportModuleName(
+    identityPlan.identities,
+    "initialize",
+    [structuralShapesModuleName, programModuleName],
+  );
+  if (diagnostics.length > 0) {
+    return { artifacts: [], diagnostics };
+  }
+  const structuralShapeModel = planRustStructuralShapeModule(
+    input,
+    moduleNameByFileName,
+    structuralShapesModuleName,
+    diagnostics,
+  );
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
@@ -44,6 +71,8 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const plannedSources = reconstructRustSourceFiles(
     input,
     identityPlan.identities,
+    programModuleName,
+    structuralShapesModuleName,
     diagnostics,
   );
   if (plannedSources === undefined) {
@@ -98,9 +127,10 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   const errorDomain = programErrorModel === undefined ? "runtime" as const : "project" as const;
   const crateInitializer = planRustCrateInitializer(
     moduleInitializers ?? [],
+    crateInitializerFunctionName,
     programErrorModel === undefined
       ? "tsonic_rust_runtime::TsonicResult"
-      : "crate::__tsonic_program::TsonicResult",
+      : `crate::${programModuleName}::TsonicResult`,
     errorDomain,
   );
   const artifacts: TargetArtifact[] = cargoProject.project.kind === "generated"
@@ -116,7 +146,15 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
         ? []
         : [{
             kind: "mod-decl" as const,
-            name: "__tsonic_program",
+            name: programModuleName,
+            visibility: "public" as const,
+            attrs: ["#[doc(hidden)]"],
+          }]),
+      ...(structuralShapeModel === undefined
+        ? []
+        : [{
+            kind: "mod-decl" as const,
+            name: structuralShapesModuleName,
             visibility: "public" as const,
             attrs: ["#[doc(hidden)]"],
           }]),
@@ -127,8 +165,14 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   artifacts.push(rustSourceArtifact("src/lib.rs", printRustSourceFile(libraryModel)));
   if (programErrorModel !== undefined) {
     artifacts.push(rustSourceArtifact(
-      "src/__tsonic_program.rs",
+      `src/${programModuleName}.rs`,
       printRustSourceFile(programErrorModel),
+    ));
+  }
+  if (structuralShapeModel !== undefined) {
+    artifacts.push(rustSourceArtifact(
+      `src/${structuralShapesModuleName}.rs`,
+      printRustSourceFile(structuralShapeModel),
     ));
   }
   const sourceArtifacts: TargetSourceFile[] = planSyntheticModuleArtifacts(
@@ -260,7 +304,7 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
               kind: "named" as const,
               path: programErrorModel === undefined
                 ? "tsonic_rust_runtime::TsonicResult"
-                : `${crateName}::__tsonic_program::TsonicResult`,
+                : `${crateName}::${programModuleName}::TsonicResult`,
               typeArguments: [{ kind: "unit" as const }],
             },
             body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },

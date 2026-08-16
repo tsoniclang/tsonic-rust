@@ -46,17 +46,17 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const main = artifactText(result, "src/main.rs");
   assert.equal(
-    main.includes("module_order_proof::__tsonic_initialize()"),
+    main.includes("module_order_proof::initialize()"),
     true,
   );
   const library = artifactText(result, "src/lib.rs");
   assert.equal(
-    library.indexOf("crate::state::__tsonic_module_init()") <
-      library.indexOf("crate::index::__tsonic_module_init()"),
+    library.indexOf("crate::state::module_init()") <
+      library.indexOf("crate::index::module_init()"),
     true,
   );
   const index = artifactText(result, "src/index.rs");
-  const initializationBody = index.slice(index.indexOf("pub fn __tsonic_module_init"));
+  const initializationBody = index.slice(index.indexOf("pub fn module_init"));
   const firstInitialization = initializationBody.indexOf("crate::state::next()");
   const secondInitialization = initializationBody.indexOf("FIRST.with(");
   const thirdInitialization = initializationBody.indexOf("SECOND.with(");
@@ -104,7 +104,7 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.doesNotMatch(artifactText(result, "src/main.rs"), /__tsonic_module_init/u);
+  assert.doesNotMatch(artifactText(result, "src/main.rs"), /module_init/u);
   validateGeneratedProject("module-cycle-functions", result.artifacts, { run: true });
 });
 
@@ -203,11 +203,11 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub async fn __tsonic_module_init\(\)[\s\S]*?let __tsonic_module_value_\d+ = load\(\)\.await;[\s\S]*?\.initialize\(__tsonic_module_value_\d+\)/u,
+    /pub async fn module_init\(\)[\s\S]*?let module_value = load\(\)\.await;[\s\S]*?\.initialize\(module_value\)/u,
   );
   assert.match(
     artifactText(result, "src/main.rs"),
-    /tsonic_rust_runtime::block_on\(async_module_proof::__tsonic_initialize\(\)\)/u,
+    /tsonic_rust_runtime::block_on\(async_module_proof::initialize\(\)\)/u,
   );
   validateGeneratedProject("async-module-proof", result.artifacts, { run: true });
 });
@@ -231,11 +231,11 @@ export function main(): void {}
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn __tsonic_module_init\(\) -> rt::TsonicResult<\(\)>[\s\S]*?json_parse\("1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
+    /pub fn module_init\(\) -> rt::TsonicResult<\(\)>[\s\S]*?json_parse\("1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
   );
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fallible_module_proof::__tsonic_initialize\(\)\?;/u,
+    /fallible_module_proof::initialize\(\)\?;/u,
   );
   validateGeneratedProject("fallible-module-proof", result.artifacts, { run: true });
 });

@@ -30,6 +30,8 @@ const maximumReconstructionsPerSourceFile = 32;
 export function reconstructRustSourceFiles(
   input: RustTranslationContext,
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
+  programModuleName: string,
+  structuralShapesModuleName: string,
   diagnostics: TargetDiagnostic[],
 ): readonly PlannedRustSourceFile[] | undefined {
   const sourceFilesByOwner = new Map<string, SourceFile>();
@@ -98,6 +100,8 @@ export function reconstructRustSourceFiles(
             [...identitiesByFileName].map(([candidateFileName, candidate]) =>
               [candidateFileName, candidate.moduleName] as const),
           ),
+          programModuleName,
+          structuralShapesModuleName,
           identity.childModuleNames,
           input,
           candidateDiagnostics,

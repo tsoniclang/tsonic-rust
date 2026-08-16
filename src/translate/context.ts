@@ -26,6 +26,12 @@ import {
 import type {
   RustProjectTypePolicyRegistry,
 } from "../source/rust-target-semantics/project-type-policy.js";
+import {
+  createRustStructuralShapePlanRegistry,
+} from "../source/rust-target-semantics/structural-shape-plan.js";
+import type {
+  RustStructuralShapePlanRegistry,
+} from "../source/rust-target-semantics/structural-shape-plan.js";
 import type { RustProviderSemantics } from "../source/provider-packages/index.js";
 import {
   collectRustProviderSemantics,
@@ -54,6 +60,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly facts: RustSemanticModel;
   readonly artifacts: RustTranslationArtifactGraph;
   readonly projectTypes: RustProjectTypePolicyRegistry;
+  readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly names: RustNamePlan;
@@ -81,6 +88,7 @@ export function createRustTranslationContext(
   const facts = new RustSemanticModel(input.source.sourceFacts);
   const artifacts = createRustTranslationArtifactGraph(ast);
   const projectTypes = createRustProjectTypePolicyRegistry();
+  const structuralShapes = createRustStructuralShapePlanRegistry();
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
     sourceFiles,
@@ -105,6 +113,7 @@ export function createRustTranslationContext(
     facts,
     artifacts,
     projectTypes,
+    structuralShapes,
     safetyApplications,
     names,
     providerSemantics,

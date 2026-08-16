@@ -22,12 +22,12 @@ export interface RustPreconstructionFieldValue {
   readonly expression: RustExpr;
 }
 
-export function rustTupleFieldPath(
+export function rustNamedFieldPath(
   receiver: RustExpr,
-  storagePath: readonly number[],
+  storagePath: readonly string[],
 ): RustExpr {
   return storagePath.reduce<RustExpr>(
-    (current, index) => ({ kind: "field", receiver: current, name: String(index) }),
+    (current, name) => ({ kind: "field", receiver: current, name }),
     receiver,
   );
 }

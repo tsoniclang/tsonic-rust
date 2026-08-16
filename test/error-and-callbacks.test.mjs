@@ -70,7 +70,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /matches!\(error\.clone\(\), rt::TsonicError::Project[0-9]+\(_\)\)/u);
-  assert.match(source, /rt::TsonicError::Project[0-9]+\(__tsonic_program_error\)/u);
+  assert.match(source, /rt::TsonicError::Project[0-9]+\(program_error\)/u);
   assert.equal(validateGeneratedProject("caught-project-error", result.artifacts, { run: true }).status, 0);
 });
 
@@ -279,7 +279,7 @@ export function inspectJson(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u);
+  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\s*\.map_err\(\s*tsonic_rust_runtime::TsonicError::from,?\s*\)\?;/u);
   assert.match(
     text,
     /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
@@ -473,11 +473,11 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn __tsonic_initialize[^\n]*-> rt::TsonicResult</u);
+  assert.match(text, /fn initialize_state[^\n]*-> rt::TsonicResult</u);
   assert.match(text, /pub fn new\([^)]*\) -> rt::TsonicResult<Derived>/u);
   assert.match(text, /pub fn new\(\) -> rt::TsonicResult<Initialized>/u);
-  assert.match(text, /fn __tsonic_virtual_[^(]+\([^)]*\) -> rt::TsonicResult<i32>/u);
-  assert.match(text, /fn readThroughBase\([^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn dispatch_[^(]+\([^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn read_through_base\([^)]*\) -> rt::TsonicResult<i32>/u);
   assert.equal(validateGeneratedProject("project-fallibility-closure", result.artifacts, { run: true }).status, 0);
 });
 

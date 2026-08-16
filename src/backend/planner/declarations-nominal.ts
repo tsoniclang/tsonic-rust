@@ -23,7 +23,6 @@ import { applyFallibleShape } from "./fallible-shape.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";
-import { rustProjectMemberSlotName } from "../../source/rust-target-semantics/project-type-policy.js";
 import { rustProjectObjectLayout } from "../../source/rust-target-semantics/project-object-layout.js";
 import {
   createRustProjectObject,
@@ -40,7 +39,11 @@ import {
   rustDeclarationRequiresUnsafe,
   rustSafetyAttributesForDeclaration,
 } from "./explicit-safety.js";
-import { rustProjectTypeParameters } from "./project-polymorphism-names.js";
+import {
+  rustProjectStateType,
+  rustProjectStateMarker,
+  rustProjectTypeParameters,
+} from "./project-polymorphism-names.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
   prepareRustPreconstructionNode,
@@ -101,7 +104,20 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
+  const stateType = rustProjectStateType(
+    context.input.projectTypes.openCarrier(definition),
+    context,
+  );
+  if (stateType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.class-state-carrier",
+      "Class declaration has no renderable named Rust state carrier.",
+    ));
+    return undefined;
+  }
   const typeParams = rustProjectTypeParameters(definition);
+  const stateMarker = rustProjectStateMarker(definition, context);
 
   const layout = rustProjectObjectLayout(node, ast);
   if (layout?.kind !== "class") {
@@ -134,7 +150,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       }
       const fieldNameNode = ast.name(member);
       const sourceFieldName = ast.text(fieldNameNode ?? member);
-      const fieldName = context.input.names.nameForDeclaration(member) ?? "";
+      const fieldName = context.input.projectTypes.fieldStorageName(definition, member) ?? "";
       const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
       const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
       if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -218,7 +234,16 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     failed = true;
   }
   const constructorMember = constructorImplementations[0];
-  const constructorFn = planConstructor(node, constructorMember, className, fields, context);
+  const constructorFn = planConstructor(
+    node,
+    constructorMember,
+    className,
+    openType,
+    definition.stateName,
+    stateMarker,
+    fields,
+    context,
+  );
   if (failed || constructorFn === undefined) {
     return undefined;
   }
@@ -231,8 +256,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     implFunctions.push(planned);
   }
   for (const accessor of accessors) {
-    const targetName = rustProjectMemberSlotName(
-      ast,
+    const targetName = context.input.projectTypes.memberSlotName(
       accessor.declaration,
       accessor.role,
     );
@@ -265,8 +289,26 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   ];
   const stateField: RustStructField = {
     name: rustProjectObjectStateField,
-    type: rustProjectObjectType(fields.map((field) => field.type)),
+    type: rustProjectObjectType(stateType),
     visibility: "crate",
+  };
+  const stateItem: RustItem = {
+    kind: "struct",
+    name: definition.stateName,
+    visibility: "crate",
+    attrs: ["#[allow(dead_code)]"],
+    derives: [],
+    ...(typeParams.length === 0 ? {} : { typeParams }),
+    fields: [
+      ...fields.map((field) => ({
+        name: field.targetName,
+        type: field.type,
+        visibility: "crate" as const,
+      })),
+      ...(stateMarker === undefined
+        ? []
+        : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
+    ],
   };
   const structItem: RustItem = {
     kind: "struct",
@@ -277,7 +319,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [stateField],
   };
-  return [structItem, {
+  return [stateItem, structItem, {
     kind: "impl",
     ...(typeParams.length === 0 ? {} : { typeParams }),
     target: openType,
@@ -289,6 +331,9 @@ function planConstructor(
   classDeclaration: Node,
   member: Node | undefined,
   className: string,
+  classType: RustType,
+  stateName: string,
+  stateMarker: ReturnType<typeof rustProjectStateMarker>,
   fields: readonly PlannedProjectObjectField[],
   context: RustPlanContext,
 ): RustImplFunction | undefined {
@@ -336,7 +381,7 @@ function planConstructor(
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
-    functionReturnType: { kind: "named", path: className },
+    functionReturnType: classType,
     ...(fallible ? { fallibleContext: true } : {}),
   };
   const parameterStatements = planRustCallableParameterPrelude(
@@ -431,7 +476,16 @@ function planConstructor(
   }
   statements.push({
     kind: "tail",
-    expr: createRustProjectObject(className, fieldValues),
+    expr: createRustProjectObject(
+      className,
+      stateName,
+      fields.map((field, index) => ({
+        name: field.targetName,
+        value: fieldValues[index]!,
+      })).concat(stateMarker === undefined
+        ? []
+        : [{ name: stateMarker.name, value: stateMarker.value }]),
+    ),
   });
   const constructorAttributes = [
     ...(params.length === 0 ? ["#[allow(clippy::new_without_default)]"] : []),
@@ -448,11 +502,12 @@ function planConstructor(
     ...(constructorAttributes.length === 0 ? {} : { attrs: constructorAttributes }),
     ...(fallible ? { fallible: true } : {}),
     params,
-    returnType: { kind: "named", path: className },
+    returnType: classType,
     body: {
-      ...(parameterPlan.bodyInnerAttrs.length === 0
-        ? {}
-        : { innerAttrs: parameterPlan.bodyInnerAttrs }),
+      innerAttrs: [
+        ...parameterPlan.bodyInnerAttrs,
+        "#![allow(unused_assignments)]",
+      ],
       ...applyFallibleShape({ statements }, {
         fallible,
         hasReturnValue: true,
@@ -816,6 +871,19 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return undefined;
   }
   const typeParams = rustProjectTypeParameters(definition);
+  const stateType = rustProjectStateType(
+    context.input.projectTypes.openCarrier(definition),
+    context,
+  );
+  if (stateType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record-state-carrier",
+      "Record declaration has no renderable named Rust state carrier.",
+    ));
+    return undefined;
+  }
+  const stateMarker = rustProjectStateMarker(definition, context);
   const layout = rustProjectObjectLayout(node, ast);
   if (layout?.kind !== "interface") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -843,7 +911,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    const fieldName = context.input.names.nameForDeclaration(member) ?? "";
+    const fieldName = context.input.projectTypes.fieldStorageName(definition, member) ?? "";
     const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
     const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
     if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -878,6 +946,23 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   context.usedAliases?.add("rt");
   return [{
     kind: "struct",
+    name: definition.stateName,
+    visibility: "crate",
+    attrs: ["#[allow(dead_code)]"],
+    derives: [],
+    ...(typeParams.length === 0 ? {} : { typeParams }),
+    fields: [
+      ...fields.map((field) => ({
+        name: field.targetName,
+        type: field.type,
+        visibility: "crate" as const,
+      })),
+      ...(stateMarker === undefined
+        ? []
+        : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
+    ],
+  }, {
+    kind: "struct",
     name: interfaceName,
     ...(structAttributes(interfaceName) === undefined
       ? {}
@@ -887,7 +972,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [{
       name: rustProjectObjectStateField,
-      type: rustProjectObjectType(fields.map((field) => field.type)),
+      type: rustProjectObjectType(stateType),
       visibility: "crate",
     }],
   }];

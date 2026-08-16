@@ -71,6 +71,7 @@ export interface RustSourceTypeRegistry {
   enumVariantsForDeclaration(declaration: Node): readonly RustSourceEnumVariant[] | undefined;
   enumVariantForLiteral(carrier: TargetTypeRef, literal: string): RustSourceEnumVariant | undefined;
   registerStructuralObject(shape: RustSourceObjectShape): boolean;
+  structuralObjects(): readonly RustSourceObjectShape[];
   structuralObjectForType(type: Type): RustSourceObjectShape | undefined;
   structuralFieldProjectionForDeclaration(
     declaration: Node,
@@ -101,6 +102,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   const carriersByDeclaration = new WeakMap<Node, TargetTypeRef>();
   const variantsByDeclaration = new Map<Node, readonly RustSourceEnumVariant[]>();
   const structuralObjectsByType = new WeakMap<Type, RustSourceObjectShape>();
+  const structuralObjects: RustSourceObjectShape[] = [];
   const structuralFieldsByDeclaration = new WeakMap<Node, RustStructuralFieldRegistration[]>();
   const selectedDeclarationsBySymbol = new WeakMap<Symbol, readonly Node[]>();
   const sourceUnionsByDeclaration = new WeakMap<Node, RustSourceUnion>();
@@ -275,6 +277,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
         }
       }
       structuralObjectsByType.set(shape.sourceType, normalized);
+      structuralObjects.push(normalized);
       for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
         selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
       }
@@ -282,6 +285,9 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
         structuralFieldsByDeclaration.set(declaration, entries);
       }
       return true;
+    },
+    structuralObjects() {
+      return Object.freeze([...structuralObjects]);
     },
     structuralObjectForType(type) {
       return structuralObjectsByType.get(type);

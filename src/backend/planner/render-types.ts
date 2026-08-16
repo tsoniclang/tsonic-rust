@@ -1,7 +1,6 @@
 import type { TargetTypeRef } from "../../policy/types.js";
 import { registerAliasFromPath } from "./plan-context.js";
 import type { RustType } from "../rust-ast/nodes.js";
-import { rustProjectObjectType } from "./project-objects.js";
 import {
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
@@ -61,6 +60,7 @@ export const rustStrRefType: RustType = { kind: "str-ref" };
 export function rustTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
   resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
+  resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
 ): RustType | undefined {
   if (carrier === undefined) {
     return undefined;
@@ -87,8 +87,8 @@ export function rustTypeFromCarrier(
       resultCarrier === undefined) {
       return undefined;
     }
-    const argumentsType = rustTypeFromCarrier(argumentsCarrier, resolveSourceTypePath);
-    const resultType = rustTypeFromCarrier(resultCarrier, resolveSourceTypePath);
+    const argumentsType = rustTypeFromCarrier(argumentsCarrier, resolveSourceTypePath, resolveStructuralShape);
+    const resultType = rustTypeFromCarrier(resultCarrier, resolveSourceTypePath, resolveStructuralShape);
     return argumentsType === undefined || resultType === undefined
       ? undefined
       : {
@@ -109,7 +109,8 @@ export function rustTypeFromCarrier(
     if (path === undefined) {
       return undefined;
     }
-    const typeArguments = (carrier.typeArguments ?? []).map((argument) => rustTypeFromCarrier(argument, resolveSourceTypePath));
+    const typeArguments = (carrier.typeArguments ?? []).map((argument) =>
+      rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape));
     if (typeArguments.some((argument) => argument === undefined)) {
       return undefined;
     }
@@ -126,20 +127,24 @@ export function rustTypeFromCarrier(
     return rustStrRefType;
   }
   if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
-    const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath);
+    const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath, resolveStructuralShape);
     return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
   }
   if (carrier.kind === "pointer" &&
     (carrier.mutability === "const" || carrier.mutability === "mut")) {
-    const pointee = rustTypeFromCarrier(carrier.pointee, resolveSourceTypePath);
+    const pointee = rustTypeFromCarrier(carrier.pointee, resolveSourceTypePath, resolveStructuralShape);
     return pointee === undefined
       ? undefined
       : { kind: "raw-pointer", pointee, mutable: carrier.mutability === "mut" };
   }
   if (carrier.kind === "function-pointer") {
     const parameters = carrier.args.map((argument) =>
-      rustTypeFromCarrier(argument, resolveSourceTypePath));
-    const result = rustReturnTypeFromCarrier(carrier.result, resolveSourceTypePath);
+      rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape));
+    const result = rustReturnTypeFromCarrier(
+      carrier.result,
+      resolveSourceTypePath,
+      resolveStructuralShape,
+    );
     return result === undefined || parameters.some((parameter) => parameter === undefined)
       ? undefined
       : {
@@ -152,13 +157,13 @@ export function rustTypeFromCarrier(
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   if (fixedArray !== undefined) {
-    const element = rustTypeFromCarrier(fixedArray.element, resolveSourceTypePath);
+    const element = rustTypeFromCarrier(fixedArray.element, resolveSourceTypePath, resolveStructuralShape);
     return element === undefined ? undefined : { kind: "fixed-array", element, length: fixedArray.length };
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
     const typeArguments = namedType.typeArguments.map((argument) =>
-      rustTypeFromCarrier(argument, resolveSourceTypePath));
+      rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape));
     return typeArguments.some((argument) => argument === undefined)
       ? undefined
       : {
@@ -169,21 +174,18 @@ export function rustTypeFromCarrier(
   }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
   if (structuralObject !== undefined) {
-    const fields = structuralObject.fields.map((field) =>
-      rustTypeFromCarrier(field.type, resolveSourceTypePath));
-    return fields.some((field) => field === undefined)
-      ? undefined
-      : rustProjectObjectType(fields as RustType[]);
+    return resolveStructuralShape?.(carrier);
   }
   if (carrier.kind === "array") {
-    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath);
+    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath, resolveStructuralShape);
     return element === undefined ? undefined : { kind: "named", path: "Vec", typeArguments: [element] };
   }
   if (carrier.kind === "tuple") {
     if (carrier.elements.length === 0) {
       return { kind: "unit" };
     }
-    const elements = carrier.elements.map((element) => rustTypeFromCarrier(element, resolveSourceTypePath));
+    const elements = carrier.elements.map((element) =>
+      rustTypeFromCarrier(element, resolveSourceTypePath, resolveStructuralShape));
     if (elements.some((element) => element === undefined)) {
       return undefined;
     }
@@ -194,7 +196,7 @@ export function rustTypeFromCarrier(
     if (value !== undefined) {
       const path = resolveSourceTypePath(value);
       const typeArguments = value.typeArguments.map((argument) =>
-        rustTypeFromCarrier(argument, resolveSourceTypePath));
+        rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape));
       return path === undefined || typeArguments.some((argument) => argument === undefined)
         ? undefined
         : {
@@ -217,10 +219,11 @@ export function rustTypeFromCarrier(
 export function rustReturnTypeFromCarrier(
   carrier: TargetTypeRef | undefined,
   resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
+  resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
 ): RustType | undefined {
   return isRustNeverCarrier(carrier)
     ? { kind: "never" }
-    : rustTypeFromCarrier(carrier, resolveSourceTypePath);
+    : rustTypeFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape);
 }
 
 export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -232,15 +235,19 @@ export function rustTypeFromCarrierInContext(
   context: {
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
+    readonly structuralShapesModuleName: string;
     readonly usedAliases?: Set<string>;
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
-    readonly input: { readonly names: import("../../common/rust-name-plan.js").RustNamePlan };
+    readonly input: {
+      readonly names: import("../../common/rust-name-plan.js").RustNamePlan;
+      readonly structuralShapes: import("../../source/rust-target-semantics/structural-shape-plan.js").RustStructuralShapePlan;
+    };
   },
 ): RustType | undefined {
   const selectedCarrier = carrier === undefined || context.typeParameterSubstitutions === undefined
     ? carrier
     : substituteRustTargetTypeParameters(carrier, context.typeParameterSubstitutions);
-  const rendered = rustTypeFromCarrier(selectedCarrier, (value) => {
+  const resolveSourceTypePath = (value: { readonly fileName: string; readonly typeName: string }): string | undefined => {
     const moduleName = context.moduleNameByFileName.get(value.fileName);
     if (moduleName === undefined) {
       return undefined;
@@ -249,7 +256,41 @@ export function rustTypeFromCarrierInContext(
     return typeName === undefined
       ? undefined
       : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
-  });
+  };
+  const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
+    const definition = context.input.structuralShapes.definitionForCarrier(shapeCarrier);
+    if (definition === undefined) {
+      return undefined;
+    }
+    const typeArguments = definition.typeParameterNames.map((name) =>
+      rustTypeFromCarrier(
+        { kind: "type-parameter", name },
+        resolveSourceTypePath,
+        resolveStructuralShape,
+      ));
+    if (typeArguments.some((argument) => argument === undefined)) {
+      return undefined;
+    }
+    const stateType: RustType = {
+      kind: "named",
+      path: context.moduleName === context.structuralShapesModuleName
+        ? definition.targetName
+        : `crate::${context.structuralShapesModuleName}::${definition.targetName}`,
+      ...(typeArguments.length === 0
+        ? {}
+        : { typeArguments: typeArguments as readonly RustType[] }),
+    };
+    return {
+      kind: "named",
+      path: "rt::ObjectHandle",
+      typeArguments: [stateType],
+    };
+  };
+  const rendered = rustTypeFromCarrier(
+    selectedCarrier,
+    resolveSourceTypePath,
+    resolveStructuralShape,
+  );
   collectAliasesFromRustType(rendered, (path) => {
     registerAliasFromPath(context, path);
   });
@@ -261,28 +302,18 @@ export function rustReturnTypeFromCarrierInContext(
   context: {
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
+    readonly structuralShapesModuleName: string;
     readonly usedAliases?: Set<string>;
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
-    readonly input: { readonly names: import("../../common/rust-name-plan.js").RustNamePlan };
+    readonly input: {
+      readonly names: import("../../common/rust-name-plan.js").RustNamePlan;
+      readonly structuralShapes: import("../../source/rust-target-semantics/structural-shape-plan.js").RustStructuralShapePlan;
+    };
   },
 ): RustType | undefined {
-  const selectedCarrier = carrier === undefined || context.typeParameterSubstitutions === undefined
-    ? carrier
-    : substituteRustTargetTypeParameters(carrier, context.typeParameterSubstitutions);
-  const rendered = rustReturnTypeFromCarrier(selectedCarrier, (value) => {
-    const moduleName = context.moduleNameByFileName.get(value.fileName);
-    if (moduleName === undefined) {
-      return undefined;
-    }
-    const typeName = context.input.names.nameForSourceType(value.fileName, value.typeName);
-    return typeName === undefined
-      ? undefined
-      : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
-  });
-  collectAliasesFromRustType(rendered, (path) => {
-    registerAliasFromPath(context, path);
-  });
-  return rendered;
+  return isRustNeverCarrier(carrier)
+    ? { kind: "never" }
+    : rustTypeFromCarrierInContext(carrier, context);
 }
 
 export function collectAliasesFromRustType(

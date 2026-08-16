@@ -61,7 +61,7 @@ export function rustModuleCellAccess(
   cell: RustExpr,
   method: "initialize" | "load" | "location",
   args: readonly RustExpr[],
-  cellName = "__tsonic_module_binding",
+  cellName = "module_binding",
 ): RustExpr {
   return {
     kind: "method-call",

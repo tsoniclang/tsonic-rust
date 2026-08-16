@@ -33,7 +33,11 @@ export function planRustClassStaticFields(
       ));
       return undefined;
     }
-    const storage = rustProjectStaticFieldStorage(member, ast);
+    const storage = rustProjectStaticFieldStorage(
+      member,
+      ast,
+      context.input.projectTypes.memberSlotName(member, "static"),
+    );
     if (storage === undefined) {
       continue;
     }
@@ -75,7 +79,7 @@ export function planRustClassStaticFields(
       value,
       "crate",
       context.syntheticNames,
-      ["#[allow(non_upper_case_globals)]"],
+      [],
     );
     items.push(planned.item);
     initialization.push(planned.initialization);

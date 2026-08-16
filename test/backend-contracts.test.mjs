@@ -213,7 +213,7 @@ export let VALUE: int32 = 1;
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/lib.rs"),
-    /pub fn __tsonic_initialize\(\) \{\s*crate::index::__tsonic_module_init\(\);\s*\}/su,
+    /pub fn initialize\(\) \{\s*crate::index::module_init\(\);\s*\}/su,
   );
 });
 
@@ -252,8 +252,8 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\n    pub\(crate\) __tsonic_state: rt::ObjectHandle<rt::EmptyObjectState>,\n\}/u);
-  assert.match(text, /__tsonic_state: rt::ObjectHandle::new\(rt::EmptyObjectState\)/u);
+  assert.match(text, /pub struct Empty \{\n    pub\(crate\) state: rt::ObjectHandle<EmptyState>,\n\}/u);
+  assert.match(text, /state: rt::ObjectHandle::new\(EmptyState \{\}\)/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
 
@@ -302,7 +302,7 @@ export class Secret {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /    pub\(crate\) __tsonic_state: rt::ObjectHandle<\(i32,\)>,/u);
+  assert.match(text, /    pub\(crate\) state: rt::ObjectHandle<SecretState>,/u);
   assert.doesNotMatch(text, /    (?:pub )?value: i32,/u);
   assert.match(text, /    fn hidden\(&self\) -> i32/u);
   assert.doesNotMatch(text, /    pub fn hidden\(&self\)/u);

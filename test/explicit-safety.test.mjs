@@ -34,8 +34,8 @@ export function copy(
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn copy\(source: \*mut i32, destination: \*mut i32, elementOffset: isize\) -> \*mut i32/u);
-  assert.match(source, /unsafe \{\s*\*destination = \*source;\s*source\.offset\(elementOffset\)\s*\}/u);
+  assert.match(source, /pub fn copy\(source: \*mut i32, destination: \*mut i32, element_offset: isize\) -> \*mut i32/u);
+  assert.match(source, /unsafe \{\s*\*destination = \*source;\s*source\.offset\(element_offset\)\s*\}/u);
   assert.doesNotMatch(source, /loadNativePointer|offsetNativePointer|storeNativePointer|unsafeContext/u);
   validateGeneratedProject("explicit-safety-native-pointer-block", result.artifacts);
 });
@@ -63,7 +63,7 @@ safety(declaredUnsafe).requiresUnsafe();
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn read\(pointer: \*mut i32\) -> i32 \{\s*unsafe \{ \*pointer \}\s*\}/u);
-  assert.match(source, /pub unsafe fn declaredUnsafe\(value: i32\) -> i32/u);
+  assert.match(source, /pub unsafe fn declared_unsafe\(value: i32\) -> i32/u);
   assert.doesNotMatch(source, /pub unsafe fn read/u);
   validateGeneratedProject("explicit-safety-independent-contracts", result.artifacts);
 });
@@ -118,11 +118,11 @@ export function passMut(pointer: mutPtr<u8>): mutPtr<u8> {
   });
   assert.deepEqual(accepted.result.diagnostics, []);
   const source = artifactText(accepted.result, "src/index.rs");
-  assert.match(source, /pub fn preserveConst\(pointer: \*const u8\) -> \*const u8/u);
-  assert.match(source, /pub fn preserveMut\(pointer: \*mut u8\) -> \*mut u8/u);
+  assert.match(source, /pub fn preserve_const\(pointer: \*const u8\) -> \*const u8/u);
+  assert.match(source, /pub fn preserve_mut\(pointer: \*mut u8\) -> \*mut u8/u);
   assert.match(source, /pub fn widen\(pointer: \*mut u8\) -> \*const u8/u);
-  assert.match(source, /pub fn passConst\(pointer: \*const u8\) -> \*const u8 \{\s*preserveConst\(pointer\)\s*\}/u);
-  assert.match(source, /pub fn passMut\(pointer: \*mut u8\) -> \*mut u8 \{\s*preserveMut\(pointer\)\s*\}/u);
+  assert.match(source, /pub fn pass_const\(pointer: \*const u8\) -> \*const u8 \{\s*preserve_const\(pointer\)\s*\}/u);
+  assert.match(source, /pub fn pass_mut\(pointer: \*mut u8\) -> \*mut u8 \{\s*preserve_mut\(pointer\)\s*\}/u);
   validateGeneratedProject("explicit-safety-rust-pointer-mutability", accepted.result.artifacts);
 
   const rejected = compileRust({
@@ -215,7 +215,7 @@ export function local(value: int32): int32 {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exact\(value: i32\) -> i32 \{\s*unsafe \{ value \}\s*\}/u);
-  assert.match(source, /pub fn local\(value: i32\) -> i32 \{\s*unsafeContext\(value\)\s*\}/u);
+  assert.match(source, /pub fn local\(value: i32\) -> i32 \{\s*unsafe_context\(value\)\s*\}/u);
 });
 
 test("unsupported safe declaration contracts fail at the Rust declaration boundary", () => {
@@ -350,9 +350,9 @@ export function inspect(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub unsafe fn new\(\) -> Base/u);
-  assert.match(source, /unsafe fn __tsonic_virtual_/u);
+  assert.match(source, /unsafe fn dispatch_base_read/u);
   assert.match(source, /unsafe \{ Base::new\(\) \}/u);
-  assert.match(source, /unsafe \{\n        \{\n            let __tsonic_dispatch_receiver/u);
+  assert.match(source, /unsafe \{\n        \{\n            let dispatch_receiver/u);
   validateGeneratedProject("explicit-safety-polymorphic-contracts", result.artifacts);
 });
 
@@ -506,10 +506,10 @@ export function write(value: Value, next: int32): void {
   }).result;
   assert.deepEqual(accepted.diagnostics, []);
   const text = artifactText(accepted, "src/index.rs");
-  assert.match(text, /unsafe fn __tsonic_read_[0-9]+_[0-9]+\(&self\) -> i32/u);
-  assert.match(text, /unsafe fn __tsonic_write_[0-9]+_[0-9]+\(&self, value: i32\)/u);
-  assert.match(text, /unsafe \{[\s\S]*__tsonic_read_/u);
-  assert.match(text, /unsafe \{[\s\S]*__tsonic_write_/u);
+  assert.match(text, /unsafe fn read_value_current\(&self\) -> i32/u);
+  assert.match(text, /unsafe fn write_value_current\(&self, value: i32\)/u);
+  assert.match(text, /unsafe \{[\s\S]*read_value_current/u);
+  assert.match(text, /unsafe \{[\s\S]*write_value_current/u);
 });
 
 test("native-pointer source aliases that collapse in TypeScript remain exact in Rust", () => {

@@ -1,8 +1,9 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { rustSnakeCaseIdentifier } from "../../common/rust-identifiers.js";
 
 export interface RustSyntheticNameState {
   readonly reserved: Set<string>;
-  nextId: number;
+  readonly nextSuffixByBase: Map<string, number>;
 }
 
 export function createRustSyntheticNameState(
@@ -16,6 +17,7 @@ export function createRustSyntheticNameState(
       const name = ast.text(node);
       if (name.length > 0) {
         reserved.add(name);
+        reserved.add(rustSnakeCaseIdentifier(name));
       }
     }
     ast.forEachChild(node, (child) => {
@@ -25,18 +27,22 @@ export function createRustSyntheticNameState(
     });
   };
   visit(root);
-  return { reserved, nextId: 0 };
+  return { reserved, nextSuffixByBase: new Map() };
 }
 
 export function allocateRustSyntheticName(
   state: RustSyntheticNameState,
   purpose: string,
 ): string {
+  const selectedBase = rustSnakeCaseIdentifier(purpose);
+  const base = selectedBase.startsWith("r#")
+    ? `${selectedBase.slice(2)}_value`
+    : selectedBase;
+  let suffix = state.nextSuffixByBase.get(base) ?? 1;
   for (;;) {
-    const candidate = state.nextId === 0
-      ? `__tsonic_${purpose}`
-      : `__tsonic_${purpose}_${state.nextId}`;
-    state.nextId += 1;
+    const candidate = suffix === 1 ? base : `${base}_${suffix}`;
+    suffix += 1;
+    state.nextSuffixByBase.set(base, suffix);
     if (!state.reserved.has(candidate)) {
       state.reserved.add(candidate);
       return candidate;

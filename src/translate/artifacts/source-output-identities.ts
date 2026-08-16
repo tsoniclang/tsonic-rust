@@ -159,6 +159,28 @@ export function rustModuleNameForSourcePath(
     : segments.map(rustModuleSegmentBase).join("::");
 }
 
+export function allocateRustSupportModuleName(
+  identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
+  preferredName: string,
+  additionalReservedNames: readonly string[] = [],
+): string {
+  const usedNames = new Set(additionalReservedNames);
+  for (const identity of identities.values()) {
+    const topLevelName = identity.moduleSegments[0];
+    if (topLevelName !== undefined) {
+      usedNames.add(topLevelName);
+    }
+  }
+  const baseName = rustModuleSegmentBase(preferredName);
+  let candidate = baseName;
+  let suffix = 2;
+  while (usedNames.has(candidate)) {
+    candidate = `${baseName}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
 interface ModuleSegmentNode {
   readonly children: Map<string, ModuleSegmentNode>;
   rustName?: string;

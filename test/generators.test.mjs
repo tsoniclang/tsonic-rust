@@ -23,12 +23,12 @@ export function* exchange(seed: int32): Generator<int32, int32, int32> {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exchange\(seed: i32\) -> rt::Generator<i32, i32, i32>/u);
-  assert.match(source, /rt::Generator::new\(move \|__tsonic_generator\| async move \{/u);
-  assert.match(source, /let resumed: i32 = match __tsonic_generator\.yield_value\(seed\)\.await \{/u);
+  assert.match(source, /rt::Generator::new\(move \|generator(?:_\d+)?\| async move \{/u);
+  assert.match(source, /let resumed: i32 = match generator(?:_\d+)?\.yield_value\(seed\)\.await \{/u);
   assert.match(source, /rt::GeneratorResume::Next/u);
   assert.match(source, /rt::GeneratorResume::Return/u);
   assert.match(source, /rt::GeneratorResume::Throw/u);
-  assert.match(source, /match __tsonic_generator\.yield_value\(resumed\)\.await \{/u);
+  assert.match(source, /match generator(?:_\d+)?\.yield_value\(resumed\)\.await \{/u);
 });
 
 test("async generators use the native async-generator carrier", () => {
@@ -48,7 +48,7 @@ export async function* exchange(seed: int32): AsyncGenerator<int32, int32, int32
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exchange\(seed: i32\) -> rt::AsyncGenerator<i32, i32, i32>/u);
-  assert.match(source, /rt::AsyncGenerator::new\(move \|__tsonic_generator\| async move \{/u);
+  assert.match(source, /rt::AsyncGenerator::new\(move \|generator(?:_\d+)?\| async move \{/u);
 });
 
 test("generated sync and async generator declarations pass Cargo", { timeout: 300_000 }, () => {

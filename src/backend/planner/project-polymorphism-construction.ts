@@ -32,7 +32,6 @@ import {
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import {
-  createRustProjectObjectLayer,
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
   rustProjectObjectStateField,
@@ -63,11 +62,12 @@ import {
 } from "./explicit-safety.js";
 import {
   prepareRustPreconstructionNode,
-  rustTupleFieldPath,
+  rustNamedFieldPath,
   type RustPreconstructionFieldValue,
 } from "./preconstruction-fields.js";
 import { planStatementSequence } from "./statements.js";
 import { applyFallibleShape } from "./fallible-shape.js";
+import { rustProjectStateMarker } from "./project-polymorphism-names.js";
 
 export function planProjectClassConstructor(
   definition: RustProjectTypeDefinition,
@@ -128,6 +128,10 @@ export function planProjectClassConstructor(
     constructor ?? definition.declaration,
     [],
   );
+  const baseStateName = allocateRustSyntheticName(syntheticNames, "base_state");
+  const stateName = allocateRustSyntheticName(syntheticNames, "state");
+  const identityName = allocateRustSyntheticName(syntheticNames, "identity");
+  const rootName = allocateRustSyntheticName(syntheticNames, "root");
   const parameterPlan = constructor === undefined
     ? planImplicitProjectConstructorParameters(
         definition,
@@ -145,7 +149,10 @@ export function planProjectClassConstructor(
   if (fallible) {
     context.usedAliases?.add("rt");
   }
-  const stateType = projectStateType(layers);
+  const stateType = projectStateType(layers, context);
+  if (stateType === undefined) {
+    return undefined;
+  }
   const initializationContext: RustPlanContext = {
     ...context,
     syntheticNames,
@@ -293,7 +300,7 @@ export function planProjectClassConstructor(
     }
     statements.push({
       kind: "let",
-      name: "__tsonic_base_state",
+      name: baseStateName,
       mutable: true,
       attrs: ["#[allow(unused_mut)]"],
       init: baseInitialization,
@@ -369,8 +376,8 @@ export function planProjectClassConstructor(
           declaration: field.declaration,
           storageIndex: field.storageIndex,
           carrier: field.carrier,
-          expression: rustTupleFieldPath(
-            { kind: "path", path: "__tsonic_base_state" },
+          expression: rustNamedFieldPath(
+            { kind: "path", path: baseStateName },
             storagePath,
           ),
         });
@@ -439,15 +446,26 @@ export function planProjectClassConstructor(
     }
     statements.push(...bodyPlan.statements);
   }
-  const ownState = createRustProjectObjectLayer(
-    ownLayer.fields.map((field) => values.get(field.declaration)!),
-  );
-  const state: RustExpr = base === undefined
-    ? ownState
-    : {
-        kind: "tuple-literal",
-        elements: [{ kind: "path", path: "__tsonic_base_state" }, ownState],
-      };
+  const state: RustExpr = {
+    kind: "struct-literal",
+    path: definition.stateName,
+    fields: [
+      ...(base === undefined
+        ? []
+        : [{
+            name: context.input.projectTypes.baseStateFieldName(definition),
+            value: { kind: "path" as const, path: baseStateName },
+          }]),
+      ...ownLayer.fields.map((field) => ({
+        name: field.targetName,
+        value: values.get(field.declaration)!,
+      })),
+      ...(() => {
+        const marker = rustProjectStateMarker(definition, context);
+        return marker === undefined ? [] : [{ name: marker.name, value: marker.value }];
+      })(),
+    ],
+  };
   statements.push({ kind: "tail", expr: state });
   const initialize: RustImplFunction = {
     name: constructorSignature.initializeName,
@@ -459,7 +477,10 @@ export function planProjectClassConstructor(
     ...(fallible ? { fallible: true } : {}),
     returnType: stateType,
     body: {
-      ...(parameterPlan.bodyInnerAttrs.length === 0 ? {} : { innerAttrs: parameterPlan.bodyInnerAttrs }),
+      innerAttrs: [
+        ...parameterPlan.bodyInnerAttrs,
+        "#![allow(unused_assignments)]",
+      ],
       ...applyFallibleShape({ statements }, {
         fallible,
         hasReturnValue: true,
@@ -496,7 +517,7 @@ export function planProjectClassConstructor(
       statements: [
         {
           kind: "let",
-          name: "__tsonic_state",
+          name: stateName,
           mutable: false,
           init: fallible ? {
             kind: "try",
@@ -516,13 +537,13 @@ export function planProjectClassConstructor(
         },
         {
           kind: "let",
-          name: "__tsonic_identity",
+          name: identityName,
           mutable: false,
           init: { kind: "call", path: "rt::ObjectIdentity::new", args: [] },
         },
         {
           kind: "let",
-          name: "__tsonic_root",
+          name: rootName,
           mutable: false,
           init: {
             kind: "call",
@@ -533,14 +554,14 @@ export function planProjectClassConstructor(
               fields: [
                 {
                   name: rustProjectObjectIdentityField,
-                  value: cloneExpression({ kind: "path", path: "__tsonic_identity" }),
+                  value: cloneExpression({ kind: "path", path: identityName }),
                 },
                 {
                   name: rustProjectObjectStateField,
                   value: {
                     kind: "call",
                     path: "rt::ObjectHandle::new",
-                    args: [{ kind: "path", path: "__tsonic_state" }],
+                    args: [{ kind: "path", path: stateName }],
                   },
                 },
               ],
@@ -555,11 +576,11 @@ export function planProjectClassConstructor(
             fields: [
               {
                 name: rustProjectObjectIdentityField,
-                value: { kind: "path", path: "__tsonic_identity" },
+                value: { kind: "path", path: identityName },
               },
               {
                 name: rustProjectObjectDispatchField,
-                value: { kind: "path", path: "__tsonic_root" },
+                value: { kind: "path", path: rootName },
               },
             ],
           },

@@ -27,10 +27,10 @@ export function read(pair: Pair, tuple: [int32, int32]): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let __tsonic_binding = pair\.clone\(\);/u);
-  assert.match(source, /let first: i32 = __tsonic_binding\.__tsonic_state\.with/u);
-  assert.match(source, /let right: i32 = __tsonic_binding\.__tsonic_state\.with/u);
-  assert.match(source, /let head: i32 = __tsonic_binding_\d*\[0\];/u);
+  assert.match(source, /let binding = pair\.clone\(\);/u);
+  assert.match(source, /let first: i32 = binding\.state\.with/u);
+  assert.match(source, /let right: i32 = binding\.state\.with/u);
+  assert.match(source, /let head: i32 = binding_2\[0\];/u);
   assert.match(source, /validated fixed-array destructuring length/u);
   validateGeneratedProject("binding-object-fixed-tuple", result.artifacts);
 });
@@ -53,9 +53,9 @@ export function summarize(envelope: Envelope): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let __tsonic_binding_\d+ = __tsonic_binding[\s\S]*\.__tsonic_state[\s\S]*\.with/u);
-  assert.match(source, /let count: i32 = __tsonic_binding_\d+\.0;/u);
-  assert.match(source, /let label: String = __tsonic_binding_\d+\.1\.clone\(\);/u);
+  assert.match(source, /let binding_2 = binding[\s\S]*\.state[\s\S]*\.with/u);
+  assert.match(source, /let count: i32 = binding_2\.0;/u);
+  assert.match(source, /let label: String = binding_2\.1\.clone\(\);/u);
   validateGeneratedProject("binding-nested", result.artifacts);
 });
 
@@ -76,8 +76,8 @@ export function read(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /__tsonic_binding\s*\.first\(\)[\s\S]*\.cloned\(\)[\s\S]*\.map_or_else/u);
-  assert.match(source, /__tsonic_binding\[1\.\.__tsonic_binding\.len\(\)\]\.to_vec\(\)/u);
+  assert.match(source, /binding\s*\.first\(\)[\s\S]*\.cloned\(\)[\s\S]*\.map_or_else/u);
+  assert.match(source, /binding\[1\.\.binding\.len\(\)\]\.to_vec\(\)/u);
   validateGeneratedProject("binding-native-vector", result.artifacts);
 });
 
@@ -99,8 +99,8 @@ export function read(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /__tsonic_binding\s*\.get\(0\)[\s\S]*\.map_or_else/u);
-  assert.match(source, /let rest: js_abi::JsArray<i32> = __tsonic_binding\.slice_from\(1\.0\);/u);
+  assert.match(source, /binding\s*\.get\(0\)[\s\S]*\.map_or_else/u);
+  assert.match(source, /let rest: js_abi::JsArray<i32> = binding\.slice_from\(1\.0\);/u);
   validateGeneratedProject("binding-js-array", result.artifacts);
 });
 
@@ -131,7 +131,12 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let remaining: rt::ObjectHandle<\(String, i32\)> = rt::ObjectHandle::new/u);
+  assert.match(
+    artifactText(result, "src/shapes.rs"),
+    /pub struct LabelRightShape \{\s*pub label: String,\s*pub right: i32,/u,
+  );
+  assert.match(source, /let remaining: rt::ObjectHandle<crate::shapes::LabelRightShape> =/u);
+  assert.match(source, /rt::ObjectHandle::new\(crate::shapes::LabelRightShape \{/u);
   assert.doesNotMatch(source, /\.with\(\|state\| state\.\d+\.clone\(\)\)\s*\.clone\(\)/u);
   assert.equal(validateGeneratedProject("binding-object-rest", result.artifacts, { run: true }).status, 0);
 });
@@ -165,9 +170,9 @@ export class Accumulator {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn add\(__tsonic_binding_parameter: Pair\)/u);
-  assert.match(source, /fn new\(__tsonic_binding_parameter(?:_\d+)?: \[i32; 2\]\)/u);
-  assert.match(source, /fn add\(&self, __tsonic_binding_parameter(?:_\d+)?: Pair\)/u);
+  assert.match(source, /fn add\(binding_parameter: Pair\)/u);
+  assert.match(source, /fn new\(binding_parameter(?:_\d+)?: \[i32; 2\]\)/u);
+  assert.match(source, /fn add\(&self, binding_parameter(?:_\d+)?: Pair\)/u);
   validateGeneratedProject("binding-parameters", result.artifacts);
 });
 
@@ -187,9 +192,9 @@ export function read(values: [int32, int32][]): int32[] {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /\|__tsonic_binding_parameter\| \{/u);
-  assert.match(source, /let left: i32 = __tsonic_binding_parameter\[0\];/u);
-  assert.match(source, /let right: i32 = __tsonic_binding_parameter\[1\];/u);
+  assert.match(source, /\|binding_parameter\| \{/u);
+  assert.match(source, /let left: i32 = binding_parameter\[0\];/u);
+  assert.match(source, /let right: i32 = binding_parameter\[1\];/u);
   validateGeneratedProject("binding-closure-parameter", result.artifacts);
 });
 
@@ -212,8 +217,8 @@ export function total(values: [int32, int32][]): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /for __tsonic_binding_element in rt::iter_copied\(values\)/u);
-  assert.match(source, /let left: i32 = __tsonic_binding_element\[0\];/u);
-  assert.match(source, /let right: i32 = __tsonic_binding_element\[1\];/u);
+  assert.match(source, /for binding_element in rt::iter_copied\(values\)/u);
+  assert.match(source, /let left: i32 = binding_element\[0\];/u);
+  assert.match(source, /let right: i32 = binding_element\[1\];/u);
   validateGeneratedProject("binding-for-of", result.artifacts);
 });

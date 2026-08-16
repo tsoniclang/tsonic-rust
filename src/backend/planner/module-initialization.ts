@@ -59,7 +59,7 @@ export function planRustModuleInitializers(
 }
 
 export interface RustCrateInitializer {
-  readonly functionName: "__tsonic_initialize";
+  readonly functionName: string;
   readonly asynchronous: boolean;
   readonly fallible: boolean;
   readonly item: RustItem;
@@ -67,6 +67,7 @@ export interface RustCrateInitializer {
 
 export function planRustCrateInitializer(
   initializers: readonly RustModuleInitializer[],
+  functionName: string,
   resultTypePath: string,
   errorDomain: RustErrorDomain,
 ): RustCrateInitializer | undefined {
@@ -99,7 +100,7 @@ export function planRustCrateInitializer(
   }
   const item: RustItem = {
     kind: "function",
-    name: "__tsonic_initialize",
+    name: functionName,
     visibility: "public",
     attrs: ["#[doc(hidden)]"],
     ...(asynchronous ? { isAsync: true } : {}),
@@ -116,7 +117,7 @@ export function planRustCrateInitializer(
     body: { statements },
   };
   return {
-    functionName: "__tsonic_initialize",
+    functionName,
     asynchronous,
     fallible,
     item,

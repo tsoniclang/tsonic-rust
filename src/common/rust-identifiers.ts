@@ -33,7 +33,8 @@ export function isValidRustIdentifier(name: string): boolean {
 
 export function rustSnakeCaseIdentifier(sourceName: string): string {
   const words = rustIdentifierWords(sourceName);
-  const value = words.join("_").toLowerCase() || "value";
+  const leadingUnderscore = /^_[^_]/u.test(sourceName) ? "_" : "";
+  const value = `${leadingUnderscore}${words.join("_").toLowerCase()}` || "value";
   return rustTargetIdentifier(/^[0-9]/u.test(value) ? `value_${value}` : value);
 }
 

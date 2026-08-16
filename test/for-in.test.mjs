@@ -63,7 +63,7 @@ export function main(): void {
   assert.match(source, /JsArray::from_dense\(vec!\[4\.0, 5\.0, 6\.0\]\)\.enumerable_own_keys\(\)/u);
   assert.match(source, /enumerable_own_keys\(\)/u);
   assert.match(source, /String::from\("first"\)/u);
-  assert.match(source, /assignedKey = __tsonic_for_in_key_\d+;/u);
+  assert.match(source, /assigned_key = for_in_key;/u);
   assert.equal(validateGeneratedProject("for-in-policies", result.artifacts, { run: true }).status, 0);
 });
 

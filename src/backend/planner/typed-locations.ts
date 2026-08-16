@@ -39,9 +39,13 @@ import type { RustPlanContext } from "./plan-context.js";
 import { rustModuleCellAccess } from "./module-storage.js";
 import { requireRustLocationValueCarrier } from "./generic-requirements.js";
 import {
-  readRustProjectObjectField,
-  writeRustProjectObjectField,
+  readRustProjectDispatchedField,
+  writeRustProjectDispatchedField,
 } from "./project-objects.js";
+import {
+  readRustStoredObjectField,
+  writeRustStoredObjectField,
+} from "./project-object-storage.js";
 import { allocateRustSyntheticName } from "./synthetic-names.js";
 
 export type RustExpressionPlanner = (
@@ -500,8 +504,44 @@ function planRustLocationStorage(
   );
   if (kind === "KindPropertyAccessExpression" &&
     operation?.kind === "source-field") {
-    const ownerName = "__tsonic_location_owner";
-    const valueName = "__tsonic_location_value";
+    const ownerName = "location_owner";
+    const valueName = "location_value";
+    const owner: RustExpr = { kind: "path", path: ownerName };
+    const read = operation.dispatch === undefined
+      ? readRustStoredObjectField(
+          operation.storage,
+          operation.receiverCarrier,
+          owner,
+          operation.storageIndex,
+          operation.resultCarrier,
+          context,
+        )
+      : readRustProjectDispatchedField(owner, operation.dispatch.read);
+    const write = operation.dispatch === undefined
+      ? writeRustStoredObjectField(
+          operation.storage,
+          operation.receiverCarrier,
+          owner,
+          operation.storageIndex,
+          "=",
+          { kind: "path", path: valueName },
+          context,
+        )
+      : writeRustProjectDispatchedField(
+          owner,
+          "location_dispatch_receiver",
+          operation.dispatch.read,
+          operation.dispatch.write,
+          "=",
+          { kind: "path", path: valueName },
+        );
+    if (read === undefined || write === undefined) {
+      return rejectLocationStorage(
+        expression,
+        context,
+        "The finalized projected member has no exact Rust storage path.",
+      );
+    }
     return {
       kind: "method-call",
       receiver: receiverLocation,
@@ -511,11 +551,7 @@ function planRustLocationStorage(
         {
           kind: "closure",
           params: [{ name: ownerName, byRefCopy: false }],
-          body: readRustProjectObjectField(
-            { kind: "path", path: ownerName },
-            operation.storageIndex,
-            operation.resultCarrier,
-          ),
+          body: read,
         },
         {
           kind: "closure",
@@ -523,12 +559,7 @@ function planRustLocationStorage(
             { name: ownerName, byRefCopy: false },
             { name: valueName, byRefCopy: false },
           ],
-          body: writeRustProjectObjectField(
-            { kind: "path", path: ownerName },
-            operation.storageIndex,
-            "=",
-            { kind: "path", path: valueName },
-          ),
+          body: write,
         },
       ],
     };

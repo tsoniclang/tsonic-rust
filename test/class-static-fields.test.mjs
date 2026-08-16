@@ -90,7 +90,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /crate::counter::__tsonic_static_[0-9]+_[0-9]+/u);
+  assert.match(text, /crate::counter::COUNTER_TOTAL/u);
   const run = validateGeneratedProject("class-static-modules", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

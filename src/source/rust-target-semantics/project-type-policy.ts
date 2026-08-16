@@ -16,6 +16,10 @@ import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 import type { RustNamePlan } from "../../common/rust-name-plan.js";
 import {
+  rustScreamingSnakeIdentifier,
+  rustSnakeCaseIdentifier,
+} from "../../common/rust-identifiers.js";
+import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   substituteRustTargetTypeParameters,
@@ -31,6 +35,14 @@ export interface RustProjectTypeIssue {
   readonly message: string;
 }
 
+type RustProjectMemberSlotRole = "read" | "write" | "virtual" | "exact" | "static";
+
+interface RustProjectMemberSlotCandidate {
+  readonly declaration: Node;
+  readonly targetName: string;
+  readonly roles: readonly RustProjectMemberSlotRole[];
+}
+
 export interface RustProjectTypeDefinition {
   readonly declaration: Node;
   readonly sourceFile: SourceFile;
@@ -40,6 +52,7 @@ export interface RustProjectTypeDefinition {
   readonly kind: "class" | "interface";
   readonly typeParameterNames: readonly string[];
   readonly targetTypeParameterNames: readonly string[];
+  readonly stateName: string;
   readonly dispatchName: string;
   readonly rootName?: string;
 }
@@ -119,6 +132,16 @@ export interface RustProjectTypePolicy {
     definition: RustProjectTypeDefinition,
     targetName: string,
   ): RustProjectConstructorSignature | undefined;
+  fieldStorageName(
+    definition: RustProjectTypeDefinition,
+    declaration: Node,
+  ): string | undefined;
+  baseStateFieldName(definition: RustProjectTypeDefinition): string;
+  stateMarkerFieldName(definition: RustProjectTypeDefinition): string;
+  memberSlotName(
+    declaration: Node,
+    role: RustProjectMemberSlotRole,
+  ): string | undefined;
   memberImplementation(
     concreteClass: RustProjectTypeDefinition,
     contractMember: Node,
@@ -165,21 +188,6 @@ export function rustInheritedProjectConstructor(
         parameter.rest === selected.rest;
     }));
   return matches.length === 1 ? { base, constructor: matches[0]! } : undefined;
-}
-
-export function rustProjectMemberSlotName(
-  ast: AstReader,
-  declaration: Node,
-  role: "read" | "write" | "virtual" | "exact" | "static",
-): string | undefined {
-  const sourceFile = ast.getSourceFile(declaration);
-  const fileName = ast.getFileName(sourceFile);
-  const start = ast.pos(declaration);
-  const end = ast.end(declaration);
-  if (fileName.length === 0 || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start) {
-    return undefined;
-  }
-  return `__tsonic_${role}_${start}_${end}`;
 }
 
 export interface RustProjectTypePolicyRegistry extends RustProjectTypePolicy {
@@ -278,6 +286,18 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     constructorForTargetName(definition, targetName) {
       return requireCurrent().constructorForTargetName(definition, targetName);
     },
+    fieldStorageName(definition, declaration) {
+      return requireCurrent().fieldStorageName(definition, declaration);
+    },
+    baseStateFieldName(definition) {
+      return requireCurrent().baseStateFieldName(definition);
+    },
+    stateMarkerFieldName(definition) {
+      return requireCurrent().stateMarkerFieldName(definition);
+    },
+    memberSlotName(declaration, role) {
+      return requireCurrent().memberSlotName(declaration, role);
+    },
     memberImplementation(concreteClass, contractMember) {
       return requireCurrent().memberImplementation(concreteClass, contractMember);
     },
@@ -292,9 +312,11 @@ export function createRustProjectTypePolicy(
   const issues: RustProjectTypeIssue[] = [];
   const byDeclaration = new WeakMap<Node, RustProjectTypeDefinition>();
   const byKey = new Map<string, RustProjectTypeDefinition>();
+  const usedModuleNamesBySourceFile = new WeakMap<SourceFile, Set<string>>();
 
   for (const sourceFile of host.sourceFiles) {
     const usedNames = sourceFileIdentifierNames(sourceFile, host.ast, host.names);
+    usedModuleNamesBySourceFile.set(sourceFile, usedNames);
     for (const statement of denseNodes(host.ast.statements(sourceFile)) ?? []) {
       const definition = projectDefinition(statement, sourceFile, host.ast, host.names, usedNames);
       if (definition === undefined) {
@@ -622,35 +644,149 @@ export function createRustProjectTypePolicy(
     constructorsByDefinition.set(definition, Object.freeze(signatures));
   }
 
+  const fieldStorageNamesByDefinition = new WeakMap<
+    RustProjectTypeDefinition,
+    ReadonlyMap<Node, string>
+  >();
+  const baseStateFieldNamesByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
+  const stateMarkerFieldNamesByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
+  for (const definition of definitions) {
+    const names = new Map<Node, string>();
+    const usedNames = new Set<string>();
+    const externalBase = externalBaseByDeclaration.get(definition.declaration);
+    for (const field of externalBase?.fields ?? []) {
+      names.set(
+        field.declaration,
+        allocateGeneratedName(usedNames, rustSnakeCaseIdentifier(field.sourceName)),
+      );
+    }
+    for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
+      const kind = host.ast.kindName(member);
+      const isField = definition.kind === "class"
+        ? kind === "KindPropertyDeclaration" && !host.ast.hasModifierKind(member, "static")
+        : kind === "KindPropertySignature";
+      if (!isField) {
+        continue;
+      }
+      const targetName = host.names.nameForDeclaration(member);
+      if (targetName !== undefined) {
+        names.set(member, allocateGeneratedName(usedNames, targetName));
+      }
+    }
+    fieldStorageNamesByDefinition.set(definition, names);
+    baseStateFieldNamesByDefinition.set(definition, allocateGeneratedName(usedNames, "base"));
+    stateMarkerFieldNamesByDefinition.set(
+      definition,
+      allocateGeneratedName(usedNames, "type_marker"),
+    );
+  }
+
+  const memberSlotNames = new WeakMap<Node, Map<RustProjectMemberSlotRole, string>>();
+  const canonicalSlotNames = new WeakMap<Node, Map<RustProjectMemberSlotRole, string>>();
+  const dispatchUsedNamesByDefinition = new WeakMap<RustProjectTypeDefinition, Set<string>>();
+  const setMemberSlotName = (
+    declaration: Node,
+    role: RustProjectMemberSlotRole,
+    name: string,
+  ): void => {
+    const names = memberSlotNames.get(declaration) ?? new Map<RustProjectMemberSlotRole, string>();
+    names.set(role, name);
+    memberSlotNames.set(declaration, names);
+  };
+  const canonicalCallable = (declaration: Node): Node => {
+    const implementation = host.navigation.callableImplementation(declaration);
+    return implementation.kind === "resolved"
+      ? implementation.implementation.declaration
+      : declaration;
+  };
+  for (const definition of definitions) {
+    const dispatchUsedNames = projectMemberNames(definition.declaration, host.ast, host.names);
+    for (const constructor of constructorsByDefinition.get(definition) ?? []) {
+      dispatchUsedNames.add(constructor.targetName);
+      dispatchUsedNames.add(constructor.initializeName);
+    }
+    dispatchUsedNamesByDefinition.set(definition, dispatchUsedNames);
+    const moduleUsedNames = usedModuleNamesBySourceFile.get(definition.sourceFile);
+    if (moduleUsedNames === undefined) {
+      throw new Error("Rust project definition has no module name scope.");
+    }
+    const candidates: RustProjectMemberSlotCandidate[] = [
+      ...(externalBaseByDeclaration.get(definition.declaration)?.fields ?? []).map((field) => ({
+        declaration: field.declaration,
+        targetName: rustSnakeCaseIdentifier(field.sourceName),
+        roles: ["read", "write"] as readonly RustProjectMemberSlotRole[],
+      })),
+    ];
+    for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
+      const kind = host.ast.kindName(member);
+      const targetName = host.names.nameForDeclaration(member);
+      if (targetName === undefined) {
+        continue;
+      }
+      if (kind === "KindPropertyDeclaration" && host.ast.hasModifierKind(member, "static")) {
+        const staticName = allocateGeneratedName(
+          moduleUsedNames,
+          rustScreamingSnakeIdentifier(
+            `${rustGeneratedNameComponent(definition.targetName)}_${rustGeneratedNameComponent(targetName)}`,
+          ),
+        );
+        setMemberSlotName(member, "static", staticName);
+        continue;
+      }
+      if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature") {
+        candidates.push({ declaration: member, targetName, roles: ["read", "write"] });
+      } else if (kind === "KindGetAccessor") {
+        candidates.push({ declaration: member, targetName, roles: ["read"] });
+      } else if (kind === "KindSetAccessor") {
+        candidates.push({ declaration: member, targetName, roles: ["write"] });
+      } else if ((kind === "KindMethodDeclaration" || kind === "KindMethodSignature") &&
+        !host.ast.hasModifierKind(member, "static")) {
+        candidates.push({ declaration: member, targetName, roles: ["virtual", "exact"] });
+      }
+    }
+    for (const candidate of candidates) {
+      const canonical = candidate.roles.some((role) => role === "virtual" || role === "exact")
+        ? canonicalCallable(candidate.declaration)
+        : candidate.declaration;
+      const canonicalNames = canonicalSlotNames.get(canonical) ??
+        new Map<RustProjectMemberSlotRole, string>();
+      for (const role of candidate.roles) {
+        const existing = canonicalNames.get(role);
+        const preferredRole = role === "virtual" ? "dispatch" : role;
+        const name = existing ?? allocateGeneratedName(
+          dispatchUsedNames,
+          `${preferredRole}_${rustGeneratedNameComponent(definition.targetName)}_${rustGeneratedNameComponent(candidate.targetName)}`,
+        );
+        canonicalNames.set(role, name);
+        setMemberSlotName(candidate.declaration, role, name);
+        setMemberSlotName(canonical, role, name);
+      }
+      canonicalSlotNames.set(canonical, canonicalNames);
+    }
+  }
+
   const frozenDefinitions = Object.freeze(definitions);
   const frozenIssues = Object.freeze(issues);
   const orderedDefinitions = [...frozenDefinitions].sort(compareProjectDefinitions);
-  const definitionOrdinal = new WeakMap<RustProjectTypeDefinition, number>();
-  orderedDefinitions.forEach((definition, index) => definitionOrdinal.set(definition, index + 1));
-  const ordinalForDefinition = (definition: RustProjectTypeDefinition): number => {
-    const ordinal = definitionOrdinal.get(definition);
-    if (ordinal === undefined) {
-      throw new Error("Rust project definition has no deterministic program ordinal.");
-    }
-    return ordinal;
-  };
   const downcastRoutesByDefinition = new WeakMap<
     RustProjectTypeDefinition,
     readonly RustProjectDowncastRoute[]
   >();
   for (const source of frozenDefinitions) {
-    const usedNames = projectMemberNames(source.declaration, host.ast, host.names);
+    const usedNames = dispatchUsedNamesByDefinition.get(source);
+    if (usedNames === undefined) {
+      throw new Error("Rust project definition has no dispatch name scope.");
+    }
     const targets = orderedDefinitions
       .filter((target) => target.kind === "class" && target.typeParameterNames.length === 0)
       .filter((target) => relationship(openCarrier(target), source).kind === "related");
-    const sourceOrdinal = ordinalForDefinition(source);
     downcastRoutesByDefinition.set(source, Object.freeze(targets.map((target) => Object.freeze({
       source,
       target,
       targetCarrier: openCarrier(target),
       slot: allocateGeneratedName(
         usedNames,
-        `__tsonic_downcast_${sourceOrdinal}_${ordinalForDefinition(target)}`,
+        `downcast_${rustGeneratedNameComponent(source.targetName)}_to_${rustGeneratedNameComponent(target.targetName)}`,
       ),
     }))));
   }
@@ -770,6 +906,26 @@ export function createRustProjectTypePolicy(
       return (constructorsByDefinition.get(definition) ?? []).find((signature) =>
         signature.targetName === targetName);
     },
+    fieldStorageName(definition, declaration) {
+      return fieldStorageNamesByDefinition.get(definition)?.get(declaration);
+    },
+    baseStateFieldName(definition) {
+      const name = baseStateFieldNamesByDefinition.get(definition);
+      if (name === undefined) {
+        throw new Error("Rust project definition has no deterministic base-state field name.");
+      }
+      return name;
+    },
+    memberSlotName(declaration, role) {
+      return memberSlotNames.get(declaration)?.get(role);
+    },
+    stateMarkerFieldName(definition) {
+      const name = stateMarkerFieldNamesByDefinition.get(definition);
+      if (name === undefined) {
+        throw new Error("Rust project definition has no deterministic state-marker field name.");
+      }
+      return name;
+    },
     memberImplementation(concreteClass, contractMember) {
       return host.navigation.memberImplementation(
         concreteClass.declaration,
@@ -814,6 +970,10 @@ function projectDefinition(
       targetParameterNames === undefined || targetParameterNames.some((name) => name === undefined)
     ? undefined
     : (() => {
+        const stateName = allocateGeneratedName(
+          usedNames,
+          `${targetName}State`,
+        );
         const dispatchName = allocateGeneratedName(
           usedNames,
           `${targetName}Dispatch`,
@@ -830,6 +990,7 @@ function projectDefinition(
         kind,
         typeParameterNames: Object.freeze(sourceTypeParameterNames),
         targetTypeParameterNames: Object.freeze(targetParameterNames as string[]),
+        stateName,
         dispatchName,
         ...(rootName === undefined ? {} : { rootName }),
       });
@@ -880,6 +1041,11 @@ function allocateGeneratedName(usedNames: Set<string>, preferred: string): strin
   }
   usedNames.add(candidate);
   return candidate;
+}
+
+function rustGeneratedNameComponent(name: string): string {
+  const targetName = rustSnakeCaseIdentifier(name);
+  return targetName.startsWith("r#") ? targetName.slice(2) : targetName;
 }
 
 function heritageKindIssue(

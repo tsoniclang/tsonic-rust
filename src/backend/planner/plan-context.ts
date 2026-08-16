@@ -61,6 +61,8 @@ export interface RustPlanContext {
   readonly sourceFile: SourceFile;
   readonly moduleName: string;
   readonly moduleNameByFileName: ReadonlyMap<string, string>;
+  readonly programModuleName: string;
+  readonly structuralShapesModuleName: string;
   readonly diagnostics: TargetDiagnostic[];
   readonly errorDomain: RustErrorDomain;
   readonly planBlock: (node: Node, context: RustPlanContext) => RustBlock | undefined;
@@ -117,11 +119,10 @@ export function registerAliasFromPath(
   context.usedAliases?.add(prefix);
 }
 
-// Naming policy: every user-authored identifier is preserved verbatim
-// wherever Rust can represent it. This conversion exists ONLY for
-// compiler-generated temporaries with no TypeScript source identity.
-// Provider, library, and capability API identity flows exclusively through
-// operation-row metadata, which the backend emits verbatim.
+// Naming policy: source declarations use the immutable compilation-wide Rust
+// name plan. This helper applies the same value-name spelling to compiler-owned
+// names that are introduced after that plan is sealed. Provider, library, and
+// capability API identity flows exclusively through operation-row metadata.
 export function rustLocalBindingName(name: string): string {
   if (/^[A-Z][A-Z0-9_]*$/u.test(name)) {
     // UPPER_SNAKE names are constant references and pass through unchanged.

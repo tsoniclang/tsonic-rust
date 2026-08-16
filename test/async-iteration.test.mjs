@@ -35,7 +35,7 @@ export async function main(): Promise<void> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /while let Some\(row\) = __tsonic_async_iterator(?:_\d+)?\.next_yield\(\)\.await/u);
+  assert.match(source, /while let Some\(row\) = async_iterator(?:_\d+)?\.next_yield\(\)\.await/u);
   assert.equal(validateGeneratedProject("async-iteration", result.artifacts, { run: true }).status, 0);
 });
 
@@ -100,6 +100,6 @@ export async function total(): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let __tsonic_async_iterator_1 = rows\(\);/u);
-  assert.match(source, /let __tsonic_async_iterator: i32 = 4;/u);
+  assert.match(source, /let async_iterator = rows\(\);/u);
+  assert.match(source, /let tsonic_async_iterator: i32 = 4;/u);
 });

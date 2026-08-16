@@ -101,7 +101,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::source_string_less_than\("alpha", "beta"\)/u);
-  assert.match(source, /rt::source_string_less_than\(&supplementary, &privateUse\)/u);
+  assert.match(source, /rt::source_string_less_than\(&supplementary, &private_use\)/u);
   validateGeneratedProject("expression-string-ordering", result.artifacts, { run: true });
 });
 
@@ -156,7 +156,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /value\.clone\(\)\.unwrap\(\)/u);
-  assert.match(source, /get_number[\s\S]*Some\(__tsonic_flow_value\)/u);
+  assert.match(source, /get_number[\s\S]*Some\(flow_value\)/u);
   assert.equal(validateGeneratedProject("non-null-projection", result.artifacts, { run: true }).status, 0);
 });
 
@@ -251,7 +251,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::source_string\(&count\)/u);
   assert.match(source, /rt::source_string\(&enabled\)/u);
-  assert.match(source, /rt::source_string\(&negativeZero\)/u);
+  assert.match(source, /rt::source_string\(&negative_zero\)/u);
   validateGeneratedProject("expression-substituted-template", result.artifacts, { run: true });
 });
 
@@ -550,8 +550,8 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::BigInt::checked_div\(left\.clone\(\), right\.clone\(\)\)/u);
   assert.match(source, /rt::BigInt::checked_rem\(left\.clone\(\), right\.clone\(\)\)/u);
-  assert.match(source, /rt::BigInt::checked_div\(__tsonic_current(?:_[0-9]+)?, __tsonic_value(?:_[0-9]+)?\)\?/u);
-  assert.match(source, /rt::BigInt::checked_rem\(\s*__tsonic_current(?:_[0-9]+)?,\s*__tsonic_value(?:_[0-9]+)?,?\s*\)\?/u);
+  assert.match(source, /rt::BigInt::checked_div\(current(?:_[0-9]+)?, value(?:_[0-9]+)?\)\?/u);
+  assert.match(source, /rt::BigInt::checked_rem\(\s*current(?:_[0-9]+)?,\s*value(?:_[0-9]+)?,?\s*\)\?/u);
   validateGeneratedProject("expression-bigint-division", result.artifacts, { run: true });
 });
 
