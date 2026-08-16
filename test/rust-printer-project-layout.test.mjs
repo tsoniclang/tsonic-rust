@@ -393,8 +393,8 @@ test("format macro arguments keep borrowed nested calls attached to their call",
           expr: {
             kind: "associated-call",
             owner: { kind: "named", path: "Self" },
-            trait: { kind: "named", path: "__TsonicDispatch_Middle" },
-            method: "__tsonic_exact_692_761",
+            trait: { kind: "named", path: "MiddleDispatch" },
+            method: "exact_middle_describe",
             args: [clone({ kind: "path", path: "self" })],
           },
         }],
@@ -419,9 +419,9 @@ test("format macro arguments keep borrowed nested calls attached to their call",
 
   assert.match(
     text,
-    /rt::source_string\(&<Self as __TsonicDispatch_Middle>::__tsonic_exact_692_761\(\n/u,
+    /rt::source_string\(&<Self as MiddleDispatch>::exact_middle_describe\(\n/u,
   );
-  assert.match(text, /self\.clone\(\)\n\s+\),\),/u);
+  assert.match(text, /self\.clone\(\)\n\s+\)\),/u);
   assert.doesNotMatch(text, /rt::source_string\(\n/u);
 });
 

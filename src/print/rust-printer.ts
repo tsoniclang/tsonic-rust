@@ -2794,7 +2794,8 @@ function printRustFormatArgument(
   if ((expression.kind === "call" || expression.kind === "associated-call") &&
     expression.args.length === 1) {
     const flat = printRustExpr(expression);
-    if (!flat.includes("\n") && renderedFits(`${flat},`, column) &&
+    if (flat.length < rustInlineFormatArgumentWidth * 2 &&
+      !flat.includes("\n") && renderedFits(`${flat},`, column) &&
       !rustExpressionContainsStatementBlock(expression) &&
       !rustExpressionContainsPreferredVerticalMethodChain(expression) &&
       !rustExpressionContainsExpandedStructLiteral(expression)) {
@@ -2808,7 +2809,6 @@ function printRustFormatArgument(
     const borrowedNested = printBorrowedNestedRustFormatArgument(
       callable,
       argument,
-      expression,
       depth,
       column,
     );
@@ -2835,11 +2835,10 @@ function printRustFormatArgument(
 function printBorrowedNestedRustFormatArgument(
   outerCallable: string,
   argument: RustExpr,
-  expression: RustExpr,
   depth: number,
   column: number,
 ): string | undefined {
-  if (argument.kind !== "reference" || renderedFits(printRustExpr(expression), column)) {
+  if (argument.kind !== "reference") {
     return undefined;
   }
   const nested = argument.expr;
@@ -2874,7 +2873,7 @@ function printBorrowedNestedRustFormatArgument(
   return [
     opening,
     `${argumentIndent}${renderedArgument}`,
-    `${indentText(depth)}),)`,
+    `${indentText(depth)}))`,
   ].join("\n");
 }
 
