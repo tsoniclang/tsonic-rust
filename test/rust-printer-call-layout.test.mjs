@@ -877,7 +877,7 @@ test("fitting callable closures move below long let bindings without expanding",
   );
 });
 
-test("short first fields stay attached when later method arguments expand", () => {
+test("field-led calls break before selectors when the final call fits there", () => {
   const receiver = { kind: "path", path: "dispatch_receiver" };
   const source = printRustSourceFile({
     headerComment,
@@ -910,8 +910,10 @@ test("short first fields stay attached when later method arguments expand", () =
     }],
   });
 
-  assert.match(source, /dispatch_receiver\.dispatch\.write_counter_value\(/u);
-  assert.doesNotMatch(source, /dispatch_receiver\n        \.dispatch/u);
+  assert.match(
+    source,
+    /dispatch_receiver\n        \.dispatch\n        \.write_counter_value\(dispatch_receiver\.dispatch\.read_counter_value\(\) \+ value\)/u,
+  );
 });
 
 test("borrowed method-chain let initializers reflow as one continuation", () => {

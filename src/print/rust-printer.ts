@@ -1979,8 +1979,8 @@ function printRustExprFitted(
         const secondStep = chain.steps[1];
         const attachFirstMethodAfterField = firstStep?.kind === "field" &&
           !firstFieldRequiresBreak && secondStep?.kind === "method" &&
-          chain.steps.filter((step) =>
-            step.kind === "field" || step.kind === "method" || step.kind === "await").length === 2 &&
+          selectorCount === 2 &&
+          rustMethodChainFirstMethodRequiresExpansion(chain, depth) &&
           renderedFits(
             `${printRustExpr(chain.base)}.${firstStep.name}.${secondStep.name}(`,
             column,
@@ -1989,7 +1989,8 @@ function printRustExprFitted(
           chain,
           depth,
           column,
-          firstFieldRequiresBreak || selectorCount > 2 ||
+          firstStep?.kind === "field" && !attachFirstMethodAfterField ||
+            selectorCount > 2 ||
             rustMethodChainBreaksReceiverForClosure(chain, flat, column) ||
             column > indentText(depth + 1).length,
           methodChainContinuationIndent,
