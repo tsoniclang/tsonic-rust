@@ -210,6 +210,18 @@ export function negateFloatComparison(value: number): boolean {
   return !(value < 10);
 }
 
+export function negateFloatLessEqual(value: number): boolean {
+  return !(value <= 10);
+}
+
+export function negateFloatGreater(value: number): boolean {
+  return !(value > 10);
+}
+
+export function negateFloatGreaterEqual(value: number): boolean {
+  return !(value >= 10);
+}
+
 export function joined(left: string, right: string): string {
   return left + ("/" + right);
 }
@@ -227,8 +239,13 @@ export function explicitUnitReturn(): void {
   assert.match(text, /\(10\.\.=20\)\.contains\(&value\)/u);
   assert.match(text, /valid\s*&&\s*\(10\.\.=20\)\.contains\(&value\)/u);
   assert.match(text, /!\(10\.\.=20\)\.contains\(&value\)/u);
-  assert.match(text, /value < 10\.0 \|\| value > 20\.0/u);
-  assert.match(text, /!\(value < 10\.0\)/u);
+  assert.match(text, /value\.partial_cmp\(&10\.0\) == Some\(std::cmp::Ordering::Less\)/u);
+  assert.match(text, /value\.partial_cmp\(&20\.0\) == Some\(std::cmp::Ordering::Greater\)/u);
+  assert.doesNotMatch(text, /!\(10\.0\.\.=20\.0\)\.contains\(&value\)/u);
+  assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering != std::cmp::Ordering::Less\)/u);
+  assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering == std::cmp::Ordering::Greater\)/u);
+  assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering != std::cmp::Ordering::Greater\)/u);
+  assert.match(text, /value\s*\.partial_cmp\(&10\.0\)\s*\.is_none_or\(\|ordering\| ordering == std::cmp::Ordering::Less\)/u);
   assert.match(text, /format!\("\{\}\{\}\{\}", left, String::from\("\/"\), right\)/u);
   assert.match(text, /pub fn explicit_unit_return\(\) \{\}/u);
   assert.doesNotMatch(text, /format!\([^\n]*format!/u);

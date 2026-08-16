@@ -1675,6 +1675,104 @@ export function expressionCarrier(node: Node, context: RustPlanContext): TargetT
     context.input.facts.getRuntimeCarrierFact(node)?.carrier;
 }
 
+function rustPartialComparison(left: RustExpr, right: RustExpr): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: left,
+    method: "partial_cmp",
+    args: [{ kind: "reference", expr: right }],
+  };
+}
+
+function rustOrderingVariant(name: "Less" | "Equal" | "Greater"): RustExpr {
+  return {
+    kind: "associated-value",
+    owner: { kind: "named", path: "std::cmp::Ordering" },
+    name,
+  };
+}
+
+function rustOrderingValue(name: "Less" | "Equal" | "Greater"): RustExpr {
+  return {
+    kind: "call",
+    path: "Some",
+    args: [rustOrderingVariant(name)],
+  };
+}
+
+function rustPartialOrderingTest(
+  left: RustExpr,
+  right: RustExpr,
+  operator: "==" | "!=",
+  ordering: "Less" | "Equal" | "Greater",
+): RustExpr {
+  return {
+    kind: "binary",
+    operator,
+    left: rustPartialComparison(left, right),
+    right: rustOrderingValue(ordering),
+  };
+}
+
+export function negateRustPlannedBooleanExpression(
+  sourceExpression: Node | undefined,
+  planned: RustExpr,
+  context: RustPlanContext,
+): RustExpr {
+  let selectedExpression = sourceExpression;
+  while (selectedExpression !== undefined) {
+    const kind = context.input.ast.kindName(selectedExpression);
+    if (kind !== KindParenthesizedExpression && kind !== KindSatisfiesExpression &&
+      kind !== KindNonNullExpression && kind !== "KindAsExpression" &&
+      kind !== "KindTypeAssertionExpression") {
+      break;
+    }
+    selectedExpression = Node_Expression(context.input.ast, selectedExpression);
+  }
+  if (selectedExpression === undefined ||
+    context.input.ast.kindName(selectedExpression) !== KindBinaryExpression ||
+    planned.kind !== "binary") {
+    return negateRustBooleanExpression(planned);
+  }
+  const left = BinaryExpression_Left(context.input.ast, selectedExpression);
+  const right = BinaryExpression_Right(context.input.ast, selectedExpression);
+  const inverse = planned.operator === "<" ? ">="
+    : planned.operator === "<=" ? ">"
+      : planned.operator === ">" ? "<="
+        : planned.operator === ">=" ? "<"
+          : undefined;
+  if (left === undefined || right === undefined || inverse === undefined) {
+    return negateRustBooleanExpression(planned);
+  }
+  const leftCarrier = expressionCarrier(left, context);
+  const rightCarrier = expressionCarrier(right, context);
+  if (isRustIntegerCarrier(leftCarrier) && isRustIntegerCarrier(rightCarrier)) {
+    return { ...planned, operator: inverse };
+  }
+  if (!isFloatCarrier(leftCarrier) || !isFloatCarrier(rightCarrier)) {
+    return negateRustBooleanExpression(planned);
+  }
+  const orderingName = "ordering";
+  const ordering = { kind: "path" as const, path: orderingName };
+  const boundary = planned.operator === "<" || planned.operator === "<=" ? "Less" : "Greater";
+  const accepted = planned.operator === "<" || planned.operator === ">" ? "!=" : "==";
+  return {
+    kind: "method-call",
+    receiver: rustPartialComparison(planned.left, planned.right),
+    method: "is_none_or",
+    args: [{
+      kind: "closure",
+      params: [{ name: orderingName, byRefCopy: false }],
+      body: {
+        kind: "binary",
+        operator: accepted,
+        left: ordering,
+        right: rustOrderingVariant(boundary),
+      },
+    }],
+  };
+}
+
 function effectivePlannedExpressionCarrier(
   node: Node,
   context: RustPlanContext,
@@ -1925,7 +2023,7 @@ function planUnaryExpression(
   return operand === undefined
     ? undefined
     : fact.operator === "!"
-      ? negateRustBooleanExpression(operand)
+      ? negateRustPlannedBooleanExpression(operandNode, operand, context)
       : { kind: "unary", operator: fact.operator, operand };
 }
 
@@ -3195,7 +3293,15 @@ function planRustRangeComparisonPair(
     return undefined;
   }
   if (exclusive && (!isRustIntegerLiteral(lower) || !isRustIntegerLiteral(upper))) {
-    return undefined;
+    if (!isRustFloatLiteral(lower) || !isRustFloatLiteral(upper)) {
+      return undefined;
+    }
+    return {
+      kind: "binary",
+      operator: "||",
+      left: rustPartialOrderingTest(first.subject, lower, "==", "Less"),
+      right: rustPartialOrderingTest(second.subject, upper, "==", "Greater"),
+    };
   }
   const contains: RustExpr = {
     kind: "method-call",
@@ -3250,6 +3356,11 @@ function isRustNumericLiteral(expression: RustExpr): boolean {
 function isRustIntegerLiteral(expression: RustExpr): boolean {
   return expression.kind === "int-literal" || expression.kind === "unary" &&
     expression.operator === "-" && expression.operand.kind === "int-literal";
+}
+
+function isRustFloatLiteral(expression: RustExpr): boolean {
+  return expression.kind === "float-literal" || expression.kind === "unary" &&
+    expression.operator === "-" && expression.operand.kind === "float-literal";
 }
 
 function planBooleanLiteralComparison(

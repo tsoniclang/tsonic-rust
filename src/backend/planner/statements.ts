@@ -91,6 +91,7 @@ import { applyRustErrorBoundary } from "./error-boundary.js";
 import {
   applyRustArgumentMode,
   expressionCarrier,
+  negateRustPlannedBooleanExpression,
   planExpression,
   planRustOperatorCallExpression,
   planFinalizedSourceInput,
@@ -2144,7 +2145,7 @@ function planDoStatement(
   }
   const conditionExit: RustStmt = {
     kind: "if",
-    condition: negateRustBooleanExpression(plannedCondition),
+    condition: negateRustPlannedBooleanExpression(condition, plannedCondition, context),
     then: { statements: [{ kind: "break" }] },
   };
   const target: RustLoopTarget = {
