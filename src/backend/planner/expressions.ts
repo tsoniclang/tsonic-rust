@@ -4316,6 +4316,29 @@ function planSelectedSourceCall(
   if (shaped === undefined) {
     return undefined;
   }
+  const sourceTypeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
+  const targetTypeArgumentCarriers = fact.targetTypeArguments ?? [];
+  if (sourceTypeArguments.length !== targetTypeArgumentCarriers.length) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-call-type-arguments",
+      "Selected project-source call has inconsistent source and target type-argument evidence.",
+    ));
+    return undefined;
+  }
+  const targetTypeArguments = targetTypeArgumentCarriers.map((carrier) =>
+    rustTypeFromCarrierInContext(carrier, context));
+  if (targetTypeArguments.some((argument) => argument === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-call-type-arguments",
+      "Selected project-source call type arguments do not have exact Rust target types.",
+    ));
+    return undefined;
+  }
+  const callTypeArguments = targetTypeArguments.length === 0
+    ? undefined
+    : targetTypeArguments as readonly RustType[];
 
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
@@ -4331,6 +4354,7 @@ function planSelectedSourceCall(
           ? targetName
           : `crate::${moduleName}::${targetName}`,
         args: shaped,
+        ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
       };
       break;
     }
@@ -4360,6 +4384,7 @@ function planSelectedSourceCall(
                 owner: { kind: "named", path: "Self" },
                 trait,
                 method: fact.target.dispatch.exactSlot,
+                ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
                 args: [{
                   kind: "method-call",
                   receiver: dispatchReceiver,
@@ -4398,6 +4423,7 @@ function planSelectedSourceCall(
                   args: [],
                 },
                 method: fact.target.dispatch.virtualSlot,
+                ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
                 args: shaped,
               },
             };
@@ -4441,6 +4467,7 @@ function planSelectedSourceCall(
             ? receiver
             : planRustNonConsumingValue(receiverNode, receiver, context),
           method: targetName,
+          ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
           args: shaped,
           receiverMode: fact.target.mutatesSelf ? "mut-ref" : "ref",
         };
@@ -4452,7 +4479,12 @@ function planSelectedSourceCall(
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
       const targetName = fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
-        planned = { kind: "call", path: `${typePath}::${targetName}`, args: shaped };
+        planned = {
+          kind: "call",
+          path: `${typePath}::${targetName}`,
+          args: shaped,
+          ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+        };
       }
       break;
     }
@@ -4461,7 +4493,12 @@ function planSelectedSourceCall(
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
       const targetName = fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
-        planned = { kind: "call", path: `${typePath}::${targetName}`, args: shaped };
+        planned = {
+          kind: "call",
+          path: `${typePath}::${targetName}`,
+          args: shaped,
+          ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+        };
       }
       break;
     }

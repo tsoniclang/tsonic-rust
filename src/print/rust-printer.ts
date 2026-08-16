@@ -1407,7 +1407,7 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printRustExpr(expression.target)} ${expression.operator} ${printRustExpr(expression.value)}`;
     }
     case "call": {
-      return `${expression.path}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${expression.path}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "invoke": {
       return `${printOperand(expression.callee, RustPrecedence.Postfix, false)}(${expression.args.map(printRustExpr).join(", ")})`;
@@ -1416,11 +1416,11 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printRustAssociatedOwner(expression.owner)}::${expression.name}`;
     }
     case "associated-call": {
-      return `${printRustAssociatedCallOwner(expression)}::${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${printRustAssociatedCallOwner(expression)}::${expression.method}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "method-call": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
-      return `${receiver}.${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${receiver}.${expression.method}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "field": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
@@ -2685,10 +2685,13 @@ function printRustSingleCollectionCallContinuation(
   column: number,
 ): string | undefined {
   const invocation = initializer.kind === "call"
-    ? { callable: initializer.path, arguments: initializer.args }
+    ? {
+        callable: `${initializer.path}${printRustCallTypeArguments(initializer.typeArguments)}`,
+        arguments: initializer.args,
+      }
     : initializer.kind === "associated-call"
       ? {
-          callable: `${printRustAssociatedOwner(initializer.owner)}::${initializer.method}`,
+          callable: `${printRustAssociatedOwner(initializer.owner)}::${initializer.method}${printRustCallTypeArguments(initializer.typeArguments)}`,
           arguments: initializer.args,
         }
       : undefined;
@@ -2732,6 +2735,12 @@ function printRustAssociatedOwner(owner: RustType): string {
     return printRustType(owner);
   }
   return `${owner.path}::<${owner.typeArguments.map(printRustType).join(", ")}>`;
+}
+
+function printRustCallTypeArguments(typeArguments: readonly RustType[] | undefined): string {
+  return typeArguments === undefined || typeArguments.length === 0
+    ? ""
+    : `::<${typeArguments.map(printRustType).join(", ")}>`;
 }
 
 function printFittedLogicalChain(
