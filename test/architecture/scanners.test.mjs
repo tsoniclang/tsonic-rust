@@ -76,6 +76,18 @@ test("clean emission has no legacy synthetic prefix or blanket lint policy", () 
   }
 });
 
+test("generated lint exceptions have one explicit policy owner", () => {
+  for (const { path, text } of sourceFiles) {
+    if (path.endsWith("/backend/rust-ast/lint-policy.ts")) {
+      continue;
+    }
+    assert.doesNotMatch(text, /#!?\[allow\(/u, `${path} emits an unowned Rust lint exception`);
+  }
+  const policy = readFileSync(join(sourceRoot, "backend/rust-ast/lint-policy.ts"), "utf8");
+  assert.doesNotMatch(policy, /#!?\[allow\((?![^\]\n]*reason = )[^\]\n]*\)\]/u);
+  assert.match(policy, /reason = /u);
+});
+
 test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
   for (const { path, text } of sourceFiles) {
     if (path.includes("/providers/compiler/")) {

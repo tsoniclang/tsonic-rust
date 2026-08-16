@@ -9,6 +9,7 @@ import type {
   RustStructField,
   RustTypeParameter,
 } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import {
   rustRuntimeAliasImports,
 } from "./plan-context.js";
@@ -62,7 +63,7 @@ export function planRustStructuralShapeModule(
       kind: "struct",
       name: definition.targetName,
       visibility: "public",
-      attrs: ["#[allow(dead_code)]"],
+      attrs: [rustLintAttributes.deadCode],
       derives: [],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields,

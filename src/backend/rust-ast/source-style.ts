@@ -9,55 +9,63 @@ import type {
   RustType,
 } from "./nodes.js";
 import { finalizeRustBlockLiveness } from "./source-liveness.js";
-import { rustExpressionContainsStatementBlock } from "./expressions.js";
-
-const tooManyArgumentsAttribute = "#[allow(clippy::too_many_arguments)]";
-const inherentToStringAttribute = "#[allow(clippy::inherent_to_string)]";
-const privateInterfacesAttribute = "#[allow(private_interfaces)]";
-const blocksInConditionsAttribute = "#[allow(clippy::blocks_in_conditions)]";
-const collapsibleIfAttribute = "#[allow(clippy::collapsible_if)]";
-const neverLoopAttribute = "#[allow(clippy::never_loop)]";
-const unusedVariablesAttribute = "#[allow(unused_variables)]";
+import { rustLintAttributes } from "./lint-policy.js";
+import { rustBlockReferencesPath } from "./source-usage.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
-  const restrictedLocalTypes = new Set(model.items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "enum" || item.kind === "type-alias") &&
-      item.visibility !== "public"
+  const items = closePublicRustTypeVisibility(model.items);
+  const publicTypes = new Set(items.flatMap((item) =>
+    (item.kind === "struct" || item.kind === "trait" || item.kind === "enum") &&
+        item.visibility === "public"
       ? [item.name]
       : []));
   return {
     ...model,
-    items: model.items.map((item) => finalizeRustItemStyle(item, restrictedLocalTypes)),
+    items: items.map((item) => finalizeRustItemStyle(item, publicTypes)),
   };
 }
 
 function finalizeRustItemStyle(
   item: RustItem,
-  restrictedLocalTypes: ReadonlySet<string>,
+  publicTypes: ReadonlySet<string>,
 ): RustItem {
   if (item.kind === "function") {
+    const itemAttrs = item.visibility === "public"
+      ? removeDeadCodeAttributes(item.attrs)
+      : item.attrs;
     const attrs = item.params.length <= 7
-      ? item.attrs
-      : appendRustAttribute(item.attrs, tooManyArgumentsAttribute);
+      ? itemAttrs
+      : appendRustAttribute(itemAttrs, rustLintAttributes.tooManyArguments);
     return { ...item, attrs, body: finalizeRustFunctionBodyStyle(item.body) };
   }
   if (item.kind === "trait") {
     return {
       ...item,
+      ...(item.visibility === "public"
+        ? { attrs: removeDeadCodeAttributes(item.attrs) }
+        : {}),
       functions: item.functions.map(finalizeRustTraitFunctionStyle),
     };
   }
   if (item.kind === "impl") {
+    const publicTarget = item.target.kind === "named" && publicTypes.has(item.target.path);
     return {
       ...item,
       functions: item.functions.map((fn) =>
-        finalizeRustImplFunctionStyle(fn, item.trait === undefined, restrictedLocalTypes)),
+        finalizeRustImplFunctionStyle(fn, item.trait === undefined, publicTarget)),
     };
   }
   if (item.kind === "const" || item.kind === "thread-local") {
     return { ...item, value: finalizeRustExpressionStyle(item.value) };
+  }
+  if (item.kind === "enum" && item.visibility === "public") {
+    return { ...item, attrs: removeDeadCodeAttributes(item.attrs) };
+  }
+  if (item.kind === "struct" && item.visibility === "public" &&
+    item.fields.every((field) => field.visibility === "public")) {
+    return { ...item, attrs: removeDeadCodeAttributes(item.attrs) };
   }
   return item;
 }
@@ -66,30 +74,34 @@ function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunctio
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   return argumentCount <= 7
     ? fn
-    : { ...fn, attrs: appendRustAttribute(fn.attrs, tooManyArgumentsAttribute) };
+    : { ...fn, attrs: appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments) };
 }
 
 function finalizeRustImplFunctionStyle(
   fn: RustImplFunction,
   inherent: boolean,
-  restrictedLocalTypes: ReadonlySet<string>,
+  publicTarget: boolean,
 ): RustImplFunction {
-  let attrs = fn.attrs;
+  let attrs = publicTarget && fn.visibility === "public"
+    ? removeDeadCodeAttributes(fn.attrs)
+    : fn.attrs;
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
-  if (argumentCount > 7) {
-    attrs = appendRustAttribute(attrs, tooManyArgumentsAttribute);
+  if (inherent && argumentCount > 7) {
+    attrs = appendRustAttribute(attrs, rustLintAttributes.tooManyArguments);
   }
   if (inherent && fn.name === "to_string" && fn.selfParam !== undefined &&
     fn.params.length === 0 && fn.returnType?.kind === "string") {
-    attrs = appendRustAttribute(attrs, inherentToStringAttribute);
-  }
-  if (fn.visibility === "public" &&
-    [...fn.params.map((parameter) => parameter.type), fn.returnType]
-      .some((type) => type !== undefined &&
-        rustTypeContainsRestrictedLocalType(type, restrictedLocalTypes))) {
-    attrs = appendRustAttribute(attrs, privateInterfacesAttribute);
+    attrs = appendRustAttribute(attrs, rustLintAttributes.inherentToString);
   }
   return { ...fn, attrs, body: finalizeRustFunctionBodyStyle(fn.body) };
+}
+
+function removeDeadCodeAttributes(
+  attrs: readonly string[] | undefined,
+): readonly string[] | undefined {
+  const filtered = attrs?.filter((attribute) =>
+    attribute !== rustLintAttributes.deadCode);
+  return filtered === undefined || filtered.length === 0 ? undefined : filtered;
 }
 
 function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
@@ -130,12 +142,12 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         ? undefined
         : finalizeRustBlockStyle(statement.else);
       let attrs = statement.attrs;
-      if (rustExpressionContainsStatementBlock(condition)) {
-        attrs = appendRustAttribute(attrs, blocksInConditionsAttribute);
+      if (rustConditionPrintsAsBlock(condition)) {
+        attrs = appendRustAttribute(attrs, rustLintAttributes.blocksInConditions);
       }
       const nested = then.statements.length === 1 ? then.statements[0] : undefined;
       if (otherwise === undefined && nested?.kind === "if" && nested.else === undefined) {
-        attrs = appendRustAttribute(attrs, collapsibleIfAttribute);
+        attrs = appendRustAttribute(attrs, rustLintAttributes.collapsibleIf);
       }
       return {
         ...statement,
@@ -149,8 +161,8 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
       return { ...statement, body: finalizeRustBlockStyle(statement.body) };
     case "while": {
       const condition = finalizeRustExpressionStyle(statement.condition);
-      const attrs = rustExpressionContainsStatementBlock(condition)
-        ? appendRustAttribute(statement.attrs, blocksInConditionsAttribute)
+      const attrs = rustConditionPrintsAsBlock(condition)
+        ? appendRustAttribute(statement.attrs, rustLintAttributes.blocksInConditions)
         : statement.attrs;
       return { ...statement, attrs, condition, body: finalizeRustBlockStyle(statement.body) };
     }
@@ -163,12 +175,14 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
     case "for": {
       const body = finalizeRustBlockStyle(statement.body);
       let attrs = statement.attrs;
-      if (!rustBlockReferencesPath(body, statement.binding)) {
-        attrs = appendRustAttribute(attrs, unusedVariablesAttribute);
+      if (!rustBlockReferencesPath(body, statement.binding) &&
+        statement.binding !== "_" && !statement.binding.startsWith("_")) {
+        attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
       }
       const finalStatement = body.statements[body.statements.length - 1];
-      if (finalStatement?.kind === "break" && finalStatement.label === statement.label) {
-        attrs = appendRustAttribute(attrs, neverLoopAttribute);
+      if (finalStatement?.kind === "break" && finalStatement.label === statement.label &&
+        !rustBlockMayContinueLoop(body, statement.label)) {
+        attrs = appendRustAttribute(attrs, rustLintAttributes.neverLoop);
       }
       return {
         ...statement,
@@ -241,6 +255,66 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
             : { continuePrelude: target.continuePrelude.map(finalizeRustStatementStyle) }),
         })),
       };
+  }
+}
+
+function rustConditionPrintsAsBlock(expression: RustExpr): boolean {
+  switch (expression.kind) {
+    case "block":
+    case "evaluate-then":
+      return true;
+    case "bottom":
+    case "numeric-cast":
+    case "unsafe":
+    case "owned-string-from-borrowed-str":
+      return rustConditionPrintsAsBlock(expression.expression);
+    case "try":
+    case "await":
+      return rustConditionPrintsAsBlock(expression.expr);
+    default:
+      return false;
+  }
+}
+
+function rustBlockMayContinueLoop(block: RustBlock, label: string | undefined): boolean {
+  return block.statements.some((statement) => rustStatementMayContinueLoop(statement, label));
+}
+
+function rustStatementMayContinueLoop(statement: RustStmt, label: string | undefined): boolean {
+  switch (statement.kind) {
+    case "continue":
+      return statement.label === label;
+    case "if":
+      return rustBlockMayContinueLoop(statement.then, label) ||
+        (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
+    case "if-let-some":
+    case "scope":
+    case "unsafe-scope":
+      return rustBlockMayContinueLoop(statement.body, label);
+    case "resource-scope":
+      return rustBlockMayContinueLoop(statement.body, label) ||
+        rustBlockMayContinueLoop(statement.cleanup, label);
+    case "try-scope":
+      return rustBlockMayContinueLoop(statement.body, label) ||
+        (statement.catchClause !== undefined &&
+          rustBlockMayContinueLoop(statement.catchClause.body, label)) ||
+        (statement.finallyClause !== undefined &&
+          rustBlockMayContinueLoop(statement.finallyClause.body, label));
+    case "loop":
+    case "while":
+    case "while-let-some":
+    case "for":
+      return label !== undefined && rustBlockMayContinueLoop(statement.body, label);
+    case "let":
+    case "expr":
+    case "assign":
+    case "return":
+    case "tail":
+    case "break":
+    case "completion-exit":
+    case "index-assign":
+    case "throw":
+      return false;
   }
 }
 
@@ -412,174 +486,126 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
   return result;
 }
 
-function rustBlockReferencesPath(block: RustBlock, path: string): boolean {
-  return block.statements.some((statement) => rustStatementReferencesPath(statement, path));
-}
-
-function rustStatementReferencesPath(statement: RustStmt, path: string): boolean {
-  switch (statement.kind) {
-    case "let":
-      return statement.init !== undefined && rustExpressionReferencesPath(statement.init, path);
-    case "expr":
-    case "tail":
-      return rustExpressionReferencesPath(statement.expr, path);
-    case "assign":
-      return rustExpressionReferencesPath(statement.target, path) ||
-        rustExpressionReferencesPath(statement.value, path);
-    case "return":
-      return statement.expr !== undefined && rustExpressionReferencesPath(statement.expr, path);
-    case "if":
-      return rustExpressionReferencesPath(statement.condition, path) ||
-        rustBlockReferencesPath(statement.then, path) ||
-        (statement.else !== undefined && rustBlockReferencesPath(statement.else, path));
-    case "loop":
-      return rustBlockReferencesPath(statement.body, path);
-    case "while":
-      return rustExpressionReferencesPath(statement.condition, path) ||
-        rustBlockReferencesPath(statement.body, path);
-    case "while-let-some":
-    case "if-let-some":
-      return rustExpressionReferencesPath(statement.expression, path) ||
-        rustBlockReferencesPath(statement.body, path);
-    case "for":
-      return rustExpressionReferencesPath(statement.iterable, path) ||
-        rustBlockReferencesPath(statement.body, path);
-    case "break":
-    case "continue":
-      return false;
-    case "completion-exit":
-      return statement.expr !== undefined && rustExpressionReferencesPath(statement.expr, path);
-    case "resource-scope":
-      return rustBlockReferencesPath(statement.body, path) ||
-        rustBlockReferencesPath(statement.cleanup, path) ||
-        statement.dispatchTargets.some((target) =>
-          target.continuePrelude?.some((value) => rustStatementReferencesPath(value, path)) === true);
-    case "index-assign":
-      return rustExpressionReferencesPath(statement.receiver, path) ||
-        rustExpressionReferencesPath(statement.index, path) ||
-        rustExpressionReferencesPath(statement.value, path);
-    case "scope":
-    case "unsafe-scope":
-      return rustBlockReferencesPath(statement.body, path);
-    case "throw":
-      return rustExpressionReferencesPath(statement.error, path);
-    case "try-scope":
-      return rustBlockReferencesPath(statement.body, path) ||
-        (statement.catchClause !== undefined && rustBlockReferencesPath(statement.catchClause.body, path)) ||
-        (statement.finallyClause !== undefined && rustBlockReferencesPath(statement.finallyClause.body, path)) ||
-        statement.dispatchTargets.some((target) =>
-          target.continuePrelude?.some((value) => rustStatementReferencesPath(value, path)) === true);
+function closePublicRustTypeVisibility(items: readonly RustItem[]): readonly RustItem[] {
+  const localTypes = new Set(items.flatMap((item) =>
+    item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
+        item.kind === "type-alias"
+      ? [item.name]
+      : []));
+  const publicTypes = new Set(items.flatMap((item) =>
+    (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
+        item.kind === "type-alias") && item.visibility === "public"
+      ? [item.name]
+      : []));
+  for (;;) {
+    const required = new Set<string>();
+    for (const item of items) {
+      for (const type of publicSignatureTypes(item, publicTypes)) {
+        collectLocalRustTypeNames(type, localTypes, required);
+      }
+    }
+    const additions = [...required].filter((name) => !publicTypes.has(name));
+    if (additions.length === 0) {
+      break;
+    }
+    for (const name of additions) {
+      publicTypes.add(name);
+    }
   }
+  return items.map((item) =>
+    (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
+        item.kind === "type-alias") && publicTypes.has(item.name) &&
+        item.visibility !== "public"
+      ? { ...item, visibility: "public" }
+      : item);
 }
 
-function rustExpressionReferencesPath(expression: RustExpr, path: string): boolean {
-  return expression.kind === "path" && expression.path === path ||
-    rustExpressionChildren(expression).some((child) => rustExpressionReferencesPath(child, path)) ||
-    expression.kind === "closure-block" && rustBlockReferencesPath(expression.body, path);
-}
-
-function rustExpressionChildren(expression: RustExpr): readonly RustExpr[] {
-  switch (expression.kind) {
-    case "int-literal":
-    case "float-literal":
-    case "bool-literal":
-    case "none":
-    case "string-literal":
-    case "str-literal":
-    case "path":
-    case "associated-value":
-    case "unreachable":
-    case "closure-block":
+function publicSignatureTypes(
+  item: RustItem,
+  publicTypes: ReadonlySet<string>,
+): readonly RustType[] {
+  switch (item.kind) {
+    case "function":
+      return item.visibility === "public"
+        ? [...item.params.map((parameter) => parameter.type), ...optionalType(item.returnType)]
+        : [];
+    case "const":
+    case "thread-local":
+      return item.visibility === "public" ? [item.type] : [];
+    case "struct":
+      return publicTypes.has(item.name)
+        ? item.fields.filter((field) => field.visibility === "public").map((field) => field.type)
+        : [];
+    case "enum":
+      return publicTypes.has(item.name)
+        ? item.variants.flatMap((variant) => variant.fields ?? [])
+        : [];
+    case "trait":
+      return publicTypes.has(item.name)
+        ? [
+            ...(item.superTraits ?? []),
+            ...item.functions.flatMap((fn) => [
+              ...fn.params.map((parameter) => parameter.type),
+              ...optionalType(fn.returnType),
+            ]),
+          ]
+        : [];
+    case "impl":
+      return rustTypeNames(item.target).some((name) => publicTypes.has(name))
+        ? item.functions.flatMap((fn) => fn.visibility === "public"
+          ? [
+              ...fn.params.map((parameter) => parameter.type),
+              ...optionalType(fn.returnType),
+            ]
+          : [])
+        : [];
+    case "type-alias":
+      return publicTypes.has(item.name) ? [item.target] : [];
+    case "mod-decl":
+    case "use":
       return [];
-    case "bottom":
-    case "numeric-cast":
-    case "unsafe":
-    case "owned-string-from-borrowed-str":
-      return [expression.expression];
-    case "unary":
-      return [expression.operand];
-    case "dereference":
-      return [expression.pointer];
-    case "binary":
-      return [expression.left, expression.right];
-    case "range":
-      return [expression.start, expression.end];
-    case "conditional":
-      return [expression.condition, expression.whenTrue, expression.whenFalse];
-    case "match":
-      return [expression.expression, ...expression.arms.map((arm) => arm.expression)];
-    case "matches":
-      return [expression.expression];
-    case "assignment":
-      return [expression.target, expression.value];
-    case "call":
-    case "associated-call":
-      return expression.args;
-    case "invoke":
-      return [expression.callee, ...expression.args];
-    case "method-call":
-      return [expression.receiver, ...expression.args];
-    case "field":
-      return [expression.receiver];
-    case "index":
-      return [expression.receiver, expression.index];
-    case "block":
-      return [...expression.bindings.map((binding) => binding.value), expression.value];
-    case "evaluate-then":
-      return [expression.effect, expression.value];
-    case "string-concat":
-      return expression.parts;
-    case "format-write":
-      return [expression.writer, ...expression.args];
-    case "reference":
-      return [expression.expr];
-    case "vec-literal":
-    case "slice-literal":
-    case "tuple-literal":
-      return expression.elements;
-    case "closure":
-      return [expression.body];
-    case "await":
-    case "try":
-      return [expression.expr];
-    case "return-expression":
-      return expression.expr === undefined ? [] : [expression.expr];
-    case "struct-literal":
-      return expression.fields.map((field) => field.value);
   }
 }
 
-function rustTypeContainsRestrictedLocalType(
+function optionalType(type: RustType | undefined): readonly RustType[] {
+  return type === undefined ? [] : [type];
+}
+
+function collectLocalRustTypeNames(
   type: RustType,
-  restrictedLocalTypes: ReadonlySet<string>,
-): boolean {
+  localTypes: ReadonlySet<string>,
+  result: Set<string>,
+): void {
+  for (const name of rustTypeNames(type)) {
+    if (localTypes.has(name)) {
+      result.add(name);
+    }
+  }
+}
+
+function rustTypeNames(type: RustType): readonly string[] {
   switch (type.kind) {
     case "named":
-      return restrictedLocalTypes.has(type.path) ||
-        type.typeArguments?.some((argument) =>
-          rustTypeContainsRestrictedLocalType(argument, restrictedLocalTypes)) === true;
+      return [type.path, ...(type.typeArguments?.flatMap(rustTypeNames) ?? [])];
     case "trait-object":
-      return rustTypeContainsRestrictedLocalType(type.trait, restrictedLocalTypes);
+      return rustTypeNames(type.trait);
     case "reference":
-      return rustTypeContainsRestrictedLocalType(type.referent, restrictedLocalTypes);
+      return rustTypeNames(type.referent);
     case "raw-pointer":
-      return rustTypeContainsRestrictedLocalType(type.pointee, restrictedLocalTypes);
+      return rustTypeNames(type.pointee);
     case "fixed-array":
     case "slice-ref":
-      return rustTypeContainsRestrictedLocalType(type.element, restrictedLocalTypes);
+      return rustTypeNames(type.element);
     case "function-pointer":
-      return type.parameters.some((parameter) =>
-        rustTypeContainsRestrictedLocalType(parameter, restrictedLocalTypes)) ||
-        rustTypeContainsRestrictedLocalType(type.result, restrictedLocalTypes);
+      return [...type.parameters.flatMap(rustTypeNames), ...rustTypeNames(type.result)];
     case "tuple":
-      return type.elements.some((element) =>
-        rustTypeContainsRestrictedLocalType(element, restrictedLocalTypes));
+      return type.elements.flatMap(rustTypeNames);
     case "primitive":
     case "string":
     case "str-ref":
     case "unit":
     case "never":
-      return false;
+      return [];
   }
 }
 

@@ -81,7 +81,7 @@ export function planRustClassStaticFields(
       context.syntheticNames,
       [],
     );
-    items.push(planned.item);
+    items.push(...planned.items);
     initialization.push(planned.initialization);
   }
   return { items, initialization };

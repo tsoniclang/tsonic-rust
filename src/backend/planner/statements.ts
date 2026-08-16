@@ -542,6 +542,7 @@ function planResourceCleanup(
         receiver: { kind: "path", path: resourceName },
         method: receiverMode === "mut-ref" ? "as_mut" : "as_ref",
         args: [],
+        receiverMode,
       },
       body,
     }],
@@ -574,11 +575,25 @@ function planResourceDisposalExpression(
 ): RustExpr | undefined {
   const target = fact.disposal.target;
   if (target.form === "source-method") {
-    return { kind: "method-call", receiver, method: target.name, args: [] };
+    return {
+      kind: "method-call",
+      receiver,
+      method: target.name,
+      args: [],
+      receiverMode: target.receiverMode,
+    };
   }
   const operation = target.target;
   if (operation.form === "method" || operation.form === "receiver-method") {
-    return { kind: "method-call", receiver, method: operation.name, args: [] };
+    return {
+      kind: "method-call",
+      receiver,
+      method: operation.name,
+      args: [],
+      receiverMode: operation.form === "receiver-method" && operation.mutatesReceiver === true
+        ? "mut-ref"
+        : "ref",
+    };
   }
   if (operation.form === "free-call") {
     registerAliasFromPath(context, operation.path);
@@ -847,7 +862,6 @@ function planVariableDeclaration(
     mutable,
     ...(rustType === undefined ? {} : { type: rustType }),
     ...(init === undefined ? {} : { init }),
-    ...(initializer === undefined && mutable ? { attrs: ["#[allow(unused_mut)]"] } : {}),
   }];
 }
 
@@ -2483,6 +2497,9 @@ function planRuntimeSetStatement(
       receiver,
       method: fact.abi.target.name,
       args: targetArguments,
+      ...(fact.abi.targetReceiver.kind === "input"
+        ? { receiverMode: fact.abi.targetReceiver.input.mode }
+        : {}),
     };
     if (fact.abi.target.form === "receiver-method") {
       for (const step of fact.abi.target.chain ?? []) {

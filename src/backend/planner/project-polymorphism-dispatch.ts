@@ -13,6 +13,7 @@ import type {
   RustTraitFunction,
   RustType,
 } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import { missingFactDiagnostic } from "./diagnostics.js";
 import { planProjectMethod } from "./declarations-nominal.js";
 import {
@@ -179,7 +180,7 @@ export function planProjectDispatchTrait(
     kind: "trait",
     name: rustProjectDispatchTraitName(definition),
     visibility: "crate",
-    attrs: ["#[allow(dead_code)]"],
+    attrs: [rustLintAttributes.deadCode],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
     functions,

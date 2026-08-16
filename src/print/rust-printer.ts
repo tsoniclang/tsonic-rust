@@ -60,7 +60,12 @@ export function printRustItem(item: RustItem): string {
     }
     case "type-alias": {
       const generics = printRustTypeParameters(item.typeParams);
-      return `${printRustVisibility(item.visibility)}type ${item.name}${generics} = ${printRustType(item.target)};`;
+      const prefix = `${printRustVisibility(item.visibility)}type ${item.name}${generics} =`;
+      const target = printRustType(item.target);
+      if (renderedFits(`${prefix} ${target};`, 0)) {
+        return `${prefix} ${target};`;
+      }
+      return `${prefix}\n${appendToLastLine(`${indentText(1)}${printRustTypeFitted(item.target, 1, indentText(1).length)}`, ";")}`;
     }
     case "const": {
       const constAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
@@ -1389,7 +1394,7 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.start, RustPrecedence.Or, false)}..${expression.inclusive === true ? "=" : ""}${printOperand(expression.end, RustPrecedence.Or, true)}`;
     }
     case "conditional": {
-      return `if ${printRustExpr(expression.condition)} { ${printRustExpr(expression.whenTrue)} } else { ${printRustExpr(expression.whenFalse)} }`;
+      return `if ${printRustExpr(expression.condition)} { ${printRustConditionalArmInline(expression.whenTrue)} } else { ${printRustConditionalArmInline(expression.whenFalse)} }`;
     }
     case "match": {
       return printRustMatchExpression(expression, 0);
@@ -1426,10 +1431,7 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(expression.index)}]`;
     }
     case "block": {
-      const bindings = expression.bindings
-        .map((binding) => `${binding.attrs?.join(" ") ?? ""}${binding.attrs === undefined ? "" : " "}let ${binding.mutable === true ? "mut " : ""}${binding.name} = ${printRustExpr(binding.value)};`)
-        .join(" ");
-      return `{ ${bindings}${bindings.length === 0 ? "" : " "}${printRustExpr(expression.value)} }`;
+      return `{ ${printRustBlockExpressionInlineContents(expression)} }`;
     }
     case "unsafe": {
       return `unsafe { ${printRustExpr(expression.expression)} }`;
@@ -1697,34 +1699,19 @@ function printRustExprFitted(
       ].join("\n");
     }
     case "conditional": {
-      const branchIndent = indentText(depth + 1);
       const condition = printRustExprFitted(
         expression.condition,
         depth,
         column + "if ".length,
-      );
-      const whenTrue = printRustExprFitted(
-        expression.whenTrue,
-        depth + 1,
-        branchIndent.length,
-        undefined,
-        "statement",
-      );
-      const whenFalse = printRustExprFitted(
-        expression.whenFalse,
-        depth + 1,
-        branchIndent.length,
-        undefined,
-        "statement",
       );
       const header = condition.includes("\n") && lastLine(condition).trim() !== "}"
         ? `if ${condition}\n${indentText(depth)}{`
         : `if ${condition} {`;
       return [
         header,
-        `${branchIndent}${whenTrue}`,
+        ...printRustConditionalArmLines(expression.whenTrue, depth + 1),
         `${indentText(depth)}} else {`,
-        `${branchIndent}${whenFalse}`,
+        ...printRustConditionalArmLines(expression.whenFalse, depth + 1),
         `${indentText(depth)}}`,
       ].join("\n");
     }
@@ -1754,25 +1741,9 @@ function printRustExprFitted(
       ].join("\n");
     }
     case "block": {
-      const statementIndent = indentText(depth + 1);
-      const bindings = expression.bindings.flatMap((binding) => {
-        const prefix = `${statementIndent}let ${binding.mutable === true ? "mut " : ""}${binding.name} = `;
-        return [
-          ...(binding.attrs ?? []).map((attribute) => `${statementIndent}${attribute}`),
-          printRustLetInitializer(prefix, binding.value, depth + 1),
-        ];
-      });
-      const value = printRustExprFitted(
-        expression.value,
-        depth + 1,
-        statementIndent.length,
-        undefined,
-        "statement",
-      );
       return [
         "{",
-        ...bindings,
-        `${statementIndent}${value}`,
+        ...printRustBlockExpressionLines(expression, depth + 1),
         `${indentText(depth)}}`,
       ].join("\n");
     }
@@ -2019,7 +1990,7 @@ function printRustExprFitted(
       const indent = indentText(depth + 1);
       if (expression.body.kind === "block") {
         const bindings = expression.body.bindings.flatMap((binding) => {
-          const prefix = `${indent}let ${binding.mutable === true ? "mut " : ""}${binding.name} = `;
+          const prefix = `${indent}let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = `;
           return [
             ...(binding.attrs ?? []).map((attribute) => `${indent}${attribute}`),
             printRustLetInitializer(prefix, binding.value, depth + 1),
@@ -2434,6 +2405,70 @@ function printRustExprFitted(
     default:
       return flat;
   }
+}
+
+function printRustConditionalArmInline(expression: RustExpr): string {
+  return expression.kind === "block"
+    ? printRustBlockExpressionInlineContents(expression)
+    : printRustExpr(expression);
+}
+
+function printRustBlockExpressionInlineContents(
+  expression: Extract<RustExpr, { readonly kind: "block" }>,
+): string {
+  const bindings = expression.bindings.map((binding) => {
+    const attributes = binding.attrs?.join(" ") ?? "";
+    const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = ${printRustExpr(binding.value)};`;
+    return attributes.length === 0 ? declaration : `${attributes} ${declaration}`;
+  });
+  return [
+    ...(expression.innerAttrs ?? []),
+    ...bindings,
+    printRustExpr(expression.value),
+  ].join(" ");
+}
+
+function printRustConditionalArmLines(
+  expression: RustExpr,
+  depth: number,
+): readonly string[] {
+  if (expression.kind === "block") {
+    return printRustBlockExpressionLines(expression, depth);
+  }
+  const indent = indentText(depth);
+  return [`${indent}${printRustExprFitted(
+    expression,
+    depth,
+    indent.length,
+    undefined,
+    "statement",
+  )}`];
+}
+
+function printRustBlockExpressionLines(
+  expression: Extract<RustExpr, { readonly kind: "block" }>,
+  depth: number,
+): readonly string[] {
+  const indent = indentText(depth);
+  const bindings = expression.bindings.flatMap((binding) => {
+    const prefix = `${indent}let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = `;
+    return [
+      ...(binding.attrs ?? []).map((attribute) => `${indent}${attribute}`),
+      printRustLetInitializer(prefix, binding.value, depth),
+    ];
+  });
+  const value = printRustExprFitted(
+    expression.value,
+    depth,
+    indent.length,
+    undefined,
+    "statement",
+  );
+  return [
+    ...(expression.innerAttrs ?? []).map((attribute) => `${indent}${attribute}`),
+    ...bindings,
+    `${indent}${value}`,
+  ];
 }
 
 function printRustAssociatedCallOwner(

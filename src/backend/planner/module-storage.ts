@@ -7,11 +7,12 @@ import type {
 } from "../rust-ast/nodes.js";
 import {
   allocateRustSyntheticName,
+  allocateRustSyntheticTypeName,
   type RustSyntheticNameState,
 } from "./synthetic-names.js";
 
 export interface PlannedRustModuleCell {
-  readonly item: RustItem;
+  readonly items: readonly RustItem[];
   readonly initialization: RustStmt;
 }
 
@@ -25,22 +26,35 @@ export function planRustModuleCell(
 ): PlannedRustModuleCell {
   const cellName = allocateRustSyntheticName(syntheticNames, "module_binding");
   const valueName = allocateRustSyntheticName(syntheticNames, "module_value");
-  const itemAttributes = attrs.includes("#[allow(clippy::type_complexity)]")
-    ? attrs
-    : [...attrs, "#[allow(clippy::type_complexity)]"];
+  const callableAlias = type.kind === "named" && type.path === "rt::Callable"
+    ? allocateRustSyntheticTypeName(syntheticNames, `${name}_callable`)
+    : undefined;
+  const storedType: RustType = callableAlias === undefined
+    ? type
+    : { kind: "named", path: callableAlias };
   return {
-    item: {
-      kind: "thread-local",
-      name,
-      visibility,
-      attrs: itemAttributes,
-      type: {
-        kind: "named",
-        path: "rt::ModuleCell",
-        typeArguments: [type],
+    items: [
+      ...(callableAlias === undefined
+        ? []
+        : [{
+            kind: "type-alias" as const,
+            name: callableAlias,
+            visibility: "private" as const,
+            target: type,
+          }]),
+      {
+        kind: "thread-local",
+        name,
+        visibility,
+        ...(attrs.length === 0 ? {} : { attrs }),
+        type: {
+          kind: "named",
+          path: "rt::ModuleCell",
+          typeArguments: [storedType],
+        },
+        value: { kind: "call", path: "rt::ModuleCell::new", args: [] },
       },
-      value: { kind: "call", path: "rt::ModuleCell::new", args: [] },
-    },
+    ],
     initialization: {
       kind: "expr",
       expr: {

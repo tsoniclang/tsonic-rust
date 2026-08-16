@@ -36,6 +36,7 @@ import {
 import type { RustPlanContext } from "./plan-context.js";
 import { allocateRustSyntheticName } from "./synthetic-names.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
+import { rustOptionDefaultValue } from "./option-default.js";
 
 export type RustBindingExpressionPlanner = (
   node: Node,
@@ -406,12 +407,7 @@ function normalizeBindingValue(
     return undefined;
   }
   if (context.fallibleContext !== true) {
-    return {
-      kind: "method-call",
-      receiver: flattened,
-      method: "unwrap_or_else",
-      args: [{ kind: "closure", params: [], body: fallback }],
-    };
+    return rustOptionDefaultValue(flattened, fallback);
   }
   context.usedAliases?.add("rt");
   const result = (value: RustExpr): RustExpr => ({

@@ -259,9 +259,6 @@ function planRustFunctionItem(
       params,
       ...(returnType === undefined ? {} : { returnType }),
       body: {
-        ...(parameterPlan.bodyInnerAttrs.length === 0
-          ? {}
-          : { innerAttrs: parameterPlan.bodyInnerAttrs }),
         statements: [...parameterStatements, {
           kind: "tail",
           expr: {
@@ -323,9 +320,6 @@ function planRustFunctionItem(
           errorDomain: context.errorDomain,
         },
       ),
-      ...(parameterPlan.bodyInnerAttrs.length === 0
-        ? {}
-        : { innerAttrs: parameterPlan.bodyInnerAttrs }),
     },
   };
   return publishRustSourceCallableContract(node, item, context)

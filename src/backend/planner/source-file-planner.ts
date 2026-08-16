@@ -21,6 +21,7 @@ import type {
   RustItem,
   RustSourceFileModel,
 } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import type { RustTranslationContext } from "../../translate/context.js";
 import {
   missingFactDiagnostic,
@@ -418,7 +419,7 @@ function planTopLevelVariableStatement(
         visibility,
         ...(isUpperSnakeName(name)
           ? {}
-          : { attrs: ["#[allow(non_upper_case_globals)]"] }),
+          : { attrs: [rustLintAttributes.nonUpperCaseGlobal] }),
         type: rustType,
         value,
       });
@@ -439,9 +440,9 @@ function planTopLevelVariableStatement(
       value,
       visibility,
       context.syntheticNames!,
-      isUpperSnakeName(name) ? [] : ["#[allow(non_upper_case_globals)]"],
+      isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal],
     );
-    items.push(planned.item);
+    items.push(...planned.items);
     initialization.push(planned.initialization);
   }
   return { items, initialization };

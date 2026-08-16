@@ -46,7 +46,7 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) state: rt::ObjectHandle<CounterState>,\n\}/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
-  assert.match(text, /let mut field_value: i32;\n        field_value = value;/u);
+  assert.match(text, /let field_value: i32 = value;/u);
   assert.match(text, /state: rt::ObjectHandle::new\(CounterState \{ value: field_value \}\)/u);
   assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
   assert.match(text, /\.with_mut\(\|state\| state\.value \+= value_2\)/u);
@@ -233,9 +233,11 @@ export function create(): Initialized {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /impl Initialized \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Initialized/u);
-  assert.match(text, /let mut field_value: i32;\n        field_value = 42;/u);
-  assert.match(text, /impl Empty \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Empty/u);
+  assert.match(text, /impl Initialized \{\n    pub fn new\(\) -> Initialized/u);
+  assert.match(text, /impl Default for Initialized \{\n    fn default\(\) -> Self \{\n        Self::new\(\)/u);
+  assert.match(text, /let field_value: i32 = 42;/u);
+  assert.match(text, /impl Empty \{\n    pub fn new\(\) -> Empty/u);
+  assert.match(text, /impl Default for Empty \{\n    fn default\(\) -> Self \{\n        Self::new\(\)/u);
 });
 
 test("class field and constructor assignment effects retain TypeScript order", { timeout: 300_000 }, () => {
@@ -302,10 +304,10 @@ export class Initialized {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let mut field_second: i32;/u);
+  assert.match(text, /let field_second: i32 = field_first;/u);
   assert.match(
     text,
-    /field_second = field_first;/u,
+    /second: field_second/u,
   );
 });
 

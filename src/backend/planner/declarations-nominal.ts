@@ -11,6 +11,7 @@ import type {
   RustStmt,
   RustStructField,
 } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import { planBlockLike, planStatementSequence } from "./statements.js";
@@ -49,6 +50,7 @@ import {
   prepareRustPreconstructionNode,
   type RustPreconstructionFieldValue,
 } from "./preconstruction-fields.js";
+import { rustDefaultImplementation } from "./default-implementation.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -285,7 +287,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const exported = ast.hasModifierKind(node, "export");
   const generatedStructAttributes = [
     ...(structAttributes(className) ?? []),
-    ...(exported ? [] : ["#[allow(dead_code)]"]),
+    ...(exported ? [] : [rustLintAttributes.deadCode]),
   ];
   const stateField: RustStructField = {
     name: rustProjectObjectStateField,
@@ -296,7 +298,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: definition.stateName,
     visibility: "crate",
-    attrs: ["#[allow(dead_code)]"],
+    attrs: [rustLintAttributes.deadCode],
     derives: [],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [
@@ -319,12 +321,19 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [stateField],
   };
-  return [stateItem, structItem, {
+  const implementation: RustItem = {
     kind: "impl",
     ...(typeParams.length === 0 ? {} : { typeParams }),
     target: openType,
     functions: implFunctions,
-  }];
+  };
+  const defaultImplementation = rustDefaultImplementation(openType, typeParams, constructorFn);
+  return [
+    stateItem,
+    structItem,
+    implementation,
+    ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
+  ];
 }
 
 function planConstructor(
@@ -364,7 +373,7 @@ function planConstructor(
     [],
   );
   const parameterPlan = member === undefined
-    ? { params: [], prelude: [], bodyInnerAttrs: [] } satisfies RustCallableParameterPlan
+    ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
     : planRustCallableParameters(member, context, syntheticNames, { requireStatic: false });
   if (parameterPlan === undefined) {
     return undefined;
@@ -413,7 +422,6 @@ function planConstructor(
       name: valueName,
       mutable: true,
       type: field.type,
-      attrs: ["#[allow(unused_mut)]"],
     });
     values.set(field.declaration, expression);
     fieldSlots.push(slot);
@@ -488,8 +496,7 @@ function planConstructor(
     ),
   });
   const constructorAttributes = [
-    ...(params.length === 0 ? ["#[allow(clippy::new_without_default)]"] : []),
-    ...(ast.hasModifierKind(classDeclaration, "export") ? [] : ["#[allow(dead_code)]"]),
+    ...(ast.hasModifierKind(classDeclaration, "export") ? [] : [rustLintAttributes.deadCode]),
     ...safetyAttributes,
   ];
   return {
@@ -504,10 +511,6 @@ function planConstructor(
     params,
     returnType: classType,
     body: {
-      innerAttrs: [
-        ...parameterPlan.bodyInnerAttrs,
-        "#![allow(unused_assignments)]",
-      ],
       ...applyFallibleShape({ statements }, {
         fallible,
         hasReturnValue: true,
@@ -603,8 +606,8 @@ export function planProjectMethod(
   }
   const isStatic = ast.hasModifierKind(member, "static");
   const methodAttributes = [
-    ...(isStatic && methodName === "new" ? ["#[allow(clippy::new_ret_no_self)]"] : []),
-    ...(ast.hasModifierKind(ast.parent(member) ?? member, "export") ? [] : ["#[allow(dead_code)]"]),
+    ...(isStatic && methodName === "new" ? [rustLintAttributes.newReturningOtherType] : []),
+    ...(ast.hasModifierKind(ast.parent(member) ?? member, "export") ? [] : [rustLintAttributes.deadCode]),
     ...safetyAttributes,
   ];
   if (generatorFact !== undefined && fallible) {
@@ -710,9 +713,6 @@ export function planProjectMethod(
       params,
       returnType: generatorReturnType,
       body: {
-        ...(parameterPlan.bodyInnerAttrs.length === 0
-          ? {}
-          : { innerAttrs: parameterPlan.bodyInnerAttrs }),
         statements: [...parameterStatements, {
           kind: "tail",
           expr: {
@@ -758,9 +758,6 @@ export function planProjectMethod(
           errorDomain: context.errorDomain,
         },
       ),
-      ...(parameterPlan.bodyInnerAttrs.length === 0
-        ? {}
-        : { innerAttrs: parameterPlan.bodyInnerAttrs }),
     },
   };
 }
@@ -948,7 +945,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     kind: "struct",
     name: definition.stateName,
     visibility: "crate",
-    attrs: ["#[allow(dead_code)]"],
+    attrs: [rustLintAttributes.deadCode],
     derives: [],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [
@@ -1025,7 +1022,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
 function structAttributes(typeName: string): readonly string[] | undefined {
   const attrs: string[] = [];
   if (!/^[A-Z][A-Za-z0-9]*$/u.test(typeName)) {
-    attrs.push("#[allow(non_camel_case_types)]");
+    attrs.push(rustLintAttributes.nonCamelCaseType);
   }
   return attrs.length === 0 ? undefined : attrs;
 }

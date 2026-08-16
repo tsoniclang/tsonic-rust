@@ -30,6 +30,7 @@ import {
 import type { RustSyntheticNameState } from "./synthetic-names.js";
 import { rustLocationStorageForDeclaration } from "./typed-locations.js";
 import type { RustBindingExpressionPlanner } from "./binding-patterns.js";
+import { rustOptionDefaultValue } from "./option-default.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
@@ -49,7 +50,6 @@ type RustParameterPrelude =
 export interface RustCallableParameterPlan {
   readonly params: readonly RustFunctionParam[];
   readonly prelude: readonly RustParameterPrelude[];
-  readonly bodyInnerAttrs: readonly string[];
 }
 
 export function planRustCallableParameters(
@@ -165,13 +165,7 @@ export function planRustCallableParameters(
       },
     });
   }
-  return {
-    params,
-    prelude,
-    bodyInnerAttrs: prelude.some((entry) => entry.kind === "default")
-      ? ["#![allow(clippy::let_and_return, clippy::unnecessary_lazy_evaluations)]"]
-      : [],
-  };
+  return { params, prelude };
 }
 
 export function planRustCallableParameterPrelude(
@@ -194,12 +188,7 @@ export function planRustCallableParameterPrelude(
         kind: "let",
         name: entry.name,
         mutable: entry.mutable,
-        init: {
-          kind: "method-call",
-          receiver: { kind: "path", path: entry.name },
-          method: "unwrap_or_else",
-          args: [{ kind: "closure", params: [], body: initializer }],
-        },
+        init: rustOptionDefaultValue({ kind: "path", path: entry.name }, initializer),
       });
       continue;
     }

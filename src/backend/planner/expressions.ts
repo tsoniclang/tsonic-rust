@@ -140,6 +140,7 @@ import {
 import { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { planRustBindingPattern } from "./binding-patterns.js";
+import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetOperationIsFallible } from "../../source/rust-facts/target-operation.js";
 import {
   rustProjectDispatchTraitType,
@@ -1168,12 +1169,7 @@ function planExpressionInner(
             if (defaultValue === undefined) {
               return undefined;
             }
-            initializer = {
-              kind: "method-call",
-              receiver: initializer,
-              method: "unwrap_or_else",
-              args: [{ kind: "closure", params: [], body: defaultValue }],
-            };
+            initializer = rustOptionDefaultValue(initializer, defaultValue);
           }
           bindingStatements.push({
             kind: "let",
@@ -1247,8 +1243,6 @@ function planExpressionInner(
         return finishRuntimeCallableExpression(
           callable,
           captureBindings,
-          sourceParameterPlans.some((parameter) => parameter.form === "default"),
-          context,
         );
       }
       const resultType = rustTypeFromCarrierInContext(resultCarrier, context);
@@ -1327,8 +1321,6 @@ function planExpressionInner(
       return finishRuntimeCallableExpression(
         callable,
         captureBindings,
-        sourceParameterPlans.some((parameter) => parameter.form === "default"),
-        context,
       );
     }
     case "KindRegularExpressionLiteral": {
@@ -1562,30 +1554,10 @@ function planGeneratorResumeExpression(
 function finishRuntimeCallableExpression(
   callable: RustExpr,
   captureBindings: readonly { readonly name: string; readonly value: RustExpr }[],
-  hasDefaultParameters: boolean,
-  context: RustPlanContext,
 ): RustExpr {
-  if (!hasDefaultParameters) {
-    return captureBindings.length === 0
-      ? callable
-      : { kind: "block", bindings: captureBindings, value: callable };
-  }
-  const callableName = allocateRustSyntheticName(
-    context.syntheticNames!,
-    "callable_implementation",
-  );
-  return {
-    kind: "block",
-    bindings: [
-      ...captureBindings,
-      {
-        name: callableName,
-        value: callable,
-        attrs: ["#[allow(clippy::let_and_return, clippy::unnecessary_lazy_evaluations)]"],
-      },
-    ],
-    value: { kind: "path", path: callableName },
-  };
+  return captureBindings.length === 0
+    ? callable
+    : { kind: "block", bindings: captureBindings, value: callable };
 }
 
 function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -3697,6 +3669,9 @@ function planProviderOperationExpression(
     args.push(planned);
   }
   const form = fact.abi.target;
+  const receiverMode = fact.abi.targetReceiver.kind === "input"
+    ? fact.abi.targetReceiver.input.mode
+    : undefined;
   const scoped = (expression: RustExpr | undefined): RustExpr | undefined =>
     expression === undefined || locationScope.kind !== "selected"
       ? expression
@@ -3744,12 +3719,24 @@ function planProviderOperationExpression(
     case "receiver-tagged-array":
       return scoped(receiver === undefined
         ? undefined
-        : { kind: "method-call", receiver, method: form.name, args });
+        : {
+            kind: "method-call",
+            receiver,
+            method: form.name,
+            args,
+            ...(receiverMode === undefined ? {} : { receiverMode }),
+          });
     case "receiver-method":
       return receiver === undefined
         ? undefined
         : scoped(applyProviderOperationChain(
-            { kind: "method-call", receiver, method: form.name, args },
+            {
+              kind: "method-call",
+              receiver,
+              method: form.name,
+              args,
+              ...(receiverMode === undefined ? {} : { receiverMode }),
+            },
             form.chain,
           ));
     case "field": {
@@ -4453,6 +4440,7 @@ function planSelectedSourceCall(
             : planRustNonConsumingValue(receiverNode, receiver, context),
           method: targetName,
           args: shaped,
+          receiverMode: fact.target.mutatesSelf ? "mut-ref" : "ref",
         };
       }
       break;

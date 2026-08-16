@@ -81,7 +81,9 @@ export function run(value: int32): int32 { return apply(value); }
 
   assert.deepEqual(result.diagnostics, []);
   const api = artifactText(result, "src/api.rs");
-  assert.match(api, /ModuleCell<rt::Callable/u);
+  assert.match(api, /pub type IncrementCallable = rt::Callable/u);
+  assert.match(api, /ModuleCell<IncrementCallable>/u);
+  assert.doesNotMatch(api, /type_complexity/u);
   assert.match(api, /pub static INCREMENT/u);
   assert.doesNotMatch(api, /pub fn increment/u);
 });
@@ -104,7 +106,9 @@ export const retained = [selected];
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /ModuleCell<rt::Callable/u);
+  assert.match(output, /pub type SelectedCallable = rt::Callable/u);
+  assert.match(output, /ModuleCell<SelectedCallable>/u);
+  assert.doesNotMatch(output, /type_complexity/u);
   assert.match(output, /pub static SELECTED/u);
   assert.doesNotMatch(output, /pub fn selected/u);
   validateGeneratedProject("observed-module-callable", result.artifacts);
@@ -218,6 +222,9 @@ export function main(): void {
   assert.match(output, /pub fn total\(values: Vec<i32>\)/u);
   assert.match(output, /pub fn depth\(value: i32\)/u);
   assert.match(output, /pub fn doubled\(value: i32\)/u);
+  assert.match(output, /amount\.unwrap_or\(1\)/u);
+  assert.doesNotMatch(output, /unnecessary_lazy_evaluations/u);
+  assert.doesNotMatch(output, /let_and_return/u);
   assert.doesNotMatch(output, /ModuleCell|Callable|thread_local!/u);
   validateGeneratedProject("native-function-abis", result.artifacts, { run: true });
 });

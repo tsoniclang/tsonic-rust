@@ -320,6 +320,9 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /callable_arguments\.0\.unwrap_or\(7\)/u);
+  assert.doesNotMatch(source, /unnecessary_lazy_evaluations|let_and_return/u);
   validateGeneratedProject("callable-parameters", result.artifacts, { run: true });
 });
 
@@ -359,6 +362,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value\.unwrap_or\(3\.5\)/u);
+  assert.doesNotMatch(source, /manual_unwrap_or|let_and_return/u);
   assert.match(source, /optional\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
   assert.match(source, /defaulted\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
   assert.match(source, /value\.map\(tsonic_rust_runtime::conversions::i32_to_f64\)/u);
@@ -533,5 +538,8 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value\.unwrap_or_else\(\|\| fallback\(base\)\)/u);
+  assert.doesNotMatch(source, /unnecessary_lazy_evaluations|let_and_return/u);
   validateGeneratedProject("callable-complete", result.artifacts, { run: true });
 });
