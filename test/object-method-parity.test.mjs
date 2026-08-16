@@ -151,6 +151,138 @@ export function main(): void {
   );
 });
 
+test("one object literal implementation adapts every exact overload ABI", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Parser {
+  parse(value: string): string;
+  parse(value: string, radix: int32): string;
+}
+
+export function main(): void {
+  const parser: Parser = {
+    parse(value: string, radix?: int32): string {
+      return radix === undefined ? value : value + "-radix";
+    },
+  };
+  check(parser.parse("seven") === "seven");
+  check(parser.parse("seven", 2) === "seven-radix");
+}
+`, "rust_object_method_overloads");
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.equal((source.match(/method_implementation: rt::Callable/gu) ?? []).length, 1);
+  assert.equal((source.match(/\.method_implementation\.clone\(\)/gu) ?? []).length, 2);
+  assert.match(source, /Some\(radix\)/u);
+  assert.match(source, /None/u);
+  assert.equal(
+    validateGeneratedProject("object-method-overloads", result.artifacts, { run: true }).status,
+    0,
+  );
+});
+
+test("object literal overload adapters ignore surplus parameters and assemble rest values", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Reader {
+  read(value: string): string;
+  read(value: string, ignored: int32): string;
+}
+
+interface Joiner {
+  join(): string;
+  join(first: string): string;
+  join(first: string, second: string): string;
+}
+
+export function main(): void {
+  const reader: Reader = {
+    read(value: string): string { return value; },
+  };
+  const joiner: Joiner = {
+    join(...values: string[]): string {
+      void values;
+      return "joined";
+    },
+  };
+  check(reader.read("one") === "one");
+  check(reader.read("two", 2) === "two");
+  check(joiner.join() === "joined");
+  check(joiner.join("one") === "joined");
+  check(joiner.join("one", "two") === "joined");
+}
+`, "rust_object_method_overload_shapes");
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /vec!\[\]/u);
+  assert.match(source, /vec!\[first\]/u);
+  assert.match(source, /vec!\[first, second\]/u);
+  assert.equal(
+    validateGeneratedProject("object-method-overload-shapes", result.artifacts, { run: true }).status,
+    0,
+  );
+});
+
+test("object literal generic implementation binders are alpha-equivalent to contract binders", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Identity {
+  identity<ContractValue>(value: ContractValue): ContractValue;
+}
+
+export function main(): void {
+  const identity: Identity = {
+    identity<ImplementationValue>(value: ImplementationValue): ImplementationValue {
+      return value;
+    },
+  };
+  check(identity.identity<int32>(7) === 7);
+  check(identity.identity<string>("seven") === "seven");
+}
+`, "rust_object_method_generic_alpha_equivalence");
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(
+    validateGeneratedProject("object-method-generic-alpha-equivalence", result.artifacts, { run: true }).status,
+    0,
+  );
+});
+
+test("object literal method adapters preserve authored primitive carriers", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { float64, int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Converter {
+  convert(value: int32): int32;
+}
+
+export function main(): void {
+  const converter: Converter = {
+    convert(value: float64): float64 { return value; },
+  };
+  check(converter.convert(7) === 7);
+}
+`, "rust_object_method_carrier_adapters");
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /i32_to_f64/u);
+  assert.match(source, /f64_to_i32/u);
+  assert.equal(
+    validateGeneratedProject("object-method-carrier-adapters", result.artifacts, { run: true }).status,
+    0,
+  );
+});
+
 test("object literal methods satisfy inherited contracts through exact redeclarations", { timeout: 300_000 }, () => {
   const { result } = compileExecutable(`
 import type { int32 } from "@tsonic/core/types.js";

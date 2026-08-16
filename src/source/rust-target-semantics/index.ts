@@ -150,7 +150,7 @@ import {
   parseSourceBigIntLiteral,
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustTypeAliasDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustObjectLiteralMethodAdapterFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustTypeAliasDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type {
   RustFutureValueFact,
   RustSourceBindingFact,
@@ -253,6 +253,7 @@ import {
   selectRustValueCarrierReconciliation,
 } from "./value-carrier-reconciliation.js";
 import { recordRustBindingPatternFacts } from "./binding-patterns.js";
+import { recordRustObjectLiteralMethodAdapterFacts } from "./object-literal-method-adapters.js";
 import {
   readRustSourceNativePointerOperation,
   readRustSourceSafetyBuilder,
@@ -285,6 +286,7 @@ interface RustFactWalk {
     readonly prepared: RustPreparedDeferredCheckedCall;
   }>;
   readonly capturedBindingStorage: Map<Node, "value" | "location">;
+  readonly objectLiteralMethodExpressions: Node[];
   readonly moduleBindings: RustModuleBindingPolicy;
   currentThisCarrier?: TargetTypeRef;
   currentSuperCarrier?: TargetTypeRef;
@@ -667,6 +669,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     operationAttempts: new WeakSet<object>(),
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
     capturedBindingStorage: new Map<Node, "value" | "location">(),
+    objectLiteralMethodExpressions: [],
     moduleBindings,
     deferredCallbackCalls: new WeakMap(),
     preparedCallbackCalls: new Map(),
@@ -771,6 +774,21 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     names: context.names,
     projectTypes,
   });
+  for (const issue of recordRustObjectLiteralMethodAdapterFacts({
+    ast: walk.context.ast,
+    facts: walk.context.facts,
+    projectTypes: walk.context.projectTypes,
+    projectMethodDispatch: walk.context.projectMethodDispatch,
+    expressions: walk.objectLiteralMethodExpressions,
+  })) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_OBJECT_LITERAL_METHOD_ADAPTER_NOT_PROVEN",
+      issue.message,
+      issue.subject,
+      ["target.capability=rust.object-literal-method.exact-adapter"],
+    );
+  }
   // Fallibility depends on finalized operation facts produced while walking
   // bodies. Compute the declaration fixpoint only after those facts exist.
   recordFallibilityFacts(walk, projectSourceFiles);
@@ -5137,7 +5155,7 @@ function resolveRecordLiteralCarrier(
             walk,
             property,
             selectedElement.sourceSelectedType,
-            selectedDeclaration,
+            selectedElement.sourceElementType,
           );
       const selectedCallable = rustCallableProtocol(selectedMemberCarrier);
       const selectedClosure = rustClosureProtocol(selectedMemberCarrier);
@@ -5170,6 +5188,7 @@ function resolveRecordLiteralCarrier(
       );
       if (resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
         leadingParameters: [{ kind: "this", carrier: resultCarrier }],
+        preserveSourceParameterForms: true,
         selectedMethodDeclaration: selectedDeclaration,
       }) === undefined) {
         return undefined;
@@ -5211,7 +5230,7 @@ function resolveRecordLiteralCarrier(
             walk,
             initializer,
             selectedElement.sourceSelectedType,
-            selectedDeclaration,
+            selectedElement.sourceElementType,
           );
       const selectedCallable = rustCallableProtocol(selectedMemberCarrier);
       const selectedClosure = rustClosureProtocol(selectedMemberCarrier);
@@ -5236,6 +5255,7 @@ function resolveRecordLiteralCarrier(
           kind: initializerKind === KindFunctionExpression ? "this" : "receiver",
           carrier: resultCarrier,
         }],
+        preserveSourceParameterForms: true,
         selectedMethodDeclaration: selectedDeclaration,
       }) === undefined) {
         return undefined;
@@ -5290,6 +5310,9 @@ function resolveRecordLiteralCarrier(
     fields,
     contributions,
   });
+  if (contributions.some((contribution) => contribution.kind === "method")) {
+    walk.objectLiteralMethodExpressions.push(expression);
+  }
   return setCarrierFact(walk, expression, resultCarrier);
 }
 
@@ -5297,8 +5320,31 @@ function resolveObjectLiteralMethodCarrier(
   walk: RustFactWalk,
   method: Node,
   selectedType: Type,
-  selectedDeclaration: Node,
+  implementationType: Type,
 ): TargetTypeRef | undefined {
+  const typeParameters = requireDenseSourceNodes(
+    walk,
+    walk.context.ast.typeParameters(method),
+    "Authored object-literal method contains an undefined type-parameter slot.",
+  );
+  const parameters = requireDenseSourceNodes(
+    walk,
+    walk.context.ast.parameters(method),
+    "Authored object-literal method contains an undefined parameter slot.",
+  );
+  const authoredReturnType = Node_Type(walk.context.ast, method);
+  if (parameters !== undefined && authoredReturnType !== undefined &&
+    parameters.every((parameter) => Node_Type(walk.context.ast, parameter) !== undefined)) {
+    const parameterCarriers = parameters.map((parameter) =>
+      resolveParameterAbi(walk, parameter)?.parameterCarrier);
+    const returnCarrier = resolveTypeNodeCarrier(walk, authoredReturnType);
+    if (returnCarrier !== undefined && !parameterCarriers.some((carrier) => carrier === undefined)) {
+      return rustClosureTargetType(
+        parameterCarriers as readonly TargetTypeRef[],
+        returnCarrier,
+      );
+    }
+  }
   const selected = resolveRustTargetTypeRef(
     selectedType,
     rustResolutionContext(walk, method),
@@ -5307,36 +5353,31 @@ function resolveObjectLiteralMethodCarrier(
   if (selected !== undefined) {
     return selected;
   }
-  const typeParameters = requireDenseSourceNodes(
-    walk,
-    walk.context.ast.typeParameters(selectedDeclaration),
-    "Selected object-literal method contract contains an undefined type-parameter slot.",
-  );
-  const parameters = requireDenseSourceNodes(
-    walk,
-    walk.context.ast.parameters(selectedDeclaration),
-    "Selected object-literal method contract contains an undefined parameter slot.",
-  );
   const returnCarrier = walk.context.facts.get(
-    selectedDeclaration,
+    method,
     rustSourceCallableReturnFactKey,
   )?.returnCarrier ?? walk.context.facts.resolve(
-    selectedDeclaration,
+    method,
     rustSourceCallableReturnFactKey,
-  )?.returnCarrier;
-  if (typeParameters === undefined || typeParameters.length === 0 ||
-    parameters === undefined || returnCarrier === undefined) {
-    return undefined;
-  }
-  const parameterCarriers = parameters.map((parameter) =>
-    (walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
-      walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey))?.parameterCarrier);
-  return parameterCarriers.some((carrier) => carrier === undefined)
-    ? undefined
-    : rustClosureTargetType(
+  )?.returnCarrier ?? resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, method));
+  if (typeParameters !== undefined && typeParameters.length > 0 &&
+    parameters !== undefined && returnCarrier !== undefined) {
+    const parameterCarriers = parameters.map((parameter) =>
+      (walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
+        walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey) ??
+        resolveParameterAbi(walk, parameter))?.parameterCarrier);
+    if (!parameterCarriers.some((carrier) => carrier === undefined)) {
+      return rustClosureTargetType(
         parameterCarriers as readonly TargetTypeRef[],
         returnCarrier,
       );
+    }
+  }
+  return resolveRustTargetTypeRef(
+    implementationType,
+    rustResolutionContext(walk, method),
+    walk.operationOptions,
+  );
 }
 
 interface RustResolvedRecordShape {
@@ -6070,7 +6111,7 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
           }
           addRegion(contribution.expression, ast.body(contribution.expression));
           for (const declaration of contribution.contractDeclarations) {
-            relateDeclarations(contribution.expression, declaration);
+            addDeclarationDependency(declaration, contribution.expression);
           }
         }
       }
@@ -6123,6 +6164,15 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
     }
   }
   const fallible = new Set<Node>();
+  for (const expression of walk.objectLiteralMethodExpressions) {
+    const adapters = walk.context.facts.get(expression, rustObjectLiteralMethodAdapterFactKey) ??
+      walk.context.facts.resolve(expression, rustObjectLiteralMethodAdapterFactKey);
+    for (const dispatch of adapters?.dispatches ?? []) {
+      if (dispatch.adapterFallible) {
+        fallible.add(dispatch.contractMethod);
+      }
+    }
+  }
   const selectedProjectDeclaration = (node: Node): Node | undefined => {
     const selected = walk.context.facts.get(node, rustSelectedCallKey) ??
       walk.context.facts.resolve(node, rustSelectedCallKey);
@@ -6685,6 +6735,7 @@ function resolveFunctionExpressionCarrier(
       readonly kind: "this" | "receiver";
       readonly carrier: TargetTypeRef;
     }[];
+    readonly preserveSourceParameterForms?: boolean;
     readonly selectedMethodDeclaration?: Node;
   },
 ): TargetTypeRef | undefined {
@@ -6842,6 +6893,9 @@ function resolveFunctionExpressionCarrier(
   setRustOperationFact(walk, expression, {
     kind: "closure",
     operationId: "tsonic.rust.closure",
+    parameterForms: options?.preserveSourceParameterForms === true
+      ? "source"
+      : "required-only",
     byRefCopyParams,
     ...(leadingParameters.length === 0 ? {} : { leadingParameters }),
     resultCarrier: closureCarrier,

@@ -87,8 +87,8 @@ closure is ordered by architectural dependency:
 1. Class initialization: define the source contract for uninitialized
    target-native static fields before choosing a Rust default.
 2. Object construction: close method reads, writes, and spread over the exact
-   callable storage now shared by method syntax, function expressions, and
-   arrow-valued members.
+   callable storage now shared by method syntax, function expressions, arrow-
+   valued members, and overloaded method implementations.
 3. Declaration contracts: close interface index signatures and propagate
    finite generic virtual specializations through open generic callers.
 4. Provider breadth: replace the tiny hand-maintained Rust standard-library
@@ -115,6 +115,28 @@ TSTS selects the exact `Counter.next` declaration. Rust stores a callable whose
 explicit receiver slot is populated only by a method call; an arrow-valued
 member receives an ignored receiver slot and therefore retains lexical `this`.
 The target does not classify either form from the `next` spelling.
+
+One authored method body may satisfy several TypeScript overloads:
+
+```ts
+interface Parser {
+  parse(value: string): string;
+  parse(value: string, radix: int32): string;
+}
+
+const parser: Parser = {
+  parse(value: string, radix?: int32): string {
+    return radix === undefined ? value : `${value}-${radix}`;
+  },
+};
+```
+
+Rust stores the authored `(string, int32 | undefined) -> string` body once.
+Each selected interface overload receives its own dispatch adapter: the first
+supplies `None`, and the second supplies `Some(radix)`. Generic substitutions,
+rest assembly, ignored surplus parameters, parameter modes, carrier
+conversions, and result conversions are all derived from finalized facts. The
+planner never treats a target member name as overload identity.
 
 ### Default export example
 

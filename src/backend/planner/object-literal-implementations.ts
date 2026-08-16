@@ -1,6 +1,15 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../policy/types.js";
-import { rustTargetOperationFactKey } from "../../source/rust-facts/keys.js";
+import {
+  rustFallibleFactKey,
+  rustObjectLiteralMethodAdapterFactKey,
+  rustTargetOperationFactKey,
+} from "../../source/rust-facts/keys.js";
+import type {
+  RustObjectLiteralMethodParameterAbi,
+  RustObjectLiteralMethodParameterAdapter,
+  RustObjectLiteralValueAdapter,
+} from "../../source/rust-facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type {
   RustProjectMethodDispatchVariant,
@@ -8,7 +17,9 @@ import type {
 import {
   rustProjectInterfaceContracts,
 } from "../../source/rust-target-semantics/project-type-policy.js";
-import { rustSourceTypeCarrierValue } from "../../source/rust-target-types.js";
+import {
+  rustSourceTypeCarrierValue,
+} from "../../source/rust-target-types.js";
 import type {
   RustExpr,
   RustFunctionParam,
@@ -40,15 +51,28 @@ import {
   allocateRustSyntheticTypeName,
   type RustSyntheticNameState,
 } from "./synthetic-names.js";
+import {
+  applyRustObjectLiteralValueAdapter,
+  planRustObjectLiteralMethodArguments,
+} from "./object-literal-method-adapters.js";
 
 export interface RustObjectLiteralMethodImplementationPlan {
   readonly sourceCallable: Node;
-  readonly contractMethod: Node;
-  readonly variant: RustProjectMethodDispatchVariant;
   readonly fieldName: string;
   readonly callableType: RustType;
-  readonly parameters: readonly RustFunctionParam[];
+  readonly parameterCount: number;
   readonly typeParameterSubstitutions: readonly (readonly [string, TargetTypeRef])[];
+  readonly fallible: boolean;
+}
+
+export interface RustObjectLiteralMethodDispatchPlan {
+  readonly contractMethod: Node;
+  readonly variant: RustProjectMethodDispatchVariant;
+  readonly implementation: RustObjectLiteralMethodImplementationPlan;
+  readonly parameters: readonly RustFunctionParam[];
+  readonly parameterAbis: readonly RustObjectLiteralMethodParameterAbi[];
+  readonly parameterAdapters: readonly RustObjectLiteralMethodParameterAdapter[];
+  readonly resultAdapter: RustObjectLiteralValueAdapter;
   readonly returnType?: RustType;
   readonly fallible: boolean;
   readonly isUnsafe: boolean;
@@ -67,7 +91,8 @@ export interface RustObjectLiteralImplementationPlan {
     readonly targetName: string;
     readonly type: RustType;
   }[];
-  readonly methods: readonly RustObjectLiteralMethodImplementationPlan[];
+  readonly implementations: readonly RustObjectLiteralMethodImplementationPlan[];
+  readonly methods: readonly RustObjectLiteralMethodDispatchPlan[];
   readonly items: readonly RustItem[];
 }
 
@@ -131,6 +156,13 @@ function createImplementationPlan(
   if (contracts === undefined) {
     return undefined;
   }
+  const adapterFact = context.input.facts.getFact(
+    expression,
+    rustObjectLiteralMethodAdapterFactKey,
+  );
+  if (adapterFact === undefined) {
+    return undefined;
+  }
   const rootName = allocateRustSyntheticTypeName(names, `${definition.targetName}ObjectLiteralRoot`);
   const stateName = allocateRustSyntheticTypeName(names, `${definition.targetName}ObjectLiteralState`);
   const stateFieldNames = new Set<string>();
@@ -158,71 +190,99 @@ function createImplementationPlan(
     return undefined;
   }
   const methodFieldNames = new Set<string>();
-  const methods: RustObjectLiteralMethodImplementationPlan[] = [];
-  for (const contribution of fact.contributions) {
-    if (contribution.kind !== "method") {
-      continue;
+  const implementations: RustObjectLiteralMethodImplementationPlan[] = [];
+  for (const implementation of adapterFact.implementations) {
+    const parameterTypes = implementation.parameters.map((parameter) =>
+      rustTypeFromCarrierInContext(parameter.parameterCarrier, context));
+    const resultType = rustTypeFromCarrierInContext(implementation.returnCarrier, context);
+    if (parameterTypes.some((type) => type === undefined) || resultType === undefined) {
+      return undefined;
     }
-    for (const contractMethod of contribution.contractDeclarations) {
-      const owner = context.input.projectTypes.definitionContainingDeclaration(contractMethod);
-      const ownerRelation = owner === undefined
-        ? undefined
-        : context.input.projectTypes.relationship(fact.resultCarrier, owner);
-      if (owner === undefined || ownerRelation?.kind !== "related") {
-        return undefined;
-      }
-      for (const variant of context.input.projectMethodDispatch.variantsForMember(contractMethod)) {
-        const substitutions = new Map(projectTypeSubstitutions(owner, ownerRelation.targetType));
-        variant.sourceTypeParameterNames.forEach((name, index) => {
-          const target = variant.targetTypeArguments[index];
-          if (target !== undefined) {
-            substitutions.set(name, target);
-          }
-        });
-        const shape = projectCallableShape(
-          contractMethod,
-          { ...context, typeParameterSubstitutions: substitutions },
-          new Map(variant.sourceTypeParameterNames.map((name, index) =>
-            [name, variant.targetTypeArguments[index]!] as const)),
-        );
-        const resultType = shape?.returnType ?? { kind: "unit" as const };
-        const callableResultType = shape?.fallible === true
-          ? {
-              kind: "named" as const,
-              path: "rt::TsonicResult",
-              typeArguments: [resultType],
-            }
-          : resultType;
-        const fieldName = shape === undefined
-          ? undefined
-          : allocateMemberFieldName(methodFieldNames, `${variant.virtualSlot}_implementation`);
-        if (shape === undefined || fieldName === undefined) {
-          return undefined;
+    const fallible = context.input.facts.getFact(
+      implementation.sourceCallable,
+      rustFallibleFactKey,
+    ) !== undefined;
+    const callableResultType: RustType = fallible
+      ? {
+          kind: "named",
+          path: "rt::TsonicResult",
+          typeArguments: [resultType],
         }
-        methods.push({
-          sourceCallable: contribution.expression,
-          contractMethod,
-          variant,
-          fieldName,
-          callableType: {
-            kind: "named",
-            path: "rt::Callable",
-            typeArguments: [{
-              kind: "tuple",
-              elements: [wrapperType, ...shape.params.map((parameter) => parameter.type)],
-            }, callableResultType],
-          },
-          parameters: shape.params,
-          typeParameterSubstitutions: Object.freeze(
-            [...substitutions].map(([name, target]) =>
-              Object.freeze([name, target] as const)),
-          ),
-          ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
-          fallible: shape.fallible,
-          isUnsafe: shape.isUnsafe,
-        });
-      }
+      : resultType;
+    implementations.push({
+      sourceCallable: implementation.sourceCallable,
+      fieldName: allocateMemberFieldName(methodFieldNames, "method_implementation"),
+      callableType: {
+        kind: "named",
+        path: "rt::Callable",
+        typeArguments: [{
+          kind: "tuple",
+          elements: [wrapperType, ...(parameterTypes as RustType[])],
+        }, callableResultType],
+      },
+      parameterCount: implementation.parameters.length,
+      typeParameterSubstitutions: implementation.typeParameterSubstitutions,
+      fallible,
+    });
+  }
+  const methods: RustObjectLiteralMethodDispatchPlan[] = [];
+  for (const dispatch of adapterFact.dispatches) {
+    const owner = context.input.projectTypes.definitionContainingDeclaration(dispatch.contractMethod);
+    const ownerRelation = owner === undefined
+      ? undefined
+      : context.input.projectTypes.relationship(fact.resultCarrier, owner);
+    const variant = context.input.projectMethodDispatch
+      .variantsForMember(dispatch.contractMethod)
+      .find((candidate) => candidate.virtualSlot === dispatch.virtualSlot);
+    const implementation = implementations[dispatch.implementationIndex];
+    if (owner === undefined || ownerRelation?.kind !== "related" ||
+      variant === undefined || implementation === undefined) {
+      return undefined;
     }
+    const substitutions = new Map(projectTypeSubstitutions(owner, ownerRelation.targetType));
+    variant.sourceTypeParameterNames.forEach((name, index) => {
+      const target = variant.targetTypeArguments[index];
+      if (target !== undefined) {
+        substitutions.set(name, target);
+      }
+    });
+    const shape = projectCallableShape(
+      dispatch.contractMethod,
+      { ...context, typeParameterSubstitutions: substitutions },
+      new Map(variant.sourceTypeParameterNames.map((name, index) =>
+        [name, variant.targetTypeArguments[index]!] as const)),
+    );
+    if (shape === undefined || shape.params.length !== dispatch.parameters.length ||
+      dispatch.parameterAdapters.length !== implementation.parameterCount ||
+      shape.fallible !== (implementation.fallible || dispatch.adapterFallible)) {
+      return undefined;
+    }
+    const usedContractParameters = new Set(dispatch.parameterAdapters.flatMap((adapter) => {
+      switch (adapter.kind) {
+        case "runtime-value":
+        case "logical-value":
+        case "sequence-rest":
+          return [adapter.contractParameterIndex];
+        case "fixed-rest":
+          return adapter.contractParameterIndexes;
+        case "omitted":
+          return [];
+      }
+    }));
+    methods.push({
+      contractMethod: dispatch.contractMethod,
+      variant,
+      implementation,
+      parameters: shape.params.map((parameter, index) => usedContractParameters.has(index)
+        ? parameter
+        : { ...parameter, name: parameter.name.startsWith("_") ? parameter.name : `_${parameter.name}` }),
+      parameterAbis: dispatch.parameters,
+      parameterAdapters: dispatch.parameterAdapters,
+      resultAdapter: dispatch.resultAdapter,
+      ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
+      fallible: shape.fallible,
+      isUnsafe: shape.isUnsafe,
+    });
   }
   const requiredMethods = contracts.flatMap((contract) =>
     projectOwnMethods(contract.definition, context)
@@ -281,9 +341,9 @@ function createImplementationPlan(
         typeArguments: [stateType],
       },
       visibility: "private",
-    }, ...methods.map((method): RustStructField => ({
-      name: method.fieldName,
-      type: method.callableType,
+    }, ...implementations.map((implementation): RustStructField => ({
+      name: implementation.fieldName,
+      type: implementation.callableType,
       visibility: "private",
     }))],
   };
@@ -294,6 +354,7 @@ function createImplementationPlan(
     rootName,
     stateName,
     stateFields: Object.freeze(finalizedStateFields),
+    implementations: Object.freeze(implementations),
     methods: Object.freeze(methods),
     items: Object.freeze([stateItem, rootItem, ...(traitItems as RustItem[])]),
   });
@@ -305,7 +366,7 @@ function planContractImplementation(
   rootType: RustType,
   wrapperType: RustType,
   stateFields: readonly RustObjectLiteralImplementationPlan["stateFields"][number][],
-  methods: readonly RustObjectLiteralMethodImplementationPlan[],
+  methods: readonly RustObjectLiteralMethodDispatchPlan[],
   context: RustPlanContext,
 ): RustItem | undefined {
   const trait = rustProjectDispatchTraitType(contract.carrier, context);
@@ -431,6 +492,43 @@ function planContractImplementation(
         new Set(method.parameters.map((parameter) => parameter.name)),
         "implementation",
       );
+      const adapterContext: RustPlanContext = {
+        ...context,
+        fallibleContext: method.fallible,
+      };
+      const adapted = planRustObjectLiteralMethodArguments(
+        method,
+        adapterContext,
+      );
+      if (adapted === undefined) {
+        return undefined;
+      }
+      let invocation: RustExpr = {
+        kind: "method-call",
+        receiver: { kind: "path", path: implementationName },
+        method: "call",
+        args: [{
+          kind: "tuple-literal",
+          elements: [receiver, ...adapted.adaptedArguments],
+        }],
+      };
+      if (method.implementation.fallible) {
+        invocation = { kind: "try", expr: invocation, errorDomain: "runtime" };
+      }
+      const adaptedResult = applyRustObjectLiteralValueAdapter(
+        invocation,
+        method.resultAdapter,
+        method.contractMethod,
+        adapterContext,
+      );
+      if (adaptedResult === undefined) {
+        return undefined;
+      }
+      const result = method.fallible
+        ? adaptedResult.kind === "try"
+          ? adaptedResult.expr
+          : { kind: "call" as const, path: "Ok", args: [adaptedResult] }
+        : adaptedResult;
       functions.push({
         name: variant.virtualSlot,
         visibility: "private",
@@ -449,28 +547,14 @@ function planContractImplementation(
               receiver: {
                 kind: "field",
                 receiver: { kind: "path", path: "self" },
-                name: method.fieldName,
+                name: method.implementation.fieldName,
               },
               method: "clone",
               args: [],
             },
-          }, {
+          }, ...adapted.statements, {
             kind: "tail",
-            expr: {
-              kind: "method-call",
-              receiver: { kind: "path", path: implementationName },
-              method: "call",
-              args: [{
-                kind: "tuple-literal",
-                elements: [
-                  receiver,
-                  ...method.parameters.map((parameter) => ({
-                    kind: "path" as const,
-                    path: parameter.name,
-                  })),
-                ],
-              }],
-            },
+            expr: result,
           }],
         },
       });

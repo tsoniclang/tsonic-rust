@@ -599,6 +599,7 @@ export type RustTargetOperationFact =
       // names come from the selected expression; byRefCopy params bind as |&x|.
       readonly kind: "closure";
       readonly operationId: string;
+      readonly parameterForms: "required-only" | "source";
       readonly byRefCopyParams: readonly boolean[];
       readonly leadingParameters?: readonly {
         readonly kind: "this" | "receiver";
@@ -1173,6 +1174,147 @@ export interface RustSourceCallableReturnFact {
 export const rustSourceCallableReturnFactKey: RustPlanKey<RustSourceCallableReturnFact> =
   defineRustPlanKey("sourceCallableReturn", (left, right) =>
     rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier));
+
+export type RustObjectLiteralValueAdapter =
+  | {
+      readonly kind: "identity";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "conversion";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+      readonly conversion: RustValueConversion;
+    }
+  | {
+      readonly kind: "project-upcast";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "option-some";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+      readonly element: RustObjectLiteralValueAdapter;
+    }
+  | {
+      readonly kind: "option-map";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+      readonly element: RustObjectLiteralValueAdapter;
+    };
+
+export interface RustObjectLiteralMethodParameterAbi {
+  readonly form: RustSourceParameterAbiFact["form"];
+  readonly valueCarrier: TargetTypeRef;
+  readonly parameterCarrier: TargetTypeRef;
+  readonly mode: RustArgumentMode;
+}
+
+export type RustObjectLiteralMethodParameterAdapter =
+  | {
+      readonly kind: "runtime-value";
+      readonly contractParameterIndex: number;
+      readonly source: RustObjectLiteralMethodParameterAbi;
+      readonly target: RustObjectLiteralMethodParameterAbi;
+      readonly adapter: RustObjectLiteralValueAdapter;
+    }
+  | {
+      readonly kind: "logical-value";
+      readonly contractParameterIndex: number;
+      readonly source: RustObjectLiteralMethodParameterAbi;
+      readonly target: RustObjectLiteralMethodParameterAbi;
+      readonly adapter: RustObjectLiteralValueAdapter;
+    }
+  | {
+      readonly kind: "omitted";
+      readonly target: RustObjectLiteralMethodParameterAbi;
+    }
+  | {
+      readonly kind: "fixed-rest";
+      readonly contractParameterIndexes: readonly number[];
+      readonly sources: readonly RustObjectLiteralMethodParameterAbi[];
+      readonly target: RustObjectLiteralMethodParameterAbi;
+      readonly elementAdapters: readonly RustObjectLiteralValueAdapter[];
+    }
+  | {
+      readonly kind: "sequence-rest";
+      readonly contractParameterIndex: number;
+      readonly source: RustObjectLiteralMethodParameterAbi;
+      readonly target: RustObjectLiteralMethodParameterAbi;
+      readonly elementAdapter: RustObjectLiteralValueAdapter;
+    };
+
+export interface RustObjectLiteralMethodAdapterFact {
+  readonly implementations: readonly {
+    readonly sourceCallable: Node;
+    readonly typeParameterSubstitutions: readonly (readonly [string, TargetTypeRef])[];
+    readonly parameters: readonly RustObjectLiteralMethodParameterAbi[];
+    readonly returnCarrier: TargetTypeRef;
+  }[];
+  readonly dispatches: readonly {
+    readonly contractMethod: Node;
+    readonly virtualSlot: string;
+    readonly implementationIndex: number;
+    readonly parameters: readonly RustObjectLiteralMethodParameterAbi[];
+    readonly returnCarrier: TargetTypeRef;
+    readonly parameterAdapters: readonly RustObjectLiteralMethodParameterAdapter[];
+    readonly resultAdapter: RustObjectLiteralValueAdapter;
+    readonly adapterFallible: boolean;
+  }[];
+}
+
+export const rustObjectLiteralMethodAdapterFactKey: RustPlanKey<RustObjectLiteralMethodAdapterFact> =
+  defineRustPlanKey("objectLiteralMethodAdapter", objectLiteralMethodAdapterFactEquals);
+
+function objectLiteralMethodAdapterFactEquals(
+  left: RustObjectLiteralMethodAdapterFact,
+  right: RustObjectLiteralMethodAdapterFact,
+): boolean {
+  return left.implementations.length === right.implementations.length &&
+    left.implementations.every((implementation, index) => {
+      const candidate = right.implementations[index];
+      return candidate !== undefined && implementation.sourceCallable === candidate.sourceCallable &&
+        closedMetadataEquals(
+          {
+            typeParameterSubstitutions: implementation.typeParameterSubstitutions,
+            parameters: implementation.parameters,
+            returnCarrier: implementation.returnCarrier,
+          },
+          {
+            typeParameterSubstitutions: candidate.typeParameterSubstitutions,
+            parameters: candidate.parameters,
+            returnCarrier: candidate.returnCarrier,
+          },
+        );
+    }) &&
+    left.dispatches.length === right.dispatches.length &&
+    left.dispatches.every((dispatch, index) => {
+      const candidate = right.dispatches[index];
+      return candidate !== undefined && dispatch.contractMethod === candidate.contractMethod &&
+        closedMetadataEquals(
+          {
+            virtualSlot: dispatch.virtualSlot,
+            implementationIndex: dispatch.implementationIndex,
+            parameters: dispatch.parameters,
+            returnCarrier: dispatch.returnCarrier,
+            parameterAdapters: dispatch.parameterAdapters,
+            resultAdapter: dispatch.resultAdapter,
+            adapterFallible: dispatch.adapterFallible,
+          },
+          {
+            virtualSlot: candidate.virtualSlot,
+            implementationIndex: candidate.implementationIndex,
+            parameters: candidate.parameters,
+            returnCarrier: candidate.returnCarrier,
+            parameterAdapters: candidate.parameterAdapters,
+            resultAdapter: candidate.resultAdapter,
+            adapterFallible: candidate.adapterFallible,
+          },
+        );
+    });
+}
 
 // Declarations whose lowering returns TsonicResult<T>: they throw, or they
 // transitively call fallible operations outside a try boundary.

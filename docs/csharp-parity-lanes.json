@@ -214,11 +214,11 @@
   {
     "id": "objects.overloaded-method-declarations",
     "area": "objects",
-    "source": "const parser: Parser = { parse(value: string | number) { return value; } };",
-    "classification": "implementation-gap",
+    "source": "const parser: Parser = { parse(value: string, radix?: int32) { return radix === undefined ? value : value + \"-radix\"; } };",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-methods.ts",
-    "rustProof": "src/source/rust-target-semantics/index.ts",
-    "action": "bind one authored implementation to every exact selected overload and close each target ABI independently"
+    "rustProof": "test/object-method-parity.test.mjs",
+    "action": "retain one authored implementation carrier and one exact adapter for each selected overload ABI"
   },
   {
     "id": "objects.accessor-members",

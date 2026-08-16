@@ -460,7 +460,7 @@ function rustExpressionUnsafeRequirement(
     : undefined;
 }
 
-function planRustProjectUpcast(
+export function planRustProjectUpcast(
   node: Node,
   expression: RustExpr,
   fact: import("../../source/rust-facts/keys.js").RustProjectUpcastFact,
@@ -1036,7 +1036,8 @@ function planExpressionInner(
         const parameterAbi = context.input.facts.getFact(parameter, rustSourceParameterAbiFactKey);
         if (parameterCarrier === undefined || parameterAbi === undefined ||
           !rustTargetTypeRefEquals(parameterCarrier, parameterAbi.parameterCarrier) ||
-          (callableProtocol === undefined && parameterAbi.form !== "required")) {
+          (callableProtocol === undefined && closureFact.parameterForms === "required-only" &&
+            parameterAbi.form !== "required")) {
           return undefined;
         }
         const byRefCopy = closureFact.byRefCopyParams[index] === true;
@@ -3565,7 +3566,7 @@ export function applyRustValueConversion(
   return { kind: "try", expr: converted, errorDomain: "runtime" };
 }
 
-function lowerRustValueConversion(
+export function lowerRustValueConversion(
   contract: import("../../source/rust-facts/value-conversions.js").RustValueConversionContract,
   source: RustExpr,
   context: RustPlanContext,
@@ -6062,15 +6063,15 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       continue;
     }
     if (contribution.kind === "method") {
-      const methods = objectLiteralImplementation?.methods.filter((method) =>
-        method.sourceCallable === contribution.expression) ?? [];
-      if (methods.length === 0) {
+      const implementations = objectLiteralImplementation?.implementations.filter((implementation) =>
+        implementation.sourceCallable === contribution.expression) ?? [];
+      if (implementations.length === 0) {
         return undefined;
       }
-      for (const method of methods) {
+      for (const implementation of implementations) {
         const closure = planExpression(contribution.expression, {
           ...context,
-          typeParameterSubstitutions: new Map(method.typeParameterSubstitutions),
+          typeParameterSubstitutions: new Map(implementation.typeParameterSubstitutions),
         });
         if (closure === undefined) {
           return undefined;
@@ -6086,7 +6087,7 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
         const tupledClosure = tupleRustClosureArguments(
           closure,
           argumentsName,
-          method.parameters.length + 1,
+          implementation.parameterCount + 1,
         );
         if (tupledClosure === undefined) {
           return undefined;
@@ -6095,12 +6096,12 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
           name: bindingName,
           value: {
             kind: "associated-call",
-            owner: method.callableType,
+            owner: implementation.callableType,
             method: "new",
             args: [tupledClosure],
           },
         });
-        methodValues.set(method.fieldName, { kind: "path", path: bindingName });
+        methodValues.set(implementation.fieldName, { kind: "path", path: bindingName });
       }
       continue;
     }
@@ -6176,7 +6177,8 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
   if (objectLiteralImplementation !== undefined) {
     if (objectLiteralImplementation.wrapperType.kind !== "named" ||
       objectLiteralImplementation.stateFields.length !== fact.fields.length ||
-      objectLiteralImplementation.methods.some((method) => !methodValues.has(method.fieldName))) {
+      objectLiteralImplementation.implementations.some((implementation) =>
+        !methodValues.has(implementation.fieldName))) {
       return undefined;
     }
     const implementationFields = [...objectLiteralImplementation.stateFields]
@@ -6223,9 +6225,9 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
                 })),
               }],
             },
-          }, ...objectLiteralImplementation.methods.map((method) => ({
-            name: method.fieldName,
-            value: methodValues.get(method.fieldName)!,
+          }, ...objectLiteralImplementation.implementations.map((implementation) => ({
+            name: implementation.fieldName,
+            value: methodValues.get(implementation.fieldName)!,
           }))],
         }],
       },
