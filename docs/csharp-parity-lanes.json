@@ -188,10 +188,10 @@
     "id": "objects.callable-property-values",
     "area": "objects",
     "source": "const counter: Counter = { value: 1, next: function () { return this.value + 1; } };",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-methods.ts",
-    "rustProof": "src/source/rust-target-semantics/index.ts",
-    "action": "lower exact callable-valued property evidence without treating function syntax as a data field"
+    "rustProof": "test/object-method-parity.test.mjs",
+    "action": "retain exact contextual method identity while preserving dynamic this for function expressions and lexical receiver semantics for arrows"
   },
   {
     "id": "objects.method-value-operations",

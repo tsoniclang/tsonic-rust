@@ -86,8 +86,9 @@ closure is ordered by architectural dependency:
 
 1. Class initialization: define the source contract for uninitialized
    target-native static fields before choosing a Rust default.
-2. Object construction: add object-literal methods without reconstructing
-   contextual member identity.
+2. Object construction: close method reads, writes, and spread over the exact
+   callable storage now shared by method syntax, function expressions, and
+   arrow-valued members.
 3. Declaration contracts: close interface index signatures and propagate
    finite generic virtual specializations through open generic callers.
 4. Provider breadth: replace the tiny hand-maintained Rust standard-library
@@ -96,6 +97,24 @@ closure is ordered by architectural dependency:
 5. Shared contracts: specify borrowed results, custom receivers, associated
    items, and fixed-array lengths at their owning layer.
 6. Surface closure: execute every blocked row in `docs/parity-lanes.json`.
+
+Object-literal method syntax and direct callable-valued properties are already
+closed through the same selected contextual contract. For example:
+
+```ts
+const counter: Counter = {
+  value: 1,
+  next: function (delta) {
+    this.value += delta;
+    return this.value;
+  },
+};
+```
+
+TSTS selects the exact `Counter.next` declaration. Rust stores a callable whose
+explicit receiver slot is populated only by a method call; an arrow-valued
+member receives an ignored receiver slot and therefore retains lexical `this`.
+The target does not classify either form from the `next` spelling.
 
 ### Default export example
 

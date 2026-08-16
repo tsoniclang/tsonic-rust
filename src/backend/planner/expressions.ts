@@ -1080,7 +1080,10 @@ function planExpressionInner(
         ...parameter,
         name: context.syntheticNames === undefined
           ? undefined
-          : allocateRustSyntheticName(context.syntheticNames, "_object_this"),
+          : allocateRustSyntheticName(
+              context.syntheticNames,
+              parameter.kind === "this" ? "_object_this" : "_object_receiver",
+            ),
       }));
       if (leadingParameterPlans.some((parameter) => parameter.name === undefined)) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -6060,12 +6063,12 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     }
     if (contribution.kind === "method") {
       const methods = objectLiteralImplementation?.methods.filter((method) =>
-        method.sourceMethod === contribution.property) ?? [];
+        method.sourceCallable === contribution.expression) ?? [];
       if (methods.length === 0) {
         return undefined;
       }
       for (const method of methods) {
-        const closure = planExpression(contribution.property, {
+        const closure = planExpression(contribution.expression, {
           ...context,
           typeParameterSubstitutions: new Map(method.typeParameterSubstitutions),
         });

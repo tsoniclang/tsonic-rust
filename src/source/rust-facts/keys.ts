@@ -562,6 +562,7 @@ export type RustTargetOperationFact =
         | {
             readonly kind: "method";
             readonly property: Node;
+            readonly expression: Node;
             readonly contractDeclarations: readonly Node[];
           }
         | {
@@ -600,7 +601,7 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly byRefCopyParams: readonly boolean[];
       readonly leadingParameters?: readonly {
-        readonly kind: "this";
+        readonly kind: "this" | "receiver";
         readonly carrier: TargetTypeRef;
       }[];
       readonly resultCarrier: TargetTypeRef;

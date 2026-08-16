@@ -42,7 +42,7 @@ import {
 } from "./synthetic-names.js";
 
 export interface RustObjectLiteralMethodImplementationPlan {
-  readonly sourceMethod: Node;
+  readonly sourceCallable: Node;
   readonly contractMethod: Node;
   readonly variant: RustProjectMethodDispatchVariant;
   readonly fieldName: string;
@@ -200,7 +200,7 @@ function createImplementationPlan(
           return undefined;
         }
         methods.push({
-          sourceMethod: contribution.property,
+          sourceCallable: contribution.expression,
           contractMethod,
           variant,
           fieldName,

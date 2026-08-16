@@ -189,3 +189,60 @@ export function main(): void {
     0,
   );
 });
+
+test("function-valued object members preserve dynamic this and lexical captures", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Counter {
+  value: int32;
+  next(delta: int32): int32;
+}
+
+export function main(): void {
+  let captured: int32 = 4;
+  const counter: Counter = {
+    value: 1,
+    next: function (delta) {
+      captured += delta;
+      this.value += delta;
+      return captured + this.value;
+    },
+  };
+  check(counter.next(2) === 9);
+  check(counter.value === 3);
+}
+`, "rust_object_function_property");
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(
+    validateGeneratedProject("object-function-property", result.artifacts, { run: true }).status,
+    0,
+  );
+});
+
+test("arrow-valued object members retain lexical receiver semantics", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Reader {
+  read(delta: int32): int32;
+}
+
+export function main(): void {
+  const captured: int32 = 5;
+  const reader: Reader = {
+    read: (delta) => captured + delta,
+  };
+  check(reader.read(3) === 8);
+}
+`, "rust_object_arrow_property");
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(
+    validateGeneratedProject("object-arrow-property", result.artifacts, { run: true }).status,
+    0,
+  );
+});

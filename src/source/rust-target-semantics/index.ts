@@ -5177,6 +5177,7 @@ function resolveRecordLiteralCarrier(
       contributions.push({
         kind: "method",
         property,
+        expression: property,
         contractDeclarations: Object.freeze([...matchedDeclarations]),
       });
       for (const declaration of matchedDeclarations) {
@@ -5186,13 +5187,76 @@ function resolveRecordLiteralCarrier(
     }
     const nameNode = ast.name(property);
     const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+    const initializer = ObjectLiteralProperty_Value(ast, property);
+    const initializerKind = initializer === undefined ? "" : ast.kindName(initializer);
+    if (initializer !== undefined &&
+      (initializerKind === KindFunctionExpression || initializerKind === "KindArrowFunction") &&
+      storage === "project-object" && selectedElement?.elementKind === "property") {
+      const selectedDeclarations = selectedElement.sourceSelectedDeclarations;
+      const selectedDeclaration = selectedElement.sourceSelectedDeclaration;
+      const matchedDeclarations = selectedMethodDeclarations.filter((declaration) => {
+        const implementation = selectedProjectDefinition === undefined
+          ? undefined
+          : walk.context.projectTypes.memberImplementation(
+              selectedProjectDefinition,
+              declaration,
+            );
+        return implementation?.kind === "resolved" && selectedDeclarations.includes(
+          implementation.implementation.declaration,
+        );
+      });
+      const selectedMemberCarrier = selectedDeclaration === undefined
+        ? undefined
+        : resolveObjectLiteralMethodCarrier(
+            walk,
+            initializer,
+            selectedElement.sourceSelectedType,
+            selectedDeclaration,
+          );
+      const selectedCallable = rustCallableProtocol(selectedMemberCarrier);
+      const selectedClosure = rustClosureProtocol(selectedMemberCarrier);
+      const selectedParameterCarriers = selectedMemberCarrier?.kind === "function-pointer"
+        ? selectedMemberCarrier.args
+        : selectedCallable?.parameters ?? selectedClosure?.parameters;
+      const selectedResultCarrier = selectedMemberCarrier?.kind === "function-pointer"
+        ? selectedMemberCarrier.result
+        : selectedCallable?.result ?? selectedClosure?.result;
+      if (selectedDeclaration === undefined ||
+        !selectedMethodDeclarations.includes(selectedDeclaration) ||
+        matchedDeclarations.length === 0 || selectedParameterCarriers === undefined ||
+        selectedResultCarrier === undefined) {
+        return undefined;
+      }
+      const methodCarrier = rustClosureTargetType(
+        [resultCarrier, ...selectedParameterCarriers],
+        selectedResultCarrier,
+      );
+      if (resolveFunctionExpressionCarrier(walk, initializer, sourceFile, methodCarrier, {
+        leadingParameters: [{
+          kind: initializerKind === KindFunctionExpression ? "this" : "receiver",
+          carrier: resultCarrier,
+        }],
+        selectedMethodDeclaration: selectedDeclaration,
+      }) === undefined) {
+        return undefined;
+      }
+      contributions.push({
+        kind: "method",
+        property,
+        expression: initializer,
+        contractDeclarations: Object.freeze([...matchedDeclarations]),
+      });
+      for (const declaration of matchedDeclarations) {
+        assignedMethodDeclarations.add(declaration);
+      }
+      continue;
+    }
     const targetField = storage === "project-object"
       ? selectedFields.find((field) =>
           field.implementationDeclaration !== undefined &&
           (selectedElement?.sourceSelectedDeclaration === field.implementationDeclaration ||
             selectedElement?.sourceSelectedDeclarations.includes(field.implementationDeclaration)))
       : selectedFieldByName.get(sourceName);
-    const initializer = ObjectLiteralProperty_Value(ast, property);
     if (targetField === undefined || initializer === undefined ||
       resolveExpressionCarrier(walk, initializer, sourceFile, targetField.carrier) === undefined) {
       return undefined;
@@ -6004,9 +6068,9 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
           if (contribution.kind !== "method") {
             continue;
           }
-          addRegion(contribution.property, ast.body(contribution.property));
+          addRegion(contribution.expression, ast.body(contribution.expression));
           for (const declaration of contribution.contractDeclarations) {
-            relateDeclarations(contribution.property, declaration);
+            relateDeclarations(contribution.expression, declaration);
           }
         }
       }
@@ -6618,7 +6682,7 @@ function resolveFunctionExpressionCarrier(
   expected: TargetTypeRef | undefined,
   options?: {
     readonly leadingParameters?: readonly {
-      readonly kind: "this";
+      readonly kind: "this" | "receiver";
       readonly carrier: TargetTypeRef;
     }[];
     readonly selectedMethodDeclaration?: Node;
