@@ -109,6 +109,7 @@ import {
   planRustValueRead,
   planRustCaptureValue,
   planRustNonConsumingValue,
+  planRustSharedReceiver,
   planRustPromotedStorageLocation,
   planRustTypedLocationCall,
 } from "./typed-locations.js";
@@ -139,6 +140,7 @@ import {
 import { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { planRustBindingPattern } from "./binding-patterns.js";
+import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetOperationIsFallible } from "../../source/rust-facts/target-operation.js";
 import {
   rustProjectDispatchTraitType,
@@ -638,9 +640,7 @@ function planExpressionInner(
           context,
         );
         const declarationModule = context.moduleNameByFileName.get(callableValue.fileName);
-        const callableName = context.input.names.nameForDeclaration(
-          callableValue.sourceDeclaration,
-        );
+        const callableName = callableValue.name;
         if (callableType === undefined || declarationModule === undefined ||
           callableName === undefined || !isValidRustIdentifier(callableName)) {
           return undefined;
@@ -1169,12 +1169,7 @@ function planExpressionInner(
             if (defaultValue === undefined) {
               return undefined;
             }
-            initializer = {
-              kind: "method-call",
-              receiver: initializer,
-              method: "unwrap_or_else",
-              args: [{ kind: "closure", params: [], body: defaultValue }],
-            };
+            initializer = rustOptionDefaultValue(initializer, defaultValue);
           }
           bindingStatements.push({
             kind: "let",
@@ -1248,8 +1243,6 @@ function planExpressionInner(
         return finishRuntimeCallableExpression(
           callable,
           captureBindings,
-          sourceParameterPlans.some((parameter) => parameter.form === "default"),
-          context,
         );
       }
       const resultType = rustTypeFromCarrierInContext(resultCarrier, context);
@@ -1328,8 +1321,6 @@ function planExpressionInner(
       return finishRuntimeCallableExpression(
         callable,
         captureBindings,
-        sourceParameterPlans.some((parameter) => parameter.form === "default"),
-        context,
       );
     }
     case "KindRegularExpressionLiteral": {
@@ -1563,30 +1554,10 @@ function planGeneratorResumeExpression(
 function finishRuntimeCallableExpression(
   callable: RustExpr,
   captureBindings: readonly { readonly name: string; readonly value: RustExpr }[],
-  hasDefaultParameters: boolean,
-  context: RustPlanContext,
 ): RustExpr {
-  if (!hasDefaultParameters) {
-    return captureBindings.length === 0
-      ? callable
-      : { kind: "block", bindings: captureBindings, value: callable };
-  }
-  const callableName = allocateRustSyntheticName(
-    context.syntheticNames!,
-    "callable_implementation",
-  );
-  return {
-    kind: "block",
-    bindings: [
-      ...captureBindings,
-      {
-        name: callableName,
-        value: callable,
-        attrs: ["#[allow(clippy::let_and_return, clippy::unnecessary_lazy_evaluations)]"],
-      },
-    ],
-    value: { kind: "path", path: callableName },
-  };
+  return captureBindings.length === 0
+    ? callable
+    : { kind: "block", bindings: captureBindings, value: callable };
 }
 
 function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -2208,14 +2179,17 @@ function planRustSourceAccessorUpdate(
     const plannedReceiver = receiverNode === undefined
       ? undefined
       : planExpression(receiverNode, context);
-    if (plannedReceiver === undefined) {
+    if (receiverNode === undefined || plannedReceiver === undefined) {
       return undefined;
     }
     const receiverName = allocateRustSyntheticName(
       context.syntheticNames,
       "accessor_update_receiver",
     );
-    locationBindings.push({ name: receiverName, value: plannedReceiver });
+    locationBindings.push({
+      name: receiverName,
+      value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+    });
     receiver = { kind: "path", path: receiverName };
   }
   const plannedRead = planRustSourceAccessorCall(
@@ -2387,7 +2361,9 @@ function planRustSourceFieldUpdate(
   }
   const receiverNode = Node_Expression(context.input.ast, fieldExpression);
   const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-  const receiver = plannedReceiver;
+  const receiver = receiverNode === undefined || plannedReceiver === undefined
+    ? plannedReceiver
+    : planRustSharedReceiver(receiverNode, plannedReceiver, context);
   if (receiver === undefined || context.syntheticNames === undefined) {
     return undefined;
   }
@@ -3693,6 +3669,9 @@ function planProviderOperationExpression(
     args.push(planned);
   }
   const form = fact.abi.target;
+  const receiverMode = fact.abi.targetReceiver.kind === "input"
+    ? fact.abi.targetReceiver.input.mode
+    : undefined;
   const scoped = (expression: RustExpr | undefined): RustExpr | undefined =>
     expression === undefined || locationScope.kind !== "selected"
       ? expression
@@ -3740,12 +3719,24 @@ function planProviderOperationExpression(
     case "receiver-tagged-array":
       return scoped(receiver === undefined
         ? undefined
-        : { kind: "method-call", receiver, method: form.name, args });
+        : {
+            kind: "method-call",
+            receiver,
+            method: form.name,
+            args,
+            ...(receiverMode === undefined ? {} : { receiverMode }),
+          });
     case "receiver-method":
       return receiver === undefined
         ? undefined
         : scoped(applyProviderOperationChain(
-            { kind: "method-call", receiver, method: form.name, args },
+            {
+              kind: "method-call",
+              receiver,
+              method: form.name,
+              args,
+              ...(receiverMode === undefined ? {} : { receiverMode }),
+            },
             form.chain,
           ));
     case "field": {
@@ -4444,9 +4435,12 @@ function planSelectedSourceCall(
       if (receiver !== undefined) {
         planned = {
           kind: "method-call",
-          receiver,
+          receiver: receiverNode === undefined
+            ? receiver
+            : planRustNonConsumingValue(receiverNode, receiver, context),
           method: targetName,
           args: shaped,
+          receiverMode: fact.target.mutatesSelf ? "mut-ref" : "ref",
         };
       }
       break;
@@ -4943,7 +4937,11 @@ export function sourceCallSelectedMemberMatches(
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
-    : fact.target.form === "callable" ? member.targetName : fact.target.name;
+    : fact.target.form === "callable"
+      ? member.targetName
+      : fact.target.form === "function"
+        ? fact.target.selectedTargetName
+        : fact.target.name;
   const selectedReturn = member.returnType === undefined
     ? undefined
     : substituteRustTargetTypeParameters(member.returnType, substitutions);
@@ -5340,15 +5338,14 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     }
     const receiverNode = Node_Expression(context.input.ast, node);
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    const receiver = plannedReceiver;
-    if (receiver === undefined) {
+    if (receiverNode === undefined || plannedReceiver === undefined) {
       return undefined;
     }
     if (fact.dispatch === undefined) {
       return readRustStoredObjectField(
         fact.storage,
         fact.receiverCarrier,
-        receiver,
+        planRustNonConsumingValue(receiverNode, plannedReceiver, context),
         fact.storageIndex,
         fact.resultCarrier,
         context,
@@ -5368,7 +5365,10 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     );
     return {
       kind: "block",
-      bindings: [{ name: receiverName, value: receiver }],
+      bindings: [{
+        name: receiverName,
+        value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+      }],
       value: readRustProjectDispatchedField(
         { kind: "path", path: receiverName },
         fact.dispatch.read,
@@ -5560,9 +5560,12 @@ export function planRustSourceAccessorCall(
       : { kind: "call", path: `${ownerPath}::${method}`, args };
   }
   const receiverNode = Node_Expression(context.input.ast, node);
-  const receiver = receiverOverride ?? (receiverNode === undefined
+  const plannedReceiver = receiverOverride ?? (receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context));
+  const receiver = receiverNode === undefined || plannedReceiver === undefined
+    ? plannedReceiver
+    : planRustNonConsumingValue(receiverNode, plannedReceiver, context);
   return receiver === undefined
     ? undefined
     : { kind: "method-call", receiver, method, args };

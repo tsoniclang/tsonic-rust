@@ -113,8 +113,8 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.equal(source.match(/fn combine\s*\(/gu)?.length ?? 0, 1);
   assert.equal(source.match(/fn total\s*\(/gu)?.length ?? 0, 1);
-  assert.match(source, /field_copied = base_state\.label\.clone\(\);/u);
-  assert.match(source, /field_second = base_state\.first \+ 2;/u);
+  assert.match(source, /let field_copied: String = base_state\.label\.clone\(\);/u);
+  assert.match(source, /let field_second: i32 = base_state\.first \+ 2;/u);
   assert.match(source, /fn letter\(\) -> u16 \{\s*65\s*\}/u);
   assert.match(source, /fn signed_maximum\(\) -> i128/u);
   assert.match(source, /fn signed_minimum\(\) -> i128/u);
@@ -186,7 +186,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let mut field_total: i32;/u);
+  assert.match(source, /let mut field_total: i32 = initial;/u);
   assert.match(source, /field_total \+= index;/u);
   assert.match(source, /let doubled: i32 = base_state\.value \* 2;/u);
 

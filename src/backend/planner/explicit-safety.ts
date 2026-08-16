@@ -15,6 +15,7 @@ import type {
 import type {
   RustExpr,
 } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import type {
   RustPlanContext,
 } from "./plan-context.js";
@@ -172,11 +173,11 @@ export function rustSafetyAttributesForDeclaration(
         "native-pointer";
   });
   return [
-    ...(isUnsafe ? ["#[allow(clippy::missing_safety_doc)]"] : []),
+    ...(isUnsafe ? [rustLintAttributes.missingSafetyDoc] : []),
     ...(!isUnsafe && hasNativePointerOperation
-      ? ["#[allow(clippy::not_unsafe_ptr_arg_deref)]"]
+      ? [rustLintAttributes.pointerDerefOutsideUnsafeFunction]
       : []),
-    ...(hasExplicitUnsafeContext ? ["#[allow(unused_unsafe)]"] : []),
+    ...(hasExplicitUnsafeContext ? [rustLintAttributes.unusedUnsafe] : []),
   ];
 }
 

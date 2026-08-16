@@ -46,14 +46,15 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) state: rt::ObjectHandle<CounterState>,\n\}/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
-  assert.match(text, /let mut field_value: i32;\n        field_value = value;/u);
+  assert.match(text, /let field_value: i32 = value;/u);
   assert.match(text, /state: rt::ObjectHandle::new\(CounterState \{ value: field_value \}\)/u);
   assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
   assert.match(text, /\.with_mut\(\|state\| state\.value \+= value_2\)/u);
   assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
   assert.match(text, /let counter: Counter = Counter::new\(10\);/u);
-  assert.match(text, /counter\.clone\(\)\.add\(5\);/u);
-  assert.match(text, /counter\.clone\(\)\.current\(\)/u);
+  assert.match(text, /counter\.add\(5\);/u);
+  assert.match(text, /counter\.current\(\)/u);
+  assert.doesNotMatch(text, /counter\.clone\(\)\.(?:add|current)\(/u);
 });
 
 test("ECMAScript private fields retain declaration identity and closed storage", { timeout: 300_000 }, () => {
@@ -232,9 +233,11 @@ export function create(): Initialized {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /impl Initialized \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Initialized/u);
-  assert.match(text, /let mut field_value: i32;\n        field_value = 42;/u);
-  assert.match(text, /impl Empty \{\n    #\[allow\(clippy::new_without_default\)\]\n    pub fn new\(\) -> Empty/u);
+  assert.match(text, /impl Initialized \{\n    pub fn new\(\) -> Initialized/u);
+  assert.match(text, /impl Default for Initialized \{\n    fn default\(\) -> Self \{\n        Self::new\(\)/u);
+  assert.match(text, /let field_value: i32 = 42;/u);
+  assert.match(text, /impl Empty \{\n    pub fn new\(\) -> Empty/u);
+  assert.match(text, /impl Default for Empty \{\n    fn default\(\) -> Self \{\n        Self::new\(\)/u);
 });
 
 test("class field and constructor assignment effects retain TypeScript order", { timeout: 300_000 }, () => {
@@ -301,10 +304,10 @@ export class Initialized {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let mut field_second: i32;/u);
+  assert.match(text, /let field_second: i32 = field_first;/u);
   assert.match(
     text,
-    /field_second = field_first;/u,
+    /second: field_second/u,
   );
 });
 
@@ -717,7 +720,8 @@ export function read(value: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn r#match\(&self, value: String\) -> String/u);
-  assert.match(text, /matcher\.clone\(\)\.r#match\(value\.clone\(\)\)/u);
+  assert.match(text, /matcher\.r#match\(value\.clone\(\)\)/u);
+  assert.doesNotMatch(text, /matcher\.clone\(\)\.r#match/u);
   validateGeneratedProject("native-raw-method-identifiers", result.artifacts);
 });
 
@@ -878,7 +882,8 @@ export function shift(p: Point, dx: int32): Point {
   assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*pub\(crate\) state: rt::ObjectHandle<PointState>,/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /state: rt::ObjectHandle::new\(PointState \{ x: 0, y: 0 \}\)/u);
-  assert.match(text, /p\.clone\(\)\.state\.with\(\|state\| state\.x\) \+ dx/u);
+  assert.match(text, /p\.state\.with\(\|state\| state\.x\) \+ dx/u);
+  assert.doesNotMatch(text, /p\.clone\(\)\.state\.with/u);
 });
 
 test("generated interface objects preserve aliases, identity, and single receiver evaluation", { timeout: 300_000 }, () => {

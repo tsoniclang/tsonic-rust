@@ -48,9 +48,9 @@ export function choose(flag: boolean): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /#\[allow\(unused_mut\)\]\n\s+let mut result: i32;/u);
-  assert.match(source, /result = 10;/u);
-  assert.match(source, /result = 20;/u);
+  assert.match(source, /let result: i32 = if flag \{ 10 \} else \{ 20 \};/u);
+  assert.doesNotMatch(source, /allow\(unused_mut\)/u);
+  assert.doesNotMatch(source, /result = (?:10|20);/u);
   validateGeneratedProject("local-definite-assignment", result.artifacts);
 });
 
@@ -74,8 +74,35 @@ export function revise(flag: boolean): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let mut result: i32;/u);
-  assert.match(source, /result = 10;/u);
+  assert.match(source, /let mut result: i32 = 10;/u);
   assert.match(source, /result = 20;/u);
   validateGeneratedProject("local-uninitialized-mutation", result.artifacts);
+});
+
+test("branch-local setup folds into one conditional initializer", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function choose(flag: boolean): int32 {
+  let result: int32;
+  if (flag) {
+    const base: int32 = 9;
+    result = base + 1;
+  } else {
+    const base: int32 = 19;
+    result = base + 1;
+  }
+  return result;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let result: i32 = if flag \{\n\s*let base: i32 = 9;\n\s*base \+ 1\n\s*\} else \{/u);
+  assert.doesNotMatch(source, /needless_late_init/u);
+  validateGeneratedProject("local-branch-setup-initializer", result.artifacts);
 });

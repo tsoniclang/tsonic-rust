@@ -213,14 +213,9 @@ export function readRustProjectDispatchedField(
   return {
     kind: "method-call",
     receiver: {
-      kind: "method-call",
-      receiver: {
-        kind: "field",
-        receiver,
-        name: rustProjectObjectDispatchField,
-      },
-      method: "clone",
-      args: [],
+      kind: "field",
+      receiver,
+      name: rustProjectObjectDispatchField,
     },
     method: readSlot,
     args: [],
@@ -250,14 +245,9 @@ export function writeRustProjectDispatchedField(
     value: {
       kind: "method-call",
       receiver: {
-        kind: "method-call",
-        receiver: {
-          kind: "field",
-          receiver: selectedReceiver,
-          name: rustProjectObjectDispatchField,
-        },
-        method: "clone",
-        args: [],
+        kind: "field",
+        receiver: selectedReceiver,
+        name: rustProjectObjectDispatchField,
       },
       method: writeSlot,
       args: [selectedValue],

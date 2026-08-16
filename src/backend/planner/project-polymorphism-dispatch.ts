@@ -13,6 +13,7 @@ import type {
   RustTraitFunction,
   RustType,
 } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import { missingFactDiagnostic } from "./diagnostics.js";
 import { planProjectMethod } from "./declarations-nominal.js";
 import {
@@ -134,10 +135,10 @@ export function planProjectDispatchTrait(
     if (read === undefined || write === undefined) {
       return undefined;
     }
-    functions.push({ name: read, selfParam: "rc", params: [], returnType: field.type });
+    functions.push({ name: read, selfParam: "ref", params: [], returnType: field.type });
     functions.push({
       name: write,
-      selfParam: "rc",
+      selfParam: "ref",
       params: [{ name: "value", type: field.type }],
     });
   }
@@ -179,7 +180,7 @@ export function planProjectDispatchTrait(
     kind: "trait",
     name: rustProjectDispatchTraitName(definition),
     visibility: "crate",
-    attrs: ["#[allow(dead_code)]"],
+    attrs: [rustLintAttributes.deadCode],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
     functions,
@@ -309,7 +310,7 @@ function planRootContractFunctions(
     functions.push({
       name: read,
       visibility: "private",
-      selfParam: "rc",
+      selfParam: "ref",
       params: [],
       returnType: field.type,
       body: {
@@ -322,7 +323,7 @@ function planRootContractFunctions(
     functions.push({
       name: write,
       visibility: "private",
-      selfParam: "rc",
+      selfParam: "ref",
       params: [{ name: "value", type: field.type }],
       body: {
         statements: [{

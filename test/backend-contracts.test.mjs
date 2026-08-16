@@ -110,7 +110,12 @@ test("project-source call consumption requires exact selected member kind, targe
   const fact = {
     kind: "source-call",
     operationId: "source:add",
-    target: { form: "function", fileName: "/src/math.ts", name: "add" },
+    target: {
+      form: "function",
+      fileName: "/src/math.ts",
+      name: "add",
+      selectedTargetName: "add",
+    },
     parameters: [{
       form: "required",
       valueCarrier: int32,

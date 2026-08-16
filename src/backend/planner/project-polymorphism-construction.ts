@@ -21,6 +21,7 @@ import type {
   RustStmt,
   RustType,
 } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
@@ -195,7 +196,6 @@ export function planProjectClassConstructor(
       name,
       mutable: true,
       type: field.type,
-      attrs: ["#[allow(unused_mut)]"],
     });
     values.set(field.declaration, expression);
     fieldSlots.push(slot);
@@ -302,7 +302,6 @@ export function planProjectClassConstructor(
       kind: "let",
       name: baseStateName,
       mutable: true,
-      attrs: ["#[allow(unused_mut)]"],
       init: baseInitialization,
     });
     bodyIndex = constructor === undefined ? 0 : 1;
@@ -477,10 +476,6 @@ export function planProjectClassConstructor(
     ...(fallible ? { fallible: true } : {}),
     returnType: stateType,
     body: {
-      innerAttrs: [
-        ...parameterPlan.bodyInnerAttrs,
-        "#![allow(unused_assignments)]",
-      ],
       ...applyFallibleShape({ statements }, {
         fallible,
         hasReturnValue: true,
@@ -502,11 +497,10 @@ export function planProjectClassConstructor(
       : "private",
     ...(() => {
       const attrs = [
-        ...(parameterPlan.params.length === 0 ? ["#[allow(clippy::new_without_default)]"] : []),
-        ...(isUnsafe ? ["#[allow(clippy::missing_safety_doc)]"] : []),
+        ...(isUnsafe ? [rustLintAttributes.missingSafetyDoc] : []),
         ...(context.input.ast.hasModifierKind(definition.declaration, "export")
           ? []
-          : ["#[allow(dead_code)]"]),
+          : [rustLintAttributes.deadCode]),
       ];
       return attrs.length === 0 ? {} : { attrs };
     })(),
@@ -602,7 +596,6 @@ function planImplicitProjectConstructorParameters(
 ): {
   readonly params: readonly RustFunctionParam[];
   readonly prelude: readonly never[];
-  readonly bodyInnerAttrs: readonly never[];
 } | undefined {
   const receiver = context.input.projectTypes.openCarrier(definition);
   const params: RustFunctionParam[] = [];
@@ -630,7 +623,7 @@ function planImplicitProjectConstructorParameters(
     }
     params.push({ name, type, mutable: false });
   }
-  return { params, prelude: [], bodyInnerAttrs: [] };
+  return { params, prelude: [] };
 }
 
 function selectedExplicitExternalBaseConstructor(

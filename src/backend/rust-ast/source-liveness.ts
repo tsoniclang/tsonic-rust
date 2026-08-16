@@ -1,25 +1,55 @@
 import type { RustBlock, RustExpr, RustStmt } from "./nodes.js";
-
-type FirstAccess = "read" | "write" | "exit" | "none";
-
-const unusedAssignmentsAttribute = "#[allow(unused_assignments)]";
-const unusedAssignmentsInnerAttribute = "#![allow(unused_assignments)]";
-const unusedVariablesAttribute = "#[allow(unused_variables)]";
+import { rustLintAttributes } from "./lint-policy.js";
+import {
+  firstAccessesInStatements,
+  firstDirectPathAccessInStatements,
+  maxWritesInStatements,
+  statementAlwaysExits,
+} from "./source-dataflow.js";
+import {
+  rustExpressionReferencesPath,
+  rustStatementReferencesPath,
+  rustStatementsReferencePath,
+} from "./source-usage.js";
 
 export function finalizeRustBlockLiveness(
   block: RustBlock,
   continuation: readonly RustStmt[] = [],
 ): RustBlock {
+  const statements = foldTrivialTerminalBinding(
+    combineDirectLateInitializers(block.statements),
+  );
   return {
     ...block,
-    statements: block.statements.map((statement, index) => {
-      const following = [...block.statements.slice(index + 1), ...continuation];
+    statements: statements.map((statement, index) => {
+      const following = [...statements.slice(index + 1), ...continuation];
       return finalizeRustStatementLiveness(
         finalizeRustNestedStatementLiveness(statement, following),
         following,
       );
     }),
   };
+}
+
+function foldTrivialTerminalBinding(
+  statements: readonly RustStmt[],
+): readonly RustStmt[] {
+  if (statements.length < 2) {
+    return statements;
+  }
+  const bindingIndex = statements.length - 2;
+  const binding = statements[bindingIndex];
+  const terminal = statements[bindingIndex + 1];
+  if (binding?.kind !== "let" || binding.init === undefined || binding.mutable ||
+    binding.type !== undefined || (binding.attrs?.length ?? 0) > 0 ||
+    terminal === undefined || (terminal.kind !== "tail" && terminal.kind !== "return") ||
+    terminal.expr?.kind !== "path" || terminal.expr.path !== binding.name) {
+    return statements;
+  }
+  return [
+    ...statements.slice(0, bindingIndex),
+    { ...terminal, expr: binding.init },
+  ];
 }
 
 function finalizeRustNestedStatementLiveness(
@@ -91,28 +121,35 @@ function finalizeRustStatementLiveness(
   following: readonly RustStmt[],
 ): RustStmt {
   if (statement.kind === "let") {
+    const writes = maxWritesInStatements(following, statement.name);
+    const mutabilityIsUnnecessary = writes === 0 ||
+      statement.init === undefined && writes < 2;
+    const normalized = statement.mutable && mutabilityIsUnnecessary
+      ? { ...statement, mutable: false }
+      : statement;
     if (statement.name === "_" || statement.name.startsWith("_")) {
-      return statement;
+      return normalized;
     }
-    let attrs = statement.attrs;
+    let attrs = normalized.attrs;
     if (!rustStatementsReferencePath(following, statement.name)) {
-      attrs = appendRustAttribute(attrs, unusedVariablesAttribute);
-    } else if (statement.mutable && statement.init !== undefined &&
-      !firstAccessesInStatements(following, statement.name).has("read")) {
-      attrs = appendRustAttribute(attrs, unusedAssignmentsAttribute);
+      attrs = appendRustAttribute(attrs, rustLintAttributes.unusedVariables);
+      return { ...normalized, attrs };
     }
-    return attrs === statement.attrs ? statement : { ...statement, attrs };
+    if (normalized.mutable && normalized.init !== undefined &&
+      !firstAccessesInStatements(following, statement.name).has("read")) {
+      attrs = appendRustAttribute(attrs, rustLintAttributes.unusedAssignments);
+    }
+    return { ...normalized, attrs };
   }
   if (statement.kind === "assign" && statement.operator === "=" &&
     statement.target.kind === "path") {
-    const nextAccesses = firstAccessesInStatements(following, statement.target.path);
-    if (nextAccesses.has("read") || nextAccesses.has("none")) {
+    if (firstDirectPathAccessInStatements(following, statement.target.path) !== "write") {
       return statement;
     }
     return {
       kind: "scope",
       body: {
-        innerAttrs: [unusedAssignmentsInnerAttribute],
+        innerAttrs: [rustLintAttributes.unusedAssignmentsInner],
         statements: [statement],
       },
     };
@@ -120,403 +157,141 @@ function finalizeRustStatementLiveness(
   return statement;
 }
 
-function firstAccessesInStatements(
+function combineDirectLateInitializers(
   statements: readonly RustStmt[],
-  path: string,
-): ReadonlySet<FirstAccess> {
-  let outcomes = new Set<FirstAccess>(["none"]);
-  for (const statement of statements) {
-    outcomes = continueFirstAccesses(outcomes, firstAccessesInStatement(statement, path));
-    if (!outcomes.has("none")) {
-      break;
+): readonly RustStmt[] {
+  const replacements = new Map<number, {
+    readonly declaration: Extract<RustStmt, { readonly kind: "let" }>;
+    readonly initializer: RustExpr;
+  }>();
+  const combinedDeclarations = new Set<number>();
+
+  for (let declarationIndex = 0; declarationIndex < statements.length; declarationIndex += 1) {
+    const declaration = statements[declarationIndex];
+    if (declaration === undefined || declaration.kind !== "let" || declaration.init !== undefined) {
+      continue;
     }
-  }
-  return outcomes;
-}
-
-function firstAccessesInStatement(
-  statement: RustStmt,
-  path: string,
-): ReadonlySet<FirstAccess> {
-  switch (statement.kind) {
-    case "let": {
-      const initializer = statement.init === undefined
-        ? new Set<FirstAccess>(["none"])
-        : firstAccessesInExpression(statement.init, path);
-      return statement.name === path
-        ? replaceNone(initializer, new Set<FirstAccess>(["exit"]))
-        : initializer;
-    }
-    case "expr":
-      return firstAccessesInExpression(statement.expr, path);
-    case "assign":
-      return firstAccessesInAssignment(
-        statement.target,
-        statement.operator,
-        statement.value,
-        path,
-      );
-    case "return":
-      return replaceNone(
-        statement.expr === undefined
-          ? new Set<FirstAccess>(["none"])
-          : firstAccessesInExpression(statement.expr, path),
-        new Set<FirstAccess>(["exit"]),
-      );
-    case "tail":
-      return replaceNone(
-        firstAccessesInExpression(statement.expr, path),
-        new Set<FirstAccess>(["exit"]),
-      );
-    case "if": {
-      const condition = firstAccessesInExpression(statement.condition, path);
-      return replaceNone(condition, unionFirstAccesses(
-        firstAccessesInStatements(statement.then.statements, path),
-        statement.else === undefined
-          ? new Set<FirstAccess>(["none"])
-          : firstAccessesInStatements(statement.else.statements, path),
-      ));
-    }
-    case "loop":
-      return unionFirstAccesses(
-        firstAccessesInStatements(statement.body.statements, path),
-        new Set<FirstAccess>(["none"]),
-      );
-    case "while":
-      return replaceNone(
-        firstAccessesInExpression(statement.condition, path),
-        unionFirstAccesses(
-          firstAccessesInStatements(statement.body.statements, path),
-          new Set<FirstAccess>(["none"]),
-        ),
-      );
-    case "while-let-some":
-      return replaceNone(
-        firstAccessesInExpression(statement.expression, path),
-        unionFirstAccesses(
-          statement.binding === path
-            ? new Set<FirstAccess>(["none"])
-            : firstAccessesInStatements(statement.body.statements, path),
-          new Set<FirstAccess>(["none"]),
-        ),
-      );
-    case "for":
-      return replaceNone(
-        firstAccessesInExpression(statement.iterable, path),
-        unionFirstAccesses(
-          statement.binding === path
-            ? new Set<FirstAccess>(["none"])
-            : firstAccessesInStatements(statement.body.statements, path),
-          new Set<FirstAccess>(["none"]),
-        ),
-      );
-    case "if-let-some":
-      return replaceNone(
-        firstAccessesInExpression(statement.expression, path),
-        unionFirstAccesses(
-          statement.binding === path
-            ? new Set<FirstAccess>(["none"])
-            : firstAccessesInStatements(statement.body.statements, path),
-          new Set<FirstAccess>(["none"]),
-        ),
-      );
-    case "break":
-    case "continue":
-      return new Set(["exit"]);
-    case "completion-exit":
-      return replaceNone(
-        statement.expr === undefined
-          ? new Set<FirstAccess>(["none"])
-          : firstAccessesInExpression(statement.expr, path),
-        new Set<FirstAccess>(["exit"]),
-      );
-    case "resource-scope":
-      return conservativeStatementAccess(statement, path);
-    case "index-assign":
-      return firstAccessesInSequence([
-        statement.receiver,
-        statement.index,
-        statement.value,
-      ], path);
-    case "scope":
-    case "unsafe-scope":
-      return firstAccessesInStatements(statement.body.statements, path);
-    case "throw":
-      return replaceNone(
-        firstAccessesInExpression(statement.error, path),
-        new Set<FirstAccess>(["exit"]),
-      );
-    case "try-scope":
-      return conservativeStatementAccess(statement, path);
-  }
-}
-
-function firstAccessesInAssignment(
-  target: RustExpr,
-  operator: string,
-  value: RustExpr,
-  path: string,
-): ReadonlySet<FirstAccess> {
-  if (target.kind !== "path" || target.path !== path) {
-    return firstAccessesInSequence([target, value], path);
-  }
-  if (operator !== "=") {
-    return new Set(["read"]);
-  }
-  return replaceNone(
-    firstAccessesInExpression(value, path),
-    new Set<FirstAccess>(["write"]),
-  );
-}
-
-function firstAccessesInExpression(
-  expression: RustExpr,
-  path: string,
-): ReadonlySet<FirstAccess> {
-  switch (expression.kind) {
-    case "path":
-      return new Set([expression.path === path ? "read" : "none"]);
-    case "int-literal":
-    case "float-literal":
-    case "bool-literal":
-    case "none":
-    case "string-literal":
-    case "str-literal":
-    case "associated-value":
-    case "unreachable":
-      return new Set(["none"]);
-    case "assignment":
-      return firstAccessesInAssignment(expression.target, expression.operator, expression.value, path);
-    case "conditional":
-      return replaceNone(
-        firstAccessesInExpression(expression.condition, path),
-        unionFirstAccesses(
-          firstAccessesInExpression(expression.whenTrue, path),
-          firstAccessesInExpression(expression.whenFalse, path),
-        ),
-      );
-    case "match":
-      return replaceNone(
-        firstAccessesInExpression(expression.expression, path),
-        unionFirstAccesses(...expression.arms.map((arm) =>
-          firstAccessesInExpression(arm.expression, path))),
-      );
-    case "binary": {
-      const left = firstAccessesInExpression(expression.left, path);
-      const right = firstAccessesInExpression(expression.right, path);
-      return expression.operator === "&&" || expression.operator === "||"
-        ? replaceNone(left, unionFirstAccesses(right, new Set<FirstAccess>(["none"])))
-        : replaceNone(left, right);
-    }
-    case "closure":
-      return rustExpressionReferencesPath(expression.body, path)
-        ? new Set(["read"])
-        : new Set(["none"]);
-    case "closure-block":
-      return rustStatementsReferencePath(expression.body.statements, path)
-        ? new Set(["read"])
-        : new Set(["none"]);
-    case "return-expression":
-      return replaceNone(
-        expression.expr === undefined
-          ? new Set<FirstAccess>(["none"])
-          : firstAccessesInExpression(expression.expr, path),
-        new Set<FirstAccess>(["exit"]),
-      );
-    default:
-      return firstAccessesInSequence(rustExpressionChildren(expression), path);
-  }
-}
-
-function firstAccessesInSequence(
-  expressions: readonly RustExpr[],
-  path: string,
-): ReadonlySet<FirstAccess> {
-  let outcomes = new Set<FirstAccess>(["none"]);
-  for (const expression of expressions) {
-    outcomes = continueFirstAccesses(outcomes, firstAccessesInExpression(expression, path));
-    if (!outcomes.has("none")) {
-      break;
-    }
-  }
-  return outcomes;
-}
-
-function continueFirstAccesses(
-  current: ReadonlySet<FirstAccess>,
-  next: ReadonlySet<FirstAccess>,
-): Set<FirstAccess> {
-  return replaceNone(current, next);
-}
-
-function replaceNone(
-  current: ReadonlySet<FirstAccess>,
-  replacement: ReadonlySet<FirstAccess>,
-): Set<FirstAccess> {
-  const result = new Set<FirstAccess>();
-  for (const value of current) {
-    if (value === "none") {
-      for (const replacementValue of replacement) {
-        result.add(replacementValue);
+    for (let assignmentIndex = declarationIndex + 1;
+      assignmentIndex < statements.length;
+      assignmentIndex += 1) {
+      const candidate = statements[assignmentIndex];
+      if (candidate === undefined) {
+        break;
       }
-    } else {
-      result.add(value);
+      if (candidate.kind === "let" && candidate.name === declaration.name) {
+        break;
+      }
+      if (!rustStatementReferencesPath(candidate, declaration.name)) {
+        if (statementAlwaysExits(candidate)) {
+          break;
+        }
+        continue;
+      }
+      if (candidate.kind === "assign" && candidate.operator === "=" &&
+        candidate.target.kind === "path" && candidate.target.path === declaration.name &&
+        !rustExpressionReferencesPath(candidate.value, declaration.name)) {
+        replacements.set(assignmentIndex, {
+          declaration,
+          initializer: candidate.value,
+        });
+        combinedDeclarations.add(declarationIndex);
+      } else {
+        const initializer = conditionalLateInitializer(candidate, declaration.name);
+        if (initializer !== undefined) {
+          replacements.set(assignmentIndex, { declaration, initializer });
+          combinedDeclarations.add(declarationIndex);
+        }
+      }
+      break;
     }
   }
-  return result;
+
+  return statements.flatMap((statement, index): readonly RustStmt[] => {
+    if (combinedDeclarations.has(index)) {
+      return [];
+    }
+    const replacement = replacements.get(index);
+    if (replacement === undefined) {
+      return [statement];
+    }
+    const following = statements.slice(index + 1);
+    return [{
+      ...replacement.declaration,
+      mutable: maxWritesInStatements(following, replacement.declaration.name) > 0,
+      init: replacement.initializer,
+      attrs: replacement.declaration.attrs,
+    }];
+  });
 }
 
-function unionFirstAccesses(
-  ...values: readonly ReadonlySet<FirstAccess>[]
-): Set<FirstAccess> {
-  return new Set(values.flatMap((value) => [...value]));
-}
-
-function conservativeStatementAccess(
+function conditionalLateInitializer(
   statement: RustStmt,
   path: string,
-): ReadonlySet<FirstAccess> {
-  return rustStatementReferencesPath(statement, path)
-    ? new Set(["read"])
-    : new Set(["none"]);
+): RustExpr | undefined {
+  if (statement.kind !== "if" || statement.else === undefined ||
+    (statement.attrs?.length ?? 0) > 0 ||
+    (statement.then.innerAttrs?.length ?? 0) > 0 ||
+    (statement.else.innerAttrs?.length ?? 0) > 0 ||
+    rustExpressionReferencesPath(statement.condition, path)) {
+    return undefined;
+  }
+  const whenTrue = branchAssignmentValue(statement.then, path);
+  const whenFalse = branchAssignmentValue(statement.else, path);
+  return whenTrue === undefined || whenFalse === undefined
+    ? undefined
+    : {
+        kind: "conditional",
+        condition: statement.condition,
+        whenTrue,
+        whenFalse,
+      };
 }
 
-function rustStatementsReferencePath(
-  statements: readonly RustStmt[],
+function branchAssignmentValue(
+  block: RustBlock,
   path: string,
-): boolean {
-  return statements.some((statement) => rustStatementReferencesPath(statement, path));
-}
-
-function rustStatementReferencesPath(statement: RustStmt, path: string): boolean {
-  switch (statement.kind) {
-    case "let":
-      return statement.init !== undefined && rustExpressionReferencesPath(statement.init, path);
-    case "expr":
-    case "tail":
-      return rustExpressionReferencesPath(statement.expr, path);
-    case "assign":
-      return rustExpressionReferencesPath(statement.target, path) ||
-        rustExpressionReferencesPath(statement.value, path);
-    case "return":
-      return statement.expr !== undefined && rustExpressionReferencesPath(statement.expr, path);
-    case "if":
-      return rustExpressionReferencesPath(statement.condition, path) ||
-        rustStatementsReferencePath(statement.then.statements, path) ||
-        (statement.else !== undefined && rustStatementsReferencePath(statement.else.statements, path));
-    case "loop":
-      return rustStatementsReferencePath(statement.body.statements, path);
-    case "while":
-      return rustExpressionReferencesPath(statement.condition, path) ||
-        rustStatementsReferencePath(statement.body.statements, path);
-    case "while-let-some":
-    case "if-let-some":
-      return rustExpressionReferencesPath(statement.expression, path) ||
-        rustStatementsReferencePath(statement.body.statements, path);
-    case "for":
-      return rustExpressionReferencesPath(statement.iterable, path) ||
-        rustStatementsReferencePath(statement.body.statements, path);
-    case "break":
-    case "continue":
-      return false;
-    case "completion-exit":
-      return statement.expr !== undefined && rustExpressionReferencesPath(statement.expr, path);
-    case "resource-scope":
-      return rustStatementsReferencePath(statement.body.statements, path) ||
-        rustStatementsReferencePath(statement.cleanup.statements, path);
-    case "index-assign":
-      return [statement.receiver, statement.index, statement.value]
-        .some((expression) => rustExpressionReferencesPath(expression, path));
-    case "scope":
-    case "unsafe-scope":
-      return rustStatementsReferencePath(statement.body.statements, path);
-    case "throw":
-      return rustExpressionReferencesPath(statement.error, path);
-    case "try-scope":
-      return rustStatementsReferencePath(statement.body.statements, path) ||
-        (statement.catchClause !== undefined &&
-          rustStatementsReferencePath(statement.catchClause.body.statements, path)) ||
-        (statement.finallyClause !== undefined &&
-          rustStatementsReferencePath(statement.finallyClause.body.statements, path));
+): RustExpr | undefined {
+  if (block.statements.length === 0) {
+    return undefined;
   }
-}
-
-function rustExpressionReferencesPath(expression: RustExpr, path: string): boolean {
-  return expression.kind === "path" && expression.path === path ||
-    rustExpressionChildren(expression).some((child) => rustExpressionReferencesPath(child, path)) ||
-    expression.kind === "closure-block" &&
-      rustStatementsReferencePath(expression.body.statements, path);
-}
-
-function rustExpressionChildren(expression: RustExpr): readonly RustExpr[] {
-  switch (expression.kind) {
-    case "int-literal":
-    case "float-literal":
-    case "bool-literal":
-    case "none":
-    case "string-literal":
-    case "str-literal":
-    case "path":
-    case "associated-value":
-    case "unreachable":
-    case "closure-block":
-      return [];
-    case "bottom":
-    case "numeric-cast":
-    case "unsafe":
-    case "owned-string-from-borrowed-str":
-      return [expression.expression];
-    case "unary":
-      return [expression.operand];
-    case "dereference":
-      return [expression.pointer];
-    case "binary":
-      return [expression.left, expression.right];
-    case "range":
-      return [expression.start, expression.end];
-    case "conditional":
-      return [expression.condition, expression.whenTrue, expression.whenFalse];
-    case "match":
-      return [expression.expression, ...expression.arms.map((arm) => arm.expression)];
-    case "matches":
-      return [expression.expression];
-    case "assignment":
-      return [expression.target, expression.value];
-    case "call":
-    case "associated-call":
-      return expression.args;
-    case "invoke":
-      return [expression.callee, ...expression.args];
-    case "method-call":
-      return [expression.receiver, ...expression.args];
-    case "field":
-      return [expression.receiver];
-    case "index":
-      return [expression.receiver, expression.index];
-    case "block":
-      return [...expression.bindings.map((binding) => binding.value), expression.value];
-    case "evaluate-then":
-      return [expression.effect, expression.value];
-    case "string-concat":
-      return expression.parts;
-    case "format-write":
-      return [expression.writer, ...expression.args];
-    case "reference":
-      return [expression.expr];
-    case "vec-literal":
-    case "slice-literal":
-    case "tuple-literal":
-      return expression.elements;
-    case "closure":
-      return [expression.body];
-    case "await":
-    case "try":
-      return [expression.expr];
-    case "return-expression":
-      return expression.expr === undefined ? [] : [expression.expr];
-    case "struct-literal":
-      return expression.fields.map((field) => field.value);
+  const statement = block.statements[block.statements.length - 1];
+  if (statement?.kind !== "assign" ||
+    statement.operator !== "=" ||
+    statement.target.kind !== "path" ||
+    statement.target.path !== path ||
+    rustExpressionReferencesPath(statement.value, path)) {
+    return undefined;
   }
+  const declarations = block.statements.slice(0, -1);
+  if (!declarations.every((candidate) => isBranchBindingDeclaration(candidate, path))) {
+    return undefined;
+  }
+  if (declarations.length === 0) {
+    return statement.value;
+  }
+  return {
+    kind: "block",
+    bindings: declarations.map((declaration) => ({
+      name: declaration.name,
+      value: declaration.init,
+      ...(declaration.type === undefined ? {} : { type: declaration.type }),
+    })),
+    value: statement.value,
+  };
+}
+
+function isBranchBindingDeclaration(
+  statement: RustStmt,
+  targetPath: string,
+): statement is Extract<RustStmt, { readonly kind: "let" }> & {
+  readonly init: RustExpr;
+} {
+  return statement.kind === "let" &&
+    statement.init !== undefined &&
+    statement.mutable !== true &&
+    (statement.attrs?.length ?? 0) === 0 &&
+    statement.name !== targetPath &&
+    !rustExpressionReferencesPath(statement.init, targetPath);
 }
 
 function appendRustAttribute(

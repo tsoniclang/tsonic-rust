@@ -196,6 +196,23 @@ export function planRustNonConsumingValue(
     : expression;
 }
 
+export function planRustSharedReceiver(
+  node: Node,
+  expression: RustExpr,
+  context: RustPlanContext,
+): RustExpr {
+  const value = planRustNonConsumingValue(node, expression, context);
+  const override = context.expressionOverrides?.get(node);
+  if (override?.valueForm === "shared-reference") {
+    return value;
+  }
+  const kind = context.input.ast.kindName(node);
+  return override === undefined &&
+      (kind === "KindThisExpression" || kind === "KindThisKeyword")
+    ? value
+    : { kind: "reference", expr: value };
+}
+
 function rustReadRequiresClone(carrier: TargetTypeRef | undefined): boolean {
   return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier);
 }

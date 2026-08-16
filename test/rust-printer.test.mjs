@@ -44,11 +44,13 @@ test("source style attributes are item-local and derived from exact Rust signatu
     }],
   });
 
-  assert.match(text, /#\[allow\(clippy::inherent_to_string\)\]\n    pub fn to_string/u);
+  assert.match(text, /#\[expect\(clippy::inherent_to_string, reason = "authored toString contract"\)\]\n    pub fn to_string/u);
   assert.match(
     text,
-    /#\[allow\(clippy::too_many_arguments\)\]\n    #\[allow\(private_interfaces\)\]\n    pub fn configure/u,
+    /#\[expect\(clippy::too_many_arguments, reason = "checked source signature"\)\]\n    pub fn configure/u,
   );
+  assert.match(text, /pub struct Hidden \{\}/u);
+  assert.doesNotMatch(text, /private_interfaces/u);
   assert.doesNotMatch(text, /^#!\[allow/mu);
 });
 
@@ -101,8 +103,8 @@ test("source style keeps intentional control-flow policy statement-local", () =>
     }],
   });
 
-  assert.match(text, /#\[allow\(clippy::blocks_in_conditions\)\]\n\s*#\[allow\(clippy::collapsible_if\)\]\n\s*if \{/u);
-  assert.match(text, /#\[allow\(unused_variables\)\]\n\s*#\[allow\(clippy::never_loop\)\]\n\s*'first_value: for unused in values/u);
+  assert.match(text, /#\[expect\(clippy::blocks_in_conditions, reason = "checked evaluation region"\)\]\n\s*#\[expect\(clippy::collapsible_if, reason = "checked lexical regions"\)\]\n\s*if \{/u);
+  assert.match(text, /#\[expect\(unused_variables, reason = "authored binding drop scope"\)\]\n\s*#\[expect\(clippy::never_loop, reason = "authored iterator protocol"\)\]\n\s*'first_value: for unused in values/u);
   assert.match(text, /Ok::<_, rt::TsonicError>\(fallible\(\)\?\)/u);
   assert.doesNotMatch(text, /#!\[allow/u);
 });
@@ -160,17 +162,60 @@ test("source liveness policy is attached only to proven dead local values", () =
             value: { kind: "int-literal", text: "2" },
           },
           { kind: "expr", expr: { kind: "call", path: "consume", args: [{ kind: "path", path: "overwritten" }] } },
+          { kind: "let", name: "holder", mutable: true, init: { kind: "call", path: "create_holder", args: [] } },
+          {
+            kind: "assign",
+            target: { kind: "field", receiver: { kind: "path", path: "holder" }, name: "value" },
+            operator: "=",
+            value: { kind: "int-literal", text: "3" },
+          },
+          { kind: "expr", expr: { kind: "call", path: "consume", args: [{ kind: "path", path: "holder" }] } },
+          { kind: "let", name: "read_only", mutable: true, init: { kind: "call", path: "create_holder", args: [] } },
+          { kind: "expr", expr: { kind: "call", path: "consume", args: [{ kind: "path", path: "read_only" }] } },
+          { kind: "let", name: "method_mutated", mutable: true, init: { kind: "call", path: "create_holder", args: [] } },
+          {
+            kind: "expr",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "method_mutated" },
+              method: "replace",
+              args: [{ kind: "int-literal", text: "4" }],
+              receiverMode: "mut-ref",
+            },
+          },
+          { kind: "let", name: "looped", mutable: true, init: { kind: "int-literal", text: "0" } },
+          {
+            kind: "while",
+            condition: { kind: "path", path: "condition" },
+            body: {
+              statements: [
+                {
+                  kind: "assign",
+                  target: { kind: "path", path: "looped" },
+                  operator: "=",
+                  value: { kind: "int-literal", text: "1" },
+                },
+                { kind: "continue" },
+              ],
+            },
+          },
+          { kind: "expr", expr: { kind: "call", path: "consume", args: [{ kind: "path", path: "looped" }] } },
         ],
       },
     }],
   });
 
-  assert.match(text, /#\[allow\(unused_assignments\)\]\n\s*let mut selected: i32 = 0;/u);
-  assert.match(text, /#\[allow\(unused_variables\)\]\n\s*let unused = produce\(\);/u);
-  assert.match(text, /#\[allow\(unused_assignments\)\]\n\s*let mut overwritten = 0;/u);
-  assert.match(text, /\{\n\s*#!\[allow\(unused_assignments\)\]\n\s*overwritten = 1;\n\s*\}/u);
-  assert.doesNotMatch(text, /#\[allow\(unused_assignments\)\]\n\s*selected = [12];/u);
-  assert.doesNotMatch(text, /#\[allow\(unused_assignments\)\]\n\s*overwritten = 2;/u);
+  assert.match(text, /#\[expect\(unused_assignments, reason = "checked source evaluation order"\)\]\n\s*let mut selected: i32 = 0;/u);
+  assert.match(text, /#\[expect\(unused_variables, reason = "authored binding drop scope"\)\]\n\s*let unused = produce\(\);/u);
+  assert.match(text, /#\[expect\(unused_assignments, reason = "checked source evaluation order"\)\]\n\s*let mut overwritten = 0;/u);
+  assert.match(text, /\{\n\s*#!\[expect\(unused_assignments, reason = "checked source evaluation order"\)\]\n\s*overwritten = 1;\n\s*\}/u);
+  assert.doesNotMatch(text, /#\[allow\(unused_assignments[^\n]*\)\]\n\s*selected = [12];/u);
+  assert.doesNotMatch(text, /#\[allow\(unused_assignments[^\n]*\)\]\n\s*overwritten = 2;/u);
+  assert.match(text, /let mut holder = create_holder\(\);\n\s*holder\.value = 3;/u);
+  assert.match(text, /let read_only = create_holder\(\);/u);
+  assert.doesNotMatch(text, /let mut read_only/u);
+  assert.match(text, /let mut method_mutated = create_holder\(\);\n\s*method_mutated\.replace\(4\);/u);
+  assert.doesNotMatch(text, /allow\(unused_assignments[^\n]*\)\]\n\s*looped = 1;/u);
 });
 
 test("multiline method-chain arguments use rustfmt-compatible outer-call layout", () => {
@@ -214,6 +259,57 @@ test("multiline method-chain arguments use rustfmt-compatible outer-call layout"
   });
 
   assert.match(text, /acme_testing::check\(\n        values\n            \.get\(tsonic_rust_runtime::conversions::i32_to_usize\(1\)\?\)\n            \.copied\(\)\n            \.is_none\(\),\n    \);/u);
+});
+
+test("nested collection initializers reserve the trailing semicolon at continuation width", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "scope",
+          body: {
+            statements: [{
+              kind: "let",
+              name: "module_value_3",
+              mutable: false,
+              init: {
+                kind: "call",
+                path: "js_abi::JsArray::from_dense",
+                args: [{
+                  kind: "vec-literal",
+                  elements: [{
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "SELECTED" },
+                    method: "with",
+                    args: [{
+                      kind: "closure",
+                      params: [{ name: "module_binding", byRefCopy: false }],
+                      body: {
+                        kind: "method-call",
+                        receiver: { kind: "path", path: "module_binding" },
+                        method: "load",
+                        args: [],
+                      },
+                    }],
+                  }],
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /let module_value_3 =\n            js_abi::JsArray::from_dense\(\n                vec!\[SELECTED\.with\(\|module_binding\| module_binding\.load\(\)\)\],\n            \);/u,
+  );
 });
 
 test("fitted multi-argument calls stay horizontal inside assignments", () => {
@@ -842,6 +938,41 @@ test("conditional expressions move the brace after a multiline method chain", ()
   });
 
   assert.match(source, /\.is_some\(\)\n    \{\n        String::from\("yes"\)/u);
+});
+
+test("short conditional initializers use rustfmt's single-line form", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "choose",
+      visibility: "public",
+      params: [{ name: "flag", type: { kind: "primitive", name: "bool" } }],
+      returnType: { kind: "primitive", name: "i32" },
+      body: {
+        statements: [
+          {
+            kind: "let",
+            name: "result",
+            mutable: false,
+            type: { kind: "primitive", name: "i32" },
+            init: {
+              kind: "conditional",
+              condition: { kind: "path", path: "flag" },
+              whenTrue: { kind: "int-literal", text: "10" },
+              whenFalse: { kind: "int-literal", text: "20" },
+            },
+          },
+          {
+            kind: "tail",
+            expr: { kind: "path", path: "result" },
+          },
+        ],
+      },
+    }],
+  });
+
+  assert.match(source, /if flag \{ 10 \} else \{ 20 \}/u);
 });
 
 test("comparisons follow multiline arithmetic operands", () => {

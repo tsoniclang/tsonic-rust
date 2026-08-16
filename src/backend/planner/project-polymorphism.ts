@@ -1,5 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustType } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
+import { rustDefaultImplementation } from "./default-implementation.js";
 import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
 import { missingFactDiagnostic } from "./diagnostics.js";
 import { diagnosticInput } from "./plan-context.js";
@@ -87,13 +89,18 @@ export function planPolymorphicClassDeclaration(
   if (staticMethods === undefined || externalErrorImplementations === undefined) {
     return undefined;
   }
+  const defaultImplementation = rustDefaultImplementation(
+    wrapperType,
+    typeParams,
+    constructor.construct,
+  );
   return [
     trait,
     {
       kind: "struct",
       name: definition.stateName,
       visibility: "crate",
-      attrs: ["#[allow(dead_code)]"],
+      attrs: [rustLintAttributes.deadCode],
       derives: [],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
@@ -121,7 +128,7 @@ export function planPolymorphicClassDeclaration(
         ? "public"
         : context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
       attrs: [
-        "#[allow(dead_code)]",
+        rustLintAttributes.deadCode,
         ...(context.input.projectTypes.programErrorVariant(definition) === undefined
           ? []
           : ["#[doc(hidden)]"]),
@@ -146,7 +153,7 @@ export function planPolymorphicClassDeclaration(
       kind: "struct",
       name: rustProjectRootName(definition),
       visibility: "crate",
-      attrs: ["#[allow(dead_code)]"],
+      attrs: [rustLintAttributes.deadCode],
       derives: [],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
@@ -172,6 +179,7 @@ export function planPolymorphicClassDeclaration(
       target: wrapperType,
       functions: [constructor.initialize, constructor.construct, ...staticMethods],
     },
+    ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
     ...rootImplementations,
     ...externalErrorImplementations,
   ];
@@ -281,7 +289,7 @@ export function planPolymorphicInterfaceDeclaration(
       kind: "struct",
       name: definition.targetName,
       visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
-      attrs: ["#[allow(dead_code)]"],
+      attrs: [rustLintAttributes.deadCode],
       derives: ["Clone"],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [

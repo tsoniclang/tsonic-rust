@@ -63,14 +63,22 @@ export type RustExpr =
   | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
   | { readonly kind: "associated-value"; readonly owner: RustType; readonly name: string }
   | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly args: readonly RustExpr[] }
-  | { readonly kind: "method-call"; readonly receiver: RustExpr; readonly method: string; readonly args: readonly RustExpr[] }
+  | {
+      readonly kind: "method-call";
+      readonly receiver: RustExpr;
+      readonly method: string;
+      readonly args: readonly RustExpr[];
+      readonly receiverMode?: "value" | "ref" | "mut-ref";
+    }
   | { readonly kind: "field"; readonly receiver: RustExpr; readonly name: string }
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
   | {
       readonly kind: "block";
+      readonly innerAttrs?: readonly string[];
       readonly bindings: readonly {
         readonly name: string;
         readonly value: RustExpr;
+        readonly type?: RustType;
         readonly mutable?: boolean;
         readonly attrs?: readonly string[];
       }[];

@@ -21,13 +21,17 @@ import type {
   RustItem,
   RustSourceFileModel,
 } from "../rust-ast/nodes.js";
+import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import type { RustTranslationContext } from "../../translate/context.js";
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
 } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
-import { planFunctionDeclaration } from "./functions.js";
+import {
+  planFunctionDeclaration,
+  planNativeModuleFunction,
+} from "./functions.js";
 import {
   diagnosticInput,
   isUpperSnakeName,
@@ -370,13 +374,37 @@ function planTopLevelVariableStatement(
     const name = context.input.names.nameForDeclaration(declaration) ?? "";
     const initializer = Node_Initializer(ast, declaration);
     const binding = context.input.facts.getFact(declaration, rustModuleBindingFactKey);
-    const rustType = rustTypeFromCarrierInContext(binding?.valueCarrier, context);
-    if (initializer === undefined || binding === undefined || rustType === undefined ||
-      !isValidRustIdentifier(name)) {
+    if (initializer === undefined || binding === undefined || !isValidRustIdentifier(name)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         { ast, sourceFile: context.sourceFile, node: declaration },
         "rust.backend.module-binding",
-        "Top-level bindings require a plain Rust identifier, an initializer, and one finalized module-binding carrier fact.",
+        "Top-level bindings require a plain Rust identifier, an initializer, and one finalized module-binding fact.",
+      ));
+      return undefined;
+    }
+    const visibility = ast.hasModifierKind(statement, "export")
+      ? "public" as const
+      : "crate" as const;
+    if (binding.storage === "native-function") {
+      const item = planNativeModuleFunction(
+        declaration,
+        binding.callableDeclaration,
+        binding.name,
+        visibility === "public",
+        context,
+      );
+      if (item === undefined) {
+        return undefined;
+      }
+      items.push(item);
+      continue;
+    }
+    const rustType = rustTypeFromCarrierInContext(binding.valueCarrier, context);
+    if (rustType === undefined) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        { ast, sourceFile: context.sourceFile, node: declaration },
+        "rust.backend.module-binding-carrier",
+        "Top-level value binding has no finalized renderable Rust carrier.",
       ));
       return undefined;
     }
@@ -384,9 +412,6 @@ function planTopLevelVariableStatement(
     if (value === undefined) {
       return undefined;
     }
-    const visibility = ast.hasModifierKind(statement, "export")
-      ? "public" as const
-      : "crate" as const;
     if (binding.storage === "native-const") {
       items.push({
         kind: "const",
@@ -394,7 +419,7 @@ function planTopLevelVariableStatement(
         visibility,
         ...(isUpperSnakeName(name)
           ? {}
-          : { attrs: ["#[allow(non_upper_case_globals)]"] }),
+          : { attrs: [rustLintAttributes.nonUpperCaseGlobal] }),
         type: rustType,
         value,
       });
@@ -415,9 +440,9 @@ function planTopLevelVariableStatement(
       value,
       visibility,
       context.syntheticNames!,
-      isUpperSnakeName(name) ? [] : ["#[allow(non_upper_case_globals)]"],
+      isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal],
     );
-    items.push(planned.item);
+    items.push(...planned.items);
     initialization.push(planned.initialization);
   }
   return { items, initialization };

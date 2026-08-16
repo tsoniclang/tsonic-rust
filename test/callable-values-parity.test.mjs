@@ -101,7 +101,7 @@ export function main(): void {
   validateGeneratedProject("callable-throw", result.artifacts, { run: true });
 });
 
-test("fallible top-level callable values keep module initialization infallible", { timeout: 300_000 }, () => {
+test("fallible direct-only top-level callables use native functions without fallible initialization", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "callable_top_level" } },
@@ -132,7 +132,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
+  assert.match(source, /fn parse_positive\(value: i32\) -> rt::TsonicResult<i32>/u);
+  assert.doesNotMatch(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
   assert.match(source, /Err\(rt::TsonicError::from\(rt::JsError::error\("negative"\)\)\)/u);
   validateGeneratedProject("callable-top-level", result.artifacts, { run: true });
 });
@@ -319,6 +320,9 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /callable_arguments\.0\.unwrap_or\(7\)/u);
+  assert.doesNotMatch(source, /unnecessary_lazy_evaluations|let_and_return/u);
   validateGeneratedProject("callable-parameters", result.artifacts, { run: true });
 });
 
@@ -358,6 +362,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value\.unwrap_or\(3\.5\)/u);
+  assert.doesNotMatch(source, /manual_unwrap_or|let_and_return/u);
   assert.match(source, /optional\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
   assert.match(source, /defaulted\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
   assert.match(source, /value\.map\(tsonic_rust_runtime::conversions::i32_to_f64\)/u);
@@ -532,5 +538,8 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /value\.unwrap_or_else\(\|\| fallback\(base\)\)/u);
+  assert.doesNotMatch(source, /unnecessary_lazy_evaluations|let_and_return/u);
   validateGeneratedProject("callable-complete", result.artifacts, { run: true });
 });

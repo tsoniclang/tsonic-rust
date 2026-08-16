@@ -76,6 +76,18 @@ test("clean emission has no legacy synthetic prefix or blanket lint policy", () 
   }
 });
 
+test("generated lint exceptions have one explicit policy owner", () => {
+  for (const { path, text } of sourceFiles) {
+    if (path.endsWith("/backend/rust-ast/lint-policy.ts")) {
+      continue;
+    }
+    assert.doesNotMatch(text, /#!?\[allow\(/u, `${path} emits an unowned Rust lint exception`);
+  }
+  const policy = readFileSync(join(sourceRoot, "backend/rust-ast/lint-policy.ts"), "utf8");
+  assert.doesNotMatch(policy, /#!?\[allow\((?![^\]\n]*reason = )[^\]\n]*\)\]/u);
+  assert.match(policy, /reason = /u);
+});
+
 test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
   for (const { path, text } of sourceFiles) {
     if (path.includes("/providers/compiler/")) {
@@ -440,6 +452,25 @@ test("backend and provider metadata layers never query the TypeScript checker", 
       continue;
     }
     assert.doesNotMatch(text, /\bchecker\.[A-Za-z0-9_]+\s*\(/u, `${path} queries the checker`);
+  }
+});
+
+test("native module-function eligibility is finalized before backend planning", () => {
+  const semantics = readFileSync(
+    join(sourceRoot, "source/rust-target-semantics/module-binding-policy.ts"),
+    "utf8",
+  );
+  assert.match(semantics, /referencesToDeclaration\(declaration\)/u);
+  assert.match(semantics, /storage: "module-cell"/u);
+  for (const { path, text } of sourceFiles) {
+    if (!path.includes("/backend/")) {
+      continue;
+    }
+    assert.doesNotMatch(
+      text,
+      /referencesToDeclaration|referenceAllowsNativeFunction/u,
+      `${path} reconstructs native module-function eligibility`,
+    );
   }
 });
 
