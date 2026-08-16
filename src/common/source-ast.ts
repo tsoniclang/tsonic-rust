@@ -53,6 +53,7 @@ export const KindStringKeyword = "KindStringKeyword";
 export const KindStringLiteral = "KindStringLiteral";
 export const KindSatisfiesExpression = "KindSatisfiesExpression";
 export const KindSpreadElement = "KindSpreadElement";
+export const KindSpreadAssignment = "KindSpreadAssignment";
 export const KindSwitchStatement = "KindSwitchStatement";
 export const KindTemplateExpression = "KindTemplateExpression";
 export const KindTrueKeyword = "KindTrueKeyword";
@@ -182,6 +183,15 @@ export function ExportAssignment_IsExportEquals(
   return node === undefined || ast.kindName(node) !== KindExportAssignment
     ? undefined
     : ast.as.AsExportAssignment(node)?.IsExportEquals === true;
+}
+
+export function SpreadAssignment_Expression(
+  ast: AstReader,
+  node: Node | undefined,
+): Node | undefined {
+  return node === undefined || ast.kindName(node) !== KindSpreadAssignment
+    ? undefined
+    : ast.as.AsSpreadAssignment(node)?.Expression;
 }
 
 export function ConditionalExpression_Condition(ast: AstReader, node: Node | undefined): Node | undefined {

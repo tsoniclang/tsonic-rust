@@ -78,16 +78,16 @@ generator protocol.
 
 ## Implementation closure
 
-Default export expressions and source-ordered class static blocks are now
+Default export expressions and source-ordered class static blocks are
 implemented and proved by `test/module-and-class-initialization-parity.test.mjs`.
-The remaining closure is ordered by architectural dependency:
+Source-ordered object spread is implemented and proved by
+`test/object-construction-parity.test.mjs`. The remaining source-language
+closure is ordered by architectural dependency:
 
-The first source-language closure is ordered by architectural dependency:
-
-1. Class initialization: add exact default initialization for uninitialized
-   static fields.
-2. Object construction: add exact object spread and object-literal methods
-   without re-evaluating inputs or reconstructing member identity.
+1. Class initialization: define the source contract for uninitialized
+   target-native static fields before choosing a Rust default.
+2. Object construction: add object-literal methods without reconstructing
+   contextual member identity.
 3. Declaration contracts: close interface index signatures and specialize the
    finite generic virtual method calls that the project contract graph proves.
 4. Provider breadth: replace the tiny hand-maintained Rust standard-library

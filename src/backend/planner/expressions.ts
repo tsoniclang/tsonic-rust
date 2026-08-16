@@ -35,6 +35,7 @@ import {
   KindStringLiteral,
   KindSatisfiesExpression,
   KindSpreadElement,
+  KindSpreadAssignment,
   KindTemplateExpression,
   KindTrueKeyword,
   KindTypeOfExpression,
@@ -48,6 +49,7 @@ import {
   Node_Expression,
   Node_Operand,
   ObjectLiteralProperty_Value,
+  SpreadAssignment_Expression,
   TemplateExpression_Head,
   TemplateExpression_TemplateSpans,
   TemplateSpan_Expression,
@@ -5875,42 +5877,108 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     return undefined;
   }
   const { ast } = context.input;
-  const fieldsBySourceName = new Map<string, RustExpr>();
-  for (const property of ast.properties(node)) {
-    const kind = property === undefined ? undefined : ast.kindName(property);
-    if (property === undefined ||
-      (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment")) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, property ?? node),
-        "rust.backend.record-fields",
-        "Object literal contains a property without a finalized record-field assignment.",
-      ));
-      return undefined;
-    }
-    const nameNode = ast.name(property);
-    const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
-    const initializer = ObjectLiteralProperty_Value(context.input.ast, property);
-    const planned = initializer === undefined ? undefined : planExpression(initializer, context);
-    if (sourceName.length === 0 || fieldsBySourceName.has(sourceName) || planned === undefined) {
-      return undefined;
-    }
-    fieldsBySourceName.set(sourceName, planned);
-  }
-  if (fieldsBySourceName.size !== fact.fields.length ||
-    fact.fields.some((field) => !fieldsBySourceName.has(field.sourceName)) ||
+  const properties = ast.properties(node);
+  if (context.syntheticNames === undefined || properties.length !== fact.contributions.length ||
+    fact.contributions.some((contribution, index) => contribution.property !== properties[index]) ||
     new Set(fact.fields.map((field) => field.sourceName)).size !== fact.fields.length ||
     new Set(fact.fields.map((field) => field.storageIndex)).size !== fact.fields.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.record-fields",
-      "Object literal properties do not match the finalized ordered record-field fact.",
+      "Object literal syntax does not match its finalized ordered contribution fact.",
     ));
     return undefined;
+  }
+  const bindings: {
+    readonly name: string;
+    readonly value: RustExpr;
+  }[] = [];
+  const valuesByStorageIndex = new Map<number, RustExpr>();
+  const finalContributionByStorageIndex = new Map<number, number>();
+  fact.contributions.forEach((contribution, contributionIndex) => {
+    if (contribution.kind === "property") {
+      finalContributionByStorageIndex.set(
+        contribution.targetStorageIndex,
+        contributionIndex,
+      );
+      return;
+    }
+    for (const field of contribution.fields) {
+      finalContributionByStorageIndex.set(field.targetStorageIndex, contributionIndex);
+    }
+  });
+  for (const [contributionIndex, contribution] of fact.contributions.entries()) {
+    if (contribution.kind === "property") {
+      const nameNode = ast.name(contribution.property);
+      const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+      const initializer = ObjectLiteralProperty_Value(ast, contribution.property);
+      const planned = initializer === undefined ? undefined : planExpression(initializer, context);
+      if (sourceName !== contribution.sourceName || planned === undefined) {
+        return undefined;
+      }
+      const bindingName = allocateRustSyntheticName(
+        context.syntheticNames,
+        finalContributionByStorageIndex.get(contribution.targetStorageIndex) === contributionIndex
+          ? `record_${contribution.sourceName}`
+          : `_record_${contribution.sourceName}`,
+      );
+      bindings.push({ name: bindingName, value: planned });
+      if (finalContributionByStorageIndex.get(contribution.targetStorageIndex) === contributionIndex) {
+        valuesByStorageIndex.set(
+          contribution.targetStorageIndex,
+          { kind: "path", path: bindingName },
+        );
+      }
+      continue;
+    }
+    const spreadExpression = SpreadAssignment_Expression(ast, contribution.property);
+    if (ast.kindName(contribution.property) !== KindSpreadAssignment ||
+      spreadExpression !== contribution.expression) {
+      return undefined;
+    }
+    const plannedSpread = planExpression(spreadExpression, context);
+    if (plannedSpread === undefined) {
+      return undefined;
+    }
+    const retainedFields = contribution.fields.filter((field) =>
+      finalContributionByStorageIndex.get(field.targetStorageIndex) === contributionIndex);
+    const spreadName = allocateRustSyntheticName(
+      context.syntheticNames,
+      retainedFields.length === 0 ? "_record_spread" : "record_spread",
+    );
+    bindings.push({ name: spreadName, value: plannedSpread });
+    for (const field of retainedFields) {
+      const value = readRustStoredObjectField(
+        contribution.sourceStorage,
+        contribution.sourceCarrier,
+        { kind: "path", path: spreadName },
+        field.sourceStorageIndex,
+        field.carrier,
+        context,
+      );
+      if (value === undefined) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, contribution.property),
+          "rust.backend.record-spread-projection",
+          `Object spread field '${field.sourceName}' has no exact Rust storage projection.`,
+        ));
+        return undefined;
+      }
+      const fieldName = allocateRustSyntheticName(
+        context.syntheticNames,
+        `record_${field.sourceName}`,
+      );
+      bindings.push({ name: fieldName, value });
+      valuesByStorageIndex.set(
+        field.targetStorageIndex,
+        { kind: "path", path: fieldName },
+      );
+    }
   }
   const values: RustExpr[] = [];
   const projectFields: { name: string; value: RustExpr }[] = [];
   for (const field of [...fact.fields].sort((left, right) => left.storageIndex - right.storageIndex)) {
-    const value = fieldsBySourceName.get(field.sourceName);
+    const value = valuesByStorageIndex.get(field.storageIndex);
     if (field.storageIndex !== values.length || value === undefined) {
       return undefined;
     }
@@ -5931,7 +5999,12 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
   if (stateMarker !== undefined) {
     projectFields.push({ name: stateMarker.name, value: stateMarker.value });
   }
-  return fact.storage === "project-object"
+  const constructed = fact.storage === "project-object"
     ? createRustProjectObject(typePath!, statePath!, projectFields)
     : createRustStructuralObjectFromCarrier(fact.resultCarrier, values, context);
+  return constructed === undefined
+    ? undefined
+    : bindings.length === 0
+      ? constructed
+      : { kind: "block", bindings, value: constructed };
 }

@@ -86,6 +86,7 @@ import {
   KindStringLiteral,
   KindSatisfiesExpression,
   KindSpreadElement,
+  KindSpreadAssignment,
   KindSwitchStatement,
   KindTemplateExpression,
   KindTrueKeyword,
@@ -99,6 +100,7 @@ import {
   Node_Name,
   Node_Type,
   ObjectLiteralProperty_Value,
+  SpreadAssignment_Expression,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
   asSourceNode,
@@ -4888,25 +4890,27 @@ function resolveRecordLiteralCarrier(
   if (selectedExpected === undefined) {
     return undefined;
   }
-  const propertiesByName = new Map<string, Node>();
   const properties = requireDenseSourceNodes(walk, ast.properties(expression), "Object literal contains an undefined or non-data property slot.");
   if (properties === undefined) {
     return undefined;
   }
+  const explicitPropertiesByName = new Map<string, Node>();
+  let containsSpread = false;
   for (const property of properties) {
     const kind = ast.kindName(property);
+    if (kind === KindSpreadAssignment) {
+      containsSpread = true;
+      continue;
+    }
     if (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment") {
       return undefined;
     }
     const nameNode = ast.name(property);
     const fieldName = nameNode === undefined ? "" : ast.text(nameNode);
-    if (fieldName.length === 0) {
+    if (fieldName.length === 0 || explicitPropertiesByName.has(fieldName)) {
       return undefined;
     }
-    if (propertiesByName.has(fieldName)) {
-      return undefined;
-    }
-    propertiesByName.set(fieldName, property);
+    explicitPropertiesByName.set(fieldName, property);
   }
   const sourceValue = rustSourceTypeCarrierValue(selectedExpected);
   const unionValue = rustSourceUnionCarrierValue(selectedExpected);
@@ -4958,12 +4962,18 @@ function resolveRecordLiteralCarrier(
       const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(selectedExpected);
       const selectedVariant = sourceUnion === undefined
         ? undefined
-        : selectRustRecordLiteralUnionVariant(
-            walk,
-            expression,
-            sourceUnion,
-            propertiesByName,
-          );
+        : containsSpread
+          ? selectRustRecordLiteralUnionVariantByCheckedType(
+              walk,
+              expression,
+              sourceUnion,
+            )
+          : selectRustRecordLiteralUnionVariant(
+              walk,
+              expression,
+              sourceUnion,
+              explicitPropertiesByName,
+            );
       if (selectedVariant === undefined) {
         return undefined;
       }
@@ -4981,30 +4991,174 @@ function resolveRecordLiteralCarrier(
       carrier: field.type,
     }));
   }
-  const fields: { sourceName: string; storageIndex: number }[] = [];
-  for (const field of selectedFields) {
-    const property = propertiesByName.get(field.sourceName);
-    if (property === undefined) {
-      return undefined;
-    }
-    const initializer = ObjectLiteralProperty_Value(walk.context.ast, property);
-    if (initializer === undefined ||
-      resolveExpressionCarrier(walk, initializer, sourceFile, field.carrier) === undefined) {
-      return undefined;
-    }
-    fields.push({ sourceName: field.sourceName, storageIndex: field.storageIndex });
-  }
-  if (fields.length !== propertiesByName.size) {
+  const selectedFieldByName = new Map(selectedFields.map((field) => [field.sourceName, field]));
+  if (selectedFieldByName.size !== selectedFields.length) {
     return undefined;
   }
+  const contributions: Extract<
+    RustTargetOperationFact,
+    { readonly kind: "record-literal" }
+  >["contributions"][number][] = [];
+  const assignedStorageIndexes = new Set<number>();
+  for (const property of properties) {
+    const kind = ast.kindName(property);
+    if (kind === KindSpreadAssignment) {
+      const spreadExpression = SpreadAssignment_Expression(ast, property);
+      const sourceCarrier = spreadExpression === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, spreadExpression, sourceFile, undefined);
+      const sourceShape = sourceCarrier === undefined
+        ? undefined
+        : resolveRustRecordShape(walk, sourceCarrier, false);
+      if (spreadExpression === undefined || sourceCarrier === undefined ||
+        sourceShape === undefined) {
+        return undefined;
+      }
+      const spreadFields: {
+        readonly sourceName: string;
+        readonly sourceStorageIndex: number;
+        readonly targetStorageIndex: number;
+        readonly carrier: TargetTypeRef;
+      }[] = [];
+      for (const sourceField of sourceShape.fields) {
+        const targetField = selectedFieldByName.get(sourceField.sourceName);
+        if (targetField === undefined) {
+          continue;
+        }
+        if (!rustTargetTypeRefEquals(sourceField.carrier, targetField.carrier)) {
+          return undefined;
+        }
+        spreadFields.push({
+          sourceName: sourceField.sourceName,
+          sourceStorageIndex: sourceField.storageIndex,
+          targetStorageIndex: targetField.storageIndex,
+          carrier: targetField.carrier,
+        });
+        assignedStorageIndexes.add(targetField.storageIndex);
+      }
+      contributions.push({
+        kind: "spread",
+        property,
+        expression: spreadExpression,
+        sourceStorage: sourceShape.storage,
+        sourceCarrier,
+        fields: spreadFields,
+      });
+      continue;
+    }
+    const nameNode = ast.name(property);
+    const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+    const targetField = selectedFieldByName.get(sourceName);
+    const initializer = ObjectLiteralProperty_Value(ast, property);
+    if (targetField === undefined || initializer === undefined ||
+      resolveExpressionCarrier(walk, initializer, sourceFile, targetField.carrier) === undefined) {
+      return undefined;
+    }
+    contributions.push({
+      kind: "property",
+      property,
+      sourceName,
+      targetStorageIndex: targetField.storageIndex,
+    });
+    assignedStorageIndexes.add(targetField.storageIndex);
+  }
+  if (assignedStorageIndexes.size !== selectedFields.length) {
+    return undefined;
+  }
+  const fields = selectedFields.map((field) => ({
+    sourceName: field.sourceName,
+    storageIndex: field.storageIndex,
+  }));
   setRustOperationFact(walk, expression, {
     kind: "record-literal",
     operationId: "tsonic.rust.record.literal",
     storage,
     resultCarrier,
     fields,
+    contributions,
   });
   return setCarrierFact(walk, expression, resultCarrier);
+}
+
+interface RustResolvedRecordShape {
+  readonly storage: "project-object" | "object-handle";
+  readonly fields: readonly {
+    readonly sourceName: string;
+    readonly storageIndex: number;
+    readonly carrier: TargetTypeRef;
+  }[];
+}
+
+function resolveRustRecordShape(
+  walk: RustFactWalk,
+  carrier: TargetTypeRef,
+  requireInterface: boolean,
+): RustResolvedRecordShape | undefined {
+  const sourceValue = rustSourceTypeCarrierValue(carrier);
+  if (sourceValue?.shape === "object") {
+    const shapeDeclaration = walk.sourceTypes.declarationForCarrier(carrier);
+    const layout = shapeDeclaration === undefined
+      ? undefined
+      : rustProjectObjectLayout(shapeDeclaration, walk.context.ast);
+    if (layout === undefined || requireInterface && layout.kind !== "interface") {
+      return undefined;
+    }
+    const fields = layout.fields.map((field) => {
+      const declared = walk.context.facts.get(field.declaration, rustRuntimeCarrierKey)?.carrier ??
+        resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration));
+      const instantiated = declared === undefined
+        ? undefined
+        : walk.context.projectTypes.instantiateMemberCarrier(
+            field.declaration,
+            carrier,
+            declared,
+          );
+      return instantiated === undefined
+        ? undefined
+        : {
+            sourceName: field.sourceName,
+            storageIndex: field.storageIndex,
+            carrier: instantiated,
+          };
+    });
+    return fields.some((field) => field === undefined)
+      ? undefined
+      : {
+          storage: "project-object",
+          fields: fields as readonly {
+            readonly sourceName: string;
+            readonly storageIndex: number;
+            readonly carrier: TargetTypeRef;
+          }[],
+        };
+  }
+  const structural = rustStructuralObjectCarrierValue(carrier);
+  return structural === undefined
+    ? undefined
+    : {
+        storage: "object-handle",
+        fields: structural.fields.map((field, storageIndex) => ({
+          sourceName: field.sourceName,
+          storageIndex,
+          carrier: field.type,
+        })),
+      };
+}
+
+function selectRustRecordLiteralUnionVariantByCheckedType(
+  walk: RustFactWalk,
+  expression: Node,
+  union: RustSourceUnion,
+): RustSourceUnionVariant | undefined {
+  const selectedSourceType = walk.context.semanticsFor(expression).getTypeAtLocation(expression);
+  const selectedCarrier = resolveRustTargetTypeRef(
+    selectedSourceType,
+    rustResolutionContext(walk, expression),
+    walk.operationOptions,
+  );
+  const candidates = union.variants.filter((variant) =>
+    rustTargetTypeRefEquals(variant.carrier, selectedCarrier));
+  return candidates.length === 1 ? candidates[0] : undefined;
 }
 
 function selectRustRecordLiteralUnionVariant(

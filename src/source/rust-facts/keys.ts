@@ -551,6 +551,27 @@ export type RustTargetOperationFact =
         readonly sourceName: string;
         readonly storageIndex: number;
       }[];
+      readonly contributions: readonly (
+        | {
+            readonly kind: "property";
+            readonly property: Node;
+            readonly sourceName: string;
+            readonly targetStorageIndex: number;
+          }
+        | {
+            readonly kind: "spread";
+            readonly property: Node;
+            readonly expression: Node;
+            readonly sourceStorage: "project-object" | "object-handle";
+            readonly sourceCarrier: TargetTypeRef;
+            readonly fields: readonly {
+              readonly sourceName: string;
+              readonly sourceStorageIndex: number;
+              readonly targetStorageIndex: number;
+              readonly carrier: TargetTypeRef;
+            }[];
+          }
+      )[];
     }
   | { readonly kind: "fixed-array-literal"; readonly operationId: string }
   | { readonly kind: "fixed-index"; readonly operationId: string; readonly index: number }

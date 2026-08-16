@@ -77,16 +77,16 @@
     "id": "declarations.static-fields-default-initializer",
     "area": "declarations",
     "source": "class Counter { static total: number; }",
-    "classification": "implemented",
+    "classification": "contract-gap",
     "csharpProof": "tsonic-csharp/src/backend/planner/declaration-class-fields.ts",
     "rustProof": "test/class-static-fields.test.mjs",
-    "action": "lower the exact TypeScript default value for every closed carrier"
+    "action": "define whether an uninitialized target-native field has TypeScript undefined semantics or an explicit target-native default before lowering it"
   },
   {
     "id": "declarations.class-static-blocks",
     "area": "declarations",
     "source": "class Registry { static { register(); } }",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/declaration-class-constructors.ts",
     "rustProof": "test/module-and-class-initialization-parity.test.mjs",
     "action": "retain one source-ordered class initialization plan for static fields and blocks"
@@ -161,9 +161,9 @@
     "id": "objects.spread",
     "area": "objects",
     "source": "const next: Point = { ...previous, x: 2 };",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-spread.ts",
-    "rustProof": "src/source/rust-target-semantics/index.ts",
+    "rustProof": "test/object-construction-parity.test.mjs",
     "action": "record each spread projection and override in source evaluation order, evaluating every source expression once"
   },
   {
