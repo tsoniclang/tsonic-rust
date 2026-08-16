@@ -2793,6 +2793,13 @@ function printRustFormatArgument(
 ): string {
   if ((expression.kind === "call" || expression.kind === "associated-call") &&
     expression.args.length === 1) {
+    const flat = printRustExpr(expression);
+    if (!flat.includes("\n") && renderedFits(`${flat},`, column) &&
+      !rustExpressionContainsStatementBlock(expression) &&
+      !rustExpressionContainsPreferredVerticalMethodChain(expression) &&
+      !rustExpressionContainsExpandedStructLiteral(expression)) {
+      return flat;
+    }
     const argument = expression.args[0]!;
     const callable = expression.kind === "call"
       ? expression.path

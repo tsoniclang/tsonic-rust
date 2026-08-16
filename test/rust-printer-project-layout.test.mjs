@@ -425,6 +425,39 @@ test("format macro arguments keep borrowed nested calls attached to their call",
   assert.doesNotMatch(text, /rt::source_string\(\n/u);
 });
 
+test("expanded format macros keep fitting borrowed nested calls horizontal", () => {
+  const text = projectFunction({
+    kind: "string-concat",
+    parts: [
+      { kind: "string-literal", value: "leaf>" },
+      {
+        kind: "call",
+        path: "rt::source_string",
+        args: [{
+          kind: "reference",
+          expr: {
+            kind: "associated-call",
+            owner: { kind: "named", path: "Self" },
+            method: "exact_middle_describe",
+            args: [{
+              kind: "method-call",
+              receiver: { kind: "path", path: "self" },
+              method: "clone",
+              args: [],
+            }],
+          },
+        }],
+      },
+      { kind: "string-literal", value: "" },
+    ],
+  });
+
+  assert.match(
+    text,
+    /rt::source_string\(&Self::exact_middle_describe\(self\.clone\(\)\)\),/u,
+  );
+});
+
 test("expanded format macros separate call-valued arguments", () => {
   const text = projectFunction({
     kind: "string-concat",
