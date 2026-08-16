@@ -170,8 +170,20 @@ export function projectMembers(
 export function projectCallableShape(
   member: Node,
   context: RustPlanContext,
+  methodTypeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>,
 ): ProjectCallableShape | undefined {
-  if ((context.input.ast.typeParameters(member) as readonly (Node | undefined)[]).some((parameter) => parameter !== undefined) ||
+  const methodTypeParameters = context.input.ast.typeParameters(member);
+  const methodTypeParameterNames = methodTypeParameters.map((parameter) => {
+    const name = parameter === undefined ? undefined : context.input.ast.name(parameter);
+    return name === undefined ? undefined : context.input.ast.text(name);
+  });
+  const methodSpecializationValid = methodTypeParameters.length === 0
+    ? methodTypeArgumentSubstitutions === undefined || methodTypeArgumentSubstitutions.size === 0
+    : methodTypeArgumentSubstitutions !== undefined &&
+      methodTypeArgumentSubstitutions.size === methodTypeParameters.length &&
+      methodTypeParameterNames.every((name) =>
+        name !== undefined && name.length > 0 && methodTypeArgumentSubstitutions.has(name));
+  if (!methodSpecializationValid ||
     context.input.facts.getFact(member, rustGeneratorFactKey) !== undefined ||
     context.input.facts.getFact(member, rustAsyncFunctionFactKey) !== undefined ||
     context.input.ast.hasModifierKind(member, "async")) {
@@ -182,16 +194,23 @@ export function projectCallableShape(
     ));
     return undefined;
   }
-  const syntheticNames = createRustSyntheticNameState(context.input.ast, member, []);
-  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, { requireStatic: false });
-  const returnCarrier = context.input.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
+  const substitutions = new Map(context.typeParameterSubstitutions ?? []);
+  for (const [name, carrier] of methodTypeArgumentSubstitutions ?? []) {
+    substitutions.set(name, carrier);
+  }
+  const selectedContext = substitutions.size === 0
+    ? context
+    : { ...context, typeParameterSubstitutions: substitutions };
+  const syntheticNames = createRustSyntheticNameState(selectedContext.input.ast, member, []);
+  const parameterPlan = planRustCallableParameters(member, selectedContext, syntheticNames, { requireStatic: false });
+  const returnCarrier = selectedContext.input.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
   if (parameterPlan === undefined || returnCarrier === undefined) {
     return undefined;
   }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const returnType = isRustUnitCarrier(returnCarrier) || fallible && isRustNeverCarrier(returnCarrier)
     ? undefined
-    : rustReturnTypeFromCarrierInContext(returnCarrier, context);
+    : rustReturnTypeFromCarrierInContext(returnCarrier, selectedContext);
   if (!isRustUnitCarrier(returnCarrier) && !(fallible && isRustNeverCarrier(returnCarrier)) && returnType === undefined) {
     return undefined;
   }
@@ -202,7 +221,7 @@ export function projectCallableShape(
     isUnsafe: rustDeclarationRequiresUnsafe(
       member,
       "declaration",
-      context.input,
+      selectedContext.input,
     ),
   };
 }

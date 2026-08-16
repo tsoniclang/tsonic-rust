@@ -1,5 +1,6 @@
 import type { TargetTypeRef } from "../../policy/types.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
+import { closedMetadataKey } from "../../common/closed-metadata.js";
 import {
   rustPascalCaseIdentifier,
   rustSnakeCaseIdentifier,
@@ -74,7 +75,7 @@ export function createRustStructuralShapePlan(
     if (structural === undefined) {
       continue;
     }
-    const key = stableValueKey(shape.carrier);
+    const key = closedMetadataKey(shape.carrier);
     const existing = uniqueByKey.get(key);
     if (existing === undefined) {
       uniqueByKey.set(key, shape.carrier);
@@ -104,21 +105,21 @@ export function createRustStructuralShapePlan(
       });
     });
   const byKey = new Map(definitions.map((definition) =>
-    [stableValueKey(definition.carrier), definition] as const));
+    [closedMetadataKey(definition.carrier), definition] as const));
   return Object.freeze({
     definitions: Object.freeze(definitions),
     definitionForCarrier(carrier: TargetTypeRef | undefined) {
       if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) {
         return undefined;
       }
-      const definition = byKey.get(stableValueKey(carrier));
+      const definition = byKey.get(closedMetadataKey(carrier));
       return definition !== undefined && rustTargetTypeRefEquals(definition.carrier, carrier)
         ? definition
         : undefined;
     },
     fieldName(carrier: TargetTypeRef, storageIndex: number) {
       return Number.isSafeInteger(storageIndex) && storageIndex >= 0
-        ? byKey.get(stableValueKey(carrier))?.fields[storageIndex]?.targetName
+        ? byKey.get(closedMetadataKey(carrier))?.fields[storageIndex]?.targetName
         : undefined;
     },
   });
@@ -157,30 +158,4 @@ function allocatePascalName(usedNames: Set<string>, preferred: string): string {
   }
   usedNames.add(candidate);
   return candidate;
-}
-
-function stableValueKey(value: unknown): string {
-  if (value === null) {
-    return "null";
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(stableValueKey).join(",")}]`;
-  }
-  switch (typeof value) {
-    case "boolean":
-      return value ? "true" : "false";
-    case "number":
-      return Number.isFinite(value) ? `n:${String(value)}` : "n:invalid";
-    case "string":
-      return `s:${value.length}:${value}`;
-    case "object": {
-      const object = value as Readonly<Record<string, unknown>>;
-      return `{${Object.keys(object).sort().map((key) =>
-        `${key.length}:${key}=${stableValueKey(object[key])}`).join(",")}}`;
-    }
-    case "undefined":
-      return "undefined";
-    default:
-      throw new Error("Rust carrier identity contains a non-data value.");
-  }
 }

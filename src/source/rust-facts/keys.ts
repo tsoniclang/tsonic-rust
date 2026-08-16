@@ -516,8 +516,6 @@ export type RustTargetOperationFact =
             readonly name: string;
             readonly mutatesSelf: boolean;
             readonly dispatch?: {
-              readonly virtualSlot: string;
-              readonly exactSlot: string;
               readonly selected: "virtual" | "exact";
               readonly ownerCarrier: TargetTypeRef;
             };

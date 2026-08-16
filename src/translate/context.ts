@@ -32,6 +32,12 @@ import {
 import type {
   RustStructuralShapePlanRegistry,
 } from "../source/rust-target-semantics/structural-shape-plan.js";
+import {
+  createRustProjectMethodDispatchPlanRegistry,
+} from "../source/rust-target-semantics/project-method-dispatch.js";
+import type {
+  RustProjectMethodDispatchPlanRegistry,
+} from "../source/rust-target-semantics/project-method-dispatch.js";
 import type { RustProviderSemantics } from "../source/provider-packages/index.js";
 import {
   collectRustProviderSemantics,
@@ -60,6 +66,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly facts: RustSemanticModel;
   readonly artifacts: RustTranslationArtifactGraph;
   readonly projectTypes: RustProjectTypePolicyRegistry;
+  readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
@@ -88,6 +95,7 @@ export function createRustTranslationContext(
   const facts = new RustSemanticModel(input.source.sourceFacts);
   const artifacts = createRustTranslationArtifactGraph(ast);
   const projectTypes = createRustProjectTypePolicyRegistry();
+  const projectMethodDispatch = createRustProjectMethodDispatchPlanRegistry();
   const structuralShapes = createRustStructuralShapePlanRegistry();
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
@@ -113,6 +121,7 @@ export function createRustTranslationContext(
     facts,
     artifacts,
     projectTypes,
+    projectMethodDispatch,
     structuralShapes,
     safetyApplications,
     names,

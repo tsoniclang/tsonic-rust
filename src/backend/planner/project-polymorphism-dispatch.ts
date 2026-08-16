@@ -5,6 +5,7 @@ import type {
   RustProjectDowncastRoute,
   RustProjectTypeDefinition,
 } from "../../source/rust-target-semantics/project-type-policy.js";
+import type { RustProjectMethodDispatchVariant } from "../../source/rust-target-semantics/project-method-dispatch.js";
 import { rustSourceTypeCarrierValue } from "../../source/rust-target-types.js";
 import type {
   RustExpr,
@@ -51,6 +52,7 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "./synthetic-names.js";
+import { rustCallableSpecialization } from "./callable-generics.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -146,28 +148,29 @@ export function planProjectDispatchTrait(
     if (context.input.ast.hasModifierKind(member, "static")) {
       continue;
     }
-    const shape = projectCallableShape(member, context);
-    if (shape === undefined) {
-      return undefined;
-    }
-    const virtual = context.input.projectTypes.memberSlotName(member, "virtual");
-    const exact = definition.kind === "class"
-      ? context.input.projectTypes.memberSlotName(member, "exact")
-      : undefined;
-    if (virtual === undefined || (definition.kind === "class" && exact === undefined)) {
-      return undefined;
-    }
-    const signature = (name: string): RustTraitFunction => ({
-      name,
-      selfParam: "rc",
-      params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
-      ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
-      ...(shape.fallible ? { fallible: true } : {}),
-      ...(shape.isUnsafe ? { isUnsafe: true } : {}),
-    });
-    functions.push(signature(virtual));
-    if (exact !== undefined) {
-      functions.push(signature(exact));
+    for (const variant of context.input.projectMethodDispatch.variantsForMember(member)) {
+      const specialization = rustCallableSpecialization(
+        variant.sourceTypeParameterNames,
+        variant.targetTypeArguments,
+      );
+      const shape = specialization === undefined
+        ? undefined
+        : projectCallableShape(member, context, specialization);
+      if (shape === undefined) {
+        return undefined;
+      }
+      const signature = (name: string): RustTraitFunction => ({
+        name,
+        selfParam: "rc",
+        params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
+        ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
+        ...(shape.fallible ? { fallible: true } : {}),
+        ...(shape.isUnsafe ? { isUnsafe: true } : {}),
+      });
+      functions.push(signature(variant.virtualSlot));
+      if (definition.kind === "class") {
+        functions.push(signature(variant.exactSlot));
+      }
     }
   }
   const superTraits = context.input.projectTypes.heritageForDefinition(definition).map((edge) =>
@@ -201,19 +204,33 @@ export function planProjectRootImplementations(
   }
   const items: RustItem[] = [];
   const typeParams = rustProjectTypeParameters(concrete);
-  const methodImplementations = new Map<Node, RustImplFunction>();
-  const implementationFor = (implementation: Node): RustImplFunction | undefined => {
-    const existing = methodImplementations.get(implementation);
+  const methodImplementations = new Map<Node, RustImplFunction[]>();
+  const implementationFor = (
+    implementation: Node,
+    targetTypeArguments: readonly TargetTypeRef[],
+  ): RustImplFunction | undefined => {
+    const variant = context.input.projectMethodDispatch.variantForMember(
+      implementation,
+      targetTypeArguments,
+    );
+    if (variant === undefined) {
+      return undefined;
+    }
+    const existing = (methodImplementations.get(implementation) ?? []).find((candidate) =>
+      candidate.name === variant.exactSlot);
     if (existing !== undefined) {
       return existing;
     }
     const planned = planRootMethodImplementation(
       concreteCarrier,
       implementation,
+      variant,
       context,
     );
     if (planned !== undefined) {
-      methodImplementations.set(implementation, planned);
+      const implementations = methodImplementations.get(implementation) ?? [];
+      implementations.push(planned);
+      methodImplementations.set(implementation, implementations);
     }
     return planned;
   };
@@ -244,7 +261,7 @@ export function planProjectRootImplementations(
       functions,
     });
   }
-  const helpers = [...methodImplementations.values()].sort((left, right) =>
+  const helpers = [...methodImplementations.values()].flat().sort((left, right) =>
     left.name.localeCompare(right.name, "en"));
   return helpers.length === 0
     ? items
@@ -263,7 +280,10 @@ function planRootContractFunctions(
   contractCarrier: TargetTypeRef,
   rootType: RustType,
   layers: readonly ProjectClassStateLayer[],
-  implementationFor: (implementation: Node) => RustImplFunction | undefined,
+  implementationFor: (
+    implementation: Node,
+    targetTypeArguments: readonly TargetTypeRef[],
+  ) => RustImplFunction | undefined,
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
@@ -342,45 +362,53 @@ function planRootContractFunctions(
     if (context.input.ast.hasModifierKind(member, "static")) {
       continue;
     }
-    const virtualImplementation = projectMemberImplementation(concrete, member, context);
-    const virtualSlot = context.input.projectTypes.memberSlotName(member, "virtual");
-    if (virtualImplementation === undefined || virtualSlot === undefined) {
-      return undefined;
-    }
-    const virtualImplementationMethod = implementationFor(virtualImplementation);
-    const virtualMethod = virtualImplementationMethod === undefined
-      ? undefined
-      : planRootMethodForwarder(
-      concreteCarrier,
-      member,
-      virtualImplementation,
-      virtualSlot,
-      rootType,
-      virtualImplementationMethod,
-      context,
-    );
-    if (virtualMethod === undefined) {
-      return undefined;
-    }
-    functions.push(virtualMethod);
-    if (contract.kind === "class") {
-      const exactSlot = context.input.projectTypes.memberSlotName(member, "exact");
-      const exactImplementationMethod = implementationFor(member);
-      const exactMethod = exactSlot === undefined || exactImplementationMethod === undefined
+    for (const variant of context.input.projectMethodDispatch.variantsForMember(member)) {
+      const virtualImplementation = projectMemberImplementation(concrete, member, context);
+      if (virtualImplementation === undefined) {
+        return undefined;
+      }
+      const virtualImplementationMethod = implementationFor(
+        virtualImplementation,
+        variant.targetTypeArguments,
+      );
+      const virtualMethod = virtualImplementationMethod === undefined
         ? undefined
         : planRootMethodForwarder(
             concreteCarrier,
             member,
-            member,
-            exactSlot,
+            virtualImplementation,
+            variant,
+            variant.virtualSlot,
             rootType,
-            exactImplementationMethod,
+            virtualImplementationMethod,
             context,
           );
-      if (exactMethod === undefined) {
+      if (virtualMethod === undefined) {
         return undefined;
       }
-      functions.push(exactMethod);
+      functions.push(virtualMethod);
+      if (contract.kind === "class") {
+        const exactImplementationMethod = implementationFor(
+          member,
+          variant.targetTypeArguments,
+        );
+        const exactMethod = exactImplementationMethod === undefined
+          ? undefined
+          : planRootMethodForwarder(
+              concreteCarrier,
+              member,
+              member,
+              variant,
+              variant.exactSlot,
+              rootType,
+              exactImplementationMethod,
+              context,
+            );
+        if (exactMethod === undefined) {
+          return undefined;
+        }
+        functions.push(exactMethod);
+      }
     }
   }
   return functions;
@@ -407,11 +435,15 @@ function projectDowncastReturnType(
 function planRootMethodImplementation(
   concreteCarrier: TargetTypeRef,
   implementation: Node,
+  variant: RustProjectMethodDispatchVariant,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
-  const helperName = context.input.projectTypes.memberSlotName(implementation, "exact");
-  if (owner === undefined || helperName === undefined) {
+  const specialization = rustCallableSpecialization(
+    variant.sourceTypeParameterNames,
+    variant.targetTypeArguments,
+  );
+  if (owner === undefined || specialization === undefined) {
     return undefined;
   }
   const ownerRelation = context.input.projectTypes.relationship(concreteCarrier, owner);
@@ -432,13 +464,16 @@ function planRootMethodImplementation(
     typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerRelation.targetType),
     expressionOverrides: thisPlan.overrides,
     projectDispatchRoot: { kind: "path", path: "self" },
+  }, {
+    targetName: variant.exactSlot,
+    typeArgumentSubstitutions: specialization,
   });
   if (planned === undefined) {
     return undefined;
   }
   return {
     ...planned,
-    name: helperName,
+    name: variant.exactSlot,
     visibility: "private",
     selfParam: "rc",
     body: thisPlan.binding === undefined
@@ -459,6 +494,7 @@ function planRootMethodForwarder(
   concreteCarrier: TargetTypeRef,
   contractMember: Node,
   implementation: Node,
+  variant: RustProjectMethodDispatchVariant,
   slot: string,
   rootType: RustType,
   helper: RustImplFunction,
@@ -469,14 +505,18 @@ function planRootMethodForwarder(
     return undefined;
   }
   const contractRelation = context.input.projectTypes.relationship(concreteCarrier, contractOwner);
-  const contractShape = contractRelation.kind === "related"
+  const specialization = rustCallableSpecialization(
+    variant.sourceTypeParameterNames,
+    variant.targetTypeArguments,
+  );
+  const contractShape = contractRelation.kind === "related" && specialization !== undefined
     ? projectCallableShape(contractMember, {
         ...context,
         typeParameterSubstitutions: projectTypeSubstitutions(
           contractOwner,
           contractRelation.targetType,
         ),
-      })
+      }, specialization)
     : undefined;
   if (contractShape === undefined ||
     (helper.fallible === true) !== contractShape.fallible ||

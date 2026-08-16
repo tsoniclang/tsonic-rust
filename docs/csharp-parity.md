@@ -88,8 +88,8 @@ closure is ordered by architectural dependency:
    target-native static fields before choosing a Rust default.
 2. Object construction: add object-literal methods without reconstructing
    contextual member identity.
-3. Declaration contracts: close interface index signatures and specialize the
-   finite generic virtual method calls that the project contract graph proves.
+3. Declaration contracts: close interface index signatures and propagate
+   finite generic virtual specializations through open generic callers.
 4. Provider breadth: replace the tiny hand-maintained Rust standard-library
    catalog with requested compiler-backed exports, then close representable
    generic bounds, mutable statics, C variadics, and unions.
@@ -150,10 +150,28 @@ base.identity<string>("one");
 ```
 
 Rust cannot place a generic method in a `dyn` trait. The project is closed,
-however, and TSTS supplies both selected instantiations. The final design must
-specialize those proven closures through the existing artifact dependency
-graph and regenerate affected callers; it must not erase values into a dynamic
-carrier or infer type arguments from syntax.
+however, and TSTS supplies both selected instantiations. Rust now emits two
+object-safe slots whose parameter and result carriers are specialized from
+those exact selected type arguments. Overrides, interface dispatch, and
+`super` calls use the same closed specialization plan; no value is erased into
+a dynamic carrier and no type argument is inferred from spelling.
+
+The remaining case is an open generic caller:
+
+```ts
+function call<T>(base: Base, value: T): T {
+  return base.identity<T>(value);
+}
+
+call<int32>(base, 1);
+call<string>(base, "one");
+```
+
+Here the virtual call is open while `call` is checked, but the complete project
+still has two finite instantiations. The callable dependency graph must carry
+those instantiations into `call` before dynamic-dispatch slots are finalized.
+Until that closure exists, Rust rejects at the finite-specialization boundary
+rather than guessing or using a boxed universal value.
 
 ## Acceptance
 

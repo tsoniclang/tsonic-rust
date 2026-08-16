@@ -20,6 +20,10 @@ import {
   rustSnakeCaseIdentifier,
 } from "../../common/rust-identifiers.js";
 import {
+  allocateRustGeneratedName as allocateGeneratedName,
+  rustGeneratedNameComponent,
+} from "../../common/rust-generated-names.js";
+import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   substituteRustTargetTypeParameters,
@@ -1030,22 +1034,6 @@ function projectMemberNames(
     }
   }
   return result;
-}
-
-function allocateGeneratedName(usedNames: Set<string>, preferred: string): string {
-  let candidate = preferred;
-  let suffix = 2;
-  while (usedNames.has(candidate)) {
-    candidate = `${preferred}_${suffix}`;
-    suffix += 1;
-  }
-  usedNames.add(candidate);
-  return candidate;
-}
-
-function rustGeneratedNameComponent(name: string): string {
-  const targetName = rustSnakeCaseIdentifier(name);
-  return targetName.startsWith("r#") ? targetName.slice(2) : targetName;
 }
 
 function heritageKindIssue(

@@ -4367,6 +4367,21 @@ function planSelectedSourceCall(
         ? Node_Expression(context.input.ast, callee)
         : undefined;
       if (fact.target.dispatch !== undefined) {
+        const dispatchDeclaration = selected.sourceDeclaration;
+        const dispatchVariant = dispatchDeclaration === undefined
+          ? undefined
+          : context.input.projectMethodDispatch.variantForMember(
+              dispatchDeclaration,
+              targetTypeArgumentCarriers,
+            );
+        if (dispatchVariant === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node),
+            "rust.backend.project-method-specialization",
+            "Selected polymorphic project call has no exact finalized Rust dispatch specialization.",
+          ));
+          break;
+        }
         const dispatchReceiver = fact.target.dispatch.selected === "exact"
           ? context.projectDispatchRoot
           : receiverNode === undefined
@@ -4383,8 +4398,7 @@ function planSelectedSourceCall(
                 kind: "associated-call",
                 owner: { kind: "named", path: "Self" },
                 trait,
-                method: fact.target.dispatch.exactSlot,
-                ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+                method: dispatchVariant.exactSlot,
                 args: [{
                   kind: "method-call",
                   receiver: dispatchReceiver,
@@ -4422,8 +4436,7 @@ function planSelectedSourceCall(
                   method: "clone",
                   args: [],
                 },
-                method: fact.target.dispatch.virtualSlot,
-                ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+                method: dispatchVariant.virtualSlot,
                 args: shaped,
               },
             };

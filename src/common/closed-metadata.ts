@@ -38,6 +38,39 @@ export function isClosedMetadata(value: unknown): boolean {
   }
 }
 
+export function closedMetadataKey(value: unknown): string {
+  if (!isClosedMetadata(value)) {
+    throw new Error("Cannot construct an identity for non-closed metadata.");
+  }
+  return closedMetadataKeyValidated(value);
+}
+
+function closedMetadataKeyValidated(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(closedMetadataKeyValidated).join(",")}]`;
+  }
+  switch (typeof value) {
+    case "boolean":
+      return value ? "true" : "false";
+    case "number":
+      return `n:${String(value)}`;
+    case "string":
+      return `s:${value.length}:${value}`;
+    case "object": {
+      const object = value as Readonly<Record<string, unknown>>;
+      return `{${Object.keys(object).sort().map((key) =>
+        `${key.length}:${key}=${closedMetadataKeyValidated(object[key])}`).join(",")}}`;
+    }
+    case "undefined":
+      return "undefined";
+    default:
+      throw new Error("Closed metadata identity contains an unsupported value.");
+  }
+}
+
 function validateClosedMetadata(value: unknown, active: WeakSet<object>): boolean {
   if (value === null || value === undefined || typeof value === "string" || typeof value === "boolean") {
     return true;

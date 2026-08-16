@@ -180,21 +180,83 @@ export function main(): void {
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });
 
-test("polymorphic generic methods reject at the exact Rust object-safety boundary", () => {
-  const { result } = compileRust({
-    files: {
-      "index.ts": `
-class Base {
-  identity<T>(value: T): T { return value; }
-}
-class Derived extends Base {}
-export function callIdentity(value: Base): string { return value.identity("x"); }
-`,
-    },
-  });
+test("polymorphic generic methods close exact selected Rust dispatch specializations", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
-    diagnostic.message.includes("object-safe non-generic synchronous Rust ABI")));
+class Base {
+  calls: int32 = 0;
+  identity<T>(value: T): T {
+    this.calls += 1;
+    return value;
+  }
+}
+class Derived extends Base {
+  identity<U>(value: U): U {
+    this.calls += 10;
+    return value;
+  }
+}
+
+export function main(): void {
+  const value: Base = new Derived();
+  check(value.identity<string>("selected") === "selected");
+  check(value.identity<int32>(7) === 7);
+  check(value.calls === 20);
+}
+`, "rust_generic_virtual_dispatch_proof");
+
+  assert.deepEqual(result.diagnostics, []);
+  const output = result.artifacts.find((artifact) => artifact.path === "src/index.rs")?.text ?? "";
+  assert.match(output, /dispatch_base_identity_specialization_1/u);
+  assert.match(output, /dispatch_base_identity_specialization_2/u);
+  assert.doesNotMatch(output, /fn dispatch_base_identity[^_]/u);
+  const run = validateGeneratedProject("generic-virtual-dispatch", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
+test("generic interface dispatch and exact super calls share closed specializations", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable(`
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+interface Identity {
+  identity<T>(value: T): T;
+}
+
+class Base {
+  calls: int32 = 0;
+  identity<T>(value: T): T {
+    this.calls += 1;
+    return value;
+  }
+}
+
+class Derived extends Base implements Identity {
+  identity<U>(value: U): U {
+    this.calls += 10;
+    return value;
+  }
+
+  baseString(value: string): string {
+    return super.identity<string>(value);
+  }
+}
+
+export function main(): void {
+  const concrete = new Derived();
+  const identity: Identity = concrete;
+  check(identity.identity<string>("interface") === "interface");
+  check(concrete.baseString("base") === "base");
+  check(concrete.calls === 11);
+}
+`, "rust_generic_interface_dispatch_proof");
+
+  assert.deepEqual(result.diagnostics, []);
+  const output = result.artifacts.find((artifact) => artifact.path === "src/index.rs")?.text ?? "";
+  assert.match(output, /dispatch_identity_identity_specialization_1/u);
+  assert.match(output, /exact_base_identity_specialization_1/u);
+  const run = validateGeneratedProject("generic-interface-dispatch", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
 });

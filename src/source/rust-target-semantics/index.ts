@@ -764,6 +764,11 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
       }
     }
   }
+  context.projectMethodDispatch.initialize({
+    ast,
+    names: context.names,
+    projectTypes,
+  });
   // Fallibility depends on finalized operation facts produced while walking
   // bodies. Compute the declaration fixpoint only after those facts exist.
   recordFallibilityFacts(walk, projectSourceFiles);
@@ -3947,27 +3952,37 @@ function applySelectedProjectSourceCall(
       const ownerCarrier = ownerRelationship?.kind === "related"
         ? ownerRelationship.targetType
         : undefined;
-      const virtualSlot = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner)
-        ? walk.context.projectTypes.memberSlotName(selectedDeclaration, "virtual")
-        : undefined;
-      const exactSlot = virtualSlot === undefined
-        ? undefined
-        : walk.context.projectTypes.memberSlotName(selectedDeclaration, "exact");
-      if (owner !== undefined && walk.context.projectTypes.isPolymorphic(owner) &&
-        (virtualSlot === undefined || exactSlot === undefined || ownerCarrier === undefined)) {
+      const polymorphic = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner);
+      if (polymorphic && ownerCarrier === undefined) {
         return undefined;
+      }
+      if (polymorphic && ast.typeParameters(selectedDeclaration).length > 0) {
+        const registration = walk.context.projectMethodDispatch.record(
+          selectedDeclaration,
+          targetTypeArguments,
+          ast,
+          walk.context.projectTypes,
+        );
+        if (registration.kind === "rejected") {
+          appendRustDiagnostic(
+            walk,
+            "RUST_PROJECT_METHOD_SPECIALIZATION_UNAVAILABLE",
+            registration.reason,
+            expression,
+            ["target.capability=rust.project-dispatch.finite-generic-specialization"],
+          );
+          return undefined;
+        }
       }
       const receiverKind = ast.kindName(receiver);
       target = {
         form: "method",
         name: methodName,
         mutatesSelf,
-        ...(virtualSlot === undefined || exactSlot === undefined
+        ...(!polymorphic
           ? {}
           : {
               dispatch: {
-                virtualSlot,
-                exactSlot,
                 selected: receiverKind === "KindSuperKeyword" ? "exact" : "virtual",
                 ownerCarrier: ownerCarrier!,
               },

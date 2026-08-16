@@ -102,11 +102,20 @@
   {
     "id": "declarations.generic-virtual-methods",
     "area": "declarations",
-    "source": "class Base { identity<T>(value: T): T { return value; } }",
-    "classification": "implementation-gap",
+    "source": "const base: Base = new Derived(); base.identity<int32>(1); base.identity<string>(\"one\");",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/declaration-class-methods.ts",
     "rustProof": "test/inheritance-construction-parity.test.mjs",
-    "action": "specialize the finite selected method closures through the artifact contract graph instead of placing generic methods in dyn traits"
+    "action": "retain exact finite specialization across virtual, interface, override, and super dispatch"
+  },
+  {
+    "id": "declarations.open-generic-virtual-callers",
+    "area": "declarations",
+    "source": "function call<T>(base: Base, value: T): T { return base.identity<T>(value); }",
+    "classification": "implementation-gap",
+    "csharpProof": "tsonic-csharp/src/backend/planner/declaration-class-methods.ts",
+    "rustProof": "test/native-semantics.test.mjs",
+    "action": "propagate finite caller specializations through the callable dependency graph before closing dynamic-dispatch slots"
   },
   {
     "id": "declarations.interface-properties-methods",

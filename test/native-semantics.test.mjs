@@ -344,7 +344,7 @@ export function isGreen(color: Color): boolean {
   assert.match(text, /color == Color::Green/u);
 });
 
-test("generic virtual methods fail closed at the Rust object-safety boundary", () => {
+test("open generic virtual calls fail at the finite specialization boundary", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -361,14 +361,18 @@ export class Derived extends Base {
     super();
   }
 }
+
+export function openCall<T>(receiver: Base, value: T): T {
+  return receiver.identity<T>(value);
+}
 `,
     },
   });
 
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
-    diagnostic.message.includes("object-safe non-generic synchronous Rust ABI")));
+    diagnostic.code === "RUST_PROJECT_METHOD_SPECIALIZATION_UNAVAILABLE" &&
+    diagnostic.message.includes("finite method specialization")));
 });
 
 test("generated cargo binary proves class and enum lowering at runtime", { timeout: 300_000 }, () => {
@@ -881,7 +885,9 @@ export function shift(p: Point, dx: int32): Point {
   assert.match(text, /pub\(crate\) struct PointState \{\s*pub\(crate\) x: i32,\s*pub\(crate\) y: i32,/u);
   assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*pub\(crate\) state: rt::ObjectHandle<PointState>,/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
-  assert.match(text, /state: rt::ObjectHandle::new\(PointState \{ x: 0, y: 0 \}\)/u);
+  assert.match(text, /let record_x = 0;/u);
+  assert.match(text, /let record_y = 0;/u);
+  assert.match(text, /state: rt::ObjectHandle::new\(PointState \{\s*x: record_x,\s*y: record_y,/u);
   assert.match(text, /p\.state\.with\(\|state\| state\.x\) \+ dx/u);
   assert.doesNotMatch(text, /p\.clone\(\)\.state\.with/u);
 });
@@ -1162,7 +1168,7 @@ export function drive(): int32 {
   assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32>/u);
   assert.match(
     text,
-    /tsonic_rust_runtime::conversions::f64_to_i32\(pass_through\(41\.0\) \+ 1\.0\)/u,
+    /tsonic_rust_runtime::conversions::f64_to_i32\(pass_through::<f64>\(41\.0\) \+ 1\.0\)/u,
   );
 });
 
