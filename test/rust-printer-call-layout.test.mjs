@@ -574,6 +574,100 @@ test("field and closure method chains retain rustfmt vertical layout", () => {
   );
 });
 
+test("compact field receivers stay attached before expanded closure calls", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "field",
+              receiver: { kind: "path", path: "self" },
+              name: "state",
+            },
+            method: "with_mut",
+            args: [{
+              kind: "closure",
+              params: [{ name: "state", byRefCopy: false }],
+              body: {
+                kind: "assignment",
+                operator: "=",
+                target: { kind: "path", path: "state.method_override" },
+                value: {
+                  kind: "call",
+                  path: "Some",
+                  args: [{ kind: "path", path: "value" }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /self\.state\n        \.with_mut\(\|state\| state\.method_override = Some\(value\)\)/u,
+  );
+});
+
+test("let-bound index closures retain rustfmt's vertical method-chain layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "index_current",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: {
+              kind: "field",
+              receiver: { kind: "path", path: "index_receiver_2" },
+              name: "state",
+            },
+            method: "with",
+            args: [{
+              kind: "closure",
+              params: [{ name: "state", byRefCopy: false }],
+              body: {
+                kind: "index",
+                receiver: {
+                  kind: "field",
+                  receiver: { kind: "path", path: "state" },
+                  name: "index_entries",
+                },
+                index: {
+                  kind: "reference",
+                  expr: { kind: "path", path: "index_key_2" },
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let index_current = index_receiver_2\n        \.state\n        \.with\(\|state\| state\.index_entries\[&index_key_2\]\);/u,
+  );
+});
+
 test("long indexes continue after one-line method-chain receivers", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -683,6 +777,72 @@ test("multiline method-call match arms use rustfmt block arms", () => {
     source,
     /Shape::Variant0\(__tsonic_union_variant_with_a_long_identity\) => \{\n            __tsonic_union_variant_with_a_long_identity\.with\(\|state\| state\.0\.clone\(\)\)\n        \}/u,
   );
+});
+
+test("calls expand matches whose scrutinee contains a statement block", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "Some",
+            args: [{
+              kind: "match",
+              expression: {
+                kind: "method-call",
+                receiver: {
+                  kind: "block",
+                  bindings: [{
+                    name: "dispatch_receiver",
+                    value: { kind: "reference", expr: { kind: "path", path: "project_this" } },
+                  }],
+                  value: {
+                    kind: "method-call",
+                    receiver: {
+                      kind: "field",
+                      receiver: { kind: "path", path: "dispatch_receiver" },
+                      name: "dispatch",
+                    },
+                    method: "read_json_object_value",
+                    args: [],
+                  },
+                },
+                method: "as_ref",
+                args: [],
+              },
+              arms: [{
+                pattern: {
+                  kind: "tuple-variant",
+                  path: "Some",
+                  elements: [{ kind: "binding", name: "flow_value" }],
+                },
+                expression: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "flow_value" },
+                  method: "clone",
+                  args: [],
+                },
+              }, {
+                pattern: { kind: "path", path: "None" },
+                expression: { kind: "unreachable", message: "flow fact" },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /Some\(\n {8}match \{/u);
+  assert.match(source, /\n {8}\},\n {4}\);/u);
+  assert.doesNotMatch(source, /Some\(match \{/u);
 });
 
 test("two-selector method arguments retain rustfmt vertical layout", () => {
@@ -913,6 +1073,44 @@ test("field-led calls break before selectors when the final call fits there", ()
   assert.match(
     source,
     /dispatch_receiver\n        \.dispatch\n        \.write_counter_value\(dispatch_receiver\.dispatch\.read_counter_value\(\) \+ value\)/u,
+  );
+});
+
+test("deep field-led calls keep their callable attached when arguments must expand", () => {
+  const receiver = { kind: "path", path: "dispatch_receiver_10" };
+  const invocation = {
+    kind: "method-call",
+    receiver: { kind: "field", receiver, name: "dispatch" },
+    method: "write_counter_value",
+    args: [{
+      kind: "binary",
+      operator: "+",
+      left: {
+        kind: "method-call",
+        receiver: { kind: "field", receiver, name: "dispatch" },
+        method: "read_counter_value",
+        args: [],
+      },
+      right: { kind: "path", path: "value_5" },
+    }],
+  };
+  const nestedScope = (depth) => depth === 0
+    ? { statements: [{ kind: "expr", expr: invocation }] }
+    : { statements: [{ kind: "scope", body: nestedScope(depth - 1) }] };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: nestedScope(4),
+    }],
+  });
+
+  assert.match(
+    source,
+    /dispatch_receiver_10\.dispatch\.write_counter_value\(\n                        dispatch_receiver_10\.dispatch\.read_counter_value\(\) \+ value_5,\n                    \)/u,
   );
 });
 

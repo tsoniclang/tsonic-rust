@@ -101,6 +101,8 @@ import {
   providerSelectedCallMatches,
   sourceAccessorSelectedOperationMatches,
   sourceFieldSelectedOperationMatches,
+  sourceIndexSelectedOperationMatches,
+  sourceMethodPropertySelectedOperationMatches,
   sourceStaticFieldSelectedOperationMatches,
   sourceUnionFieldSelectedOperationMatches,
 } from "./expressions.js";
@@ -119,7 +121,11 @@ import {
 import { requireRustLocationValueCarrier } from "./generic-requirements.js";
 import { planRustReturnExit } from "./completion-exits.js";
 import {
+  readRustProjectObjectIndex,
   readRustProjectDispatchedField,
+  rustProjectObjectDispatchField,
+  writeRustProjectMethodOverride,
+  writeRustProjectObjectIndex,
   writeRustProjectDispatchedField,
 } from "./project-objects.js";
 import {
@@ -980,6 +986,8 @@ function planExpressionAsStatement(
       if (target === undefined && sourceField?.kind !== "source-accessor" &&
         sourceField?.kind !== "source-static-field" &&
         sourceField?.kind !== "source-field" &&
+        sourceField?.kind !== "source-index-signature" &&
+        sourceField?.kind !== "source-method-property" &&
         sourceField?.kind !== "source-union-field") {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, expression),
@@ -1028,6 +1036,15 @@ function planExpressionAsStatement(
       }
       if (sourceField?.kind === "source-accessor") {
         return planRustSourceAccessorAssignment(
+          left,
+          valueNode,
+          sourceField,
+          fact,
+          context,
+        );
+      }
+      if (sourceField?.kind === "source-method-property") {
+        return planRustSourceMethodPropertyAssignment(
           left,
           valueNode,
           sourceField,
@@ -1179,6 +1196,16 @@ function planExpressionAsStatement(
                 value: projected,
               },
             }];
+      }
+      if (storageOverride?.valueForm !== "storage" &&
+        sourceField?.kind === "source-index-signature") {
+        return planRustSourceIndexAssignment(
+          left,
+          valueNode,
+          sourceField,
+          fact,
+          context,
+        );
       }
       if (storageOverride?.valueForm !== "storage" && sourceField?.kind === "source-field") {
         if (!sourceFieldSelectedOperationMatches(left, sourceField, context)) {
@@ -1468,6 +1495,87 @@ function planExpressionAsStatement(
   return planned === undefined
     ? undefined
     : [{ kind: "let", name: "_", mutable: false, init: planned }];
+}
+
+function planRustSourceMethodPropertyAssignment(
+  left: Node,
+  valueNode: Node,
+  method: Extract<RustTargetOperationFact, { readonly kind: "source-method-property" }>,
+  assignment: RustAssignmentOperationFact,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  if (assignment.kind !== "operator-token" || assignment.operator !== "=" ||
+    method.write === undefined ||
+    !sourceMethodPropertySelectedOperationMatches(left, method, context)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, left),
+      "rust.backend.source-method-property-assignment",
+      "Project method replacement requires exact writable property evidence and plain assignment.",
+    ));
+    return undefined;
+  }
+  const receiverNode = Node_Expression(context.input.ast, left);
+  const plannedReceiver = receiverNode === undefined
+    ? undefined
+    : planExpression(receiverNode, context);
+  const value = planExpression(valueNode, context);
+  const receiverDefinition = context.input.projectTypes.definitionForCarrier(
+    method.receiverCarrier,
+  );
+  if (receiverNode === undefined || plannedReceiver === undefined || value === undefined ||
+    receiverDefinition === undefined || context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "method_receiver",
+  );
+  const valueName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "method_replacement",
+  );
+  const receiver: RustExpr = { kind: "path", path: receiverName };
+  const replacement: RustExpr = { kind: "path", path: valueName };
+  const write = context.input.projectTypes.isPolymorphic(receiverDefinition)
+    ? {
+        kind: "method-call" as const,
+        receiver: {
+          kind: "field" as const,
+          receiver,
+          name: rustProjectObjectDispatchField,
+        },
+        method: method.write.dispatchSlot,
+        args: [replacement],
+      }
+    : method.write.storageName === undefined
+      ? undefined
+      : writeRustProjectMethodOverride(
+          receiver,
+          method.write.storageName,
+          replacement,
+        );
+  if (write === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, left),
+      "rust.backend.source-method-property-storage",
+      "Project method replacement has no exact generated storage route.",
+    ));
+    return undefined;
+  }
+  return [{
+    kind: "expr",
+    expr: {
+      kind: "block",
+      bindings: [{
+        name: receiverName,
+        value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+      }, {
+        name: valueName,
+        value,
+      }],
+      value: write,
+    },
+  }];
 }
 
 function planRustSourceStaticFieldAssignment(
@@ -1865,6 +1973,96 @@ function planRustCompoundAssignmentValue(
     return undefined;
   }
   return { kind: "binary", operator: binary, left: current, right: value };
+}
+
+function planRustSourceIndexAssignment(
+  target: Node,
+  valueNode: Node,
+  index: Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }>,
+  assignment: RustAssignmentOperationFact,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  if (!index.writable || !sourceIndexSelectedOperationMatches(target, index, context) ||
+    context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, target),
+      "rust.backend.project-index-assignment-contract",
+      "Project index assignment requires the exact writable selected index-signature fact.",
+    ));
+    return undefined;
+  }
+  const receiverNode = Node_Expression(context.input.ast, target);
+  const keyNode = ElementAccessExpression_ArgumentExpression(context.input.ast, target);
+  const plannedReceiver = receiverNode === undefined
+    ? undefined
+    : planExpression(receiverNode, context);
+  const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
+  const value = planExpression(valueNode, context);
+  if (receiverNode === undefined || plannedReceiver === undefined || keyNode === undefined ||
+    key === undefined || value === undefined ||
+    !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_receiver");
+  const keyName = allocateRustSyntheticName(context.syntheticNames, "index_key");
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "index_value");
+  const receiverPath: RustExpr = { kind: "path", path: receiverName };
+  const keyPath: RustExpr = { kind: "path", path: keyName };
+  const valuePath: RustExpr = { kind: "path", path: valueName };
+  const bindings: {
+    readonly name: string;
+    readonly value: RustExpr;
+  }[] = [{
+    name: receiverName,
+    value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+  }, {
+    name: keyName,
+    value: key,
+  }];
+  let next: RustExpr = valuePath;
+  if (assignment.operator !== "=") {
+    const currentName = allocateRustSyntheticName(context.syntheticNames, "index_current");
+    bindings.push({
+      name: currentName,
+      value: readRustProjectObjectIndex(
+        receiverPath,
+        index.storageName,
+        keyPath,
+        index.resultCarrier,
+      ),
+    }, {
+      name: valueName,
+      value,
+    });
+    const plannedNext = planRustCompoundAssignmentValue(
+      assignment,
+      { kind: "path", path: currentName },
+      valuePath,
+      target,
+      context,
+    );
+    if (plannedNext === undefined) {
+      return undefined;
+    }
+    const nextName = allocateRustSyntheticName(context.syntheticNames, "index_next");
+    bindings.push({ name: nextName, value: plannedNext });
+    next = { kind: "path", path: nextName };
+  } else {
+    bindings.push({ name: valueName, value });
+  }
+  return [{
+    kind: "expr",
+    expr: {
+      kind: "block",
+      bindings,
+      value: writeRustProjectObjectIndex(
+        receiverPath,
+        index.storageName,
+        keyPath,
+        next,
+      ),
+    },
+  }];
 }
 
 function planCondition(condition: Node, context: RustPlanContext, construct: string) {

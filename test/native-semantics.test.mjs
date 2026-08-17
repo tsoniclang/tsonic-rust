@@ -385,10 +385,10 @@ export function stringCall(receiver: Base, value: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn __tsonic_open_call_specialization_1/u);
-  assert.match(text, /fn __tsonic_open_call_specialization_2/u);
-  assert.match(text, /fn __tsonic_relay_specialization_1/u);
-  assert.match(text, /fn __tsonic_relay_specialization_2/u);
+  assert.match(text, /fn open_call_specialization_1/u);
+  assert.match(text, /fn open_call_specialization_2/u);
+  assert.match(text, /fn relay_specialization_1/u);
+  assert.match(text, /fn relay_specialization_2/u);
   assert.doesNotMatch(text, /fn open_call</u);
   assert.doesNotMatch(text, /fn relay</u);
 });

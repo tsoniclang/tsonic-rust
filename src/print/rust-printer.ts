@@ -25,6 +25,7 @@ const rustInlineFormatArgumentWidth = 40;
 const rustMethodChainWidth = 60;
 const rustNestedMethodFirstSegmentWidth = 64;
 const rustInlineFieldReceiverWidth = 28;
+const rustInlineClosureFieldReceiverWidth = 10;
 
 interface RustFunctionParameterPrint {
   readonly prefix: string;
@@ -1973,12 +1974,9 @@ function printRustExprFitted(
       }
       if (chain !== undefined && verticalLayout) {
         const firstStep = chain.steps[0];
-        const firstFieldRequiresBreak = firstStep?.kind === "field" &&
-          printRustExpr(chain.base).length + firstStep.name.length + 1 >
-            rustInlineFieldReceiverWidth;
         const secondStep = chain.steps[1];
         const attachFirstMethodAfterField = firstStep?.kind === "field" &&
-          !firstFieldRequiresBreak && secondStep?.kind === "method" &&
+          secondStep?.kind === "method" &&
           selectorCount === 2 &&
           rustMethodChainFirstMethodRequiresExpansion(chain, depth) &&
           renderedFits(
@@ -2020,7 +2018,8 @@ function printRustExprFitted(
         bodySelectorCount >= 3 &&
         flat.length > rustNestedCallWidth;
       if (!flat.includes("\n") && renderedFits(flat, column) && !bodyHasLongMethodChain &&
-        !rustMethodChainPrefersVerticalLayout(expression.body)) {
+        !rustMethodChainPrefersVerticalLayout(expression.body) &&
+        !rustExpressionContainsStatementBlock(expression.body)) {
         return flat;
       }
       const params = printRustClosureParams(expression.params);
@@ -2594,6 +2593,12 @@ function printRustLetInitializer(
   depth: number,
 ): string {
   const flat = printRustExpr(initializer);
+  if (!flat.includes("\n") && prefix.length + flat.length + 1 <= rustFormatWidth &&
+    !rustExpressionContainsStatementBlock(initializer) &&
+    !rustExpressionContainsExpandedStructLiteral(initializer) &&
+    !rustMethodChainPrefersVerticalLayout(initializer)) {
+    return `${prefix}${flat};`;
+  }
   const fittedAtPrefix = printRustExprFitted(initializer, depth, prefix.length + 1);
   const trailingClosure = initializer.kind === "call" || initializer.kind === "invoke" ||
       initializer.kind === "associated-call" || initializer.kind === "method-call"
@@ -3275,6 +3280,7 @@ function printFittedMethodChain(
     : continuationIndent;
   const breakBeforeFirstField = selectedBreakBeforeFirstSelector;
   let emittedCall = false;
+  let emittedField = false;
   for (const step of chain.steps) {
     if (step.kind === "try") {
       rendered = appendToLastLine(rendered, "?");
@@ -3288,10 +3294,18 @@ function printFittedMethodChain(
       continue;
     }
     if (step.kind === "field") {
-      rendered = breakBeforeFirstField || emittedCall || rendered.includes("\n") ||
+      const attachInitialField = !emittedCall && !emittedField &&
+        !rendered.includes("\n") &&
+        (forceAttachFirstSelector ||
+          rustMethodChainContainsClosure(chain) &&
+            lastLineLength(rendered) + step.name.length + 1 <=
+              rustInlineClosureFieldReceiverWidth);
+      rendered = !attachInitialField && (breakBeforeFirstField || emittedCall || rendered.includes("\n") ||
           lastLineLength(rendered) + step.name.length + 1 > rustInlineFieldReceiverWidth
-        ? `${rendered}\n${selectedContinuationIndent}.${step.name}`
-        : appendToLastLine(rendered, `.${step.name}`);
+        )
+          ? `${rendered}\n${selectedContinuationIndent}.${step.name}`
+          : appendToLastLine(rendered, `.${step.name}`);
+      emittedField = true;
       continue;
     }
     const inlineMethod = printFittedCall(
@@ -3503,12 +3517,15 @@ function printFittedCall(
       column + prefix.length,
     );
     const attached = appendToLastLine(`${prefix}${renderedArgument}`, ")");
-    if (((arguments_[0].kind === "block" || arguments_[0].kind === "evaluate-then") &&
+    const nestedMatchScrutinee = arguments_[0].kind === "match" &&
+      rustExpressionContainsStatementBlock(arguments_[0].expression);
+    if (!nestedMatchScrutinee &&
+      (((arguments_[0].kind === "block" || arguments_[0].kind === "evaluate-then") &&
         column + firstLine(attached).length <= rustFormatWidth) ||
       renderedFits(attached, column) &&
       !(arguments_[0].kind === "match" &&
         (firstLine(attached).length > rustNestedCallWidth ||
-          !firstLine(renderedArgument).trimEnd().endsWith("{")))) {
+          !firstLine(renderedArgument).trimEnd().endsWith("{"))))) {
       return attached;
     }
     const argumentIndent = indentText(depth + 1);

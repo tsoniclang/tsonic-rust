@@ -27,8 +27,10 @@ import type {
 } from "./plan-context.js";
 import {
   readRustProjectObjectField,
+  readRustProjectMethodOverride,
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
+  writeRustProjectMethodOverride,
   writeRustProjectObjectField,
 } from "./project-objects.js";
 import {
@@ -38,6 +40,8 @@ import {
   projectCallableShape,
   projectFieldStoragePath,
   projectMemberImplementation,
+  projectMethodPropertyStoragePath,
+  projectOwnMethodProperties,
   projectOwnFields,
   projectOwnMethods,
   projectTypeSubstitutions,
@@ -172,6 +176,27 @@ export function planProjectDispatchTrait(
         functions.push(signature(variant.exactSlot));
       }
     }
+  }
+  const methodProperties = projectOwnMethodProperties(definition, carrier, context);
+  if (methodProperties === undefined) {
+    return undefined;
+  }
+  for (const property of methodProperties) {
+    const write = context.input.projectTypes.memberSlotName(
+      property.declaration,
+      "method-write",
+    );
+    if (write === undefined || functions.some((candidate) => candidate.name === write)) {
+      if (write === undefined) {
+        return undefined;
+      }
+      continue;
+    }
+    functions.push({
+      name: write,
+      selfParam: "ref",
+      params: [{ name: "value", type: property.callableType }],
+    });
   }
   const superTraits = context.input.projectTypes.heritageForDefinition(definition).map((edge) =>
     rustProjectDispatchTraitType(edge.targetType, context));
@@ -381,6 +406,14 @@ function planRootContractFunctions(
             variant.virtualSlot,
             rootType,
             virtualImplementationMethod,
+            (context.input.projectMethodProperties.usageFor(member)?.writable === true ||
+                context.input.projectMethodProperties.usageFor(virtualImplementation)?.writable === true)
+              ? projectMethodPropertyStoragePath(
+                  virtualImplementation,
+                  layers,
+                  context,
+                )
+              : undefined,
             context,
           );
       if (virtualMethod === undefined) {
@@ -402,12 +435,60 @@ function planRootContractFunctions(
               variant.exactSlot,
               rootType,
               exactImplementationMethod,
+              undefined,
               context,
             );
         if (exactMethod === undefined) {
           return undefined;
         }
         functions.push(exactMethod);
+      }
+      const usage = context.input.projectMethodProperties.usageFor(member);
+      if (usage?.writable === true) {
+        const write = context.input.projectTypes.memberSlotName(member, "method-write");
+        const storagePath = projectMethodPropertyStoragePath(
+          virtualImplementation,
+          layers,
+          context,
+        );
+        const implementationOwner = context.input.projectTypes
+          .definitionContainingDeclaration(virtualImplementation);
+        const implementationCarrier = implementationOwner === undefined
+          ? undefined
+          : context.input.projectTypes.relationship(
+              concreteCarrier,
+              implementationOwner,
+            );
+        const properties = implementationCarrier?.kind === "related"
+          ? projectOwnMethodProperties(
+              implementationOwner!,
+              implementationCarrier.targetType,
+              context,
+            )
+          : undefined;
+        const property = properties?.find((candidate) =>
+          candidate.declaration === virtualImplementation);
+        if (write === undefined || storagePath === undefined || property === undefined) {
+          return undefined;
+        }
+        if (!functions.some((candidate) => candidate.name === write)) {
+          functions.push({
+            name: write,
+            visibility: "private",
+            selfParam: "ref",
+            params: [{ name: "value", type: property.callableType }],
+            body: {
+              statements: [{
+                kind: "expr",
+                expr: writeRustProjectMethodOverride(
+                  { kind: "path", path: "self" },
+                  storagePath,
+                  { kind: "path", path: "value" },
+                ),
+              }],
+            },
+          });
+        }
       }
     }
   }
@@ -498,6 +579,7 @@ function planRootMethodForwarder(
   slot: string,
   rootType: RustType,
   helper: RustImplFunction,
+  overrideStoragePath: readonly string[] | undefined,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const contractOwner = context.input.projectTypes.definitionContainingDeclaration(contractMember);
@@ -546,6 +628,10 @@ function planRootMethodForwarder(
       })),
     ],
   };
+  const overrideName = allocateRustLocalName(
+    new Set(helper.params.map((parameter) => parameter.name)),
+    "method_override",
+  );
   return {
     name: slot,
     visibility: "private",
@@ -555,14 +641,54 @@ function planRootMethodForwarder(
     ...(helper.fallible === true ? { fallible: true } : {}),
     ...(helper.isUnsafe === true ? { isUnsafe: true } : {}),
     body: {
-      statements: [{
+      statements: [
+        ...(overrideStoragePath === undefined
+          ? []
+          : [{
+              kind: "if-let-some" as const,
+              binding: overrideName,
+              expression: readRustProjectMethodOverride(
+                { kind: "path", path: "self" },
+                overrideStoragePath,
+              ),
+              body: {
+                statements: [{
+                  kind: "return" as const,
+                  expr: {
+                    kind: "method-call" as const,
+                    receiver: { kind: "path" as const, path: overrideName },
+                    method: "call",
+                    args: [{
+                      kind: "tuple-literal" as const,
+                      elements: helper.params.map((parameter) => ({
+                        kind: "path" as const,
+                        path: parameter.name,
+                      })),
+                    }],
+                  },
+                }],
+              },
+            }]),
+        {
         kind: "tail",
         expr: helper.isUnsafe === true
           ? { kind: "unsafe", expression: call }
           : call,
-      }],
+        },
+      ],
     },
   };
+}
+
+function allocateRustLocalName(used: ReadonlySet<string>, preferred: string): string {
+  let suffix = 1;
+  for (;;) {
+    const candidate = suffix === 1 ? preferred : `${preferred}_${suffix}`;
+    if (!used.has(candidate)) {
+      return candidate;
+    }
+    suffix += 1;
+  }
 }
 
 function projectThisOverrides(

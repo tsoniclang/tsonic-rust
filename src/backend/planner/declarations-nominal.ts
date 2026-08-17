@@ -22,12 +22,19 @@ import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSelfModeFactKey, rustSourceCallableReturnFactKey, rustTypeAliasDeclarationFactKey } from "../../source/rust-facts/keys.js";
 import { applyRustTailShape, rustBlockTerminates } from "./functions.js";
 import { applyFallibleShape } from "./fallible-shape.js";
-import { isRustNeverCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
+import {
+  isRustIntegerCarrier,
+  isRustNeverCarrier,
+  isRustStringCarrier,
+  isRustUnitCarrier,
+  rustCarrierSupportsClone,
+} from "../../source/rust-target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "./synthetic-names.js";
 import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";
 import { rustProjectObjectLayout } from "../../source/rust-target-semantics/project-object-layout.js";
 import {
   createRustProjectObject,
+  readRustProjectMethodOverride,
   rustProjectObjectStateField,
   rustProjectObjectType,
 } from "./project-objects.js";
@@ -56,6 +63,12 @@ import {
   planRustCallableGenerics,
   rustCallableSpecialization,
 } from "./callable-generics.js";
+import type { RustProjectTypeDefinition } from "../../source/rust-target-semantics/project-type-policy.js";
+import {
+  type ProjectMethodPropertyPlan,
+  projectOwnMethodProperties,
+  projectOwnMethods,
+} from "./project-polymorphism-model.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -244,6 +257,19 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     failed = true;
   }
   const constructorMember = constructorImplementations[0];
+  const methodProperties = projectOwnMethodProperties(
+    definition,
+    context.input.projectTypes.openCarrier(definition),
+    context,
+  );
+  if (methodProperties === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.method-property-layout",
+      "Class method properties have no exact mutable callable storage plan.",
+    ));
+    return undefined;
+  }
   const constructorFn = planConstructor(
     node,
     constructorMember,
@@ -252,6 +278,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     definition.stateName,
     stateMarker,
     fields,
+    methodProperties,
     context,
   );
   if (failed || constructorFn === undefined) {
@@ -315,6 +342,15 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         type: field.type,
         visibility: "crate" as const,
       })),
+      ...methodProperties.map((property) => ({
+        name: property.targetName,
+        type: {
+          kind: "named" as const,
+          path: "Option",
+          typeArguments: [property.callableType],
+        },
+        visibility: "crate" as const,
+      })),
       ...(stateMarker === undefined
         ? []
         : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
@@ -352,6 +388,7 @@ function planConstructor(
   stateName: string,
   stateMarker: ReturnType<typeof rustProjectStateMarker>,
   fields: readonly PlannedProjectObjectField[],
+  methodProperties: readonly ProjectMethodPropertyPlan[],
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const { ast } = context.input;
@@ -498,9 +535,15 @@ function planConstructor(
       fields.map((field, index) => ({
         name: field.targetName,
         value: fieldValues[index]!,
-      })).concat(stateMarker === undefined
-        ? []
-        : [{ name: stateMarker.name, value: stateMarker.value }]),
+      })).concat(
+        methodProperties.map((property) => ({
+          name: property.targetName,
+          value: { kind: "none" as const },
+        })),
+        stateMarker === undefined
+          ? []
+          : [{ name: stateMarker.name, value: stateMarker.value }],
+      ),
     ),
   });
   const constructorAttributes = [
@@ -761,6 +804,20 @@ export function planProjectMethod(
     };
   }
   const typeParams = genericPlan.finalizeTypeParameters();
+  const finalizedBody = applyFallibleShape(
+    applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
+    {
+      fallible,
+      hasReturnValue: returnType !== undefined,
+      errorDomain: context.errorDomain,
+    },
+  );
+  const overridePrelude = options?.targetName === undefined && !isStatic
+    ? planDirectProjectMethodOverridePrelude(member, params, syntheticNames, context)
+    : [];
+  if (overridePrelude === undefined) {
+    return undefined;
+  }
   return {
     name: methodName,
     ...(isUnsafe ? { isUnsafe: true } : {}),
@@ -773,16 +830,59 @@ export function planProjectMethod(
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: {
-      ...applyFallibleShape(
-        applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-        {
-          fallible,
-          hasReturnValue: returnType !== undefined,
-          errorDomain: context.errorDomain,
-        },
-      ),
+      statements: [...overridePrelude, ...finalizedBody.statements],
     },
   };
+}
+
+function planDirectProjectMethodOverridePrelude(
+  member: Node,
+  params: readonly import("../rust-ast/nodes.js").RustFunctionParam[],
+  syntheticNames: import("./synthetic-names.js").RustSyntheticNameState,
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
+  const usage = context.input.projectMethodProperties.usageFor(member);
+  if (usage?.writable !== true) {
+    return [];
+  }
+  const owner = context.input.projectTypes.definitionContainingDeclaration(member);
+  const targetName = owner === undefined
+    ? undefined
+    : context.input.projectTypes.fieldStorageName(owner, member);
+  if (owner?.kind !== "class" || targetName === undefined ||
+    context.input.facts.getFact(member, rustFallibleFactKey) === undefined ||
+    syntheticNames === undefined) {
+    return undefined;
+  }
+  const overrideName = allocateRustSyntheticName(
+    syntheticNames,
+    "method_override",
+  );
+  return [{
+    kind: "if-let-some",
+    binding: overrideName,
+    expression: readRustProjectMethodOverride(
+      { kind: "path", path: "self" },
+      targetName,
+    ),
+    body: {
+      statements: [{
+        kind: "return",
+        expr: {
+          kind: "method-call",
+          receiver: { kind: "path", path: overrideName },
+          method: "call",
+          args: [{
+            kind: "tuple-literal",
+            elements: params.map((parameter) => ({
+              kind: "path" as const,
+              path: parameter.name,
+            })),
+          }],
+        },
+      }],
+    },
+  }];
 }
 
 export function planProjectMethodVariants(
@@ -817,6 +917,24 @@ export function planProjectMethodVariants(
     methods.push(method);
   }
   return Object.freeze(methods);
+}
+
+export function planProjectStaticMethods(
+  definition: RustProjectTypeDefinition,
+  context: RustPlanContext,
+): readonly RustImplFunction[] | undefined {
+  const methods: RustImplFunction[] = [];
+  for (const member of projectOwnMethods(definition, context)) {
+    if (!context.input.ast.hasModifierKind(member, "static")) {
+      continue;
+    }
+    const planned = planProjectMethodVariants(member, context);
+    if (planned === undefined) {
+      return undefined;
+    }
+    methods.push(...planned);
+  }
+  return methods;
 }
 
 function borrowedGeneratorType(
@@ -947,7 +1065,17 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ));
     return undefined;
   }
+  if (layout.indexSignatures.length > 1 ||
+    (layout.indexSignatures.length === 1 && layout.fields.length > 0)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record-index-layout",
+      "Rust index-backed interfaces require exactly one index signature and no separately stored property signatures.",
+    ));
+    return undefined;
+  }
   const fields: PlannedProjectObjectField[] = [];
+  let indexField: RustStructField | undefined;
   for (const member of ast.members(node)) {
     if (member === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -956,6 +1084,39 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
         "Interface declaration contains an undefined member slot.",
       ));
       return undefined;
+    }
+    if (ast.kindName(member) === "KindIndexSignature") {
+      const indexLayout = layout.indexSignatures.find((index) =>
+        index.declaration === member);
+      const keyCarrier = indexLayout === undefined
+        ? undefined
+        : carrierOf(context, indexLayout.keyParameter) ??
+          carrierOf(context, Node_Type(ast, indexLayout.keyParameter));
+      const valueCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
+      const keyType = rustTypeFromCarrierInContext(keyCarrier, context);
+      const valueType = rustTypeFromCarrierInContext(valueCarrier, context);
+      const targetName = context.input.projectTypes.fieldStorageName(definition, member);
+      if (indexLayout === undefined || keyCarrier === undefined || valueCarrier === undefined ||
+        keyType === undefined || valueType === undefined || targetName === undefined ||
+        (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
+        !rustCarrierSupportsClone(valueCarrier)) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, member),
+          "rust.backend.record-index-carrier",
+          "Rust index-backed interfaces require a closed string/integer key, a cloneable value, and deterministic generated storage.",
+        ));
+        return undefined;
+      }
+      indexField = {
+        name: targetName,
+        type: {
+          kind: "named",
+          path: "std::collections::HashMap",
+          typeArguments: [keyType, valueType],
+        },
+        visibility: "crate",
+      };
+      continue;
     }
     if (ast.kindName(member) !== "KindPropertySignature") {
       context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -1011,6 +1172,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
         type: field.type,
         visibility: "crate" as const,
       })),
+      ...(indexField === undefined ? [] : [indexField]),
       ...(stateMarker === undefined
         ? []
         : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),

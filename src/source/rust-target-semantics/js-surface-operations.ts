@@ -138,6 +138,7 @@ interface JsOperationRowData {
         readonly target: RustProviderOperationForm;
         readonly resultConversion?: RustValueConversion;
         readonly result: JsCarrierRef;
+        readonly sourceResult?: JsCarrierRef;
         readonly params?: readonly (JsCarrierRef | undefined)[];
         readonly firstArgCarrierId?: string;
 }
@@ -287,8 +288,8 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
   { owner, member: "indexOf", operationKind: "call", lane: "js-array", variant: "from", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "index_of", argModes: ["ref", "value"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }, { ref: "float64" }] } },
   { owner, member: "lastIndexOf", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "last_index_of_from_end", argModes: ["ref"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner, member: "lastIndexOf", operationKind: "call", lane: "js-array", variant: "from", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "last_index_of", argModes: ["ref", "value"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }, { ref: "float64" }] } },
-  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "number", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"] }, result: { ref: "option-of-element" }, params: [{ ref: "float64" }] } },
-  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "int32", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
+  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "number", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"] }, result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, params: [{ ref: "float64" }] } },
+  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "int32", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, params: [{ ref: "int32" }] } },
   ...arrayPredicateRows.flatMap((predicateRow) =>
     arrayCallbackRows.map(({ arity, variant, suffix }): JsOperationRowData => ({
       owner,
@@ -1154,7 +1155,11 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     };
   }
   const resultCarrier = resolveCarrierRef(row.shape.result, bindings);
-  if (resultCarrier === undefined) {
+  const sourceResultCarrier = row.shape.sourceResult === undefined
+    ? undefined
+    : resolveCarrierRef(row.shape.sourceResult, bindings);
+  if (resultCarrier === undefined ||
+    (row.shape.sourceResult !== undefined && sourceResultCarrier === undefined)) {
     return undefined;
   }
   const copyReference = row.shape.result.ref === "option-of-map-value" ? bindings.mapValue : bindings.element;
@@ -1171,6 +1176,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       operationKind: row.shape.operationKind,
       target: materializeTarget(target, copyReference),
       resultCarrier,
+      ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
       isAsync: false,
       isFallible: row.fallible === true,

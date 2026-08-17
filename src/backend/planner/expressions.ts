@@ -118,10 +118,13 @@ import {
 } from "./typed-locations.js";
 import {
   createRustProjectObject,
+  readRustProjectObjectIndex,
+  readRustProjectObjectIndexStorage,
   readRustProjectDispatchedField,
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
   rustProjectObjectStateField,
+  writeRustProjectObjectIndex,
   writeRustProjectDispatchedField,
 } from "./project-objects.js";
 import {
@@ -185,6 +188,7 @@ import {
   planRustProjectTypeTest,
 } from "./project-downcasts.js";
 import { planRustProgramErrorTypeTest } from "./program-error-operations.js";
+import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";
 
 type RustExpressionResultUse = "value" | "discarded";
 
@@ -2131,6 +2135,17 @@ function planRustUpdateExpression(
           context,
         );
   }
+  const sourceIndex = findRustUpdateSourceIndex(operand, context);
+  if (sourceIndex !== undefined) {
+    return planRustSourceIndexUpdate(
+      sourceIndex.expression,
+      sourceIndex.fact,
+      fact,
+      step,
+      returnsPrevious,
+      context,
+    );
+  }
   const sourceField = findRustUpdateProjectField(operand, context);
   if (sourceField !== undefined) {
     return sourceField.fact.kind === "source-union-field"
@@ -2194,6 +2209,86 @@ function planRustUpdateExpression(
     returnsPrevious,
     context,
   );
+}
+
+function findRustUpdateSourceIndex(
+  operand: Node,
+  context: RustPlanContext,
+): {
+  readonly expression: Node;
+  readonly fact: Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }>;
+} | undefined {
+  let current: Node | undefined = operand;
+  while (current !== undefined) {
+    const fact = context.input.facts.getFact(current, rustTargetOperationFactKey);
+    if (fact?.kind === "source-index-signature") {
+      return { expression: current, fact };
+    }
+    if (context.input.ast.kindName(current) !== KindParenthesizedExpression) {
+      return undefined;
+    }
+    current = Node_Expression(context.input.ast, current);
+  }
+  return undefined;
+}
+
+function planRustSourceIndexUpdate(
+  expression: Node,
+  index: Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }>,
+  update: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>,
+  step: RustExpr,
+  returnsPrevious: boolean,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (!index.writable || !sourceIndexSelectedOperationMatches(expression, index, context) ||
+    !rustTargetTypeRefEquals(index.resultCarrier, update.resultCarrier) ||
+    context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, expression),
+      "rust.backend.project-index-update-contract",
+      "Project index update requires exact writable index, key, value, and update facts.",
+    ));
+    return undefined;
+  }
+  const receiverNode = Node_Expression(context.input.ast, expression);
+  const keyNode = ElementAccessExpression_ArgumentExpression(context.input.ast, expression);
+  const plannedReceiver = receiverNode === undefined
+    ? undefined
+    : planExpression(receiverNode, context);
+  const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
+  if (receiverNode === undefined || plannedReceiver === undefined || keyNode === undefined ||
+    key === undefined || !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_update_receiver");
+  const keyName = allocateRustSyntheticName(context.syntheticNames, "index_update_key");
+  const receiver: RustExpr = { kind: "path", path: receiverName };
+  const selectedKey: RustExpr = { kind: "path", path: keyName };
+  return planRustUpdateValue({
+    locationBindings: [{
+      name: receiverName,
+      value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+    }, {
+      name: keyName,
+      value: key,
+    }],
+    read: readRustProjectObjectIndex(
+      receiver,
+      index.storageName,
+      selectedKey,
+      index.resultCarrier,
+    ),
+    write: (value) => writeRustProjectObjectIndex(
+      receiver,
+      index.storageName,
+      selectedKey,
+      value,
+    ),
+    update,
+    step,
+    returnsPrevious,
+    context,
+  });
 }
 
 function findRustUpdateSourceStaticField(
@@ -5418,6 +5513,9 @@ function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | un
 
 function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "source-method-property") {
+    return planRustSourceMethodPropertyRead(node, fact, context);
+  }
   if (fact !== undefined && fact.kind === "source-accessor") {
     const read = fact.read;
     const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
@@ -5610,6 +5708,165 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
   return finishProviderOperationExpression(context, fact, planned, node);
 }
 
+function planRustSourceMethodPropertyRead(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-method-property" }>,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
+  const callable = rustCallableProtocol(fact.callableCarrier);
+  if (resultCarrier === undefined || callable === undefined ||
+    !rustTargetTypeRefEquals(resultCarrier, fact.callableCarrier) ||
+    !requireExpressionCarrier(
+      node,
+      resultCarrier,
+      context,
+      "rust.backend.source-method-property-carrier",
+    ) || !selectedOperationMatches(
+      context.input.facts.getSelectedTargetProperty(node),
+      fact.operationId,
+      "property",
+      resultCarrier,
+    )) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-method-property-selected-evidence",
+      "Project method-property read conflicts with its exact selected callable evidence.",
+    ));
+    return undefined;
+  }
+  const receiverNode = Node_Expression(context.input.ast, node);
+  const plannedReceiver = receiverNode === undefined
+    ? undefined
+    : planExpression(receiverNode, context);
+  if (receiverNode === undefined || plannedReceiver === undefined ||
+    context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-method-property-plan",
+      "Project method-property read has no exact receiver, callable type, or dispatch identity.",
+    ));
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "method_receiver",
+  );
+  const callableValue = planRustBoundProjectMethodCallable(
+    fact.declaration,
+    fact.receiverCarrier,
+    { kind: "path", path: receiverName },
+    fact.callableCarrier,
+    context,
+  );
+  if (callableValue === undefined) {
+    return undefined;
+  }
+  return {
+    kind: "block",
+    bindings: [{
+      name: receiverName,
+      value: plannedReceiver,
+    }],
+    value: callableValue,
+  };
+}
+
+function planRustBoundProjectMethodCallable(
+  declaration: Node,
+  receiverCarrier: TargetTypeRef,
+  receiver: RustExpr,
+  callableCarrier: TargetTypeRef,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const callable = rustCallableProtocol(callableCarrier);
+  const callableType = rustTypeFromCarrierInContext(callableCarrier, context);
+  const receiverDefinition = context.input.projectTypes.definitionForCarrier(receiverCarrier);
+  const selectedImplementation = receiverDefinition === undefined
+    ? undefined
+    : context.input.projectTypes.memberImplementation(
+        receiverDefinition,
+        declaration,
+      );
+  const selectedDeclaration = selectedImplementation?.kind === "resolved"
+    ? selectedImplementation.implementation.declaration
+    : declaration;
+  const variant = context.input.projectMethodDispatch.variantForMember(declaration, []);
+  const implementation = context.input.source.navigation.callableImplementation(
+    selectedDeclaration,
+  );
+  const implementationDeclaration = implementation.kind === "resolved"
+    ? implementation.implementation.declaration
+    : selectedDeclaration;
+  const targetName = context.input.names.nameForDeclaration(implementationDeclaration) ??
+    rustProjectCallableTargetName(implementationDeclaration, context.input);
+  if (callable === undefined || callableType === undefined ||
+    receiverDefinition === undefined || context.syntheticNames === undefined ||
+    (context.input.projectTypes.isPolymorphic(receiverDefinition)
+      ? variant === undefined
+      : !isValidRustIdentifier(targetName ?? ""))) {
+    return undefined;
+  }
+  const argumentsName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "method_arguments",
+  );
+  const argumentsList = callable.parameters.map((_, index) => ({
+    kind: "field" as const,
+    receiver: { kind: "path" as const, path: argumentsName },
+    name: String(index),
+  }));
+  const invocation: RustExpr = context.input.projectTypes.isPolymorphic(receiverDefinition)
+    ? {
+        kind: "method-call",
+        receiver: {
+          kind: "method-call",
+          receiver: {
+            kind: "field",
+            receiver,
+            name: rustProjectObjectDispatchField,
+          },
+          method: "clone",
+          args: [],
+        },
+        method: variant!.virtualSlot,
+        args: argumentsList,
+      }
+    : {
+        kind: "method-call",
+        receiver,
+        method: targetName!,
+        args: argumentsList,
+      };
+  const fallible = context.input.facts.getFact(
+    implementationDeclaration,
+    rustFallibleFactKey,
+  ) !== undefined || context.input.facts.getFact(
+    declaration,
+    rustFallibleFactKey,
+  ) !== undefined;
+  context.usedAliases?.add("rt");
+  return {
+    kind: "associated-call",
+    owner: callableType,
+    method: "new",
+    args: [{
+      kind: "closure-block",
+      params: [{ name: argumentsName, mutable: false }],
+      move: true,
+      async: false,
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: fallible
+            ? invocation
+            : { kind: "call", path: "Ok", args: [invocation] },
+        }],
+      },
+    }],
+  };
+}
+
 function planRustSourceUnionFieldRead(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-union-field" }>,
@@ -5659,6 +5916,19 @@ function planRustSourceUnionFieldRead(
 export function sourceFieldSelectedOperationMatches(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-field" }>,
+  context: RustPlanContext,
+): boolean {
+  return selectedOperationMatches(
+    context.input.facts.getSelectedTargetProperty(node),
+    fact.operationId,
+    "property",
+    fact.resultCarrier,
+  );
+}
+
+export function sourceMethodPropertySelectedOperationMatches(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-method-property" }>,
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
@@ -5765,6 +6035,19 @@ export function sourceUnionFieldSelectedOperationMatches(
   );
 }
 
+export function sourceIndexSelectedOperationMatches(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }>,
+  context: RustPlanContext,
+): boolean {
+  return selectedOperationMatches(
+    context.input.facts.getSelectedTargetElementAccess(node),
+    fact.operationId,
+    "indexer",
+    fact.resultCarrier,
+  );
+}
+
 function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   return planOptionalChainExpression(
     node,
@@ -5776,6 +6059,55 @@ function planElementAccess(node: Node, context: RustPlanContext): RustExpr | und
 
 function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact !== undefined && fact.kind === "source-index-signature") {
+    const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
+    if (resultCarrier === undefined || !requireExpressionCarrier(
+      node,
+      resultCarrier,
+      context,
+      "rust.backend.project-index-carrier",
+    ) || !selectedOperationMatches(
+      context.input.facts.getSelectedTargetElementAccess(node),
+      fact.operationId,
+      "indexer",
+      resultCarrier,
+    )) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.project-index-selected-evidence",
+        "Project index access conflicts with the TSTS-selected index-signature fact.",
+      ));
+      return undefined;
+    }
+    const receiverNode = Node_Expression(context.input.ast, node);
+    const keyNode = ElementAccessExpression_ArgumentExpression(context.input.ast, node);
+    const plannedReceiver = receiverNode === undefined
+      ? undefined
+      : planExpression(receiverNode, context);
+    const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
+    if (receiverNode === undefined || plannedReceiver === undefined || key === undefined ||
+      context.syntheticNames === undefined) {
+      return undefined;
+    }
+    const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_receiver");
+    const keyName = allocateRustSyntheticName(context.syntheticNames, "index_key");
+    return {
+      kind: "block",
+      bindings: [{
+        name: receiverName,
+        value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+      }, {
+        name: keyName,
+        value: key,
+      }],
+      value: readRustProjectObjectIndex(
+        { kind: "path", path: receiverName },
+        fact.storageName,
+        { kind: "path", path: keyName },
+        resultCarrier,
+      ),
+    };
+  }
   if (fact !== undefined && fact.kind === "fixed-index") {
     const optional = context.input.facts.getFact(node, rustOptionalChainFactKey);
     const innerResult = optional?.innerResultCarrier ?? expressionCarrier(node, context);
@@ -5991,6 +6323,9 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
 
 function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "record-index-literal") {
+    return planProjectIndexRecordLiteral(node, fact, context);
+  }
   if (fact === undefined || fact.kind !== "record-literal") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -6044,6 +6379,7 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
   }[] = [];
   const valuesByStorageIndex = new Map<number, RustExpr>();
   const finalContributionByStorageIndex = new Map<number, number>();
+  const finalContributionByMethod = new Map<Node, number>();
   fact.contributions.forEach((contribution, contributionIndex) => {
     if (contribution.kind === "property") {
       finalContributionByStorageIndex.set(
@@ -6053,17 +6389,25 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       return;
     }
     if (contribution.kind === "method") {
+      for (const declaration of contribution.contractDeclarations) {
+        finalContributionByMethod.set(declaration, contributionIndex);
+      }
       return;
     }
     for (const field of contribution.fields) {
       finalContributionByStorageIndex.set(field.targetStorageIndex, contributionIndex);
     }
+    for (const method of contribution.methods) {
+      finalContributionByMethod.set(method.contractDeclaration, contributionIndex);
+    }
   });
   const objectLiteralImplementation = fact.contributions.some((contribution) =>
-    contribution.kind === "method")
+    contribution.kind === "method" ||
+      contribution.kind === "spread" && contribution.methods.length > 0)
     ? context.objectLiteralImplementations?.forExpression(node)
     : undefined;
-  if (fact.contributions.some((contribution) => contribution.kind === "method") &&
+  if (fact.contributions.some((contribution) => contribution.kind === "method" ||
+      contribution.kind === "spread" && contribution.methods.length > 0) &&
     objectLiteralImplementation === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -6099,11 +6443,15 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     }
     if (contribution.kind === "method") {
       const implementations = objectLiteralImplementation?.implementations.filter((implementation) =>
-        implementation.sourceCallable === contribution.expression) ?? [];
+        implementation.kind === "authored" &&
+          implementation.sourceCallable === contribution.expression) ?? [];
       if (implementations.length === 0) {
         return undefined;
       }
       for (const implementation of implementations) {
+        if (implementation.kind !== "authored") {
+          return undefined;
+        }
         const closure = planExpression(contribution.expression, {
           ...context,
           typeParameterSubstitutions: new Map(implementation.typeParameterSubstitutions),
@@ -6151,9 +6499,14 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     }
     const retainedFields = contribution.fields.filter((field) =>
       finalContributionByStorageIndex.get(field.targetStorageIndex) === contributionIndex);
+    const retainedMethods = objectLiteralImplementation?.implementations.filter((implementation) =>
+      implementation.kind === "spread" &&
+        finalContributionByMethod.get(implementation.contractMethod) === contributionIndex) ?? [];
     const spreadName = allocateRustSyntheticName(
       context.syntheticNames,
-      retainedFields.length === 0 ? "_record_spread" : "record_spread",
+      retainedFields.length === 0 && retainedMethods.length === 0
+        ? "_record_spread"
+        : "record_spread",
     );
     bindings.push({ name: spreadName, value: plannedSpread });
     for (const field of retainedFields) {
@@ -6181,6 +6534,48 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       valuesByStorageIndex.set(
         field.targetStorageIndex,
         { kind: "path", path: fieldName },
+      );
+    }
+    for (const implementation of retainedMethods) {
+      if (implementation.kind !== "spread") {
+        return undefined;
+      }
+      const source = contribution.methods.find((method) =>
+        method.contractDeclaration === implementation.contractMethod);
+      if (source === undefined) {
+        return undefined;
+      }
+      const receiverName = allocateRustSyntheticName(
+        context.syntheticNames,
+        "record_method_receiver",
+      );
+      bindings.push({
+        name: receiverName,
+        value: {
+          kind: "method-call",
+          receiver: { kind: "path", path: spreadName },
+          method: "clone",
+          args: [],
+        },
+      });
+      const callableValue = planRustBoundProjectMethodCallable(
+        implementation.contractMethod,
+        contribution.sourceCarrier,
+        { kind: "path", path: receiverName },
+        source.callableCarrier,
+        context,
+      );
+      if (callableValue === undefined) {
+        return undefined;
+      }
+      const callableName = allocateRustSyntheticName(
+        context.syntheticNames,
+        "record_method",
+      );
+      bindings.push({ name: callableName, value: callableValue });
+      methodValues.set(
+        implementation.fieldName,
+        { kind: "path", path: callableName },
       );
     }
   }
@@ -6254,10 +6649,16 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
               args: [{
                 kind: "struct-literal",
                 path: objectLiteralImplementation.stateName,
-                fields: implementationFields.map((field) => ({
-                  name: field.name,
-                  value: field.value!,
-                })),
+                fields: [
+                  ...implementationFields.map((field) => ({
+                    name: field.name,
+                    value: field.value!,
+                  })),
+                  ...objectLiteralImplementation.methodOverrides.map((override) => ({
+                    name: override.fieldName,
+                    value: { kind: "none" as const },
+                  })),
+                ],
               }],
             },
           }, ...objectLiteralImplementation.implementations.map((implementation) => ({
@@ -6288,4 +6689,153 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     : bindings.length === 0
       ? constructed
       : { kind: "block", bindings, value: constructed };
+}
+
+function planProjectIndexRecordLiteral(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "record-index-literal" }>,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (!requireExpressionCarrier(
+    node,
+    fact.resultCarrier,
+    context,
+    "rust.backend.record-index-literal-carrier",
+  ) || context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const definition = context.input.projectTypes.definitionForCarrier(fact.resultCarrier);
+  const wrapperType = rustTypeFromCarrierInContext(fact.resultCarrier, context);
+  const stateType = rustProjectStateType(fact.resultCarrier, context);
+  const properties = context.input.ast.properties(node);
+  if (definition?.kind !== "interface" || context.input.projectTypes.isPolymorphic(definition) ||
+    wrapperType?.kind !== "named" || stateType?.kind !== "named" ||
+    properties.length !== fact.contributions.length ||
+    fact.contributions.some((contribution, index) => contribution.property !== properties[index])) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record-index-literal-contract",
+      "Index-backed object literal conflicts with its finalized interface, contribution order, or generated storage contract.",
+    ));
+    return undefined;
+  }
+  const mapName = allocateRustSyntheticName(context.syntheticNames, "record_index_entries");
+  const bindings: {
+    readonly name: string;
+    readonly value: RustExpr;
+  }[] = [];
+  const mapPath: RustExpr = { kind: "path", path: mapName };
+  let entries: RustExpr | undefined;
+  for (const contribution of fact.contributions) {
+    if (contribution.kind === "property") {
+      const initializer = ObjectLiteralProperty_Value(context.input.ast, contribution.property);
+      const value = initializer === contribution.expression
+        ? planExpression(contribution.expression, context)
+        : undefined;
+      const key = rustProjectIndexLiteralKey(contribution.sourceName, fact.keyCarrier);
+      if (value === undefined || key === undefined) {
+        return undefined;
+      }
+      const valueName = allocateRustSyntheticName(
+        context.syntheticNames,
+        `record_${contribution.sourceName}`,
+      );
+      bindings.push({ name: valueName, value });
+      const contributionEntries: RustExpr = {
+        kind: "call",
+        path: "std::iter::once",
+        args: [{
+          kind: "tuple-literal",
+          elements: [key, { kind: "path", path: valueName }],
+        }],
+      };
+      entries = appendRustRecordEntries(entries, contributionEntries);
+      continue;
+    }
+    const spreadExpression = SpreadAssignment_Expression(
+      context.input.ast,
+      contribution.property,
+    );
+    const spread = spreadExpression === contribution.expression
+      ? planExpression(contribution.expression, context)
+      : undefined;
+    if (spread === undefined) {
+      return undefined;
+    }
+    const spreadName = allocateRustSyntheticName(context.syntheticNames, "record_index_spread");
+    const spreadEntriesName = allocateRustSyntheticName(
+      context.syntheticNames,
+      "record_index_spread_entries",
+    );
+    bindings.push({ name: spreadName, value: spread }, {
+      name: spreadEntriesName,
+      value: readRustProjectObjectIndexStorage(
+        { kind: "path", path: spreadName },
+        contribution.sourceStorageName,
+      ),
+    });
+    const spreadEntries: RustExpr = { kind: "path", path: spreadEntriesName };
+    entries = entries === undefined
+      ? {
+          kind: "method-call",
+          receiver: spreadEntries,
+          method: "into_iter",
+          args: [],
+        }
+      : appendRustRecordEntries(entries, spreadEntries);
+  }
+  bindings.push({
+    name: mapName,
+    value: entries === undefined
+      ? { kind: "call", path: "std::collections::HashMap::new", args: [] }
+      : {
+          kind: "call",
+          path: "std::collections::HashMap::from_iter",
+          args: [entries],
+        },
+  });
+  context.usedAliases?.add("rt");
+  return {
+    kind: "block",
+    bindings,
+    value: createRustProjectObject(
+      wrapperType.path,
+      stateType.path,
+      [{ name: fact.storageName, value: mapPath }],
+    ),
+  };
+}
+
+function appendRustRecordEntries(
+  current: RustExpr | undefined,
+  next: RustExpr,
+): RustExpr {
+  return current === undefined
+    ? next
+    : {
+        kind: "method-call",
+        receiver: current,
+        method: "chain",
+        args: [next],
+      };
+}
+
+function rustProjectIndexLiteralKey(
+  sourceName: string,
+  keyCarrier: TargetTypeRef,
+): RustExpr | undefined {
+  if (isRustStringCarrier(keyCarrier)) {
+    return {
+      kind: "call",
+      path: "String::from",
+      args: [{ kind: "str-literal", value: sourceName }],
+    };
+  }
+  if (isRustIntegerCarrier(keyCarrier)) {
+    const value = parseSourceIntegerLiteral(sourceName);
+    return value === undefined
+      ? undefined
+      : { kind: "int-literal", text: value.toString(10) };
+  }
+  return undefined;
 }

@@ -90,6 +90,25 @@ test("string padding selects one exact overload row from finalized carriers", ()
   }), undefined);
 });
 
+test("array index rows distinguish checked source and runtime result carriers", () => {
+  const elementCarrier = rustSourcePrimitiveTargetType("int32");
+  const selected = selectJsSurfaceOperation({
+    ownerName: "ReadonlyArray",
+    memberName: "index",
+    operationKind: "indexer",
+    receiverCarrier: rustJsArrayTargetType(elementCarrier),
+    argumentCarriers: [elementCarrier],
+  });
+
+  assert.equal(selected?.fact.kind, "provider-operation");
+  assert.deepEqual(selected?.fact.sourceResultCarrier, elementCarrier);
+  assert.deepEqual(selected?.fact.resultCarrier, {
+    kind: "target-named",
+    id: "rust.std.Option",
+    typeArguments: [elementCarrier],
+  });
+});
+
 test("unavailable argument carriers defer only when one operation row remains", () => {
   const unresolvedCompatibility = (_expected, actual) => actual === undefined ? 100 : undefined;
   const json = selectJsSurfaceOperation({

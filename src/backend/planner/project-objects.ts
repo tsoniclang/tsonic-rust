@@ -118,6 +118,186 @@ export function writeRustProjectObjectField(
   };
 }
 
+export function readRustProjectMethodOverride(
+  receiver: RustExpr,
+  storagePath: string | readonly string[],
+): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with",
+    args: [{
+      kind: "closure",
+      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      body: {
+        kind: "method-call",
+        receiver: rustProjectObjectStatePath(storagePath),
+        method: "clone",
+        args: [],
+      },
+    }],
+  };
+}
+
+export function writeRustProjectMethodOverride(
+  receiver: RustExpr,
+  storagePath: string | readonly string[],
+  value: RustExpr,
+): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with_mut",
+    args: [{
+      kind: "closure",
+      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      body: {
+        kind: "assignment",
+        operator: "=",
+        target: rustProjectObjectStatePath(storagePath),
+        value: { kind: "call", path: "Some", args: [value] },
+      },
+    }],
+  };
+}
+
+export function readRustProjectObjectIndex(
+  receiver: RustExpr,
+  storageName: string,
+  key: RustExpr,
+  resultCarrier: TargetTypeRef,
+): RustExpr {
+  const value: RustExpr = {
+    kind: "index",
+    receiver: rustProjectObjectStatePath(storageName),
+    index: { kind: "reference", expr: key },
+  };
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with",
+    args: [{
+      kind: "closure",
+      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      body: isRustCopyCarrier(resultCarrier)
+        ? value
+        : { kind: "method-call", receiver: value, method: "clone", args: [] },
+    }],
+  };
+}
+
+export function readRustProjectObjectIndexStorage(
+  receiver: RustExpr,
+  storageName: string,
+): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with",
+    args: [{
+      kind: "closure",
+      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      body: {
+        kind: "method-call",
+        receiver: rustProjectObjectStatePath(storageName),
+        method: "clone",
+        args: [],
+      },
+    }],
+  };
+}
+
+export function writeRustProjectObjectIndex(
+  receiver: RustExpr,
+  storageName: string,
+  key: RustExpr,
+  value: RustExpr,
+): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with_mut",
+    args: [{
+      kind: "closure-block",
+      params: [{ name: rustProjectObjectStateBinding, mutable: false }],
+      move: false,
+      async: false,
+      body: {
+        statements: [{
+          kind: "let",
+          name: "_",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: rustProjectObjectStatePath(storageName),
+            method: "insert",
+            args: [key, value],
+          },
+        }],
+      },
+    }],
+  };
+}
+
+export function mutateRustProjectObjectIndex(
+  receiver: RustExpr,
+  storageName: string,
+  key: RustExpr,
+  mutation: (value: RustExpr) => RustExpr | undefined,
+): RustExpr | undefined {
+  const location: RustExpr = {
+    kind: "dereference",
+    pointer: {
+      kind: "method-call",
+      receiver: {
+        kind: "method-call",
+        receiver: rustProjectObjectStatePath(storageName),
+        method: "get_mut",
+        args: [{ kind: "reference", expr: key }],
+      },
+      method: "expect",
+      args: [{ kind: "str-literal", value: "selected index key must exist" }],
+    },
+  };
+  const body = mutation(location);
+  return body === undefined
+    ? undefined
+    : {
+        kind: "method-call",
+        receiver: {
+          kind: "field",
+          receiver,
+          name: rustProjectObjectStateField,
+        },
+        method: "with_mut",
+        args: [{
+          kind: "closure",
+          params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+          body,
+        }],
+      };
+}
+
 export function writeRustStructuralObjectField(
   receiver: RustExpr,
   storagePath: string | readonly string[],

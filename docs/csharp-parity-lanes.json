@@ -112,10 +112,10 @@
     "id": "declarations.open-generic-virtual-callers",
     "area": "declarations",
     "source": "function call<T>(base: Base, value: T): T { return base.identity<T>(value); }",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/declaration-class-methods.ts",
     "rustProof": "test/native-semantics.test.mjs",
-    "action": "propagate finite caller specializations through the callable dependency graph before closing dynamic-dispatch slots"
+    "action": "retain finite caller-specialization propagation through the callable dependency graph before closing dynamic-dispatch slots"
   },
   {
     "id": "declarations.interface-properties-methods",
@@ -137,10 +137,10 @@
     "id": "declarations.interface-index-signatures",
     "area": "declarations",
     "source": "interface Values { [key: string]: number; }",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/declaration-interfaces.ts",
-    "rustProof": "src/backend/planner/declarations-nominal.ts",
-    "action": "represent the selected index contract with a closed map or generated index trait backed by exact element evidence"
+    "rustProof": "test/object-property-parity.test.mjs",
+    "action": "retain exact map-backed index storage, selected key/value carriers, source-ordered construction, and copy-or-clone reads"
   },
   {
     "id": "declarations.enums",
@@ -197,19 +197,19 @@
     "id": "objects.method-value-operations",
     "area": "objects",
     "source": "const next = counter.next; counter.next = replacement;",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-methods.ts",
-    "rustProof": "src/backend/planner/object-literal-implementations.ts",
-    "action": "represent methods as mutable runtime properties so reads preserve this semantics and writes replace the exact property value"
+    "rustProof": "test/object-property-parity.test.mjs",
+    "action": "retain exact bound-callable reads and independently replaceable method-property storage"
   },
   {
     "id": "objects.method-spread",
     "area": "objects",
     "source": "const derived: Counter = { ...counter, value: 2 };",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literal-spread.ts",
-    "rustProof": "src/backend/planner/object-literal-implementations.ts",
-    "action": "copy exact callable property storage alongside data fields in source evaluation order"
+    "rustProof": "test/object-property-parity.test.mjs",
+    "action": "retain exact callable-property projection alongside data fields in source evaluation order"
   },
   {
     "id": "objects.overloaded-method-declarations",
@@ -397,10 +397,10 @@
     "id": "providers.generic-bounds",
     "area": "providers",
     "source": "import { constrained } from \"@tsonic/rust/crates/library/index.js\";",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/test/dotnet-provider-generic-constraints.test.mjs",
-    "rustProof": "src/providers/compiler/rustdoc.ts",
-    "action": "project representable Rust bounds into exact provider metadata and generated where clauses"
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "retain exact Clone and Copy provider bounds through declaration models and generated generic requirements"
   },
   {
     "id": "providers.borrowed-results",
@@ -422,17 +422,17 @@
     "id": "providers.c-variadics",
     "area": "providers",
     "source": "unsafe(() => variadic(format, first, second));",
-    "classification": "implementation-gap",
-    "rustProof": "src/providers/compiler/rustdoc.ts",
-    "action": "project C variadic tails as an explicit unsafe provider ABI without pretending they are ordinary Rust rest parameters"
+    "classification": "implemented",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "retain C variadic tails as an explicit unsafe provider ABI without treating them as ordinary Rust rest parameters"
   },
   {
     "id": "providers.mutable-statics",
     "area": "providers",
     "source": "unsafe(() => externalCounter.value++);",
-    "classification": "implementation-gap",
-    "rustProof": "src/providers/compiler/rustdoc.ts",
-    "action": "emit exact unsafe read and write operations over the selected static identity"
+    "classification": "implemented",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "retain exact unsafe read and write operations over the selected mutable static identity"
   },
   {
     "id": "providers.traits-associated-items",
@@ -446,9 +446,9 @@
     "id": "providers.rust-unions",
     "area": "providers",
     "source": "unsafe(() => payload.integer);",
-    "classification": "implementation-gap",
-    "rustProof": "src/providers/compiler/model.ts",
-    "action": "project union fields as explicit unsafe selected operations"
+    "classification": "implemented",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "retain union fields as explicit unsafe selected operations over exact provider identities"
   },
   {
     "id": "providers.macros",

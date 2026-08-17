@@ -39,6 +39,12 @@ import type {
   RustProjectMethodDispatchPlanRegistry,
 } from "../source/rust-target-semantics/project-method-dispatch.js";
 import {
+  createRustProjectMethodPropertyPlanRegistry,
+} from "../source/rust-target-semantics/project-method-properties.js";
+import type {
+  RustProjectMethodPropertyPlanRegistry,
+} from "../source/rust-target-semantics/project-method-properties.js";
+import {
   createRustSourceCallableSpecializationPlanRegistry,
 } from "../source/rust-target-semantics/source-callable-specializations.js";
 import type {
@@ -73,6 +79,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly artifacts: RustTranslationArtifactGraph;
   readonly projectTypes: RustProjectTypePolicyRegistry;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
+  readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlanRegistry;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly providerSemantics: RustProviderSemantics;
@@ -103,6 +110,7 @@ export function createRustTranslationContext(
   const artifacts = createRustTranslationArtifactGraph(ast);
   const projectTypes = createRustProjectTypePolicyRegistry();
   const projectMethodDispatch = createRustProjectMethodDispatchPlanRegistry();
+  const projectMethodProperties = createRustProjectMethodPropertyPlanRegistry();
   const sourceCallableSpecializations = createRustSourceCallableSpecializationPlanRegistry();
   const structuralShapes = createRustStructuralShapePlanRegistry();
   const safetyApplications = createRustSafetyApplicationFactIndex({
@@ -130,6 +138,7 @@ export function createRustTranslationContext(
     artifacts,
     projectTypes,
     projectMethodDispatch,
+    projectMethodProperties,
     sourceCallableSpecializations,
     structuralShapes,
     safetyApplications,

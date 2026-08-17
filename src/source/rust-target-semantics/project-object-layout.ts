@@ -7,10 +7,16 @@ export interface RustProjectObjectField {
   readonly storageIndex: number;
 }
 
+export interface RustProjectObjectIndexSignature {
+  readonly declaration: Node;
+  readonly keyParameter: Node;
+}
+
 export interface RustProjectObjectLayout {
   readonly declaration: Node;
   readonly kind: "class" | "interface";
   readonly fields: readonly RustProjectObjectField[];
+  readonly indexSignatures: readonly RustProjectObjectIndexSignature[];
 }
 
 export interface RustProjectStaticFieldStorage {
@@ -37,12 +43,22 @@ export function rustProjectObjectLayout(
     return undefined;
   }
   const fields: RustProjectObjectField[] = [];
+  const indexSignatures: RustProjectObjectIndexSignature[] = [];
   const seen = new Set<string>();
   for (const member of members as readonly Node[]) {
     const memberKind = ast.kindName(member);
     const isField = objectKind === "class"
       ? memberKind === "KindPropertyDeclaration" && !ast.hasModifierKind(member, "static")
       : memberKind === "KindPropertySignature";
+    if (objectKind === "interface" && memberKind === "KindIndexSignature") {
+      const parameters = ast.parameters(member);
+      const keyParameter = parameters.length === 1 ? parameters[0] : undefined;
+      if (keyParameter === undefined) {
+        return undefined;
+      }
+      indexSignatures.push({ declaration: member, keyParameter });
+      continue;
+    }
     if (!isField) {
       continue;
     }
@@ -54,7 +70,12 @@ export function rustProjectObjectLayout(
     seen.add(sourceName);
     fields.push({ declaration: member, sourceName, storageIndex: fields.length });
   }
-  return { declaration, kind: objectKind, fields: Object.freeze(fields) };
+  return {
+    declaration,
+    kind: objectKind,
+    fields: Object.freeze(fields),
+    indexSignatures: Object.freeze(indexSignatures),
+  };
 }
 
 export function rustProjectObjectField(
@@ -65,6 +86,17 @@ export function rustProjectObjectField(
   return owner === undefined
     ? undefined
     : rustProjectObjectLayout(owner, ast)?.fields.find((field) => field.declaration === declaration);
+}
+
+export function rustProjectObjectIndexSignature(
+  declaration: Node,
+  ast: AstReader,
+): RustProjectObjectIndexSignature | undefined {
+  const owner = ast.parent(declaration);
+  return owner === undefined
+    ? undefined
+    : rustProjectObjectLayout(owner, ast)?.indexSignatures.find((index) =>
+        index.declaration === declaration);
 }
 
 export function rustProjectStaticFieldStorage(

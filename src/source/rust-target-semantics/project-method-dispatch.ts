@@ -227,7 +227,7 @@ function projectDispatchUsedNames(
     if (targetName !== undefined) {
       used.add(targetName);
     }
-    for (const role of ["read", "write", "virtual", "exact", "static"] as const) {
+    for (const role of ["read", "write", "virtual", "exact", "method-write", "static"] as const) {
       const slot = input.projectTypes.memberSlotName(member, role);
       if (slot !== undefined) {
         used.add(slot);

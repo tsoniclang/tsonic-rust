@@ -39,7 +39,13 @@ export interface RustProjectTypeIssue {
   readonly message: string;
 }
 
-type RustProjectMemberSlotRole = "read" | "write" | "virtual" | "exact" | "static";
+type RustProjectMemberSlotRole =
+  | "read"
+  | "write"
+  | "virtual"
+  | "exact"
+  | "method-write"
+  | "static";
 
 interface RustProjectMemberSlotCandidate {
   readonly declaration: Node;
@@ -715,6 +721,31 @@ export function createRustProjectTypePolicy(
     }
     for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
       const kind = host.ast.kindName(member);
+      if (definition.kind === "interface" && kind === "KindIndexSignature") {
+        names.set(
+          member,
+          allocateGeneratedName(usedNames, "index_entries"),
+        );
+        continue;
+      }
+      if ((kind === "KindMethodDeclaration" || kind === "KindMethodSignature") &&
+        !host.ast.hasModifierKind(member, "static")) {
+        const implementation = host.navigation.callableImplementation(member);
+        const canonical = implementation.kind === "resolved"
+          ? implementation.implementation.declaration
+          : member;
+        const existing = names.get(canonical);
+        const targetName = host.names.nameForDeclaration(member);
+        if (targetName !== undefined) {
+          const storageName = existing ?? allocateGeneratedName(
+            usedNames,
+            `${rustSnakeCaseIdentifier(targetName)}_override`,
+          );
+          names.set(member, storageName);
+          names.set(canonical, storageName);
+        }
+        continue;
+      }
       const isField = definition.kind === "class"
         ? kind === "KindPropertyDeclaration" && !host.ast.hasModifierKind(member, "static")
         : kind === "KindPropertySignature";
@@ -794,7 +825,11 @@ export function createRustProjectTypePolicy(
         candidates.push({ declaration: member, targetName, roles: ["write"] });
       } else if ((kind === "KindMethodDeclaration" || kind === "KindMethodSignature") &&
         !host.ast.hasModifierKind(member, "static")) {
-        candidates.push({ declaration: member, targetName, roles: ["virtual", "exact"] });
+        candidates.push({
+          declaration: member,
+          targetName,
+          roles: ["virtual", "exact", "method-write"],
+        });
       }
     }
     for (const candidate of candidates) {
@@ -805,7 +840,9 @@ export function createRustProjectTypePolicy(
         new Map<RustProjectMemberSlotRole, string>();
       for (const role of candidate.roles) {
         const existing = canonicalNames.get(role);
-        const preferredRole = role === "virtual" ? "dispatch" : role;
+        const preferredRole = role === "virtual"
+          ? "dispatch"
+          : role === "method-write" ? "replace" : role;
         const name = existing ?? allocateGeneratedName(
           dispatchUsedNames,
           `${preferredRole}_${rustGeneratedNameComponent(definition.targetName)}_${rustGeneratedNameComponent(candidate.targetName)}`,

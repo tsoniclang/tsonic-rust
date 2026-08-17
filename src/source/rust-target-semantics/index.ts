@@ -145,6 +145,7 @@ import {
   rustSourceUnionCarrierValue,
   rustSourceUnionTargetType,
   rustStructuralObjectCarrierValue,
+  rustCarrierSupportsClone,
 } from "../rust-target-types.js";
 import {
   parseSourceBigIntLiteral,
@@ -287,6 +288,7 @@ interface RustFactWalk {
   }>;
   readonly capturedBindingStorage: Map<Node, "value" | "location">;
   readonly objectLiteralMethodExpressions: Node[];
+  readonly objectLiteralMethodSpreadExpressions: Node[];
   readonly moduleBindings: RustModuleBindingPolicy;
   currentThisCarrier?: TargetTypeRef;
   currentSuperCarrier?: TargetTypeRef;
@@ -655,6 +657,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     },
     sourceCallableAbi,
     projectTypes: context.projectTypes,
+    projectMethodProperties: context.projectMethodProperties,
   };
   const walk: RustFactWalk = {
     context,
@@ -670,6 +673,7 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
     capturedBindingStorage: new Map<Node, "value" | "location">(),
     objectLiteralMethodExpressions: [],
+    objectLiteralMethodSpreadExpressions: [],
     moduleBindings,
     deferredCallbackCalls: new WeakMap(),
     preparedCallbackCalls: new Map(),
@@ -803,6 +807,11 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
   context.projectMethodDispatch.initialize({
     ast,
     names: context.names,
+    projectTypes,
+  });
+  context.projectMethodProperties.initialize({
+    ast,
+    navigation: context.source.navigation,
     projectTypes,
   });
   for (const issue of recordRustObjectLiteralMethodAdapterFacts({
@@ -1868,6 +1877,12 @@ function resolveSelectedFlowReadCarrier(
   if (rustOptionElementCarrier(sourceCarrier) !== undefined &&
     walk.context.semanticsFor(expression).isNullish(selectedType)) {
     return sourceCarrier;
+  }
+  const operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
+    walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+  if (operation?.kind === "provider-operation" &&
+    operation.sourceResultCarrier !== undefined) {
+    return operation.sourceResultCarrier;
   }
   const typeNode = Node_Type(walk.context.ast, declaration);
   const typeSourceFile = typeNode === undefined
@@ -4921,6 +4936,29 @@ function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): void {
       if (fieldCarrier !== undefined) {
         setCarrierFact(walk, member, fieldCarrier);
       }
+    } else if (memberKind === "KindIndexSignature") {
+      const parameters = requireDenseSourceNodes(
+        walk,
+        ast.parameters(member),
+        "Interface index signature contains an undefined key parameter slot.",
+      );
+      const keyParameter = parameters?.length === 1 ? parameters[0] : undefined;
+      const keyCarrier = keyParameter === undefined
+        ? undefined
+        : resolveTypeNodeCarrier(walk, Node_Type(ast, keyParameter));
+      const valueCarrier = resolveTypeNodeCarrier(walk, Node_Type(ast, member));
+      if (keyParameter === undefined || keyCarrier === undefined || valueCarrier === undefined) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_INTERFACE_INDEX_SIGNATURE_NOT_CLOSED",
+          "Interface index signatures require one exact key carrier and one exact value carrier.",
+          member,
+          ["target.capability=rust.project-index-signature"],
+        );
+        continue;
+      }
+      setCarrierFact(walk, keyParameter, keyCarrier);
+      setCarrierFact(walk, member, valueCarrier);
     } else if (memberKind === "KindMethodSignature") {
       walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
         { message: "rust reference-backed project interface method self mode" },
@@ -4985,6 +5023,21 @@ function resolveRecordLiteralCarrier(
   const properties = requireDenseSourceNodes(walk, ast.properties(expression), "Object literal contains an undefined or non-data property slot.");
   if (properties === undefined) {
     return undefined;
+  }
+  const indexedDefinition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
+  const indexedLayout = indexedDefinition?.kind === "interface"
+    ? rustProjectObjectLayout(indexedDefinition.declaration, ast)
+    : undefined;
+  if (indexedLayout !== undefined && indexedLayout.indexSignatures.length !== 0) {
+    return resolveProjectIndexRecordLiteral(
+      walk,
+      expression,
+      sourceFile,
+      selectedExpected,
+      properties,
+      indexedDefinition!,
+      indexedLayout,
+    );
   }
   const explicitPropertiesByName = new Map<string, Node>();
   let containsSpread = false;
@@ -5191,6 +5244,36 @@ function resolveRecordLiteralCarrier(
         });
         assignedStorageIndexes.add(targetField.storageIndex);
       }
+      const sourceDefinition = walk.context.projectTypes.definitionForCarrier(sourceCarrier);
+      const spreadMethods: {
+        readonly contractDeclaration: Node;
+        readonly sourceDeclaration: Node;
+        readonly callableCarrier: TargetTypeRef;
+      }[] = [];
+      if (storage === "project-object") {
+        for (const contractDeclaration of selectedMethodDeclarations) {
+          const implementation = sourceDefinition === undefined
+            ? undefined
+            : walk.context.projectTypes.memberImplementation(
+                sourceDefinition,
+                contractDeclaration,
+              );
+          const callableCarrier = resolveProjectMethodPropertyCarrier(
+            walk,
+            contractDeclaration,
+            sourceCarrier,
+          );
+          if (implementation?.kind !== "resolved" || callableCarrier === undefined) {
+            return undefined;
+          }
+          spreadMethods.push({
+            contractDeclaration,
+            sourceDeclaration: implementation.implementation.declaration,
+            callableCarrier,
+          });
+          assignedMethodDeclarations.add(contractDeclaration);
+        }
+      }
       contributions.push({
         kind: "spread",
         property,
@@ -5198,6 +5281,7 @@ function resolveRecordLiteralCarrier(
         sourceStorage: sourceShape.storage,
         sourceCarrier,
         fields: spreadFields,
+        methods: spreadMethods,
       });
       continue;
     }
@@ -5370,6 +5454,190 @@ function resolveRecordLiteralCarrier(
   if (contributions.some((contribution) => contribution.kind === "method")) {
     walk.objectLiteralMethodExpressions.push(expression);
   }
+  if (contributions.some((contribution) =>
+    contribution.kind === "spread" && contribution.methods.length > 0)) {
+    walk.objectLiteralMethodSpreadExpressions.push(expression);
+  }
+  return setCarrierFact(walk, expression, resultCarrier);
+}
+
+function resolveProjectMethodPropertyCarrier(
+  walk: RustFactWalk,
+  declaration: Node,
+  receiverCarrier: TargetTypeRef,
+): TargetTypeRef | undefined {
+  const owner = walk.context.projectTypes.definitionContainingDeclaration(declaration);
+  const relationship = owner === undefined
+    ? undefined
+    : walk.context.projectTypes.relationship(receiverCarrier, owner);
+  const parameters = requireDenseSourceNodes(
+    walk,
+    walk.context.ast.parameters(declaration),
+    "Project method property contains an undefined parameter slot.",
+  );
+  if (relationship?.kind !== "related" || parameters === undefined ||
+    walk.context.ast.typeParameters(declaration).length !== 0 ||
+    walk.context.ast.hasModifierKind(declaration, "async") ||
+    walk.context.facts.get(declaration, rustGeneratorFactKey) !== undefined) {
+    return undefined;
+  }
+  const parameterCarriers = parameters.map((parameter) => {
+    const abi = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey);
+    return abi?.form === "required" && abi.mode === "value"
+      ? walk.context.projectTypes.instantiateMemberCarrier(
+          parameter,
+          relationship.targetType,
+          abi.parameterCarrier,
+        )
+      : undefined;
+  });
+  const returnCarrier = walk.context.facts.get(
+    declaration,
+    rustSourceCallableReturnFactKey,
+  )?.returnCarrier;
+  const resultCarrier = returnCarrier === undefined
+    ? undefined
+    : walk.context.projectTypes.instantiateMemberCarrier(
+        declaration,
+        relationship.targetType,
+        returnCarrier,
+      );
+  return resultCarrier === undefined || parameterCarriers.some((carrier) => carrier === undefined)
+    ? undefined
+    : rustCallableTargetType(
+        parameterCarriers as TargetTypeRef[],
+        resultCarrier,
+      );
+}
+
+function resolveProjectIndexRecordLiteral(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  resultCarrier: TargetTypeRef,
+  properties: readonly Node[],
+  definition: import("./project-type-policy.js").RustProjectTypeDefinition,
+  layout: import("./project-object-layout.js").RustProjectObjectLayout,
+): TargetTypeRef | undefined {
+  if (definition.kind !== "interface" || layout.indexSignatures.length !== 1 ||
+    layout.fields.length !== 0 ||
+    walk.context.projectTypes.isPolymorphic(definition)) {
+    return undefined;
+  }
+  const index = layout.indexSignatures[0]!;
+  const declaredKeyCarrier = walk.context.facts.get(index.keyParameter, rustRuntimeCarrierKey)?.carrier ??
+    resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, index.keyParameter));
+  const declaredValueCarrier = walk.context.facts.get(index.declaration, rustRuntimeCarrierKey)?.carrier ??
+    resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, index.declaration));
+  const keyCarrier = declaredKeyCarrier === undefined
+    ? undefined
+    : walk.context.projectTypes.instantiateMemberCarrier(
+        index.keyParameter,
+        resultCarrier,
+        declaredKeyCarrier,
+      );
+  const valueCarrier = declaredValueCarrier === undefined
+    ? undefined
+    : walk.context.projectTypes.instantiateMemberCarrier(
+        index.declaration,
+        resultCarrier,
+        declaredValueCarrier,
+      );
+  const storageName = walk.context.projectTypes.fieldStorageName(
+    definition,
+    index.declaration,
+  );
+  if (keyCarrier === undefined || valueCarrier === undefined || storageName === undefined ||
+    (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
+    !rustCarrierSupportsClone(valueCarrier)) {
+    return undefined;
+  }
+  const contributions: Extract<
+    RustTargetOperationFact,
+    { readonly kind: "record-index-literal" }
+  >["contributions"][number][] = [];
+  for (const property of properties) {
+    const kind = walk.context.ast.kindName(property);
+    if (kind === KindSpreadAssignment) {
+      const spreadExpression = SpreadAssignment_Expression(walk.context.ast, property);
+      const sourceCarrier = spreadExpression === undefined
+        ? undefined
+        : resolveExpressionCarrier(walk, spreadExpression, sourceFile, undefined);
+      const sourceDefinition = sourceCarrier === undefined
+        ? undefined
+        : walk.context.projectTypes.definitionForCarrier(sourceCarrier);
+      const sourceLayout = sourceDefinition?.kind === "interface"
+        ? rustProjectObjectLayout(sourceDefinition.declaration, walk.context.ast)
+        : undefined;
+      const sourceIndex = sourceLayout?.indexSignatures.length === 1 &&
+          sourceLayout.fields.length === 0 && !walk.context.projectTypes.isPolymorphic(sourceDefinition!)
+        ? sourceLayout.indexSignatures[0]
+        : undefined;
+      const sourceDeclaredKey = sourceIndex === undefined
+        ? undefined
+        : walk.context.facts.get(sourceIndex.keyParameter, rustRuntimeCarrierKey)?.carrier ??
+          resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, sourceIndex.keyParameter));
+      const sourceDeclaredValue = sourceIndex === undefined
+        ? undefined
+        : walk.context.facts.get(sourceIndex.declaration, rustRuntimeCarrierKey)?.carrier ??
+          resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, sourceIndex.declaration));
+      const sourceKey = sourceDeclaredKey === undefined || sourceCarrier === undefined
+        ? undefined
+        : walk.context.projectTypes.instantiateMemberCarrier(
+            sourceIndex!.keyParameter,
+            sourceCarrier,
+            sourceDeclaredKey,
+          );
+      const sourceValue = sourceDeclaredValue === undefined || sourceCarrier === undefined
+        ? undefined
+        : walk.context.projectTypes.instantiateMemberCarrier(
+            sourceIndex!.declaration,
+            sourceCarrier,
+            sourceDeclaredValue,
+          );
+      const sourceStorageName = sourceDefinition === undefined || sourceIndex === undefined
+        ? undefined
+        : walk.context.projectTypes.fieldStorageName(sourceDefinition, sourceIndex.declaration);
+      if (spreadExpression === undefined || sourceCarrier === undefined || sourceIndex === undefined ||
+        sourceStorageName === undefined || !rustTargetTypeRefEquals(sourceKey, keyCarrier) ||
+        !rustTargetTypeRefEquals(sourceValue, valueCarrier)) {
+        return undefined;
+      }
+      contributions.push({
+        kind: "spread",
+        property,
+        expression: spreadExpression,
+        sourceCarrier,
+        sourceStorageName,
+      });
+      continue;
+    }
+    if (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment") {
+      return undefined;
+    }
+    const name = walk.context.ast.name(property);
+    const sourceName = name === undefined ? "" : walk.context.ast.text(name);
+    const initializer = ObjectLiteralProperty_Value(walk.context.ast, property);
+    if (sourceName.length === 0 || initializer === undefined ||
+      resolveExpressionCarrier(walk, initializer, sourceFile, valueCarrier) === undefined) {
+      return undefined;
+    }
+    contributions.push({
+      kind: "property",
+      property,
+      sourceName,
+      expression: initializer,
+    });
+  }
+  setRustOperationFact(walk, expression, {
+    kind: "record-index-literal",
+    operationId: "tsonic.rust.record.index-literal",
+    resultCarrier,
+    keyCarrier,
+    valueCarrier,
+    storageName,
+    contributions,
+  });
   return setCarrierFact(walk, expression, resultCarrier);
 }
 
@@ -6221,12 +6489,32 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
     }
   }
   const fallible = new Set<Node>();
+  for (const usage of walk.context.projectMethodProperties.usages) {
+    if (usage.writable) {
+      fallible.add(usage.declaration);
+    }
+  }
   for (const expression of walk.objectLiteralMethodExpressions) {
     const adapters = walk.context.facts.get(expression, rustObjectLiteralMethodAdapterFactKey) ??
       walk.context.facts.resolve(expression, rustObjectLiteralMethodAdapterFactKey);
     for (const dispatch of adapters?.dispatches ?? []) {
       if (dispatch.adapterFallible) {
         fallible.add(dispatch.contractMethod);
+      }
+    }
+  }
+  for (const expression of walk.objectLiteralMethodSpreadExpressions) {
+    const operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
+      walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+    if (operation?.kind !== "record-literal") {
+      continue;
+    }
+    for (const contribution of operation.contributions) {
+      if (contribution.kind !== "spread") {
+        continue;
+      }
+      for (const method of contribution.methods) {
+        fallible.add(method.contractDeclaration);
       }
     }
   }

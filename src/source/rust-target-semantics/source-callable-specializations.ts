@@ -432,7 +432,7 @@ function assignCallableVariantNames(
       .forEach((entry, index) => {
         const targetName = allocateRustGeneratedName(
           used,
-          `__tsonic_${base}_specialization_${index + 1}`,
+          `${base}_specialization_${index + 1}`,
         );
         entry.targetName = targetName;
       });
