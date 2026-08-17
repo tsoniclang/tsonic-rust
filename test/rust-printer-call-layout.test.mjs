@@ -41,6 +41,72 @@ test("fitting method-call arguments remain on one rustfmt line", () => {
   );
 });
 
+test("single binary call arguments retain rustfmt's attached continuation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "selected",
+      visibility: "public",
+      params: [],
+      returnType: {
+        kind: "named",
+        path: "Result",
+        typeArguments: [
+          { kind: "primitive", name: "i32" },
+          { kind: "named", path: "Error" },
+        ],
+      },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: "Ok",
+            args: [{
+              kind: "binary",
+              operator: "+",
+              left: {
+                kind: "index",
+                receiver: { kind: "path", path: "values" },
+                index: {
+                  kind: "try",
+                  errorDomain: "runtime",
+                  expr: {
+                    kind: "call",
+                    path: "tsonic_rust_runtime::conversions::i32_to_usize",
+                    args: [{ kind: "int-literal", text: "0" }],
+                  },
+                },
+              },
+              right: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::conversions::usize_to_i32",
+                  args: [{
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "values" },
+                    method: "len",
+                    args: [],
+                  }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /Ok\(values\[tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\]\n {8}\+ tsonic_rust_runtime::conversions::usize_to_i32\(values\.len\(\)\)\?\)/u,
+  );
+  assert.doesNotMatch(source, /Ok\(\n/u);
+});
+
 test("multi-argument calls follow rustfmt argument width independently of callable width", () => {
   const longArguments = {
     kind: "path",

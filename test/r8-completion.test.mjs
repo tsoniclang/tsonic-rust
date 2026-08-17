@@ -78,6 +78,41 @@ export function main(): void {
   assert.equal(validateGeneratedProject("dynamic-fixed-array-update", result.artifacts, { run: true }).status, 0);
 });
 
+test("shared FixedArray length and indexing lower through exact source-core evidence", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "source_fixed_array_proof" },
+    },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
+
+function selected(values: FixedArray<int32, 3>, index: int32): int32 {
+  values[index] += 4;
+  return values[0] + values.length;
+}
+
+export function main(): void {
+  const values: FixedArray<int32, 3> = [2, 3, 4];
+  check(selected(values, 0) === 9);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn selected\(mut values: \[i32; 3\], index: i32\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(values\.len\(\)\)\?/u);
+  assert.equal(
+    validateGeneratedProject("source-fixed-array", result.artifacts, { run: true }).status,
+    0,
+  );
+});
+
 test("RegExp outside the oracle subset stays hard-rejected", async () => {
   const fixtures = [
     { source: "export function f(s: string): boolean {\n  return /a(?<name>b)/.test(s);\n}\n" },

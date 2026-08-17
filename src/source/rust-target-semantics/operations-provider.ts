@@ -109,6 +109,7 @@ import type {
 } from "../rust-facts/keys.js";
 import {
   rustInt32ToUsizeValueConversion,
+  rustUsizeToInt32ValueConversion,
   selectRustSourceValueConversion,
   substituteRustValueConversion,
   rustValueConversionIdentity,
@@ -147,6 +148,7 @@ import {
   selectRustFlowReadProjection,
 } from "./value-carrier-reconciliation.js";
 import {
+  tsonicFixedArrayProviderMember,
   tsonicCoreSourceSemanticsModules,
 } from "@tsonic/source-core";
 import {
@@ -2695,6 +2697,14 @@ export function selectRustCheckedPropertyAccess(
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked property access carries conflicting selected provider declaration identities.");
   }
   if (providerEvidence.kind === "selected") {
+    if (tsonicFixedArrayProviderMember(providerEvidence.identity) === "length") {
+      return selectRustFixedArrayLengthProperty(
+        request,
+        selectedReceiverCarrier,
+        context,
+        options,
+      );
+    }
     return mapProviderCheckedOperation(request.expression, providerEvidence.identity, "property", context, options, request.receiver, [], request, selectedReceiverCarrier);
   }
 
@@ -3511,6 +3521,173 @@ function sourceDeclarationsOperationId(
   return `tsonic.rust.source.${kind}:${JSON.stringify(unique)}`;
 }
 
+function selectRustFixedArrayLengthProperty(
+  request: RustCheckedPropertySelectionInput,
+  receiverCarrier: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const fixedArray = rustFixedArrayCarrierValue(receiverCarrier);
+  if (fixedArray === undefined || request.accessMode !== "read") {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_FIXED_ARRAY_LENGTH_NOT_CLOSED",
+      "The selected FixedArray.length access requires one exact fixed-array receiver and readonly access.",
+    );
+  }
+  const resultCarrier = rustSourcePrimitiveTargetType("int32");
+  const template: RustProviderOperationTemplate = {
+    kind: "provider-operation",
+    operationId: "tsonic.rust.fixed-array.length",
+    operationKind: "property",
+    target: { form: "receiver-method", name: "len" },
+    resultCarrier,
+    parameterCarriers: [],
+    resultConversion: rustUsizeToInt32ValueConversion,
+    isAsync: false,
+    isFallible: false,
+    errorBoundary: "none",
+  };
+  const fact = finalizeProviderOperationFromSubjects(
+    template,
+    request.receiver,
+    [],
+    context,
+    options,
+    receiverCarrier,
+  );
+  if (fact === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_FIXED_ARRAY_LENGTH_ABI_INCOMPLETE",
+      "The selected FixedArray.length access cannot finalize one total Rust len operation ABI.",
+    );
+  }
+  return acceptRustMemberOperation(
+    request,
+    "property",
+    fact,
+    context,
+    options,
+    {
+      sourceExpression: request.expression,
+      sourceReceiver: request.receiver,
+      sourceSelectedSymbol: request.sourceSelectedSymbol,
+      sourceSelectedDeclaration: request.sourceSelectedDeclaration,
+      sourceResultType: request.sourceResultType,
+    },
+  );
+}
+
+function selectRustFixedArrayElementAccess(
+  request: RustCheckedElementSelectionInput,
+  receiverCarrier: TargetTypeRef | undefined,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedOperationSelectionResult> {
+  const fixedArray = rustFixedArrayCarrierValue(receiverCarrier);
+  if (fixedArray === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_FIXED_ARRAY_RECEIVER_NOT_CLOSED",
+      "The selected FixedArray index access has no exact fixed-array receiver carrier.",
+    );
+  }
+  const index = request.sourceSelectedElementIndex;
+  if (index !== undefined) {
+    if (index < 0 || index >= fixedArray.length) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
+        "Fixed-array element access carries a TSTS-selected ordinal outside the finalized array bounds.",
+      );
+    }
+    return acceptRustMemberOperation(request, "indexer", {
+      kind: "fixed-index",
+      operationId: "tsonic.rust.fixed-array.index",
+      index,
+    }, context, options, elementProvenance(request), fixedArray.element);
+  }
+  if (!isRustCopyCarrier(fixedArray.element)) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY",
+      "Dynamic fixed-array element access requires an exact Copy element carrier so a borrowed Rust index result can preserve source value semantics.",
+    );
+  }
+  const dynamicIndexCarrier = selectedValueCarrier(
+    request.argument,
+    request.sourceArgumentType,
+    context,
+    options,
+  );
+  const normalizedIndexCarrier = normalizeSelectedOperationInputCarrier(
+    request.argument,
+    dynamicIndexCarrier,
+    rustSourcePrimitiveTargetType("int32"),
+    context,
+    options,
+  );
+  if (
+    normalizedIndexCarrier === undefined ||
+    !rustTargetTypeRefEquals(
+      normalizedIndexCarrier,
+      rustSourcePrimitiveTargetType("int32"),
+    )
+  ) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED",
+      "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
+    );
+  }
+  const template: RustProviderOperationTemplate = {
+    kind: "provider-operation",
+    operationId: "tsonic.rust.fixed-array.dynamic-index",
+    operationKind: "indexer",
+    target: {
+      form: "index",
+      indexConversion: rustInt32ToUsizeValueConversion,
+    },
+    resultCarrier: fixedArray.element,
+    parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
+    isAsync: false,
+    isFallible: false,
+    errorBoundary: "none",
+  };
+  const fact = finalizeProviderOperationFromSubjects(
+    template,
+    request.receiver,
+    [request.argument],
+    context,
+    options,
+    receiverCarrier,
+    [normalizedIndexCarrier],
+  );
+  if (fact === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_SELECTED_OPERATION_ABI_INCOMPLETE",
+      "Dynamic fixed-array indexing cannot finalize one total Rust index ABI.",
+    );
+  }
+  return acceptRustMemberOperation(
+    request,
+    "indexer",
+    fact,
+    context,
+    options,
+    elementProvenance(request),
+  );
+}
+
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
   context: RustOperationPolicyContext,
@@ -3534,6 +3711,14 @@ export function selectRustCheckedElementAccess(
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked element access carries conflicting selected provider declaration identities.");
   }
   if (providerEvidence.kind === "selected") {
+    if (tsonicFixedArrayProviderMember(providerEvidence.identity) === "index") {
+      return selectRustFixedArrayElementAccess(
+        request,
+        selectedReceiverCarrier,
+        context,
+        options,
+      );
+    }
     return mapProviderCheckedOperation(request.expression, providerEvidence.identity, "indexer", context, options, request.receiver, [request.argument], request, selectedReceiverCarrier);
   }
 
@@ -3621,60 +3806,11 @@ export function selectRustCheckedElementAccess(
   }
   const fixedReceiver = rustFixedArrayCarrierValue(receiverCarrier);
   if (fixedReceiver !== undefined) {
-    const index = request.sourceSelectedElementIndex;
-    if (index !== undefined) {
-      if (index < 0 || index >= fixedReceiver.length) {
-        return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN", "Fixed-array element access carries a TSTS-selected ordinal outside the finalized array bounds.");
-      }
-      return acceptRustMemberOperation(request, "indexer", {
-        kind: "fixed-index",
-        operationId: "tsonic.rust.fixed-array.index",
-        index,
-      }, context, options, elementProvenance(request), fixedReceiver.element);
-    }
-    if (!isRustCopyCarrier(fixedReceiver.element)) {
-      return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_DYNAMIC_INDEX_REQUIRES_COPY", "Dynamic fixed-array element access requires an exact Copy element carrier so a borrowed Rust index result can preserve source value semantics.");
-    }
-    const dynamicIndexCarrier = selectedValueCarrier(
-      request.argument,
-      request.sourceArgumentType,
-      context,
-      options,
-    );
-    if (dynamicIndexCarrier === undefined ||
-      !rustTargetTypeRefEquals(dynamicIndexCarrier, rustSourcePrimitiveTargetType("int32"))) {
-      return rejectSelectedOperation(request.expression, context, "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED", "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.");
-    }
-    const template: RustProviderOperationTemplate = {
-      kind: "provider-operation",
-      operationId: "tsonic.rust.fixed-array.dynamic-index",
-      operationKind: "indexer",
-      target: { form: "index", indexConversion: rustInt32ToUsizeValueConversion },
-      resultCarrier: fixedReceiver.element,
-      parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
-      isAsync: false,
-      isFallible: false,
-      errorBoundary: "none",
-    };
-    const fact = finalizeProviderOperationFromSubjects(
-      template,
-      request.receiver,
-      [request.argument],
-      context,
-      options,
-      selectedReceiverCarrier,
-      [dynamicIndexCarrier],
-    );
-    if (fact === undefined) {
-      return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", "Dynamic fixed-array indexing cannot finalize one total Rust index ABI.");
-    }
-    return acceptRustMemberOperation(
+    return selectRustFixedArrayElementAccess(
       request,
-      "indexer",
-      fact,
+      receiverCarrier,
       context,
       options,
-      elementProvenance(request),
     );
   }
 

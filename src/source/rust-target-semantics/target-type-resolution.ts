@@ -4,6 +4,9 @@ import {
   providerVirtualDeclarationFactKey,
   sourcePrimitiveFactKey,
 } from "@tsonic/tsts";
+import {
+  tsonicFixedArrayFactKey,
+} from "@tsonic/source-core";
 import type {
   ExtensionFactSubject,
   Node,
@@ -58,6 +61,7 @@ import {
   rustUnitTargetType,
   rustUndefinedTargetType,
   rustVecTargetType,
+  rustFixedArrayTargetType,
   substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
 import { rustProviderOperationOwnerMatches } from "./provider-operation-selection.js";
@@ -98,6 +102,14 @@ export function resolveRustTargetTypeRef(
 ): TargetTypeRef | undefined {
   if (subject === undefined) {
     return undefined;
+  }
+  const fixedArray = context.facts.resolve(subject, tsonicFixedArrayFactKey) ??
+    context.facts.get(subject, tsonicFixedArrayFactKey);
+  if (fixedArray !== undefined) {
+    const element = resolveRustTargetTypeRef(fixedArray.elementType, context, options);
+    return element === undefined
+      ? undefined
+      : rustFixedArrayTargetType(element, fixedArray.length);
   }
   const functionPointer = context.facts.resolve(subject, functionPointerFactKey) ??
     context.facts.get(subject, functionPointerFactKey);
@@ -169,6 +181,19 @@ function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const fixedArray = context.facts.resolve(node, tsonicFixedArrayFactKey) ??
+    context.facts.get(node, tsonicFixedArrayFactKey);
+  if (fixedArray !== undefined) {
+    const element = resolveRustAuthoredTargetType(
+      fixedArray.elementType,
+      context,
+      options,
+      resolving,
+    );
+    return element === undefined
+      ? undefined
+      : rustFixedArrayTargetType(element, fixedArray.length);
+  }
   const functionPointer = context.facts.resolve(node, functionPointerFactKey) ??
     context.facts.get(node, functionPointerFactKey);
   if (functionPointer !== undefined) {

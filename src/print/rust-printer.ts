@@ -3594,7 +3594,11 @@ function printFittedCall(
       column + prefix.length,
     );
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
-    if (!rendered.includes("\n") && renderedFits(attached, column)) {
+    const attachedBinaryContinuation = /^[A-Za-z_][A-Za-z0-9_]*$/u.test(callable) &&
+      callable.length <= rustInlineFieldReceiverWidth &&
+      rendered.split("\n").length === 2;
+    if ((!rendered.includes("\n") || attachedBinaryContinuation) &&
+      renderedFits(attached, column)) {
       return attached;
     }
   }
