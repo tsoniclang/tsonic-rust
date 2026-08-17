@@ -147,6 +147,16 @@ interface ObjectConstructor {
 }
 declare var Object: ObjectConstructor;
 
+interface Boolean {
+  toString(): string;
+  valueOf(): boolean;
+}
+interface BooleanConstructor {
+  new (value?: unknown): Boolean;
+  (value?: unknown): boolean;
+}
+declare var Boolean: BooleanConstructor;
+
 interface Number {
   toString(radix?: number): string;
   valueOf(): number;
@@ -211,9 +221,13 @@ interface String {
   repeat(count: number): string;
   padStart(maxLength: number, fillString?: string): string;
   padEnd(maxLength: number, fillString?: string): string;
+  normalize(form?: UnicodeNormalizationForm): string;
   toLowerCase(): string;
   toUpperCase(): string;
+  isWellFormed(): boolean;
+  toWellFormed(): string;
 }
+type UnicodeNormalizationForm = "NFC" | "NFD" | "NFKC" | "NFKD";
 interface StringConstructor {
   new (value?: unknown): String;
   (value?: unknown): string;
@@ -363,7 +377,24 @@ declare var Set: SetConstructor;
 interface Date {
   getTime(): number;
   valueOf(): number;
+  getUTCFullYear(): number;
+  getUTCMonth(): number;
+  getUTCDate(): number;
+  getUTCDay(): number;
+  getUTCHours(): number;
+  getUTCMinutes(): number;
+  getUTCSeconds(): number;
+  getUTCMilliseconds(): number;
+  setTime(time: number): number;
+  setUTCMilliseconds(ms: number): number;
+  setUTCSeconds(sec: number, ms?: number): number;
+  setUTCMinutes(min: number, sec?: number, ms?: number): number;
+  setUTCHours(hours: number, min?: number, sec?: number, ms?: number): number;
+  setUTCDate(date: number): number;
+  setUTCMonth(month: number, date?: number): number;
+  setUTCFullYear(year: number, month?: number, date?: number): number;
   toISOString(): string;
+  toUTCString(): string;
   toJSON(): string;
 }
 interface DateConstructor {

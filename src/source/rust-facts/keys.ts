@@ -267,6 +267,7 @@ export interface RustProviderOperationTemplate<
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
   readonly sourceResultCarrier?: TargetTypeRef;
+  readonly sourceAbsenceCarrier?: TargetTypeRef;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly typeParameters?: readonly string[];
@@ -398,6 +399,7 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
       readonly sourceResultCarrier?: TargetTypeRef;
+      readonly sourceAbsenceCarrier?: TargetTypeRef;
       readonly abi: RustFinalizedOperationAbiFor<RustProviderFactOperationKind>;
     }
   | {
@@ -473,6 +475,14 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly negated: boolean;
       readonly optionOperand: "left" | "right";
+      readonly optionCarrier: TargetTypeRef;
+      readonly nullishCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "option-equality";
+      readonly operationId: string;
+      readonly negated: boolean;
+      readonly optionCarrier: TargetTypeRef;
     }
   | {
       readonly kind: "option-value-equality";
@@ -908,6 +918,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "iteration":
       return fact.elementCarrier;
     case "option-check":
+    case "option-equality":
     case "option-value-equality":
       return { kind: "source-primitive", name: "bool" };
     default:

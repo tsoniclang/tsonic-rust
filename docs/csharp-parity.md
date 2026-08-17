@@ -106,14 +106,13 @@ position, applies entries in source order, copies `Copy` values, and clones
 only non-`Copy` values. The backend never derives an index contract from the
 `Scores` spelling.
 
-The remaining closure is ordered by architectural dependency:
-
-1. Class initialization: define the source contract for uninitialized
-   target-native static fields before choosing a Rust default.
-2. Shared contracts: specify escaping borrowed views, borrowed custom
-   receivers, open associated types, fixed-array lengths, and object-literal
-   accessors at their owning layer.
-3. Surface closure: execute every blocked row in `docs/parity-lanes.json`.
+The detailed surface inventory in `docs/parity-lanes.json` is closed by an
+implemented row, a shared hard rejection, or an exact Rust target limit.
+Rust-only APIs whose signatures require a source lifetime or higher-kinded
+associated-type projection stay precisely rejected: TypeScript has no source
+type that can express those contracts. The provider does support owned custom
+receivers, copied borrowed values, owned strings, and compiler-resolved
+concrete associated types.
 
 Object-literal method syntax and direct callable-valued properties are already
 closed through the same selected contextual contract. For example:

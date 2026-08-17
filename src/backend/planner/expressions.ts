@@ -106,7 +106,7 @@ import { applyRustErrorBoundary } from "./error-boundary.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceBindingPath, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetType, rustStructuralMethodStorageCarrier, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourcePrimitiveTargetType, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetType, rustStructuralMethodStorageCarrier, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import {
   requireRustCarrierRequirements,
   requireRustDefaultValueCarrier,
@@ -205,25 +205,7 @@ export function planExpression(
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
-  let planned: RustExpr | undefined;
-  if (override === undefined || override.valueForm !== "storage" ||
-    isRustCopyCarrier(override.carrier)) {
-    planned = override?.expression ?? planRawExpression(node, context, resultUse);
-  } else if (!rustCarrierSupportsClone(override.carrier)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.preconstruction-field-read",
-      "A preconstruction field value must be Copy or Clone when read before the complete object exists.",
-    ));
-    return undefined;
-  } else {
-    planned = {
-      kind: "method-call",
-      receiver: override.expression,
-      method: "clone",
-      args: [],
-    };
-  }
+  const planned = planExpressionBeforeValueProjections(node, context, resultUse);
   if (planned === undefined || resultUse === "discarded") {
     return planned;
   }
@@ -353,6 +335,32 @@ export function planExpression(
   return projection?.kind === "some"
     ? { kind: "call", path: "Some", args: [contextuallyConverted] }
     : contextuallyConverted;
+}
+
+function planExpressionBeforeValueProjections(
+  node: Node,
+  context: RustPlanContext,
+  resultUse: RustExpressionResultUse,
+): RustExpr | undefined {
+  const override = context.expressionOverrides?.get(node);
+  if (override === undefined || override.valueForm !== "storage" ||
+    isRustCopyCarrier(override.carrier)) {
+    return override?.expression ?? planRawExpression(node, context, resultUse);
+  }
+  if (!rustCarrierSupportsClone(override.carrier)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.preconstruction-field-read",
+      "A preconstruction field value must be Copy or Clone when read before the complete object exists.",
+    ));
+    return undefined;
+  }
+  return {
+    kind: "method-call",
+    receiver: override.expression,
+    method: "clone",
+    args: [],
+  };
 }
 
 function planRawExpression(
@@ -3115,15 +3123,112 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const leftNode = BinaryExpression_Left(context.input.ast, node);
     const rightNode = BinaryExpression_Right(context.input.ast, node);
     const optionNode = fact.optionOperand === "left" ? leftNode : rightNode;
-    const value = optionNode === undefined ? undefined : planExpression(optionNode, context);
-    if (optionNode === undefined || value === undefined) {
+    const nullishNode = fact.optionOperand === "left" ? rightNode : leftNode;
+    const option = optionNode === undefined
+      ? undefined
+      : planExpressionBeforeValueProjections(optionNode, context, "value");
+    const nullish = nullishNode === undefined
+      ? undefined
+      : planExpressionBeforeValueProjections(nullishNode, context, "value");
+    const boolCarrier = rustSourcePrimitiveTargetType("bool");
+    if (optionNode === undefined || nullishNode === undefined || option === undefined || nullish === undefined ||
+      !rustTargetTypeRefEquals(expressionCarrier(optionNode, context), fact.optionCarrier) ||
+      !rustTargetTypeRefEquals(expressionCarrier(nullishNode, context), fact.nullishCarrier) ||
+      !requireExpressionCarrier(node, boolCarrier, context, "rust.backend.option-check-carrier") ||
+      !selectedOperationMatches(
+        context.input.facts.getSelectedTargetOperator(node),
+        fact.operationId,
+        "operator",
+        boolCarrier,
+        rustTargetOperationText(fact),
+      )) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.option-check",
+        "Option presence check conflicts with its exact finalized operand carriers or selected operation.",
+      ));
+      return undefined;
+    }
+    const check = (receiver: RustExpr): RustExpr => ({
+      kind: "method-call",
+      receiver,
+      method: fact.negated ? "is_some" : "is_none",
+      args: [],
+    });
+    if (isExplicitRustNullishValue(nullish)) {
+      return check(planRustNonConsumingValue(optionNode, option, context));
+    }
+    if (fact.optionOperand === "right") {
+      return {
+        kind: "evaluate-then",
+        effect: nullish,
+        discard: isRustUnitCarrier(expressionCarrier(nullishNode, context)) ? "unit" : "value",
+        value: check(planRustNonConsumingValue(optionNode, option, context)),
+      };
+    }
+    const optionName = allocateRustSyntheticName(
+      context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+      "option_value",
+    );
+    return {
+      kind: "block",
+      bindings: [{ name: optionName, value: option }],
+      value: {
+        kind: "evaluate-then",
+        effect: nullish,
+        discard: isRustUnitCarrier(expressionCarrier(nullishNode, context)) ? "unit" : "value",
+        value: check({ kind: "path", path: optionName }),
+      },
+    };
+  }
+  if (fact !== undefined && fact.kind === "option-equality") {
+    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.ast, node);
+    const left = leftNode === undefined
+      ? undefined
+      : planExpressionBeforeValueProjections(leftNode, context, "value");
+    const right = rightNode === undefined
+      ? undefined
+      : planExpressionBeforeValueProjections(rightNode, context, "value");
+    const boolCarrier = rustSourcePrimitiveTargetType("bool");
+    const leftCarrier = leftNode === undefined ? undefined : expressionCarrier(leftNode, context);
+    const rightCarrier = rightNode === undefined ? undefined : expressionCarrier(rightNode, context);
+    const selectedOperation = context.input.facts.getSelectedTargetOperator(node);
+    if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
+      !rustTargetTypeRefEquals(leftCarrier, fact.optionCarrier) ||
+      !rustTargetTypeRefEquals(rightCarrier, fact.optionCarrier) ||
+      !requireExpressionCarrier(node, boolCarrier, context, "rust.backend.option-equality-carrier") ||
+      !selectedOperationMatches(
+        selectedOperation,
+        fact.operationId,
+        "operator",
+        boolCarrier,
+        rustTargetOperationText(fact),
+      )) {
+      const diagnostic = missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.option-equality",
+        "Option equality conflicts with its exact finalized operand carrier or selected operation.",
+      );
+      context.diagnostics.push({
+        ...diagnostic,
+        evidence: [
+          ...(diagnostic.evidence ?? []),
+          `carrier.expected=${JSON.stringify(fact.optionCarrier)}`,
+          `carrier.left=${JSON.stringify(leftCarrier)}`,
+          `carrier.right=${JSON.stringify(rightCarrier)}`,
+          `operation.selected.id=${selectedOperation?.operationId ?? "missing"}`,
+          `operation.selected.kind=${selectedOperation?.operationKind ?? "missing"}`,
+          `operation.selected.target=${selectedOperation?.targetOperation ?? "missing"}`,
+        ],
+      });
       return undefined;
     }
     return {
-      kind: "method-call",
-      receiver: planRustNonConsumingValue(optionNode, value, context),
-      method: fact.negated ? "is_some" : "is_none",
-      args: [],
+      kind: "binary",
+      operator: fact.negated ? "!=" : "==",
+      left: planRustNonConsumingValue(leftNode, left, context),
+      right: planRustNonConsumingValue(rightNode, right, context),
     };
   }
   if (fact !== undefined && fact.kind === "option-value-equality") {
@@ -3131,14 +3236,16 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     const rightNode = BinaryExpression_Right(context.input.ast, node);
     const optionNode = fact.optionOperand === "left" ? leftNode : rightNode;
     const valueNode = fact.optionOperand === "left" ? rightNode : leftNode;
-    const option = optionNode === undefined ? undefined : planExpression(optionNode, context);
+    const option = optionNode === undefined
+      ? undefined
+      : planExpressionBeforeValueProjections(optionNode, context, "value");
     const value = valueNode === undefined ? undefined : planExpression(valueNode, context);
     const valueProjection = valueNode === undefined
       ? undefined
       : context.input.facts.getFact(valueNode, rustOptionProjectionFactKey);
     const optionCarrier = optionNode === undefined
       ? undefined
-      : rustEffectiveValueCarrier(context.input.facts, optionNode);
+      : expressionCarrier(optionNode, context);
     const valueCarrier = valueNode === undefined
       ? undefined
       : rustValueCarrierBeforeOptionProjection(context.input.facts, valueNode);
@@ -3146,6 +3253,19 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
       !rustTargetTypeRefEquals(optionCarrier, fact.optionCarrier) ||
       !rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) ||
       !rustTargetTypeRefEquals(rustOptionElementCarrier(fact.optionCarrier), fact.valueCarrier) ||
+      !requireExpressionCarrier(
+        node,
+        rustSourcePrimitiveTargetType("bool"),
+        context,
+        "rust.backend.option-value-equality-carrier",
+      ) ||
+      !selectedOperationMatches(
+        context.input.facts.getSelectedTargetOperator(node),
+        fact.operationId,
+        "operator",
+        rustSourcePrimitiveTargetType("bool"),
+        rustTargetOperationText(fact),
+      ) ||
       (valueProjection !== undefined &&
         (valueProjection.kind !== "some" ||
           !rustTargetTypeRefEquals(valueProjection.sourceCarrier, fact.valueCarrier) ||
@@ -3313,6 +3433,12 @@ function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | 
     "Binary expression selected a non-operator Rust operation.",
   ));
   return undefined;
+}
+
+function isExplicitRustNullishValue(expression: RustExpr): boolean {
+  return expression.kind === "none" ||
+    expression.kind === "path" &&
+      (expression.path === "rt::Undefined" || expression.path === "rt::Null");
 }
 
 export function planRustOperatorCallExpression(
@@ -4668,7 +4794,9 @@ function planObjectShapeProjectionCall(
   }
   const receiverName = allocateRustSyntheticName(
     context.syntheticNames,
-    "object_projection_value",
+    fact.projection === "values" || fact.projection === "entries"
+      ? "object_projection_value"
+      : "_object_projection_value",
   );
   const bindings: Extract<RustExpr, { readonly kind: "block" }>["bindings"][number][] = [{
     name: receiverName,
@@ -4749,24 +4877,27 @@ function planObjectShapeProjectionCall(
         ));
         return undefined;
       }
-      value = fact.fields.reduce<RustExpr>(
-        (left, field) => ({
+      const comparisons = fact.fields.map<RustExpr>((field) => ({
+        kind: "binary",
+        operator: "==",
+        left: {
+          kind: "method-call",
+          receiver: { kind: "path", path: keyName! },
+          method: "as_str",
+          args: [],
+        },
+        right: { kind: "str-literal", value: field.sourceName },
+      }));
+      value = comparisons.length === 0
+        ? { kind: "bool-literal", value: false }
+        : comparisons.slice(1).reduce<RustExpr>(
+        (left, right) => ({
           kind: "binary",
           operator: "||",
           left,
-          right: {
-            kind: "binary",
-            operator: "==",
-            left: {
-              kind: "method-call",
-              receiver: { kind: "path", path: keyName! },
-              method: "as_str",
-              args: [],
-            },
-            right: { kind: "str-literal", value: field.sourceName },
-          },
+          right,
         }),
-        { kind: "bool-literal", value: false },
+        comparisons[0]!,
       );
       break;
   }

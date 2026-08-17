@@ -12,6 +12,7 @@ import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustUndefinedTargetType,
   rustVecTargetType,
 } from "../dist/source/rust-target-types.js";
 import { rustInt32ToFloat64ValueConversion } from "../dist/source/rust-facts/value-conversions.js";
@@ -102,6 +103,7 @@ test("array index rows distinguish checked source and runtime result carriers", 
 
   assert.equal(selected?.fact.kind, "provider-operation");
   assert.deepEqual(selected?.fact.sourceResultCarrier, elementCarrier);
+  assert.deepEqual(selected?.fact.sourceAbsenceCarrier, rustUndefinedTargetType());
   assert.deepEqual(selected?.fact.resultCarrier, {
     kind: "target-named",
     id: "rust.std.Option",
@@ -673,6 +675,39 @@ export function timing(): boolean {
   assert.match(text, /js_abi::JsDate::from_string\("1970-01-02T00:00:00.000Z"\)/u);
 });
 
+test("Boolean, Unicode string, and mutable UTC Date operations use exact runtime rows", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function exact(value: string, month: int32): boolean {
+  const date = new Date(Date.UTC(2020, month));
+  date.setUTCFullYear(2024, 1, 29);
+  date.setUTCHours(1, 2, 3, 4);
+  return value.normalize("NFKC").isWellFormed() &&
+    value.toWellFormed().length >= 0 &&
+    true.toString() === "true" && true.valueOf() &&
+    date.getUTCFullYear() === 2024 && date.getUTCMonth() === 1 &&
+    date.getUTCDay() === 4 && date.toUTCString().endsWith("GMT");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_string::normalize_with_form/u);
+  assert.match(text, /js_string::is_well_formed/u);
+  assert.match(text, /js_abi::boolean_to_string/u);
+  assert.match(text, /js_abi::JsDate::utc/u);
+  assert.match(text, /set_utc_full_year_month_date/u);
+  assert.match(text, /set_utc_hours_minutes_seconds_milliseconds/u);
+  assert.match(text, /get_utc_day_number/u);
+  assert.match(text, /to_utc_string/u);
+});
+
 test("closed object projections lower from exact structural facts", () => {
   const { result } = compileRust({
     surfaces: ["js"],
@@ -710,7 +745,7 @@ export function project(): boolean {
   assert.match(text, /object_projection_value/u);
   assert.match(text, /\.with\(\|state\|/u);
   assert.match(text, /\.as_str\(\) == "tail"/u);
-  assert.match(text, /accessor_getter/u);
+  assert.match(text, /record_getter/u);
 });
 
 test("open and spread-derived object projections fail closed", () => {

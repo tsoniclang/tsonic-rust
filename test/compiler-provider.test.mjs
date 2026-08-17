@@ -192,6 +192,10 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       widget.methods.find(({ name }) => name === "into_box_value")?.receiver?.kind,
       "custom",
     );
+    assert.match(
+      widget.unsupportedMembers.find(({ name }) => name === "pinned_count")?.reason ?? "",
+      /borrowed custom receiver with no lifetime-bearing source receiver contract/u,
+    );
     assert.ok(widget.methods.some(({ name, traitDispatch }) =>
       name === "measure" && traitDispatch?.path === "acme_widget::Metric"));
     assert.ok(widget.methods.some(({ name, traitDispatch }) =>
@@ -471,6 +475,30 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       unsupportedBorrowedResult.unsupportedExports.find(({ name }) =>
         name === "borrowed_owned_string")?.reason ?? "",
       /borrowed or unsized value with no closed target carrier/u,
+    );
+
+    const unsupportedBorrowedSlice = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["borrowed_slice"],
+    });
+    assert.match(
+      unsupportedBorrowedSlice.unsupportedExports.find(({ name }) =>
+        name === "borrowed_slice")?.reason ?? "",
+      /borrowed or unsized value with no closed target carrier/u,
+    );
+
+    const unsupportedOpenAssociatedType = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["pass_family_item"],
+    });
+    assert.match(
+      unsupportedOpenAssociatedType.unsupportedExports.find(({ name }) =>
+        name === "pass_family_item")?.reason ?? "",
+      /Generic associated Rust types have no closed provider type contract/u,
     );
 
     const standardSnapshot = worker.standardSnapshot();

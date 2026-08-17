@@ -3383,6 +3383,9 @@ function finalizeProviderOperationFact(
     ...(template.sourceResultCarrier === undefined
       ? {}
       : { sourceResultCarrier: template.sourceResultCarrier }),
+    ...(template.sourceAbsenceCarrier === undefined
+      ? {}
+      : { sourceAbsenceCarrier: template.sourceAbsenceCarrier }),
     abi,
   };
 }

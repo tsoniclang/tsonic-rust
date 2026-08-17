@@ -1061,9 +1061,41 @@ function receiverKind(type: RustCompilerType, functionName: string): RustCompile
     });
   }
   if (compilerTypeContainsSelf(type)) {
+    if (compilerTypeContainsReference(type)) {
+      throw new Error(
+        `Rust method '${functionName}' has a borrowed custom receiver with no lifetime-bearing source receiver contract.`,
+      );
+    }
     return Object.freeze({ kind: "custom", type });
   }
   throw new Error(`Rust method '${functionName}' has a custom receiver that does not contain Self.`);
+}
+
+function compilerTypeContainsReference(type: RustCompilerType): boolean {
+  switch (type.kind) {
+    case "reference":
+      return true;
+    case "tuple":
+      return type.elements.some(compilerTypeContainsReference);
+    case "array":
+    case "slice":
+      return compilerTypeContainsReference(type.element);
+    case "raw-pointer":
+      return compilerTypeContainsReference(type.target);
+    case "function-pointer":
+      return type.parameters.some(compilerTypeContainsReference) ||
+        compilerTypeContainsReference(type.result);
+    case "associated-type":
+      return compilerTypeContainsReference(type.owner) ||
+        type.trait.typeArguments.some(compilerTypeContainsReference);
+    case "path":
+      return type.typeArguments.some(compilerTypeContainsReference);
+    case "unit":
+    case "primitive":
+    case "generic":
+    case "self":
+      return false;
+  }
 }
 
 function compilerTypeContainsSelf(type: RustCompilerType): boolean {

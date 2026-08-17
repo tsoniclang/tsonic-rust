@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { artifactText, compileRust } from "./helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust } from "./helpers/rust-session.mjs";
 import { validateGeneratedProject } from "./helpers/cargo-projects.mjs";
 
 const syncResource = `
@@ -267,4 +267,113 @@ export async function run(): Promise<void> {
   assert.match(source, /while let Some\(resource\) = .*next_yield\(\)\.await/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
   validateGeneratedProject("resource-management-for-await", result.artifacts);
+});
+
+test("using remains live across sync generator suspension and disposes on every completion", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "generator_resource" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+let disposed: int32 = 0;
+
+class Resource {
+  constructor() {}
+  [Symbol.dispose](): void {
+    disposed += 1;
+  }
+}
+
+function* values(): Generator<int32, int32, int32> {
+  using resource = new Resource();
+  const next: int32 = yield 7;
+  return next;
+}
+
+export function main(): void {
+  const returned = values();
+  check(disposed === 0);
+  returned.next();
+  check(disposed === 0);
+  const returnedResult = returned.return(11);
+  check(returnedResult.done === true);
+  check(disposed === 1);
+
+  const completed = values();
+  completed.next();
+  const completedResult = completed.next(9);
+  check(completedResult.done === true);
+  check(disposed === 2);
+
+  const thrown = values();
+  thrown.next();
+  try {
+    thrown.throw(new Error("stop"));
+  } catch {}
+  check(disposed === 3);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /generator(?:_\d+)?\.yield_value\(7\)\.await/u);
+  assert.match(source, /resource\.dispose\(\)/u);
+  assert.match(source, /rt::finish_resource/u);
+  assert.equal(validateGeneratedProject("generator-resource", result.artifacts, { run: true }).status, 0);
+});
+
+test("await using remains live across async generator suspension and awaits cleanup", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "async_generator_resource" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+let disposed: int32 = 0;
+
+class AsyncResource {
+  constructor() {}
+  async [Symbol.asyncDispose](): Promise<void> {
+    disposed += 1;
+  }
+}
+
+async function* values(): AsyncGenerator<int32, int32, int32> {
+  await using resource = new AsyncResource();
+  const next: int32 = yield 7;
+  return next;
+}
+
+export async function main(): Promise<void> {
+  const returned = values();
+  await returned.next();
+  check(disposed === 0);
+  const returnedResult = await returned.return(11);
+  check(returnedResult.done === true);
+  check(disposed === 1);
+
+  const thrown = values();
+  await thrown.next();
+  try {
+    await thrown.throw(new Error("stop"));
+  } catch {}
+  check(disposed === 2);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /generator(?:_\d+)?\.yield_value\(7\)\.await/u);
+  assert.match(source, /resource\.dispose_async\(\)\.await/u);
+  assert.match(source, /rt::finish_resource/u);
+  assert.equal(validateGeneratedProject("async-generator-resource", result.artifacts, { run: true }).status, 0);
 });

@@ -627,15 +627,22 @@ function resolveRustTypeComponentEvidence(
       resolving,
     );
   }
-  const semantics = context.semanticsFor(component.authoredTypeNode);
-  const authored = resolveRustAuthoredTargetType(
-    component.authoredTypeNode,
+  const authoredSourceFile = context.ast.getSourceFile(component.authoredTypeNode);
+  const semantics = authoredSourceFile !== undefined &&
+      context.source.semantics.includes(authoredSourceFile)
+    ? context.semantics(authoredSourceFile)
+    : undefined;
+  const selected = resolveRustTargetType(
+    component.selectedType,
     context,
     options,
     resolving,
   );
-  const selected = resolveRustTargetType(
-    component.selectedType,
+  if (semantics === undefined) {
+    return selected;
+  }
+  const authored = resolveRustAuthoredTargetType(
+    component.authoredTypeNode,
     context,
     options,
     resolving,

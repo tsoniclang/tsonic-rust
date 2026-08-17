@@ -21,12 +21,12 @@ test("implemented row members exist in the operation tables", () => {
   }
 });
 
-test("blocked entries each name a contract", () => {
-  const blocked = inventory.split("## Blocked by named external contracts")[1];
-  const entries = blocked.split("\n- ").slice(1);
+test("target limits each state their exact boundary", () => {
+  const targetLimits = inventory.split("## Target limits")[1];
+  const entries = targetLimits.split("\n- ").slice(1);
   assert.ok(entries.length >= 4);
   for (const entry of entries) {
-    assert.match(entry, /requires/u, entry.slice(0, 40));
+    assert.match(entry, /cannot|has no|omits|without/u, entry.slice(0, 60));
   }
 });
 
@@ -36,11 +36,11 @@ test("every C#-relative lane has exactly one valid classification", () => {
   assert.ok(lanes.length >= 90, `lane list too small: ${lanes.length}`);
   const seen = new Set();
   for (const lane of lanes) {
-    assert.ok(["implemented", "hard-rejected", "blocked"].includes(lane.classification), lane.lane);
+    assert.ok(["implemented", "hard-rejected", "target-limit"].includes(lane.classification), lane.lane);
     assert.ok(!seen.has(lane.lane), `duplicate lane: ${lane.lane}`);
     seen.add(lane.lane);
-    if (lane.classification === "blocked") {
-      assert.ok(typeof lane.contract === "string" && lane.contract.startsWith("requires"), `${lane.lane} must name its contract`);
+    if (lane.classification === "target-limit") {
+      assert.ok(typeof lane.reason === "string" && lane.reason.length >= 40, `${lane.lane} must state its exact target boundary`);
     }
   }
 });
@@ -63,9 +63,14 @@ test("the C# surface families cannot silently disappear from the inventory", () 
 
 test("implemented lanes with row members exist in the operation tables", () => {
   for (const lane of lanes) {
-    if (lane.classification !== "implemented" || lane.rowMember === undefined) {
+    if (lane.classification !== "implemented") {
       continue;
     }
-    assert.ok(rows.includes(`member: "${lane.rowMember}"`), `${lane.lane}: no row for member ${lane.rowMember}`);
+    if (lane.rowMember !== undefined) {
+      assert.ok(rows.includes(`member: "${lane.rowMember}"`), `${lane.lane}: no row for member ${lane.rowMember}`);
+    }
+    if (lane.rowFactory !== undefined) {
+      assert.ok(rows.includes(`function ${lane.rowFactory}(`), `${lane.lane}: no row factory ${lane.rowFactory}`);
+    }
   }
 });

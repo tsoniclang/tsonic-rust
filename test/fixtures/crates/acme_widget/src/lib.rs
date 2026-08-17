@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::boxed::Box;
+use std::pin::Pin;
 use tsonic_rust_runtime::{TsonicError, TsonicResult};
 
 pub const ANSWER: i32 = 42;
@@ -54,6 +55,18 @@ impl<T> Widget<T> {
     pub fn into_box_value(self: Box<Self>) -> T {
         self.value
     }
+
+    pub fn pinned_count(self: Pin<&mut Self>) -> i32 {
+        self.count
+    }
+}
+
+pub trait Family {
+    type Item<T>;
+}
+
+pub fn pass_family_item<F: Family, T>(value: F::Item<T>) -> F::Item<T> {
+    value
 }
 
 pub trait Metric<T> {
@@ -145,6 +158,10 @@ pub fn borrowed_label() -> &'static str {
 
 pub fn borrowed_owned_string(value: &String) -> &String {
     value
+}
+
+pub fn borrowed_slice(values: &[i32]) -> &[i32] {
+    values
 }
 
 pub fn checked_double(value: i32) -> TsonicResult<i32> {

@@ -224,10 +224,10 @@
     "id": "objects.accessor-members",
     "area": "objects",
     "source": "const value = { get count() { return 1; } };",
-    "classification": "shared-rejection",
-    "csharpProof": "tsonic-csharp/src/backend/planner/expression-object-literals.ts",
-    "rustProof": "src/source/rust-target-semantics/index.ts",
-    "action": "require a shared exact accessor-object contract before either target lowers it"
+    "classification": "implemented",
+    "csharpProof": "tsonic-csharp/test/direct-translation-object-shapes.test.mjs",
+    "rustProof": "test/object-property-parity.test.mjs",
+    "action": "retain exact getter and setter evidence, mutable storage, receiver identity, and project-interface dispatch"
   },
   {
     "id": "bindings.destructuring",
@@ -289,10 +289,10 @@
     "id": "generators.resource-suspension",
     "area": "generators",
     "source": "function* values() { using resource = open(); yield resource.value; }",
-    "classification": "target-limit",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/test/direct-translation-generators.test.mjs",
-    "rustProof": "src/backend/planner/statements.ts",
-    "action": "retain precise rejection unless the Rust generator protocol can own lexical disposal and suppressed-error state across suspension"
+    "rustProof": "test/resource-management.test.mjs",
+    "action": "retain lexical disposal and suppressed-error composition across synchronous and asynchronous generator suspension"
   },
   {
     "id": "resources.sync-async",
@@ -414,9 +414,9 @@
     "id": "providers.escaping-borrowed-results",
     "area": "providers",
     "source": "const view = buffer.asSlice();",
-    "classification": "contract-gap",
-    "rustProof": "src/providers/compiler/rustdoc-model.ts",
-    "action": "define a selected lifetime relation from receiver or argument storage to an escaping returned view"
+    "classification": "target-limit",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "reject escaping borrowed views because TypeScript has no lifetime-bearing view type; retain exact Copy and owned-string projections"
   },
   {
     "id": "providers.owned-custom-receivers",
@@ -430,9 +430,9 @@
     "id": "providers.borrowed-custom-receivers",
     "area": "providers",
     "source": "pinned.poll(context);",
-    "classification": "contract-gap",
-    "rustProof": "src/providers/compiler/rustdoc-model.ts",
-    "action": "define exact lifetime and mutability projection for custom borrowed receivers such as Pin<&mut Self>"
+    "classification": "target-limit",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "reject nested borrowed custom receivers before source projection; retain owned custom receivers such as Box<Self>"
   },
   {
     "id": "providers.c-variadics",
@@ -462,9 +462,9 @@
     "id": "providers.open-associated-types",
     "area": "providers",
     "source": "const value: Family<T>::Item<U> = family.make(input);",
-    "classification": "contract-gap",
-    "rustProof": "src/providers/compiler/rustdoc-model.ts",
-    "action": "model unresolved associated types and generic associated types only from exact compiler-owned substitutions"
+    "classification": "target-limit",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "reject open associated and generic-associated projections because TypeScript has no higher-kinded projection type; retain compiler-resolved concrete substitutions"
   },
   {
     "id": "providers.rust-unions",
@@ -486,9 +486,9 @@
     "id": "js-node.detailed-surface",
     "area": "surfaces",
     "source": "console.log(values.map(value => value + 1));",
-    "classification": "contract-gap",
+    "classification": "implemented",
     "rustProof": "docs/parity-lanes.json",
-    "action": "close every blocked row in the dedicated JS and Node inventory while retaining its hard rejections"
+    "action": "retain every implemented detailed lane and each exact hard rejection or Rust target limit in the dedicated JS and Node inventory"
   },
   {
     "id": "output.generated-cargo",

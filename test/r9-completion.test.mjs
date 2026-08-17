@@ -103,7 +103,7 @@ export async function size_of(path: string): Promise<boolean> {
   assert.match(text, /tsonic_rust_runtime::conversions::u64_to_f64\(info\.size\)/u);
 });
 
-test("remaining blocked lanes stay classified", async () => {
+test("stream scheduler target limits fail at the provider boundary", async () => {
   const cases = [
     { module: "node:fs", name: "watch", call: "watch(\"x\")" },
     { module: "node:fs", name: "createReadStream", call: "createReadStream(\"x\")" },

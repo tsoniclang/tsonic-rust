@@ -376,6 +376,77 @@ test("unary expressions expand long nested calls before outer attachment", () =>
   );
 });
 
+test("unary block arguments remain attached to their outer calls", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "unary",
+              operator: "!",
+              operand: {
+                kind: "block",
+                bindings: [{
+                  name: "matched",
+                  value: { kind: "bool-literal", value: true },
+                }],
+                value: { kind: "path", path: "matched" },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /acme_testing::check\(!\{\n {8}let matched = true;\n {8}matched\n {4}\}\);/u,
+  );
+  assert.doesNotMatch(source, /acme_testing::check\(\n/u);
+});
+
+test("long atomic vectors use rustfmt-compatible element lines", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "values",
+          mutable: false,
+          init: {
+            kind: "vec-literal",
+            elements: ["first", "second", "third", "fourth"].map((value) => ({
+              kind: "call",
+              path: "String::from",
+              args: [{ kind: "str-literal", value }],
+            })),
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let values = vec!\[\n {8}String::from\("first"\),\n {8}String::from\("second"\),\n {8}String::from\("third"\),\n {8}String::from\("fourth"\),\n {4}\];/u,
+  );
+});
+
 test("fallible conversion wrappers own multiline callback method chains", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -843,6 +914,46 @@ test("multiline method-call match arms use rustfmt block arms", () => {
     source,
     /Shape::Variant0\(__tsonic_union_variant_with_a_long_identity\) => \{\n            __tsonic_union_variant_with_a_long_identity\.with\(\|state\| state\.0\.clone\(\)\)\n        \}/u,
   );
+});
+
+test("direct fallible match arms stay in rustfmt expression form", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "match",
+            expression: { kind: "path", path: "command" },
+            arms: [{
+              pattern: {
+                kind: "tuple-variant",
+                path: "Command::Throw",
+                elements: [{ kind: "binding", name: "error" }],
+              },
+              expression: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "call",
+                  path: "Err",
+                  args: [{ kind: "path", path: "error" }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /Command::Throw\(error\) => Err\(error\)\?,/u);
+  assert.doesNotMatch(source, /Command::Throw\(error\) => \{/u);
 });
 
 test("calls expand matches whose scrutinee contains a statement block", () => {

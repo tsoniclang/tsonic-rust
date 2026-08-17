@@ -1954,6 +1954,24 @@ function printRustExprFitted(
         argument.kind === "binary" || argument.kind === "tuple-literal" ||
         rustExpressionContainsClosure(argument) ||
         rustExpressionContainsStatementBlock(argument));
+      const firstStep = chain?.steps[0];
+      const secondStep = chain?.steps[1];
+      const firstMethodRequiresExpansion = chain === undefined
+        ? false
+        : rustMethodChainFirstMethodRequiresExpansion(chain, depth);
+      const fieldLedCallPrefersSelectorBreak = firstStep?.kind === "field" &&
+        secondStep?.kind === "method" &&
+        selectorCount === 2 &&
+        !firstMethodRequiresExpansion;
+      const attachFirstMethodAfterField = chain !== undefined &&
+        firstStep?.kind === "field" &&
+        secondStep?.kind === "method" &&
+        selectorCount === 2 &&
+        firstMethodRequiresExpansion &&
+        renderedFits(
+          `${printRustExpr(chain.base)}.${firstStep.name}.${secondStep.name}(`,
+          column,
+        );
       if (chain !== undefined && selectorCount === 1 && !hasClosure &&
         !flat.includes("\n") && !renderedFits(flat, column)) {
         const brokenSelector = printFittedMethodChain(
@@ -1977,6 +1995,8 @@ function printRustExprFitted(
           column,
         );
         if (attached.includes("\n") &&
+          !fieldLedCallPrefersSelectorBreak &&
+          !attachFirstMethodAfterField &&
           (chain === undefined || attachedArgumentsPreferExpansion ||
             !rustMethodChainBreaksReceiverWhenExpanded(chain)) &&
           (!columnRequiresVerticalLayout || attachedArgumentsPreferExpansion) &&
@@ -2007,16 +2027,6 @@ function printRustExprFitted(
         );
       }
       if (chain !== undefined && verticalLayout) {
-        const firstStep = chain.steps[0];
-        const secondStep = chain.steps[1];
-        const attachFirstMethodAfterField = firstStep?.kind === "field" &&
-          secondStep?.kind === "method" &&
-          selectorCount === 2 &&
-          rustMethodChainFirstMethodRequiresExpansion(chain, depth) &&
-          renderedFits(
-            `${printRustExpr(chain.base)}.${firstStep.name}.${secondStep.name}(`,
-            column,
-          );
         return printFittedMethodChain(
           chain,
           depth,
@@ -2449,6 +2459,7 @@ function printRustExprFitted(
       const compactElements = expression.elements.map(printRustExpr).join(", ");
       const elements = expression.kind !== "tuple-literal" &&
           expression.elements.every(rustFormatArgumentIsAtomic) &&
+          compactElements.length <= rustNestedCallWidth &&
           renderedFits(`${compactElements},`, elementIndent.length)
         ? [`${elementIndent}${compactElements},`]
         : expression.elements.map((element) => {
@@ -3593,6 +3604,19 @@ function printFittedCall(
       `${indentText(depth)})`,
     ].join("\n");
   }
+  if (arguments_.length === 1 && arguments_[0]?.kind === "unary" &&
+    expressionIsRightHandBlock(arguments_[0].operand)) {
+    const prefix = `${callable}(`;
+    const renderedArgument = printRustExprFitted(
+      arguments_[0],
+      inlineArgumentDepth,
+      column + prefix.length,
+    );
+    const attached = appendToLastLine(`${prefix}${renderedArgument}`, ")");
+    if (column + firstLine(attached).length <= rustFormatWidth) {
+      return attached;
+    }
+  }
   if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
     rustExpressionContainsStatementBlock(arguments_[0])) {
     const prefix = `${callable}(`;
@@ -4545,7 +4569,7 @@ function printRustMatchExpression(
         `${armIndent}}`,
       ];
     }
-    if (rustExpressionContainsTry(arm.expression)) {
+    if (arm.expression.kind !== "try" && rustExpressionContainsTry(arm.expression)) {
       const valueIndent = indentText(depth + 2);
       const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
       return [

@@ -15,6 +15,7 @@ test("process identity, timing, and memory APIs compile and execute", { timeout:
     files: {
       "index.ts": `
 import { ok } from "node:assert";
+import { Buffer } from "node:buffer";
 import processDefault, {
   argv0,
   availableMemory,
@@ -23,6 +24,8 @@ import processDefault, {
   cwd,
   hrtime,
   memoryUsage,
+  stderr,
+  stdout,
   uptime,
   version,
 } from "node:process";
@@ -55,6 +58,12 @@ export function main(): void {
   ok(processDefault.version === version);
   ok(processDefault.uptime() >= 0);
   ok(processDefault.memoryUsage().rss >= 0);
+  ok(stdout.fd === 1);
+  ok(stderr.fd === 2);
+  ok(stdout.write(""));
+  ok(stderr.write(Buffer.alloc(0)));
+  ok(processDefault.stdout.fd === stdout.fd);
+  ok(processDefault.stderr.fd === stderr.fd);
 }
 `,
     },
@@ -65,6 +74,9 @@ export function main(): void {
   assert.match(source, /tsonic_rust_node::process::hrtime_open_number/u);
   assert.match(source, /tsonic_rust_node::process::hrtime_since_number/u);
   assert.match(source, /tsonic_rust_node::process::memory_usage/u);
+  assert.match(source, /tsonic_rust_node::process::stdout/u);
+  assert.match(source, /\.write_string\(""\)/u);
+  assert.match(source, /\.write_buffer\(/u);
   assert.match(source, /\.heap_total/u);
   const run = validateGeneratedProject("node-process-parity-20260817", result.artifacts, { run: true });
   assert.equal(run.status, 0);

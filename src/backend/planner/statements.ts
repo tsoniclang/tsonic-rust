@@ -370,14 +370,6 @@ function resourceFactForPlanning(
     ));
     return undefined;
   }
-  if (context.generator !== undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.generator-resource-management",
-      "Rust generators cannot preserve exact resource cleanup and suppressed-error semantics across suspension.",
-    ));
-    return undefined;
-  }
   if ((fact.declarationKind === "await using" || fact.disposal.kind === "async") &&
     context.asyncContext !== true) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
