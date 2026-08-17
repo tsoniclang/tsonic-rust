@@ -1,4 +1,5 @@
 import type {
+  RustCompilerTraitDispatch,
   RustCompilerTraitImplementation,
   RustCompilerTraitRequirement,
   RustCompilerType,
@@ -34,6 +35,28 @@ export function canonicalCompilerTypePathKey(
 
 export function canonicalPathKey(path: readonly string[]): string {
   return path.join("\0");
+}
+
+
+export function normalizeTraitDispatch(
+  document: RustdocDocument,
+  raw: unknown,
+  resolvingAliases: ReadonlySet<string> = new Set(),
+): RustCompilerTraitDispatch {
+  const trait = requireRecord(raw, "Rust trait reference");
+  const pathRecord = requireRecord(
+    document.paths[String(trait.id)],
+    `Rust trait reference '${String(trait.id)}'`,
+  );
+  const path = requireArray(pathRecord.path, "Rust trait path");
+  if (pathRecord.kind !== "trait" || path.length < 2 ||
+    path.some((segment) => typeof segment !== "string")) {
+    throw new Error(`Rust trait reference '${String(trait.id)}' has no canonical crate-qualified identity.`);
+  }
+  return Object.freeze({
+    path: (path as string[]).join("::"),
+    typeArguments: normalizePathArguments(document, trait.args, resolvingAliases),
+  });
 }
 
 
@@ -225,6 +248,7 @@ export function normalizeTypeTraits(
   document: RustdocDocument,
   owner: Readonly<Record<string, unknown>>,
   declaredTypeParameters: readonly RustCompilerTypeParameter[],
+  ownerCanonicalPath: readonly string[],
 ): RustCompilerTypeTraits {
   const implementations = new Map<string, RustCompilerTraitImplementation>();
   const sourceTypeArgumentCount = sourceVisibleTypeParameterCount(declaredTypeParameters);
@@ -257,6 +281,7 @@ export function normalizeTypeTraits(
       implementationParameters,
       declaredTypeParameters,
       sourceTypeArgumentCount,
+      ownerCanonicalPath,
     );
     if (implementation !== undefined) {
       implementations.set(traitImplementationKey(implementation), implementation);
@@ -277,11 +302,13 @@ function sourceTraitImplementation(
   implementationParameters: readonly RustCompilerTypeParameter[],
   declaredTypeParameters: readonly RustCompilerTypeParameter[],
   sourceTypeArgumentCount: number,
+  ownerCanonicalPath: readonly string[],
 ): RustCompilerTraitImplementation | undefined {
   const parameterPositions = directImplementationTypeParameterPositions(
     document,
     impl,
     declaredTypeParameters,
+    ownerCanonicalPath,
   );
   if (parameterPositions === undefined) {
     return undefined;
@@ -331,9 +358,12 @@ export function directImplementationTypeParameterPositions(
   document: RustdocDocument,
   impl: Readonly<Record<string, unknown>>,
   declaredTypeParameters: readonly RustCompilerTypeParameter[],
+  ownerCanonicalPath: readonly string[],
 ): ReadonlyMap<string, number> | undefined {
   const target = normalizeType(document, impl.for);
-  if (target.kind !== "path" || target.typeArguments.length > declaredTypeParameters.length ||
+  if (target.kind !== "path" ||
+    canonicalCompilerTypePathKey(target) !== canonicalPathKey(ownerCanonicalPath) ||
+    target.typeArguments.length > declaredTypeParameters.length ||
     declaredTypeParameters.slice(target.typeArguments.length).some((parameter) => parameter.defaultType === undefined)) {
     return undefined;
   }
@@ -387,16 +417,127 @@ export function compilerTypeSupportsRequirement(
       return structuralBuiltinSupportsTrait(traitPath) &&
         compilerTypeSupportsRequirement(document, type.element, requirement, active);
     case "reference":
-      return traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone";
+      return type.mutable === false &&
+        (traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone");
     case "function-pointer":
     case "raw-pointer":
       return traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone";
     case "path":
       return compilerPathTypeSupportsRequirement(document, type, requirement, active);
+    case "associated-type":
     case "slice":
     case "generic":
     case "self":
       return false;
+  }
+}
+
+
+export function compilerTypeRequirementConditions(
+  document: RustdocDocument,
+  type: RustCompilerType,
+  requirement: RustCompilerTypeRequirement,
+  active: Set<string> = new Set(),
+): readonly RustCompilerTypeParameter[] | undefined {
+  if (type.kind === "generic") {
+    return Object.freeze([Object.freeze({
+      name: type.name,
+      requirements: Object.freeze([requirement]),
+    })]);
+  }
+  if (type.kind === "tuple") {
+    const groups = type.elements.map((element) =>
+      compilerTypeRequirementConditions(document, element, requirement, active));
+    if (groups.some((group) => group === undefined)) {
+      return undefined;
+    }
+    return mergeTypeParameterRequirements(...groups.filter(
+      (group): group is readonly RustCompilerTypeParameter[] => group !== undefined,
+    ));
+  }
+  if (type.kind === "array") {
+    return compilerTypeRequirementConditions(document, type.element, requirement, active);
+  }
+  if (type.kind !== "path") {
+    return compilerTypeSupportsRequirement(document, type, requirement, new Set())
+      ? Object.freeze([])
+      : undefined;
+  }
+  const activeKey = `${canonicalCompilerTypePathKey(type)}\0${typeRequirementKey(requirement)}\0${JSON.stringify(type.typeArguments)}`;
+  if (active.has(activeKey)) {
+    return undefined;
+  }
+  active.add(activeKey);
+  try {
+    const item = compilerTypeDeclarationItem(document, type);
+    const declaration = item === undefined ? undefined : compilerTypeDeclaration(item);
+    if (declaration === undefined) {
+      return undefined;
+    }
+    const candidates = new Map<string, readonly RustCompilerTypeParameter[]>();
+    for (const implId of requireArray(declaration.impls, "Rust concrete type impls")) {
+      const implItem = itemById(document, implId);
+      const impl = requireInnerRecord(implItem, "impl", "Rust concrete type impl");
+      if (!isRecord(impl.trait) || impl.trait.args !== null || impl.is_negative === true ||
+        impl.blanket_impl !== null) {
+        continue;
+      }
+      const implementedTrait = rustCompilerTraitRequirement(document, impl.trait.id);
+      if (implementedTrait === undefined ||
+        typeRequirementKey(implementedTrait) !== typeRequirementKey(requirement)) {
+        continue;
+      }
+      let parameters: readonly RustCompilerTypeParameter[];
+      try {
+        parameters = normalizeTypeParameters(
+          document,
+          requireRecord(impl.generics, "Rust concrete impl generics"),
+        );
+      } catch {
+        continue;
+      }
+      const bindings = directImplementationTypeBindings(document, impl, type);
+      if (bindings === undefined) {
+        continue;
+      }
+      const groups: RustCompilerTypeParameter[][] = [];
+      let valid = true;
+      for (const parameter of parameters) {
+        const argument = bindings.get(parameter.name);
+        if (argument === undefined) {
+          valid = false;
+          break;
+        }
+        for (const selected of parameter.requirements) {
+          const conditions = compilerTypeRequirementConditions(
+            document,
+            argument,
+            selected,
+            active,
+          );
+          if (conditions === undefined) {
+            valid = false;
+            break;
+          }
+          groups.push([...conditions]);
+        }
+        if (!valid) {
+          break;
+        }
+      }
+      if (!valid) {
+        continue;
+      }
+      const merged = mergeTypeParameterRequirements(...groups);
+      candidates.set(JSON.stringify(merged), merged);
+    }
+    if (candidates.size !== 1) {
+      return undefined;
+    }
+    const selected = candidates.values().next();
+    return selected.done ? undefined : selected.value;
+  } finally {
+    active.delete(activeKey);
   }
 }
 
@@ -532,6 +673,14 @@ function compilerTypesEqual(left: RustCompilerType, right: RustCompilerType): bo
         left.typeArguments.length === selected.typeArguments.length &&
         left.typeArguments.every((argument, index) => compilerTypesEqual(argument, selected.typeArguments[index]!));
     }
+    case "associated-type": {
+      const selected = right as typeof left;
+      return left.name === selected.name && compilerTypesEqual(left.owner, selected.owner) &&
+        left.trait.path === selected.trait.path &&
+        left.trait.typeArguments.length === selected.trait.typeArguments.length &&
+        left.trait.typeArguments.every((argument, index) =>
+          compilerTypesEqual(argument, selected.trait.typeArguments[index]!));
+    }
   }
 }
 
@@ -642,9 +791,14 @@ export function normalizeType(
     return Object.freeze({ kind: "array", element: normalizeType(document, type.array.type, resolvingAliases), length });
   }
   if (isRecord(type.borrowed_ref)) {
+    const lifetime = type.borrowed_ref.lifetime;
+    if (lifetime !== null && typeof lifetime !== "string") {
+      throw new Error("Rust reference lifetime has no stable rustdoc representation.");
+    }
     return Object.freeze({
       kind: "reference",
       mutable: type.borrowed_ref.is_mutable === true,
+      ...(lifetime === null ? {} : { lifetime }),
       target: normalizeType(document, type.borrowed_ref.type, resolvingAliases),
     });
   }
@@ -690,6 +844,23 @@ export function normalizeType(
         header.is_unsafe,
         "Rust function pointer safety",
       ),
+    });
+  }
+  if (isRecord(type.qualified_path)) {
+    const qualified = type.qualified_path;
+    const associatedArguments = normalizePathArguments(
+      document,
+      qualified.args,
+      resolvingAliases,
+    );
+    if (associatedArguments.length !== 0) {
+      throw new Error("Generic associated Rust types have no closed provider type contract.");
+    }
+    return Object.freeze({
+      kind: "associated-type",
+      owner: normalizeType(document, qualified.self_type, resolvingAliases),
+      trait: normalizeTraitDispatch(document, qualified.trait, resolvingAliases),
+      name: requireString(qualified.name, "Rust associated type name"),
     });
   }
   if (isRecord(type.resolved_path)) {
@@ -759,7 +930,7 @@ function normalizePathArguments(
 }
 
 
-function substituteRustCompilerType(
+export function substituteRustCompilerType(
   type: RustCompilerType,
   bindings: ReadonlyMap<string, RustCompilerType>,
 ): RustCompilerType {
@@ -791,6 +962,9 @@ function substituteRustCompilerType(
       return Object.freeze({
         kind: type.kind,
         mutable: type.mutable,
+        ...(type.kind === "reference" && type.lifetime !== undefined
+          ? { lifetime: type.lifetime }
+          : {}),
         target: substituteRustCompilerType(type.target, bindings),
       });
     case "function-pointer":
@@ -805,6 +979,16 @@ function substituteRustCompilerType(
         ...type,
         typeArguments: Object.freeze(type.typeArguments.map((argument) =>
           substituteRustCompilerType(argument, bindings))),
+      });
+    case "associated-type":
+      return Object.freeze({
+        ...type,
+        owner: substituteRustCompilerType(type.owner, bindings),
+        trait: Object.freeze({
+          ...type.trait,
+          typeArguments: Object.freeze(type.trait.typeArguments.map((argument) =>
+            substituteRustCompilerType(argument, bindings))),
+        }),
       });
   }
 }
@@ -825,6 +1009,7 @@ export function rustStaticValueCanBeCopied(type: RustCompilerType): boolean {
       return type.mutable === false;
     case "generic":
     case "self":
+    case "associated-type":
     case "slice":
     case "path":
       return false;

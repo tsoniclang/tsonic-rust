@@ -510,6 +510,9 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
     (value.conversion.kind === "raw-pointer-mut-to-const" &&
       hasExactKeys(value.conversion, ["kind", "pointee"]) &&
       isRustTargetTypeRef(value.conversion.pointee)) ||
+    (value.conversion.kind === "copy-from-reference" &&
+      hasExactKeys(value.conversion, ["kind", "target"]) &&
+      isRustTargetTypeRef(value.conversion.target)) ||
     (value.conversion.kind === "source-union-variant" &&
       hasExactKeys(value.conversion, ["kind", "source", "target", "variantName"]) &&
       isRustTargetTypeRef(value.conversion.source) &&
@@ -538,6 +541,8 @@ function isNonOptionValueConversion(value: unknown): boolean {
       typeof value.source === "string" && typeof value.target === "string") ||
     (value.kind === "raw-pointer-mut-to-const" &&
       hasExactKeys(value, ["kind", "pointee"]) && isRustTargetTypeRef(value.pointee)) ||
+    (value.kind === "copy-from-reference" &&
+      hasExactKeys(value, ["kind", "target"]) && isRustTargetTypeRef(value.target)) ||
     (value.kind === "source-union-variant" &&
       hasExactKeys(value, ["kind", "source", "target", "variantName"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
@@ -781,6 +786,25 @@ function finalizeTargetInputs(
       const args = mappedArguments(undefined, undefined, undefined);
       return args?.length === 2 ? { targetReceiver: none, targetArguments: args } : undefined;
     }
+    case "trait-call": {
+      const receiver = form.receiverMode === undefined
+        ? undefined
+        : input.receiver(form.receiverMode);
+      const args = mappedArguments(undefined, form.argModes, undefined);
+      return args === undefined || (form.receiverMode !== undefined && receiver === undefined)
+        ? undefined
+        : {
+            targetReceiver: none,
+            targetArguments: [
+              ...(receiver === undefined ? [] : [receiver]),
+              ...args,
+            ],
+          };
+    }
+    case "trait-associated-value":
+      return sourceArgumentCount === 0
+        ? { targetReceiver: none, targetArguments: [] }
+        : undefined;
     case "call-str-slice": {
       const elements = indexes.map((index) => input.argument(index, "ref"));
       if (elements.some((entry) => entry === undefined)) {
@@ -792,9 +816,9 @@ function finalizeTargetInputs(
         return undefined;
       }
       const elementCarrier = closed[0]?.parameterCarrier ?? {
-        kind: "pointer",
-        pointee: stringCarrier,
-        mutability: "const",
+        kind: "reference",
+        referent: stringCarrier,
+        mutable: false,
       } as const;
       return {
         targetReceiver: none,
@@ -819,9 +843,9 @@ function finalizeTargetInputs(
         return undefined;
       }
       const elementCarrier = closed[0]?.parameterCarrier ?? {
-        kind: "pointer",
-        pointee: stringCarrier,
-        mutability: "const",
+        kind: "reference",
+        referent: stringCarrier,
+        mutable: false,
       } as const;
       return {
         targetReceiver: none,
@@ -1099,16 +1123,10 @@ function carrierAfterMode(carrier: TargetTypeRef, mode: RustArgumentMode): Targe
   if (mode === "value") {
     return carrier;
   }
-  if (carrier.kind === "pointer") {
-    if (mode === "mut-ref" && carrier.mutability !== "mut") {
-      return undefined;
-    }
-    return carrier;
-  }
   return {
-    kind: "pointer",
-    pointee: carrier,
-    mutability: mode === "mut-ref" ? "mut" : "const",
+    kind: "reference",
+    referent: carrier,
+    mutable: mode === "mut-ref",
   };
 }
 

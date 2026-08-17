@@ -175,8 +175,15 @@ function rustTargetTypeRefEqualsValidated(
     case "array":
       return right.kind === left.kind && left.rank === right.rank &&
         rustTargetTypeRefEqualsValidated(left.element, right.element);
+    case "slice":
+      return right.kind === left.kind &&
+        rustTargetTypeRefEqualsValidated(left.element, right.element);
     case "tuple":
       return right.kind === left.kind && targetTypeRefListsEqual(left.elements, right.elements);
+    case "reference":
+      return right.kind === left.kind && left.mutable === right.mutable &&
+        left.lifetime === right.lifetime &&
+        rustTargetTypeRefEqualsValidated(left.referent, right.referent);
     case "pointer":
       return right.kind === left.kind && left.mutability === right.mutability &&
         rustTargetTypeRefEqualsValidated(left.pointee, right.pointee);
@@ -229,9 +236,16 @@ function validateRustTargetTypeRef(
         return hasExactKeys(value, ["kind", "element", "rank"], ["kind", "element"]) &&
           validateChild(value.element) &&
           (value.rank === undefined || (Number.isSafeInteger(value.rank) && (value.rank as number) > 0));
+      case "slice":
+        return hasExactKeys(value, ["kind", "element"], ["kind", "element"]) &&
+          validateChild(value.element);
       case "tuple":
         return hasExactKeys(value, ["kind", "elements"], ["kind", "elements"]) &&
           validateChildren(value.elements);
+      case "reference":
+        return hasExactKeys(value, ["kind", "referent", "mutable", "lifetime"], ["kind", "referent", "mutable"]) &&
+          validateChild(value.referent) && typeof value.mutable === "boolean" &&
+          (value.lifetime === undefined || (typeof value.lifetime === "string" && value.lifetime.length > 0));
       case "pointer":
         return hasExactKeys(value, ["kind", "pointee", "mutability"], ["kind", "pointee"]) &&
           validateChild(value.pointee) &&

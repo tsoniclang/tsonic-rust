@@ -34,6 +34,7 @@ import {
   rustFixedArrayTargetType,
   rustMoveOnlyNamedTypeTraits,
   rustNamedTargetType,
+  rustNamedTypeCarrierValue,
 } from "../rust-target-types.js";
 import type { RustNamedTypeTraitContract } from "../rust-target-types.js";
 
@@ -304,14 +305,6 @@ export interface RustProviderSemantics {
 export function mergeRustProviderSemantics(
   ...inputs: readonly RustProviderSemantics[]
 ): RustProviderSemantics {
-  const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
-  const operations = mergeExactRows(inputs.flatMap((input) => input.operations), providerOperationRowIdentity, "operation");
-  const types = mergeExactRows(inputs.flatMap((input) => input.types), providerTypeRowIdentity, "type");
-  const binaryEpilogues = mergeExactRows(
-    inputs.flatMap((input) => input.binaryEpilogues),
-    providerBinaryEpilogueIdentity,
-    "binary epilogue",
-  );
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   for (const input of inputs) {
@@ -330,6 +323,26 @@ export function mergeRustProviderSemantics(
       carrierTraits.set(id, traits);
     }
   }
+  const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
+  const operations = mergeExactRows(
+    inputs.flatMap((input) => input.operations).map((row) =>
+      canonicalizeProviderOperationRow(row, carrierPaths, carrierTraits)),
+    providerOperationRowIdentity,
+    "operation",
+  );
+  const types = mergeExactRows(
+    inputs.flatMap((input) => input.types).map((row) => Object.freeze({
+      ...row,
+      targetCarrier: materializeProviderCarrier(row.targetCarrier, carrierPaths, carrierTraits),
+    })),
+    providerTypeRowIdentity,
+    "type",
+  );
+  const binaryEpilogues = mergeExactRows(
+    inputs.flatMap((input) => input.binaryEpilogues),
+    providerBinaryEpilogueIdentity,
+    "binary epilogue",
+  );
   return Object.freeze({
     exports,
     operations,
@@ -467,19 +480,37 @@ export function collectRustProviderSemanticsFromDefinitions(
   }
   return {
     exports: Object.freeze(exports),
-    operations: Object.freeze(operations),
+    operations: Object.freeze(operations.map((row) =>
+      canonicalizeProviderOperationRow(row, carrierPaths, carrierTraits))),
     carrierPaths,
     carrierTraits,
-    types: Object.freeze(types),
+    types: Object.freeze(types.map((row) => Object.freeze({
+      ...row,
+      targetCarrier: materializeProviderCarrier(row.targetCarrier, carrierPaths, carrierTraits),
+    }))),
     binaryEpilogues: Object.freeze(binaryEpilogues),
   };
+}
+
+function canonicalizeProviderOperationRow(
+  row: RustProviderOperationRow,
+  carrierPaths: ReadonlyMap<string, string>,
+  carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>,
+): RustProviderOperationRow {
+  return materializeProviderOperationRow(
+    row,
+    new Map(),
+    carrierPaths,
+    carrierTraits,
+    row,
+  );
 }
 
 function materializeProviderOperationRow(
   row: RustProviderOperationDefinition,
   aliases: ReadonlyMap<string, string>,
-  carrierPaths: Readonly<Record<string, string>>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
   owner: Pick<RustProviderOperationRow, "providerPackageId" | "providerId" | "providerVersion" | "providerModuleId" | "moduleSpecifier">,
 ): RustProviderOperationRow {
   return {
@@ -495,7 +526,13 @@ function materializeProviderOperationRow(
       : { parameterCarriers: row.parameterCarriers.map((carrier) => materializeProviderCarrier(carrier, carrierPaths, carrierTraits)) }),
     ...(row.resultConversion === undefined
       ? {}
-      : { resultConversion: row.resultConversion }),
+      : {
+          resultConversion: materializeProviderValueConversion(
+            row.resultConversion,
+            carrierPaths,
+            carrierTraits,
+          ),
+        }),
     ...(row.immediateCallback === undefined
       ? {}
       : {
@@ -515,8 +552,8 @@ function materializeProviderOperationRow(
 function materializeProviderOperationForm(
   form: RustProviderOperationForm,
   aliases: ReadonlyMap<string, string>,
-  carrierPaths: Readonly<Record<string, string>>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
 ): RustProviderOperationForm {
   const argConversions = "argConversions" in form && form.argConversions !== undefined
     ? [...form.argConversions]
@@ -578,6 +615,15 @@ function materializeProviderOperationForm(
   if (form.form === "binary-operator") {
     return { ...form, trait: expandProviderPath(form.trait, aliases) };
   }
+  if (form.form === "trait-call" || form.form === "trait-associated-value") {
+    return {
+      ...form,
+      owner: materializeProviderCarrier(form.owner, carrierPaths, carrierTraits),
+      traitPath: expandProviderPath(form.traitPath, aliases),
+      traitTypeArguments: form.traitTypeArguments.map((argument) =>
+        materializeProviderCarrier(argument, carrierPaths, carrierTraits)),
+    };
+  }
   if (form.form === "index" && form.indexConversion !== undefined) {
     return form;
   }
@@ -601,6 +647,23 @@ export function materializeProviderCarrier(
   carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract> = {},
 ): TargetTypeRef {
+  const named = rustNamedTypeCarrierValue(carrier);
+  if (named !== undefined) {
+    const typeArguments = named.typeArguments.map((argument) =>
+      materializeProviderCarrier(argument, carrierPaths, carrierTraits));
+    const path = carrierPaths instanceof Map
+      ? carrierPaths.get(named.id)
+      : (carrierPaths as Readonly<Record<string, string>>)[named.id];
+    const traits = carrierTraits instanceof Map
+      ? carrierTraits.get(named.id)
+      : (carrierTraits as Readonly<Record<string, RustNamedTypeTraitContract>>)[named.id];
+    return rustNamedTargetType(
+      named.id,
+      path ?? named.path,
+      typeArguments,
+      traits ?? named.traits,
+    );
+  }
   if (carrier.kind === "target-named") {
     const typeArguments = (carrier.typeArguments ?? []).map((argument) =>
       materializeProviderCarrier(argument, carrierPaths, carrierTraits));
@@ -617,8 +680,14 @@ export function materializeProviderCarrier(
   if (carrier.kind === "array") {
     return { ...carrier, element: materializeProviderCarrier(carrier.element, carrierPaths, carrierTraits) };
   }
+  if (carrier.kind === "slice") {
+    return { ...carrier, element: materializeProviderCarrier(carrier.element, carrierPaths, carrierTraits) };
+  }
   if (carrier.kind === "tuple") {
     return { ...carrier, elements: carrier.elements.map((element) => materializeProviderCarrier(element, carrierPaths, carrierTraits)) };
+  }
+  if (carrier.kind === "reference") {
+    return { ...carrier, referent: materializeProviderCarrier(carrier.referent, carrierPaths, carrierTraits) };
   }
   if (carrier.kind === "pointer") {
     return { ...carrier, pointee: materializeProviderCarrier(carrier.pointee, carrierPaths, carrierTraits) };
@@ -634,6 +703,44 @@ export function materializeProviderCarrier(
   return fixedArray === undefined
     ? carrier
     : rustFixedArrayTargetType(materializeProviderCarrier(fixedArray.element, carrierPaths, carrierTraits), fixedArray.length);
+}
+
+function materializeProviderValueConversion(
+  conversion: RustValueConversion,
+  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
+): RustValueConversion {
+  switch (conversion.kind) {
+    case "copy-from-reference":
+      return {
+        ...conversion,
+        target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+      };
+    case "raw-pointer-mut-to-const":
+      return {
+        ...conversion,
+        pointee: materializeProviderCarrier(conversion.pointee, carrierPaths, carrierTraits),
+      };
+    case "source-union-variant":
+    case "bottom-coercion":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+      };
+    case "option-map":
+      return {
+        ...conversion,
+        elementConversion: materializeProviderValueConversion(
+          conversion.elementConversion,
+          carrierPaths,
+          carrierTraits,
+        ) as typeof conversion.elementConversion,
+      };
+    case "semantic-conversion":
+    case "numeric-promotion":
+      return conversion;
+  }
 }
 
 function createRustProviderPackageSourceExtension(definition: RustProviderPackageDefinition): CompilerExtension {

@@ -392,8 +392,8 @@ export function printRustType(type: RustType): string {
     case "fixed-array": {
       return `[${printRustType(type.element)}; ${type.length}]`;
     }
-    case "slice-ref": {
-      return `${type.mutable ? "&mut " : "&"}[${printRustType(type.element)}]`;
+    case "slice": {
+      return `[${printRustType(type.element)}]`;
     }
     case "function-pointer": {
       const abiName = type.abi?.length === 1 && type.abi[0] !== "target-default"
@@ -1432,7 +1432,10 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.callee, RustPrecedence.Postfix, false)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "associated-value": {
-      return `${printRustAssociatedOwner(expression.owner)}::${expression.name}`;
+      const owner = expression.trait === undefined
+        ? printRustAssociatedOwner(expression.owner)
+        : `<${printRustType(expression.owner)} as ${printRustType(expression.trait)}>`;
+      return `${owner}::${expression.name}`;
     }
     case "associated-call": {
       return `${printRustAssociatedCallOwner(expression)}::${expression.method}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;

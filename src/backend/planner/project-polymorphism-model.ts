@@ -439,9 +439,8 @@ function rustTypeEquals(left: RustType | undefined, right: RustType | undefined)
     case "fixed-array":
       return right.kind === "fixed-array" && left.length === right.length &&
         rustTypeEquals(left.element, right.element);
-    case "slice-ref":
-      return right.kind === "slice-ref" && left.mutable === right.mutable &&
-        rustTypeEquals(left.element, right.element);
+    case "slice":
+      return right.kind === "slice" && rustTypeEquals(left.element, right.element);
     case "function-pointer":
       return right.kind === "function-pointer" && left.isUnsafe === right.isUnsafe &&
         sameStrings(left.abi, right.abi) &&

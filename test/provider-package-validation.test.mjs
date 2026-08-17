@@ -9,6 +9,11 @@ import {
   rustCallableTargetType,
   rustClosureTargetType,
 } from "../dist/index.js";
+import {
+  collectRustProviderSemanticsFromDefinitions,
+  mergeRustProviderSemantics,
+} from "../dist/source/provider-packages/index.js";
+import { rustNamedTypeCarrierValue } from "../dist/source/rust-target-types.js";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
 
@@ -219,6 +224,73 @@ test("provider operation carriers are closed and renderable", () => {
       item.label,
     );
   }
+});
+
+test("provider carriers distinguish owned vectors from nested unsized slices", () => {
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [{
+        exportId: "@acme/validation::run",
+        operationKind: "method",
+        target: { form: "call", path: "acme_validation::run" },
+        resultCarrier: { kind: "slice", element: int32Carrier },
+      }],
+    })),
+    /bare Rust slice outside a reference, pointer, or target type argument/u,
+  );
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    carrierPaths: { "acme.Box": "alloc::boxed::Box" },
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: {
+        kind: "target-named",
+        id: "acme.Box",
+        typeArguments: [{ kind: "slice", element: int32Carrier }],
+      },
+    }],
+  })));
+});
+
+test("provider carrier metadata canonicalizes after cross-provider composition", () => {
+  const boxCarrier = { kind: "target-named", id: "acme.Box" };
+  const carrierPaths = { "acme.Box": "alloc::boxed::Box" };
+  const carrierTraits = {
+    "acme.Box": {
+      implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+    },
+  };
+  const owner = definition({
+    id: "acme-carrier-owner",
+    displayName: "Acme carrier owner",
+    carrierPaths,
+    carrierTraits,
+    operations: [],
+  });
+  const consumer = definition({
+    id: "acme-carrier-consumer",
+    displayName: "Acme carrier consumer",
+    carrierPaths,
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: boxCarrier,
+    }],
+  });
+
+  const together = collectRustProviderSemanticsFromDefinitions([consumer, owner]);
+  const separately = mergeRustProviderSemantics(
+    collectRustProviderSemanticsFromDefinitions([consumer]),
+    collectRustProviderSemanticsFromDefinitions([owner]),
+  );
+  const togetherCarrier = rustNamedTypeCarrierValue(together.operations[0].resultCarrier);
+  const separateCarrier = rustNamedTypeCarrierValue(separately.operations[0].resultCarrier);
+
+  assert.deepEqual(togetherCarrier?.traits, carrierTraits["acme.Box"]);
+  assert.deepEqual(separateCarrier, togetherCarrier);
 });
 
 test("runtime Callable is a built-in generic carrier and needs no provider-owned path", () => {

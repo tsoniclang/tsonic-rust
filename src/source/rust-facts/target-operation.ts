@@ -27,6 +27,12 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     if (target.form === "binary-operator") {
       return target.operator;
     }
+    if (target.form === "trait-call") {
+      return `${target.traitPath}::${target.method}`;
+    }
+    if (target.form === "trait-associated-value") {
+      return `${target.traitPath}::${target.name}`;
+    }
     return target.name;
   }
   if (fact.kind === "operator-token" || fact.kind === "operator-call") {

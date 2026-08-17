@@ -110,6 +110,7 @@ import type {
 import {
   rustInt32ToUsizeValueConversion,
   selectRustSourceValueConversion,
+  substituteRustValueConversion,
   rustValueConversionIdentity,
 } from "../rust-facts/value-conversions.js";
 import {
@@ -2305,7 +2306,8 @@ function providerFormRequiresSourceReceiver(form: RustProviderOperationForm): bo
     form.form === "receiver-method" ||
     form.form === "receiver-value-array" ||
     form.form === "receiver-tagged-array" ||
-    form.form === "arg-receiver-method";
+    form.form === "arg-receiver-method" ||
+    (form.form === "trait-call" && form.receiverMode !== undefined);
 }
 
 interface InstantiatedProviderOperationTemplate<
@@ -2380,6 +2382,14 @@ function instantiateProviderOperationTemplate<
         : {
             targetTypeArguments: template.targetTypeArguments.map((carrier) =>
               substituteRustTargetTypeParameters(carrier, bindings)),
+          }),
+      ...(template.resultConversion === undefined
+        ? {}
+        : {
+            resultConversion: substituteRustValueConversion(
+              template.resultConversion,
+              bindings,
+            ),
           }),
       typeParameters: [],
       typeRequirements: [],
@@ -2458,6 +2468,14 @@ function substituteProviderOperationForm(
           ...alternative,
           inputCarrier: substituteRustTargetTypeParameters(alternative.inputCarrier, substitutions),
         })),
+      };
+    case "trait-call":
+    case "trait-associated-value":
+      return {
+        ...form,
+        owner: substituteRustTargetTypeParameters(form.owner, substitutions),
+        traitTypeArguments: form.traitTypeArguments.map((argument) =>
+          substituteRustTargetTypeParameters(argument, substitutions)),
       };
     default:
       return form;
@@ -3663,8 +3681,8 @@ export function selectRustCheckedElementAccess(
   const sourceProfileIdentity = resolveSelectedSourceProfileMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
   const nativeArrayReceiver = receiverCarrier?.kind === "array"
     ? receiverCarrier
-    : receiverCarrier?.kind === "pointer" && receiverCarrier.pointee.kind === "array"
-      ? receiverCarrier.pointee
+    : receiverCarrier?.kind === "reference" && receiverCarrier.referent.kind === "slice"
+      ? receiverCarrier.referent
       : undefined;
   if (sourceProfileIdentity?.profile === "native" &&
     (sourceProfileIdentity.ownerName === "Array" || sourceProfileIdentity.ownerName === "ReadonlyArray") &&
@@ -3826,7 +3844,7 @@ function rustPropertyKeyIterationLowering(
   options: RustOperationsProviderOptions,
 ): RustPropertyKeyIterationLowering | undefined {
   if (iterable?.kind === "array" ||
-    (iterable?.kind === "pointer" && iterable.pointee.kind === "array") ||
+    (iterable?.kind === "reference" && iterable.referent.kind === "slice") ||
     rustFixedArrayCarrierValue(iterable) !== undefined) {
     return { kind: "dense-index-keys" };
   }
@@ -3859,8 +3877,8 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
   if (iterable?.kind === "array") {
     return { kind: "borrowed", elementCarrier: iterable.element, input: "reference" };
   }
-  if (iterable?.kind === "pointer" && iterable.pointee.kind === "array") {
-    return { kind: "borrowed", elementCarrier: iterable.pointee.element, input: "direct" };
+  if (iterable?.kind === "reference" && iterable.referent.kind === "slice") {
+    return { kind: "borrowed", elementCarrier: iterable.referent.element, input: "direct" };
   }
   const fixed = rustFixedArrayCarrierValue(iterable);
   if (fixed !== undefined) {
@@ -4021,10 +4039,10 @@ export function selectRustCheckedConversion(
         { message: "rust selected literal is representable by the selected target primitive carrier" },
       ]);
     }
-    if (targetCarrier.kind === "pointer" && sourceCarrier !== undefined &&
-      rustTargetTypeRefEquals(targetCarrier.pointee, sourceCarrier)) {
+    if (targetCarrier.kind === "reference" && sourceCarrier !== undefined &&
+      rustTargetTypeRefEquals(targetCarrier.referent, sourceCarrier)) {
       return acceptRustPolicy({ convertedType: targetCarrier }, [
-        { message: "rust selected call argument borrows into the selected target pointer carrier" },
+        { message: "rust selected call argument borrows into the selected target reference carrier" },
       ]);
     }
     const reconciliation = sourceCarrier === undefined

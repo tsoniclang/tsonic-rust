@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::boxed::Box;
 use tsonic_rust_runtime::{TsonicError, TsonicResult};
 
 pub const ANSWER: i32 = 42;
@@ -49,6 +50,61 @@ impl<T> Widget<T> {
     pub fn value(&self) -> &T {
         &self.value
     }
+
+    pub fn into_box_value(self: Box<Self>) -> T {
+        self.value
+    }
+}
+
+pub trait Metric<T> {
+    type Output;
+
+    const UNIT: i32;
+
+    fn measure(&self, scale: T) -> Self::Output;
+
+    fn reset(&mut self, value: T);
+
+    fn from_metric(value: T) -> Self
+    where
+        Self: Sized;
+}
+
+impl<T: Copy> Metric<T> for Widget<T> {
+    type Output = T;
+
+    const UNIT: i32 = 1;
+
+    fn measure(&self, scale: T) -> Self::Output {
+        let _ = &self.value;
+        scale
+    }
+
+    fn reset(&mut self, value: T) {
+        self.value = value;
+    }
+
+    fn from_metric(value: T) -> Self {
+        Self { count: Self::UNIT, value }
+    }
+}
+
+pub trait ConstantSlot {
+    const SLOT: i32;
+}
+
+pub trait MethodSlot {
+    fn SLOT() -> i32;
+}
+
+impl<T> ConstantSlot for Widget<T> {
+    const SLOT: i32 = 1;
+}
+
+impl<T> MethodSlot for Widget<T> {
+    fn SLOT() -> i32 {
+        2
+    }
 }
 
 pub struct CheckedWidget {
@@ -65,8 +121,30 @@ impl CheckedWidget {
     }
 }
 
+pub struct GenericFactory {
+    pub value: i32,
+}
+
+impl GenericFactory {
+    pub fn new<T>(_marker: T) -> Self {
+        Self { value: 27 }
+    }
+}
+
 pub fn double(value: i32) -> i32 {
     value * 2
+}
+
+pub fn borrowed_answer(value: &i32) -> &i32 {
+    value
+}
+
+pub fn borrowed_label() -> &'static str {
+    "widget"
+}
+
+pub fn borrowed_owned_string(value: &String) -> &String {
+    value
 }
 
 pub fn checked_double(value: i32) -> TsonicResult<i32> {

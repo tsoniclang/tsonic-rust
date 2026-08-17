@@ -832,7 +832,7 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  const ownedBinding = declarationCarrier.kind !== "pointer";
+  const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
   const resourceFact = context.input.facts.getFact(declaration, rustResourceManagementFactKey);
   const mutable = locationStorage === undefined &&
     (context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||

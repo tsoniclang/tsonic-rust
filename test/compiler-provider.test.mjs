@@ -114,6 +114,7 @@ test("compiler provider retains incomplete Rust enums as opaque native types", (
       variantsComplete: false,
       variants: [],
       methods: [],
+      associatedConstants: [],
       unsupportedMembers: [{ kind: "variant", name: "Hidden", reason: "stripped by rustdoc" }],
       traits: { implementations: [] },
     }],
@@ -180,8 +181,30 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     });
     const widget = widgetModule.exports.find(({ name }) => name === "Widget");
     assert.equal(widget?.kind, "struct");
-    assert.ok(widget.unsupportedMembers.some(({ name, reason }) =>
-      name === "value" && /borrowed/u.test(reason)));
+    const valueMethod = widget.methods.find(({ name }) => name === "value");
+    assert.deepEqual(valueMethod?.borrowedResult, {
+      sourceType: { kind: "generic", name: "T" },
+      origin: { kind: "receiver" },
+      conversion: "copy",
+    });
+    assert.deepEqual(valueMethod?.typeRequirements, [{ name: "T", requirements: ["copy"] }]);
+    assert.equal(
+      widget.methods.find(({ name }) => name === "into_box_value")?.receiver?.kind,
+      "custom",
+    );
+    assert.ok(widget.methods.some(({ name, traitDispatch }) =>
+      name === "measure" && traitDispatch?.path === "acme_widget::Metric"));
+    assert.ok(widget.methods.some(({ name, traitDispatch }) =>
+      name === "reset" && traitDispatch?.path === "acme_widget::Metric"));
+    assert.ok(widget.methods.some(({ name, traitDispatch }) =>
+      name === "from_metric" && traitDispatch?.path === "acme_widget::Metric"));
+    assert.deepEqual(
+      widget.associatedConstants.map(({ name, traitDispatch }) => ({ name, trait: traitDispatch.path })),
+      [
+        { name: "SLOT", trait: "acme_widget::ConstantSlot" },
+        { name: "UNIT", trait: "acme_widget::Metric" },
+      ],
+    );
 
     const functionModule = worker.module({
       snapshot,
@@ -197,6 +220,8 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         "Pair",
         "SimpleMode",
         "apply",
+        "borrowed_answer",
+        "borrowed_label",
         "byte_ptr",
         "checked_double",
         "cloned",
@@ -227,6 +252,8 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         "Pair",
         "SimpleMode",
         "apply",
+        "borrowed_answer",
+        "borrowed_label",
         "byte_ptr",
         "checked_double",
         "cloned",
@@ -352,6 +379,18 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       fixedArgumentModes: ["value"],
     });
     assert.equal(variadic?.isUnsafe, true);
+    const borrowedAnswer = functionModule.exports.find(({ name }) => name === "borrowed_answer");
+    assert.deepEqual(borrowedAnswer?.kind === "function" ? borrowedAnswer.function.borrowedResult : undefined, {
+      sourceType: { kind: "primitive", name: "i32" },
+      origin: { kind: "parameter", index: 0 },
+      conversion: "copy",
+    });
+    const borrowedLabel = functionModule.exports.find(({ name }) => name === "borrowed_label");
+    assert.deepEqual(borrowedLabel?.kind === "function" ? borrowedLabel.function.borrowedResult : undefined, {
+      sourceType: { kind: "primitive", name: "str" },
+      origin: { kind: "static" },
+      conversion: "owned-string",
+    });
     const cloned = functionModule.exports.find(({ name }) => name === "cloned");
     assert.deepEqual(cloned?.kind === "function" ? cloned.function.typeRequirements : undefined, [{
       name: "T",
@@ -374,6 +413,21 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       ({ exportId, operationKind }) => exportId.endsWith("::CheckedWidget") && operationKind === "constructor",
     );
     assert.equal(checkedWidgetConstructor?.isFallible, true);
+    const genericFactoryModule = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["GenericFactory"],
+    });
+    const genericFactoryProjection = projectRustCompilerModule(genericFactoryModule, {
+      providerModuleId: compilerProviderModuleId(dependency, []),
+      moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
+    });
+    const genericFactoryNew = genericFactoryProjection.declarationModel.exports
+      .find(({ name }) => name === "GenericFactory")?.members?.find(({ name }) => name === "new");
+    assert.equal(genericFactoryNew?.kind, "method");
+    assert.equal(genericFactoryNew?.static, true);
+    assert.deepEqual(genericFactoryNew?.signatures?.[0]?.typeParameters, [{ name: "T" }]);
     assert.deepEqual(
       functionProjection.declarationModel.imports,
       [
@@ -400,6 +454,24 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
     });
     assert.match(projection.carrierPaths.values().next().value, /^widget_alias::Widget$/u);
+    assert.equal(
+      projection.declarationModel.exports.find(({ name }) => name === "Widget")?.members
+        ?.some(({ name }) => name === "SLOT"),
+      false,
+      "a trait constant and trait method occupying one source static slot are both omitted",
+    );
+
+    const unsupportedBorrowedResult = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["borrowed_owned_string"],
+    });
+    assert.match(
+      unsupportedBorrowedResult.unsupportedExports.find(({ name }) =>
+        name === "borrowed_owned_string")?.reason ?? "",
+      /borrowed or unsized value with no closed target carrier/u,
+    );
 
     const standardSnapshot = worker.standardSnapshot();
     const standardDependency = standardSnapshot.dependencies.find(({ alias }) => alias === "std");
@@ -436,6 +508,56 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       trait.kind === "trait" && trait.path === "core::cmp::Eq" &&
       requirements.some(({ typeArgumentIndex, requirement }) =>
         typeArgumentIndex === 0 && requirement.kind === "trait" && requirement.path === "core::hash::Hash")));
+    const collectionsProjection = projectRustCompilerModule(collectionsModule, {
+      providerModuleId: compilerProviderModuleId(standardDependency, ["collections"]),
+      moduleSpecifier: "@tsonic/rust/std/collections.js",
+    });
+    const projectedHashMap = collectionsProjection.declarationModel.exports.find(({ name }) => name === "HashMap");
+    assert.equal(
+      projectedHashMap?.members?.find(({ name }) => name === "extend_one")?.signatures?.[0]?.parameters[0]?.name,
+      "argument0",
+      "Rust destructuring patterns become deterministic positional source parameter names",
+    );
+
+    const opsModule = worker.module({
+      snapshot: standardSnapshot,
+      dependency: standardDependency,
+      modulePath: ["ops"],
+      requestedExports: ["ControlFlow"],
+    });
+    const opsProjection = projectRustCompilerModule(opsModule, {
+      providerModuleId: compilerProviderModuleId(standardDependency, ["ops"]),
+      moduleSpecifier: "@tsonic/rust/std/ops.js",
+    });
+    const controlFlow = opsProjection.declarationModel.exports.find(({ name }) => name === "ControlFlow");
+    assert.deepEqual(controlFlow?.typeParameters, [{ name: "B" }]);
+    assert.deepEqual(
+      controlFlow?.members?.find(({ name }) => name === "Continue")?.signatures?.[0]?.parameters[0]?.type,
+      { kind: "tuple", elementTypes: [] },
+      "a hidden trailing Rust default parameter is substituted with its exact default source type",
+    );
+
+    const vecModule = worker.module({
+      snapshot: standardSnapshot,
+      dependency: standardDependency,
+      modulePath: ["vec"],
+      requestedExports: ["Vec"],
+    });
+    const vecProjection = projectRustCompilerModule(vecModule, {
+      providerModuleId: compilerProviderModuleId(standardDependency, ["vec"]),
+      moduleSpecifier: "@tsonic/rust/std/vec.js",
+    });
+    const boxedSliceConversion = vecProjection.operations.find(({ target }) =>
+      target.form === "trait-call" && target.traitTypeArguments.some((argument) =>
+        argument.kind === "target-named" && argument.typeArguments?.some(({ kind }) => kind === "slice")));
+    assert.ok(boxedSliceConversion);
+    assert.equal(
+      boxedSliceConversion.target.form === "trait-call"
+        ? boxedSliceConversion.target.traitTypeArguments[0]?.typeArguments?.[0]?.kind
+        : undefined,
+      "slice",
+      "nested Rust slices remain unsized target types instead of becoming owned Vec carriers",
+    );
 
     const ioModule = worker.module({
       snapshot: standardSnapshot,
@@ -506,7 +628,11 @@ test("compiler worker replaces a corrupt rustdoc cache artifact from its immutab
     assert.deepEqual(recovered.exports.map(({ name }) => name), ["Widget"]);
     assert.doesNotThrow(() => JSON.parse(readFileSync(artifactPath, "utf8")));
     const cargoCommands = readFileSync(shim.counterPath, "utf8").trim().split("\n");
-    assert.equal(cargoCommands.filter((command) => command === "rustdoc").length, 3);
+    assert.equal(
+      cargoCommands.filter((command) => command === "rustdoc").length,
+      5,
+      "the recovered Cargo document is regenerated while its exact standard-library closure remains cached",
+    );
   } finally {
     process.env.PATH = originalPath;
   }
@@ -519,8 +645,9 @@ import type { int32 } from "@tsonic/core/types.js";
 import type { FunctionPointer } from "@tsonic/core/types.js";
 import { unsafeContext } from "@tsonic/core/lang.js";
 import type { constPtr, i8, mutPtr, u8 } from "@tsonic/rust/types.js";
+import { Box } from "@tsonic/rust/std/boxed.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
-import { ANSWER, CheckedWidget, GLOBAL_COUNT, MUTABLE_COUNT, Mode, NumberBits, SimpleMode, Widget, apply, byte_ptr, checked_double, cloned, copied, dangerous, double, duplicate, featured, fill, first_byte, identity, integer_bits, integer_format, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
+import { ANSWER, CheckedWidget, GenericFactory, GLOBAL_COUNT, MUTABLE_COUNT, Mode, NumberBits, SimpleMode, Widget, apply, borrowed_answer, borrowed_label, byte_ptr, checked_double, cloned, copied, dangerous, double, duplicate, featured, fill, first_byte, identity, integer_bits, integer_format, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 
@@ -549,6 +676,9 @@ export function invokePointer(
 }
 
 export function main(): void {
+  if (GenericFactory.new<int32>(1).value !== 27) {
+    throw new Error("generic static factory mapping failed");
+  }
   const checked = new CheckedWidget(6);
   if (checked.value !== 6 || checked_double(4) !== 8 || checkedInProjectDomain(5) !== 10) {
     throw new Error("fallible compiler-provider mapping failed");
@@ -558,6 +688,26 @@ export function main(): void {
   widget.count = 2;
   if (previous !== 7 || widget.count !== 2 || widget.into_value() !== 9) {
     throw new Error("generic Widget mapping failed");
+  }
+  const borrowedWidget = new Widget<int32>(12);
+  if (borrowedWidget.value() !== 12) {
+    throw new Error("borrowed Copy result mapping failed");
+  }
+  const boxed = new Box<Widget<int32>>(new Widget<int32>(13));
+  if (Widget.into_box_value<int32>(boxed) !== 13) {
+    throw new Error("custom receiver mapping failed");
+  }
+  const metric = Widget.from_metric<int32>(14);
+  if (metric.measure(2) !== 2 || Widget.UNIT<int32>() !== 1) {
+    throw new Error("trait method or associated constant mapping failed");
+  }
+  metric.reset(17);
+  if (metric.into_value() !== 17) {
+    throw new Error("mutable trait receiver mapping failed");
+  }
+  const ownedBorrowedLabel: string = borrowed_label();
+  if (borrowed_answer(18) !== 18 || borrowed_label() !== "widget" || ownedBorrowedLabel !== "widget") {
+    throw new Error("borrowed free-function result mapping failed");
   }
   if (double(4) !== 8 || identity<int32>(5) !== 5 || featured(1) !== 101 || triple(3) !== 9) {
     throw new Error("function mapping failed");
@@ -647,6 +797,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.equal(result.artifacts.some(({ path }) => path === "Cargo.toml"), false);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::new\(7\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::GenericFactory::new::<i32>\(1\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::CheckedWidget::new\(6\)\?/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::checked_double\(4\)\?/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{ widget_alias::dangerous\(12\) \}/u);
@@ -656,6 +807,12 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /\*widget_alias::borrowed_answer\(&18\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let owned_borrowed_label: String = String::from\(widget_alias::borrowed_label\(\)\);/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::borrowed_label\(\) != "widget"/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::into_box_value\(boxed\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /<widget_alias::Widget<i32> as widget_alias::Metric<i32>>::measure/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /<widget_alias::Widget<i32> as widget_alias::Metric<i32>>::UNIT/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{[\s\S]*widget_alias::MUTABLE_COUNT = 4;[\s\S]*widget_alias::MUTABLE_COUNT[\s\S]*bits\.integer[\s\S]*widget_alias::variadic_printf\(format, variadic_value\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   assert.equal(readFileSync(project.manifestPath, "utf8"), manifestBefore);
@@ -675,19 +832,20 @@ test("missing Cargo exports fail closed at the selected source import", { timeou
     assert.match(rustSourceDiagnostics(harness), expected);
   }
 
-  const unsupportedMember = createRustSession({
+  const unsupportedMember = compileRustThroughTargetPack({
     target: { id: "rust", options: { projectFile: project.manifestPath } },
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
 import { Widget } from "@tsonic/rust/crates/widget_alias/index.js";
-export function invalid(widget: Widget<int32>): int32 {
+export function invalid(widget: Widget<string>): string {
   return widget.value();
 }
 `,
     },
   });
-  assert.match(rustSourceDiagnostics(unsupportedMember), /Property 'value' does not exist on type 'Widget<number>'/u);
+  assert.equal(unsupportedMember.result.artifacts.length, 0);
+  assert.ok(unsupportedMember.result.diagnostics.some(({ code }) =>
+    code === "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN"));
 });
 
 test("compiler provider keeps native Result separate from the runtime error boundary", { timeout: 300_000 }, () => {

@@ -107,7 +107,13 @@ function requireCarrier(
       addRequirements(carrier.name, required, requirements);
       return true;
     case "array":
-      return requireCarrier(carrier.element, required, requirements);
+      return requireCarrier(
+        carrier.element,
+        withoutRequirement(required, "default"),
+        requirements,
+      );
+    case "slice":
+      return false;
     case "tuple":
       return carrier.elements.every((element) =>
         requireCarrier(element, required, requirements));
@@ -118,7 +124,7 @@ function requireCarrier(
       }
       if (carrier.id === rustOptionTargetId) {
         return arguments_.every((argument) =>
-          requireCarrier(argument, required, requirements));
+          requireCarrier(argument, withoutRequirement(required, "default"), requirements));
       }
       if (carrier.id === rustLocationTargetId) {
         const nestedRequirements = new Set<RustGenericRequirement>();
@@ -145,14 +151,47 @@ function requireCarrier(
       return sourceType === undefined || !sourceType.typeArguments.some((argument) =>
         containsDeclaredTypeParameter(argument, requirements.declared));
     }
+    case "reference":
+      if (required.has("default") || required.has("clone") && carrier.mutable ||
+        required.has("static") && carrier.lifetime !== "static") {
+        return false;
+      }
+      return !required.has("static") || requireCarrier(
+        carrier.referent,
+        new Set(["static"]),
+        requirements,
+      );
     case "pointer":
+      return !required.has("default") && (!required.has("static") || requireCarrier(
+        carrier.pointee,
+        new Set(["static"]),
+        requirements,
+      ));
     case "function-pointer":
+      return !required.has("default") && (!required.has("static") ||
+        carrier.args.every((argument) => requireCarrier(
+          argument,
+          new Set(["static"]),
+          requirements,
+        )) && requireCarrier(carrier.result, new Set(["static"]), requirements));
     case "closure":
     case "associated-type":
       return !containsDeclaredTypeParameter(carrier, requirements.declared);
     default:
       return true;
   }
+}
+
+function withoutRequirement(
+  required: ReadonlySet<RustGenericRequirement>,
+  omitted: RustGenericRequirement,
+): ReadonlySet<RustGenericRequirement> {
+  if (!required.has(omitted)) {
+    return required;
+  }
+  const result = new Set(required);
+  result.delete(omitted);
+  return result;
 }
 
 function containsDeclaredTypeParameter(
@@ -167,9 +206,13 @@ function containsDeclaredTypeParameter(
         containsDeclaredTypeParameter(argument, declared)) === true;
     case "array":
       return containsDeclaredTypeParameter(carrier.element, declared);
+    case "slice":
+      return containsDeclaredTypeParameter(carrier.element, declared);
     case "tuple":
       return carrier.elements.some((element) =>
         containsDeclaredTypeParameter(element, declared));
+    case "reference":
+      return containsDeclaredTypeParameter(carrier.referent, declared);
     case "pointer":
       return containsDeclaredTypeParameter(carrier.pointee, declared);
     case "function-pointer":

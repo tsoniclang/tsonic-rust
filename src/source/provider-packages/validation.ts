@@ -643,10 +643,14 @@ function walkTargetCarrier(
       for (const argument of carrier.typeArguments ?? []) walkTargetCarrier(argument, visit);
       return;
     case "array":
+    case "slice":
       walkTargetCarrier(carrier.element, visit);
       return;
     case "tuple":
       for (const element of carrier.elements) walkTargetCarrier(element, visit);
+      return;
+    case "reference":
+      walkTargetCarrier(carrier.referent, visit);
       return;
     case "pointer":
       walkTargetCarrier(carrier.pointee, visit);
@@ -924,6 +928,9 @@ function operationFormCarriers(form: RustProviderOperationForm): readonly Target
       ...form.alternatives.map((alternative) => alternative.inputCarrier),
     ];
   }
+  if (form.form === "trait-call" || form.form === "trait-associated-value") {
+    return [form.owner, ...form.traitTypeArguments];
+  }
   return [];
 }
 
@@ -1139,6 +1146,39 @@ function validateOperationForm(
         }
       }
       return;
+    case "trait-call":
+      requireExactKeys(
+        record,
+        ["form", "owner", "traitPath", "traitTypeArguments", "method", "receiverMode", "argModes"],
+        `${label}.target`,
+        fail,
+      );
+      validateCarrier(form.owner, definition, `${label}.target.owner`, fail);
+      requireRustPath(form.traitPath, `${label}.target.traitPath`, fail);
+      requireRustIdentifier(form.method, `${label}.target.method`, fail);
+      for (const [index, argument] of form.traitTypeArguments.entries()) {
+        validateCarrier(argument, definition, `${label}.target.traitTypeArguments[${index}]`, fail);
+      }
+      if (form.receiverMode !== undefined && form.receiverMode !== "value" &&
+        form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
+        fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
+      validateModes(form.argModes, label, parameterCarriers?.length, fail);
+      return;
+    case "trait-associated-value":
+      requireExactKeys(
+        record,
+        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
+        `${label}.target`,
+        fail,
+      );
+      validateCarrier(form.owner, definition, `${label}.target.owner`, fail);
+      requireRustPath(form.traitPath, `${label}.target.traitPath`, fail);
+      requireRustIdentifier(form.name, `${label}.target.name`, fail);
+      for (const [index, argument] of form.traitTypeArguments.entries()) {
+        validateCarrier(argument, definition, `${label}.target.traitTypeArguments[${index}]`, fail);
+      }
+      return;
     case "receiver-method":
       requireExactKeys(record, ["form", "name", "argModes", "argConversions", "argOrder", "chain", "mutatesReceiver"], `${label}.target`, fail);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
@@ -1303,6 +1343,7 @@ function validateCarrier(
   fail: Fail,
   options: {
     readonly allowImmediateClosure?: boolean;
+    readonly allowUnsized?: boolean;
     readonly position?: "value" | "return";
   } = {},
 ): void {
@@ -1321,7 +1362,9 @@ function validateCarrier(
         fail(`${where} names target carrier '${carrier.id}' without a Rust carrier path`);
       }
       for (const [index, argument] of (carrier.typeArguments ?? []).entries()) {
-        validateCarrier(argument, definition, `${where}.typeArguments[${index}]`, fail);
+        validateCarrier(argument, definition, `${where}.typeArguments[${index}]`, fail, {
+          allowUnsized: true,
+        });
       }
       return;
     case "type-parameter":
@@ -1335,16 +1378,35 @@ function validateCarrier(
       }
       validateCarrier(carrier.element, definition, `${where}.element`, fail);
       return;
+    case "slice":
+      requireExactKeys(record, ["kind", "element"], where, fail);
+      if (options.allowUnsized !== true) {
+        fail(`${where} uses a bare Rust slice outside a reference, pointer, or target type argument`);
+      }
+      validateCarrier(carrier.element, definition, `${where}.element`, fail);
+      return;
     case "tuple":
       requireExactKeys(record, ["kind", "elements"], where, fail);
       for (const [index, element] of carrier.elements.entries()) {
         validateCarrier(element, definition, `${where}.elements[${index}]`, fail);
       }
       return;
+    case "reference":
+      requireExactKeys(record, ["kind", "referent", "mutable", "lifetime"], where, fail);
+      if (typeof carrier.mutable !== "boolean" ||
+        (carrier.lifetime !== undefined && (typeof carrier.lifetime !== "string" || carrier.lifetime.length === 0))) {
+        fail(`${where} has an invalid Rust reference contract`);
+      }
+      validateCarrier(carrier.referent, definition, `${where}.referent`, fail, {
+        allowUnsized: true,
+      });
+      return;
     case "pointer":
       requireExactKeys(record, ["kind", "pointee", "mutability"], where, fail);
       if (carrier.mutability === "const" || carrier.mutability === "mut") {
-        validateCarrier(carrier.pointee, definition, `${where}.pointee`, fail);
+        validateCarrier(carrier.pointee, definition, `${where}.pointee`, fail, {
+          allowUnsized: true,
+        });
         return;
       }
       fail(`${where} is not a renderable Rust pointer carrier`);
@@ -1379,9 +1441,6 @@ function validateCarrier(
     case "target-specific": {
       requireExactKeys(record, ["kind", "target", "name", "value"], where, fail);
       if (isRustNeverCarrier(carrier)) {
-        if (options.position !== "return") {
-          fail(`${where} uses Rust bottom outside a callable or operation result`);
-        }
         return;
       }
       const fixedArray = rustFixedArrayCarrierValue(carrier);
@@ -1412,6 +1471,11 @@ function validateValueConversion(
     requireExactKeys(asRecord(conversion), ["kind", "pointee"], where, fail);
     if (!isRustTargetTypeRef(conversion.pointee)) {
       fail(`${where}.pointee is not a closed Rust target type`);
+    }
+  } else if (conversion.kind === "copy-from-reference") {
+    requireExactKeys(asRecord(conversion), ["kind", "target"], where, fail);
+    if (!isRustTargetTypeRef(conversion.target)) {
+      fail(`${where}.target is not a closed Rust target type`);
     }
   } else if (conversion.kind === "source-union-variant") {
     requireExactKeys(asRecord(conversion), ["kind", "source", "target", "variantName"], where, fail);

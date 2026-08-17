@@ -471,6 +471,10 @@ export function collectModuleStandardTypeLocations(
       case "raw-pointer":
         visitType(type.target);
         return;
+      case "associated-type":
+        visitType(type.owner);
+        type.trait.typeArguments.forEach(visitType);
+        return;
       case "function-pointer":
         type.parameters.forEach(visitType);
         visitType(type.result);
@@ -492,8 +496,12 @@ export function collectModuleStandardTypeLocations(
   const visitFunction = (fn: RustCompilerFunction): void => {
     visitParameters(fn.typeParameters);
     visitParameters(fn.typeRequirements);
+    if (fn.receiver?.kind === "custom") {
+      visitType(fn.receiver.type);
+    }
     fn.parameters.forEach((parameter) => visitType(parameter.type));
     visitType(fn.result);
+    fn.traitDispatch?.typeArguments.forEach(visitType);
   };
   for (const exported of module.exports) {
     switch (exported.kind) {
@@ -514,12 +522,20 @@ export function collectModuleStandardTypeLocations(
         visitParameters(exported.typeParameters);
         exported.fields.forEach((field) => visitType(field.type));
         exported.methods.forEach(visitFunction);
+        exported.associatedConstants.forEach((constant) => {
+          visitType(constant.type);
+          constant.traitDispatch.typeArguments.forEach(visitType);
+        });
         break;
       case "enum":
         selectCanonicalPath(exported.canonicalPath);
         visitParameters(exported.typeParameters);
         exported.variants.forEach((variant) => variant.fields.forEach(visitType));
         exported.methods.forEach(visitFunction);
+        exported.associatedConstants.forEach((constant) => {
+          visitType(constant.type);
+          constant.traitDispatch.typeArguments.forEach(visitType);
+        });
         break;
     }
   }

@@ -23,13 +23,16 @@ import {
 } from "../../source/rust-source-semantics/source-modules.js";
 import {
   rustFixedArrayTargetType,
+  rustNeverTargetType,
   rustOptionTargetId,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
 } from "../../source/rust-target-types.js";
 import type { RustNamedTypeTraitContract } from "../../source/rust-target-types.js";
+import { rustBorrowedStrToStringValueConversion } from "../../source/rust-facts/value-conversions.js";
 import type {
+  RustCompilerAssociatedConstant,
   RustCompilerDependency,
   RustCompilerExport,
   RustCompilerFunction,
@@ -39,6 +42,7 @@ import type {
   RustCompilerTypeTraits,
   RustCompilerStandardTypeLocation,
 } from "./model.js";
+import { substituteRustCompilerType } from "./rustdoc-types.js";
 
 export interface RustCompilerProviderProjection {
   readonly declarationModel: ProviderDeclarationModel;
@@ -63,6 +67,7 @@ interface ProjectionContext {
   readonly carrierTraits: Map<string, RustNamedTypeTraitContract>;
   readonly standardTypes: ReadonlyMap<string, RustCompilerStandardTypeLocation>;
   readonly localStandardTypeNames: ReadonlyMap<string, string>;
+  readonly defaultTypeBindings?: ReadonlyMap<string, RustCompilerType>;
   readonly currentType?: {
     readonly exportId: string;
     readonly name: string;
@@ -234,8 +239,9 @@ function projectExport(
   }
   if (exported.kind === "type-alias") {
     const typeParameterNames = sourceVisibleTypeParameters(exported.typeParameters).map((parameter) => parameter.name);
-    const sourceType = sourceTypeFor(exported.type, context, "result");
-    const targetCarrier = targetTypeFor(exported.type, context, "result");
+    const typeContext = withDefaultTypeBindings(context, exported.typeParameters);
+    const sourceType = sourceTypeFor(exported.type, typeContext, "result");
+    const targetCarrier = targetTypeFor(exported.type, typeContext, "result");
     return {
       declaration: Object.freeze({
         id: exportId,
@@ -281,7 +287,7 @@ function projectExport(
     ...(sourceTypeArguments.length === 0 ? {} : { typeArguments: sourceTypeArguments }),
   };
   const typeContext: ProjectionContext = {
-    ...context,
+    ...withDefaultTypeBindings(context, exported.typeParameters),
     currentType: {
       exportId,
       name: exported.name,
@@ -294,7 +300,8 @@ function projectExport(
   };
   const nativeEnumDeclaration = exported.kind === "enum" && exported.variantsComplete &&
     typeParameterNames.length === 0 &&
-    exported.variants.every((variant) => variant.kind === "plain");
+    exported.variants.every((variant) => variant.kind === "plain") &&
+    exported.methods.length === 0 && exported.associatedConstants.length === 0;
   const members: ProviderMemberDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
   if (exported.kind === "struct" || exported.kind === "union") {
@@ -392,25 +399,26 @@ function projectExport(
       }));
     }
   }
-  for (const method of exported.methods) {
-    const methodTypeParameters = method.typeParameters.map((parameter) => parameter.name);
-    const allowedMethodTypeParameters = new Set([...typeParameterNames, ...methodTypeParameters]);
-    if (!compilerFunctionUsesOnlyTypeParameters(method, allowedMethodTypeParameters)) {
-      continue;
-    }
-    const result = compilerFunctionResult(method.result);
-    const constructor = exported.kind === "struct" && method.receiver === undefined &&
-      method.name === "new" && rustCompilerTypeNamesCurrentType(result.type, typeContext);
-    const projected = projectFunction(method, typeContext, exportId, constructor, selectedTargetPath);
-    members.push(Object.freeze({
-      id: projected.memberId!,
-      name: constructor ? "constructor" : method.name,
-      kind: constructor ? "constructor" : "method",
-      ...(method.receiver === undefined && !constructor ? { static: true } : {}),
-      signatures: Object.freeze([projected.signature]),
-    }));
-    operations.push(projected.operation);
-  }
+  const projectedMethods = projectTypeMethods(
+    exported.methods,
+    exported.kind,
+    exported.typeParameters.map((parameter) => parameter.name),
+    typeContext,
+    exportId,
+    selectedTargetPath,
+  );
+  members.push(...projectedMethods.members);
+  operations.push(...projectedMethods.operations);
+  const projectedConstants = projectAssociatedConstants(
+    exported.associatedConstants,
+    typeParameterNames,
+    exported.typeParameters,
+    typeContext,
+    exportId,
+  );
+  members.push(...projectedConstants.members);
+  operations.push(...projectedConstants.operations);
+  const unambiguous = selectUnambiguousMembers(members, operations);
   const declaration: ProviderExportDeclaration = Object.freeze({
     id: exportId,
     name: exported.name,
@@ -419,11 +427,11 @@ function projectExport(
     ...(typeParameterNames.length === 0
       ? {}
       : { typeParameters: Object.freeze(typeParameterNames.map((name) => Object.freeze({ name }))) }),
-    members: Object.freeze(members),
+    members: unambiguous.members,
   });
   return {
     declaration,
-    operations: Object.freeze(operations),
+    operations: unambiguous.operations,
     type: Object.freeze({
       exportId,
       targetCarrier: typeCarrier,
@@ -432,12 +440,171 @@ function projectExport(
   };
 }
 
+function projectTypeMethods(
+  methods: readonly RustCompilerFunction[],
+  ownerKind: "struct" | "enum" | "union",
+  allOwnerTypeParameters: readonly string[],
+  context: ProjectionContext,
+  exportId: string,
+  ownerTargetPath: readonly string[],
+): {
+  readonly members: readonly ProviderMemberDeclaration[];
+  readonly operations: readonly RustProviderOperationDefinition[];
+} {
+  const projected = methods.flatMap((method) => {
+    const methodTypeParameters = method.typeParameters.map((parameter) => parameter.name);
+    const allowedMethodTypeParameters = new Set([...allOwnerTypeParameters, ...methodTypeParameters]);
+    if (!compilerFunctionUsesOnlyTypeParameters(method, allowedMethodTypeParameters)) {
+      return [];
+    }
+    const result = compilerFunctionResult(method.result);
+    const constructor = ownerKind === "struct" && method.receiver === undefined &&
+      method.traitDispatch === undefined && method.name === "new" && method.typeParameters.length === 0 &&
+      rustCompilerTypeNamesCurrentType(result.type, context);
+    const value = projectFunction(method, context, exportId, constructor, ownerTargetPath);
+    return [{ method, constructor, value }];
+  });
+  const byMember = new Map<string, typeof projected>();
+  for (const entry of projected) {
+    const memberId = entry.value.memberId!;
+    const group = byMember.get(memberId) ?? [];
+    group.push(entry);
+    byMember.set(memberId, group);
+  }
+  const members: ProviderMemberDeclaration[] = [];
+  const operations: RustProviderOperationDefinition[] = [];
+  for (const [memberId, group] of [...byMember].sort(([left], [right]) => compareText(left, right))) {
+    const counts = new Map<string, number>();
+    for (const entry of group) {
+      const key = sourceSignatureSelectionKey(entry.value.signature);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const selected = group.filter((entry) =>
+      counts.get(sourceSignatureSelectionKey(entry.value.signature)) === 1);
+    if (selected.length === 0) {
+      continue;
+    }
+    const first = selected[0]!;
+    members.push(Object.freeze({
+      id: memberId,
+      name: first.constructor ? "constructor" : first.method.name,
+      kind: first.constructor ? "constructor" : "method",
+      ...(first.constructor || sourceMethodIsInstance(first.method) ? {} : { static: true }),
+      signatures: Object.freeze(selected.map((entry) => entry.value.signature)),
+    }));
+    operations.push(...selected.map((entry) => entry.value.operation));
+  }
+  return { members: Object.freeze(members), operations: Object.freeze(operations) };
+}
+
+function projectAssociatedConstants(
+  constants: readonly RustCompilerAssociatedConstant[],
+  ownerTypeParameters: readonly string[],
+  ownerTypeParameterContracts: readonly RustCompilerTypeParameter[],
+  context: ProjectionContext,
+  exportId: string,
+): {
+  readonly members: readonly ProviderMemberDeclaration[];
+  readonly operations: readonly RustProviderOperationDefinition[];
+} {
+  const nameCounts = new Map<string, number>();
+  for (const constant of constants) {
+    nameCounts.set(constant.name, (nameCounts.get(constant.name) ?? 0) + 1);
+  }
+  const members: ProviderMemberDeclaration[] = [];
+  const operations: RustProviderOperationDefinition[] = [];
+  for (const constant of constants) {
+    if (nameCounts.get(constant.name) !== 1 ||
+      !compilerTypeUsesOnlyTypeParameters(
+        constant.type,
+        new Set(ownerTypeParameterContracts.map((parameter) => parameter.name)),
+      )) {
+      continue;
+    }
+    const memberId = `${exportId}::trait-constant:${constant.name}`;
+    const resultCarrier = targetTypeFor(constant.type, context, "result");
+    const sourceType = sourceTypeFor(constant.type, context, "result");
+    const target = {
+      form: "trait-associated-value" as const,
+      owner: requireCurrentType(context).carrier,
+      traitPath: targetTraitPath(constant.traitDispatch.path, context),
+      traitTypeArguments: constant.traitDispatch.typeArguments.map((argument) =>
+        targetTypeFor(argument, context, "result", true)),
+      name: constant.name,
+    };
+    if (ownerTypeParameters.length === 0) {
+      members.push(Object.freeze({
+        id: memberId,
+        name: constant.name,
+        kind: "property",
+        static: true,
+        type: sourceType,
+      }));
+      operations.push(operationRow({
+        exportId,
+        memberId,
+        operationKind: "property",
+        target,
+        resultCarrier,
+        ...typeRequirements(constant.typeRequirements, ownerTypeParameters),
+      }));
+      continue;
+    }
+    const signatureId = `${memberId}::signature`;
+    members.push(Object.freeze({
+      id: memberId,
+      name: constant.name,
+      kind: "method",
+      static: true,
+      signatures: Object.freeze([Object.freeze({
+        id: signatureId,
+        name: constant.name,
+        parameters: Object.freeze([]),
+        returnType: sourceType,
+        typeParameters: Object.freeze(ownerTypeParameters.map((name) => Object.freeze({ name }))),
+      })]),
+    }));
+    operations.push(operationRow({
+      exportId,
+      memberId,
+      signatureId,
+      operationKind: "method",
+      target,
+      resultCarrier,
+      typeParameters: ownerTypeParameters,
+      ...typeRequirements(
+        [...ownerTypeParameterContracts, ...constant.typeRequirements],
+        ownerTypeParameters,
+      ),
+    }));
+  }
+  return { members: Object.freeze(members), operations: Object.freeze(operations) };
+}
+
+function sourceSignatureSelectionKey(signature: ProviderSignatureDeclaration): string {
+  return JSON.stringify({
+    parameters: signature.parameters,
+    typeParameters: signature.typeParameters?.map(({ name }) => name) ?? [],
+  });
+}
+
+function sourceMethodIsInstance(method: RustCompilerFunction): boolean {
+  return method.receiver?.kind === "value" || method.receiver?.kind === "shared" ||
+    method.receiver?.kind === "mutable";
+}
+
 function compilerFunctionUsesOnlyTypeParameters(
   fn: RustCompilerFunction,
   allowed: ReadonlySet<string>,
 ): boolean {
   return fn.parameters.every((parameter) => compilerTypeUsesOnlyTypeParameters(parameter.type, allowed)) &&
-    compilerTypeUsesOnlyTypeParameters(fn.result, allowed);
+    compilerTypeUsesOnlyTypeParameters(fn.result, allowed) &&
+    (fn.receiver?.kind !== "custom" ||
+      compilerTypeUsesOnlyTypeParameters(fn.receiver.type, allowed)) &&
+    (fn.borrowedResult === undefined ||
+      compilerTypeUsesOnlyTypeParameters(fn.borrowedResult.sourceType, allowed)) &&
+    (fn.traitDispatch === undefined || fn.traitDispatch.typeArguments.every((argument) =>
+      compilerTypeUsesOnlyTypeParameters(argument, allowed)));
 }
 
 function compilerTypeUsesOnlyTypeParameters(
@@ -455,6 +622,10 @@ function compilerTypeUsesOnlyTypeParameters(
     case "reference":
     case "raw-pointer":
       return compilerTypeUsesOnlyTypeParameters(type.target, allowed);
+    case "associated-type":
+      return compilerTypeUsesOnlyTypeParameters(type.owner, allowed) &&
+        type.trait.typeArguments.every((argument) =>
+          compilerTypeUsesOnlyTypeParameters(argument, allowed));
     case "function-pointer":
       return type.parameters.every((parameter) => compilerTypeUsesOnlyTypeParameters(parameter, allowed)) &&
         compilerTypeUsesOnlyTypeParameters(type.result, allowed);
@@ -478,17 +649,29 @@ function projectFunction(
   readonly signature: ProviderSignatureDeclaration;
   readonly operation: RustProviderOperationDefinition;
 } {
+  const instanceMethod = sourceMethodIsInstance(fn);
   const memberId = context.currentType === undefined
     ? undefined
-    : `${exportId}::${constructor ? "constructor" : fn.receiver === undefined ? "static" : "method"}:${fn.name}`;
+    : `${exportId}::${constructor ? "constructor" : instanceMethod ? "method" : "static"}:${fn.name}`;
   const signatureId = `${memberId ?? exportId}::signature:${functionSignatureDigest(fn)}`;
   const parameters: ProviderParameterDeclaration[] = [];
   const parameterCarriers: TargetTypeRef[] = [];
   const argumentModes: ("value" | "ref" | "mut-ref")[] = [];
-  for (const parameter of fn.parameters) {
+  if (fn.receiver?.kind === "custom") {
+    const passing = parameterPassing(fn.receiver.type);
+    parameters.push(Object.freeze({
+      name: "receiver",
+      type: sourceTypeFor(passing.type, context, "parameter"),
+      ...(passing.sourceMode === "by-value" ? {} : { passingMode: passing.sourceMode }),
+    }));
+    parameterCarriers.push(targetTypeFor(passing.type, context, "parameter"));
+    argumentModes.push(passing.targetMode);
+  }
+  for (let parameterIndex = 0; parameterIndex < fn.parameters.length; parameterIndex += 1) {
+    const parameter = fn.parameters[parameterIndex]!;
     const passing = parameterPassing(parameter.type);
     parameters.push(Object.freeze({
-      name: parameter.name,
+      name: `argument${parameterIndex}`,
       type: sourceTypeFor(passing.type, context, "parameter"),
       ...(passing.sourceMode === "by-value" ? {} : { passingMode: passing.sourceMode }),
     }));
@@ -503,12 +686,18 @@ function projectFunction(
     } satisfies ProviderParameterDeclaration));
   }
   const result = compilerFunctionResult(fn.result);
+  const exposedResultType = fn.borrowedResult?.sourceType ?? result.type;
   const resultCarrier = constructor
     ? requireCurrentType(context).carrier
-    : targetTypeFor(result.type, context, "result");
-  const returnType = constructor ? undefined : sourceTypeFor(result.type, context, "result");
+    : targetTypeFor(exposedResultType, context, "result");
+  const returnType = constructor ? undefined : sourceTypeFor(exposedResultType, context, "result");
+  const resultConversion = fn.borrowedResult === undefined
+    ? undefined
+    : fn.borrowedResult.conversion === "owned-string"
+      ? rustBorrowedStrToStringValueConversion
+      : Object.freeze({ kind: "copy-from-reference" as const, target: resultCarrier });
   const methodTypeParameters = uniqueText([
-    ...(context.currentType !== undefined && fn.receiver === undefined && !constructor
+    ...(context.currentType !== undefined && !instanceMethod && !constructor
       ? context.currentType.typeParameters
       : []),
     ...fn.typeParameters.map((parameter) => parameter.name),
@@ -524,13 +713,33 @@ function projectFunction(
   if (fn.variadic && (context.currentType !== undefined || fn.receiver !== undefined)) {
     throw new Error(`Rust C-variadic function '${fn.name}' must be one free provider function.`);
   }
-  const target = fn.variadic
+  const traitTarget = fn.traitDispatch === undefined
+    ? undefined
+    : {
+        form: "trait-call" as const,
+        owner: requireCurrentType(context).carrier,
+        traitPath: targetTraitPath(fn.traitDispatch.path, context),
+        traitTypeArguments: fn.traitDispatch.typeArguments.map((argument) =>
+          targetTypeFor(argument, context, "result", true)),
+        method: fn.name,
+        ...(instanceMethod
+          ? {
+              receiverMode: fn.receiver?.kind === "value"
+                ? "value" as const
+                : fn.receiver?.kind === "mutable"
+                  ? "mut-ref" as const
+                  : "ref" as const,
+            }
+          : {}),
+        ...(argumentModes.every((mode) => mode === "value") ? {} : { argModes: argumentModes }),
+      };
+  const target = traitTarget ?? (fn.variadic
     ? {
         form: "call-c-variadic" as const,
         path: ownerTargetPath.join("::"),
         fixedArgumentModes: argumentModes,
       }
-    : context.currentType === undefined || fn.receiver === undefined
+    : context.currentType === undefined || !instanceMethod
     ? {
         form: "call" as const,
         path: context.currentType === undefined
@@ -542,8 +751,8 @@ function projectFunction(
         form: "receiver-method" as const,
         name: fn.name,
         ...(argumentModes.every((mode) => mode === "value") ? {} : { argModes: argumentModes }),
-        ...(fn.receiver === "mutable" ? { mutatesReceiver: true } : {}),
-      };
+        ...(fn.receiver?.kind === "mutable" ? { mutatesReceiver: true } : {}),
+      });
   const operation = {
     exportId,
     ...(memberId === undefined ? {} : { memberId }),
@@ -552,12 +761,13 @@ function projectFunction(
     target,
     resultCarrier,
     parameterCarriers,
-    ...(context.currentType === undefined || fn.receiver === undefined
+    ...(context.currentType === undefined || !instanceMethod
       ? {}
       : { receiverCarrier: context.currentType.carrier }),
     ...(allTypeParameters.length === 0 ? {} : { typeParameters: allTypeParameters }),
     ...typeRequirements(fn.typeRequirements, allTypeParameters),
     ...(targetTypeArguments.length === 0 ? {} : { targetTypeArguments }),
+    ...(resultConversion === undefined ? {} : { resultConversion }),
     ...(fn.asynchronous ? { isAsync: true as const } : {}),
     ...(fn.unsafe ? { isUnsafe: true as const } : {}),
   };
@@ -579,6 +789,39 @@ function projectFunction(
           errorBoundary: "target-runtime",
         })
       : operationRow(operation),
+  };
+}
+
+function selectUnambiguousMembers(
+  members: readonly ProviderMemberDeclaration[],
+  operations: readonly RustProviderOperationDefinition[],
+): {
+  readonly members: readonly ProviderMemberDeclaration[];
+  readonly operations: readonly RustProviderOperationDefinition[];
+} {
+  const membersBySourceSlot = new Map<string, ProviderMemberDeclaration[]>();
+  for (const member of members) {
+    if (typeof member.name !== "string") {
+      throw new Error("Rust compiler providers may expose only identifier-named source members.");
+    }
+    const key = `${member.static === true ? "static" : "instance"}\0${member.name}`;
+    const group = membersBySourceSlot.get(key) ?? [];
+    group.push(member);
+    membersBySourceSlot.set(key, group);
+  }
+  const ambiguousMemberIds = new Set<string>();
+  for (const group of membersBySourceSlot.values()) {
+    if (group.length <= 1) {
+      continue;
+    }
+    for (const member of group) {
+      ambiguousMemberIds.add(member.id);
+    }
+  }
+  return {
+    members: Object.freeze(members.filter((member) => !ambiguousMemberIds.has(member.id))),
+    operations: Object.freeze(operations.filter((operation) =>
+      operation.memberId === undefined || !ambiguousMemberIds.has(operation.memberId))),
   };
 }
 
@@ -615,12 +858,19 @@ function sourceTypeFor(
   type: RustCompilerType,
   context: ProjectionContext,
   position: "parameter" | "result",
+  nested = false,
 ): ProviderTypeExpression {
+  if (type.kind === "generic") {
+    const bound = context.defaultTypeBindings?.get(type.name);
+    if (bound !== undefined) {
+      return sourceTypeFor(bound, context, position, nested);
+    }
+  }
   if (type.kind === "reference") {
     if (position === "result") {
       throw new Error("Borrowed Rust results require an explicit lifetime-bearing source contract.");
     }
-    return sourceTypeFor(type.target, context, position);
+    return sourceTypeFor(type.target, context, position, nested);
   }
   switch (type.kind) {
     case "unit":
@@ -628,6 +878,9 @@ function sourceTypeFor(
     case "primitive": {
       if (type.name === "str") {
         return { kind: "string" };
+      }
+      if (type.name === "never") {
+        return { kind: "never" };
       }
       const primitive = sourcePrimitiveByRustName.get(type.name);
       if (primitive === undefined) {
@@ -640,34 +893,36 @@ function sourceTypeFor(
     case "self":
       return requireCurrentType(context).sourceType;
     case "tuple":
-      return { kind: "tuple", elementTypes: type.elements.map((element) => sourceTypeFor(element, context, position)) };
+      return { kind: "tuple", elementTypes: type.elements.map((element) => sourceTypeFor(element, context, position, true)) };
     case "array":
-      return { kind: "array", elementType: sourceTypeFor(type.element, context, position) };
+      return { kind: "array", elementType: sourceTypeFor(type.element, context, position, true) };
     case "slice":
-      if (position === "result") {
+      if (position === "result" && !nested) {
         throw new Error("Borrowed Rust slice results require an explicit lifetime-bearing source contract.");
       }
-      return { kind: "array", elementType: sourceTypeFor(type.element, context, position) };
+      return { kind: "array", elementType: sourceTypeFor(type.element, context, position, true) };
     case "raw-pointer":
       return importedSourceType(
         context,
         rustTypesModule,
         type.mutable ? rustMutPointerExport : rustConstPointerExport,
-        [sourceTypeFor(type.target, context, position)],
+        [sourceTypeFor(type.target, context, position, true)],
       );
     case "function-pointer":
       return importedSourceType(context, "@tsonic/core/types.js", "FunctionPointer", [{
           kind: "tuple",
           elementTypes: type.parameters.map((parameter) =>
-            sourceTypeFor(parameter, context, position)),
-        }, sourceTypeFor(type.result, context, position)]);
+            sourceTypeFor(parameter, context, position, true)),
+        }, sourceTypeFor(type.result, context, position, true)]);
+    case "associated-type":
+      throw new Error("Unresolved Rust associated type reached source provider projection.");
     case "path": {
       if (isRustStringPath(type)) {
         return { kind: "string" };
       }
       if (isRustOptionPath(type)) {
         const arguments_ = type.typeArguments.map((argument) =>
-          sourceTypeFor(argument, context, position));
+          sourceTypeFor(argument, context, position, true));
         if (arguments_.length !== 1) {
           throw new Error("Rust Option must carry exactly one source type argument.");
         }
@@ -699,7 +954,7 @@ function sourceTypeFor(
         exportName: type.name,
         ...(type.typeArguments.length === 0
           ? {}
-          : { typeArguments: type.typeArguments.map((argument) => sourceTypeFor(argument, context, position)) }),
+          : { typeArguments: type.typeArguments.map((argument) => sourceTypeFor(argument, context, position, true)) }),
       };
     }
   }
@@ -709,12 +964,13 @@ function targetTypeFor(
   type: RustCompilerType,
   context: ProjectionContext,
   position: "parameter" | "result",
+  nested = false,
 ): TargetTypeRef {
-  if (type.kind === "reference") {
-    if (position === "result") {
-      throw new Error("Borrowed Rust results require an explicit lifetime-bearing target carrier.");
+  if (type.kind === "generic") {
+    const bound = context.defaultTypeBindings?.get(type.name);
+    if (bound !== undefined) {
+      return targetTypeFor(bound, context, position, nested);
     }
-    return targetTypeFor(type.target, context, position);
   }
   switch (type.kind) {
     case "unit":
@@ -722,6 +978,9 @@ function targetTypeFor(
     case "primitive": {
       if (type.name === "str") {
         return rustStringTargetType();
+      }
+      if (type.name === "never") {
+        return rustNeverTargetType();
       }
       const primitive = sourcePrimitiveByRustName.get(type.name);
       if (primitive === undefined) {
@@ -734,36 +993,47 @@ function targetTypeFor(
     case "self":
       return requireCurrentType(context).carrier;
     case "tuple":
-      return { kind: "tuple", elements: type.elements.map((element) => targetTypeFor(element, context, position)) };
+      return { kind: "tuple", elements: type.elements.map((element) => targetTypeFor(element, context, position, true)) };
     case "array":
-      return rustFixedArrayTargetType(targetTypeFor(type.element, context, position), type.length);
+      return rustFixedArrayTargetType(targetTypeFor(type.element, context, position, true), type.length);
     case "slice":
-      if (position === "result") {
+      if (position === "result" && !nested) {
         throw new Error("Borrowed Rust slice results require an explicit lifetime-bearing target carrier.");
       }
-      return { kind: "array", element: targetTypeFor(type.element, context, position) };
+      return nested
+        ? { kind: "slice", element: targetTypeFor(type.element, context, position, true) }
+        : { kind: "array", element: targetTypeFor(type.element, context, position, true) };
+    case "reference":
+      return {
+        kind: "reference",
+        referent: targetTypeFor(type.target, context, "parameter", true),
+        mutable: type.mutable,
+        ...(type.lifetime === undefined ? {} : { lifetime: type.lifetime }),
+      };
     case "raw-pointer":
       return {
         kind: "pointer",
-        pointee: targetTypeFor(type.target, context, position),
+        pointee: targetTypeFor(type.target, context, position, true),
         mutability: type.mutable ? "mut" : "const",
       };
     case "function-pointer":
       return {
         kind: "function-pointer",
         args: type.parameters.map((parameter) =>
-          targetTypeFor(parameter, context, position)),
-        result: targetTypeFor(type.result, context, position),
+          targetTypeFor(parameter, context, position, true)),
+        result: targetTypeFor(type.result, context, position, true),
         abi: [providerFunctionPointerAbi(type.abi)],
         ...(type.unsafe ? { isUnsafe: true } : {}),
       };
+    case "associated-type":
+      throw new Error("Unresolved Rust associated type reached target provider projection.");
     case "path": {
       if (isRustStringPath(type)) {
         return rustStringTargetType();
       }
       if (isRustOptionPath(type)) {
         const arguments_ = type.typeArguments.map((argument) =>
-          targetTypeFor(argument, context, position));
+          targetTypeFor(argument, context, position, true));
         if (arguments_.length !== 1) {
           throw new Error("Rust Option must carry exactly one target type argument.");
         }
@@ -788,7 +1058,7 @@ function targetTypeFor(
       const path = rustPath(context.dependency.targetCrateName, type.modulePath, type.name);
       recordCarrierPath(context.carrierPaths, id, path);
       const typeArguments = type.typeArguments.map((argument) =>
-        targetTypeFor(argument, context, position));
+        targetTypeFor(argument, context, position, true));
       return {
         kind: "target-named",
         id,
@@ -938,6 +1208,14 @@ function rustPath(crateName: string, modulePath: readonly string[], ...tail: rea
   return [crateName, ...modulePath, ...tail].join("::");
 }
 
+function targetTraitPath(path: string, context: ProjectionContext): string {
+  const segments = path.split("::");
+  if (segments[0] === context.dependency.crateName) {
+    segments[0] = context.dependency.targetCrateName;
+  }
+  return segments.join("::");
+}
+
 function functionSignatureDigest(fn: RustCompilerFunction): string {
   return digestText(JSON.stringify(fn)).slice(0, 24);
 }
@@ -1003,7 +1281,7 @@ function standardSourceTypeArguments(
 ): readonly ProviderTypeExpression[] {
   const count = requireStandardSourceTypeArgumentCount(type, location);
   return Object.freeze(type.typeArguments.slice(0, count)
-    .map((argument) => sourceTypeFor(argument, context, position)));
+    .map((argument) => sourceTypeFor(argument, context, position, true)));
 }
 
 function standardTargetTypeArguments(
@@ -1014,7 +1292,7 @@ function standardTargetTypeArguments(
 ): readonly TargetTypeRef[] {
   const count = requireStandardSourceTypeArgumentCount(type, location);
   return Object.freeze(type.typeArguments.slice(0, count)
-    .map((argument) => targetTypeFor(argument, context, position)));
+    .map((argument) => targetTypeFor(argument, context, position, true)));
 }
 
 function requireStandardSourceTypeArgumentCount(
@@ -1042,6 +1320,28 @@ function sourceVisibleTypeParameters(
     throw new Error("Rust default type parameters must form one trailing source-omittable suffix.");
   }
   return Object.freeze(parameters.slice(0, firstDefault));
+}
+
+function withDefaultTypeBindings(
+  context: ProjectionContext,
+  parameters: readonly RustCompilerTypeParameter[],
+): ProjectionContext {
+  const firstDefault = parameters.findIndex((parameter) => parameter.defaultType !== undefined);
+  if (firstDefault < 0) {
+    return context;
+  }
+  if (parameters.slice(firstDefault).some((parameter) => parameter.defaultType === undefined)) {
+    throw new Error("Rust default type parameters must form one trailing source-omittable suffix.");
+  }
+  const bindings = new Map(context.defaultTypeBindings ?? []);
+  for (const parameter of parameters.slice(firstDefault)) {
+    const defaultType = parameter.defaultType;
+    if (defaultType === undefined) {
+      throw new Error(`Rust default type parameter '${parameter.name}' has no default type.`);
+    }
+    bindings.set(parameter.name, substituteRustCompilerType(defaultType, bindings));
+  }
+  return { ...context, defaultTypeBindings: bindings };
 }
 
 function rustCompilerTypeNamesCurrentType(

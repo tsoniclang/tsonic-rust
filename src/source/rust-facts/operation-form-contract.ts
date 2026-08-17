@@ -18,7 +18,7 @@ export function rustProviderOperationFormAcceptsTargetTypeArguments(
 ): boolean {
   return form.form === "call" || form.form === "free-call" || form.form === "method" ||
     form.form === "receiver-method" || form.form === "arg-method" ||
-    form.form === "arg-receiver-method";
+    form.form === "arg-receiver-method" || form.form === "trait-call";
 }
 
 export function rustProviderOperationFormContractViolation(
@@ -193,6 +193,32 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "binary operator form must name its exact std trait and two source arguments";
     }
+    case "trait-call":
+      return hasExactKeys(
+        form,
+        ["form", "owner", "traitPath", "traitTypeArguments", "method", "receiverMode", "argModes"],
+        ["form", "owner", "traitPath", "traitTypeArguments", "method"],
+      ) && isRustTargetTypeRef(form.owner) && typeof form.traitPath === "string" &&
+        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitTypeArguments) &&
+        form.traitTypeArguments.every(isRustTargetTypeRef) && typeof form.method === "string" &&
+        rustIdentifierPattern.test(form.method) &&
+        (form.receiverMode === undefined || modes.has(form.receiverMode)) &&
+        validateModes(form.argModes) === undefined
+        ? undefined
+        : "trait call must carry one exact owner, trait identity, method, receiver mode, and argument modes";
+    case "trait-associated-value":
+      return hasExactKeys(
+        form,
+        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
+        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
+      ) && isRustTargetTypeRef(form.owner) && typeof form.traitPath === "string" &&
+        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitTypeArguments) &&
+        form.traitTypeArguments.every(isRustTargetTypeRef) && typeof form.name === "string" &&
+        rustIdentifierPattern.test(form.name) &&
+        runtimeSourceIndexes.length === 0 &&
+        (operationKind === "property" || operationKind === "method")
+        ? undefined
+        : "trait associated value must carry one exact owner, trait identity, and zero runtime arguments";
     case "call":
       if (!hasExactKeys(form, ["form", "path", "argModes", "argConversions", "argOrder", "trailingArguments", "chain"], ["form", "path"]) ||
         typeof form.path !== "string" || !rustPathPattern.test(form.path)) {

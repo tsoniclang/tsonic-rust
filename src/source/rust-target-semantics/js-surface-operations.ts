@@ -767,9 +767,9 @@ interface JsLaneBindings {
 }
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
-  if (carrier?.kind === "pointer" && carrier.pointee.kind === "target-named" && carrier.pointee.id === rustStringTargetId) {
+  if (carrier?.kind === "reference" && carrier.referent.kind === "target-named" && carrier.referent.id === rustStringTargetId) {
     // Borrowed string parameters (&str) share the string lane.
-    return { lane: "string", bindings: { receiver: carrier.pointee } };
+    return { lane: "string", bindings: { receiver: carrier.referent } };
   }
   if (carrier?.kind === "target-named") {
     if (isRustJsArrayCarrier(carrier)) {
@@ -1042,6 +1042,8 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
       return { ...carrier, element: materializeInferredCarrier(carrier.element, inferred) };
     case "tuple":
       return { ...carrier, elements: carrier.elements.map((element) => materializeInferredCarrier(element, inferred)) };
+    case "reference":
+      return { ...carrier, referent: materializeInferredCarrier(carrier.referent, inferred) };
     case "pointer":
       return { ...carrier, pointee: materializeInferredCarrier(carrier.pointee, inferred) };
     case "function-pointer":

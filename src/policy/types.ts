@@ -15,7 +15,9 @@ export type RustTargetTypeRef =
   | { readonly kind: "target-named"; readonly id: string; readonly typeArguments?: readonly RustTargetTypeRef[] }
   | { readonly kind: "type-parameter"; readonly name: string }
   | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }
+  | { readonly kind: "slice"; readonly element: RustTargetTypeRef }
   | { readonly kind: "tuple"; readonly elements: readonly RustTargetTypeRef[] }
+  | { readonly kind: "reference"; readonly referent: RustTargetTypeRef; readonly mutable: boolean; readonly lifetime?: string }
   | { readonly kind: "pointer"; readonly pointee: RustTargetTypeRef; readonly mutability?: "const" | "mut" | "target-defined" }
   | { readonly kind: "function-pointer"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef; readonly abi?: readonly string[]; readonly isUnsafe?: boolean }
   | { readonly kind: "closure"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef }

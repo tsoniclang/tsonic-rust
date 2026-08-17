@@ -4475,9 +4475,7 @@ function recordSelectedOperationInputs(
       : ElementAccessExpression_ArgumentExpression(ast, operand);
     if (receiver !== undefined) {
       resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
-      if (fact?.kind === "provider-operation" &&
-        fact.abi.targetReceiver.kind === "input" &&
-        fact.abi.targetReceiver.input.mode === "mut-ref") {
+      if (providerOperationSourceReceiverMode(fact) === "mut-ref") {
         recordBindingWrite(walk, receiver, "referent");
       }
     }
@@ -4529,7 +4527,7 @@ function recordSelectedOperationInputs(
       const receiver = Node_Expression(walk.context.ast, callee);
       if (receiver !== undefined) {
         resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
-        if (fact?.kind === "provider-operation" && fact.abi.targetReceiver.kind === "input" && fact.abi.targetReceiver.input.mode === "mut-ref") {
+        if (providerOperationSourceReceiverMode(fact) === "mut-ref") {
           recordBindingWrite(walk, receiver, "referent");
         }
       }
@@ -4574,6 +4572,27 @@ function recordSelectedOperationInputs(
       }
     }
   }
+}
+
+function providerOperationSourceReceiverMode(
+  fact: RustTargetOperationFact | undefined,
+): "value" | "ref" | "mut-ref" | undefined {
+  if (fact?.kind !== "provider-operation") {
+    return undefined;
+  }
+  const directInputs = [
+    ...(fact.abi.targetReceiver.kind === "input" ? [fact.abi.targetReceiver.input] : []),
+    ...fact.abi.targetArguments.flatMap((input) => {
+      if ("mode" in input && "source" in input && input.source.kind === "receiver") {
+        return [input];
+      }
+      return [];
+    }),
+  ];
+  const receiverModes = directInputs
+    .filter((input) => input.source.kind === "receiver")
+    .map((input) => input.mode);
+  return receiverModes.length === 1 ? receiverModes[0] : undefined;
 }
 
 function collectDescendantsOfKind(walk: RustFactWalk, root: Node, kindName: string): readonly Node[] {

@@ -594,7 +594,7 @@ function rustTypeNames(type: RustType): readonly string[] {
     case "raw-pointer":
       return rustTypeNames(type.pointee);
     case "fixed-array":
-    case "slice-ref":
+    case "slice":
       return rustTypeNames(type.element);
     case "function-pointer":
       return [...type.parameters.flatMap(rustTypeNames), ...rustTypeNames(type.result)];

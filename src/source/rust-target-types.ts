@@ -226,9 +226,9 @@ export function rustStringTargetType(): TargetTypeRef {
 
 export function rustBorrowedStrTargetType(): TargetTypeRef {
   return {
-    kind: "pointer",
-    pointee: rustStringTargetType(),
-    mutability: "const",
+    kind: "reference",
+    referent: rustStringTargetType(),
+    mutable: false,
   };
 }
 
@@ -454,8 +454,12 @@ export function substituteRustTargetTypeParameters(
         : { ...type, typeArguments: type.typeArguments.map((argument) => substituteRustTargetTypeParameters(argument, substitutions)) };
     case "array":
       return { ...type, element: substituteRustTargetTypeParameters(type.element, substitutions) };
+    case "slice":
+      return { ...type, element: substituteRustTargetTypeParameters(type.element, substitutions) };
     case "tuple":
       return { ...type, elements: type.elements.map((element) => substituteRustTargetTypeParameters(element, substitutions)) };
+    case "reference":
+      return { ...type, referent: substituteRustTargetTypeParameters(type.referent, substitutions) };
     case "pointer":
       return { ...type, pointee: substituteRustTargetTypeParameters(type.pointee, substitutions) };
     case "function-pointer":
@@ -552,9 +556,13 @@ function visitRustTargetTypeParameters(
         visitRustTargetTypeParameters(argument, visit)) === true;
     case "array":
       return visitRustTargetTypeParameters(type.element, visit);
+    case "slice":
+      return visitRustTargetTypeParameters(type.element, visit);
     case "tuple":
       return type.elements.some((element) =>
         visitRustTargetTypeParameters(element, visit));
+    case "reference":
+      return visitRustTargetTypeParameters(type.referent, visit);
     case "pointer":
       return visitRustTargetTypeParameters(type.pointee, visit);
     case "function-pointer":
@@ -626,9 +634,14 @@ export function inferRustTargetTypeParameterBindings(
       }
       case "array":
         return right.kind === "array" && left.rank === right.rank && match(left.element, right.element);
+      case "slice":
+        return right.kind === "slice" && match(left.element, right.element);
       case "tuple":
         return right.kind === "tuple" && left.elements.length === right.elements.length &&
           left.elements.every((element, index) => match(element, right.elements[index]!));
+      case "reference":
+        return right.kind === "reference" && left.mutable === right.mutable &&
+          left.lifetime === right.lifetime && match(left.referent, right.referent);
       case "pointer":
         return right.kind === "pointer" && left.mutability === right.mutability && match(left.pointee, right.pointee);
       case "function-pointer":
@@ -975,7 +988,8 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined) {
     return false;
   }
-  if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer") {
+  if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer" ||
+    carrier.kind === "pointer" || carrier.kind === "reference" && carrier.mutable === false) {
     return true;
   }
   if (carrier.kind === "tuple") {
@@ -1013,10 +1027,13 @@ export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined
 export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined || carrier.kind === "type-parameter" ||
     carrier.kind === "associated-type" || carrier.kind === "lifetime" ||
-    carrier.kind === "opaque" || carrier.kind === "pointer" || carrier.kind === "closure") {
+    carrier.kind === "opaque" || carrier.kind === "closure" ||
+    carrier.kind === "slice" ||
+    carrier.kind === "reference" && carrier.mutable) {
     return false;
   }
-  if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer") {
+  if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer" ||
+    carrier.kind === "pointer" || carrier.kind === "reference") {
     return true;
   }
   if (carrier.kind === "array") {
@@ -1094,6 +1111,9 @@ export function rustCarrierSupportsTrait(
       carrier.elements.every((element) => rustCarrierSupportsTrait(element, traitPath));
   }
   if (carrier.kind === "array") {
+    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(carrier.element, traitPath);
+  }
+  if (carrier.kind === "slice") {
     return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(carrier.element, traitPath);
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
@@ -1256,23 +1276,23 @@ export function sameRustPrimitiveCarrier(left: TargetTypeRef | undefined, right:
 }
 
 export function rustSliceRefTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "pointer", pointee: { kind: "array", element }, mutability: "const" };
+  return { kind: "reference", referent: { kind: "slice", element }, mutable: false };
 }
 
-export function isRustSliceRefCarrier(carrier: TargetTypeRef | undefined): carrier is Extract<TargetTypeRef, { kind: "pointer" }> {
-  return carrier?.kind === "pointer" && carrier.mutability === "const" && carrier.pointee.kind === "array";
+export function isRustSliceRefCarrier(carrier: TargetTypeRef | undefined): carrier is Extract<TargetTypeRef, { kind: "reference" }> {
+  return carrier?.kind === "reference" && carrier.mutable === false && carrier.referent.kind === "slice";
 }
 
 export function rustSliceElementCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  return carrier?.kind === "pointer" && carrier.pointee.kind === "array" ? carrier.pointee.element : undefined;
+  return carrier?.kind === "reference" && carrier.referent.kind === "slice" ? carrier.referent.element : undefined;
 }
 
 export function rustSliceMutRefTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "pointer", pointee: { kind: "array", element }, mutability: "mut" };
+  return { kind: "reference", referent: { kind: "slice", element }, mutable: true };
 }
 
 export function isRustSliceMutRefCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "pointer" && carrier.mutability === "mut" && carrier.pointee.kind === "array";
+  return carrier?.kind === "reference" && carrier.mutable && carrier.referent.kind === "slice";
 }
 
 export const rustFutureTargetId = "rust.core.Future";

@@ -94,6 +94,10 @@ export type RustNonOptionValueConversion =
       readonly pointee: TargetTypeRef;
     }
   | {
+      readonly kind: "copy-from-reference";
+      readonly target: TargetTypeRef;
+    }
+  | {
       readonly kind: "source-union-variant";
       readonly source: TargetTypeRef;
       readonly target: TargetTypeRef;
@@ -223,6 +227,22 @@ export type RustProviderOperationForm =
       readonly form: "binary-operator";
       readonly operator: RustBinaryOperator;
       readonly trait: string;
+    }
+  | {
+      readonly form: "trait-call";
+      readonly owner: TargetTypeRef;
+      readonly traitPath: string;
+      readonly traitTypeArguments: readonly TargetTypeRef[];
+      readonly method: string;
+      readonly receiverMode?: RustArgumentMode;
+      readonly argModes?: readonly RustArgumentMode[];
+    }
+  | {
+      readonly form: "trait-associated-value";
+      readonly owner: TargetTypeRef;
+      readonly traitPath: string;
+      readonly traitTypeArguments: readonly TargetTypeRef[];
+      readonly name: string;
     }
   | {
       // Method call on the receiver, with optional zero-argument chain calls

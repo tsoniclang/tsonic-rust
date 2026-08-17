@@ -3569,10 +3569,6 @@ function refShape(context: RustPlanContext, argument: RustExpr, node: Node | und
   if (argument.kind === "vec-literal") {
     return { kind: "reference", expr: { kind: "slice-literal", elements: argument.elements } };
   }
-  const carrier = node === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  if (carrier?.kind === "pointer") {
-    return argument;
-  }
   return { kind: "reference", expr: argument };
 }
 
@@ -3677,6 +3673,8 @@ export function lowerRustValueConversion(
       return { kind: "numeric-cast", expression: source, target: contract.targetType };
     case "owned-string-from-borrowed-str":
       return { kind: "owned-string-from-borrowed-str", expression: source };
+    case "copy-from-reference":
+      return { kind: "dereference", pointer: source };
     case "source-union-variant": {
       const union = rustSourceUnionCarrierValue(contract.target);
       const typePath = union === undefined ? undefined : sourceTypePath(context, union);
@@ -3980,6 +3978,50 @@ function planProviderOperationExpression(
       }
       return scoped({ kind: "binary", operator: form.operator, left, right });
     }
+    case "trait-call": {
+      const owner = rustTypeFromCarrierInContext(form.owner, context);
+      const traitTypeArguments = form.traitTypeArguments.map((argument) =>
+        rustTypeFromCarrierInContext(argument, context));
+      if (owner === undefined || traitTypeArguments.some((argument) => argument === undefined)) {
+        return undefined;
+      }
+      registerAliasFromPath(context, form.traitPath);
+      return scoped({
+        kind: "associated-call",
+        owner,
+        trait: {
+          kind: "named",
+          path: form.traitPath,
+          ...(traitTypeArguments.length === 0
+            ? {}
+            : { typeArguments: traitTypeArguments as readonly RustType[] }),
+        },
+        method: form.method,
+        args,
+        ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+      });
+    }
+    case "trait-associated-value": {
+      const owner = rustTypeFromCarrierInContext(form.owner, context);
+      const traitTypeArguments = form.traitTypeArguments.map((argument) =>
+        rustTypeFromCarrierInContext(argument, context));
+      if (owner === undefined || traitTypeArguments.some((argument) => argument === undefined) || args.length !== 0) {
+        return undefined;
+      }
+      registerAliasFromPath(context, form.traitPath);
+      return scoped({
+        kind: "associated-value",
+        owner,
+        trait: {
+          kind: "named",
+          path: form.traitPath,
+          ...(traitTypeArguments.length === 0
+            ? {}
+            : { typeArguments: traitTypeArguments as readonly RustType[] }),
+        },
+        name: form.name,
+      });
+    }
   }
 }
 
@@ -4136,9 +4178,9 @@ export function planFinalizedTargetInput(
       if (planned === undefined) {
         return undefined;
       }
-      const asTargetElement = element.parameterCarrier.kind === "pointer" &&
-        element.parameterCarrier.pointee.kind === "target-named" &&
-        element.parameterCarrier.pointee.id === "rust.std.String"
+      const asTargetElement = element.parameterCarrier.kind === "reference" &&
+        element.parameterCarrier.referent.kind === "target-named" &&
+        element.parameterCarrier.referent.id === "rust.std.String"
         ? planned.kind === "string-literal"
           ? { kind: "str-literal", value: planned.value } as RustExpr
           : planned.kind === "reference"
@@ -4254,7 +4296,7 @@ function applyFinalizedArgumentMode(
   sourceParameterAbi: import("../../source/rust-facts/keys.js").RustSourceParameterAbiFact | undefined,
   sourceIsSharedReference: boolean,
 ): RustExpr {
-  if (input.mode === "value" || input.conversion.targetCarrier.kind === "pointer") {
+  if (input.mode === "value") {
     return expression;
   }
   if (sourceParameterAbi?.mode === input.mode &&
@@ -5075,8 +5117,8 @@ function shapeRustSourceCallInput(
   if (parameter.mode === "value") {
     return selectedInput;
   }
-  if (parameter.parameterCarrier.kind !== "pointer" ||
-    !rustTargetTypeRefEquals(parameter.parameterCarrier.pointee, input.carrier)) {
+  if (parameter.parameterCarrier.kind !== "reference" ||
+    !rustTargetTypeRefEquals(parameter.parameterCarrier.referent, input.carrier)) {
     return undefined;
   }
   const mutable = parameter.mode === "mut-ref";

@@ -46,6 +46,35 @@ export function bothMissing(): boolean {
   assert.doesNotMatch(output, /equalPointer|loadPointer|storePointer/u);
 });
 
+test("typed locations retain only the exact lifetime bound for raw and function pointers", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { allocatePointer } from "@tsonic/core/lang.js";
+import type { FunctionPointer, Pointer } from "@tsonic/core/types.js";
+import type { constPtr } from "@tsonic/rust/types.js";
+
+export function retainRaw<T>(value: constPtr<T>): Pointer<constPtr<T>> {
+  return allocatePointer(value);
+}
+
+export function retainFunction<T>(
+  value: FunctionPointer<[T], T>,
+): Pointer<FunctionPointer<[T], T>> {
+  return allocatePointer(value);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /pub fn retain_raw<T: 'static>\(value: \*const T\) -> rt::Location<\*const T>/u);
+  assert.match(output, /pub fn retain_function<T: 'static>\(value: fn\(T\) -> T\) -> rt::Location<fn\(T\) -> T>/u);
+  assert.doesNotMatch(output, /retain_(?:raw|function)<T: Clone/u);
+  validateGeneratedProject("typed-location-pointer-generics", result.artifacts);
+});
+
 test("captured string compound assignments retain their shared location across iterations", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

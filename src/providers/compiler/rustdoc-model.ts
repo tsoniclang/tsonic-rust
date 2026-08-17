@@ -1,4 +1,5 @@
 import type {
+  RustCompilerAssociatedConstant,
   RustCompilerDependency,
   RustCompilerEnumVariant,
   RustCompilerExport,
@@ -43,14 +44,17 @@ import {
 import {
   canonicalCompilerTypePathKey,
   canonicalPathKey,
+  compilerTypeRequirementConditions,
   compilerTypeSupportsRequirement,
   directImplementationTypeParameterPositions,
   mergeTypeParameterRequirements,
   normalizeType,
   normalizeTypeParameters,
+  normalizeTraitDispatch,
   normalizeTypeTraits,
   rustStaticValueCanBeCopied,
   sourceVisibleTypeParameterCount,
+  substituteRustCompilerType,
   typeParameterGuaranteesRequirement,
   typeRequirementKey,
 } from "./rustdoc-types.js";
@@ -191,6 +195,10 @@ function sameModuleExportDependencies(
       case "raw-pointer":
         visitType(type.target);
         return;
+      case "associated-type":
+        visitType(type.owner);
+        type.trait.typeArguments.forEach(visitType);
+        return;
       case "function-pointer":
         type.parameters.forEach(visitType);
         visitType(type.result);
@@ -206,9 +214,22 @@ function sameModuleExportDependencies(
         return;
     }
   };
+  const visitParameters = (parameters: readonly RustCompilerTypeParameter[]): void => {
+    for (const parameter of parameters) {
+      if (parameter.defaultType !== undefined) {
+        visitType(parameter.defaultType);
+      }
+    }
+  };
   const visitFunction = (fn: RustCompilerFunction): void => {
+    visitParameters(fn.typeParameters);
+    visitParameters(fn.typeRequirements);
+    if (fn.receiver?.kind === "custom") {
+      visitType(fn.receiver.type);
+    }
     fn.parameters.forEach((parameter) => visitType(parameter.type));
     visitType(fn.result);
+    fn.traitDispatch?.typeArguments.forEach(visitType);
   };
   switch (exported.kind) {
     case "constant":
@@ -219,19 +240,35 @@ function sameModuleExportDependencies(
       visitFunction(exported.function);
       break;
     case "struct":
+      visitParameters(exported.typeParameters);
       exported.fields.forEach((field) => visitType(field.type));
       exported.methods.forEach(visitFunction);
+      exported.associatedConstants.forEach((constant) => {
+        visitType(constant.type);
+        constant.traitDispatch.typeArguments.forEach(visitType);
+      });
       break;
     case "type-alias":
+      visitParameters(exported.typeParameters);
       visitType(exported.type);
       break;
     case "enum":
+      visitParameters(exported.typeParameters);
       exported.variants.forEach((variant) => variant.fields.forEach(visitType));
       exported.methods.forEach(visitFunction);
+      exported.associatedConstants.forEach((constant) => {
+        visitType(constant.type);
+        constant.traitDispatch.typeArguments.forEach(visitType);
+      });
       break;
     case "union":
+      visitParameters(exported.typeParameters);
       exported.fields.forEach((field) => visitType(field.type));
       exported.methods.forEach(visitFunction);
+      exported.associatedConstants.forEach((constant) => {
+        visitType(constant.type);
+        constant.traitDispatch.typeArguments.forEach(visitType);
+      });
       break;
   }
   names.delete(exported.name);
@@ -339,16 +376,17 @@ function normalizeExport(
     const struct = requireInnerRecord(item, "struct", `Rust struct '${name}'`);
     const typeParameters = normalizeTypeParameters(document, requireRecord(struct.generics, `${name}.generics`));
     const fields = normalizeFields(document, struct, dependency);
-    const methods = normalizeMethods(document, struct, dependency, typeParameters);
+    const members = normalizeTypeMembers(document, struct, dependency, typeParameters, canonicalPath);
     return Object.freeze({
       kind: "struct",
       ...identity,
       typeParameters,
       fields: fields.values,
-      methods: methods.values,
-      unsupportedMembers: Object.freeze([...fields.unsupported, ...methods.unsupported]
+      methods: members.methods,
+      associatedConstants: members.associatedConstants,
+      unsupportedMembers: Object.freeze([...fields.unsupported, ...members.unsupported]
         .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
-      traits: normalizeTypeTraits(document, struct, typeParameters),
+      traits: normalizeTypeTraits(document, struct, typeParameters, canonicalPath),
     });
   }
   if (hasInnerKind(item, "type_alias")) {
@@ -365,7 +403,7 @@ function normalizeExport(
     const enum_ = requireInnerRecord(item, "enum", `Rust enum '${name}'`);
     const generics = requireRecord(enum_.generics, `${name}.generics`);
     const typeParameters = normalizeTypeParameters(document, generics);
-    const methods = normalizeMethods(document, enum_, dependency, typeParameters);
+    const members = normalizeTypeMembers(document, enum_, dependency, typeParameters, canonicalPath);
     const variantsComplete = enum_.has_stripped_variants === false;
     const variants = variantsComplete
       ? normalizeEnumVariants(document, enum_, dependency)
@@ -376,10 +414,11 @@ function normalizeExport(
       typeParameters,
       variantsComplete,
       variants: variants.values,
-      methods: methods.values,
-      unsupportedMembers: Object.freeze([...variants.unsupported, ...methods.unsupported]
+      methods: members.methods,
+      associatedConstants: members.associatedConstants,
+      unsupportedMembers: Object.freeze([...variants.unsupported, ...members.unsupported]
         .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
-      traits: normalizeTypeTraits(document, enum_, typeParameters),
+      traits: normalizeTypeTraits(document, enum_, typeParameters, canonicalPath),
     });
   }
   if (hasInnerKind(item, "union")) {
@@ -394,16 +433,17 @@ function normalizeExport(
       dependency,
       "union",
     );
-    const methods = normalizeMethods(document, union, dependency, typeParameters);
+    const members = normalizeTypeMembers(document, union, dependency, typeParameters, canonicalPath);
     return Object.freeze({
       kind: "union",
       ...identity,
       typeParameters,
       fields: fields.values,
-      methods: methods.values,
-      unsupportedMembers: Object.freeze([...fields.unsupported, ...methods.unsupported]
+      methods: members.methods,
+      associatedConstants: members.associatedConstants,
+      unsupportedMembers: Object.freeze([...fields.unsupported, ...members.unsupported]
         .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
-      traits: normalizeTypeTraits(document, union, typeParameters),
+      traits: normalizeTypeTraits(document, union, typeParameters, canonicalPath),
     });
   }
   throw new Error(`Rust export '${name}' has no supported provider representation.`);
@@ -526,89 +566,324 @@ function normalizePublicFields(
   };
 }
 
-function normalizeMethods(
+function normalizeTypeMembers(
   document: RustdocDocument,
-  struct: Readonly<Record<string, unknown>>,
+  owner: Readonly<Record<string, unknown>>,
   dependency: RustCompilerDependency,
   declaredTypeParameters: readonly RustCompilerTypeParameter[],
+  ownerCanonicalPath: readonly string[],
 ): {
-  readonly values: readonly RustCompilerFunction[];
+  readonly methods: readonly RustCompilerFunction[];
+  readonly associatedConstants: readonly RustCompilerAssociatedConstant[];
   readonly unsupported: readonly RustCompilerUnsupportedMember[];
 } {
   const methods: RustCompilerFunction[] = [];
+  const associatedConstants: RustCompilerAssociatedConstant[] = [];
   const unsupported: RustCompilerUnsupportedMember[] = [];
-  for (const implId of requireArray(struct.impls, "Rust struct impls")) {
+  for (const implId of requireArray(owner.impls, "Rust type impls")) {
     const implItem = itemById(document, implId);
     const impl = requireInnerRecord(implItem, "impl", "Rust impl");
-    if (impl.trait !== null || impl.blanket_impl !== null) {
+    if (impl.blanket_impl !== null || impl.is_negative === true || impl.is_synthetic === true) {
       continue;
     }
+    const traitSelection = impl.trait === null
+      ? { kind: "inherent" as const }
+      : selectPublicTraitDispatch(document, impl.trait);
+    if (traitSelection.kind === "not-public") {
+      continue;
+    }
+    if (traitSelection.kind === "unsupported") {
+      for (const memberId of requireArray(impl.items, "Rust impl items")) {
+        const item = itemById(document, memberId);
+        if (hasInnerKind(item, "function") || hasInnerKind(item, "assoc_const")) {
+          unsupported.push(Object.freeze({
+            kind: hasInnerKind(item, "assoc_const") ? "associated-constant" : "method",
+            name: typeof item.name === "string" ? item.name : `<member:${String(memberId)}>`,
+            reason: traitSelection.reason,
+          }));
+        }
+      }
+      continue;
+    }
+    const traitDispatch = traitSelection.kind === "selected"
+      ? traitSelection.dispatch
+      : undefined;
     const implGenerics = requireRecord(impl.generics, "Rust impl generics");
     let implTypeParameters: readonly RustCompilerTypeParameter[];
+    let implementationBindings: ReadonlyMap<string, RustCompilerType>;
+    let sourceRequirements: readonly RustCompilerTypeParameter[];
     try {
       implTypeParameters = normalizeTypeParameters(document, implGenerics);
-      const sourceRequirements = sourceImplementationRequirements(
+      const selectedRequirements = sourceImplementationRequirements(
         document,
         impl,
         implTypeParameters,
         declaredTypeParameters,
+        ownerCanonicalPath,
       );
-      if (sourceRequirements === undefined) {
-        throw new Error("Rust inherent impl requirements cannot be projected onto the source-visible type arguments.");
+      const selectedBindings = implementationTypeBindings(
+        document,
+        impl,
+        implTypeParameters,
+        declaredTypeParameters,
+        ownerCanonicalPath,
+      );
+      if (selectedRequirements === undefined || selectedBindings === undefined) {
+        throw new Error("Rust impl requirements cannot be projected onto the source-visible type arguments.");
       }
-      implTypeParameters = sourceRequirements;
+      implementationBindings = selectedBindings;
+      sourceRequirements = selectedRequirements;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       for (const methodId of requireArray(impl.items, "Rust impl items")) {
         const item = itemById(document, methodId);
-        if (item.visibility === "public" && hasInnerKind(item, "function")) {
+        if ((traitDispatch !== undefined || item.visibility === "public") && hasInnerKind(item, "function")) {
           unsupported.push(Object.freeze({
             kind: "method",
             name: typeof item.name === "string" ? item.name : `<method:${String(methodId)}>`,
+            reason,
+          }));
+        } else if (traitDispatch !== undefined && hasInnerKind(item, "assoc_const")) {
+          unsupported.push(Object.freeze({
+            kind: "associated-constant",
+            name: typeof item.name === "string" ? item.name : `<associated-constant:${String(methodId)}>`,
             reason,
           }));
         }
       }
       continue;
     }
+    const associatedTypeBindings = traitDispatch === undefined
+      ? new Map<string, RustCompilerType>()
+      : normalizeAssociatedTypeBindings(
+          document,
+          impl,
+          traitDispatch,
+          implementationBindings,
+        );
     for (const methodId of requireArray(impl.items, "Rust impl items")) {
       const item = itemById(document, methodId);
-      if (item.visibility !== "public" || !hasInnerKind(item, "function")) {
+      if (traitDispatch === undefined && item.visibility !== "public") {
         continue;
       }
       const name = typeof item.name === "string" ? item.name : `<method:${String(methodId)}>`;
+      if (hasInnerKind(item, "assoc_type")) {
+        continue;
+      }
       try {
-        methods.push(normalizeFunction(document, item, dependency, true, implTypeParameters));
+        if (hasInnerKind(item, "function")) {
+          methods.push(normalizeFunction(document, item, dependency, true, sourceRequirements, {
+            implementationBindings,
+            associatedTypeBindings,
+            ...(traitDispatch === undefined ? {} : {
+              traitDispatch: substituteTraitDispatch(traitDispatch, implementationBindings),
+            }),
+          }));
+        } else if (traitDispatch !== undefined && hasInnerKind(item, "assoc_const")) {
+          const constant = requireInnerRecord(item, "assoc_const", `Rust associated constant '${name}'`);
+          associatedConstants.push(Object.freeze({
+            id: canonicalItemId(dependency, item),
+            name: requireString(item.name, "Rust associated constant name"),
+            type: normalizeMemberType(
+              document,
+              constant.type,
+              implementationBindings,
+              associatedTypeBindings,
+              traitDispatch,
+            ),
+            traitDispatch: substituteTraitDispatch(traitDispatch, implementationBindings),
+            typeRequirements: sourceRequirements,
+          }));
+        }
       } catch (error) {
         unsupported.push(Object.freeze({
-          kind: "method",
+          kind: hasInnerKind(item, "assoc_const") ? "associated-constant" : "method",
           name,
           reason: error instanceof Error ? error.message : String(error),
         }));
       }
     }
   }
-  const names = new Set<string>();
-  for (const method of methods) {
-    if (names.has(method.name)) {
-      unsupported.push(Object.freeze({
-        kind: "method",
-        name: method.name,
-        reason: `Rust struct exposes ambiguous inherent method '${method.name}'.`,
-      }));
-      continue;
-    }
-    names.add(method.name);
-  }
-  const ambiguousNames = new Set(unsupported
-    .filter((entry) => entry.reason.includes("ambiguous inherent method"))
-    .map((entry) => entry.name));
   return {
-    values: Object.freeze(methods
-      .filter((method) => !ambiguousNames.has(method.name))
-      .sort((left, right) => compareText(left.name, right.name))),
+    methods: Object.freeze(methods.sort((left, right) =>
+      compareText(`${left.name}\0${left.id}`, `${right.name}\0${right.id}`))),
+    associatedConstants: Object.freeze(associatedConstants.sort((left, right) =>
+      compareText(`${left.name}\0${left.id}`, `${right.name}\0${right.id}`))),
     unsupported: Object.freeze(unsupported.sort((left, right) => compareText(left.name, right.name))),
   };
+}
+
+function selectPublicTraitDispatch(
+  document: RustdocDocument,
+  raw: unknown,
+):
+  | { readonly kind: "selected"; readonly dispatch: ReturnType<typeof normalizeTraitDispatch> }
+  | { readonly kind: "not-public" }
+  | { readonly kind: "unsupported"; readonly reason: string } {
+  const trait = requireRecord(raw, "Rust impl trait");
+  const local = document.index[String(trait.id)];
+  if (isRecord(local) && local.visibility !== "public") {
+    return { kind: "not-public" };
+  }
+  try {
+    return { kind: "selected", dispatch: normalizeTraitDispatch(document, trait) };
+  } catch (error) {
+    return {
+      kind: "unsupported",
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function implementationTypeBindings(
+  document: RustdocDocument,
+  impl: Readonly<Record<string, unknown>>,
+  implementationParameters: readonly RustCompilerTypeParameter[],
+  declaredTypeParameters: readonly RustCompilerTypeParameter[],
+  ownerCanonicalPath: readonly string[],
+): ReadonlyMap<string, RustCompilerType> | undefined {
+  const positions = directImplementationTypeParameterPositions(
+    document,
+    impl,
+    declaredTypeParameters,
+    ownerCanonicalPath,
+  );
+  if (positions === undefined) {
+    return undefined;
+  }
+  const bindings = new Map<string, RustCompilerType>();
+  for (const parameter of implementationParameters) {
+    const index = positions.get(parameter.name);
+    const declared = index === undefined ? undefined : declaredTypeParameters[index];
+    if (declared === undefined) {
+      return undefined;
+    }
+    bindings.set(parameter.name, Object.freeze({ kind: "generic", name: declared.name }));
+  }
+  return bindings;
+}
+
+function normalizeAssociatedTypeBindings(
+  document: RustdocDocument,
+  impl: Readonly<Record<string, unknown>>,
+  traitDispatch: ReturnType<typeof normalizeTraitDispatch>,
+  implementationBindings: ReadonlyMap<string, RustCompilerType>,
+): ReadonlyMap<string, RustCompilerType> {
+  const bindings = new Map<string, RustCompilerType>();
+  for (const itemId of requireArray(impl.items, "Rust trait impl items")) {
+    const item = itemById(document, itemId);
+    if (!hasInnerKind(item, "assoc_type")) {
+      continue;
+    }
+    const associated = requireInnerRecord(item, "assoc_type", "Rust associated type implementation");
+    if (associated.type === null || associated.type === undefined) {
+      continue;
+    }
+    const name = requireString(item.name, "Rust associated type name");
+    const key = associatedTypeKey(traitDispatch.path, name);
+    if (bindings.has(key)) {
+      throw new Error(`Rust trait impl defines associated type '${name}' more than once.`);
+    }
+    bindings.set(
+      key,
+      substituteRustCompilerType(normalizeType(document, associated.type), implementationBindings),
+    );
+  }
+  return bindings;
+}
+
+function normalizeMemberType(
+  document: RustdocDocument,
+  raw: unknown,
+  implementationBindings: ReadonlyMap<string, RustCompilerType>,
+  associatedTypeBindings: ReadonlyMap<string, RustCompilerType>,
+  currentTrait: ReturnType<typeof normalizeTraitDispatch> | undefined,
+): RustCompilerType {
+  return substituteAssociatedTypes(
+    substituteRustCompilerType(normalizeType(document, raw), implementationBindings),
+    associatedTypeBindings,
+    currentTrait,
+  );
+}
+
+function substituteAssociatedTypes(
+  type: RustCompilerType,
+  bindings: ReadonlyMap<string, RustCompilerType>,
+  currentTrait: ReturnType<typeof normalizeTraitDispatch> | undefined,
+): RustCompilerType {
+  if (type.kind === "associated-type") {
+    const dispatch = type.trait.typeArguments.length === 0 && currentTrait?.path === type.trait.path
+      ? currentTrait
+      : type.trait;
+    const selected = type.owner.kind === "self"
+      ? bindings.get(associatedTypeKey(dispatch.path, type.name))
+      : undefined;
+    if (selected !== undefined) {
+      return substituteAssociatedTypes(selected, bindings, currentTrait);
+    }
+    return Object.freeze({
+      ...type,
+      owner: substituteAssociatedTypes(type.owner, bindings, currentTrait),
+      trait: Object.freeze({
+        ...dispatch,
+        typeArguments: Object.freeze(dispatch.typeArguments.map((argument) =>
+          substituteAssociatedTypes(argument, bindings, currentTrait))),
+      }),
+    });
+  }
+  switch (type.kind) {
+    case "unit":
+    case "primitive":
+    case "generic":
+    case "self":
+      return type;
+    case "tuple":
+      return Object.freeze({
+        ...type,
+        elements: Object.freeze(type.elements.map((element) =>
+          substituteAssociatedTypes(element, bindings, currentTrait))),
+      });
+    case "array":
+    case "slice":
+      return Object.freeze({
+        ...type,
+        element: substituteAssociatedTypes(type.element, bindings, currentTrait),
+      });
+    case "reference":
+    case "raw-pointer":
+      return Object.freeze({
+        ...type,
+        target: substituteAssociatedTypes(type.target, bindings, currentTrait),
+      });
+    case "function-pointer":
+      return Object.freeze({
+        ...type,
+        parameters: Object.freeze(type.parameters.map((parameter) =>
+          substituteAssociatedTypes(parameter, bindings, currentTrait))),
+        result: substituteAssociatedTypes(type.result, bindings, currentTrait),
+      });
+    case "path":
+      return Object.freeze({
+        ...type,
+        typeArguments: Object.freeze(type.typeArguments.map((argument) =>
+          substituteAssociatedTypes(argument, bindings, currentTrait))),
+      });
+  }
+}
+
+function substituteTraitDispatch(
+  trait: ReturnType<typeof normalizeTraitDispatch>,
+  bindings: ReadonlyMap<string, RustCompilerType>,
+): ReturnType<typeof normalizeTraitDispatch> {
+  return Object.freeze({
+    ...trait,
+    typeArguments: Object.freeze(trait.typeArguments.map((argument) =>
+      substituteRustCompilerType(argument, bindings))),
+  });
+}
+
+function associatedTypeKey(traitPath: string, name: string): string {
+  return `${traitPath}\0${name}`;
 }
 
 function sourceImplementationRequirements(
@@ -616,11 +891,13 @@ function sourceImplementationRequirements(
   impl: Readonly<Record<string, unknown>>,
   implementationParameters: readonly RustCompilerTypeParameter[],
   declaredTypeParameters: readonly RustCompilerTypeParameter[],
+  ownerCanonicalPath: readonly string[],
 ): readonly RustCompilerTypeParameter[] | undefined {
   const positions = directImplementationTypeParameterPositions(
     document,
     impl,
     declaredTypeParameters,
+    ownerCanonicalPath,
   );
   if (positions === undefined) {
     return undefined;
@@ -675,6 +952,11 @@ function normalizeFunction(
   dependency: RustCompilerDependency,
   allowReceiver: true | undefined,
   inheritedRequirements: readonly RustCompilerTypeParameter[] = Object.freeze([]),
+  options: {
+    readonly implementationBindings?: ReadonlyMap<string, RustCompilerType>;
+    readonly associatedTypeBindings?: ReadonlyMap<string, RustCompilerType>;
+    readonly traitDispatch?: ReturnType<typeof normalizeTraitDispatch>;
+  } = {},
 ): RustCompilerFunction {
   const name = requireString(item.name, "Rust function name");
   const fn = requireInnerRecord(item, "function", `Rust function '${name}'`);
@@ -685,6 +967,15 @@ function normalizeFunction(
   const abi = normalizeAbi(header.abi, `${name}.header.abi`);
   const generics = requireRecord(fn.generics, `${name}.generics`);
   const typeParameters = normalizeTypeParameters(document, generics);
+  const implementationBindings = options.implementationBindings ?? new Map<string, RustCompilerType>();
+  const associatedTypeBindings = options.associatedTypeBindings ?? new Map<string, RustCompilerType>();
+  const normalizeSelectedType = (raw: unknown): RustCompilerType => normalizeMemberType(
+    document,
+    raw,
+    implementationBindings,
+    associatedTypeBindings,
+    options.traitDispatch,
+  );
   const rawInputs = requireArray(signature.inputs, `${name}.inputs`);
   let receiver: RustCompilerFunction["receiver"];
   const parameters: RustCompilerParameter[] = [];
@@ -693,7 +984,7 @@ function normalizeFunction(
     if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== "string") {
       throw new Error(`Rust function '${name}' input ${index} has an invalid rustdoc shape.`);
     }
-    const type = normalizeType(document, pair[1]);
+    const type = normalizeSelectedType(pair[1]);
     if (index === 0 && pair[0] === "self") {
       if (allowReceiver !== true) {
         throw new Error(`Free Rust function '${name}' unexpectedly declares a self receiver.`);
@@ -706,18 +997,26 @@ function normalizeFunction(
   const output = signature.output;
   const result = output === null
     ? Object.freeze({ kind: "unit" as const })
-    : normalizeType(document, output);
-  if (!rustResultTypeHasClosedCarrier(result)) {
+    : normalizeSelectedType(output);
+  const borrowed = borrowedResultProjection(document, result, receiver, parameters);
+  if (borrowed === undefined && !rustResultTypeHasClosedCarrier(result)) {
     throw new Error(`Rust function '${name}' returns a borrowed or unsized value with no closed target carrier.`);
   }
+  const typeRequirements = mergeTypeParameterRequirements(
+    inheritedRequirements,
+    typeParameters,
+    ...(borrowed?.typeRequirements === undefined ? [] : [borrowed.typeRequirements]),
+  );
   return Object.freeze({
     id: canonicalItemId(dependency, item),
     name,
     parameters: Object.freeze(parameters),
     result,
     typeParameters,
-    typeRequirements: mergeTypeParameterRequirements(inheritedRequirements, typeParameters),
+    typeRequirements,
     ...(receiver === undefined ? {} : { receiver }),
+    ...(options.traitDispatch === undefined ? {} : { traitDispatch: options.traitDispatch }),
+    ...(borrowed === undefined ? {} : { borrowedResult: borrowed.projection }),
     asynchronous: header.is_async === true,
     unsafe,
     abi,
@@ -741,6 +1040,8 @@ function rustResultTypeHasClosedCarrier(type: RustCompilerType): boolean {
         rustResultTypeHasClosedCarrier(type.result);
     case "path":
       return type.typeArguments.every(rustResultTypeHasClosedCarrier);
+    case "associated-type":
+      return false;
     case "unit":
     case "primitive":
     case "generic":
@@ -749,12 +1050,113 @@ function rustResultTypeHasClosedCarrier(type: RustCompilerType): boolean {
   }
 }
 
-function receiverKind(type: RustCompilerType, functionName: string): "value" | "shared" | "mutable" {
+function receiverKind(type: RustCompilerType, functionName: string): RustCompilerFunction["receiver"] {
   if (type.kind === "self") {
-    return "value";
+    return Object.freeze({ kind: "value" });
   }
   if (type.kind === "reference" && type.target.kind === "self") {
-    return type.mutable ? "mutable" : "shared";
+    return Object.freeze({
+      kind: type.mutable ? "mutable" : "shared",
+      ...(type.lifetime === undefined ? {} : { lifetime: type.lifetime }),
+    });
   }
-  throw new Error(`Rust method '${functionName}' has an unsupported receiver type.`);
+  if (compilerTypeContainsSelf(type)) {
+    return Object.freeze({ kind: "custom", type });
+  }
+  throw new Error(`Rust method '${functionName}' has a custom receiver that does not contain Self.`);
+}
+
+function compilerTypeContainsSelf(type: RustCompilerType): boolean {
+  switch (type.kind) {
+    case "self":
+      return true;
+    case "tuple":
+      return type.elements.some(compilerTypeContainsSelf);
+    case "array":
+    case "slice":
+      return compilerTypeContainsSelf(type.element);
+    case "reference":
+    case "raw-pointer":
+      return compilerTypeContainsSelf(type.target);
+    case "function-pointer":
+      return type.parameters.some(compilerTypeContainsSelf) || compilerTypeContainsSelf(type.result);
+    case "associated-type":
+      return compilerTypeContainsSelf(type.owner) ||
+        type.trait.typeArguments.some(compilerTypeContainsSelf);
+    case "path":
+      return type.typeArguments.some(compilerTypeContainsSelf);
+    case "unit":
+    case "primitive":
+    case "generic":
+      return false;
+  }
+}
+
+function borrowedResultProjection(
+  document: RustdocDocument,
+  result: RustCompilerType,
+  receiver: RustCompilerFunction["receiver"],
+  parameters: readonly RustCompilerParameter[],
+): {
+  readonly projection: NonNullable<RustCompilerFunction["borrowedResult"]>;
+  readonly typeRequirements?: readonly RustCompilerTypeParameter[];
+} | undefined {
+  if (result.kind !== "reference") {
+    return undefined;
+  }
+  if (result.mutable) {
+    return undefined;
+  }
+  const origin = borrowedResultOrigin(result, receiver, parameters);
+  if (origin === undefined) {
+    return undefined;
+  }
+  if (result.target.kind === "primitive" && result.target.name === "str" && result.mutable === false) {
+    return {
+      projection: Object.freeze({
+        sourceType: result.target,
+        origin,
+        conversion: "owned-string",
+      }),
+    };
+  }
+  const typeRequirements = compilerTypeRequirementConditions(
+    document,
+    result.target,
+    "copy",
+  );
+  if (typeRequirements === undefined) {
+    return undefined;
+  }
+  return {
+    projection: Object.freeze({
+      sourceType: result.target,
+      origin,
+      conversion: "copy",
+    }),
+    ...(typeRequirements.length === 0 ? {} : { typeRequirements }),
+  };
+}
+
+function borrowedResultOrigin(
+  result: Extract<RustCompilerType, { readonly kind: "reference" }>,
+  receiver: RustCompilerFunction["receiver"],
+  parameters: readonly RustCompilerParameter[],
+): NonNullable<RustCompilerFunction["borrowedResult"]>["origin"] | undefined {
+  if (result.lifetime === "'static") {
+    return Object.freeze({ kind: "static" });
+  }
+  if (receiver?.kind === "shared" || receiver?.kind === "mutable") {
+    if (result.lifetime === undefined || result.lifetime === receiver.lifetime) {
+      return Object.freeze({ kind: "receiver" });
+    }
+  }
+  const candidates = parameters.flatMap((parameter, index) =>
+    parameter.type.kind === "reference" &&
+      (result.lifetime === undefined || parameter.type.lifetime === result.lifetime)
+      ? [index]
+      : []);
+  return candidates.length === 1
+    ? Object.freeze({ kind: "parameter", index: candidates[0]! })
+    : undefined;
 }
