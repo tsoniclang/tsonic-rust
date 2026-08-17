@@ -401,6 +401,30 @@ export type RustTargetOperationFact =
       readonly abi: RustFinalizedOperationAbiFor<RustProviderFactOperationKind>;
     }
   | {
+      readonly kind: "default-value";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "object-shape-projection";
+      readonly operationId: string;
+      readonly projection: "keys" | "values" | "entries" | "has-own";
+      readonly sourceValue: Node;
+      readonly sourceValueOrigin:
+        | { readonly kind: "receiver" }
+        | { readonly kind: "argument"; readonly index: number };
+      readonly sourceValueCarrier: TargetTypeRef;
+      readonly keyExpression?: Node;
+      readonly fields: readonly {
+        readonly sourceName: string;
+        readonly storageIndex: number;
+        readonly valueCarrier: TargetTypeRef;
+        readonly conversion?: RustValueConversion;
+      }[];
+      readonly storage: "project-object" | "object-handle";
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "array-literal";
       readonly operationId: string;
       readonly lane: "native" | "js";
@@ -796,6 +820,8 @@ export type RustTypedLocationPlan = RustTypedLocationPlanBase & (
 export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact): TargetTypeRef | undefined {
   switch (fact.kind) {
     case "provider-operation":
+    case "default-value":
+    case "object-shape-projection":
     case "operator-token":
     case "operator-call":
     case "string-concat":

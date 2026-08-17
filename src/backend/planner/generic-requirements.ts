@@ -1,11 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../policy/types.js";
 import {
+  rustCarrierSupportsTrait,
   rustFixedArrayCarrierValue,
   rustLocationTargetId,
   rustNamedTypeCarrierValue,
   rustOptionTargetId,
   rustSourceTypeCarrierValue,
+  substituteRustTargetTypeParameters,
 } from "../../source/rust-target-types.js";
 import type { RustTypeParameter } from "../rust-ast/nodes.js";
 import { unsupportedConstructDiagnostic } from "./diagnostics.js";
@@ -39,6 +41,38 @@ export function requireRustLocationValueCarrier(
     node,
     context,
   );
+}
+
+export function requireRustDefaultValueCarrier(
+  carrier: TargetTypeRef,
+  node: Node,
+  context: RustPlanContext,
+): boolean {
+  const selectedCarrier = context.typeParameterSubstitutions === undefined
+    ? carrier
+    : substituteRustTargetTypeParameters(carrier, context.typeParameterSubstitutions);
+  const requirements = context.genericRequirements;
+  const supported = rustCarrierSupportsTrait(
+    selectedCarrier,
+    "core::default::Default",
+    (name, traitPath) => {
+      if (traitPath !== "core::default::Default" ||
+        requirements === undefined || !requirements.declared.has(name)) {
+        return false;
+      }
+      addRequirements(name, new Set(["default"]), requirements);
+      return true;
+    },
+  );
+  if (supported) {
+    return true;
+  }
+  context.diagnostics.push(unsupportedConstructDiagnostic(
+    diagnosticInput(context, node),
+    "rust.backend.default-value-requirement",
+    "defaultValue<T>() requires an exact Rust Default implementation for its selected target carrier.",
+  ));
+  return false;
 }
 
 export function requireRustCarrierRequirements(

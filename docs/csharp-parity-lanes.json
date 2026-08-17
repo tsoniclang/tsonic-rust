@@ -77,10 +77,10 @@
     "id": "declarations.static-fields-default-initializer",
     "area": "declarations",
     "source": "class Counter { static total: number; }",
-    "classification": "contract-gap",
-    "csharpProof": "tsonic-csharp/src/backend/planner/declaration-class-fields.ts",
+    "classification": "shared-rejection",
+    "csharpProof": "tsonic-csharp/test/direct-translation-declarations.test.mjs",
     "rustProof": "test/class-static-fields.test.mjs",
-    "action": "define whether an uninitialized target-native field has TypeScript undefined semantics or an explicit target-native default before lowering it"
+    "action": "retain the exact rejection; use an explicit initializer or defaultValue<T>() instead of silently replacing TypeScript undefined with a target-native default"
   },
   {
     "id": "declarations.class-static-blocks",
@@ -346,10 +346,10 @@
     "id": "types.fixed-array-lengths",
     "area": "types",
     "source": "declare const bytes: FixedArray<uint8, 32>;",
-    "classification": "contract-gap",
-    "csharpProof": "tsonic-csharp/test/direct-translation-array-shapes.test.mjs",
-    "rustProof": "docs/parity-inventory.md",
-    "action": "add a shared source-core fixed-length fact instead of inferring a length from syntax or names"
+    "classification": "implemented",
+    "csharpProof": "tsonic-csharp/test/direct-translation-core.test.mjs",
+    "rustProof": "test/r8-completion.test.mjs",
+    "action": "retain exact source-core FixedArray<T, N> facts and native target array lowering without syntax or name inference"
   },
   {
     "id": "types.open-dynamic-values",

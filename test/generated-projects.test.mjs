@@ -224,6 +224,16 @@ export function main(): void {
 
   const d = new Date(86400000);
   check(d.getTime() === 86400000);
+
+  const projected = { tail: "tail", 10: "ten", 2: "two", "01": "leading" };
+  check(Object.keys(projected).join(",") === "2,10,tail,01");
+  check(Object.values(projected).join(",") === "two,ten,tail,leading");
+  check(Object.entries(projected).length === 4);
+  check(Object.hasOwn(projected, "tail"));
+  check(!Object.hasOwn(projected, "missing"));
+  check(projected.hasOwnProperty("01"));
+  const reordered = { "01": "leading", tail: "tail", 2: "two", 10: "ten" };
+  check(Object.keys(reordered).join(",") === "2,10,01,tail");
 }
 `,
     },

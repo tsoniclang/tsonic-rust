@@ -120,7 +120,7 @@ export function read(): int32 {
     diagnostic.message.includes("exact TSTS-selected receiver value evidence")));
 });
 
-test("static class fields without an initializer fail closed", () => {
+test("static class fields require explicit initialization and defaultValue uses exact Rust Default evidence", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -137,6 +137,49 @@ export class Invalid {
   assert.ok(result.diagnostics.some((diagnostic) =>
     diagnostic.code === "RUST_UNSUPPORTED_AST" &&
     diagnostic.message.includes("static class fields require an initializer")));
+
+  const explicitDefault = compileRust({
+    files: {
+      "index.ts": `
+import { defaultValue } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+
+export class Exact {
+  static value: int32 = defaultValue<int32>();
+}
+
+export function genericDefault<T>(): T {
+  return defaultValue<T>();
+}
+`,
+    },
+  });
+  assert.deepEqual(explicitDefault.result.diagnostics, []);
+  const emitted = artifactText(explicitDefault.result, "src/index.rs");
+  assert.match(emitted, /rt::ModuleCell<i32>/u);
+  assert.match(emitted, /<i32 as Default>::default\(\)/u);
+  assert.match(emitted, /pub fn generic_default<T: Default>\(\) -> T/u);
+  assert.match(emitted, /<T as Default>::default\(\)/u);
+  validateGeneratedProject(
+    "class-static-explicit-default",
+    explicitDefault.result.artifacts,
+  );
+
+  const unsupportedDefault = compileRust({
+    files: {
+      "index.ts": `
+import { defaultValue } from "@tsonic/core/lang.js";
+
+export function invalid(): () => void {
+  return defaultValue<() => void>();
+}
+`,
+    },
+  });
+  assert.equal(unsupportedDefault.result.artifacts.length, 0);
+  assert.ok(unsupportedDefault.result.diagnostics.some((diagnostic) =>
+    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+    diagnostic.message.includes("requires an exact Rust Default implementation")));
 });
 
 test("static this receiver access fails closed without exact value evidence", () => {

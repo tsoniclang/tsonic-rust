@@ -749,8 +749,8 @@
   {
     "area": "Object",
     "lane": "Object.keys/values/entries",
-    "classification": "blocked",
-    "contract": "requires closed-shape reflection rows over the JsValue carrier"
+    "classification": "implemented",
+    "proof": "test/generated-projects.test.mjs"
   },
   {
     "area": "Object",
@@ -761,8 +761,8 @@
   {
     "area": "Object",
     "lane": "Object.hasOwn",
-    "classification": "blocked",
-    "contract": "requires closed-shape reflection rows over the JsValue carrier"
+    "classification": "implemented",
+    "proof": "test/generated-projects.test.mjs"
   },
   {
     "area": "Object",
@@ -837,8 +837,9 @@
   {
     "area": "Arrays",
     "lane": "fixed-size arrays beyond homogeneous tuples",
-    "classification": "blocked",
-    "contract": "requires source-core length facts"
+    "classification": "implemented",
+    "contract": "exact source-core FixedArray<T, N> facts lower to native [T; N] carriers",
+    "proof": "test/r8-completion.test.mjs"
   },
   {
     "area": "Node",

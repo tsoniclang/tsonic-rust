@@ -1088,9 +1088,16 @@ const rustUnconditionallyEqHashTargetIds: ReadonlySet<string> = new Set([
 export function rustCarrierSupportsTrait(
   carrier: TargetTypeRef | undefined,
   traitPath: string,
+  typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
 ): boolean {
   if (carrier === undefined) {
     return false;
+  }
+  if (carrier.kind === "type-parameter") {
+    return typeParameterSupports(carrier.name, traitPath);
+  }
+  if (traitPath === "core::default::Default") {
+    return rustCarrierSupportsDefault(carrier, typeParameterSupports);
   }
   if (traitPath === "core::clone::Clone") {
     return rustCarrierSupportsClone(carrier);
@@ -1127,19 +1134,65 @@ export function rustCarrierSupportsTrait(
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
-    return rustNamedTypeSupportsTrait(namedType, traitPath);
+    return rustNamedTypeSupportsTrait(namedType, traitPath, typeParameterSupports);
   }
   return false;
+}
+
+function rustCarrierSupportsDefault(
+  carrier: TargetTypeRef,
+  typeParameterSupports: (name: string, traitPath: string) => boolean,
+): boolean {
+  if (carrier.kind === "type-parameter") {
+    return typeParameterSupports(carrier.name, "core::default::Default");
+  }
+  if (carrier.kind === "source-primitive") {
+    return rustPrimitiveTypeName(carrier.name) !== undefined;
+  }
+  if (carrier.kind === "array") {
+    return true;
+  }
+  if (carrier.kind === "tuple") {
+    return carrier.elements.length <= 12 && carrier.elements.every((element) =>
+      rustCarrierSupportsTrait(
+        element,
+        "core::default::Default",
+        typeParameterSupports,
+      ));
+  }
+  if (carrier.kind === "target-named") {
+    return carrier.id === rustOptionTargetId ||
+      rustUnconditionallyDefaultTargetIds.has(carrier.id);
+  }
+  const fixedArray = rustFixedArrayCarrierValue(carrier);
+  if (fixedArray !== undefined) {
+    return rustCarrierSupportsTrait(
+      fixedArray.element,
+      "core::default::Default",
+      typeParameterSupports,
+    );
+  }
+  const namedType = rustNamedTypeCarrierValue(carrier);
+  return namedType !== undefined && rustNamedTypeSupportsTrait(
+    namedType,
+    "core::default::Default",
+    typeParameterSupports,
+  );
 }
 
 function rustNamedTypeSupportsTrait(
   namedType: RustNamedTypeCarrierValue,
   traitPath: string,
+  typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
 ): boolean {
   return namedType.traits.implementations.some((implementation) =>
     implementation.traitPath === traitPath && implementation.requirements.every((requirement) => {
       const argument = namedType.typeArguments[requirement.typeArgumentIndex];
-      return argument !== undefined && rustCarrierSupportsTrait(argument, requirement.traitPath);
+      return argument !== undefined && rustCarrierSupportsTrait(
+        argument,
+        requirement.traitPath,
+        typeParameterSupports,
+      );
     }));
 }
 
@@ -1177,6 +1230,15 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustJsRegExpMatchTargetId,
   rustJsErrorTargetId,
   rustProgramErrorTargetId,
+]);
+
+const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
+  rustStringTargetId,
+  rustNullTargetId,
+  rustUndefinedTargetId,
+  rustJsArrayTargetId,
+  rustJsMapTargetId,
+  rustJsSetTargetId,
 ]);
 
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {

@@ -1,4 +1,5 @@
 import {
+  defaultValueFactKey,
   flowStateFactKey,
 } from "@tsonic/tsts";
 import type {
@@ -7,6 +8,9 @@ import type {
   ProviderDeclarationIdentity,
   SourceCallMarkerKind,
 } from "@tsonic/tsts";
+import {
+  orderEnumerableOwnStringProperties,
+} from "@tsonic/target-api";
 import {
   acceptRustPolicy,
   rejectRustPolicy,
@@ -47,6 +51,8 @@ import {
   KindNewExpression,
   KindNonNullExpression,
   KindParenthesizedExpression,
+  KindPropertyAssignment,
+  KindShorthandPropertyAssignment,
   KindSatisfiesExpression,
   Node_Expression,
   Node_Type,
@@ -112,6 +118,7 @@ import {
   rustUsizeToInt32ValueConversion,
   selectRustSourceValueConversion,
   substituteRustValueConversion,
+  rustValueConversionIsFallible,
   rustValueConversionIdentity,
 } from "../rust-facts/value-conversions.js";
 import {
@@ -155,6 +162,8 @@ import {
   rustSourceSemanticsModules,
 } from "../rust-source-semantics/source-modules.js";
 import type {
+  RustSourceObjectField,
+  RustSourceObjectShape,
   RustSourceTypeRegistry,
   RustSourceUnion,
 } from "./source-type-registry.js";
@@ -1255,6 +1264,9 @@ function mapRustSourceMarkerCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
+  if (markerName === "default-value") {
+    return mapRustDefaultValueCall(request, provider, context, options);
+  }
   const typedLocation = selectRustTypedLocationCall(
     request,
     provider,
@@ -1329,6 +1341,92 @@ function mapRustSourceMarkerCall(
       sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     },
   }, evidence);
+}
+
+function mapRustDefaultValueCall(
+  request: RustCheckedCallSelectionInput,
+  provider: ProviderDeclarationIdentity,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const sourceArguments = selectedCallArgumentNodes(request);
+  const sourceFact = context.facts.resolve(request.source.call, defaultValueFactKey) ??
+    context.facts.get(request.source.call, defaultValueFactKey);
+  const resultCarrier = resolveRustTargetTypeRef(sourceFact?.type, context, options);
+  const sourceTypeArguments = request.source.sourceSelectedMethodTypeArguments;
+  const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
+  if (sourceArguments.length !== 0 || sourceFact === undefined || resultCarrier === undefined ||
+    sourceTypeArguments?.length !== 1 ||
+    targetTypeArguments === undefined || targetTypeArguments.length !== 1 ||
+    !rustTargetTypeRefEquals(targetTypeArguments[0], resultCarrier)) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_DEFAULT_VALUE_EVIDENCE_NOT_PROVEN",
+      "defaultValue<T>() requires one exact source-core type fact, one matching selected type argument, no arguments, and one matching Rust result carrier.",
+    );
+  }
+  const operationId = "tsonic.rust.default-value";
+  const fact: Extract<RustTargetOperationFact, { readonly kind: "default-value" }> = {
+    kind: "default-value",
+    operationId,
+    resultCarrier,
+  };
+  const operation: RustTargetOperationSelection = {
+    operationId,
+    operationKind: "method",
+    targetOperation: "Default::default",
+    resultType: resultCarrier,
+    providerDeclaration: provider,
+    provenance: {
+      sourceExpression: request.source.call,
+      sourceCallee: request.source.sourceCallee.expression,
+      sourceSelectedSignature: request.source.selectedSignature,
+      sourceSelectedDeclaration: request.sourceSelectedDeclaration,
+      sourceSelectedSymbol: selectedCallCalleeSymbol(request),
+      sourceResultType: request.source.sourceResultType,
+      providerDeclaration: provider,
+    },
+  };
+  const member: RustTargetMember = {
+    id: operationId,
+    sourceName: "defaultValue",
+    targetName: "Default::default",
+    kind: "method",
+    static: true,
+    parameters: [],
+    returnType: resultCarrier,
+    typeParameters: [{ name: sourceTypeArguments[0]!.typeParameterName }],
+    providerDeclaration: provider,
+  };
+  const selectedSignature = {
+    member,
+    providerDeclaration: provider,
+    targetTypeArguments,
+    ...(request.source.selectedSignature === undefined
+      ? {}
+      : { sourceSignature: request.source.selectedSignature }),
+    ...(request.sourceSelectedDeclaration === undefined
+      ? {}
+      : { sourceDeclaration: request.sourceSelectedDeclaration }),
+    ...(selectedCallCalleeSymbol(request) === undefined
+      ? {}
+      : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+    ...(selectedCallCalleeDeclaration(request) === undefined
+      ? {}
+      : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+    ...(request.source.sourceResultType === undefined
+      ? {}
+      : { sourceReturnType: request.source.sourceResultType }),
+    sourceArgumentBindings: request.source.sourceArgumentBindings,
+    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+    sourceSelectedMethodTypeArguments: sourceTypeArguments,
+  };
+  const evidence = [{ message: "rust selected source-core defaultValue<T>()" }];
+  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
+  context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
+  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
+  return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
 export function selectRustCheckedValue(
@@ -1467,6 +1565,18 @@ function mapSelectedJsSpecialCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
+  const objectProjection = selectedObjectShapeProjection(
+    ownerName,
+    memberName,
+  );
+  if (objectProjection !== undefined) {
+    return mapSelectedObjectShapeProjection(
+      request,
+      objectProjection,
+      context,
+      options,
+    );
+  }
   if (ownerName === "String" && memberName === "match") {
     const [argument] = selectedCallArgumentNodes(request);
     const creation = argument === undefined
@@ -1540,6 +1650,413 @@ function mapSelectedJsSpecialCall(
   }, [rustJsValueTargetType()], context, options, {
     sourceName: memberName,
   });
+}
+
+interface SelectedObjectShapeProjection {
+  readonly projection: Extract<
+    RustTargetOperationFact,
+    { readonly kind: "object-shape-projection" }
+  >["projection"];
+  readonly sourceName: string;
+  readonly sourceValue: "first-argument" | "receiver";
+  readonly keyArgumentIndex?: number;
+  readonly expectedArgumentCount: number;
+  readonly static: boolean;
+}
+
+function selectedObjectShapeProjection(
+  ownerName: string,
+  memberName: string,
+): SelectedObjectShapeProjection | undefined {
+  if (ownerName === "ObjectConstructor") {
+    if (memberName === "keys" || memberName === "values" || memberName === "entries") {
+      return {
+        projection: memberName,
+        sourceName: memberName,
+        sourceValue: "first-argument",
+        expectedArgumentCount: 1,
+        static: true,
+      };
+    }
+    if (memberName === "hasOwn") {
+      return {
+        projection: "has-own",
+        sourceName: memberName,
+        sourceValue: "first-argument",
+        keyArgumentIndex: 1,
+        expectedArgumentCount: 2,
+        static: true,
+      };
+    }
+  }
+  return ownerName === "Object" && memberName === "hasOwnProperty"
+    ? {
+        projection: "has-own",
+        sourceName: memberName,
+        sourceValue: "receiver",
+        keyArgumentIndex: 0,
+        expectedArgumentCount: 1,
+        static: false,
+      }
+    : undefined;
+}
+
+function mapSelectedObjectShapeProjection(
+  request: RustCheckedCallSelectionInput,
+  selection: SelectedObjectShapeProjection,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const sourceArguments = request.source.sourceArguments;
+  const sourceValue = selection.sourceValue === "receiver"
+    ? request.source.sourceReceiver
+    : sourceArguments[0];
+  if (sourceArguments.length !== selection.expectedArgumentCount || sourceValue === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_EVIDENCE_MISSING",
+      `Selected Object.${selection.sourceName} call does not carry its exact receiver/argument evidence.`,
+    );
+  }
+  const sourceValueNode = asNode(sourceValue.expression, context);
+  const sourceValueCarrier = selectedValueCarrier(
+    sourceValue.expression,
+    sourceValue.type,
+    context,
+    options,
+  );
+  const shape = options.sourceTypes.structuralObjectForType(sourceValue.type);
+  if (sourceValueNode === undefined || sourceValueCarrier === undefined || shape === undefined ||
+    shape.storage !== "object-handle" ||
+    !rustTargetTypeRefEquals(sourceValueCarrier, shape.carrier)) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_NOT_CLOSED",
+      `Selected Object.${selection.sourceName} call requires one exact generated structural object carrier.`,
+    );
+  }
+  const orderedFields = selectedAuthoredObjectFields(shape, context);
+  if (orderedFields.kind === "rejected") {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_NOT_CLOSED",
+      orderedFields.reason,
+    );
+  }
+  const resolvedSourceResult = resolveRustTargetTypeRef(
+    request.source.sourceResultType,
+    context,
+    options,
+  );
+  const innerResultCarrier = request.source.optionalChain
+    ? rustOptionElementCarrier(resolvedSourceResult)
+    : resolvedSourceResult;
+  if (innerResultCarrier === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_RESULT_MISSING",
+      `Selected Object.${selection.sourceName} call has no exact closed result carrier.`,
+    );
+  }
+  const projectedFields = selectObjectShapeProjectionFields(
+    selection.projection,
+    orderedFields.fields,
+    innerResultCarrier,
+  );
+  if (projectedFields.kind === "rejected") {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_RESULT_INVALID",
+      projectedFields.reason,
+    );
+  }
+  const keyExpression = selection.keyArgumentIndex === undefined
+    ? undefined
+    : asNode(sourceArguments[selection.keyArgumentIndex]?.expression, context);
+  if (selection.projection === "has-own" && keyExpression === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_KEY_MISSING",
+      `Selected Object.${selection.sourceName} call has no exact checked key expression.`,
+    );
+  }
+  const optionalResult = selectRustOptionalCallResult(
+    request,
+    innerResultCarrier,
+    context,
+    options,
+  );
+  if (optionalResult.kind === "rejected" || resolvedSourceResult === undefined ||
+    !rustTargetTypeRefEquals(optionalResult.resultCarrier, resolvedSourceResult)) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_OPTIONAL_RESULT_INVALID",
+      optionalResult.kind === "rejected"
+        ? optionalResult.message
+        : `Selected Object.${selection.sourceName} result conflicts with its optional-chain carrier.`,
+    );
+  }
+  const operationId = `tsonic.rust.js.object-shape.${selection.projection}`;
+  const fact: Extract<RustTargetOperationFact, { readonly kind: "object-shape-projection" }> = {
+    kind: "object-shape-projection",
+    operationId,
+    projection: selection.projection,
+    sourceValue: sourceValueNode,
+    sourceValueOrigin: selection.sourceValue === "receiver"
+      ? { kind: "receiver" }
+      : { kind: "argument", index: 0 },
+    sourceValueCarrier,
+    ...(keyExpression === undefined ? {} : { keyExpression }),
+    fields: projectedFields.fields,
+    storage: shape.storage,
+    resultCarrier: innerResultCarrier,
+  };
+  const evidence = [{ message: `rust selected closed Object.${selection.sourceName} projection` }];
+  const parameterCarriers = sourceArguments.map((argument) =>
+    selectedSourceValueCarrier(argument, context, options));
+  if (parameterCarriers.some((carrier) => carrier === undefined)) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_PARAMETER_MISSING",
+      `Selected Object.${selection.sourceName} call has an argument without a closed Rust carrier.`,
+    );
+  }
+  if (selection.keyArgumentIndex !== undefined &&
+    !rustTargetTypeRefEquals(
+      parameterCarriers[selection.keyArgumentIndex],
+      rustStringTargetType(),
+    )) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_SHAPE_PROJECTION_KEY_INVALID",
+      `Selected Object.${selection.sourceName} key does not have the exact source string carrier.`,
+    );
+  }
+  const parameterModes = sourceArguments.map((_, index) =>
+    selection.static && index === 0 ? "borrow-shared" as const : "by-value" as const);
+  for (const [index, argument] of sourceArguments.entries()) {
+    const mode = parameterModes[index]!;
+    context.facts.set(argument.expression, rustArgumentPassingKey, {
+      mode,
+      ...(mode === "borrow-shared"
+        ? { storageExpression: argument.expression }
+        : {}),
+    }, [{ message: `rust Object projection argument ${index} passes as ${mode}` }]);
+  }
+  const operation: RustTargetOperationSelection = {
+    operationId,
+    operationKind: "method",
+    targetOperation: operationId,
+    resultType: optionalResult.resultCarrier,
+    provenance: {
+      sourceExpression: request.source.call,
+      sourceReceiver: sourceValue.expression,
+      sourceCallee: request.source.sourceCallee.expression,
+      sourceSelectedSignature: request.source.selectedSignature,
+      sourceSelectedDeclaration: request.sourceSelectedDeclaration,
+      sourceSelectedSymbol: selectedCallCalleeSymbol(request),
+      sourceResultType: request.source.sourceResultType,
+    },
+  };
+  const member: RustTargetMember = {
+    id: operationId,
+    sourceName: selection.sourceName,
+    targetName: operationId,
+    kind: "method",
+    ...(selection.static ? { static: true } : {}),
+    parameters: parameterCarriers.map((carrier, index) => ({
+      name: `arg${index}`,
+      type: carrier!,
+      passingMode: parameterModes[index]!,
+    })),
+    returnType: innerResultCarrier,
+  };
+  const selectedSignature = {
+    member,
+    ...(!selection.static ? { sourceSelectedReceiverCarrier: sourceValueCarrier } : {}),
+    ...(request.source.selectedSignature === undefined
+      ? {}
+      : { sourceSignature: request.source.selectedSignature }),
+    ...(request.sourceSelectedDeclaration === undefined
+      ? {}
+      : { sourceDeclaration: request.sourceSelectedDeclaration }),
+    ...(selectedCallCalleeSymbol(request) === undefined
+      ? {}
+      : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
+    ...(selectedCallCalleeDeclaration(request) === undefined
+      ? {}
+      : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
+    ...(request.source.sourceResultType === undefined
+      ? {}
+      : { sourceReturnType: request.source.sourceResultType }),
+    sourceArgumentBindings: request.source.sourceArgumentBindings,
+    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
+    ...(request.source.sourceSelectedMethodTypeArguments === undefined
+      ? {}
+      : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
+  };
+  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
+  if (optionalResult.fact !== undefined) {
+    context.facts.set(
+      request.source.call,
+      rustOptionalChainFactKey,
+      optionalResult.fact,
+      [{ message: `rust optional Object.${selection.sourceName} projection` }],
+    );
+  }
+  context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
+  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
+  return acceptRustPolicy({ selectedSignature }, evidence);
+}
+
+type SelectedAuthoredObjectFields =
+  | { readonly kind: "resolved"; readonly fields: readonly RustSourceObjectField[] }
+  | { readonly kind: "rejected"; readonly reason: string };
+
+function selectedAuthoredObjectFields(
+  shape: RustSourceObjectShape,
+  context: RustOperationPolicyContext,
+): SelectedAuthoredObjectFields {
+  const selected: {
+    readonly field: RustSourceObjectField;
+    readonly owner: Node;
+    readonly start: number;
+  }[] = [];
+  for (const field of shape.fields) {
+    const declarations = field.declarations.filter((declaration) => {
+      const kind = context.ast.kindName(declaration);
+      return kind === KindPropertyAssignment || kind === KindShorthandPropertyAssignment;
+    });
+    if (declarations.length !== 1 || field.declarations.length !== 1) {
+      return {
+        kind: "rejected",
+        reason: `Closed Object projection member '${field.sourceName}' is not owned by one exact object-literal property.`,
+      };
+    }
+    const declaration = declarations[0]!;
+    const owner = context.ast.parent(declaration);
+    const range = context.ast.authoredRange(declaration);
+    if (owner === undefined || context.ast.kindName(owner) !== "KindObjectLiteralExpression" ||
+      range.kind !== "authored" || context.ast.questionToken(declaration) !== undefined) {
+      return {
+        kind: "rejected",
+        reason: `Closed Object projection member '${field.sourceName}' has no exact required own-property declaration.`,
+      };
+    }
+    selected.push({ field, owner, start: range.start });
+  }
+  const owner = selected[0]?.owner;
+  if (owner === undefined || selected.some((entry) => entry.owner !== owner) ||
+    new Set(selected.map((entry) => entry.start)).size !== selected.length) {
+    return {
+      kind: "rejected",
+      reason: "Closed Object projection fields do not belong to one unambiguous authored object literal.",
+    };
+  }
+  const authored = [...selected]
+    .sort((left, right) => left.start - right.start)
+    .map((entry) => entry.field);
+  return {
+    kind: "resolved",
+    fields: orderEnumerableOwnStringProperties(
+      authored,
+      (field) => field.sourceName,
+    ),
+  };
+}
+
+type SelectedProjectionFields =
+  | {
+      readonly kind: "resolved";
+      readonly fields: Extract<
+        RustTargetOperationFact,
+        { readonly kind: "object-shape-projection" }
+      >["fields"];
+    }
+  | { readonly kind: "rejected"; readonly reason: string };
+
+function selectObjectShapeProjectionFields(
+  projection: SelectedObjectShapeProjection["projection"],
+  fields: readonly RustSourceObjectField[],
+  resultCarrier: TargetTypeRef,
+): SelectedProjectionFields {
+  if (projection === "has-own") {
+    return rustTargetTypeRefEquals(resultCarrier, rustSourcePrimitiveTargetType("bool"))
+      ? { kind: "resolved", fields: fields.map(projectIdentityField) }
+      : { kind: "rejected", reason: "Object.hasOwn requires an exact boolean result carrier." };
+  }
+  if (!isRustJsArrayCarrier(resultCarrier) || resultCarrier.typeArguments?.length !== 1) {
+    return {
+      kind: "rejected",
+      reason: `Object.${projection} requires an exact JavaScript-array result carrier.`,
+    };
+  }
+  const elementCarrier = resultCarrier.typeArguments[0]!;
+  if (projection === "keys") {
+    return rustTargetTypeRefEquals(elementCarrier, rustStringTargetType())
+      ? { kind: "resolved", fields: fields.map(projectIdentityField) }
+      : { kind: "rejected", reason: "Object.keys requires an exact string-array result carrier." };
+  }
+  const valueCarrier = projection === "entries" && elementCarrier.kind === "tuple" &&
+      elementCarrier.elements.length === 2 &&
+      rustTargetTypeRefEquals(elementCarrier.elements[0]!, rustStringTargetType())
+    ? elementCarrier.elements[1]
+    : projection === "values"
+      ? elementCarrier
+      : undefined;
+  if (valueCarrier === undefined) {
+    return {
+      kind: "rejected",
+      reason: "Object.entries requires an exact JavaScript array of [string, value] tuples.",
+    };
+  }
+  const projected = fields.map((field) => {
+    if (rustTargetTypeRefEquals(field.resultCarrier, valueCarrier)) {
+      return projectIdentityField(field);
+    }
+    const conversion = selectRustSourceValueConversion(
+      field.resultCarrier,
+      valueCarrier,
+    );
+    return conversion === undefined || rustValueConversionIsFallible(conversion)
+      ? undefined
+      : {
+          ...projectIdentityField(field),
+          conversion,
+        };
+  });
+  const unresolvedIndex = projected.findIndex((field) => field === undefined);
+  return unresolvedIndex === -1
+    ? {
+        kind: "resolved",
+        fields: projected as NonNullable<typeof projected[number]>[],
+      }
+    : {
+        kind: "rejected",
+        reason: `Object.${projection} member '${fields[unresolvedIndex]!.sourceName}' has no exact infallible result conversion.`,
+      };
+}
+
+function projectIdentityField(
+  field: RustSourceObjectField,
+): Extract<
+  RustTargetOperationFact,
+  { readonly kind: "object-shape-projection" }
+>["fields"][number] {
+  return {
+    sourceName: field.sourceName,
+    storageIndex: field.storageIndex,
+    valueCarrier: field.resultCarrier,
+  };
 }
 
 function acceptProjectSourceCall(

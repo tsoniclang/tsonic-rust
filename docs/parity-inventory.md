@@ -6,8 +6,7 @@ lane carries exactly one classification — implemented (positive runtime
 proof in the generated Cargo bank), hard-rejected (architecture;
 zero-artifact proof), or blocked by a named contract — and the guard test
 keeps this document and the lane list from drifting. C# lanes without
-Rust rows (Object helpers, Number helpers,
-Date extras, and process stdio) are enumerated in
+Rust rows (remaining Object mutation, Number helpers, Date extras, and process stdio) are enumerated in
 the blocked section with the contract each requires.
 
 ## Implemented
@@ -73,6 +72,10 @@ the blocked section with the contract each requires.
   map timing tuples and memory fields through closed native carriers.
   Canonical `node:*` modules and their Node-compatible bare module aliases resolve to
   one provider/module/export identity rather than duplicate declaration models.
+- Object.keys/values/entries and Object.hasOwn/hasOwnProperty over exact generated
+  structural object carriers. Integer-index keys use ECMAScript numeric order;
+  remaining keys preserve the exact authored own-property order. Open nominal,
+  spread-ambiguous, and otherwise unproven runtime shapes fail closed.
 - Error model, async/await, callbacks, tuples, fixed arrays, records,
   string-literal unions, discriminated object unions with exact selected
   narrowing evidence, generics, statics — see README.
@@ -94,10 +97,8 @@ the blocked section with the contract each requires.
 - streams and fs.watch, event subscriptions: requires stream and event
   carrier
   contracts.
-- Fixed-size arrays beyond homogeneous tuples: requires source-core
-  length facts.
-- Object.keys/values/entries, Object.assign, Object.hasOwn:
-  requires closed-shape reflection rows over the JsValue carrier.
+- Object.assign with shape-changing sources: requires an identity-preserving
+  mutable shape-revision contract.
 - Console calls with open or structural object arguments: requires exact
   closed source-to-JsValue object conversion facts.
 - Date UTC setters and local-time getters and setters: requires

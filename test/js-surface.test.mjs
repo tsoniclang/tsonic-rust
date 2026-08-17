@@ -673,6 +673,66 @@ export function timing(): boolean {
   assert.match(text, /js_abi::JsDate::from_string\("1970-01-02T00:00:00.000Z"\)/u);
 });
 
+test("closed object projections lower from exact structural facts", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function project(): boolean {
+  const value = { tail: "tail", 10: "ten", 2: "two", "01": "leading" };
+  const keys = Object.keys(value);
+  const values = Object.values(value);
+  const entries = Object.entries(value);
+  const reordered = { "01": "leading", tail: "tail", 2: "two", 10: "ten" };
+  const reorderedKeys = Object.keys(reordered);
+  return keys.length === 4 && values.length === 4 && entries.length === 4 &&
+    reorderedKeys.length === 4 && Object.hasOwn(value, "tail") &&
+    value.hasOwnProperty("01");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::JsArray::from_dense\(vec!\[/u);
+  assert.match(text, /object_projection_value/u);
+  assert.match(text, /\.with\(\|state\|/u);
+  assert.match(text, /\.as_str\(\) == "tail"/u);
+});
+
+test("open and spread-derived object projections fail closed", () => {
+  assertRustTargetRejection({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+interface Named { name: string }
+export function keys(value: Named): string[] {
+  return Object.keys(value);
+}
+`,
+    },
+  }, [{
+    code: "RUST_OBJECT_SHAPE_PROJECTION_NOT_CLOSED",
+    message: "Selected Object.keys call requires one exact generated structural object carrier.",
+  }]);
+
+  assertRustTargetRejection({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function keys(): string[] {
+  const base = { first: "one" };
+  return Object.keys({ ...base, second: "two" });
+}
+`,
+    },
+  }, [{
+    code: "RUST_OBJECT_SHAPE_PROJECTION_NOT_CLOSED",
+    message: "Closed Object projection fields do not belong to one unambiguous authored object literal.",
+  }]);
+});
+
 test("mutable JS object assignments preserve reference identity", () => {
   const { result } = compileRust({
     surfaces: ["js"],

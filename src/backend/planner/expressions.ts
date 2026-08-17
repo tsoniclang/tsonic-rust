@@ -6,6 +6,7 @@ import type {
 } from "../../policy/types.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import { rustVecRestAssembly } from "../../policy/intrinsics.js";
+import { rustArgumentPassingKey } from "../../policy/model.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 import {
   isRustBinaryOperator,
@@ -105,8 +106,11 @@ import { applyRustErrorBoundary } from "./error-boundary.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceBindingPath, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
-import { requireRustCarrierRequirements } from "./generic-requirements.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetType, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import {
+  requireRustCarrierRequirements,
+  requireRustDefaultValueCarrier,
+} from "./generic-requirements.js";
 import {
   planRustIdentifierValue,
   planRustValueRead,
@@ -4364,7 +4368,10 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
   const fact = rustOperationFact(node, context);
   const callCarrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
   const innerResultCarrier = fact?.kind === "source-call" ||
-      fact?.kind === "provider-operation" || fact?.kind === "typed-location"
+      fact?.kind === "provider-operation" ||
+      fact?.kind === "object-shape-projection" ||
+      fact?.kind === "default-value" ||
+      fact?.kind === "typed-location"
     ? fact.resultCarrier
     : undefined;
   const selectedResultCarrier = innerResultCarrier === undefined
@@ -4414,6 +4421,12 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
     return fact.state === "moved" && argumentNode !== undefined
       ? planRustNonConsumingValue(argumentNode, argument!, context)
       : argument;
+  }
+  if (fact !== undefined && fact.kind === "object-shape-projection") {
+    return planObjectShapeProjectionCall(node, fact, context);
+  }
+  if (fact !== undefined && fact.kind === "default-value") {
+    return planRustDefaultValueCall(node, fact, context);
   }
   if (fact !== undefined && fact.kind === "source-call") {
     const argumentPlan = planRustSourceCallArgumentEvaluation(
@@ -4500,6 +4513,242 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
   ));
   return undefined;
 }
+
+function planRustDefaultValueCall(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "default-value" }>,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const sourceArguments = context.input.ast.arguments(node);
+  const selected = context.input.facts.getSelectedTargetCall(node);
+  const operation = context.input.facts.getSelectedTargetOperation(node);
+  if (!isDenseDataArray(sourceArguments) || sourceArguments.length !== 0 ||
+    selected === undefined || selected.member.id !== fact.operationId ||
+    selected.member.kind !== "method" || selected.member.static !== true ||
+    selected.member.parameters.length !== 0 || selected.member.returnType === undefined ||
+    !rustTargetTypeRefEquals(selected.member.returnType, fact.resultCarrier) ||
+    selected.member.typeParameters?.length !== 1 ||
+    selected.targetTypeArguments?.length !== 1 ||
+    !rustTargetTypeRefEquals(selected.targetTypeArguments[0], fact.resultCarrier) ||
+    operation === undefined || operation.operationId !== fact.operationId ||
+    operation.operationKind !== "method" || operation.targetOperation !== "Default::default" ||
+    operation.resultType === undefined ||
+    !rustTargetTypeRefEquals(operation.resultType, fact.resultCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.default-value-selected-signature",
+      "defaultValue<T>() conflicts with its finalized zero-argument Rust Default contract.",
+    ));
+    return undefined;
+  }
+  if (!requireRustDefaultValueCarrier(fact.resultCarrier, node, context)) {
+    return undefined;
+  }
+  const owner = rustTypeFromCarrierInContext(fact.resultCarrier, context);
+  if (owner === undefined) {
+    return undefined;
+  }
+  return {
+    kind: "associated-call",
+    owner,
+    trait: { kind: "named", path: "Default" },
+    method: "default",
+    args: [],
+  };
+}
+
+function planObjectShapeProjectionCall(
+  node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "object-shape-projection" }>,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const sourceArguments = context.input.ast.arguments(node);
+  const staticCall = fact.sourceValueOrigin.kind === "argument";
+  if (
+    staticCall &&
+    sourceArguments[fact.sourceValueOrigin.index] !== fact.sourceValue
+  ) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.object-shape-projection-source",
+      "Closed Object projection source argument conflicts with its finalized origin.",
+    ));
+    return undefined;
+  }
+  const expectedParameterCarriers = staticCall
+    ? fact.projection === "has-own"
+      ? [fact.sourceValueCarrier, rustStringTargetType()]
+      : [fact.sourceValueCarrier]
+    : fact.projection === "has-own"
+      ? [rustStringTargetType()]
+      : [];
+  const selected = context.input.facts.getSelectedTargetCall(node);
+  if (selected === undefined || selected.member.id !== fact.operationId ||
+    selected.member.kind !== "method" ||
+    (selected.member.static === true) !== staticCall ||
+    selected.member.returnType === undefined ||
+    !rustTargetTypeRefEquals(selected.member.returnType, fact.resultCarrier) ||
+    selected.member.parameters.length !== expectedParameterCarriers.length ||
+    !selected.member.parameters.every((parameter, index) =>
+      rustTargetTypeRefEquals(parameter.type, expectedParameterCarriers[index]) &&
+      parameter.passingMode === (staticCall && index === 0 ? "borrow-shared" : "by-value")) ||
+    (!staticCall && !rustTargetTypeRefEquals(
+      selected.sourceSelectedReceiverCarrier,
+      fact.sourceValueCarrier,
+    ))) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.object-shape-projection-selected-signature",
+      "Closed Object projection conflicts with its TSTS-selected target member contract.",
+    ));
+    return undefined;
+  }
+  if (!isDenseDataArray(sourceArguments) || sourceArguments.some((argument) => argument === undefined) ||
+    sourceArguments.length !== expectedParameterCarriers.length ||
+    sourceArguments.some((argument, index) => {
+      const passing = context.input.facts.getFact(argument!, rustArgumentPassingKey);
+      return passing?.mode !== (staticCall && index === 0 ? "borrow-shared" : "by-value");
+    })) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.object-shape-projection-arguments",
+      "Closed Object projection source arguments conflict with their finalized passing contracts.",
+    ));
+    return undefined;
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.object-shape-projection-name-state",
+      "Closed Object projection requires the compilation-owned synthetic-name state.",
+    ));
+    return undefined;
+  }
+  const plannedSourceValue = planExpression(fact.sourceValue, context);
+  if (plannedSourceValue === undefined) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "object_projection_value",
+  );
+  const bindings: Extract<RustExpr, { readonly kind: "block" }>["bindings"][number][] = [{
+    name: receiverName,
+    value: planRustSharedReceiver(fact.sourceValue, plannedSourceValue, context),
+  }];
+  let keyName: string | undefined;
+  if (fact.keyExpression !== undefined) {
+    const plannedKey = planExpression(fact.keyExpression, context);
+    if (plannedKey === undefined) {
+      return undefined;
+    }
+    keyName = allocateRustSyntheticName(
+      context.syntheticNames,
+      "object_projection_key",
+    );
+    bindings.push({ name: keyName, value: plannedKey });
+  }
+  const receiver: RustExpr = { kind: "path", path: receiverName };
+  let value: RustExpr | undefined;
+  switch (fact.projection) {
+    case "keys":
+      value = rustObjectProjectionArray(
+        fact.fields.map((field) => ({
+          kind: "string-literal" as const,
+          value: field.sourceName,
+        })),
+        context,
+      );
+      break;
+    case "values":
+    case "entries": {
+      const projected: RustExpr[] = [];
+      for (const field of fact.fields) {
+        const stored = readRustStoredObjectField(
+          fact.storage,
+          fact.sourceValueCarrier,
+          receiver,
+          field.storageIndex,
+          field.valueCarrier,
+          context,
+        );
+        const converted = stored === undefined
+          ? undefined
+          : applyRustValueConversion(
+              context,
+              stored,
+              field.conversion,
+              undefined,
+              false,
+            );
+        if (converted === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node),
+            "rust.backend.object-shape-projection-field",
+            `Closed Object projection member '${field.sourceName}' has no exact stored-field read and conversion.`,
+          ));
+          return undefined;
+        }
+        projected.push(fact.projection === "values"
+          ? converted
+          : {
+              kind: "tuple-literal",
+              elements: [
+                { kind: "string-literal", value: field.sourceName },
+                converted,
+              ],
+            });
+      }
+      value = rustObjectProjectionArray(projected, context);
+      break;
+    }
+    case "has-own":
+      if (keyName === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.object-shape-projection-key",
+          "Closed Object.hasOwn projection has no finalized key expression.",
+        ));
+        return undefined;
+      }
+      value = fact.fields.reduce<RustExpr>(
+        (left, field) => ({
+          kind: "binary",
+          operator: "||",
+          left,
+          right: {
+            kind: "binary",
+            operator: "==",
+            left: {
+              kind: "method-call",
+              receiver: { kind: "path", path: keyName! },
+              method: "as_str",
+              args: [],
+            },
+            right: { kind: "str-literal", value: field.sourceName },
+          },
+        }),
+        { kind: "bool-literal", value: false },
+      );
+      break;
+  }
+  return value === undefined
+    ? undefined
+    : { kind: "block", bindings, value };
+}
+
+function rustObjectProjectionArray(
+  elements: readonly RustExpr[],
+  context: RustPlanContext,
+): RustExpr {
+  context.usedAliases?.add("js_abi");
+  return {
+    kind: "call",
+    path: "js_abi::JsArray::from_dense",
+    args: [{ kind: "vec-literal", elements }],
+  };
+}
+
 
 function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
