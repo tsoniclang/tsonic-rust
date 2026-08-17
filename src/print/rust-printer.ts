@@ -5,6 +5,7 @@ import type {
   RustPattern,
   RustSourceFileModel,
   RustStmt,
+  RustStructField,
   RustType,
   RustVisibility,
 } from "../backend/rust-ast/nodes.js";
@@ -83,7 +84,7 @@ export function printRustItem(item: RustItem): string {
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
       const generics = printRustTypeParameters(item.typeParams);
       const header = `${structAttrs}${derives}${printRustVisibility(item.visibility)}struct ${item.name}${generics} {`;
-      const fields = item.fields.map((field) => `    ${printRustVisibility(field.visibility)}${field.name}: ${printRustType(field.type)},`).join("\n");
+      const fields = item.fields.map(printRustStructField).join("\n");
       return fields.length === 0 ? `${header}}` : `${header}\n${fields}\n}`;
     }
     case "enum": {
@@ -179,6 +180,23 @@ export function printRustItem(item: RustItem): string {
       return body.length === 0 ? `${header}}` : `${header}\n${body}\n}`;
     }
   }
+}
+
+function printRustStructField(field: RustStructField): string {
+  const prefix = `    ${printRustVisibility(field.visibility)}${field.name}:`;
+  const flatType = printRustType(field.type);
+  const flat = `${prefix} ${flatType},`;
+  if (!flatType.includes("\n") && renderedFits(flat, 0)) {
+    return flat;
+  }
+  const typeIndent = indentText(2);
+  return [
+    prefix,
+    appendToLastLine(
+      `${typeIndent}${printRustTypeFitted(field.type, 2, typeIndent.length)}`,
+      ",",
+    ),
+  ].join("\n");
 }
 
 function printRustSelfParam(
@@ -1407,7 +1425,7 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printRustExpr(expression.target)} ${expression.operator} ${printRustExpr(expression.value)}`;
     }
     case "call": {
-      return `${expression.path}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${expression.path}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "invoke": {
       return `${printOperand(expression.callee, RustPrecedence.Postfix, false)}(${expression.args.map(printRustExpr).join(", ")})`;
@@ -1416,11 +1434,11 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printRustAssociatedOwner(expression.owner)}::${expression.name}`;
     }
     case "associated-call": {
-      return `${printRustAssociatedCallOwner(expression)}::${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${printRustAssociatedCallOwner(expression)}::${expression.method}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "method-call": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
-      return `${receiver}.${expression.method}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${receiver}.${expression.method}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "field": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
@@ -1954,14 +1972,28 @@ function printRustExprFitted(
         );
       }
       if (chain !== undefined && verticalLayout) {
+        const firstStep = chain.steps[0];
+        const firstFieldRequiresBreak = firstStep?.kind === "field" &&
+          printRustExpr(chain.base).length + firstStep.name.length + 1 >
+            rustInlineFieldReceiverWidth;
+        const secondStep = chain.steps[1];
+        const attachFirstMethodAfterField = firstStep?.kind === "field" &&
+          !firstFieldRequiresBreak && secondStep?.kind === "method" &&
+          selectorCount === 2 &&
+          rustMethodChainFirstMethodRequiresExpansion(chain, depth) &&
+          renderedFits(
+            `${printRustExpr(chain.base)}.${firstStep.name}.${secondStep.name}(`,
+            column,
+          );
         return printFittedMethodChain(
           chain,
           depth,
           column,
-          chain.steps[0]?.kind === "field" ||
+          firstStep?.kind === "field" && !attachFirstMethodAfterField ||
             rustMethodChainBreaksReceiverForClosure(chain, flat, column) ||
             column > indentText(depth + 1).length,
           methodChainContinuationIndent,
+          attachFirstMethodAfterField,
         );
       }
       if (chain !== undefined && rustMethodChainBreaksReceiverWhenExpanded(chain) &&
@@ -2584,6 +2616,8 @@ function printRustLetInitializer(
       initializer.kind === "invoke" || initializer.kind === "associated-call") &&
     trailingClosure?.kind === "closure" &&
     fittedAtPrefix.includes("\n") &&
+    !(initializer.kind === "associated-call" && flat.includes("\n") === false &&
+      renderedFits(flat, indentText(depth + 1).length)) &&
     prefix.length + firstLine(fittedAtPrefix).length + 1 <= rustFormatWidth;
   if (directCallOpeningFits) {
     return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
@@ -2685,10 +2719,13 @@ function printRustSingleCollectionCallContinuation(
   column: number,
 ): string | undefined {
   const invocation = initializer.kind === "call"
-    ? { callable: initializer.path, arguments: initializer.args }
+    ? {
+        callable: `${initializer.path}${printRustCallTypeArguments(initializer.typeArguments)}`,
+        arguments: initializer.args,
+      }
     : initializer.kind === "associated-call"
       ? {
-          callable: `${printRustAssociatedOwner(initializer.owner)}::${initializer.method}`,
+          callable: `${printRustAssociatedOwner(initializer.owner)}::${initializer.method}${printRustCallTypeArguments(initializer.typeArguments)}`,
           arguments: initializer.args,
         }
       : undefined;
@@ -2732,6 +2769,12 @@ function printRustAssociatedOwner(owner: RustType): string {
     return printRustType(owner);
   }
   return `${owner.path}::<${owner.typeArguments.map(printRustType).join(", ")}>`;
+}
+
+function printRustCallTypeArguments(typeArguments: readonly RustType[] | undefined): string {
+  return typeArguments === undefined || typeArguments.length === 0
+    ? ""
+    : `::<${typeArguments.map(printRustType).join(", ")}>`;
 }
 
 function printFittedLogicalChain(

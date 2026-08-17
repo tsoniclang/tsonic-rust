@@ -5,6 +5,7 @@ import type { RustGenericRequirementSet } from "./generic-requirements.js";
 import type { RustGeneratorFact, RustSourceBindingFact } from "../../source/rust-facts/keys.js";
 import type { TargetTypeRef } from "../../policy/types.js";
 import type { RustSyntheticNameState } from "./synthetic-names.js";
+import type { RustObjectLiteralImplementationRegistry } from "./object-literal-implementations.js";
 import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../rust-ast/nodes.js";
 import {
   isValidRustIdentifier,
@@ -94,6 +95,7 @@ export interface RustPlanContext {
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
   readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly projectDispatchRoot?: RustExpr;
+  readonly objectLiteralImplementations?: RustObjectLiteralImplementationRegistry;
   readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../policy/types.js").TargetTypeRef>;
 }
 

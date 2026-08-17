@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import {
+  KindClassStaticBlockDeclaration,
   Node_Initializer,
   Node_Type,
 } from "../../common/source-ast.js";
@@ -51,6 +52,7 @@ import {
   type RustPreconstructionFieldValue,
 } from "./preconstruction-fields.js";
 import { rustDefaultImplementation } from "./default-implementation.js";
+import { planRustCallableGenerics } from "./callable-generics.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -146,6 +148,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       continue;
     }
     const memberKind = ast.kindName(member);
+    if (memberKind === KindClassStaticBlockDeclaration) {
+      continue;
+    }
     if (memberKind === "KindPropertyDeclaration") {
       if (ast.hasModifierKind(member, "static")) {
         continue;
@@ -522,12 +527,14 @@ function planConstructor(
 
 export function planProjectMethod(
   member: Node,
-  context: RustPlanContext,
+  outerContext: RustPlanContext,
   options?: {
-    readonly targetName: string;
-    readonly safetyPlacement: "getter" | "setter";
+    readonly targetName?: string;
+    readonly safetyPlacement?: "getter" | "setter";
+    readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
   },
 ): RustImplFunction | undefined {
+  let context = outerContext;
   const { ast } = context.input;
   const sourceMethodName = options?.targetName ??
     context.input.names.nameForDeclaration(member) ??
@@ -560,6 +567,15 @@ export function planProjectMethod(
     ));
     return undefined;
   }
+  const genericPlan = planRustCallableGenerics(
+    member,
+    context,
+    options?.typeArgumentSubstitutions,
+  );
+  if (genericPlan === undefined) {
+    return undefined;
+  }
+  context = genericPlan.context;
   const generatorFact = context.input.facts.getFact(member, rustGeneratorFactKey);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
@@ -704,12 +720,14 @@ export function planProjectMethod(
       ));
       return undefined;
     }
+    const typeParams = genericPlan.finalizeTypeParameters();
     return {
       name: methodName,
       ...(isUnsafe ? { isUnsafe: true } : {}),
       visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
       ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
       ...(isStatic ? {} : { selfParam: "ref" as const }),
+      ...(typeParams.length === 0 ? {} : { typeParams }),
       params,
       returnType: generatorReturnType,
       body: {
@@ -739,6 +757,7 @@ export function planProjectMethod(
       },
     };
   }
+  const typeParams = genericPlan.finalizeTypeParameters();
   return {
     name: methodName,
     ...(isUnsafe ? { isUnsafe: true } : {}),
@@ -747,6 +766,7 @@ export function planProjectMethod(
     ...(fallible ? { fallible: true } : {}),
     ...(sourceAsync ? { isAsync: true } : {}),
     ...(isStatic ? {} : { selfParam: "ref" as const }),
+    ...(typeParams.length === 0 ? {} : { typeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: {

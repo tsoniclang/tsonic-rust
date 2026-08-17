@@ -133,10 +133,13 @@ function collectNameCandidates(
   if (role !== undefined && scope !== undefined) {
     const name = ast.name(node);
     const nameKind = name === undefined ? undefined : ast.kindName(name);
-    const sourceName = name === undefined ||
-        (nameKind !== "KindIdentifier" && nameKind !== "KindPrivateIdentifier")
-      ? ""
-      : ast.text(name);
+    const sourceName = ast.kindName(node) === "KindExportAssignment" &&
+        ast.as.AsExportAssignment(node)?.IsExportEquals !== true
+      ? "default"
+      : name === undefined ||
+          (nameKind !== "KindIdentifier" && nameKind !== "KindPrivateIdentifier")
+        ? ""
+        : ast.text(name);
     if (sourceName.length > 0) {
       candidates.push({
         declaration: node,
@@ -172,6 +175,8 @@ function declarationNameRole(
       return "variant";
     case "KindVariableDeclaration":
       return ast.kindName(scope) === "KindSourceFile" ? "module-value" : "value";
+    case "KindExportAssignment":
+      return ast.kindName(scope) === "KindSourceFile" ? "module-value" : undefined;
     case "KindBindingElement":
     case "KindFunctionDeclaration":
     case "KindFunctionExpression":

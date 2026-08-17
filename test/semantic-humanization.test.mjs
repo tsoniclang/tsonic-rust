@@ -229,6 +229,40 @@ export function main(): void {
   validateGeneratedProject("native-function-abis", result.artifacts, { run: true });
 });
 
+test("project methods preserve generic declarations and exact call type arguments", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "generic_project_methods" },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+class Identity {
+  identity<T>(value: T): T { return value; }
+}
+
+export function main(): void {
+  const identity = new Identity();
+  if (identity.identity<string>("value") !== "value" ||
+      identity.identity<int32>(7) !== 7) {
+    throw new Error("generic project method mismatch");
+  }
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /pub fn identity<T>\(&self, value: T\) -> T/u);
+  assert.match(output, /identity\.identity::<String>\(String::from\("value"\)\)/u);
+  assert.match(output, /identity\.identity::<i32>\(7\)/u);
+  const run = validateGeneratedProject("generic-project-methods", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
 test("non-consuming project access borrows direct and polymorphic receivers", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {

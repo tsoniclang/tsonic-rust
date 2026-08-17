@@ -1090,6 +1090,90 @@ test("long field-led method chains use rustfmt selector layout", () => {
   );
 });
 
+test("pure method chains keep the first fitting call attached to their receiver", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: { kind: "path", path: "set" },
+                method: "add_eq",
+                args: [{ kind: "call", path: "first_value", args: [] }],
+              },
+              method: "add_eq",
+              args: [{ kind: "call", path: "second_value", args: [] }],
+            },
+            method: "add_eq",
+            args: [{ kind: "call", path: "third_value", args: [] }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /set\.add_eq\(first_value\(\)\)\n        \.add_eq\(second_value\(\)\)\n        \.add_eq\(third_value\(\)\);/u,
+  );
+});
+
+test("field-led calls stay attached when their argument list must expand", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "field",
+              receiver: { kind: "path", path: "dispatch_receiver" },
+              name: "dispatch",
+            },
+            method: "write_counter_value",
+            args: [{
+              kind: "binary",
+              operator: "+",
+              left: {
+                kind: "method-call",
+                receiver: {
+                  kind: "field",
+                  receiver: { kind: "path", path: "dispatch_receiver" },
+                  name: "dispatch",
+                },
+                method: "read_counter_value",
+                args: [],
+              },
+              right: { kind: "path", path: "value_with_a_long_generated_name" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /dispatch_receiver\.dispatch\.write_counter_value\(\n {8}dispatch_receiver\.dispatch\.read_counter_value\(\) \+ value_with_a_long_generated_name,/u,
+  );
+});
+
 test("trait signatures count their semicolon and break before long return types", () => {
   const source = printRustSourceFile({
     headerComment,

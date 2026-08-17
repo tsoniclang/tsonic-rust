@@ -3,6 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api";
 import {
   KindFunctionDeclaration,
   KindImportDeclaration,
+  KindExportAssignment,
   KindExportDeclaration,
   KindVariableStatement,
   Node_Initializer,
@@ -59,8 +60,12 @@ import {
 import {
   diagnoseRustSafetyApplications,
 } from "./explicit-safety.js";
-import { planRustModuleCell } from "./module-storage.js";
-import { planRustClassStaticFields } from "./class-static-fields.js";
+import {
+  planRustModuleCell,
+  type PlannedRustModuleCell,
+} from "./module-storage.js";
+import { planRustClassInitialization } from "./class-static-fields.js";
+import { createRustObjectLiteralImplementationRegistry } from "./object-literal-implementations.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -143,6 +148,16 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     syntheticNames,
     "module_init",
   );
+  const objectLiteralImplementations = createRustObjectLiteralImplementationRegistry(
+    context.sourceFile,
+    { ...context, syntheticNames },
+    syntheticNames,
+  );
+  context = {
+    ...context,
+    objectLiteralImplementations,
+  };
+  items.push(...objectLiteralImplementations.items);
   const asynchronous = context.input.source.navigation.moduleHasTopLevelAwait(
     context.sourceFile,
   );
@@ -214,17 +229,39 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       }
       continue;
     }
+    if (kind === KindExportAssignment) {
+      const diagnosticCount = context.diagnostics.length;
+      const planned = planDefaultExportAssignment(
+        statement,
+        initializationContext,
+      );
+      if (planned !== undefined) {
+        items.push(...planned.items);
+        initializationStatements.push(planned.initialization);
+      } else {
+        ensureTopLevelPlanningDiagnostic(
+          context,
+          statement,
+          diagnosticCount,
+          "default-export",
+        );
+      }
+      continue;
+    }
     if (kind === "KindClassDeclaration") {
       const diagnosticCount = context.diagnostics.length;
       const definition = context.input.projectTypes.definitionForDeclaration(statement);
-      const staticFields = planRustClassStaticFields(statement, initializationContext);
+      const classInitialization = planRustClassInitialization(
+        statement,
+        initializationContext,
+      );
       const planned = definition !== undefined && context.input.projectTypes.isPolymorphic(definition)
         ? planPolymorphicClassDeclaration(statement, context)
         : planClassDeclaration(statement, context);
-      if (planned !== undefined && staticFields !== undefined) {
-        items.push(...staticFields.items);
+      if (planned !== undefined && classInitialization !== undefined) {
+        items.push(...classInitialization.items);
         items.push(...planned);
-        initializationStatements.push(...staticFields.initialization);
+        initializationStatements.push(...classInitialization.initialization);
       } else {
         ensureTopLevelPlanningDiagnostic(
           context,
@@ -340,6 +377,47 @@ function ensureTopLevelPlanningDiagnostic(
 interface PlannedTopLevelVariableStatement {
   readonly items: readonly RustItem[];
   readonly initialization: readonly import("../rust-ast/nodes.js").RustStmt[];
+}
+
+function planDefaultExportAssignment(
+  declaration: Node,
+  context: RustPlanContext,
+): PlannedRustModuleCell | undefined {
+  const { ast } = context.input;
+  const assignment = ast.as.AsExportAssignment(declaration);
+  const binding = context.input.facts.getFact(declaration, rustModuleBindingFactKey);
+  const name = context.input.names.nameForDeclaration(declaration) ?? "";
+  if (assignment === undefined || assignment.IsExportEquals === true ||
+    assignment.Expression === undefined || binding?.storage !== "module-cell" ||
+    !isValidRustIdentifier(name)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      { ast, sourceFile: context.sourceFile, node: declaration },
+      "rust.backend.default-export",
+      "Default exports require one exact expression, binding name, and finalized module-cell snapshot.",
+    ));
+    return undefined;
+  }
+  if (!rustCarrierSupportsClone(binding.valueCarrier)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      { ast, sourceFile: context.sourceFile, node: declaration },
+      "rust.backend.default-export-carrier",
+      "Default export snapshots require one exact Clone-capable Rust value carrier.",
+    ));
+    return undefined;
+  }
+  const rustType = rustTypeFromCarrierInContext(binding.valueCarrier, context);
+  const value = planExpression(assignment.Expression, context);
+  if (rustType === undefined || value === undefined || context.syntheticNames === undefined) {
+    return undefined;
+  }
+  context.usedAliases?.add("rt");
+  return planRustModuleCell(
+    name,
+    rustType,
+    value,
+    "public",
+    context.syntheticNames,
+  );
 }
 
 function planTopLevelVariableStatement(

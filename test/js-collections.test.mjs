@@ -265,7 +265,10 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /map\.set_eq/u);
   assert.match(source, /map\.get_eq/u);
-  assert.match(source, /set\.add_eq/u);
+  assert.match(
+    source,
+    /set\s*\.add_eq\(first\.clone\(\)\)\s*\.add_eq\(first\.clone\(\)\)\s*\.add_eq\(same_value\.clone\(\)\)/u,
+  );
   assert.equal(validateGeneratedProject("js-project-identity-collections", result.artifacts, { run: true }).status, 0);
 });
 

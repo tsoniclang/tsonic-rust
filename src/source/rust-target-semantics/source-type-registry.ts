@@ -138,8 +138,11 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
           (kind === "KindTypeAliasDeclaration" && variantsByDeclaration.has(declaration))
         ? "enum"
         : undefined;
+    if (shape === undefined) {
+      return undefined;
+    }
     const typeName = ast.text(ast.name(declaration));
-    return shape === undefined || typeName.length === 0
+    return typeName.length === 0
       ? undefined
       : rustSourceTypeCarrier(fileName, typeName, shape);
   };

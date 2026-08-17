@@ -3,18 +3,15 @@ import {
   Node_Type,
 } from "../../common/source-ast.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../source/rust-target-types.js";
-import type { RustBlock, RustItem, RustTypeParameter } from "../rust-ast/nodes.js";
+import type { RustBlock, RustItem } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planBlockLike } from "./statements.js";
 import { diagnosticInput, isValidRustIdentifier } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
-import {
-  applyRustGenericRequirements,
-  createRustGenericRequirementSet,
-  requireRustCarrierRequirements,
-} from "./generic-requirements.js";
+import { requireRustCarrierRequirements } from "./generic-requirements.js";
+import { planRustCallableGenerics } from "./callable-generics.js";
 import {
   publishRustSourceCallableContract,
 } from "./source-callable-contracts.js";
@@ -103,31 +100,11 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const typeParams: RustTypeParameter[] = [];
-  for (const typeParameter of ast.typeParameters(node)) {
-    if (typeParameter === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.type-parameter",
-        "Function declaration contains an undefined type-parameter slot.",
-      ));
-      return undefined;
-    }
-    const typeParameterName = context.input.names.nameForDeclaration(typeParameter) ?? "";
-    if (!isValidRustIdentifier(typeParameterName)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, typeParameter),
-        "rust.backend.generics",
-        "Type parameter names must be valid Rust identifiers.",
-      ));
-      return undefined;
-    }
-    typeParams.push({ name: typeParameterName, bounds: [] });
+  const genericPlan = planRustCallableGenerics(node, context);
+  if (genericPlan === undefined) {
+    return undefined;
   }
-  const genericRequirements = createRustGenericRequirementSet(
-    typeParams.map((parameter) => parameter.name),
-  );
-  context = { ...context, genericRequirements };
+  context = genericPlan.context;
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
   const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
     requireStatic: generatorFact !== undefined,
@@ -246,7 +223,7 @@ function planRustFunctionItem(
       return undefined;
     }
     context.usedAliases?.add("rt");
-    const finalizedTypeParams = applyRustGenericRequirements(typeParams, genericRequirements);
+    const finalizedTypeParams = genericPlan.finalizeTypeParameters();
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
       name,
@@ -292,10 +269,7 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const finalizedTypeParams = applyRustGenericRequirements(
-    typeParams,
-    genericRequirements,
-  );
+  const finalizedTypeParams = genericPlan.finalizeTypeParameters();
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,

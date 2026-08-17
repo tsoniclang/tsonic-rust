@@ -59,14 +59,15 @@ export type RustExpr =
     }
   | { readonly kind: "matches"; readonly expression: RustExpr; readonly pattern: RustPattern }
   | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
-  | { readonly kind: "call"; readonly path: string; readonly args: readonly RustExpr[] }
+  | { readonly kind: "call"; readonly path: string; readonly typeArguments?: readonly RustType[]; readonly args: readonly RustExpr[] }
   | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
   | { readonly kind: "associated-value"; readonly owner: RustType; readonly name: string }
-  | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly args: readonly RustExpr[] }
+  | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly typeArguments?: readonly RustType[]; readonly args: readonly RustExpr[] }
   | {
       readonly kind: "method-call";
       readonly receiver: RustExpr;
       readonly method: string;
+      readonly typeArguments?: readonly RustType[];
       readonly args: readonly RustExpr[];
       readonly receiverMode?: "value" | "ref" | "mut-ref";
     }

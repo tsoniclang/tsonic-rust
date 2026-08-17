@@ -20,6 +20,10 @@ import {
   rustSnakeCaseIdentifier,
 } from "../../common/rust-identifiers.js";
 import {
+  allocateRustGeneratedName as allocateGeneratedName,
+  rustGeneratedNameComponent,
+} from "../../common/rust-generated-names.js";
+import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   substituteRustTargetTypeParameters,
@@ -55,6 +59,11 @@ export interface RustProjectTypeDefinition {
   readonly stateName: string;
   readonly dispatchName: string;
   readonly rootName?: string;
+}
+
+export interface RustProjectInterfaceContract {
+  readonly definition: RustProjectTypeDefinition;
+  readonly carrier: TargetTypeRef;
 }
 
 export interface RustProjectConstructorSignature {
@@ -159,6 +168,43 @@ export interface RustProjectTypePolicyHost {
     heritage: Node,
   ): TargetTypeRef | undefined;
   resolveExternalHeritage(edge: SourceDeclaredHeritageEdge): RustExternalProjectBase | undefined;
+}
+
+export function rustProjectInterfaceContracts(
+  policy: RustProjectTypePolicy,
+  definition: RustProjectTypeDefinition,
+  carrier: TargetTypeRef,
+): readonly RustProjectInterfaceContract[] | undefined {
+  const ordered: RustProjectInterfaceContract[] = [];
+  const visiting = new Set<RustProjectTypeDefinition>();
+  const visited = new Map<RustProjectTypeDefinition, TargetTypeRef>();
+  const visit = (current: RustProjectTypeDefinition): boolean => {
+    const relation = policy.relationship(carrier, current);
+    if (current.kind !== "interface" || relation.kind !== "related") {
+      return false;
+    }
+    const previous = visited.get(current);
+    if (previous !== undefined) {
+      return rustTargetTypeRefEquals(previous, relation.targetType);
+    }
+    if (visiting.has(current)) {
+      return false;
+    }
+    visiting.add(current);
+    for (const edge of policy.heritageForDefinition(current)) {
+      if (edge.kind !== "extends" || !visit(edge.target)) {
+        return false;
+      }
+    }
+    visiting.delete(current);
+    visited.set(current, relation.targetType);
+    ordered.push(Object.freeze({
+      definition: current,
+      carrier: relation.targetType,
+    }));
+    return true;
+  };
+  return visit(definition) ? Object.freeze(ordered) : undefined;
 }
 
 export function rustInheritedProjectConstructor(
@@ -493,6 +539,13 @@ export function createRustProjectTypePolicy(
   }
 
   const polymorphic = new Set<RustProjectTypeDefinition>();
+  for (const definition of definitions) {
+    if (definition.kind === "interface" &&
+      (denseNodes(host.ast.members(definition.declaration)) ?? []).some((member) =>
+        host.ast.kindName(member) === "KindMethodSignature")) {
+      polymorphic.add(definition);
+    }
+  }
   for (const definition of definitions) {
     const edges = heritageByDeclaration.get(definition.declaration) ?? [];
     for (const edge of edges) {
@@ -1030,22 +1083,6 @@ function projectMemberNames(
     }
   }
   return result;
-}
-
-function allocateGeneratedName(usedNames: Set<string>, preferred: string): string {
-  let candidate = preferred;
-  let suffix = 2;
-  while (usedNames.has(candidate)) {
-    candidate = `${preferred}_${suffix}`;
-    suffix += 1;
-  }
-  usedNames.add(candidate);
-  return candidate;
-}
-
-function rustGeneratedNameComponent(name: string): string {
-  const targetName = rustSnakeCaseIdentifier(name);
-  return targetName.startsWith("r#") ? targetName.slice(2) : targetName;
 }
 
 function heritageKindIssue(

@@ -137,11 +137,9 @@ export function planRustIdentifierValue(
     path: captured?.path ?? path,
   };
   if (captured?.storage === "location") {
-    context.usedAliases?.add("rt");
     return { kind: "method-call", receiver: value, method: "load", args: [] };
   }
   if (storage !== undefined) {
-    context.usedAliases?.add("rt");
     return storage.storage === "module-cell"
       ? rustModuleCellAccess(value, "load", [])
       : { kind: "method-call", receiver: value, method: "load", args: [] };

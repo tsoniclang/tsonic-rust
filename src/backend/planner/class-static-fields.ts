@@ -1,5 +1,9 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Initializer } from "../../common/source-ast.js";
+import {
+  ClassStaticBlock_Body,
+  KindClassStaticBlockDeclaration,
+  Node_Initializer,
+} from "../../common/source-ast.js";
 import {
   rustCarrierSupportsClone,
 } from "../../source/rust-target-types.js";
@@ -7,20 +11,21 @@ import { rustProjectStaticFieldStorage } from "../../source/rust-target-semantic
 import type { RustItem, RustStmt } from "../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
+import { planBlockLike } from "./statements.js";
 import { planRustModuleCell } from "./module-storage.js";
 import { diagnosticInput } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render-types.js";
 
-export interface PlannedRustClassStaticFields {
+export interface PlannedRustClassInitialization {
   readonly items: readonly RustItem[];
   readonly initialization: readonly RustStmt[];
 }
 
-export function planRustClassStaticFields(
+export function planRustClassInitialization(
   declaration: Node,
   context: RustPlanContext,
-): PlannedRustClassStaticFields | undefined {
+): PlannedRustClassInitialization | undefined {
   const { ast } = context.input;
   const items: RustItem[] = [];
   const initialization: RustStmt[] = [];
@@ -32,6 +37,20 @@ export function planRustClassStaticFields(
         "Class declaration contains an undefined static-field member slot.",
       ));
       return undefined;
+    }
+    if (ast.kindName(member) === KindClassStaticBlockDeclaration) {
+      const body = ClassStaticBlock_Body(ast, member);
+      const planned = body === undefined ? undefined : planBlockLike(body, context);
+      if (planned === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, member),
+          "rust.backend.class-static-block",
+          "Class static block has no exact plannable body.",
+        ));
+        return undefined;
+      }
+      initialization.push({ kind: "scope", body: planned });
+      continue;
     }
     const storage = rustProjectStaticFieldStorage(
       member,

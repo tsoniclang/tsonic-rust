@@ -1728,6 +1728,13 @@ function acceptProjectSourceCall(
     kind: construction ? "constructor" : "method",
     parameters: parameters as NonNullable<RustTargetMember["parameters"]>,
     returnType,
+    ...((request.source.sourceSelectedMethodTypeArguments?.length ?? 0) === 0
+      ? {}
+      : {
+          typeParameters: request.source.sourceSelectedMethodTypeArguments!.map((argument) => ({
+            name: argument.typeParameterName,
+          })),
+        }),
   };
   const selectedSignature = {
     member,

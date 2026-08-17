@@ -131,7 +131,10 @@ export function area(shape: Shape): int32 {
   assert.match(text, /pub enum Shape \{\n    Variant0\(rt::ObjectHandle<crate::shapes::KindRadiusShape>\),\n    Variant1\(rt::ObjectHandle<crate::shapes::KindSizeShape>\),\n\}/u);
   assert.match(shapes, /pub struct KindRadiusShape \{\s*pub kind: String,\s*pub radius: i32,/u);
   assert.match(shapes, /pub struct KindSizeShape \{\s*pub kind: String,\s*pub size: i32,/u);
-  assert.match(text, /Shape::Variant0\(rt::ObjectHandle::new\(crate::shapes::KindRadiusShape \{\s*kind: String::from\("circle"\),\s*radius: 1,/u);
+  assert.match(
+    text,
+    /Shape::Variant0\(\{\s*let record_kind = String::from\("circle"\);\s*let record_radius = 1;\s*rt::ObjectHandle::new\(crate::shapes::KindRadiusShape \{\s*kind: record_kind,\s*radius: record_radius,/u,
+  );
   assert.match(text, /match &shape/u);
   assert.match(text, /unreachable!\("TSTS-selected source refinement excluded this union variant"\)/u);
 });
@@ -157,7 +160,10 @@ export function added(value: int32): Event {
   const shapes = artifactText(result, "src/shapes.rs");
   assert.match(shapes, /pub struct KindValueShape \{\s*pub kind: String,\s*pub value: i32,/u);
   assert.match(shapes, /pub struct KindValueShape2 \{\s*pub kind: String,\s*pub value: u8,/u);
-  assert.match(text, /Event::Variant0\(rt::ObjectHandle::new\(crate::shapes::KindValueShape \{\s*kind: String::from\("added"\),\s*value,/u);
+  assert.match(
+    text,
+    /Event::Variant0\(\{\s*let record_kind = String::from\("added"\);\s*let record_value = value;\s*rt::ObjectHandle::new\(crate::shapes::KindValueShape \{\s*kind: record_kind,\s*value: record_value,/u,
+  );
   assert.doesNotMatch(text, /Event::Variant1\(rt::ObjectHandle::new\(crate::shapes::KindValueShape2/u);
 });
 
