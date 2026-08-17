@@ -3833,6 +3833,19 @@ function planProviderOperationExpression(
   const receiverMode = fact.abi.targetReceiver.kind === "input"
     ? fact.abi.targetReceiver.input.mode
     : undefined;
+  const targetTypeArguments = fact.abi.targetTypeArguments.map((carrier) =>
+    rustTypeFromCarrierInContext(carrier, context));
+  if (targetTypeArguments.some((argument) => argument === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, operationNode),
+      "rust.backend.provider-target-type-arguments",
+      "Provider operation target type arguments do not have exact Rust target types.",
+    ));
+    return undefined;
+  }
+  const concreteTargetTypeArguments = targetTypeArguments.length === 0
+    ? undefined
+    : targetTypeArguments as readonly RustType[];
   const scoped = (expression: RustExpr | undefined): RustExpr | undefined =>
     expression === undefined || locationScope.kind !== "selected"
       ? expression
@@ -3856,15 +3869,31 @@ function planProviderOperationExpression(
         ));
         return undefined;
       }
-      return scoped({ kind: "method-call", receiver: typedReceiver, method: form.name, args });
+      return scoped({
+        kind: "method-call",
+        receiver: typedReceiver,
+        method: form.name,
+        args,
+        ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+      });
     }
     case "call": {
       registerAliasFromPath(context, form.path);
-      return scoped(applyProviderOperationChain({ kind: "call", path: form.path, args }, form.chain));
+      return scoped(applyProviderOperationChain({
+        kind: "call",
+        path: form.path,
+        args,
+        ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+      }, form.chain));
     }
     case "call-c-variadic":
       registerAliasFromPath(context, form.path);
-      return scoped({ kind: "call", path: form.path, args });
+      return scoped({
+        kind: "call",
+        path: form.path,
+        args,
+        ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+      });
     case "call-value-slice":
     case "call-value-array":
     case "call-str-slice":
@@ -3892,6 +3921,7 @@ function planProviderOperationExpression(
             receiver,
             method: form.name,
             args,
+            ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
             ...(receiverMode === undefined ? {} : { receiverMode }),
           });
     case "receiver-method":
@@ -3903,6 +3933,7 @@ function planProviderOperationExpression(
               receiver,
               method: form.name,
               args,
+              ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
               ...(receiverMode === undefined ? {} : { receiverMode }),
             },
             form.chain,

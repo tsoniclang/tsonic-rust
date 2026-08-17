@@ -42,14 +42,15 @@ import {
   rustPrimitiveTypeName,
   rustTargetTypeParameterNames,
   rustStringTargetId,
-  rustIsizeTargetId,
-  rustUsizeTargetId,
   isRustUnitCarrier,
   isRustNeverCarrier,
   isRustNamedTypeTraitContract,
   rustOptionElementCarrier,
 } from "../rust-target-types.js";
-import { rustProviderOperationFormContractViolation } from "../rust-facts/operation-form-contract.js";
+import {
+  rustProviderOperationFormAcceptsTargetTypeArguments,
+  rustProviderOperationFormContractViolation,
+} from "../rust-facts/operation-form-contract.js";
 import { isClosedMetadata } from "../../common/closed-metadata.js";
 
 type Fail = (message: string) => never;
@@ -74,8 +75,6 @@ const builtInTargetCarrierIds = new Set([
   rustBigIntTargetId,
   rustCallableTargetId,
   rustStringTargetId,
-  rustIsizeTargetId,
-  rustUsizeTargetId,
   rustOptionTargetId,
   rustNullTargetId,
   rustUndefinedTargetId,
@@ -680,7 +679,7 @@ function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "resultConversion", "isAsync", "isFallible", "errorBoundary", "isUnsafe", "immediateCallback",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "targetTypeArguments", "resultConversion", "isAsync", "isFallible", "errorBoundary", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -769,6 +768,15 @@ function validateOperationRows(
       `${label}.typeRequirements`,
       fail,
     );
+    if (row.targetTypeArguments !== undefined && (
+      !Array.isArray(row.targetTypeArguments) || row.targetTypeArguments.length === 0 ||
+      !rustProviderOperationFormAcceptsTargetTypeArguments(row.target)
+    )) {
+      fail(`${label}.targetTypeArguments requires a non-empty native call or method type-argument list`);
+    }
+    for (const [index, carrier] of (row.targetTypeArguments ?? []).entries()) {
+      validateCarrier(carrier, definition, `${label}.targetTypeArguments[${index}]`, fail);
+    }
     for (const [index, carrier] of (row.parameterCarriers ?? []).entries()) {
       validateCarrier(
         carrier,
@@ -782,6 +790,7 @@ function validateOperationRows(
       ...rustTargetTypeParameterNames(row.resultCarrier),
       ...(row.receiverCarrier === undefined ? [] : rustTargetTypeParameterNames(row.receiverCarrier)),
       ...(row.parameterCarriers ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
+      ...(row.targetTypeArguments ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
       ...operationFormCarriers(row.target).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
       ...(row.immediateCallback === undefined
         ? []
@@ -835,11 +844,20 @@ function validateTypeParameterRequirements(
     }
     seen.add(requirement.name);
     previous = requirement.name;
-    if (requirement.requirements.length === 0 ||
-      requirement.requirements.some((entry) => entry !== "clone" && entry !== "copy") ||
-      new Set(requirement.requirements).size !== requirement.requirements.length ||
-      requirement.requirements.some((entry, index) => index > 0 && entry < requirement.requirements[index - 1]!)) {
-      fail(`${where}.${requirement.name} must contain a non-empty canonical Clone/Copy requirement set`);
+    const keys = requirement.requirements.map((entry, index) => {
+      if (entry === "clone" || entry === "copy") {
+        return entry;
+      }
+      requireExactKeys(asRecord(entry), ["kind", "path"], `${where}.${requirement.name}.requirements[${index}]`, fail);
+      if (entry.kind !== "trait") {
+        fail(`${where}.${requirement.name}.requirements[${index}].kind must be 'trait'`);
+      }
+      requireRustPath(entry.path, `${where}.${requirement.name}.requirements[${index}].path`, fail);
+      return `trait:${entry.path}`;
+    });
+    if (keys.length === 0 || new Set(keys).size !== keys.length ||
+      keys.some((entry, index) => index > 0 && entry < keys[index - 1]!)) {
+      fail(`${where}.${requirement.name} must contain a non-empty canonical target requirement set`);
     }
   }
 }

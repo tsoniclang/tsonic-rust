@@ -26,7 +26,7 @@ export interface RustCompilerPackageSource {
   readonly sourceDigest: string;
 }
 
-export interface RustCompilerProjectSnapshot {
+interface RustCompilerSnapshotBase {
   readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
   readonly manifestPath: string;
   readonly rootPackageId: string;
@@ -35,6 +35,29 @@ export interface RustCompilerProjectSnapshot {
   readonly packageSources: readonly RustCompilerPackageSource[];
   readonly digest: string;
 }
+
+export interface RustCompilerCargoProjectSnapshot extends RustCompilerSnapshotBase {
+  readonly kind: "cargo-project";
+}
+
+export interface RustCompilerMetadataArtifact {
+  readonly crateName: string;
+  readonly path: string;
+  readonly byteLength: number;
+  readonly modifiedMilliseconds: number;
+  readonly digest: string;
+}
+
+export interface RustCompilerStandardLibrarySnapshot extends RustCompilerSnapshotBase {
+  readonly kind: "standard-library";
+  readonly targetTriple: string;
+  readonly targetLibraryDirectory: string;
+  readonly metadataArtifacts: readonly RustCompilerMetadataArtifact[];
+}
+
+export type RustCompilerProjectSnapshot =
+  | RustCompilerCargoProjectSnapshot
+  | RustCompilerStandardLibrarySnapshot;
 
 export type RustCompilerType =
   | { readonly kind: "unit" }
@@ -64,13 +87,26 @@ export type RustCompilerType =
 export interface RustCompilerTypeParameter {
   readonly name: string;
   readonly requirements: readonly RustCompilerTypeRequirement[];
+  readonly defaultType?: RustCompilerType;
 }
 
-export type RustCompilerTypeRequirement = "clone" | "copy";
+export type RustCompilerTypeRequirement =
+  | "clone"
+  | "copy"
+  | { readonly kind: "trait"; readonly path: string };
+
+export interface RustCompilerTraitRequirement {
+  readonly typeArgumentIndex: number;
+  readonly requirement: RustCompilerTypeRequirement;
+}
+
+export interface RustCompilerTraitImplementation {
+  readonly trait: RustCompilerTypeRequirement;
+  readonly requirements: readonly RustCompilerTraitRequirement[];
+}
 
 export interface RustCompilerTypeTraits {
-  readonly clone: "never" | "always" | "all-type-arguments";
-  readonly copy: "never" | "always" | "all-type-arguments";
+  readonly implementations: readonly RustCompilerTraitImplementation[];
 }
 
 export interface RustCompilerParameter {
@@ -106,36 +142,35 @@ export interface RustCompilerEnumVariant {
 }
 
 export interface RustCompilerUnsupportedMember {
-  readonly kind: "field" | "method";
+  readonly kind: "field" | "method" | "variant";
   readonly name: string;
   readonly reason: string;
 }
 
-export type RustCompilerExport =
+interface RustCompilerExportIdentity {
+  readonly id: string;
+  readonly name: string;
+  readonly canonicalPath: readonly string[];
+  readonly targetPath: readonly string[];
+}
+
+export type RustCompilerExport = RustCompilerExportIdentity & (
   | {
       readonly kind: "constant";
-      readonly id: string;
-      readonly name: string;
       readonly type: RustCompilerType;
     }
   | {
       readonly kind: "static";
-      readonly id: string;
-      readonly name: string;
       readonly type: RustCompilerType;
       readonly unsafe: boolean;
       readonly mutable: boolean;
     }
   | {
       readonly kind: "function";
-      readonly id: string;
-      readonly name: string;
       readonly function: RustCompilerFunction;
     }
   | {
       readonly kind: "struct";
-      readonly id: string;
-      readonly name: string;
       readonly typeParameters: readonly RustCompilerTypeParameter[];
       readonly fields: readonly RustCompilerField[];
       readonly methods: readonly RustCompilerFunction[];
@@ -144,16 +179,13 @@ export type RustCompilerExport =
     }
   | {
       readonly kind: "type-alias";
-      readonly id: string;
-      readonly name: string;
       readonly typeParameters: readonly RustCompilerTypeParameter[];
       readonly type: RustCompilerType;
     }
   | {
       readonly kind: "enum";
-      readonly id: string;
-      readonly name: string;
       readonly typeParameters: readonly RustCompilerTypeParameter[];
+      readonly variantsComplete: boolean;
       readonly variants: readonly RustCompilerEnumVariant[];
       readonly methods: readonly RustCompilerFunction[];
       readonly unsupportedMembers: readonly RustCompilerUnsupportedMember[];
@@ -161,14 +193,22 @@ export type RustCompilerExport =
     }
   | {
       readonly kind: "union";
-      readonly id: string;
-      readonly name: string;
       readonly typeParameters: readonly RustCompilerTypeParameter[];
       readonly fields: readonly RustCompilerField[];
       readonly methods: readonly RustCompilerFunction[];
       readonly unsupportedMembers: readonly RustCompilerUnsupportedMember[];
       readonly traits: RustCompilerTypeTraits;
-    };
+    }
+);
+
+export interface RustCompilerStandardTypeLocation {
+  readonly canonicalPath: readonly string[];
+  readonly sourceModuleSpecifier: string;
+  readonly sourceExportName: string;
+  readonly targetPath: readonly string[];
+  readonly targetId: string;
+  readonly sourceTypeArgumentCount: number;
+}
 
 export interface RustCompilerUnsupportedExport {
   readonly name: string;
@@ -182,4 +222,5 @@ export interface RustCompilerModuleModel {
   readonly modulePath: readonly string[];
   readonly exports: readonly RustCompilerExport[];
   readonly unsupportedExports: readonly RustCompilerUnsupportedExport[];
+  readonly standardTypeLocations: readonly RustCompilerStandardTypeLocation[];
 }

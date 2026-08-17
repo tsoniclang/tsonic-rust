@@ -16,12 +16,46 @@ import {
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
 const int32 = { kind: "source-primitive", name: "int32" };
-const isize = { kind: "target-named", id: "rust.core.isize" };
+const isize = { kind: "source-primitive", name: "native-int" };
 const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
 const string = { kind: "target-named", id: "rust.std.String" };
 const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
 const unit = { kind: "tuple", elements: [] };
-const usize = { kind: "target-named", id: "rust.core.usize" };
+const usize = { kind: "source-primitive", name: "native-uint" };
+
+test("provider calls retain closed target-only generic arguments", () => {
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: { form: "call", path: "core::mem::size_of" },
+    sourceArgumentCarriers: [],
+    resultCarrier: usize,
+    targetTypeArguments: [int32],
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(abi);
+  assert.deepEqual(abi.targetTypeArguments, [int32]);
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+  assert.equal(finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: { form: "call", path: "core::mem::size_of" },
+    sourceArgumentCarriers: [],
+    resultCarrier: usize,
+    targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+    isAsync: false,
+    isFallible: false,
+  }), undefined);
+  assert.equal(finalizeRustProviderOperationAbi({
+    operationKind: "property",
+    form: { form: "path", path: "acme::VALUE" },
+    sourceArgumentCarriers: [],
+    resultCarrier: int32,
+    targetTypeArguments: [int32],
+    isAsync: false,
+    isFallible: false,
+  }), undefined);
+});
 
 test("provider results preserve exact borrowed-string ownership conversion", () => {
   const borrowedString = {
@@ -588,6 +622,7 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
     { ...abi, target: { ...abi.target, argModes: [] } },
     { ...abi, target: { ...abi.target, argOrder: [0, 0] } },
     { ...abi, targetArguments: [{ ...abi.targetArguments[0], source: { kind: "argument", sourceIndex: 7 } }] },
+    { ...abi, targetTypeArguments: [{ kind: "type-parameter", name: "T" }] },
     { ...abi, result: { ...abi.result, unexpected: true } },
   ];
 
@@ -696,6 +731,7 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
   const malformed = [
     { ...abi, sourceArguments: sparse },
     { ...abi, targetArguments: Array(abi.targetArguments.length) },
+    { ...abi, targetTypeArguments: Array(1) },
     { ...abi, target: { ...abi.target, argModes: Array(1) } },
   ];
   for (const candidate of malformed) {

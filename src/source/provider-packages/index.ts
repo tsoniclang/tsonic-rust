@@ -62,7 +62,10 @@ export interface RustProviderImmediateCallbackDefinition {
   readonly fallibleTarget: RustProviderOperationForm;
 }
 
-export type RustProviderTypeRequirement = "clone" | "copy";
+export type RustProviderTypeRequirement =
+  | "clone"
+  | "copy"
+  | { readonly kind: "trait"; readonly path: string };
 
 export interface RustProviderTypeParameterRequirement {
   readonly name: string;
@@ -82,6 +85,7 @@ interface RustProviderOperationDefinitionBase<
   readonly receiverCarrier?: TargetTypeRef;
   readonly typeParameters?: readonly string[];
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
+  readonly targetTypeArguments?: readonly TargetTypeRef[];
   readonly resultConversion?: RustValueConversion;
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;

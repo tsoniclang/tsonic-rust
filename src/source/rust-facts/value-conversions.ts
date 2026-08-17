@@ -13,14 +13,12 @@ import {
   rustNeverTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
-  rustIsizeTargetType,
   rustJsValueTargetType,
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
   rustBorrowedStrTargetType,
   rustStringTargetType,
-  rustUsizeTargetType,
 } from "../rust-target-types.js";
 import type { RustPrimitiveTypeName } from "../../common/rust-syntax.js";
 import { rustNumericPromotionKind } from "../rust-target-semantics/numeric-promotion.js";
@@ -31,8 +29,8 @@ const uint8Carrier = rustSourcePrimitiveTargetType("uint8");
 const uint32Carrier = rustSourcePrimitiveTargetType("uint32");
 const uint64Carrier = rustSourcePrimitiveTargetType("uint64");
 const float64Carrier = rustSourcePrimitiveTargetType("float64");
-const usizeCarrier = rustUsizeTargetType();
-const isizeCarrier = rustIsizeTargetType();
+const usizeCarrier = rustSourcePrimitiveTargetType("native-uint");
+const isizeCarrier = rustSourcePrimitiveTargetType("native-int");
 const stringCarrier = rustStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 

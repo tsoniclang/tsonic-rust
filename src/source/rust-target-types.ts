@@ -34,8 +34,6 @@ export const rustJsSetTargetId = "rust.js.JsSet";
 export const rustJsDateTargetId = "rust.js.JsDate";
 export const rustJsRegExpTargetId = "rust.js.JsRegExp";
 export const rustJsRegExpMatchTargetId = "rust.js.JsRegExpMatch";
-export const rustUsizeTargetId = "rust.core.usize";
-export const rustIsizeTargetId = "rust.core.isize";
 export const rustNamedTypeCarrierName = "named-type";
 export const rustStructuralObjectCarrierName = "structural-object";
 export const rustSourceUnionCarrierName = "source-union";
@@ -238,14 +236,6 @@ export function rustBigIntTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustBigIntTargetId };
 }
 
-export function rustUsizeTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustUsizeTargetId };
-}
-
-export function rustIsizeTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustIsizeTargetId };
-}
-
 export function rustUnitTargetType(): TargetTypeRef {
   return { kind: "tuple", elements: [] };
 }
@@ -287,16 +277,22 @@ export interface RustNamedTypeCarrierValue {
   readonly typeArguments: readonly TargetTypeRef[];
 }
 
-export type RustNamedTypeTraitCondition = "never" | "always" | "all-type-arguments";
+export interface RustNamedTypeTraitRequirement {
+  readonly typeArgumentIndex: number;
+  readonly traitPath: string;
+}
+
+export interface RustNamedTypeTraitImplementation {
+  readonly traitPath: string;
+  readonly requirements: readonly RustNamedTypeTraitRequirement[];
+}
 
 export interface RustNamedTypeTraitContract {
-  readonly clone: RustNamedTypeTraitCondition;
-  readonly copy: RustNamedTypeTraitCondition;
+  readonly implementations: readonly RustNamedTypeTraitImplementation[];
 }
 
 export const rustMoveOnlyNamedTypeTraits: RustNamedTypeTraitContract = Object.freeze({
-  clone: "never",
-  copy: "never",
+  implementations: Object.freeze([]),
 });
 
 export function rustNamedTargetType(
@@ -339,11 +335,16 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     candidate.typeArguments.some((argument) => !isRustTargetTypeRef(argument))) {
     return undefined;
   }
+  const typeArguments = candidate.typeArguments as readonly TargetTypeRef[];
+  if (candidate.traits.implementations.some((implementation) =>
+    implementation.requirements.some((requirement) => requirement.typeArgumentIndex >= typeArguments.length))) {
+    return undefined;
+  }
   return {
     id: candidate.id,
     path: candidate.path,
     traits: candidate.traits,
-    typeArguments: candidate.typeArguments as readonly TargetTypeRef[],
+    typeArguments,
   };
 }
 
@@ -352,19 +353,64 @@ export function isRustNamedTypeTraitContract(value: unknown): value is RustNamed
     return false;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 2 || keys[0] !== "clone" || keys[1] !== "copy") {
+  if (keys.length !== 1 || keys[0] !== "implementations") {
     return false;
   }
-  const candidate = value as { readonly clone?: unknown; readonly copy?: unknown };
-  if (!isRustNamedTypeTraitCondition(candidate.clone) || !isRustNamedTypeTraitCondition(candidate.copy)) {
+  const candidate = value as { readonly implementations?: unknown };
+  if (!isDenseDataArray(candidate.implementations)) {
     return false;
   }
-  return candidate.copy === "never" || candidate.clone === "always" ||
-    (candidate.copy === "all-type-arguments" && candidate.clone === "all-type-arguments");
+  let previousIdentity: string | undefined;
+  for (const implementation of candidate.implementations) {
+    if (typeof implementation !== "object" || implementation === null || Array.isArray(implementation) ||
+      !hasExactObjectKeys(implementation, ["requirements", "traitPath"])) {
+      return false;
+    }
+    const selected = implementation as Partial<RustNamedTypeTraitImplementation>;
+    if (!isRustTraitPath(selected.traitPath) || !isDenseDataArray(selected.requirements)) {
+      return false;
+    }
+    let previousRequirementIdentity: string | undefined;
+    for (const requirement of selected.requirements) {
+      if (typeof requirement !== "object" || requirement === null || Array.isArray(requirement) ||
+        !hasExactObjectKeys(requirement, ["traitPath", "typeArgumentIndex"])) {
+        return false;
+      }
+      const condition = requirement as Partial<RustNamedTypeTraitRequirement>;
+      if (!Number.isSafeInteger(condition.typeArgumentIndex) || condition.typeArgumentIndex! < 0 ||
+        !isRustTraitPath(condition.traitPath)) {
+        return false;
+      }
+      const identity = `${String(condition.typeArgumentIndex).padStart(12, "0")}\0${condition.traitPath}`;
+      if (previousRequirementIdentity !== undefined && previousRequirementIdentity >= identity) {
+        return false;
+      }
+      previousRequirementIdentity = identity;
+    }
+    const identity = `${selected.traitPath}\0${JSON.stringify(selected.requirements)}`;
+    if (previousIdentity !== undefined && previousIdentity >= identity) {
+      return false;
+    }
+    previousIdentity = identity;
+  }
+  const implementations = candidate.implementations as readonly RustNamedTypeTraitImplementation[];
+  return implementations
+    .filter((implementation) => implementation.traitPath === "core::marker::Copy")
+    .every((copy) => implementations.some((clone) =>
+      clone.traitPath === "core::clone::Clone" && clone.requirements.every((requirement) =>
+        copy.requirements.some((candidate) =>
+          candidate.typeArgumentIndex === requirement.typeArgumentIndex &&
+          rustTraitPathImplies(candidate.traitPath, requirement.traitPath)))));
 }
 
-function isRustNamedTypeTraitCondition(value: unknown): value is RustNamedTypeTraitCondition {
-  return value === "never" || value === "always" || value === "all-type-arguments";
+function rustTraitPathImplies(actual: string, required: string): boolean {
+  return actual === required ||
+    actual === "core::marker::Copy" && required === "core::clone::Clone";
+}
+
+function isRustTraitPath(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+$/u.test(value);
 }
 
 export function rustFixedArrayTargetType(element: TargetTypeRef, length: number): TargetTypeRef {
@@ -950,9 +996,7 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
-    return namedType.traits.copy === "always" ||
-      (namedType.traits.copy === "all-type-arguments" &&
-        namedType.typeArguments.every(isRustCopyCarrier));
+    return rustNamedTypeSupportsTrait(namedType, "core::marker::Copy");
   }
   return rustSourceTypeCarrierValue(carrier)?.shape === "enum";
 }
@@ -960,8 +1004,6 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
 const rustUnconditionallyCopyTargetIds: ReadonlySet<string> = new Set([
   rustNullTargetId,
   rustUndefinedTargetId,
-  rustUsizeTargetId,
-  rustIsizeTargetId,
 ]);
 
 export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -996,9 +1038,7 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
-    return namedType.traits.clone === "always" ||
-      (namedType.traits.clone === "all-type-arguments" &&
-        namedType.typeArguments.every(rustCarrierSupportsClone));
+    return rustNamedTypeSupportsTrait(namedType, "core::clone::Clone");
   }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
   if (structuralObject !== undefined) {
@@ -1009,6 +1049,78 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
     return sourceUnion.variants.every((variant) => rustCarrierSupportsClone(variant.carrier));
   }
   return carrier.target === "rust" && carrier.name === "source-type";
+}
+
+const rustEqHashTraitPaths: ReadonlySet<string> = new Set([
+  "core::cmp::Eq",
+  "core::hash::Hash",
+]);
+
+const rustStringTraitPaths: ReadonlySet<string> = new Set([
+  "core::cmp::Eq",
+  "core::hash::Hash",
+]);
+
+const rustUnconditionallyEqHashTargetIds: ReadonlySet<string> = new Set([
+  rustStringTargetId,
+  rustBigIntTargetId,
+  rustNullTargetId,
+  rustUndefinedTargetId,
+]);
+
+export function rustCarrierSupportsTrait(
+  carrier: TargetTypeRef | undefined,
+  traitPath: string,
+): boolean {
+  if (carrier === undefined) {
+    return false;
+  }
+  if (traitPath === "core::clone::Clone") {
+    return rustCarrierSupportsClone(carrier);
+  }
+  if (traitPath === "core::marker::Copy") {
+    return isRustCopyCarrier(carrier);
+  }
+  if (carrier.kind === "source-primitive") {
+    return carrier.name !== "float32" && carrier.name !== "float64" &&
+      rustEqHashTraitPaths.has(traitPath) &&
+      (carrier.name === "bool" || carrier.name === "char" || isRustIntegerCarrier(carrier));
+  }
+  if (carrier.kind === "target-named" && rustUnconditionallyEqHashTargetIds.has(carrier.id)) {
+    return rustStringTraitPaths.has(traitPath);
+  }
+  if (carrier.kind === "tuple") {
+    return rustEqHashTraitPaths.has(traitPath) &&
+      carrier.elements.every((element) => rustCarrierSupportsTrait(element, traitPath));
+  }
+  if (carrier.kind === "array") {
+    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(carrier.element, traitPath);
+  }
+  const fixedArray = rustFixedArrayCarrierValue(carrier);
+  if (fixedArray !== undefined) {
+    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(fixedArray.element, traitPath);
+  }
+  if (carrier.kind === "target-named" && carrier.id === rustOptionTargetId) {
+    const [element] = carrier.typeArguments ?? [];
+    return rustEqHashTraitPaths.has(traitPath) && element !== undefined &&
+      rustCarrierSupportsTrait(element, traitPath);
+  }
+  const namedType = rustNamedTypeCarrierValue(carrier);
+  if (namedType !== undefined) {
+    return rustNamedTypeSupportsTrait(namedType, traitPath);
+  }
+  return false;
+}
+
+function rustNamedTypeSupportsTrait(
+  namedType: RustNamedTypeCarrierValue,
+  traitPath: string,
+): boolean {
+  return namedType.traits.implementations.some((implementation) =>
+    implementation.traitPath === traitPath && implementation.requirements.every((requirement) => {
+      const argument = namedType.typeArguments[requirement.typeArgumentIndex];
+      return argument !== undefined && rustCarrierSupportsTrait(argument, requirement.traitPath);
+    }));
 }
 
 export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined): boolean {

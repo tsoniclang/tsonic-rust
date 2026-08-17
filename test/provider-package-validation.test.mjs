@@ -552,6 +552,29 @@ test("operation type parameters are declared exactly when their carriers use the
       typeParameters: ["T"],
     }],
   })));
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: int32Carrier,
+      typeParameters: ["T"],
+      targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+    }],
+  })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [{
+        exportId: "@acme/validation::run",
+        operationKind: "method",
+        target: { form: "path", path: "acme_validation::VALUE" },
+        resultCarrier: int32Carrier,
+        typeParameters: ["T"],
+        targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+      }],
+    })),
+    /targetTypeArguments requires a non-empty native call or method/u,
+  );
 });
 
 test("argument permutations and structured constants fail closed when malformed", () => {
@@ -905,7 +928,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
       value: {
         id: "acme.validation.Value",
         path: "acme_validation::Value",
-        traits: { clone: "never", copy: "never" },
+        traits: { implementations: [] },
         typeArguments: [],
       },
     },
@@ -931,14 +954,22 @@ test("provider type relations remain target-owned and require closed Rust paths"
   assert.throws(
     () => createRustProviderPackage({
       ...valid,
-      carrierTraits: { "acme.validation.Missing": { clone: "always", copy: "never" } },
+      carrierTraits: {
+        "acme.validation.Missing": {
+          implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+        },
+      },
     }),
     /carrier trait contract 'acme\.validation\.Missing' has no rendered carrier path/u,
   );
   assert.throws(
     () => createRustProviderPackage({
       ...valid,
-      carrierTraits: { "acme.validation.Value": { clone: "never", copy: "always" } },
+      carrierTraits: {
+        "acme.validation.Value": {
+          implementations: [{ traitPath: "core::marker::Copy", requirements: [] }],
+        },
+      },
     }),
     /invalid native trait contract/u,
   );

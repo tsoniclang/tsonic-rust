@@ -250,6 +250,7 @@ export interface RustProviderOperationTemplate<
   readonly receiverCarrier?: TargetTypeRef;
   readonly typeParameters?: readonly string[];
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
+  readonly targetTypeArguments?: readonly TargetTypeRef[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;

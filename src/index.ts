@@ -139,8 +139,6 @@ export {
   rustStringTargetId,
   rustStringTargetType,
   rustUnitTargetType,
-  rustUsizeTargetId,
-  rustUsizeTargetType,
   rustVecTargetType,
   sameRustPrimitiveCarrier,
 } from "./source/rust-target-types.js";

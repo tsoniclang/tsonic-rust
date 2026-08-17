@@ -23,21 +23,12 @@ import {
 } from "../../source/rust-source-semantics/source-modules.js";
 import {
   rustFixedArrayTargetType,
-  rustIsizeTargetType,
   rustOptionTargetId,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
-  rustUsizeTargetType,
 } from "../../source/rust-target-types.js";
 import type { RustNamedTypeTraitContract } from "../../source/rust-target-types.js";
-import {
-  rustStdCollectionsModule,
-  rustStdHashMapTargetId,
-  rustStdHashSetTargetId,
-  rustStdVecModule,
-  rustStdVecTargetId,
-} from "./std-catalog.js";
 import type {
   RustCompilerDependency,
   RustCompilerExport,
@@ -45,6 +36,8 @@ import type {
   RustCompilerModuleModel,
   RustCompilerType,
   RustCompilerTypeParameter,
+  RustCompilerTypeTraits,
+  RustCompilerStandardTypeLocation,
 } from "./model.js";
 
 export interface RustCompilerProviderProjection {
@@ -68,12 +61,16 @@ interface ProjectionContext {
   readonly imports: Map<string, Set<string>>;
   readonly carrierPaths: Map<string, string>;
   readonly carrierTraits: Map<string, RustNamedTypeTraitContract>;
+  readonly standardTypes: ReadonlyMap<string, RustCompilerStandardTypeLocation>;
+  readonly localStandardTypeNames: ReadonlyMap<string, string>;
   readonly currentType?: {
     readonly exportId: string;
     readonly name: string;
     readonly carrier: TargetTypeRef;
     readonly sourceType: ProviderTypeExpression;
     readonly typeParameters: readonly string[];
+    readonly canonicalPath: readonly string[];
+    readonly targetPath: readonly string[];
   };
 }
 
@@ -89,6 +86,8 @@ const sourcePrimitiveByRustName = new Map<string, Parameters<typeof rustSourcePr
   ["u64", "uint64"],
   ["i128", "int128"],
   ["u128", "uint128"],
+  ["isize", "native-int"],
+  ["usize", "native-uint"],
   ["f32", "float32"],
   ["f64", "float64"],
 ]);
@@ -106,6 +105,14 @@ export function projectRustCompilerModule(
   const types: RustProviderTypeDefinition[] = [];
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
+  const standardTypes = new Map(module.standardTypeLocations.map((location) => [
+    canonicalPathKey(location.canonicalPath),
+    location,
+  ]));
+  const localStandardTypeNames = new Map(module.exports
+    .filter((exported) => exported.kind === "struct" || exported.kind === "enum" ||
+      exported.kind === "union" || exported.kind === "type-alias")
+    .map((exported) => [canonicalPathKey(exported.canonicalPath), exported.name]));
   for (const exported of module.exports) {
     const projected = projectExport(exported, {
       dependency: module.dependency,
@@ -114,6 +121,8 @@ export function projectRustCompilerModule(
       imports,
       carrierPaths,
       carrierTraits,
+      standardTypes,
+      localStandardTypeNames,
     });
     declarations.push(projected.declaration);
     operations.push(...projected.operations);
@@ -151,7 +160,7 @@ function projectExport(
     const sourceType = sourceTypeFor(exported.type, context, "result");
     const targetCarrier = targetTypeFor(exported.type, context, "result");
     const memberId = `${exportId}::static-value`;
-    const path = rustPath(context.dependency.targetCrateName, context.modulePath, exported.name);
+    const path = exported.targetPath.join("::");
     return {
       declaration: Object.freeze({
         id: exportId,
@@ -203,7 +212,7 @@ function projectExport(
         operationKind: "property",
         target: {
           form: "path",
-          path: rustPath(context.dependency.targetCrateName, context.modulePath, exported.name),
+          path: exported.targetPath.join("::"),
         },
         resultCarrier: targetCarrier,
         ...(exported.kind === "static" && exported.unsafe ? { isUnsafe: true } : {}),
@@ -211,7 +220,7 @@ function projectExport(
     };
   }
   if (exported.kind === "function") {
-    const projected = projectFunction(exported.function, context, exportId, false);
+    const projected = projectFunction(exported.function, context, exportId, false, exported.targetPath);
     return {
       declaration: Object.freeze({
         id: exportId,
@@ -224,7 +233,7 @@ function projectExport(
     };
   }
   if (exported.kind === "type-alias") {
-    const typeParameterNames = exported.typeParameters.map((parameter) => parameter.name);
+    const typeParameterNames = sourceVisibleTypeParameters(exported.typeParameters).map((parameter) => parameter.name);
     const sourceType = sourceTypeFor(exported.type, context, "result");
     const targetCarrier = targetTypeFor(exported.type, context, "result");
     return {
@@ -242,17 +251,24 @@ function projectExport(
       type: Object.freeze({
         exportId,
         targetCarrier,
-        ...typeRequirements(exported.typeParameters),
+        ...typeRequirements(exported.typeParameters, typeParameterNames),
       }),
     };
   }
-  const typeParameterNames = exported.typeParameters.map((parameter) => parameter.name);
-  const targetPath = rustPath(context.dependency.targetCrateName, context.modulePath, exported.name);
-  const targetTypeId = compilerTargetTypeId(context.dependency, context.modulePath, exported.name);
+  const typeParameterNames = sourceVisibleTypeParameters(exported.typeParameters).map((parameter) => parameter.name);
+  const standardLocation = context.standardTypes.get(canonicalPathKey(exported.canonicalPath));
+  const selectedTargetPath = standardLocation?.targetPath ?? exported.targetPath;
+  const targetPath = selectedTargetPath.join("::");
+  const targetTypeId = standardLocation?.targetId ??
+    compilerTargetTypeId(context.dependency, exported.canonicalPath);
   const typeArguments = typeParameterNames.map((name): TargetTypeRef => ({ kind: "type-parameter", name }));
   const sourceTypeArguments = typeParameterNames.map((name): ProviderTypeExpression => ({ kind: "type-parameter", name }));
   recordCarrierPath(context.carrierPaths, targetTypeId, targetPath);
-  recordCarrierTraits(context.carrierTraits, targetTypeId, exported.traits);
+  recordCarrierTraits(
+    context.carrierTraits,
+    targetTypeId,
+    projectCompilerTraitContract(exported.traits),
+  );
   const typeCarrier: TargetTypeRef = {
     kind: "target-named",
     id: targetTypeId,
@@ -272,9 +288,12 @@ function projectExport(
       carrier: typeCarrier,
       sourceType,
       typeParameters: typeParameterNames,
+      canonicalPath: exported.canonicalPath,
+      targetPath: selectedTargetPath,
     },
   };
-  const nativeEnumDeclaration = exported.kind === "enum" && typeParameterNames.length === 0 &&
+  const nativeEnumDeclaration = exported.kind === "enum" && exported.variantsComplete &&
+    typeParameterNames.length === 0 &&
     exported.variants.every((variant) => variant.kind === "plain");
   const members: ProviderMemberDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
@@ -297,7 +316,7 @@ function projectExport(
         resultCarrier: targetFieldType,
         receiverCarrier: typeCarrier,
         typeParameters: typeParameterNames,
-        ...typeRequirements(exported.typeParameters),
+        ...typeRequirements(exported.typeParameters, typeParameterNames),
         ...(exported.kind === "union" ? { isUnsafe: true } : {}),
       }));
       operations.push(operationRow({
@@ -309,10 +328,10 @@ function projectExport(
         parameterCarriers: [targetFieldType],
         receiverCarrier: typeCarrier,
         typeParameters: typeParameterNames,
-        ...typeRequirements(exported.typeParameters),
+        ...typeRequirements(exported.typeParameters, typeParameterNames),
       }));
     }
-  } else {
+  } else if (exported.variantsComplete) {
     for (const variant of exported.variants) {
       const memberId = `${exportId}::variant:${variant.name}`;
       if (variant.kind === "plain") {
@@ -328,11 +347,11 @@ function projectExport(
           operationKind: "property",
           target: {
             form: "path",
-            path: rustPath(context.dependency.targetCrateName, context.modulePath, exported.name, variant.name),
+            path: [...selectedTargetPath, variant.name].join("::"),
           },
           resultCarrier: typeCarrier,
           typeParameters: typeParameterNames,
-          ...typeRequirements(exported.typeParameters),
+          ...typeRequirements(exported.typeParameters, typeParameterNames),
         }));
         continue;
       }
@@ -352,6 +371,9 @@ function projectExport(
           name: variant.name,
           parameters: Object.freeze(parameters),
           returnType: sourceType,
+          ...(typeParameterNames.length === 0
+            ? {}
+            : { typeParameters: Object.freeze(typeParameterNames.map((name) => Object.freeze({ name }))) }),
         })]),
       }));
       operations.push(operationRow({
@@ -361,20 +383,25 @@ function projectExport(
         operationKind: "method",
         target: {
           form: "call",
-          path: rustPath(context.dependency.targetCrateName, context.modulePath, exported.name, variant.name),
+          path: [...exported.targetPath, variant.name].join("::"),
         },
         resultCarrier: typeCarrier,
         parameterCarriers,
         typeParameters: typeParameterNames,
-        ...typeRequirements(exported.typeParameters),
+        ...typeRequirements(exported.typeParameters, typeParameterNames),
       }));
     }
   }
   for (const method of exported.methods) {
+    const methodTypeParameters = method.typeParameters.map((parameter) => parameter.name);
+    const allowedMethodTypeParameters = new Set([...typeParameterNames, ...methodTypeParameters]);
+    if (!compilerFunctionUsesOnlyTypeParameters(method, allowedMethodTypeParameters)) {
+      continue;
+    }
     const result = compilerFunctionResult(method.result);
     const constructor = exported.kind === "struct" && method.receiver === undefined &&
-      method.name === "new" && result.type.kind === "self";
-    const projected = projectFunction(method, typeContext, exportId, constructor);
+      method.name === "new" && rustCompilerTypeNamesCurrentType(result.type, typeContext);
+    const projected = projectFunction(method, typeContext, exportId, constructor, selectedTargetPath);
     members.push(Object.freeze({
       id: projected.memberId!,
       name: constructor ? "constructor" : method.name,
@@ -400,9 +427,44 @@ function projectExport(
     type: Object.freeze({
       exportId,
       targetCarrier: typeCarrier,
-      ...typeRequirements(exported.typeParameters),
+      ...typeRequirements(exported.typeParameters, typeParameterNames),
     }),
   };
+}
+
+function compilerFunctionUsesOnlyTypeParameters(
+  fn: RustCompilerFunction,
+  allowed: ReadonlySet<string>,
+): boolean {
+  return fn.parameters.every((parameter) => compilerTypeUsesOnlyTypeParameters(parameter.type, allowed)) &&
+    compilerTypeUsesOnlyTypeParameters(fn.result, allowed);
+}
+
+function compilerTypeUsesOnlyTypeParameters(
+  type: RustCompilerType,
+  allowed: ReadonlySet<string>,
+): boolean {
+  switch (type.kind) {
+    case "generic":
+      return allowed.has(type.name);
+    case "tuple":
+      return type.elements.every((element) => compilerTypeUsesOnlyTypeParameters(element, allowed));
+    case "array":
+    case "slice":
+      return compilerTypeUsesOnlyTypeParameters(type.element, allowed);
+    case "reference":
+    case "raw-pointer":
+      return compilerTypeUsesOnlyTypeParameters(type.target, allowed);
+    case "function-pointer":
+      return type.parameters.every((parameter) => compilerTypeUsesOnlyTypeParameters(parameter, allowed)) &&
+        compilerTypeUsesOnlyTypeParameters(type.result, allowed);
+    case "path":
+      return type.typeArguments.every((argument) => compilerTypeUsesOnlyTypeParameters(argument, allowed));
+    case "unit":
+    case "primitive":
+    case "self":
+      return true;
+  }
 }
 
 function projectFunction(
@@ -410,6 +472,7 @@ function projectFunction(
   context: ProjectionContext,
   exportId: string,
   constructor: boolean,
+  ownerTargetPath: readonly string[],
 ): {
   readonly memberId?: string;
   readonly signature: ProviderSignatureDeclaration;
@@ -444,26 +507,35 @@ function projectFunction(
     ? requireCurrentType(context).carrier
     : targetTypeFor(result.type, context, "result");
   const returnType = constructor ? undefined : sourceTypeFor(result.type, context, "result");
-  const methodTypeParameters = fn.typeParameters.map((parameter) => parameter.name);
+  const methodTypeParameters = uniqueText([
+    ...(context.currentType !== undefined && fn.receiver === undefined && !constructor
+      ? context.currentType.typeParameters
+      : []),
+    ...fn.typeParameters.map((parameter) => parameter.name),
+  ]);
   const allTypeParameters = uniqueText([
     ...(context.currentType?.typeParameters ?? []),
     ...methodTypeParameters,
   ]);
+  const targetTypeArguments = Object.freeze(fn.typeParameters.map(({ name }): TargetTypeRef => Object.freeze({
+    kind: "type-parameter",
+    name,
+  })));
   if (fn.variadic && (context.currentType !== undefined || fn.receiver !== undefined)) {
     throw new Error(`Rust C-variadic function '${fn.name}' must be one free provider function.`);
   }
   const target = fn.variadic
     ? {
         form: "call-c-variadic" as const,
-        path: rustPath(context.dependency.targetCrateName, context.modulePath, fn.name),
+        path: ownerTargetPath.join("::"),
         fixedArgumentModes: argumentModes,
       }
     : context.currentType === undefined || fn.receiver === undefined
     ? {
         form: "call" as const,
-        path: rustPath(context.dependency.targetCrateName, context.modulePath, ...(context.currentType === undefined
-          ? [fn.name]
-          : [context.currentType.name, fn.name])),
+        path: context.currentType === undefined
+          ? ownerTargetPath.join("::")
+          : [...ownerTargetPath, fn.name].join("::"),
         ...(argumentModes.every((mode) => mode === "value") ? {} : { argModes: argumentModes }),
       }
     : {
@@ -484,7 +556,8 @@ function projectFunction(
       ? {}
       : { receiverCarrier: context.currentType.carrier }),
     ...(allTypeParameters.length === 0 ? {} : { typeParameters: allTypeParameters }),
-    ...typeRequirements(fn.typeRequirements),
+    ...typeRequirements(fn.typeRequirements, allTypeParameters),
+    ...(targetTypeArguments.length === 0 ? {} : { targetTypeArguments }),
     ...(fn.asynchronous ? { isAsync: true as const } : {}),
     ...(fn.unsafe ? { isUnsafe: true as const } : {}),
   };
@@ -527,17 +600,7 @@ function compilerFunctionResult(type: RustCompilerType): {
   if (type.kind === "path" && isTsonicResultPath(type)) {
     return { type: type.typeArguments[0]!, fallible: true };
   }
-  if (type.kind !== "path" || !isRustResultPath(type)) {
-    return { type, fallible: false };
-  }
-  const [success, error] = type.typeArguments;
-  if (success === undefined || error === undefined || !isTsonicErrorPath(error)) {
-    throw new Error(
-      `Rust result '${rustCompilerTypeText(type)}' cannot cross the source boundary; ` +
-      "fallible compiler-provider functions must use tsonic_rust_runtime::TsonicResult<T>.",
-    );
-  }
-  return { type: success, fallible: true };
+  return { type, fallible: false };
 }
 
 function isTsonicResultPath(type: Extract<RustCompilerType, { readonly kind: "path" }>): boolean {
@@ -546,23 +609,6 @@ function isTsonicResultPath(type: Extract<RustCompilerType, { readonly kind: "pa
     type.modulePath[0] === "error" &&
     type.name === "TsonicResult" &&
     type.typeArguments.length === 1;
-}
-
-function isRustResultPath(type: Extract<RustCompilerType, { readonly kind: "path" }>): boolean {
-  return type.crateName === "core" &&
-    type.modulePath.length === 1 &&
-    type.modulePath[0] === "result" &&
-    type.name === "Result" &&
-    type.typeArguments.length === 2;
-}
-
-function isTsonicErrorPath(type: RustCompilerType): boolean {
-  return type.kind === "path" &&
-    type.crateName === "tsonic_rust_runtime" &&
-    type.modulePath.length === 1 &&
-    type.modulePath[0] === "error" &&
-    type.name === "TsonicError" &&
-    type.typeArguments.length === 0;
 }
 
 function sourceTypeFor(
@@ -582,12 +628,6 @@ function sourceTypeFor(
     case "primitive": {
       if (type.name === "str") {
         return { kind: "string" };
-      }
-      if (type.name === "isize") {
-        return { kind: "source-primitive", name: "native-int" };
-      }
-      if (type.name === "usize") {
-        return { kind: "source-primitive", name: "native-uint" };
       }
       const primitive = sourcePrimitiveByRustName.get(type.name);
       if (primitive === undefined) {
@@ -625,9 +665,24 @@ function sourceTypeFor(
       if (isRustStringPath(type)) {
         return { kind: "string" };
       }
-      const standard = standardSourceType(type, context, position);
+      if (isRustOptionPath(type)) {
+        const arguments_ = type.typeArguments.map((argument) =>
+          sourceTypeFor(argument, context, position));
+        if (arguments_.length !== 1) {
+          throw new Error("Rust Option must carry exactly one source type argument.");
+        }
+        return { kind: "union", types: [arguments_[0]!, { kind: "undefined" }] };
+      }
+      const standard = context.standardTypes.get(canonicalCompilerTypePathKey(type));
       if (standard !== undefined) {
-        return standard;
+        const typeArguments = standardSourceTypeArguments(type, standard, context, position);
+        const localName = context.localStandardTypeNames.get(canonicalCompilerTypePathKey(type));
+        return importedSourceType(
+          context,
+          localName === undefined ? standard.sourceModuleSpecifier : context.owner.moduleSpecifier,
+          localName ?? standard.sourceExportName,
+          typeArguments,
+        );
       }
       if (type.crateName !== context.dependency.crateName) {
         throw new Error(`External Rust type '${rustCompilerTypeText(type)}' has no imported provider contract.`);
@@ -668,12 +723,6 @@ function targetTypeFor(
       if (type.name === "str") {
         return rustStringTargetType();
       }
-      if (type.name === "isize") {
-        return rustIsizeTargetType();
-      }
-      if (type.name === "usize") {
-        return rustUsizeTargetType();
-      }
       const primitive = sourcePrimitiveByRustName.get(type.name);
       if (primitive === undefined) {
         throw new Error(`Rust primitive '${type.name}' has no target carrier contract.`);
@@ -712,14 +761,30 @@ function targetTypeFor(
       if (isRustStringPath(type)) {
         return rustStringTargetType();
       }
-      const standard = standardTargetType(type, context, position);
+      if (isRustOptionPath(type)) {
+        const arguments_ = type.typeArguments.map((argument) =>
+          targetTypeFor(argument, context, position));
+        if (arguments_.length !== 1) {
+          throw new Error("Rust Option must carry exactly one target type argument.");
+        }
+        return { kind: "target-named", id: rustOptionTargetId, typeArguments: arguments_ };
+      }
+      const standard = context.standardTypes.get(canonicalCompilerTypePathKey(type));
       if (standard !== undefined) {
-        return standard;
+        const arguments_ = standardTargetTypeArguments(type, standard, context, position);
+        const path = standard.targetPath.join("::");
+        recordCarrierPath(context.carrierPaths, standard.targetId, path);
+        return {
+          kind: "target-named",
+          id: standard.targetId,
+          ...(arguments_.length === 0 ? {} : { typeArguments: arguments_ }),
+        };
       }
       if (type.crateName !== context.dependency.crateName) {
         throw new Error(`External Rust type '${rustCompilerTypeText(type)}' has no target carrier contract.`);
       }
-      const id = compilerTargetTypeId(context.dependency, type.modulePath, type.name);
+      const canonicalPath = [type.crateName, ...type.modulePath, type.name];
+      const id = compilerTargetTypeId(context.dependency, canonicalPath);
       const path = rustPath(context.dependency.targetCrateName, type.modulePath, type.name);
       recordCarrierPath(context.carrierPaths, id, path);
       const typeArguments = type.typeArguments.map((argument) =>
@@ -782,17 +847,47 @@ function recordCarrierTraits(
   if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(contract)) {
     throw new Error(`Rust compiler target carrier '${id}' has conflicting native trait contracts.`);
   }
-  traits.set(id, Object.freeze({ ...contract }));
+  traits.set(id, contract);
+}
+
+function projectCompilerTraitContract(
+  contract: RustCompilerTypeTraits,
+): RustNamedTypeTraitContract {
+  const implementations = contract.implementations.map((implementation) => Object.freeze({
+    traitPath: compilerRequirementTraitPath(implementation.trait),
+    requirements: Object.freeze(implementation.requirements.map((requirement) => Object.freeze({
+      typeArgumentIndex: requirement.typeArgumentIndex,
+      traitPath: compilerRequirementTraitPath(requirement.requirement),
+    })).sort((left, right) =>
+      left.typeArgumentIndex - right.typeArgumentIndex || compareText(left.traitPath, right.traitPath))),
+  })).sort((left, right) => compareText(
+    `${left.traitPath}\0${JSON.stringify(left.requirements)}`,
+    `${right.traitPath}\0${JSON.stringify(right.requirements)}`,
+  ));
+  return Object.freeze({ implementations: Object.freeze(implementations) });
+}
+
+function compilerRequirementTraitPath(
+  requirement: RustCompilerTypeParameter["requirements"][number],
+): string {
+  return requirement === "clone"
+    ? "core::clone::Clone"
+    : requirement === "copy"
+      ? "core::marker::Copy"
+      : requirement.path;
 }
 
 function typeRequirements(
   parameters: readonly RustCompilerTypeParameter[],
+  allowedTypeParameters: readonly string[],
 ): { readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[] } {
+  const allowed = new Set(allowedTypeParameters);
   const requirements = parameters
-    .filter((parameter) => parameter.requirements.length > 0)
+    .filter((parameter) => allowed.has(parameter.name) && parameter.requirements.length > 0)
     .map((parameter) => Object.freeze({
       name: parameter.name,
-      requirements: Object.freeze([...parameter.requirements].sort(compareText)),
+      requirements: Object.freeze([...parameter.requirements]
+        .sort((left, right) => compareText(typeRequirementKey(left), typeRequirementKey(right)))),
     }))
     .sort((left, right) => compareText(left.name, right.name));
   return requirements.length === 0
@@ -832,8 +927,11 @@ function compilerExportId(dependency: RustCompilerDependency, modulePath: readon
   return `${dependency.packageId}::${[...modulePath, name].join("::")}`;
 }
 
-function compilerTargetTypeId(dependency: RustCompilerDependency, modulePath: readonly string[], name: string): string {
-  return `rust.cargo.${digestText(dependency.packageId).slice(0, 24)}.${[...modulePath, name].join(".")}`;
+function compilerTargetTypeId(
+  dependency: RustCompilerDependency,
+  canonicalPath: readonly string[],
+): string {
+  return `rust.cargo.${digestText(dependency.packageId).slice(0, 24)}.${canonicalPath.join(".")}`;
 }
 
 function rustPath(crateName: string, modulePath: readonly string[], ...tail: readonly string[]): string {
@@ -889,107 +987,96 @@ function isRustStringPath(type: Extract<RustCompilerType, { readonly kind: "path
     type.typeArguments.length === 0;
 }
 
-function standardSourceType(
-  type: Extract<RustCompilerType, { readonly kind: "path" }>,
-  context: ProjectionContext,
-  position: "parameter" | "result",
-): ProviderTypeExpression | undefined {
-  const kind = rustStandardTypeKind(type);
-  if (kind === undefined) {
-    return undefined;
-  }
-  const arguments_ = type.typeArguments.map((argument) => sourceTypeFor(argument, context, position));
-  switch (kind) {
-    case "option":
-      return arguments_.length === 1
-        ? { kind: "union", types: [arguments_[0]!, { kind: "undefined" }] }
-        : undefined;
-    case "vec":
-      if (arguments_.length !== 1) {
-        return undefined;
-      }
-      {
-        const names = context.imports.get(rustStdVecModule) ?? new Set<string>();
-        names.add("Vec");
-        context.imports.set(rustStdVecModule, names);
-      }
-      return {
-        kind: "provider-ref",
-        moduleSpecifier: rustStdVecModule,
-        exportName: "Vec",
-        typeArguments: arguments_,
-      };
-    case "hash-map":
-    case "hash-set": {
-      const exportName = kind === "hash-map" ? "HashMap" : "HashSet";
-      const names = context.imports.get(rustStdCollectionsModule) ?? new Set<string>();
-      names.add(exportName);
-      context.imports.set(rustStdCollectionsModule, names);
-      return {
-        kind: "provider-ref",
-        moduleSpecifier: rustStdCollectionsModule,
-        exportName,
-        typeArguments: arguments_,
-      };
-    }
-  }
+function isRustOptionPath(type: Extract<RustCompilerType, { readonly kind: "path" }>): boolean {
+  return type.crateName === "core" &&
+    type.modulePath.length === 1 &&
+    type.modulePath[0] === "option" &&
+    type.name === "Option" &&
+    type.typeArguments.length === 1;
 }
 
-function standardTargetType(
+function standardSourceTypeArguments(
   type: Extract<RustCompilerType, { readonly kind: "path" }>,
+  location: RustCompilerStandardTypeLocation,
   context: ProjectionContext,
   position: "parameter" | "result",
-): TargetTypeRef | undefined {
-  const kind = rustStandardTypeKind(type);
-  if (kind === undefined) {
-    return undefined;
-  }
-  const arguments_ = type.typeArguments.map((argument) => targetTypeFor(argument, context, position));
-  switch (kind) {
-    case "option":
-      return arguments_.length === 1
-        ? { kind: "target-named", id: rustOptionTargetId, typeArguments: arguments_ }
-        : undefined;
-    case "vec":
-      if (arguments_.length !== 1) {
-        return undefined;
-      }
-      recordCarrierPath(context.carrierPaths, rustStdVecTargetId, "std::vec::Vec");
-      return { kind: "target-named", id: rustStdVecTargetId, typeArguments: arguments_ };
-    case "hash-map":
-    case "hash-set": {
-      const id = kind === "hash-map" ? rustStdHashMapTargetId : rustStdHashSetTargetId;
-      const path = kind === "hash-map" ? "std::collections::HashMap" : "std::collections::HashSet";
-      recordCarrierPath(context.carrierPaths, id, path);
-      return { kind: "target-named", id, typeArguments: arguments_ };
-    }
-  }
+): readonly ProviderTypeExpression[] {
+  const count = requireStandardSourceTypeArgumentCount(type, location);
+  return Object.freeze(type.typeArguments.slice(0, count)
+    .map((argument) => sourceTypeFor(argument, context, position)));
 }
 
-type RustStandardTypeKind = "option" | "vec" | "hash-map" | "hash-set";
-
-const rustStandardTypePolicies: readonly {
-  readonly kind: RustStandardTypeKind;
-  readonly crateName: string;
-  readonly modulePath: readonly string[];
-  readonly name: string;
-  readonly arity: number;
-}[] = Object.freeze([
-  { kind: "option", crateName: "core", modulePath: ["option"], name: "Option", arity: 1 },
-  { kind: "vec", crateName: "alloc", modulePath: ["vec"], name: "Vec", arity: 1 },
-  { kind: "hash-map", crateName: "std", modulePath: ["collections", "hash", "map"], name: "HashMap", arity: 2 },
-  { kind: "hash-set", crateName: "std", modulePath: ["collections", "hash", "set"], name: "HashSet", arity: 1 },
-]);
-
-function rustStandardTypeKind(
+function standardTargetTypeArguments(
   type: Extract<RustCompilerType, { readonly kind: "path" }>,
-): RustStandardTypeKind | undefined {
-  return rustStandardTypePolicies.find((policy) =>
-    policy.crateName === type.crateName &&
-    policy.name === type.name &&
-    policy.arity === type.typeArguments.length &&
-    policy.modulePath.length === type.modulePath.length &&
-    policy.modulePath.every((segment, index) => segment === type.modulePath[index]))?.kind;
+  location: RustCompilerStandardTypeLocation,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+): readonly TargetTypeRef[] {
+  const count = requireStandardSourceTypeArgumentCount(type, location);
+  return Object.freeze(type.typeArguments.slice(0, count)
+    .map((argument) => targetTypeFor(argument, context, position)));
+}
+
+function requireStandardSourceTypeArgumentCount(
+  type: Extract<RustCompilerType, { readonly kind: "path" }>,
+  location: RustCompilerStandardTypeLocation,
+): number {
+  const count = location.sourceTypeArgumentCount;
+  if (type.typeArguments.length < count) {
+    throw new Error(
+      `Rust standard-library type '${rustCompilerTypeText(type)}' supplies ${type.typeArguments.length} ` +
+      `type arguments for source arity ${count}.`,
+    );
+  }
+  return count;
+}
+
+function sourceVisibleTypeParameters(
+  parameters: readonly RustCompilerTypeParameter[],
+): readonly RustCompilerTypeParameter[] {
+  const firstDefault = parameters.findIndex((parameter) => parameter.defaultType !== undefined);
+  if (firstDefault < 0) {
+    return parameters;
+  }
+  if (parameters.slice(firstDefault).some((parameter) => parameter.defaultType === undefined)) {
+    throw new Error("Rust default type parameters must form one trailing source-omittable suffix.");
+  }
+  return Object.freeze(parameters.slice(0, firstDefault));
+}
+
+function rustCompilerTypeNamesCurrentType(
+  type: RustCompilerType,
+  context: ProjectionContext,
+): boolean {
+  if (type.kind === "self") {
+    return true;
+  }
+  const current = requireCurrentType(context);
+  if (type.kind !== "path" ||
+    canonicalCompilerTypePathKey(type) !== canonicalPathKey(current.canonicalPath) ||
+    type.typeArguments.length < current.typeParameters.length) {
+    return false;
+  }
+  return current.typeParameters.every((name, index) => {
+    const argument = type.typeArguments[index];
+    return argument?.kind === "generic" && argument.name === name;
+  });
+}
+
+function canonicalCompilerTypePathKey(
+  type: Extract<RustCompilerType, { readonly kind: "path" }>,
+): string {
+  return canonicalPathKey([type.crateName, ...type.modulePath, type.name]);
+}
+
+function canonicalPathKey(path: readonly string[]): string {
+  return path.join("\0");
+}
+
+function typeRequirementKey(
+  requirement: RustCompilerTypeParameter["requirements"][number],
+): string {
+  return typeof requirement === "string" ? requirement : `trait:${requirement.path}`;
 }
 
 function rustCompilerTypeText(type: Extract<RustCompilerType, { readonly kind: "path" }>): string {

@@ -53,11 +53,9 @@ import type {
 import type { RustProviderSemantics } from "../source/provider-packages/index.js";
 import {
   collectRustProviderSemantics,
-  collectRustProviderSemanticsFromDefinitions,
   mergeRustProviderSemantics,
 } from "../source/provider-packages/index.js";
 import { rustBuiltInSourceTypeSemantics } from "../source/rust-target-semantics/built-in-source-types.js";
-import { rustStdProviderDefinition } from "../providers/compiler/std-catalog.js";
 import {
   createRustSafetyApplicationFactIndex,
 } from "./safety/application-fact-index.js";
@@ -123,7 +121,6 @@ export function createRustTranslationContext(
   const diagnostics: TargetDiagnostic[] = [];
   const staticProviderSemantics = mergeRustProviderSemantics(
     rustBuiltInSourceTypeSemantics(),
-    collectRustProviderSemanticsFromDefinitions([rustStdProviderDefinition()]),
     collectRustProviderSemantics(backend),
   );
   const providerSemantics = compilerProviderSemantics === undefined

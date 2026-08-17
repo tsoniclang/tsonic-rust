@@ -13,13 +13,17 @@ import {
   rustFutureTargetType,
   rustSliceRefTargetType,
   rustStringTargetType,
+  rustTargetTypeParameterNames,
 } from "../rust-target-types.js";
 import {
   rustValueConversionContract,
   selectRustSourceValueConversion,
 } from "./value-conversions.js";
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../../common/closed-metadata.js";
-import { rustProviderOperationFormContractViolation } from "./operation-form-contract.js";
+import {
+  rustProviderOperationFormAcceptsTargetTypeArguments,
+  rustProviderOperationFormContractViolation,
+} from "./operation-form-contract.js";
 import type { RustErrorBoundary, RustFallibleErrorBoundary } from "./error-boundary.js";
 import {
   isRustErrorBoundary,
@@ -121,6 +125,7 @@ export interface RustFinalizedOperationAbi {
   readonly sourceArguments: readonly RustFinalizedSourceArgument[];
   readonly targetReceiver: { readonly kind: "none" } | { readonly kind: "input"; readonly input: RustFinalizedSourceInput };
   readonly targetArguments: readonly RustFinalizedTargetInput[];
+  readonly targetTypeArguments: readonly TargetTypeRef[];
   readonly result: RustFinalizedOperationResult;
   readonly effects: {
     readonly invocation: "infallible" | "fallible";
@@ -146,6 +151,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly resultCarrier: TargetTypeRef;
+  readonly targetTypeArguments?: readonly TargetTypeRef[];
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;
   readonly isFallible: boolean;
@@ -168,6 +174,11 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
         new Set(options.compileTimeSourceArgumentIndexes).size !== options.compileTimeSourceArgumentIndexes.length ||
         options.compileTimeSourceArgumentIndexes.some((index) =>
           !Number.isSafeInteger(index) || index < 0 || index >= options.sourceArgumentCarriers.length))) ||
+    (options.targetTypeArguments !== undefined &&
+      (!isDenseDataArray(options.targetTypeArguments) || options.targetTypeArguments.length === 0 ||
+        options.targetTypeArguments.some((carrier) =>
+          !isRustTargetTypeRef(carrier) || rustTargetTypeParameterNames(carrier).length !== 0) ||
+        !rustProviderOperationFormAcceptsTargetTypeArguments(options.form))) ||
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
     (options.isFallible && !isRustFallibleErrorBoundary(options.errorBoundary)) ||
     (!options.isFallible && options.errorBoundary !== undefined) ||
@@ -240,6 +251,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     sourceArguments,
     targetReceiver: mapping.targetReceiver,
     targetArguments: mapping.targetArguments,
+    targetTypeArguments: options.targetTypeArguments ?? [],
     result,
     effects: {
       invocation: options.isFallible && !options.isAsync ? "fallible" : "infallible",
@@ -266,6 +278,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     abi.sourceArguments.length,
     abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex),
   ) !== undefined ||
+    (abi.targetTypeArguments.length > 0 &&
+      !rustProviderOperationFormAcceptsTargetTypeArguments(abi.target)) ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
     (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
     !isRustErrorBoundary(abi.effects.errorBoundary) ||
@@ -388,16 +402,20 @@ function isRustFinalizedOperationAbiShape(value: unknown): value is RustFinalize
     "sourceArguments",
     "targetReceiver",
     "targetArguments",
+    "targetTypeArguments",
     "result",
     "effects",
   ]) || !operationKinds.has(value.operationKind) || !isRecord(value.target) ||
-    !Array.isArray(value.sourceArguments) || !Array.isArray(value.targetArguments)) {
+    !Array.isArray(value.sourceArguments) || !Array.isArray(value.targetArguments) ||
+    !Array.isArray(value.targetTypeArguments)) {
     return false;
   }
   if (!isSourceReceiver(value.sourceReceiver) ||
     !value.sourceArguments.every(isSourceArgument) ||
     !isTargetReceiver(value.targetReceiver) ||
     !value.targetArguments.every(isTargetInput) ||
+    !value.targetTypeArguments.every((carrier) =>
+      isRustTargetTypeRef(carrier) && rustTargetTypeParameterNames(carrier).length === 0) ||
     !isOperationResult(value.result) || !isEffects(value.effects)) {
     return false;
   }

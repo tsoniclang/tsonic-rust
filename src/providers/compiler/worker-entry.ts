@@ -7,8 +7,11 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join } from "node:path";
-import { createRustCompilerProjectSnapshot } from "./cargo-snapshot.js";
+import { basename, dirname, join } from "node:path";
+import {
+  createRustCompilerProjectSnapshot,
+  createRustCompilerStandardLibrarySnapshot,
+} from "./cargo-snapshot.js";
 import { rustCompilerProviderProtocolVersion } from "./model.js";
 import type {
   RustCompilerWorkerRequest,
@@ -18,6 +21,7 @@ import { loadRustCompilerModule } from "./rustdoc.js";
 
 const pollMilliseconds = 20;
 const ownerPollMilliseconds = 1_000;
+let standardLibrarySnapshot: ReturnType<typeof createRustCompilerStandardLibrarySnapshot> | undefined;
 
 const options = readServerOptions(process.argv.slice(2));
 mkdirSync(options.requestsDirectory, { recursive: true });
@@ -84,12 +88,32 @@ function processRequest(request: RustCompilerWorkerRequest): RustCompilerWorkerR
       snapshot: createRustCompilerProjectSnapshot(request.manifestPath),
     };
   }
+  if (request.kind === "standard-snapshot") {
+    return {
+      protocolVersion: rustCompilerProviderProtocolVersion,
+      id: request.id,
+      kind: "snapshot",
+      snapshot: getStandardLibrarySnapshot(),
+    };
+  }
+  const standardSnapshot = getStandardLibrarySnapshot();
+  const standardDependency = standardSnapshot.dependencies.find(({ alias }) => alias === "std");
+  if (standardDependency === undefined) {
+    throw new Error("Rust standard-library snapshot has no canonical 'std' dependency.");
+  }
+  const cargoRoot = dirname(dirname(request.targetDirectory));
   return {
     protocolVersion: rustCompilerProviderProtocolVersion,
     id: request.id,
     kind: "module",
     module: loadRustCompilerModule({
       snapshot: request.snapshot,
+      standardLibrarySnapshot: standardSnapshot,
+      standardLibraryTargetDirectory: join(
+        cargoRoot,
+        standardSnapshot.digest,
+        standardDependency.sourceDigest,
+      ),
       dependency: request.dependency,
       modulePath: request.modulePath,
       ...(request.requestedExports === undefined ? {} : { requestedExports: request.requestedExports }),
@@ -98,19 +122,24 @@ function processRequest(request: RustCompilerWorkerRequest): RustCompilerWorkerR
   };
 }
 
+function getStandardLibrarySnapshot(): ReturnType<typeof createRustCompilerStandardLibrarySnapshot> {
+  standardLibrarySnapshot ??= createRustCompilerStandardLibrarySnapshot();
+  return standardLibrarySnapshot;
+}
+
 function parseRequest(text: string): RustCompilerWorkerRequest {
   const value = JSON.parse(text) as unknown;
   if (!isRecord(value) || value.protocolVersion !== rustCompilerProviderProtocolVersion ||
     typeof value.id !== "string" || value.id.length === 0 ||
-    (value.kind !== "snapshot" && value.kind !== "module")) {
+    (value.kind !== "snapshot" && value.kind !== "standard-snapshot" && value.kind !== "module")) {
     throw new Error("Rust compiler-provider worker received an invalid request envelope.");
   }
   if (value.kind === "snapshot") {
     if (typeof value.manifestPath !== "string" || value.manifestPath.length === 0) {
       throw new Error("Rust compiler-provider snapshot request has no manifest path.");
     }
-  } else if (!isRecord(value.snapshot) || !isRecord(value.dependency) ||
-    !Array.isArray(value.modulePath) || typeof value.targetDirectory !== "string") {
+  } else if (value.kind === "module" && (!isRecord(value.snapshot) || !isRecord(value.dependency) ||
+    !Array.isArray(value.modulePath) || typeof value.targetDirectory !== "string")) {
     throw new Error("Rust compiler-provider module request has an invalid payload.");
   }
   return value as unknown as RustCompilerWorkerRequest;

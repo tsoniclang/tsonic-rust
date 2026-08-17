@@ -29,9 +29,7 @@ import {
   rustPrimitiveTypeName,
   substituteRustTargetTypeParameters,
   rustStringTargetId,
-  rustIsizeTargetId,
   isRustNeverCarrier,
-  rustUsizeTargetId,
 } from "../../source/rust-target-types.js";
 
 const namedCarrierPaths: Readonly<Record<string, string>> = {
@@ -74,12 +72,6 @@ export function rustTypeFromCarrier(
   }
   if (carrier.kind === "target-named" && carrier.id === rustStringTargetId) {
     return { kind: "string" };
-  }
-  if (carrier.kind === "target-named" && carrier.id === rustUsizeTargetId) {
-    return { kind: "primitive", name: "usize" };
-  }
-  if (carrier.kind === "target-named" && carrier.id === rustIsizeTargetId) {
-    return { kind: "primitive", name: "isize" };
   }
   if (carrier.kind === "target-named" && carrier.id === rustCallableTargetId) {
     const [argumentsCarrier, resultCarrier] = carrier.typeArguments ?? [];

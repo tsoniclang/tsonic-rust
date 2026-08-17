@@ -2375,6 +2375,12 @@ function instantiateProviderOperationTemplate<
       ...(template.receiverCarrier === undefined
         ? {}
         : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
+      ...(template.targetTypeArguments === undefined
+        ? {}
+        : {
+            targetTypeArguments: template.targetTypeArguments.map((carrier) =>
+              substituteRustTargetTypeParameters(carrier, bindings)),
+          }),
       typeParameters: [],
       typeRequirements: [],
     },
@@ -2473,6 +2479,9 @@ function finalizeProviderOperationFact(
       ? {}
       : { compileTimeSourceArgumentIndexes: template.compileTimeSourceArgumentIndexes }),
     resultCarrier: template.resultCarrier,
+    ...(template.targetTypeArguments === undefined
+      ? {}
+      : { targetTypeArguments: template.targetTypeArguments }),
     ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
     isAsync: template.isAsync,
     isFallible: template.isFallible,
@@ -4497,6 +4506,7 @@ function providerOperationTemplate<
     ...(row.receiverCarrier === undefined ? {} : { receiverCarrier: row.receiverCarrier }),
     ...(row.typeParameters === undefined ? {} : { typeParameters: row.typeParameters }),
     ...(row.typeRequirements === undefined ? {} : { typeRequirements: row.typeRequirements }),
+    ...(row.targetTypeArguments === undefined ? {} : { targetTypeArguments: row.targetTypeArguments }),
     ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,

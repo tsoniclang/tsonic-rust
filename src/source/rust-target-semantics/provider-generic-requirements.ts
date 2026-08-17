@@ -4,6 +4,7 @@ import type {
 } from "../provider-packages/index.js";
 import {
   isRustCopyCarrier,
+  rustCarrierSupportsTrait,
   rustCarrierSupportsClone,
 } from "../rust-target-types.js";
 
@@ -13,10 +14,15 @@ export function rustProviderGenericRequirementsAreSatisfied(
 ): boolean {
   for (const parameter of requirements ?? []) {
     const carrier = bindings.get(parameter.name);
-    if (carrier === undefined || parameter.requirements.some((requirement) =>
-      requirement === "copy"
-        ? !isRustCopyCarrier(carrier)
-        : !rustCarrierSupportsClone(carrier))) {
+    if (carrier === undefined || parameter.requirements.some((requirement) => {
+      if (requirement === "copy") {
+        return !isRustCopyCarrier(carrier);
+      }
+      if (requirement === "clone") {
+        return !rustCarrierSupportsClone(carrier);
+      }
+      return !rustCarrierSupportsTrait(carrier, requirement.path);
+    })) {
       return false;
     }
   }

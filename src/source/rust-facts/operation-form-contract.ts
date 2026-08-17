@@ -13,6 +13,14 @@ const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;
 const modes = new Set<RustArgumentMode>(["value", "ref", "mut-ref"]);
 
+export function rustProviderOperationFormAcceptsTargetTypeArguments(
+  form: RustProviderOperationForm,
+): boolean {
+  return form.form === "call" || form.form === "free-call" || form.form === "method" ||
+    form.form === "receiver-method" || form.form === "arg-method" ||
+    form.form === "arg-receiver-method";
+}
+
 export function rustProviderOperationFormContractViolation(
   operationKind: RustFinalizedOperationKind,
   form: RustProviderOperationForm,

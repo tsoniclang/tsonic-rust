@@ -89,6 +89,11 @@ test("generated lint exceptions have one explicit policy owner", () => {
 });
 
 test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
+  assert.throws(
+    () => statSync(join(sourceRoot, "providers/compiler/std-catalog.ts")),
+    /ENOENT/u,
+    "the retired hand-maintained standard-library catalog must remain deleted",
+  );
   for (const { path, text } of sourceFiles) {
     if (path.includes("/providers/compiler/")) {
       continue;

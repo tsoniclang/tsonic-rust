@@ -15,6 +15,11 @@ export type RustCompilerWorkerRequest =
   | {
       readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
       readonly id: string;
+      readonly kind: "standard-snapshot";
+    }
+  | {
+      readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
+      readonly id: string;
       readonly kind: "module";
       readonly snapshot: RustCompilerProjectSnapshot;
       readonly dependency: RustCompilerDependency;

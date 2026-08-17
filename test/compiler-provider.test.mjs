@@ -7,6 +7,7 @@ import {
   cpSync,
   mkdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -20,6 +21,9 @@ import {
 import {
   rustCompilerProviderProtocolVersion,
 } from "../dist/providers/compiler/model.js";
+import {
+  verifyRustCompilerStandardLibraryMetadata,
+} from "../dist/providers/compiler/cargo-snapshot.js";
 import {
   compileRustThroughTargetPack,
   createRustSession,
@@ -53,18 +57,23 @@ test("compiler provider rejects Rust scalar char instead of conflating it with n
       kind: "function",
       id: "char_contract::identity",
       name: "identity",
+      canonicalPath: ["char_contract", "identity"],
+      targetPath: ["char_contract", "identity"],
       function: {
         id: "char_contract::identity",
         name: "identity",
         parameters: [{ name: "value", type: { kind: "primitive", name: "char" } }],
         result: { kind: "primitive", name: "char" },
         typeParameters: [],
+        typeRequirements: [],
         asynchronous: false,
         unsafe: false,
         abi: "Rust",
+        variadic: false,
       },
     }],
     unsupportedExports: [],
+    standardTypeLocations: [],
   };
 
   assert.throws(
@@ -76,7 +85,78 @@ test("compiler provider rejects Rust scalar char instead of conflating it with n
   );
 });
 
-test("compiler worker reflects exact Cargo aliases, features, slices, and one cached rustdoc artifact", { timeout: 300_000 }, () => {
+test("compiler provider retains incomplete Rust enums as opaque native types", () => {
+  const dependency = {
+    alias: "opaque_enum",
+    packageId: "opaque-enum 1.0.0",
+    packageName: "opaque-enum",
+    packageVersion: "1.0.0",
+    crateName: "opaque_enum",
+    targetCrateName: "opaque_enum",
+    manifestPath: "/opaque-enum/Cargo.toml",
+    sourceRoot: "/opaque-enum",
+    sourceDigest: "opaque-enum",
+    closurePackageIds: ["opaque-enum 1.0.0"],
+    features: [],
+  };
+  const projection = projectRustCompilerModule({
+    protocolVersion: rustCompilerProviderProtocolVersion,
+    projectDigest: "opaque-enum",
+    dependency,
+    modulePath: [],
+    exports: [{
+      kind: "enum",
+      id: "opaque_enum::Mode",
+      name: "Mode",
+      canonicalPath: ["opaque_enum", "Mode"],
+      targetPath: ["opaque_enum", "Mode"],
+      typeParameters: [],
+      variantsComplete: false,
+      variants: [],
+      methods: [],
+      unsupportedMembers: [{ kind: "variant", name: "Hidden", reason: "stripped by rustdoc" }],
+      traits: { implementations: [] },
+    }],
+    unsupportedExports: [],
+    standardTypeLocations: [],
+  }, {
+    providerModuleId: "opaque-enum",
+    moduleSpecifier: "@tsonic/rust/crates/opaque_enum/index.js",
+  });
+
+  assert.deepEqual(
+    projection.declarationModel.exports.map(({ kind, name }) => ({ kind, name })),
+    [{ kind: "class", name: "Mode" }],
+  );
+  assert.deepEqual(projection.operations, []);
+  assert.deepEqual([...projection.carrierPaths.values()], ["opaque_enum::Mode"]);
+});
+
+test("standard-library metadata snapshots fail closed after exact artifact mutation", () => {
+  const root = uniquePath("standard-metadata");
+  const artifactPath = resolve(root, "libstd-proof.rmeta");
+  mkdirSync(root, { recursive: true });
+  writeFileSync(artifactPath, "original");
+  const artifactStat = statSync(artifactPath);
+  const snapshot = {
+    kind: "standard-library",
+    metadataArtifacts: [{
+      crateName: "std",
+      path: artifactPath,
+      byteLength: artifactStat.size,
+      modifiedMilliseconds: artifactStat.mtimeMs,
+      digest: "not-consumed-by-mutation-check",
+    }],
+  };
+  verifyRustCompilerStandardLibraryMetadata(snapshot);
+  writeFileSync(artifactPath, "mutated metadata");
+  assert.throws(
+    () => verifyRustCompilerStandardLibraryMetadata(snapshot),
+    /changed after the compiler-provider snapshot was created/u,
+  );
+});
+
+test("compiler worker reflects exact Cargo and standard-library snapshots once per session", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
   const workerRoot = uniquePath("worker-cache");
   const shim = createCargoCountingShim();
@@ -220,13 +300,11 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       modulePath: [],
       requestedExports: ["StructuredMode"],
     });
-    assert.deepEqual(unsupportedModule.exports, []);
-    assert.deepEqual(
-      unsupportedModule.unsupportedExports.map(({ name }) => name),
-      ["StructuredMode"],
-    );
+    assert.deepEqual(unsupportedModule.exports.map(({ name }) => name), ["StructuredMode"]);
+    assert.deepEqual(unsupportedModule.unsupportedExports, []);
     assert.match(
-      unsupportedModule.unsupportedExports.find(({ name }) => name === "StructuredMode")?.reason ?? "",
+      unsupportedModule.exports.find(({ name }) => name === "StructuredMode")?.unsupportedMembers
+        .find(({ name }) => name === "Named")?.reason ?? "",
       /struct payload/u,
     );
     const dangerous = functionModule.exports.find(({ name }) => name === "dangerous");
@@ -323,9 +401,112 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
     });
     assert.match(projection.carrierPaths.values().next().value, /^widget_alias::Widget$/u);
 
+    const standardSnapshot = worker.standardSnapshot();
+    const standardDependency = standardSnapshot.dependencies.find(({ alias }) => alias === "std");
+    assert.ok(standardDependency);
+    const collectionsModule = worker.module({
+      snapshot: standardSnapshot,
+      dependency: standardDependency,
+      modulePath: ["collections"],
+      requestedExports: ["HashMap"],
+    });
+    const hashMap = collectionsModule.exports.find(({ name }) => name === "HashMap");
+    assert.equal(hashMap?.kind, "struct");
+    assert.deepEqual(hashMap.typeParameters.map(({ name, defaultType }) => ({
+      name,
+      hasDefault: defaultType !== undefined,
+    })), [
+      { name: "K", hasDefault: false },
+      { name: "V", hasDefault: false },
+      { name: "S", hasDefault: true },
+      { name: "A", hasDefault: true },
+    ]);
+    assert.ok(hashMap.methods.some(({ name }) => name === "new"));
+    assert.deepEqual(
+      hashMap.methods.find(({ name }) => name === "insert")?.typeRequirements,
+      [{
+        name: "K",
+        requirements: [
+          { kind: "trait", path: "core::cmp::Eq" },
+          { kind: "trait", path: "core::hash::Hash" },
+        ],
+      }],
+    );
+    assert.ok(hashMap.traits.implementations.some(({ trait, requirements }) =>
+      trait.kind === "trait" && trait.path === "core::cmp::Eq" &&
+      requirements.some(({ typeArgumentIndex, requirement }) =>
+        typeArgumentIndex === 0 && requirement.kind === "trait" && requirement.path === "core::hash::Hash")));
+
+    const ioModule = worker.module({
+      snapshot: standardSnapshot,
+      dependency: standardDependency,
+      modulePath: ["io"],
+      requestedExports: ["ErrorKind"],
+    });
+    const errorKind = ioModule.exports.find(({ name }) => name === "ErrorKind");
+    assert.equal(errorKind?.kind, "enum");
+    assert.equal(errorKind.variantsComplete, false);
+    assert.deepEqual(errorKind.variants, []);
+    const ioProjection = projectRustCompilerModule(ioModule, {
+      providerModuleId: compilerProviderModuleId(standardDependency, ["io"]),
+      moduleSpecifier: "@tsonic/rust/std/io.js",
+    });
+    assert.deepEqual(
+      ioProjection.declarationModel.exports.map(({ kind, name }) => ({ kind, name })),
+      [{ kind: "class", name: "ErrorKind" }],
+    );
+
     const cargoCommands = readFileSync(shim.counterPath, "utf8").trim().split("\n");
-    assert.equal(cargoCommands.filter((command) => command === "metadata").length, 1);
-    assert.equal(cargoCommands.filter((command) => command === "rustdoc").length, 1);
+    assert.equal(cargoCommands.filter((command) => command === "metadata").length, 2);
+    assert.equal(
+      cargoCommands.filter((command) => command === "rustdoc").length,
+      4,
+      "the Cargo dependency and each required std/core/alloc rustdoc document are generated once",
+    );
+  } finally {
+    process.env.PATH = originalPath;
+  }
+});
+
+test("compiler worker replaces a corrupt rustdoc cache artifact from its immutable snapshot", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const workerRoot = uniquePath("worker-corrupt-cache");
+  const shim = createCargoCountingShim();
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${shim.directory}:${originalPath ?? ""}`;
+  try {
+    const worker = createRustCompilerWorkerClient(workerRoot);
+    const snapshot = worker.snapshot(project.manifestPath);
+    const dependency = snapshot.dependencies.find(({ alias }) => alias === "widget_alias");
+    assert.ok(dependency);
+    const first = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["Widget"],
+    });
+    assert.deepEqual(first.exports.map(({ name }) => name), ["Widget"]);
+
+    const artifactPath = resolve(
+      workerRoot,
+      "cargo",
+      snapshot.digest,
+      dependency.sourceDigest,
+      "doc",
+      `${dependency.crateName.replace(/-/gu, "_")}.json`,
+    );
+    writeFileSync(artifactPath, "{corrupt rustdoc cache");
+
+    const recovered = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: ["Widget"],
+    });
+    assert.deepEqual(recovered.exports.map(({ name }) => name), ["Widget"]);
+    assert.doesNotThrow(() => JSON.parse(readFileSync(artifactPath, "utf8")));
+    const cargoCommands = readFileSync(shim.counterPath, "utf8").trim().split("\n");
+    assert.equal(cargoCommands.filter((command) => command === "rustdoc").length, 3);
   } finally {
     process.env.PATH = originalPath;
   }
@@ -509,7 +690,7 @@ export function invalid(widget: Widget<int32>): int32 {
   assert.match(rustSourceDiagnostics(unsupportedMember), /Property 'value' does not exist on type 'Widget<number>'/u);
 });
 
-test("compiler provider rejects fallible results with a non-runtime error carrier", { timeout: 300_000 }, () => {
+test("compiler provider keeps native Result separate from the runtime error boundary", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
   const harness = createRustSession({
     target: { id: "rust", options: { projectFile: project.manifestPath } },
@@ -517,10 +698,7 @@ test("compiler provider rejects fallible results with a non-runtime error carrie
       "index.ts": `import { foreign_result } from "@tsonic/rust/crates/widget_alias/index.js";\nexport const selected = foreign_result;\n`,
     },
   });
-  assert.match(
-    rustSourceDiagnostics(harness),
-    /fallible compiler-provider functions must use tsonic_rust_runtime::TsonicResult<T>/u,
-  );
+  assert.equal(rustSourceDiagnostics(harness), "");
 });
 
 test("unsafe Cargo provider calls fail closed without an explicit source unsafe region", { timeout: 300_000 }, () => {
