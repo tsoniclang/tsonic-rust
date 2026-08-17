@@ -18,6 +18,11 @@ pub enum StructuredMode {
 pub static GLOBAL_COUNT: i32 = 1;
 pub static mut MUTABLE_COUNT: i32 = 1;
 
+pub union NumberBits {
+    pub integer: u32,
+    pub float: f32,
+}
+
 pub enum SimpleMode {
     Off,
     On,
@@ -84,6 +89,21 @@ pub fn identity<T>(value: T) -> T {
     value
 }
 
+pub fn cloned<T: Clone>(value: &T) -> T {
+    value.clone()
+}
+
+pub fn copied<T>(value: T) -> T
+where
+    T: Copy,
+{
+    value
+}
+
+pub fn integer_bits(value: u32) -> NumberBits {
+    NumberBits { integer: value }
+}
+
 pub fn maybe_positive(value: i32) -> Option<i32> {
     (value > 0).then_some(value)
 }
@@ -113,6 +133,18 @@ static BYTE: u8 = 23;
 
 pub fn byte_ptr() -> *const u8 {
     &BYTE
+}
+
+static INTEGER_FORMAT: &[u8] = b"%d\0";
+
+pub fn integer_format() -> *const i8 {
+    INTEGER_FORMAT.as_ptr().cast()
+}
+
+#[link(name = "c")]
+unsafe extern "C" {
+    #[link_name = "printf"]
+    pub fn variadic_printf(format: *const i8, ...) -> i32;
 }
 
 pub fn mode_code(mode: Mode) -> i32 {

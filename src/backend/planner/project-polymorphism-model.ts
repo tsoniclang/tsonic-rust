@@ -34,7 +34,7 @@ import type { RustPlanContext } from "./plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
 import { planRustCallableParameters } from "./callable-parameters.js";
 import { createRustSyntheticNameState } from "./synthetic-names.js";
-import { planProjectMethod } from "./declarations-nominal.js";
+import { planProjectMethodVariants } from "./declarations-nominal.js";
 import { rustDeclarationRequiresUnsafe } from "./explicit-safety.js";
 import { rustProjectStateType as rustProjectNamedStateType } from "./project-polymorphism-names.js";
 
@@ -294,11 +294,11 @@ export function planProjectStaticMethods(
     if (!context.input.ast.hasModifierKind(member, "static")) {
       continue;
     }
-    const planned = planProjectMethod(member, context);
+    const planned = planProjectMethodVariants(member, context);
     if (planned === undefined) {
       return undefined;
     }
-    methods.push(planned);
+    methods.push(...planned);
   }
   return methods;
 }

@@ -35,6 +35,7 @@ import {
   projectRustCompilerModule,
 } from "./projection.js";
 import type { RustCompilerProviderProjection } from "./projection.js";
+import type { RustNamedTypeTraitContract } from "../../source/rust-target-types.js";
 import { createRustCompilerWorkerClient } from "./worker-client.js";
 import type { RustCompilerWorkerClient } from "./worker-client.js";
 import {
@@ -184,6 +185,7 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
   const operationsByIdentity = new Map<string, RustProviderOperationDefinition>();
   const typesByIdentity = new Map<string, RustProviderTypeDefinition>();
   const carrierPaths = new Map<string, string>();
+  const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   let sealed = false;
   return Object.freeze({
     add(projection: RustCompilerProviderProjection): void {
@@ -224,6 +226,13 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
         }
         carrierPaths.set(id, path);
       }
+      for (const [id, traits] of projection.carrierTraits) {
+        const existing = carrierTraits.get(id);
+        if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
+          throw new Error(`Rust compiler-provider carrier '${id}' has conflicting native trait contracts.`);
+        }
+        carrierTraits.set(id, traits);
+      }
     },
     semantics(): RustProviderSemantics {
       sealed = true;
@@ -249,6 +258,9 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
         }));
       const carrierPathRecord = Object.fromEntries(
         [...carrierPaths.entries()].sort(([left], [right]) => compareText(left, right)),
+      );
+      const carrierTraitRecord = Object.fromEntries(
+        [...carrierTraits.entries()].sort(([left], [right]) => compareText(left, right)),
       );
       const ownedModuleSpecifiers = new Set(moduleDefinitions.map((module) => module.moduleSpecifier));
       const sourceDependencyNames = new Map<string, Set<string>>();
@@ -286,6 +298,9 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
         ...(Object.keys(carrierPathRecord).length === 0
           ? {}
           : { carrierPaths: Object.freeze(carrierPathRecord) }),
+        ...(Object.keys(carrierTraitRecord).length === 0
+          ? {}
+          : { carrierTraits: Object.freeze(carrierTraitRecord) }),
       });
       return collectRustProviderSemanticsFromDefinitions([definition]);
     },

@@ -71,6 +71,7 @@ import {
   type RustSourceTypeRegistry,
 } from "./source-type-registry.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
+import { rustProviderGenericRequirementsAreSatisfied } from "./provider-generic-requirements.js";
 
 export interface RustTargetTypeResolutionOptions {
   readonly jsEnabled: boolean;
@@ -876,6 +877,9 @@ function instantiateProviderTargetType(
   const substitutions = new Map(
     relation.sourceTypeParameters.map((name, index) => [name, arguments_[index]!] as const),
   );
+  if (!rustProviderGenericRequirementsAreSatisfied(relation.typeRequirements, substitutions)) {
+    return undefined;
+  }
   return substituteRustTargetTypeParameters(relation.targetCarrier, substitutions);
 }
 

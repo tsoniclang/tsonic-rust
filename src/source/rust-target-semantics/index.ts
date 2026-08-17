@@ -769,6 +769,37 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
       }
     }
   }
+  const callableSpecializations = context.sourceCallableSpecializations.initialize({
+    ast,
+    names: context.names,
+    projectTypes,
+  });
+  for (const issue of callableSpecializations.issues) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED",
+      issue.message,
+      issue.subject,
+      ["target.capability=rust.source-callable.finite-specialization"],
+    );
+  }
+  for (const request of callableSpecializations.projectMethodRequests) {
+    const registration = context.projectMethodDispatch.record(
+      request.declaration,
+      request.targetTypeArguments,
+      ast,
+      projectTypes,
+    );
+    if (registration.kind === "rejected") {
+      appendRustDiagnostic(
+        walk,
+        "RUST_PROJECT_METHOD_SPECIALIZATION_UNAVAILABLE",
+        registration.reason,
+        request.declaration,
+        ["target.capability=rust.project-dispatch.finite-generic-specialization"],
+      );
+    }
+  }
   context.projectMethodDispatch.initialize({
     ast,
     names: context.names,
@@ -3977,12 +4008,16 @@ function applySelectedProjectSourceCall(
         return undefined;
       }
       if (polymorphic && ast.typeParameters(selectedDeclaration).length > 0) {
-        const registration = walk.context.projectMethodDispatch.record(
-          selectedDeclaration,
+        const registration = walk.context.sourceCallableSpecializations.recordProjectMethodCall({
+          subject: expression,
+          ...(walk.currentCallableDeclaration === undefined
+            ? {}
+            : { caller: walk.currentCallableDeclaration }),
+          declaration: selectedDeclaration,
           targetTypeArguments,
           ast,
-          walk.context.projectTypes,
-        );
+          projectTypes: walk.context.projectTypes,
+        });
         if (registration.kind === "rejected") {
           appendRustDiagnostic(
             walk,
@@ -4034,6 +4069,28 @@ function applySelectedProjectSourceCall(
   }
   if (target === undefined) {
     return undefined;
+  }
+  if (declarationKind === KindFunctionDeclaration ||
+    declarationKind === "KindMethodDeclaration") {
+    const registration = walk.context.sourceCallableSpecializations.recordSourceCall({
+      subject: expression,
+      ...(walk.currentCallableDeclaration === undefined
+        ? {}
+        : { caller: walk.currentCallableDeclaration }),
+      callee: selectedDeclaration,
+      targetTypeArguments,
+      ast,
+    });
+    if (registration.kind === "rejected") {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SOURCE_CALLABLE_SPECIALIZATION_EVIDENCE_CONFLICT",
+        registration.reason,
+        expression,
+        ["target.capability=rust.source-callable.exact-call-graph"],
+      );
+      return undefined;
+    }
   }
   if (target.form === "callable") {
     const callable = rustCallableProtocol(target.carrier);

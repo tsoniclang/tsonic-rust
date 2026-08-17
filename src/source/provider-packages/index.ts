@@ -62,6 +62,13 @@ export interface RustProviderImmediateCallbackDefinition {
   readonly fallibleTarget: RustProviderOperationForm;
 }
 
+export type RustProviderTypeRequirement = "clone" | "copy";
+
+export interface RustProviderTypeParameterRequirement {
+  readonly name: string;
+  readonly requirements: readonly RustProviderTypeRequirement[];
+}
+
 interface RustProviderOperationDefinitionBase<
   OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
 > {
@@ -74,6 +81,7 @@ interface RustProviderOperationDefinitionBase<
   readonly parameterCarriers?: readonly TargetTypeRef[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly typeParameters?: readonly string[];
+  readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
   readonly resultConversion?: RustValueConversion;
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
@@ -99,6 +107,7 @@ export type RustProviderOperationDefinition<
 export interface RustProviderTypeDefinition {
   readonly exportId: string;
   readonly targetCarrier: TargetTypeRef;
+  readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
 }
 
 export interface RustProviderTypeRow extends RustProviderTypeDefinition {
@@ -515,6 +524,13 @@ function materializeProviderOperationForm(
       ...(argConversions === undefined ? {} : { argConversions }),
     };
   }
+  if (form.form === "call-c-variadic") {
+    return {
+      ...form,
+      path: expandProviderPath(form.path, aliases),
+      fixedArgumentModes: [...form.fixedArgumentModes],
+    };
+  }
   if (form.form === "free-call") {
     return {
       ...form,
@@ -551,7 +567,8 @@ function materializeProviderOperationForm(
       })),
     };
   }
-  if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path") {
+  if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path" ||
+    form.form === "static") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }
   if (form.form === "binary-operator") {

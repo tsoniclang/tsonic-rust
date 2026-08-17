@@ -3767,6 +3767,9 @@ function planProviderOperationExpression(
       registerAliasFromPath(context, form.path);
       return scoped(applyProviderOperationChain({ kind: "call", path: form.path, args }, form.chain));
     }
+    case "call-c-variadic":
+      registerAliasFromPath(context, form.path);
+      return scoped({ kind: "call", path: form.path, args });
     case "call-value-slice":
     case "call-value-array":
     case "call-str-slice":
@@ -3776,6 +3779,10 @@ function planProviderOperationExpression(
       return scoped({ kind: "call", path: form.path, args });
     }
     case "path": {
+      registerAliasFromPath(context, form.path);
+      return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
+    }
+    case "static": {
       registerAliasFromPath(context, form.path);
       return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
     }
@@ -4381,7 +4388,13 @@ function planSelectedSourceCall(
     return undefined;
   }
   const sourceTypeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const targetTypeArgumentCarriers = fact.targetTypeArguments ?? [];
+  const targetTypeArgumentCarriers = (fact.targetTypeArguments ?? []).map((argument) =>
+    context.typeParameterSubstitutions === undefined
+      ? argument
+      : substituteRustTargetTypeParameters(
+          argument,
+          context.typeParameterSubstitutions,
+        ));
   if (sourceTypeArguments.length !== targetTypeArgumentCarriers.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -4400,7 +4413,27 @@ function planSelectedSourceCall(
     ));
     return undefined;
   }
-  const callTypeArguments = targetTypeArguments.length === 0
+  const selectedDeclaration = selected.sourceDeclaration;
+  const requiresCallableSpecialization = selectedDeclaration !== undefined &&
+    context.input.sourceCallableSpecializations.requiresSpecialization(
+      selectedDeclaration,
+    );
+  const callableSpecialization = requiresCallableSpecialization && selectedDeclaration !== undefined
+    ? context.input.sourceCallableSpecializations.variantForCall(
+        selectedDeclaration,
+        targetTypeArgumentCarriers,
+      )
+    : undefined;
+  if (requiresCallableSpecialization && callableSpecialization === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-callable-specialization",
+      "Selected project-source call has no exact finite Rust callable specialization.",
+    ));
+    return undefined;
+  }
+  const callTypeArguments = targetTypeArguments.length === 0 ||
+      callableSpecialization !== undefined
     ? undefined
     : targetTypeArguments as readonly RustType[];
 
@@ -4408,7 +4441,7 @@ function planSelectedSourceCall(
   switch (fact.target.form) {
     case "function": {
       const moduleName = context.moduleNameByFileName.get(fact.target.fileName);
-      const targetName = fact.target.name;
+      const targetName = callableSpecialization?.targetName ?? fact.target.name;
       if (moduleName === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
@@ -4423,7 +4456,9 @@ function planSelectedSourceCall(
       break;
     }
     case "method": {
-      const targetName = fact.target.name;
+      const targetName = fact.target.dispatch === undefined
+        ? callableSpecialization?.targetName ?? fact.target.name
+        : fact.target.name;
       if (!isValidRustIdentifier(targetName)) {
         break;
       }
@@ -4554,7 +4589,7 @@ function planSelectedSourceCall(
     case "static-method": {
       const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-      const targetName = fact.target.name;
+      const targetName = callableSpecialization?.targetName ?? fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
         planned = {
           kind: "call",

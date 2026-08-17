@@ -68,10 +68,29 @@ export function rustProviderOperationFormContractViolation(
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path) && runtimeSourceIndexes.length === 0
         ? undefined
         : "path form must be a zero-argument closed Rust path";
+    case "static":
+      return hasExactKeys(form, ["form", "path"], ["form", "path"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) &&
+          ((operationKind === "property" && runtimeSourceIndexes.length === 0) ||
+            (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
+        ? undefined
+        : "static form must be one closed Rust path with the exact property read/write arity";
     case "call-str-slice":
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path)
         ? undefined
         : "slice-call form must contain one closed Rust path";
+    case "call-c-variadic":
+      return hasExactKeys(
+        form,
+        ["form", "path", "fixedArgumentModes"],
+        ["form", "path", "fixedArgumentModes"],
+      ) && typeof form.path === "string" && rustPathPattern.test(form.path) &&
+        isDenseDataArray(form.fixedArgumentModes) &&
+        form.fixedArgumentModes.every((mode) => modes.has(mode)) &&
+        runtimeSourceIndexes.length === sourceArgumentCount &&
+        sourceArgumentCount >= form.fixedArgumentModes.length
+        ? undefined
+        : "C-variadic call form must contain one path, exact fixed argument modes, and only runtime source arguments";
     case "free-call-str-slice":
       return hasExactKeys(form, ["form", "path", "receiverMode"], ["form", "path", "receiverMode"]) &&
           typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode)
@@ -138,9 +157,11 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "method form must contain one Rust identifier";
     case "field":
-      return hasExactKeys(form, ["form", "name"], ["form", "name"]) && typeof form.name === "string" && rustIdentifierPattern.test(form.name) && runtimeSourceIndexes.length === 0
+      return hasExactKeys(form, ["form", "name"], ["form", "name"]) && typeof form.name === "string" && rustIdentifierPattern.test(form.name) &&
+          ((operationKind === "property" && runtimeSourceIndexes.length === 0) ||
+            (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
         ? undefined
-        : "field form must contain one Rust identifier and no source arguments";
+        : "field form must contain one Rust identifier with the exact property read/write arity";
     case "arg-receiver-method": {
       if (!hasExactKeys(form, ["form", "name", "argModes"], ["form", "name"]) ||
         typeof form.name !== "string" || !rustIdentifierPattern.test(form.name)) {

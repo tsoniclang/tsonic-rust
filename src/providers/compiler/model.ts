@@ -1,4 +1,4 @@
-export const rustCompilerProviderProtocolVersion = 1;
+export const rustCompilerProviderProtocolVersion = 2;
 export const supportedRustdocFormatVersion = 57;
 
 export interface RustCompilerIdentity {
@@ -63,6 +63,14 @@ export type RustCompilerType =
 
 export interface RustCompilerTypeParameter {
   readonly name: string;
+  readonly requirements: readonly RustCompilerTypeRequirement[];
+}
+
+export type RustCompilerTypeRequirement = "clone" | "copy";
+
+export interface RustCompilerTypeTraits {
+  readonly clone: "never" | "always" | "all-type-arguments";
+  readonly copy: "never" | "always" | "all-type-arguments";
 }
 
 export interface RustCompilerParameter {
@@ -76,10 +84,12 @@ export interface RustCompilerFunction {
   readonly parameters: readonly RustCompilerParameter[];
   readonly result: RustCompilerType;
   readonly typeParameters: readonly RustCompilerTypeParameter[];
+  readonly typeRequirements: readonly RustCompilerTypeParameter[];
   readonly receiver?: "value" | "shared" | "mutable";
   readonly asynchronous: boolean;
   readonly unsafe: boolean;
   readonly abi: string;
+  readonly variadic: boolean;
 }
 
 export interface RustCompilerField {
@@ -114,6 +124,7 @@ export type RustCompilerExport =
       readonly name: string;
       readonly type: RustCompilerType;
       readonly unsafe: boolean;
+      readonly mutable: boolean;
     }
   | {
       readonly kind: "function";
@@ -129,6 +140,7 @@ export type RustCompilerExport =
       readonly fields: readonly RustCompilerField[];
       readonly methods: readonly RustCompilerFunction[];
       readonly unsupportedMembers: readonly RustCompilerUnsupportedMember[];
+      readonly traits: RustCompilerTypeTraits;
     }
   | {
       readonly kind: "type-alias";
@@ -145,6 +157,17 @@ export type RustCompilerExport =
       readonly variants: readonly RustCompilerEnumVariant[];
       readonly methods: readonly RustCompilerFunction[];
       readonly unsupportedMembers: readonly RustCompilerUnsupportedMember[];
+      readonly traits: RustCompilerTypeTraits;
+    }
+  | {
+      readonly kind: "union";
+      readonly id: string;
+      readonly name: string;
+      readonly typeParameters: readonly RustCompilerTypeParameter[];
+      readonly fields: readonly RustCompilerField[];
+      readonly methods: readonly RustCompilerFunction[];
+      readonly unsupportedMembers: readonly RustCompilerUnsupportedMember[];
+      readonly traits: RustCompilerTypeTraits;
     };
 
 export interface RustCompilerUnsupportedExport {

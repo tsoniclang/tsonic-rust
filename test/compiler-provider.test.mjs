@@ -111,21 +111,28 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
         "ANSWER",
         "CheckedWidget",
         "GLOBAL_COUNT",
+        "MUTABLE_COUNT",
         "Mode",
+        "NumberBits",
         "Pair",
         "SimpleMode",
         "apply",
         "byte_ptr",
         "checked_double",
+        "cloned",
+        "copied",
         "dangerous",
         "double",
         "featured",
         "fill",
         "first_byte",
+        "integer_bits",
+        "integer_format",
         "mode_code",
         "pair_sum",
         "simple_mode_code",
         "sum",
+        "variadic_printf",
       ],
     });
     assert.deepEqual(
@@ -134,21 +141,28 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
         "ANSWER",
         "CheckedWidget",
         "GLOBAL_COUNT",
+        "MUTABLE_COUNT",
         "Mode",
+        "NumberBits",
         "Pair",
         "SimpleMode",
         "apply",
         "byte_ptr",
         "checked_double",
+        "cloned",
+        "copied",
         "dangerous",
         "double",
         "featured",
         "fill",
         "first_byte",
+        "integer_bits",
+        "integer_format",
         "mode_code",
         "pair_sum",
         "simple_mode_code",
         "sum",
+        "variadic_printf",
       ],
     );
     assert.equal(functionModule.exports.find(({ name }) => name === "ANSWER")?.kind, "constant");
@@ -204,16 +218,12 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       snapshot,
       dependency,
       modulePath: [],
-      requestedExports: ["MUTABLE_COUNT", "StructuredMode"],
+      requestedExports: ["StructuredMode"],
     });
     assert.deepEqual(unsupportedModule.exports, []);
     assert.deepEqual(
       unsupportedModule.unsupportedExports.map(({ name }) => name),
-      ["MUTABLE_COUNT", "StructuredMode"],
-    );
-    assert.match(
-      unsupportedModule.unsupportedExports.find(({ name }) => name === "MUTABLE_COUNT")?.reason ?? "",
-      /explicit location and synchronization contract/u,
+      ["StructuredMode"],
     );
     assert.match(
       unsupportedModule.unsupportedExports.find(({ name }) => name === "StructuredMode")?.reason ?? "",
@@ -241,6 +251,38 @@ test("compiler worker reflects exact Cargo aliases, features, slices, and one ca
       kind: "pointer",
       pointee: { kind: "source-primitive", name: "uint8" },
       mutability: "const",
+    }]);
+    const mutableStaticOperations = functionProjection.operations.filter(
+      ({ exportId }) => exportId.endsWith("::MUTABLE_COUNT"),
+    );
+    assert.deepEqual(
+      mutableStaticOperations.map(({ operationKind, target, isUnsafe }) => ({ operationKind, target, isUnsafe })),
+      [
+        { operationKind: "property", target: { form: "static", path: "widget_alias::MUTABLE_COUNT" }, isUnsafe: true },
+        { operationKind: "property-set", target: { form: "static", path: "widget_alias::MUTABLE_COUNT" }, isUnsafe: true },
+      ],
+    );
+    const numberBits = functionModule.exports.find(({ name }) => name === "NumberBits");
+    assert.equal(numberBits?.kind, "union");
+    assert.deepEqual(numberBits?.fields.map(({ name }) => name), ["float", "integer"]);
+    const variadic = functionProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::variadic_printf"),
+    );
+    assert.deepEqual(variadic?.target, {
+      form: "call-c-variadic",
+      path: "widget_alias::variadic_printf",
+      fixedArgumentModes: ["value"],
+    });
+    assert.equal(variadic?.isUnsafe, true);
+    const cloned = functionModule.exports.find(({ name }) => name === "cloned");
+    assert.deepEqual(cloned?.kind === "function" ? cloned.function.typeRequirements : undefined, [{
+      name: "T",
+      requirements: ["clone"],
+    }]);
+    const copied = functionModule.exports.find(({ name }) => name === "copied");
+    assert.deepEqual(copied?.kind === "function" ? copied.function.typeRequirements : undefined, [{
+      name: "T",
+      requirements: ["copy"],
     }]);
     const checkedDoubleOperation = functionProjection.operations.find(
       ({ exportId }) => exportId.endsWith("::checked_double"),
@@ -295,9 +337,9 @@ test("Cargo provider virtual imports compile, execute, and preserve the user-own
 import type { int32 } from "@tsonic/core/types.js";
 import type { FunctionPointer } from "@tsonic/core/types.js";
 import { unsafeContext } from "@tsonic/core/lang.js";
-import type { constPtr, mutPtr, u8 } from "@tsonic/rust/types.js";
+import type { constPtr, i8, mutPtr, u8 } from "@tsonic/rust/types.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
-import { ANSWER, CheckedWidget, GLOBAL_COUNT, Mode, SimpleMode, Widget, apply, byte_ptr, checked_double, dangerous, double, duplicate, featured, fill, first_byte, identity, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum } from "@tsonic/rust/crates/widget_alias/index.js";
+import { ANSWER, CheckedWidget, GLOBAL_COUNT, MUTABLE_COUNT, Mode, NumberBits, SimpleMode, Widget, apply, byte_ptr, checked_double, cloned, copied, dangerous, double, duplicate, featured, fill, first_byte, identity, integer_bits, integer_format, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 
@@ -354,6 +396,30 @@ export function main(): void {
   if (GLOBAL_COUNT !== 1 || simple_mode_code(SimpleMode.On) !== 1) {
     throw new Error("static or unit enum mapping failed");
   }
+  {
+    unsafeContext();
+    MUTABLE_COUNT.value = 4;
+    if (MUTABLE_COUNT.value !== 4) {
+      throw new Error("mutable static mapping failed");
+    }
+    const bits: NumberBits = integer_bits(6);
+    if (bits.integer !== 6) {
+      throw new Error("union field read mapping failed");
+    }
+    bits.integer = 9;
+    if (bits.integer !== 9) {
+      throw new Error("union field write mapping failed");
+    }
+    const cloneInput = "clone";
+    if (cloned<string>(cloneInput) !== cloneInput || copied<int32>(7) !== 7) {
+      throw new Error("generic provider requirements failed");
+    }
+    const format: constPtr<i8> = integer_format();
+    const variadicValue: int32 = 7;
+    if (variadic_printf(format, variadicValue) !== 1) {
+      throw new Error("C variadic mapping failed");
+    }
+  }
   const pair: Pair<int32> = [4, 5];
   if (pair_sum(pair) !== 9) {
     throw new Error("type alias mapping failed");
@@ -409,6 +475,7 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{[\s\S]*widget_alias::MUTABLE_COUNT = 4;[\s\S]*widget_alias::MUTABLE_COUNT[\s\S]*bits\.integer[\s\S]*widget_alias::variadic_printf\(format, variadic_value\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);
   assert.equal(readFileSync(project.manifestPath, "utf8"), manifestBefore);
   const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
@@ -470,6 +537,41 @@ export function rejected(value: int32): int32 { return dangerous(value); }
   });
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.some(({ code }) => code === "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED"));
+});
+
+test("compiler provider generic requirements and C variadic tails fail closed", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const generic = compileRustThroughTargetPack({
+    target: { id: "rust", options: { projectFile: project.manifestPath } },
+    files: {
+      "index.ts": `
+import { Widget, copied } from "@tsonic/rust/crates/widget_alias/index.js";
+export function rejected(value: Widget<string>): Widget<string> {
+  return copied<Widget<string>>(value);
+}
+`,
+    },
+  });
+  assert.equal(generic.result.artifacts.length, 0);
+  assert.ok(generic.result.diagnostics.some(({ code }) =>
+    code === "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN"));
+
+  const variadic = compileRustThroughTargetPack({
+    target: { id: "rust", options: { projectFile: project.manifestPath } },
+    files: {
+      "index.ts": `
+import { unsafeContext } from "@tsonic/core/lang.js";
+import type { float32, int32 } from "@tsonic/core/types.js";
+import { integer_format, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
+export function rejected(value: float32): int32 {
+  return unsafeContext(variadic_printf(integer_format(), value));
+}
+`,
+    },
+  });
+  assert.equal(variadic.result.artifacts.length, 0);
+  assert.ok(variadic.result.diagnostics.some(({ code }) =>
+    code === "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED"), JSON.stringify(variadic.result.diagnostics));
 });
 
 test("dependency-closure mutation after snapshot is rejected before rustdoc reuse", { timeout: 300_000 }, () => {

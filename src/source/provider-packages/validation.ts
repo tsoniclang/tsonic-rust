@@ -11,7 +11,10 @@ import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
 } from "../../policy/equality.js";
-import type { RustProviderPackageDefinition } from "./index.js";
+import type {
+  RustProviderPackageDefinition,
+  RustProviderTypeParameterRequirement,
+} from "./index.js";
 import type {
   RustProviderConstantArgument,
   RustProviderOperationForm,
@@ -576,7 +579,7 @@ function validateTypeRelations(
 ): void {
   const relatedExports = new Set<string>();
   for (const relation of definition.types ?? []) {
-    requireExactKeys(asRecord(relation), ["exportId", "targetCarrier"], "type relation", fail);
+    requireExactKeys(asRecord(relation), ["exportId", "targetCarrier", "typeRequirements"], "type relation", fail);
     requireNonEmpty(relation.exportId, "type relation export id", fail);
     const exported = exportsById.get(relation.exportId)?.declaration;
     if (exported === undefined) {
@@ -591,6 +594,12 @@ function validateTypeRelations(
     }
     const sourceTypeParameters = new Set(
       (exported.typeParameters ?? []).map((parameter) => parameter.name),
+    );
+    validateTypeParameterRequirements(
+      relation.typeRequirements,
+      sourceTypeParameters,
+      `export '${relation.exportId}' type requirements`,
+      fail,
     );
     for (const parameter of targetCarrierTypeParameters(relation.targetCarrier)) {
       if (!sourceTypeParameters.has(parameter)) {
@@ -671,7 +680,7 @@ function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "resultConversion", "isAsync", "isFallible", "errorBoundary", "isUnsafe", "immediateCallback",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "resultConversion", "isAsync", "isFallible", "errorBoundary", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -754,6 +763,12 @@ function validateOperationRows(
       }
       typeParameterNames.add(name);
     }
+    validateTypeParameterRequirements(
+      row.typeRequirements,
+      typeParameterNames,
+      `${label}.typeRequirements`,
+      fail,
+    );
     for (const [index, carrier] of (row.parameterCarriers ?? []).entries()) {
       validateCarrier(
         carrier,
@@ -797,6 +812,34 @@ function validateOperationRows(
     );
     if (operationFormContractViolation !== undefined) {
       fail(`${label}.target violates the closed Rust operation-form contract: ${operationFormContractViolation}`);
+    }
+  }
+}
+
+function validateTypeParameterRequirements(
+  requirements: readonly RustProviderTypeParameterRequirement[] | undefined,
+  typeParameterNames: ReadonlySet<string>,
+  where: string,
+  fail: Fail,
+): void {
+  const seen = new Set<string>();
+  let previous = "";
+  for (const requirement of requirements ?? []) {
+    requireExactKeys(asRecord(requirement), ["name", "requirements"], where, fail);
+    requireRustIdentifier(requirement.name, `${where}.name`, fail);
+    if (!typeParameterNames.has(requirement.name)) {
+      fail(`${where} references undeclared type parameter '${requirement.name}'`);
+    }
+    if (seen.has(requirement.name) || (previous.length > 0 && requirement.name < previous)) {
+      fail(`${where} must contain unique rows in type-parameter order`);
+    }
+    seen.add(requirement.name);
+    previous = requirement.name;
+    if (requirement.requirements.length === 0 ||
+      requirement.requirements.some((entry) => entry !== "clone" && entry !== "copy") ||
+      new Set(requirement.requirements).size !== requirement.requirements.length ||
+      requirement.requirements.some((entry, index) => index > 0 && entry < requirement.requirements[index - 1]!)) {
+      fail(`${where}.${requirement.name} must contain a non-empty canonical Clone/Copy requirement set`);
     }
   }
 }
@@ -916,6 +959,23 @@ function validateOperationParameters(
     }
     return;
   }
+  if (row.target.form === "call-c-variadic") {
+    if (ownerSignatures.length !== 1) {
+      fail(`row '${row.memberId ?? row.exportId}' C-variadic operation requires one exact selected source signature`);
+      return;
+    }
+    const parameters = ownerSignatures[0]!.parameters;
+    const restIndex = parameters.findIndex((parameter) => parameter.rest === true);
+    if (restIndex !== parameters.length - 1 || restIndex < 0 ||
+      parameters.slice(0, -1).some((parameter) => parameter.rest === true)) {
+      fail(`row '${row.memberId ?? row.exportId}' C-variadic operation requires one trailing source rest parameter`);
+    }
+    if ((row.parameterCarriers?.length ?? 0) !== restIndex ||
+      row.target.fixedArgumentModes.length !== restIndex) {
+      fail(`row '${row.memberId ?? row.exportId}' C-variadic operation must exactly describe every fixed source parameter`);
+    }
+    return;
+  }
   const counts = new Set(ownerSignatures.map((candidate) => candidate.parameters.length));
   if (counts.size !== 1) {
     fail(`row '${row.memberId ?? row.exportId}' spans signatures with different parameter counts; declare exact signatureId rows`);
@@ -948,8 +1008,14 @@ function validateOperationForm(
       validateTrailingArguments(form.trailingArguments, label, fail);
       validateChain(form.chain, label, fail);
       return;
+    case "call-c-variadic":
+      requireExactKeys(record, ["form", "path", "fixedArgumentModes"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      validateModes(form.fixedArgumentModes, label, parameterCarriers?.length, fail);
+      return;
     case "call-str-slice":
     case "path":
+    case "static":
       requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
       return;

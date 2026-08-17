@@ -2393,6 +2393,17 @@ function planRuntimeSetStatement(
     ));
     return undefined;
   }
+  if (fact.abi.effects.safety === "requires-unsafe" &&
+    (context.explicitUnsafeContextDepth ?? 0) === 0) {
+    context.diagnostics.push({
+      code: "RUST_UNSAFE_OPERATION_CONTEXT_REQUIRED",
+      category: "error",
+      source: "tsonic-rust",
+      message: "The selected Rust operation requires an explicit unsafeContext() source region at this use site.",
+      sourceNode: expression,
+    });
+    return undefined;
+  }
   const selectedResult = context.input.facts.getRuntimeCarrierFact(right)?.carrier;
   if (selectedResult === undefined || !selectedOperatorIdentityMatches(
     expression,
@@ -2450,6 +2461,41 @@ function planRuntimeSetStatement(
       kind: "index-assign",
       receiver,
       index,
+      value,
+    }];
+  }
+  if (fact.abi.target.form === "static") {
+    const [value] = targetArguments;
+    if (receiver !== undefined || value === undefined || targetArguments.length !== 1) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.runtime-static-set-abi",
+        "Runtime static setter ABI must finalize exactly one value and no target receiver.",
+      ));
+      return undefined;
+    }
+    registerAliasFromPath(context, fact.abi.target.path);
+    return [{
+      kind: "assign",
+      target: { kind: "path", path: fact.abi.target.path },
+      operator: "=",
+      value,
+    }];
+  }
+  if (fact.abi.target.form === "field") {
+    const [value] = targetArguments;
+    if (receiver === undefined || value === undefined || targetArguments.length !== 1) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.runtime-field-set-abi",
+        "Runtime field setter ABI must finalize one receiver and one value.",
+      ));
+      return undefined;
+    }
+    return [{
+      kind: "assign",
+      target: { kind: "field", receiver, name: fact.abi.target.name },
+      operator: "=",
       value,
     }];
   }

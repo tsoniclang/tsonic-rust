@@ -25,6 +25,7 @@ import {
   isRustErrorBoundary,
   isRustFallibleErrorBoundary,
 } from "./error-boundary.js";
+import { isRustCVariadicArgumentCarrier } from "./c-variadic.js";
 
 export type RustFinalizedOperationKind =
   | "method"
@@ -189,6 +190,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     options.sourceArgumentCarriers,
     runtimeSourceIndexes,
     options.declaredSourceArgumentCarriers,
+    options.form,
   )) {
     return undefined;
   }
@@ -645,12 +647,40 @@ function finalizeTargetInputs(
     case "marker":
     case "path":
       return sourceArgumentCount === 0 ? { targetReceiver: none, targetArguments: [] } : undefined;
+    case "static": {
+      if (operationKind === "property" && sourceArgumentCount === 0) {
+        return { targetReceiver: none, targetArguments: [] };
+      }
+      const value = operationKind === "property-set" && sourceArgumentCount === 1
+        ? input.argument(0, "value")
+        : undefined;
+      return value === undefined ? undefined : { targetReceiver: none, targetArguments: [value] };
+    }
     case "call": {
       const args = mappedArguments(form.argOrder, form.argModes, form.argConversions);
       return args === undefined ? undefined : {
         targetReceiver: none,
         targetArguments: [...args, ...constants(form.trailingArguments)],
       };
+    }
+    case "call-c-variadic": {
+      const fixed = form.fixedArgumentModes.map((mode, sourceIndex) =>
+        input.argument(sourceIndex, mode));
+      const tail = indexes.slice(form.fixedArgumentModes.length).map((sourceIndex) => {
+        const carrier = input.sourceArgumentCarrier(sourceIndex);
+        return isRustCVariadicArgumentCarrier(carrier)
+          ? input.argument(sourceIndex, "value")
+          : undefined;
+      });
+      return fixed.some((entry) => entry === undefined) || tail.some((entry) => entry === undefined)
+        ? undefined
+        : {
+            targetReceiver: none,
+            targetArguments: [
+              ...fixed as RustFinalizedSourceInput[],
+              ...tail as RustFinalizedSourceInput[],
+            ],
+          };
     }
     case "free-call": {
       const receiver = input.receiver(form.receiverMode);
@@ -677,10 +707,19 @@ function finalizeTargetInputs(
       };
     }
     case "field": {
-      const receiver = input.receiver("ref");
-      return receiver === undefined || sourceArgumentCount !== 0 ? undefined : {
+      const receiver = input.receiver(operationKind === "property-set" ? "mut-ref" : "ref");
+      if (receiver === undefined) {
+        return undefined;
+      }
+      if (operationKind === "property" && sourceArgumentCount === 0) {
+        return { targetReceiver: { kind: "input", input: receiver }, targetArguments: [] };
+      }
+      const value = operationKind === "property-set" && sourceArgumentCount === 1
+        ? input.argument(0, "value")
+        : undefined;
+      return value === undefined ? undefined : {
         targetReceiver: { kind: "input", input: receiver },
-        targetArguments: [],
+        targetArguments: [value],
       };
     }
     case "index": {
@@ -1059,7 +1098,18 @@ function declaredCarriersMatch(
   source: readonly TargetTypeRef[],
   runtimeSourceIndexes: readonly number[],
   declared: readonly (TargetTypeRef | undefined)[] | undefined,
+  form: RustProviderOperationForm,
 ): boolean {
+  if (form.form === "call-c-variadic") {
+    return declared !== undefined && isDenseDataArray(source) &&
+      isDenseDataArray(runtimeSourceIndexes) && isDenseDataArray(declared) &&
+      runtimeSourceIndexes.length === source.length &&
+      runtimeSourceIndexes.every((sourceIndex, index) => sourceIndex === index) &&
+      declared.length === form.fixedArgumentModes.length &&
+      source.length >= declared.length &&
+      declared.every((carrier, index) => carrier === undefined ||
+        rustTargetTypeRefEquals(source[index]!, carrier));
+  }
   return declared === undefined || (isDenseDataArray(source) && isDenseDataArray(runtimeSourceIndexes) &&
     isDenseDataArray(declared) && runtimeSourceIndexes.length === declared.length &&
     declared.every((carrier, index) => carrier === undefined ||

@@ -52,7 +52,10 @@ import {
   type RustPreconstructionFieldValue,
 } from "./preconstruction-fields.js";
 import { rustDefaultImplementation } from "./default-implementation.js";
-import { planRustCallableGenerics } from "./callable-generics.js";
+import {
+  planRustCallableGenerics,
+  rustCallableSpecialization,
+} from "./callable-generics.js";
 
 interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -256,11 +259,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   }
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
-    const planned = planProjectMethod(method, context);
+    const planned = planProjectMethodVariants(method, context);
     if (planned === undefined) {
       return undefined;
     }
-    implFunctions.push(planned);
+    implFunctions.push(...planned);
   }
   for (const accessor of accessors) {
     const targetName = context.input.projectTypes.memberSlotName(
@@ -780,6 +783,40 @@ export function planProjectMethod(
       ),
     },
   };
+}
+
+export function planProjectMethodVariants(
+  member: Node,
+  context: RustPlanContext,
+): readonly RustImplFunction[] | undefined {
+  const specializations = context.input.sourceCallableSpecializations;
+  if (!specializations.requiresSpecialization(member)) {
+    const method = planProjectMethod(member, context);
+    return method === undefined ? undefined : Object.freeze([method]);
+  }
+  const variants = specializations.variantsForCallable(member);
+  if (variants.length === 0) {
+    return undefined;
+  }
+  const methods: RustImplFunction[] = [];
+  for (const variant of variants) {
+    const specialization = rustCallableSpecialization(
+      variant.sourceTypeParameterNames,
+      variant.targetTypeArguments,
+    );
+    if (specialization === undefined) {
+      return undefined;
+    }
+    const method = planProjectMethod(member, context, {
+      targetName: variant.targetName,
+      typeArgumentSubstitutions: specialization,
+    });
+    if (method === undefined) {
+      return undefined;
+    }
+    methods.push(method);
+  }
+  return Object.freeze(methods);
 }
 
 function borrowedGeneratorType(

@@ -118,6 +118,7 @@ import {
 import {
   finalizeRustProviderOperationAbi,
 } from "../rust-facts/finalized-operation-abi.js";
+import { isRustCVariadicArgumentCarrier } from "../rust-facts/c-variadic.js";
 import { rustTargetOperationText } from "../rust-facts/target-operation.js";
 import {
   selectJsSurfaceConstructorBySourceOwner,
@@ -174,6 +175,7 @@ import {
 } from "./project-object-layout.js";
 import { selectRustOptionalChain } from "./optional-chains.js";
 import type { RustProjectTypePolicy } from "./project-type-policy.js";
+import { rustProviderGenericRequirementsAreSatisfied } from "./provider-generic-requirements.js";
 import {
   recordRustValueCarrierReconciliation,
   rustEffectiveValueCarrier,
@@ -2156,6 +2158,18 @@ function selectedCallSourceCarriers(
       ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
       : { kind: "incompatible", sourceIndex: incompatible };
   }
+  if (fact.target.form === "call-c-variadic") {
+    const form = fact.target;
+    if (actual.length < form.fixedArgumentModes.length) {
+      return { kind: "incompatible", sourceIndex: actual.length };
+    }
+    const incompatible = actual.findIndex((carrier, sourceIndex) =>
+      sourceIndex >= form.fixedArgumentModes.length &&
+      !isRustCVariadicArgumentCarrier(carrier));
+    return incompatible < 0
+      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      : { kind: "incompatible", sourceIndex: incompatible };
+  }
   return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
 }
 
@@ -2335,6 +2349,9 @@ function instantiateProviderOperationTemplate<
   if ([...parameterNames].some((name) => !bindings.has(name))) {
     return undefined;
   }
+  if (!rustProviderGenericRequirementsAreSatisfied(template.typeRequirements, bindings)) {
+    return undefined;
+  }
   return {
     template: {
       ...template,
@@ -2348,6 +2365,7 @@ function instantiateProviderOperationTemplate<
         ? {}
         : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
       typeParameters: [],
+      typeRequirements: [],
     },
     substitutions: bindings,
   };
@@ -4250,6 +4268,7 @@ function providerOperationTemplate<
     ...(row.parameterCarriers === undefined ? {} : { parameterCarriers: row.parameterCarriers }),
     ...(row.receiverCarrier === undefined ? {} : { receiverCarrier: row.receiverCarrier }),
     ...(row.typeParameters === undefined ? {} : { typeParameters: row.typeParameters }),
+    ...(row.typeRequirements === undefined ? {} : { typeRequirements: row.typeRequirements }),
     ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,

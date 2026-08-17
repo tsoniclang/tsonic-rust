@@ -17,6 +17,7 @@ import type {
   RustErrorBoundary,
   RustFallibleErrorBoundary,
 } from "./error-boundary.js";
+import type { RustProviderTypeParameterRequirement } from "../provider-packages/index.js";
 
 export type {
   RustAssignmentOperator,
@@ -119,6 +120,11 @@ export type RustProviderOperationForm =
     }
   | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argConversions?: readonly (RustValueConversion | undefined)[]; readonly argOrder?: readonly number[]; readonly trailingArguments?: readonly RustProviderConstantArgument[]; readonly chain?: readonly RustProviderChainStep[] }
   | {
+      readonly form: "call-c-variadic";
+      readonly path: string;
+      readonly fixedArgumentModes: readonly RustArgumentMode[];
+    }
+  | {
       // Free function taking all arguments as one &[&str] slice (variadic
       // string APIs like path join).
       readonly form: "call-str-slice";
@@ -180,6 +186,7 @@ export type RustProviderOperationForm =
       }[];
     }
   | { readonly form: "path"; readonly path: string }
+  | { readonly form: "static"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
   | {
       // Static helper lowering to a method on the first argument
@@ -241,6 +248,7 @@ export interface RustProviderOperationTemplate<
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly typeParameters?: readonly string[];
+  readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;

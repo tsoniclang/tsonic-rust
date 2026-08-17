@@ -11,6 +11,7 @@ import type { TargetTypeRef } from "../../policy/types.js";
 import type {
   RustProviderModuleDefinition,
   RustProviderOperationDefinition,
+  RustProviderTypeParameterRequirement,
   RustProviderTypeDefinition,
 } from "../../source/provider-packages/index.js";
 import {
@@ -29,6 +30,7 @@ import {
   rustUnitTargetType,
   rustUsizeTargetType,
 } from "../../source/rust-target-types.js";
+import type { RustNamedTypeTraitContract } from "../../source/rust-target-types.js";
 import {
   rustStdCollectionsModule,
   rustStdHashMapTargetId,
@@ -42,6 +44,7 @@ import type {
   RustCompilerFunction,
   RustCompilerModuleModel,
   RustCompilerType,
+  RustCompilerTypeParameter,
 } from "./model.js";
 
 export interface RustCompilerProviderProjection {
@@ -50,6 +53,7 @@ export interface RustCompilerProviderProjection {
   readonly operations: readonly RustProviderOperationDefinition[];
   readonly types: readonly RustProviderTypeDefinition[];
   readonly carrierPaths: ReadonlyMap<string, string>;
+  readonly carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>;
 }
 
 interface ProjectionOwner {
@@ -63,6 +67,7 @@ interface ProjectionContext {
   readonly owner: ProjectionOwner;
   readonly imports: Map<string, Set<string>>;
   readonly carrierPaths: Map<string, string>;
+  readonly carrierTraits: Map<string, RustNamedTypeTraitContract>;
   readonly currentType?: {
     readonly exportId: string;
     readonly name: string;
@@ -100,6 +105,7 @@ export function projectRustCompilerModule(
   const operations: RustProviderOperationDefinition[] = [];
   const types: RustProviderTypeDefinition[] = [];
   const carrierPaths = new Map<string, string>();
+  const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   for (const exported of module.exports) {
     const projected = projectExport(exported, {
       dependency: module.dependency,
@@ -107,6 +113,7 @@ export function projectRustCompilerModule(
       owner,
       imports,
       carrierPaths,
+      carrierTraits,
     });
     declarations.push(projected.declaration);
     operations.push(...projected.operations);
@@ -127,6 +134,7 @@ export function projectRustCompilerModule(
     operations: Object.freeze(operations),
     types: Object.freeze(types),
     carrierPaths,
+    carrierTraits,
   });
 }
 
@@ -139,6 +147,46 @@ function projectExport(
   readonly type?: RustProviderTypeDefinition;
 } {
   const exportId = compilerExportId(context.dependency, context.modulePath, exported.name);
+  if (exported.kind === "static" && exported.mutable) {
+    const sourceType = sourceTypeFor(exported.type, context, "result");
+    const targetCarrier = targetTypeFor(exported.type, context, "result");
+    const memberId = `${exportId}::static-value`;
+    const path = rustPath(context.dependency.targetCrateName, context.modulePath, exported.name);
+    return {
+      declaration: Object.freeze({
+        id: exportId,
+        name: exported.name,
+        exportName: exported.name,
+        kind: "class",
+        members: Object.freeze([Object.freeze({
+          id: memberId,
+          name: "value",
+          kind: "property",
+          static: true,
+          type: sourceType,
+        })]),
+      }),
+      operations: Object.freeze([
+        operationRow({
+          exportId,
+          memberId,
+          operationKind: "property",
+          target: { form: "static", path },
+          resultCarrier: targetCarrier,
+          isUnsafe: true,
+        }),
+        operationRow({
+          exportId,
+          memberId,
+          operationKind: "property-set",
+          target: { form: "static", path },
+          resultCarrier: rustUnitTargetType(),
+          parameterCarriers: [targetCarrier],
+          isUnsafe: true,
+        }),
+      ]),
+    };
+  }
   if (exported.kind === "constant" || exported.kind === "static") {
     const sourceType = sourceTypeFor(exported.type, context, "result");
     const targetCarrier = targetTypeFor(exported.type, context, "result");
@@ -191,7 +239,11 @@ function projectExport(
           : { typeParameters: Object.freeze(typeParameterNames.map((name) => Object.freeze({ name }))) }),
       }),
       operations: Object.freeze([]),
-      type: Object.freeze({ exportId, targetCarrier }),
+      type: Object.freeze({
+        exportId,
+        targetCarrier,
+        ...typeRequirements(exported.typeParameters),
+      }),
     };
   }
   const typeParameterNames = exported.typeParameters.map((parameter) => parameter.name);
@@ -200,6 +252,7 @@ function projectExport(
   const typeArguments = typeParameterNames.map((name): TargetTypeRef => ({ kind: "type-parameter", name }));
   const sourceTypeArguments = typeParameterNames.map((name): ProviderTypeExpression => ({ kind: "type-parameter", name }));
   recordCarrierPath(context.carrierPaths, targetTypeId, targetPath);
+  recordCarrierTraits(context.carrierTraits, targetTypeId, exported.traits);
   const typeCarrier: TargetTypeRef = {
     kind: "target-named",
     id: targetTypeId,
@@ -225,7 +278,7 @@ function projectExport(
     exported.variants.every((variant) => variant.kind === "plain");
   const members: ProviderMemberDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
-  if (exported.kind === "struct") {
+  if (exported.kind === "struct" || exported.kind === "union") {
     for (const field of exported.fields) {
       const sourceFieldType = sourceTypeFor(field.type, typeContext, "result");
       const targetFieldType = targetTypeFor(field.type, typeContext, "result");
@@ -233,7 +286,7 @@ function projectExport(
       members.push(Object.freeze({
         id: memberId,
         name: field.name,
-        kind: "field",
+        kind: "property",
         type: sourceFieldType,
       }));
       operations.push(operationRow({
@@ -244,6 +297,19 @@ function projectExport(
         resultCarrier: targetFieldType,
         receiverCarrier: typeCarrier,
         typeParameters: typeParameterNames,
+        ...typeRequirements(exported.typeParameters),
+        ...(exported.kind === "union" ? { isUnsafe: true } : {}),
+      }));
+      operations.push(operationRow({
+        exportId,
+        memberId,
+        operationKind: "property-set",
+        target: { form: "field", name: field.name },
+        resultCarrier: rustUnitTargetType(),
+        parameterCarriers: [targetFieldType],
+        receiverCarrier: typeCarrier,
+        typeParameters: typeParameterNames,
+        ...typeRequirements(exported.typeParameters),
       }));
     }
   } else {
@@ -266,6 +332,7 @@ function projectExport(
           },
           resultCarrier: typeCarrier,
           typeParameters: typeParameterNames,
+          ...typeRequirements(exported.typeParameters),
         }));
         continue;
       }
@@ -299,6 +366,7 @@ function projectExport(
         resultCarrier: typeCarrier,
         parameterCarriers,
         typeParameters: typeParameterNames,
+        ...typeRequirements(exported.typeParameters),
       }));
     }
   }
@@ -332,6 +400,7 @@ function projectExport(
     type: Object.freeze({
       exportId,
       targetCarrier: typeCarrier,
+      ...typeRequirements(exported.typeParameters),
     }),
   };
 }
@@ -363,6 +432,13 @@ function projectFunction(
     parameterCarriers.push(targetTypeFor(passing.type, context, "parameter"));
     argumentModes.push(passing.targetMode);
   }
+  if (fn.variadic) {
+    parameters.push(Object.freeze({
+      name: uniqueVariadicParameterName(parameters),
+      type: { kind: "array", elementType: { kind: "unknown" } },
+      rest: true,
+    } satisfies ProviderParameterDeclaration));
+  }
   const result = compilerFunctionResult(fn.result);
   const resultCarrier = constructor
     ? requireCurrentType(context).carrier
@@ -373,7 +449,16 @@ function projectFunction(
     ...(context.currentType?.typeParameters ?? []),
     ...methodTypeParameters,
   ]);
-  const target = context.currentType === undefined || fn.receiver === undefined
+  if (fn.variadic && (context.currentType !== undefined || fn.receiver !== undefined)) {
+    throw new Error(`Rust C-variadic function '${fn.name}' must be one free provider function.`);
+  }
+  const target = fn.variadic
+    ? {
+        form: "call-c-variadic" as const,
+        path: rustPath(context.dependency.targetCrateName, context.modulePath, fn.name),
+        fixedArgumentModes: argumentModes,
+      }
+    : context.currentType === undefined || fn.receiver === undefined
     ? {
         form: "call" as const,
         path: rustPath(context.dependency.targetCrateName, context.modulePath, ...(context.currentType === undefined
@@ -399,6 +484,7 @@ function projectFunction(
       ? {}
       : { receiverCarrier: context.currentType.carrier }),
     ...(allTypeParameters.length === 0 ? {} : { typeParameters: allTypeParameters }),
+    ...typeRequirements(fn.typeRequirements),
     ...(fn.asynchronous ? { isAsync: true as const } : {}),
     ...(fn.unsafe ? { isUnsafe: true as const } : {}),
   };
@@ -421,6 +507,17 @@ function projectFunction(
         })
       : operationRow(operation),
   };
+}
+
+function uniqueVariadicParameterName(
+  parameters: readonly ProviderParameterDeclaration[],
+): string {
+  const occupied = new Set(parameters.map((parameter) => parameter.name));
+  let name = "variadicArguments";
+  while (occupied.has(name)) {
+    name = `_${name}`;
+  }
+  return name;
 }
 
 function compilerFunctionResult(type: RustCompilerType): {
@@ -674,6 +771,33 @@ function recordCarrierPath(paths: Map<string, string>, id: string, path: string)
     throw new Error(`Rust compiler target carrier '${id}' maps to both '${existing}' and '${path}'.`);
   }
   paths.set(id, path);
+}
+
+function recordCarrierTraits(
+  traits: Map<string, RustNamedTypeTraitContract>,
+  id: string,
+  contract: RustNamedTypeTraitContract,
+): void {
+  const existing = traits.get(id);
+  if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(contract)) {
+    throw new Error(`Rust compiler target carrier '${id}' has conflicting native trait contracts.`);
+  }
+  traits.set(id, Object.freeze({ ...contract }));
+}
+
+function typeRequirements(
+  parameters: readonly RustCompilerTypeParameter[],
+): { readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[] } {
+  const requirements = parameters
+    .filter((parameter) => parameter.requirements.length > 0)
+    .map((parameter) => Object.freeze({
+      name: parameter.name,
+      requirements: Object.freeze([...parameter.requirements].sort(compareText)),
+    }))
+    .sort((left, right) => compareText(left.name, right.name));
+  return requirements.length === 0
+    ? {}
+    : { typeRequirements: Object.freeze(requirements) };
 }
 
 export function compilerModuleSpecifier(alias: string, modulePath: readonly string[]): string {

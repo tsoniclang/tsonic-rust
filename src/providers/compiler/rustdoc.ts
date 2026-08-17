@@ -19,6 +19,8 @@ import type {
   RustCompilerProjectSnapshot,
   RustCompilerType,
   RustCompilerTypeParameter,
+  RustCompilerTypeRequirement,
+  RustCompilerTypeTraits,
   RustCompilerUnsupportedExport,
   RustCompilerUnsupportedMember,
 } from "./model.js";
@@ -338,6 +340,10 @@ function sameModuleExportDependencies(
       exported.variants.forEach((variant) => variant.fields.forEach(visitType));
       exported.methods.forEach(visitFunction);
       break;
+    case "union":
+      exported.fields.forEach((field) => visitType(field.type));
+      exported.methods.forEach(visitFunction);
+      break;
   }
   names.delete(exported.name);
   return Object.freeze([...names].sort(compareText));
@@ -376,9 +382,7 @@ function normalizeExport(
   }
   if (hasInnerKind(item, "static")) {
     const static_ = requireInnerRecord(item, "static", `Rust static '${name}'`);
-    if (requireBoolean(static_.is_mutable, `${name}.static.is_mutable`)) {
-      throw new Error(`Mutable Rust static '${name}' requires an explicit location and synchronization contract.`);
-    }
+    const mutable = requireBoolean(static_.is_mutable, `${name}.static.is_mutable`);
     const type = normalizeType(document, static_.type);
     if (!rustStaticValueCanBeCopied(type)) {
       throw new Error(`Rust static '${name}' has a value type that is not structurally proven Copy.`);
@@ -389,6 +393,7 @@ function normalizeExport(
       name,
       type,
       unsafe: requireBoolean(static_.is_unsafe, `${name}.static.is_unsafe`),
+      mutable,
     });
   }
   if (hasInnerKind(item, "function")) {
@@ -401,7 +406,7 @@ function normalizeExport(
   }
   if (hasInnerKind(item, "struct")) {
     const struct = requireInnerRecord(item, "struct", `Rust struct '${name}'`);
-    const typeParameters = normalizeTypeParameters(requireRecord(struct.generics, `${name}.generics`));
+    const typeParameters = normalizeTypeParameters(document, requireRecord(struct.generics, `${name}.generics`));
     const fields = normalizeFields(document, struct, dependency);
     const methods = normalizeMethods(document, struct, dependency);
     return Object.freeze({
@@ -413,20 +418,17 @@ function normalizeExport(
       methods: methods.values,
       unsupportedMembers: Object.freeze([...fields.unsupported, ...methods.unsupported]
         .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
+      traits: normalizeTypeTraits(document, struct, typeParameters),
     });
   }
   if (hasInnerKind(item, "type_alias")) {
     const alias = requireInnerRecord(item, "type_alias", `Rust type alias '${name}'`);
     const generics = requireRecord(alias.generics, `${name}.generics`);
-    if (requireArray(generics.where_predicates, `${name}.where_predicates`).length > 0 ||
-      genericParametersHaveBounds(generics)) {
-      throw new Error(`Rust type alias '${name}' has generic constraints that are not representable by the current source contract.`);
-    }
     return Object.freeze({
       kind: "type-alias",
       id,
       name,
-      typeParameters: normalizeTypeParameters(generics),
+      typeParameters: normalizeTypeParameters(document, generics),
       type: normalizeType(document, alias.type),
     });
   }
@@ -436,19 +438,45 @@ function normalizeExport(
       throw new Error(`Rust enum '${name}' does not expose one complete variant set.`);
     }
     const generics = requireRecord(enum_.generics, `${name}.generics`);
-    if (requireArray(generics.where_predicates, `${name}.where_predicates`).length > 0 ||
-      genericParametersHaveBounds(generics)) {
-      throw new Error(`Rust enum '${name}' has generic constraints that are not representable by the current source contract.`);
-    }
+    const typeParameters = normalizeTypeParameters(document, generics);
     const methods = normalizeMethods(document, enum_, dependency);
     return Object.freeze({
       kind: "enum",
       id,
       name,
-      typeParameters: normalizeTypeParameters(generics),
+      typeParameters,
       variants: normalizeEnumVariants(document, enum_, dependency),
       methods: methods.values,
       unsupportedMembers: methods.unsupported,
+      traits: normalizeTypeTraits(document, enum_, typeParameters),
+    });
+  }
+  if (hasInnerKind(item, "union")) {
+    const union = requireInnerRecord(item, "union", `Rust union '${name}'`);
+    if (union.has_stripped_fields !== false) {
+      throw new Error(`Rust union '${name}' does not expose one complete public field set.`);
+    }
+    const typeParameters = normalizeTypeParameters(
+      document,
+      requireRecord(union.generics, `${name}.generics`),
+    );
+    const fields = normalizePublicFields(
+      document,
+      requireArray(union.fields, `${name}.fields`),
+      dependency,
+      "union",
+    );
+    const methods = normalizeMethods(document, union, dependency);
+    return Object.freeze({
+      kind: "union",
+      id,
+      name,
+      typeParameters,
+      fields: fields.values,
+      methods: methods.values,
+      unsupportedMembers: Object.freeze([...fields.unsupported, ...methods.unsupported]
+        .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
+      traits: normalizeTypeTraits(document, union, typeParameters),
     });
   }
   throw new Error(`Rust export '${name}' has no supported provider representation.`);
@@ -504,16 +532,33 @@ function normalizeFields(
   if (plain === undefined) {
     return { values: Object.freeze([]), unsupported: Object.freeze([]) };
   }
+  return normalizePublicFields(
+    document,
+    requireArray(plain.fields, "Rust struct fields"),
+    dependency,
+    "struct",
+  );
+}
+
+function normalizePublicFields(
+  document: RustdocDocument,
+  fieldIds: readonly unknown[],
+  dependency: RustCompilerDependency,
+  ownerKind: "struct" | "union",
+): {
+  readonly values: readonly RustCompilerField[];
+  readonly unsupported: readonly RustCompilerUnsupportedMember[];
+} {
   const fields: RustCompilerField[] = [];
   const unsupported: RustCompilerUnsupportedMember[] = [];
-  for (const id of requireArray(plain.fields, "Rust struct fields")) {
+  for (const id of fieldIds) {
     const item = itemById(document, id);
     if (item.visibility !== "public") {
       continue;
     }
     const name = typeof item.name === "string" ? item.name : `<field:${String(id)}>`;
     try {
-      const inner = requireInnerRecord(item, "struct_field", "Rust struct field");
+      const inner = requireInnerRecord(item, "struct_field", `Rust ${ownerKind} field`);
       fields.push(Object.freeze({
         id: canonicalItemId(dependency, item),
         name: requireString(item.name, "Rust field name"),
@@ -550,8 +595,21 @@ function normalizeMethods(
       continue;
     }
     const implGenerics = requireRecord(impl.generics, "Rust impl generics");
-    if (requireArray(implGenerics.where_predicates, "Rust impl where predicates").length > 0 ||
-      genericParametersHaveBounds(implGenerics)) {
+    let implTypeParameters: readonly RustCompilerTypeParameter[];
+    try {
+      implTypeParameters = normalizeTypeParameters(document, implGenerics);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      for (const methodId of requireArray(impl.items, "Rust impl items")) {
+        const item = itemById(document, methodId);
+        if (item.visibility === "public" && hasInnerKind(item, "function")) {
+          unsupported.push(Object.freeze({
+            kind: "method",
+            name: typeof item.name === "string" ? item.name : `<method:${String(methodId)}>`,
+            reason,
+          }));
+        }
+      }
       continue;
     }
     for (const methodId of requireArray(impl.items, "Rust impl items")) {
@@ -561,7 +619,7 @@ function normalizeMethods(
       }
       const name = typeof item.name === "string" ? item.name : `<method:${String(methodId)}>`;
       try {
-        methods.push(normalizeFunction(document, item, dependency, true));
+        methods.push(normalizeFunction(document, item, dependency, true, implTypeParameters));
       } catch (error) {
         unsupported.push(Object.freeze({
           kind: "method",
@@ -599,20 +657,17 @@ function normalizeFunction(
   item: Readonly<Record<string, unknown>>,
   dependency: RustCompilerDependency,
   allowReceiver: true | undefined,
+  inheritedRequirements: readonly RustCompilerTypeParameter[] = Object.freeze([]),
 ): RustCompilerFunction {
   const name = requireString(item.name, "Rust function name");
   const fn = requireInnerRecord(item, "function", `Rust function '${name}'`);
   const signature = requireRecord(fn.sig, `${name}.sig`);
-  if (signature.is_c_variadic !== false) {
-    throw new Error(`Rust function '${name}' is variadic and has no closed source signature.`);
-  }
+  const variadic = requireBoolean(signature.is_c_variadic, `${name}.sig.is_c_variadic`);
   const header = requireRecord(fn.header, `${name}.header`);
   const unsafe = requireBoolean(header.is_unsafe, `${name}.header.is_unsafe`);
   const abi = normalizeAbi(header.abi, `${name}.header.abi`);
   const generics = requireRecord(fn.generics, `${name}.generics`);
-  if (requireArray(generics.where_predicates, `${name}.where_predicates`).length > 0 || genericParametersHaveBounds(generics)) {
-    throw new Error(`Rust function '${name}' has generic constraints that are not representable by the current source contract.`);
-  }
+  const typeParameters = normalizeTypeParameters(document, generics);
   const rawInputs = requireArray(signature.inputs, `${name}.inputs`);
   let receiver: RustCompilerFunction["receiver"];
   const parameters: RustCompilerParameter[] = [];
@@ -643,11 +698,13 @@ function normalizeFunction(
     name,
     parameters: Object.freeze(parameters),
     result,
-    typeParameters: normalizeTypeParameters(generics),
+    typeParameters,
+    typeRequirements: mergeTypeParameterRequirements(inheritedRequirements, typeParameters),
     ...(receiver === undefined ? {} : { receiver }),
     asynchronous: header.is_async === true,
     unsafe,
     abi,
+    variadic,
   });
 }
 
@@ -661,25 +718,200 @@ function receiverKind(type: RustCompilerType, functionName: string): "value" | "
   throw new Error(`Rust method '${functionName}' has an unsupported receiver type.`);
 }
 
-function normalizeTypeParameters(generics: Readonly<Record<string, unknown>>): readonly RustCompilerTypeParameter[] {
-  const parameters: RustCompilerTypeParameter[] = [];
+function normalizeTypeParameters(
+  document: RustdocDocument,
+  generics: Readonly<Record<string, unknown>>,
+): readonly RustCompilerTypeParameter[] {
+  const requirements = new Map<string, Set<RustCompilerTypeRequirement>>();
+  const names: string[] = [];
   for (const raw of requireArray(generics.params, "Rust generic parameters")) {
     const parameter = requireRecord(raw, "Rust generic parameter");
     const kind = requireRecord(parameter.kind, "Rust generic parameter kind");
     if (!isRecord(kind.type)) {
       throw new Error(`Rust lifetime and const generic parameters are not representable by the current source contract.`);
     }
-    parameters.push(Object.freeze({ name: requireString(parameter.name, "Rust type parameter name") }));
+    const name = requireString(parameter.name, "Rust type parameter name");
+    if (names.includes(name) || kind.type.default !== null || kind.type.is_synthetic !== false) {
+      throw new Error(`Rust type parameter '${name}' has an unsupported duplicate, default, or synthetic contract.`);
+    }
+    names.push(name);
+    addNormalizedBounds(
+      document,
+      requireArray(kind.type.bounds, `Rust type parameter '${name}' bounds`),
+      name,
+      requirements,
+    );
   }
-  return Object.freeze(parameters);
+  for (const rawPredicate of requireArray(generics.where_predicates, "Rust generic where predicates")) {
+    const predicate = requireRecord(rawPredicate, "Rust generic where predicate");
+    const bounded = isRecord(predicate.bound_predicate)
+      ? predicate.bound_predicate
+      : undefined;
+    if (bounded === undefined || requireArray(
+      bounded.generic_params,
+      "Rust generic where predicate parameters",
+    ).length !== 0) {
+      throw new Error("Rust lifetime, equality, and higher-ranked where predicates are not representable by the current provider contract.");
+    }
+    const type = requireRecord(bounded.type, "Rust generic where predicate type");
+    const name = typeof type.generic === "string" ? type.generic : undefined;
+    if (name === undefined || !names.includes(name)) {
+      throw new Error("Rust where predicates must constrain one declared type parameter directly.");
+    }
+    addNormalizedBounds(
+      document,
+      requireArray(bounded.bounds, `Rust where predicate '${name}' bounds`),
+      name,
+      requirements,
+    );
+  }
+  return Object.freeze(names.map((name) => Object.freeze({
+    name,
+    requirements: Object.freeze([...requirements.get(name) ?? []].sort(compareText)),
+  })));
 }
 
-function genericParametersHaveBounds(generics: Readonly<Record<string, unknown>>): boolean {
-  return requireArray(generics.params, "Rust generic parameters").some((raw) => {
-    const parameter = requireRecord(raw, "Rust generic parameter");
-    const kind = requireRecord(parameter.kind, "Rust generic parameter kind");
-    return isRecord(kind.type) && requireArray(kind.type.bounds, "Rust generic parameter bounds").length > 0;
-  });
+function addNormalizedBounds(
+  document: RustdocDocument,
+  bounds: readonly unknown[],
+  parameterName: string,
+  requirements: Map<string, Set<RustCompilerTypeRequirement>>,
+): void {
+  const selected = requirements.get(parameterName) ?? new Set<RustCompilerTypeRequirement>();
+  requirements.set(parameterName, selected);
+  for (const rawBound of bounds) {
+    const bound = requireRecord(rawBound, `Rust type parameter '${parameterName}' bound`);
+    const traitBound = isRecord(bound.trait_bound) ? bound.trait_bound : undefined;
+    if (traitBound === undefined || traitBound.modifier !== "none" ||
+      requireArray(traitBound.generic_params, `Rust type parameter '${parameterName}' higher-ranked bounds`).length !== 0) {
+      throw new Error(`Rust type parameter '${parameterName}' has a non-trait, optional, lifetime, or higher-ranked bound that is not representable.`);
+    }
+    const trait = requireRecord(traitBound.trait, `Rust type parameter '${parameterName}' trait bound`);
+    if (trait.args !== null) {
+      throw new Error(`Rust type parameter '${parameterName}' has a parameterized trait bound that is not representable.`);
+    }
+    const requirement = rustCompilerTraitRequirement(document, trait.id);
+    if (requirement === undefined) {
+      throw new Error(`Rust type parameter '${parameterName}' requires unsupported trait '${String(trait.path)}'.`);
+    }
+    selected.add(requirement);
+  }
+}
+
+function rustCompilerTraitRequirement(
+  document: RustdocDocument,
+  traitId: unknown,
+): RustCompilerTypeRequirement | undefined {
+  const candidate = document.paths[String(traitId)];
+  const path = isRecord(candidate) ? candidate : undefined;
+  if (path?.kind !== "trait" || !Array.isArray(path.path)) {
+    return undefined;
+  }
+  const segments = path.path;
+  if (segments.length === 3 && segments[0] === "core" && segments[1] === "clone" && segments[2] === "Clone") {
+    return "clone";
+  }
+  if (segments.length === 3 && segments[0] === "core" && segments[1] === "marker" && segments[2] === "Copy") {
+    return "copy";
+  }
+  return undefined;
+}
+
+function mergeTypeParameterRequirements(
+  ...groups: readonly (readonly RustCompilerTypeParameter[])[]
+): readonly RustCompilerTypeParameter[] {
+  const requirements = new Map<string, Set<RustCompilerTypeRequirement>>();
+  for (const group of groups) {
+    for (const parameter of group) {
+      const selected = requirements.get(parameter.name) ?? new Set<RustCompilerTypeRequirement>();
+      requirements.set(parameter.name, selected);
+      for (const requirement of parameter.requirements) {
+        selected.add(requirement);
+      }
+    }
+  }
+  return Object.freeze([...requirements.entries()]
+    .sort(([left], [right]) => compareText(left, right))
+    .map(([name, selected]) => Object.freeze({
+      name,
+      requirements: Object.freeze([...selected].sort(compareText)),
+    })));
+}
+
+function normalizeTypeTraits(
+  document: RustdocDocument,
+  owner: Readonly<Record<string, unknown>>,
+  declaredTypeParameters: readonly RustCompilerTypeParameter[],
+): RustCompilerTypeTraits {
+  let clone: RustCompilerTypeTraits["clone"] = "never";
+  let copy: RustCompilerTypeTraits["copy"] = "never";
+  for (const implId of requireArray(owner.impls, "Rust type impls")) {
+    const implItem = itemById(document, implId);
+    const impl = requireInnerRecord(implItem, "impl", "Rust type impl");
+    if (!isRecord(impl.trait) || impl.is_negative === true || impl.blanket_impl !== null) {
+      continue;
+    }
+    const requirement = rustCompilerTraitRequirement(document, impl.trait.id);
+    if (requirement === undefined) {
+      continue;
+    }
+    let implementationParameters: readonly RustCompilerTypeParameter[];
+    try {
+      implementationParameters = normalizeTypeParameters(
+        document,
+        requireRecord(impl.generics, `Rust ${requirement} impl generics`),
+      );
+    } catch {
+      continue;
+    }
+    const condition = traitImplementationCondition(
+      requirement,
+      implementationParameters,
+      declaredTypeParameters,
+    );
+    if (requirement === "clone" && traitConditionRank(condition) > traitConditionRank(clone)) {
+      clone = condition;
+    }
+    if (requirement === "copy" && traitConditionRank(condition) > traitConditionRank(copy)) {
+      copy = condition;
+    }
+  }
+  if (copy !== "never" && clone === "never") {
+    clone = copy;
+  }
+  return Object.freeze({ clone, copy });
+}
+
+function traitImplementationCondition(
+  trait: RustCompilerTypeRequirement,
+  implementationParameters: readonly RustCompilerTypeParameter[],
+  declaredTypeParameters: readonly RustCompilerTypeParameter[],
+): RustCompilerTypeTraits["clone"] {
+  const declared = new Map(declaredTypeParameters.map((parameter) => [
+    parameter.name,
+    new Set(parameter.requirements),
+  ] as const));
+  let requiresTypeArguments = false;
+  for (const parameter of implementationParameters) {
+    const guaranteed = declared.get(parameter.name);
+    if (guaranteed === undefined) {
+      return "never";
+    }
+    for (const requirement of parameter.requirements) {
+      if (guaranteed.has(requirement) || (requirement === "clone" && guaranteed.has("copy"))) {
+        continue;
+      }
+      if (requirement !== trait) {
+        return "never";
+      }
+      requiresTypeArguments = true;
+    }
+  }
+  return requiresTypeArguments ? "all-type-arguments" : "always";
+}
+
+function traitConditionRank(condition: RustCompilerTypeTraits["clone"]): number {
+  return condition === "always" ? 2 : condition === "all-type-arguments" ? 1 : 0;
 }
 
 function normalizeType(
@@ -775,7 +1007,7 @@ function normalizeType(
       }
       const alias = requireInnerRecord(resolvedItem, "type_alias", `Rust type alias '${id}'`);
       const generics = requireRecord(alias.generics, `Rust type alias '${id}' generics`);
-      const parameters = normalizeTypeParameters(generics);
+      const parameters = normalizeTypeParameters(document, generics);
       if (parameters.length !== args.length) {
         throw new Error(`Rust type alias '${id}' received ${args.length} type arguments for ${parameters.length} parameters.`);
       }

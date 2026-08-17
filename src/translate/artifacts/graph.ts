@@ -6,6 +6,8 @@ import {
   createTargetArtifactContractGraph,
   sourceNodeIdentity,
 } from "@tsonic/target-api";
+import { closedMetadataKey } from "../../common/closed-metadata.js";
+import type { TargetTypeRef } from "../../policy/types.js";
 import type {
   TargetArtifactContractGraph,
   TargetArtifactDependency,
@@ -41,7 +43,10 @@ export interface RustTranslationArtifactGraph {
     declaration: Node,
     callable: RustSourceCallableContract,
   ): RustArtifactRequestResult;
-  sourceCallable(declaration: Node): RustSourceCallableContract | undefined;
+  sourceCallable(
+    declaration: Node,
+    sourceTypeArguments?: readonly TargetTypeRef[],
+  ): RustSourceCallableContract | undefined;
   reconstructArtifact(
     owner: string,
   ): TargetArtifactReconstruction<RustArtifactFacet, RustArtifactSnapshot>;
@@ -105,7 +110,7 @@ export function createRustTranslationArtifactGraph(
         "Rust source-callable publication conflicts with its exact source declaration.",
       );
     }
-    const owner = sourceCallableOwner(ast, declaration);
+    const owner = sourceCallableOwner(ast, declaration, callable.sourceTypeArguments);
     if (owner === undefined) {
       return rejected(
         "Rust source-callable publication requires one stable compiler-owned declaration identity.",
@@ -125,8 +130,9 @@ export function createRustTranslationArtifactGraph(
 
   function sourceCallable(
     declaration: Node,
+    sourceTypeArguments?: readonly TargetTypeRef[],
   ): RustSourceCallableContract | undefined {
-    const owner = sourceCallableOwner(ast, declaration);
+    const owner = sourceCallableOwner(ast, declaration, sourceTypeArguments);
     if (owner === undefined) {
       return undefined;
     }
@@ -187,9 +193,16 @@ export function createRustTranslationArtifactGraph(
 function sourceCallableOwner(
   ast: AstReader,
   declaration: Node,
+  sourceTypeArguments?: readonly TargetTypeRef[],
 ): string | undefined {
   const identity = sourceNodeIdentity(ast, declaration);
-  return identity === undefined ? undefined : `source-callable:${identity}`;
+  if (identity === undefined) {
+    return undefined;
+  }
+  const instantiation = sourceTypeArguments === undefined
+    ? "open"
+    : `closed:${closedMetadataKey(sourceTypeArguments)}`;
+  return `source-callable:${identity}:${instantiation}`;
 }
 
 function rejected(reason: string): RustArtifactRequestResult {

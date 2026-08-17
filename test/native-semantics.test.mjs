@@ -344,10 +344,12 @@ export function isGreen(color: Color): boolean {
   assert.match(text, /color == Color::Green/u);
 });
 
-test("open generic virtual calls fail at the finite specialization boundary", () => {
+test("open generic virtual callers close through finite concrete entry points", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
 export class Base {
   constructor() {}
 
@@ -362,17 +364,33 @@ export class Derived extends Base {
   }
 }
 
-export function openCall<T>(receiver: Base, value: T): T {
+function openCall<T>(receiver: Base, value: T): T {
   return receiver.identity<T>(value);
+}
+
+function relay<U>(receiver: Base, value: U): U {
+  return openCall<U>(receiver, value);
+}
+
+export function intCall(receiver: Base, value: int32): int32 {
+  return relay<int32>(receiver, value);
+}
+
+export function stringCall(receiver: Base, value: string): string {
+  return relay<string>(receiver, value);
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_PROJECT_METHOD_SPECIALIZATION_UNAVAILABLE" &&
-    diagnostic.message.includes("finite method specialization")));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn __tsonic_open_call_specialization_1/u);
+  assert.match(text, /fn __tsonic_open_call_specialization_2/u);
+  assert.match(text, /fn __tsonic_relay_specialization_1/u);
+  assert.match(text, /fn __tsonic_relay_specialization_2/u);
+  assert.doesNotMatch(text, /fn open_call</u);
+  assert.doesNotMatch(text, /fn relay</u);
 });
 
 test("generated cargo binary proves class and enum lowering at runtime", { timeout: 300_000 }, () => {

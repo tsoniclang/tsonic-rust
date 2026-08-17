@@ -30,7 +30,7 @@ import {
 } from "./diagnostics.js";
 import { planExpression } from "./expressions.js";
 import {
-  planFunctionDeclaration,
+  planFunctionDeclarations,
   planNativeModuleFunction,
 } from "./functions.js";
 import {
@@ -197,9 +197,9 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
         }
       }
       const diagnosticCount = context.diagnostics.length;
-      const item = planFunctionDeclaration(statement, context);
-      if (item !== undefined) {
-        items.push(item);
+      const plannedFunctions = planFunctionDeclarations(statement, context);
+      if (plannedFunctions !== undefined) {
+        items.push(...plannedFunctions);
       } else {
         ensureTopLevelPlanningDiagnostic(
           context,

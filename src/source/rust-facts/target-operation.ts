@@ -13,7 +13,7 @@ import { rustValueConversionIsFallible } from "./value-conversions.js";
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
     const target = fact.abi.target;
-    if (target.form === "call" || target.form === "path" || target.form === "free-call" ||
+    if (target.form === "call" || target.form === "call-c-variadic" || target.form === "path" || target.form === "static" || target.form === "free-call" ||
       target.form === "call-str-slice" || target.form === "free-call-str-slice" ||
       target.form === "call-value-slice" || target.form === "call-value-array") {
       return target.path;
@@ -61,7 +61,8 @@ export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFac
     return true;
   }
   return fact.kind === "provider-operation" &&
-    (fact.abi.target.form === "field" || fact.abi.target.form === "index");
+    (fact.abi.target.form === "field" || fact.abi.target.form === "index" ||
+      fact.abi.target.form === "static");
 }
 
 export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationFact | undefined): boolean {
