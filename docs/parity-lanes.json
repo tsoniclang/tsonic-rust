@@ -859,9 +859,14 @@
   },
   {
     "area": "Node",
-    "lane": "process extras (argv0, hrtime, memoryUsage, stdio)",
+    "lane": "process identity and metrics (argv0, hrtime, memoryUsage)",
+    "classification": "implemented"
+  },
+  {
+    "area": "Node",
+    "lane": "process stdio",
     "classification": "blocked",
-    "contract": "requires process-runtime carrier contracts"
+    "contract": "requires exact stream and stdio carrier contracts"
   },
   {
     "area": "Node",

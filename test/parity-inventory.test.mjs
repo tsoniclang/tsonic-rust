@@ -50,7 +50,7 @@ test("the C# surface families cannot silently disappear from the inventory", () 
     "Object.keys", "Object.assign", "Object.hasOwn",
     "Number.parseInt", "Number.isNaN", "toFixed",
     "console.log", "node:assert", "bare module aliases",
-    "process extras", "buffer extras",
+    "process identity and metrics", "process stdio", "buffer extras",
     "local-time getters", "UTC setters",
     "localeCompare", "matchAll result consumption", "exec/match result consumption",
     "streams and fs.watch", "discriminated object unions",
