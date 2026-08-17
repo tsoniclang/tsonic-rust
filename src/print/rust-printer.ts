@@ -1990,7 +1990,6 @@ function printRustExprFitted(
           depth,
           column,
           firstStep?.kind === "field" && !attachFirstMethodAfterField ||
-            selectorCount > 2 ||
             rustMethodChainBreaksReceiverForClosure(chain, flat, column) ||
             column > indentText(depth + 1).length,
           methodChainContinuationIndent,

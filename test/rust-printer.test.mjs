@@ -1090,6 +1090,44 @@ test("long field-led method chains use rustfmt selector layout", () => {
   );
 });
 
+test("pure method chains keep the first fitting call attached to their receiver", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: { kind: "path", path: "set" },
+                method: "add_eq",
+                args: [{ kind: "call", path: "first_value", args: [] }],
+              },
+              method: "add_eq",
+              args: [{ kind: "call", path: "second_value", args: [] }],
+            },
+            method: "add_eq",
+            args: [{ kind: "call", path: "third_value", args: [] }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /set\.add_eq\(first_value\(\)\)\n        \.add_eq\(second_value\(\)\)\n        \.add_eq\(third_value\(\)\);/u,
+  );
+});
+
 test("field-led calls stay attached when their argument list must expand", () => {
   const source = printRustSourceFile({
     headerComment,
