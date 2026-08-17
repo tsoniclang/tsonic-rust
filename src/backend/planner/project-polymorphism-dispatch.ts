@@ -36,11 +36,13 @@ import {
 import {
   cloneExpression,
   cloneField,
+  type ProjectCallableShape,
   type ProjectClassStateLayer,
   projectCallableShape,
   projectFieldStoragePath,
   projectMemberImplementation,
   projectMethodPropertyStoragePath,
+  projectOwnAccessors,
   projectOwnMethodProperties,
   projectOwnFields,
   projectOwnMethods,
@@ -136,16 +138,53 @@ export function planProjectDispatchTrait(
     });
   }
   for (const field of fields) {
+    const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
     const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
-    const write = context.input.projectTypes.memberSlotName(field.declaration, "write");
-    if (read === undefined || write === undefined) {
+    const write = dispatch?.write === undefined
+      ? undefined
+      : context.input.projectTypes.memberSlotName(field.declaration, "write");
+    if (dispatch === undefined || read === undefined ||
+      dispatch.write !== undefined && write === undefined) {
       return undefined;
     }
-    functions.push({ name: read, selfParam: "ref", params: [], returnType: field.type });
     functions.push({
-      name: write,
-      selfParam: "ref",
-      params: [{ name: "value", type: field.type }],
+      name: read,
+      selfParam: dispatch.read.selfMode,
+      params: [],
+      returnType: field.type,
+      ...(dispatch.read.fallible ? { fallible: true } : {}),
+    });
+    if (dispatch.write !== undefined) {
+      functions.push({
+        name: write!,
+        selfParam: dispatch.write.selfMode,
+        params: [{ name: "value", type: field.type }],
+        ...(dispatch.write.fallible ? { fallible: true } : {}),
+      });
+    }
+  }
+  for (const accessor of projectOwnAccessors(definition, context)) {
+    const shape = projectAccessorCallableShape(
+      definition,
+      carrier,
+      accessor.declaration,
+      accessor.role,
+      context,
+    );
+    const slot = context.input.projectTypes.memberSlotName(
+      accessor.declaration,
+      accessor.role,
+    );
+    if (shape === undefined || slot === undefined) {
+      return undefined;
+    }
+    functions.push({
+      name: slot,
+      selfParam: "rc",
+      params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
+      ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
+      ...(shape.fallible ? { fallible: true } : {}),
+      ...(shape.isUnsafe ? { isUnsafe: true } : {}),
     });
   }
   for (const member of projectOwnMethods(definition, context)) {
@@ -230,6 +269,7 @@ export function planProjectRootImplementations(
   const items: RustItem[] = [];
   const typeParams = rustProjectTypeParameters(concrete);
   const methodImplementations = new Map<Node, RustImplFunction[]>();
+  const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (
     implementation: Node,
     targetTypeArguments: readonly TargetTypeRef[],
@@ -259,6 +299,25 @@ export function planProjectRootImplementations(
     }
     return planned;
   };
+  const accessorImplementationFor = (
+    accessor: Node,
+    role: "read" | "write",
+  ): RustImplFunction | undefined => {
+    const existing = accessorImplementations.get(accessor);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const planned = planRootAccessorImplementation(
+      concreteCarrier,
+      accessor,
+      role,
+      context,
+    );
+    if (planned !== undefined) {
+      accessorImplementations.set(accessor, planned);
+    }
+    return planned;
+  };
   for (const contract of [...lineage, ...interfaces]) {
     const relation = context.input.projectTypes.relationship(concreteCarrier, contract);
     if (relation.kind !== "related") {
@@ -273,6 +332,7 @@ export function planProjectRootImplementations(
       rootType,
       layers,
       implementationFor,
+      accessorImplementationFor,
       context,
     );
     if (traitType === undefined || functions === undefined) {
@@ -286,7 +346,10 @@ export function planProjectRootImplementations(
       functions,
     });
   }
-  const helpers = [...methodImplementations.values()].flat().sort((left, right) =>
+  const helpers = [
+    ...methodImplementations.values(),
+    ...[...accessorImplementations.values()].map((implementation) => [implementation]),
+  ].flat().sort((left, right) =>
     left.name.localeCompare(right.name, "en"));
   return helpers.length === 0
     ? items
@@ -308,6 +371,10 @@ function planRootContractFunctions(
   implementationFor: (
     implementation: Node,
     targetTypeArguments: readonly TargetTypeRef[],
+  ) => RustImplFunction | undefined,
+  accessorImplementationFor: (
+    accessor: Node,
+    role: "read" | "write",
   ) => RustImplFunction | undefined,
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
@@ -341,47 +408,163 @@ function planRootContractFunctions(
     return undefined;
   }
   for (const field of fields) {
+    const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
     const implementation = field.origin === "external"
-      ? field.declaration
-      : projectMemberImplementation(concrete, field.declaration, context);
-    const storagePath = implementation === undefined
-      ? undefined
-      : projectFieldStoragePath(implementation, layers, context);
+      ? { kind: "stored" as const, declaration: field.declaration }
+      : context.input.projectFieldDispatch.implementationFor(
+          concrete,
+          field.declaration,
+        );
+    const storagePath = implementation?.kind === "stored"
+      ? projectFieldStoragePath(implementation.declaration, layers, context)
+      : undefined;
+    const readHelper = implementation?.kind === "accessor"
+      ? accessorImplementationFor(implementation.getter, "read")
+      : undefined;
     const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
-    const write = context.input.projectTypes.memberSlotName(field.declaration, "write");
-    if (implementation === undefined || storagePath === undefined || read === undefined || write === undefined) {
+    const write = dispatch?.write === undefined
+      ? undefined
+      : context.input.projectTypes.memberSlotName(field.declaration, "write");
+    const readValue = implementation?.kind === "stored"
+      ? storagePath === undefined
+        ? undefined
+        : {
+            expression: readRustProjectObjectField(
+              { kind: "path", path: "self" },
+              storagePath,
+              field.carrier,
+            ),
+            fallible: false,
+          }
+      : implementation?.kind === "accessor"
+        ? planProjectFieldAccessorCall(
+            rootType,
+            readHelper,
+            undefined,
+            field.type,
+          )
+        : undefined;
+    if (dispatch === undefined || implementation === undefined || read === undefined ||
+      readValue === undefined ||
+      dispatch.write !== undefined && write === undefined) {
+      return undefined;
+    }
+    const readResult = dispatch.read.fallible
+      ? readValue.fallible
+        ? readValue.expression
+        : { kind: "call" as const, path: "Ok", args: [readValue.expression] }
+      : readValue.fallible
+        ? undefined
+        : readValue.expression;
+    if (readResult === undefined) {
       return undefined;
     }
     functions.push({
       name: read,
       visibility: "private",
-      selfParam: "ref",
+      selfParam: dispatch.read.selfMode,
       params: [],
       returnType: field.type,
+      ...(dispatch.read.fallible ? { fallible: true } : {}),
       body: {
         statements: [{
           kind: "tail",
-          expr: readRustProjectObjectField({ kind: "path", path: "self" }, storagePath, field.carrier),
+          expr: readResult,
         }],
       },
     });
-    functions.push({
-      name: write,
-      visibility: "private",
-      selfParam: "ref",
-      params: [{ name: "value", type: field.type }],
-      body: {
-        statements: [{
-          kind: "expr",
-          expr: writeRustProjectObjectField(
-            { kind: "path", path: "self" },
-            storagePath,
-            "=",
-            { kind: "path", path: "value" },
-          ),
-        }],
-      },
-    });
+    if (dispatch.write !== undefined) {
+      const writeValue = implementation.kind === "stored"
+        ? storagePath === undefined
+          ? undefined
+          : {
+              expression: writeRustProjectObjectField(
+                { kind: "path", path: "self" },
+                storagePath,
+                "=",
+                { kind: "path", path: "value" },
+              ),
+              fallible: false,
+            }
+        : implementation.setter === undefined
+          ? undefined
+          : (() => {
+              const helper = accessorImplementationFor(implementation.setter!, "write");
+              return planProjectFieldAccessorCall(
+                rootType,
+                helper,
+                { kind: "path", path: "value" },
+                field.type,
+              );
+            })();
+      if (writeValue === undefined || !dispatch.write.fallible && writeValue.fallible) {
+        return undefined;
+      }
+      functions.push({
+        name: write!,
+        visibility: "private",
+        selfParam: dispatch.write.selfMode,
+        params: [{ name: "value", type: field.type }],
+        ...(dispatch.write.fallible ? { fallible: true } : {}),
+        body: dispatch.write.fallible
+          ? {
+              statements: [{
+                kind: "tail",
+                expr: writeValue.fallible
+                  ? writeValue.expression
+                  : {
+                      kind: "evaluate-then",
+                      effect: writeValue.expression,
+                      discard: "unit",
+                      value: { kind: "call", path: "Ok", args: [{ kind: "path", path: "()" }] },
+                    },
+              }],
+            }
+          : {
+              statements: [{
+                kind: "expr",
+                expr: writeValue.expression,
+              }],
+            },
+      });
+    }
+  }
+  for (const accessor of projectOwnAccessors(contract, context)) {
+    const implementation = projectMemberImplementation(
+      concrete,
+      accessor.declaration,
+      context,
+    );
+    const helper = implementation === undefined
+      ? undefined
+      : accessorImplementationFor(implementation, accessor.role);
+    const slot = context.input.projectTypes.memberSlotName(
+      accessor.declaration,
+      accessor.role,
+    );
+    const contractShape = projectAccessorCallableShape(
+      contract,
+      contractCarrier,
+      accessor.declaration,
+      accessor.role,
+      context,
+    );
+    const forwarder = implementation === undefined || helper === undefined ||
+        slot === undefined || contractShape === undefined
+      ? undefined
+      : planRootCallableForwarder(
+          implementation,
+          slot,
+          rootType,
+          helper,
+          contractShape,
+          undefined,
+          context,
+        );
+    if (forwarder === undefined) {
+      return undefined;
+    }
+    functions.push(forwarder);
   }
   for (const member of projectOwnMethods(contract, context)) {
     if (context.input.ast.hasModifierKind(member, "static")) {
@@ -495,6 +678,34 @@ function planRootContractFunctions(
   return functions;
 }
 
+function planProjectFieldAccessorCall(
+  rootType: RustType,
+  helper: RustImplFunction | undefined,
+  value: RustExpr | undefined,
+  valueType: RustType,
+): { readonly expression: RustExpr; readonly fallible: boolean } | undefined {
+  const read = value === undefined;
+  const expectedParameters = read ? [] : [{ name: "value", type: valueType }];
+  if (helper === undefined || helper.selfParam !== "rc" || helper.isAsync === true ||
+    helper.isUnsafe === true || !rustFunctionTypesMatch(
+      helper.params,
+      helper.returnType,
+      expectedParameters,
+      read ? valueType : undefined,
+    )) {
+    return undefined;
+  }
+  return {
+    expression: {
+      kind: "associated-call",
+      owner: rootType,
+      method: helper.name,
+      args: [{ kind: "path", path: "self" }, ...(read ? [] : [value])],
+    },
+    fallible: helper.fallible === true,
+  };
+}
+
 function projectDowncastReturnType(
   route: RustProjectDowncastRoute,
   context: RustPlanContext,
@@ -519,12 +730,55 @@ function planRootMethodImplementation(
   variant: RustProjectMethodDispatchVariant,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
   const specialization = rustCallableSpecialization(
     variant.sourceTypeParameterNames,
     variant.targetTypeArguments,
   );
-  if (owner === undefined || specialization === undefined) {
+  return specialization === undefined
+    ? undefined
+    : planRootCallableImplementation(
+        concreteCarrier,
+        implementation,
+        context,
+        {
+          targetName: variant.exactSlot,
+          typeArgumentSubstitutions: specialization,
+        },
+      );
+}
+
+function planRootAccessorImplementation(
+  concreteCarrier: TargetTypeRef,
+  accessor: Node,
+  role: "read" | "write",
+  context: RustPlanContext,
+): RustImplFunction | undefined {
+  const targetName = context.input.projectTypes.memberSlotName(accessor, role);
+  return targetName === undefined
+    ? undefined
+    : planRootCallableImplementation(
+        concreteCarrier,
+        accessor,
+        context,
+        {
+          targetName,
+          safetyPlacement: role === "read" ? "getter" : "setter",
+        },
+      );
+}
+
+function planRootCallableImplementation(
+  concreteCarrier: TargetTypeRef,
+  implementation: Node,
+  context: RustPlanContext,
+  options: {
+    readonly targetName: string;
+    readonly safetyPlacement?: "getter" | "setter";
+    readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+  },
+): RustImplFunction | undefined {
+  const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
+  if (owner === undefined) {
     return undefined;
   }
   const ownerRelation = context.input.projectTypes.relationship(concreteCarrier, owner);
@@ -546,15 +800,20 @@ function planRootMethodImplementation(
     expressionOverrides: thisPlan.overrides,
     projectDispatchRoot: { kind: "path", path: "self" },
   }, {
-    targetName: variant.exactSlot,
-    typeArgumentSubstitutions: specialization,
+    targetName: options.targetName,
+    ...(options.safetyPlacement === undefined
+      ? {}
+      : { safetyPlacement: options.safetyPlacement }),
+    ...(options.typeArgumentSubstitutions === undefined
+      ? {}
+      : { typeArgumentSubstitutions: options.typeArgumentSubstitutions }),
   });
   if (planned === undefined) {
     return undefined;
   }
   return {
     ...planned,
-    name: variant.exactSlot,
+    name: options.targetName,
     visibility: "private",
     selfParam: "rc",
     body: thisPlan.binding === undefined
@@ -600,7 +859,29 @@ function planRootMethodForwarder(
         ),
       }, specialization)
     : undefined;
-  if (contractShape === undefined ||
+  return contractShape === undefined
+    ? undefined
+    : planRootCallableForwarder(
+        implementation,
+        slot,
+        rootType,
+        helper,
+        contractShape,
+        overrideStoragePath,
+        context,
+      );
+}
+
+function planRootCallableForwarder(
+  implementation: Node,
+  slot: string,
+  rootType: RustType,
+  helper: RustImplFunction,
+  contractShape: ProjectCallableShape,
+  overrideStoragePath: readonly string[] | undefined,
+  context: RustPlanContext,
+): RustImplFunction | undefined {
+  if (
     (helper.fallible === true) !== contractShape.fallible ||
     (helper.isUnsafe === true) !== contractShape.isUnsafe ||
     !rustFunctionTypesMatch(
@@ -678,6 +959,28 @@ function planRootMethodForwarder(
       ],
     },
   };
+}
+
+function projectAccessorCallableShape(
+  definition: RustProjectTypeDefinition,
+  carrier: TargetTypeRef,
+  declaration: Node,
+  role: "read" | "write",
+  context: RustPlanContext,
+): ProjectCallableShape | undefined {
+  const shape = projectCallableShape(declaration, {
+    ...context,
+    typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier),
+  });
+  if (shape === undefined || shape.params.length !== (role === "read" ? 0 : 1)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.project-accessor-signature",
+      "Project accessor does not preserve one exact getter or setter Rust ABI.",
+    ));
+    return undefined;
+  }
+  return shape;
 }
 
 function allocateRustLocalName(used: ReadonlySet<string>, preferred: string): string {

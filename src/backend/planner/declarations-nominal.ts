@@ -1159,6 +1159,11 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return undefined;
   }
   context.usedAliases?.add("rt");
+  const exported = ast.hasModifierKind(node, "export");
+  const interfaceAttributes = [
+    ...(structAttributes(interfaceName) ?? []),
+    ...(exported ? [] : [rustLintAttributes.deadCode]),
+  ];
   return [{
     kind: "struct",
     name: definition.stateName,
@@ -1180,10 +1185,8 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   }, {
     kind: "struct",
     name: interfaceName,
-    ...(structAttributes(interfaceName) === undefined
-      ? {}
-      : { attrs: structAttributes(interfaceName) }),
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
+    ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
+    visibility: exported ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [{
@@ -1226,6 +1229,9 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     kind: "enum",
     name: aliasName,
     visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
+    ...(ast.hasModifierKind(node, "export")
+      ? {}
+      : { attrs: [rustLintAttributes.deadCode] }),
     derives: fact.kind === "string-literal"
       ? ["Clone", "Copy", "Debug", "PartialEq"]
       : ["Clone", "Debug", "PartialEq"],

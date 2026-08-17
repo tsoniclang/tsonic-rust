@@ -104,6 +104,19 @@ export interface RustObjectLiteralMethodDispatchPlan {
   readonly isUnsafe: boolean;
 }
 
+export interface RustObjectLiteralAccessorImplementationPlan {
+  readonly storageIndex: number;
+  readonly contractDeclarations: readonly Node[];
+  readonly getter: {
+    readonly fieldName: string;
+    readonly callableType: RustType;
+  };
+  readonly setter?: {
+    readonly fieldName: string;
+    readonly callableType: RustType;
+  };
+}
+
 export interface RustObjectLiteralImplementationPlan {
   readonly expression: Node;
   readonly resultCarrier: TargetTypeRef;
@@ -117,6 +130,7 @@ export interface RustObjectLiteralImplementationPlan {
     readonly targetName: string;
     readonly type: RustType;
   }[];
+  readonly accessors: readonly RustObjectLiteralAccessorImplementationPlan[];
   readonly implementations: readonly RustObjectLiteralMethodImplementationPlan[];
   readonly methodOverrides: readonly RustObjectLiteralMethodOverridePlan[];
   readonly methods: readonly RustObjectLiteralMethodDispatchPlan[];
@@ -126,6 +140,32 @@ export interface RustObjectLiteralImplementationPlan {
 export interface RustObjectLiteralImplementationRegistry {
   readonly items: readonly RustItem[];
   forExpression(expression: Node): RustObjectLiteralImplementationPlan | undefined;
+}
+
+type RustRecordLiteralFact = Extract<
+  import("../../source/rust-facts/keys.js").RustTargetOperationFact,
+  { readonly kind: "record-literal" }
+>;
+
+export function rustObjectLiteralRequiresDispatchImplementation(
+  fact: RustRecordLiteralFact,
+  context: RustPlanContext,
+): boolean {
+  if (fact.storage !== "project-object") {
+    return false;
+  }
+  if (fact.contributions.some((contribution) =>
+    contribution.kind === "method" || contribution.kind === "accessor" ||
+    contribution.kind === "spread" && contribution.methods.length > 0)) {
+    return true;
+  }
+  return fact.fields.some((field) => field.contractDeclarations.some((declaration) => {
+    const dispatch = context.input.projectFieldDispatch.planFor(declaration);
+    return dispatch === undefined ||
+      dispatch.read.selfMode !== "ref" || dispatch.read.fallible ||
+      dispatch.write !== undefined &&
+        (dispatch.write.selfMode !== "ref" || dispatch.write.fallible);
+  }));
 }
 
 export function createRustObjectLiteralImplementationRegistry(
@@ -138,8 +178,7 @@ export function createRustObjectLiteralImplementationRegistry(
   const visit = (node: Node): void => {
     const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
     if (fact?.kind === "record-literal" &&
-      fact.contributions.some((contribution) => contribution.kind === "method" ||
-        contribution.kind === "spread" && contribution.methods.length > 0)) {
+      rustObjectLiteralRequiresDispatchImplementation(fact, context)) {
       const plan = createImplementationPlan(node, fact, context, names);
       if (plan !== undefined) {
         plans.set(node, plan);
@@ -163,10 +202,7 @@ export function createRustObjectLiteralImplementationRegistry(
 
 function createImplementationPlan(
   expression: Node,
-  fact: Extract<
-    import("../../source/rust-facts/keys.js").RustTargetOperationFact,
-    { readonly kind: "record-literal" }
-  >,
+  fact: RustRecordLiteralFact,
   context: RustPlanContext,
   names: RustSyntheticNameState,
 ): RustObjectLiteralImplementationPlan | undefined {
@@ -196,7 +232,17 @@ function createImplementationPlan(
   const rootName = allocateRustSyntheticTypeName(names, `${definition.targetName}ObjectLiteralRoot`);
   const stateName = allocateRustSyntheticTypeName(names, `${definition.targetName}ObjectLiteralState`);
   const stateFieldNames = new Set<string>();
-  const stateFields = fact.fields.map((field) => {
+  const accessorRoles = new Map<number, Set<"get" | "set">>();
+  for (const contribution of fact.contributions) {
+    if (contribution.kind !== "accessor") {
+      continue;
+    }
+    const roles = accessorRoles.get(contribution.targetStorageIndex) ?? new Set();
+    roles.add(contribution.role);
+    accessorRoles.set(contribution.targetStorageIndex, roles);
+  }
+  const stateFields = fact.fields.filter((field) =>
+    accessorRoles.get(field.storageIndex)?.has("get") !== true).map((field) => {
     const declaration = field.implementationDeclaration;
     const type = rustTypeFromCarrierInContext(field.carrier, context);
     const owner = context.input.projectTypes.definitionContainingDeclaration(declaration);
@@ -220,6 +266,58 @@ function createImplementationPlan(
     return undefined;
   }
   const methodFieldNames = new Set<string>();
+  const accessors: RustObjectLiteralAccessorImplementationPlan[] = [];
+  for (const field of fact.fields) {
+    const roles = accessorRoles.get(field.storageIndex);
+    if (roles === undefined) {
+      continue;
+    }
+    const valueType = rustTypeFromCarrierInContext(field.carrier, context);
+    const dispatch = context.input.projectFieldDispatch.planFor(
+      field.contractDeclarations[0]!,
+    );
+    if (valueType === undefined || field.contractDeclarations.length === 0 ||
+      !roles.has("get") || roles.has("set") !== !field.readonly ||
+      dispatch === undefined || !dispatch.read.fallible ||
+      (!field.readonly && dispatch.write?.fallible !== true)) {
+      return undefined;
+    }
+    const result = (type: RustType): RustType => ({
+      kind: "named",
+      path: "rt::TsonicResult",
+      typeArguments: [type],
+    });
+    accessors.push({
+      storageIndex: field.storageIndex,
+      contractDeclarations: field.contractDeclarations,
+      getter: {
+        fieldName: allocateMemberFieldName(methodFieldNames, "property_getter"),
+        callableType: {
+          kind: "named",
+          path: "rt::Callable",
+          typeArguments: [{
+            kind: "tuple",
+            elements: [wrapperType],
+          }, result(valueType)],
+        },
+      },
+      ...(roles.has("set")
+        ? {
+            setter: {
+              fieldName: allocateMemberFieldName(methodFieldNames, "property_setter"),
+              callableType: {
+                kind: "named" as const,
+                path: "rt::Callable",
+                typeArguments: [{
+                  kind: "tuple" as const,
+                  elements: [wrapperType, valueType],
+                }, result({ kind: "unit" })],
+              },
+            },
+          }
+        : {}),
+    });
+  }
   const implementations: RustObjectLiteralMethodImplementationPlan[] = [];
   for (const implementation of adapterFact?.implementations ?? []) {
     const parameterTypes = implementation.parameters.map((parameter) =>
@@ -468,6 +566,7 @@ function createImplementationPlan(
       rootType,
       wrapperType,
       finalizedStateFields,
+      accessors,
       methods,
       context,
     ));
@@ -498,6 +597,20 @@ function createImplementationPlan(
       })),
     ],
   };
+  const accessorFields = accessors.flatMap((accessor): RustStructField[] => [
+    {
+      name: accessor.getter.fieldName,
+      type: accessor.getter.callableType,
+      visibility: "private",
+    },
+    ...(accessor.setter === undefined
+      ? []
+      : [{
+          name: accessor.setter.fieldName,
+          type: accessor.setter.callableType,
+          visibility: "private" as const,
+        }]),
+  ]);
   const rootItem: RustItem = {
     kind: "struct",
     name: rootName,
@@ -520,7 +633,7 @@ function createImplementationPlan(
       name: implementation.fieldName,
       type: implementation.callableType,
       visibility: "private",
-    }))],
+    })), ...accessorFields],
   };
   return Object.freeze({
     expression,
@@ -529,6 +642,7 @@ function createImplementationPlan(
     rootName,
     stateName,
     stateFields: Object.freeze(finalizedStateFields),
+    accessors: Object.freeze(accessors),
     implementations: Object.freeze(implementations),
     methodOverrides: Object.freeze(methodOverrides),
     methods: Object.freeze(methods),
@@ -542,12 +656,13 @@ function planContractImplementation(
   rootType: RustType,
   wrapperType: RustType,
   stateFields: readonly RustObjectLiteralImplementationPlan["stateFields"][number][],
+  accessors: readonly RustObjectLiteralAccessorImplementationPlan[],
   methods: readonly RustObjectLiteralMethodDispatchPlan[],
   context: RustPlanContext,
 ): RustItem | undefined {
   const trait = rustProjectDispatchTraitType(contract.carrier, context);
   const fields = projectOwnFields(contract.definition, contract.carrier, context);
-  if (trait === undefined || fields === undefined) {
+  if (trait === undefined || fields === undefined || wrapperType.kind !== "named") {
     return undefined;
   }
   const functions: RustImplFunction[] = [];
@@ -584,46 +699,116 @@ function planContractImplementation(
     });
   }
   for (const field of fields) {
+    const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
     const stateField = stateFields.find((candidate) =>
       candidate.contractDeclarations.includes(field.declaration));
+    const accessor = accessors.find((candidate) =>
+      candidate.contractDeclarations.includes(field.declaration));
     const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
-    const write = context.input.projectTypes.memberSlotName(field.declaration, "write");
-    if (stateField === undefined || read === undefined || write === undefined) {
+    const write = dispatch?.write === undefined
+      ? undefined
+      : context.input.projectTypes.memberSlotName(field.declaration, "write");
+    if (dispatch === undefined || (stateField === undefined) === (accessor === undefined) ||
+      read === undefined || dispatch.write !== undefined && write === undefined) {
+      return undefined;
+    }
+    const readValue: RustExpr = stateField !== undefined
+      ? readRustProjectObjectField(
+          { kind: "path", path: "self" },
+          stateField.targetName,
+          field.carrier,
+        )
+      : {
+          kind: "method-call",
+          receiver: {
+            kind: "field",
+            receiver: { kind: "path", path: "self" },
+            name: accessor!.getter.fieldName,
+          },
+          method: "call",
+          args: [{
+            kind: "tuple-literal",
+            elements: [projectObjectLiteralReceiver(wrapperType.path, "self")],
+          }],
+        };
+    const readResult = dispatch.read.fallible
+      ? accessor === undefined
+        ? { kind: "call" as const, path: "Ok", args: [readValue] }
+        : readValue
+      : accessor === undefined
+        ? readValue
+        : undefined;
+    if (readResult === undefined) {
       return undefined;
     }
     functions.push({
       name: read,
       visibility: "private",
-      selfParam: "ref",
+      selfParam: dispatch.read.selfMode,
       params: [],
       returnType: field.type,
+      ...(dispatch.read.fallible ? { fallible: true } : {}),
       body: {
         statements: [{
           kind: "tail",
-          expr: readRustProjectObjectField(
-            { kind: "path", path: "self" },
-            stateField.targetName,
-            field.carrier,
-          ),
+          expr: readResult,
         }],
       },
-    }, {
-      name: write,
-      visibility: "private",
-      selfParam: "ref",
-      params: [{ name: "value", type: field.type }],
-      body: {
-        statements: [{
-          kind: "expr",
-          expr: writeRustProjectObjectField(
+    });
+    if (dispatch.write !== undefined) {
+      const writeValue: RustExpr | undefined = stateField !== undefined
+        ? writeRustProjectObjectField(
             { kind: "path", path: "self" },
             stateField.targetName,
             "=",
             { kind: "path", path: "value" },
-          ),
-        }],
-      },
-    });
+          )
+        : accessor?.setter === undefined
+          ? undefined
+          : {
+              kind: "method-call",
+              receiver: {
+                kind: "field",
+                receiver: { kind: "path", path: "self" },
+                name: accessor.setter.fieldName,
+              },
+              method: "call",
+              args: [{
+                kind: "tuple-literal",
+                elements: [
+                  projectObjectLiteralReceiver(wrapperType.path, "self"),
+                  { kind: "path", path: "value" },
+                ],
+              }],
+            };
+      if (writeValue === undefined || !dispatch.write.fallible && accessor !== undefined) {
+        return undefined;
+      }
+      functions.push({
+        name: write!,
+        visibility: "private",
+        selfParam: dispatch.write.selfMode,
+        params: [{ name: "value", type: field.type }],
+        ...(dispatch.write.fallible ? { fallible: true } : {}),
+        body: dispatch.write.fallible
+          ? {
+              statements: [{
+                kind: "tail",
+                expr: accessor === undefined
+                  ? {
+                      kind: "evaluate-then",
+                      effect: writeValue,
+                      discard: "unit",
+                      value: { kind: "call", path: "Ok", args: [{ kind: "path", path: "()" }] },
+                    }
+                  : writeValue,
+              }],
+            }
+          : {
+              statements: [{ kind: "expr", expr: writeValue }],
+            },
+      });
+    }
   }
   for (const contractMethod of projectOwnMethods(contract.definition, context)) {
     if (context.input.ast.hasModifierKind(contractMethod, "static")) {
@@ -849,6 +1034,34 @@ function planContractImplementation(
     trait,
     target: rootType,
     functions,
+  };
+}
+
+function projectObjectLiteralReceiver(wrapperPath: string, selfPath: string): RustExpr {
+  return {
+    kind: "struct-literal",
+    path: wrapperPath,
+    fields: [{
+      name: rustProjectObjectIdentityField,
+      value: {
+        kind: "method-call",
+        receiver: {
+          kind: "field",
+          receiver: { kind: "path", path: selfPath },
+          name: rustProjectObjectIdentityField,
+        },
+        method: "clone",
+        args: [],
+      },
+    }, {
+      name: rustProjectObjectDispatchField,
+      value: {
+        kind: "method-call",
+        receiver: { kind: "path", path: selfPath },
+        method: "clone",
+        args: [],
+      },
+    }],
   };
 }
 

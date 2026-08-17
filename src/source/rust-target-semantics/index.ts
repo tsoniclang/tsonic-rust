@@ -5,9 +5,13 @@ import type {
   AstReader,
   ExtensionFactSubject,
   Node,
+  ResolvedSourcePropertyAccessInfo,
   SourceFile,
   Type,
 } from "@tsonic/tsts";
+import {
+  selectSourceObjectLiteralAccessors,
+} from "@tsonic/target-api";
 import type { RustAssignmentOperator } from "../../common/rust-syntax.js";
 import { isDenseDataArray } from "../../common/closed-metadata.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
@@ -127,8 +131,10 @@ import {
   isRustVecCarrier,
   rustBigIntTargetType,
   rustCallableProtocol,
+  rustStructuralMethodCallableCarrier,
   rustClosureProtocol,
   rustCallableTargetType,
+  rustStructuralPropertyValueCarrier,
   rustClosureTargetType,
   rustJsArrayTargetType,
   rustProgramErrorTargetType,
@@ -151,7 +157,7 @@ import {
   parseSourceBigIntLiteral,
   sourceCharCodeUnit,
 } from "../../common/source-literal-values.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustObjectLiteralMethodAdapterFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustTypeAliasDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
+import { rustAsyncFunctionFactKey, rustBindingProjectionFactKey, rustClosureCaptureFactKey, rustContextualValueConversionFactKey, rustFallibleFactKey, rustFlowReadProjectionFactKey, rustFutureValueFactKey, rustGeneratorFactKey, rustLocationStorageFactKey, rustModuleBindingFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustObjectLiteralMethodAdapterFactKey, rustOptionalChainFactKey, rustOptionProjectionFactKey, rustPostCheckOperationKind, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId, rustPreparedOperationResultFactKey, rustResourceManagementFactKey, rustSelfModeFactKey, rustSourceAccessorEffectsFactKey, rustSourceBindingFactKey, rustSourceCallableReturnFactKey, rustSourceCallableValueFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey, rustTargetOperationResultCarrier, rustTypeAliasDeclarationFactKey, rustYieldFactKey } from "../rust-facts/keys.js";
 import type {
   RustFutureValueFact,
   RustSourceBindingFact,
@@ -433,34 +439,11 @@ function selectExpressionOperation(
     if (source === undefined || source.callCallee) {
       return;
     }
-    const receiverReference = walk.context.source.navigation.sourceReferenceFor(
-      source.receiver.expression,
-    );
-    recordPolicySelection(walk, expression, selectRustCheckedPropertyAccess({
-      target: "rust",
-      expression,
-      receiver: source.receiver.expression,
-      sourceReceiverType: source.receiver.type,
-      ...(source.receiver.declaration === undefined
-        ? {}
-        : { sourceReceiverDeclaration: source.receiver.declaration }),
-      ...(receiverReference?.declaration === undefined
-        ? {}
-        : { sourceReceiverValueDeclaration: receiverReference.declaration }),
-      accessMode: source.accessMode,
-      ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
-      ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
-      ...(source.selectedReadDeclaration === undefined
-        ? {}
-        : { sourceSelectedReadDeclaration: source.selectedReadDeclaration }),
-      ...(source.selectedWriteDeclaration === undefined
-        ? {}
-        : { sourceSelectedWriteDeclaration: source.selectedWriteDeclaration }),
-      ...(source.sourceReadType === undefined ? {} : { sourceReadType: source.sourceReadType }),
-      ...(source.sourceWriteType === undefined ? {} : { sourceWriteType: source.sourceWriteType }),
-      sourceResultType: source.sourceReadType ?? source.sourceWriteType,
-      optionalChain: source.optionalChain,
-    }, context, walk.operationOptions));
+    recordPolicySelection(walk, expression, selectRustCheckedPropertyAccess(
+      checkedPropertySelectionInput(walk, expression, source),
+      context,
+      walk.operationOptions,
+    ));
     return;
   }
   if (kind === KindElementAccessExpression) {
@@ -575,6 +558,41 @@ function selectExpressionOperation(
       ? {}
       : { sourceRightDeclaration: rightReference.declaration }),
   }, context, walk.operationOptions));
+}
+
+function checkedPropertySelectionInput(
+  walk: RustFactWalk,
+  expression: Node,
+  source: ResolvedSourcePropertyAccessInfo,
+): import("../../policy/operations/contracts.js").RustCheckedPropertySelectionInput {
+  const receiverReference = walk.context.source.navigation.sourceReferenceFor(
+    source.receiver.expression,
+  );
+  return {
+    target: "rust",
+    expression,
+    receiver: source.receiver.expression,
+    sourceReceiverType: source.receiver.type,
+    ...(source.receiver.declaration === undefined
+      ? {}
+      : { sourceReceiverDeclaration: source.receiver.declaration }),
+    ...(receiverReference?.declaration === undefined
+      ? {}
+      : { sourceReceiverValueDeclaration: receiverReference.declaration }),
+    accessMode: source.accessMode,
+    ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
+    ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
+    ...(source.selectedReadDeclaration === undefined
+      ? {}
+      : { sourceSelectedReadDeclaration: source.selectedReadDeclaration }),
+    ...(source.selectedWriteDeclaration === undefined
+      ? {}
+      : { sourceSelectedWriteDeclaration: source.selectedWriteDeclaration }),
+    ...(source.sourceReadType === undefined ? {} : { sourceReadType: source.sourceReadType }),
+    ...(source.sourceWriteType === undefined ? {} : { sourceWriteType: source.sourceWriteType }),
+    sourceResultType: source.sourceReadType ?? source.sourceWriteType,
+    optionalChain: source.optionalChain,
+  };
 }
 
 function rustOperatorText(kind: string | undefined): string | undefined {
@@ -829,12 +847,20 @@ export function analyzeRustProgram(context: RustTranslationContext): void {
       ["target.capability=rust.object-literal-method.exact-adapter"],
     );
   }
-  // Fallibility depends on finalized operation facts produced while walking
-  // bodies. Compute the declaration fixpoint only after those facts exist.
+  context.structuralShapes.initialize(
+    sourceTypes.structuralObjects(),
+    sourceTypes.structuralFieldImplementations(),
+  );
+  context.projectFieldDispatch.initialize({
+    ast,
+    projectTypes,
+    semanticsFor: context.semanticsFor,
+  });
+  // Fallibility depends on finalized operation facts and the one whole-program
+  // structural storage plan produced while walking bodies.
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
-  context.structuralShapes.initialize(sourceTypes.structuralObjects());
 }
 
 function promiseInnerCarrier(
@@ -2673,7 +2699,37 @@ function resolveExpressionCarrierUncached(
       return resolveCallLikeCarrier(walk, expression, sourceFile, kind, expected);
     }
     case KindPropertyAccessExpression: {
-      return undefined;
+      const semantics = walk.context.semanticsFor(expression);
+      const source = semantics.getResolvedPropertyAccessInfo(expression);
+      if (source === undefined || source.callCallee) {
+        return undefined;
+      }
+      const receiverCarrier = resolveExpressionCarrier(
+        walk,
+        source.receiver.expression,
+        sourceFile,
+        undefined,
+      );
+      if (receiverCarrier === undefined) {
+        return undefined;
+      }
+      let operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
+        walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+      if (operation === undefined) {
+        recordPolicySelection(walk, expression, selectRustCheckedPropertyAccess(
+          checkedPropertySelectionInput(walk, expression, source),
+          rustOperationContext(walk, expression),
+          walk.operationOptions,
+        ));
+        operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
+          walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+      }
+      const resultCarrier = operation === undefined
+        ? undefined
+        : rustTargetOperationResultCarrier(operation);
+      return resultCarrier === undefined
+        ? undefined
+        : setCarrierFact(walk, expression, resultCarrier);
     }
     case KindElementAccessExpression: {
       return undefined;
@@ -3523,6 +3579,16 @@ function resolveCallLikeCarrier(
   }
   const selectedSignature = walk.context.facts.get(expression, rustSelectedCallKey) ??
     walk.context.facts.resolve(expression, rustSelectedCallKey);
+  if (selectedSignature?.sourceCallableCarrier !== undefined) {
+    return applySelectedRuntimeCallableCall(
+      walk,
+      expression,
+      callee,
+      callArguments,
+      sourceFile,
+      selectedSignature,
+    );
+  }
   const selectedSourceDeclaration = asSourceNode(
     selectedSignature?.sourceDeclaration,
     walk.context.ast,
@@ -3750,6 +3816,177 @@ function selectedDeclarationIsProjectSource(walk: RustFactWalk, declaration: Nod
   }
   const sourceFile = ast.getSourceFile(declaration);
   return ast.getFileName(sourceFile).length > 0 && !ast.isDeclarationFile(sourceFile);
+}
+
+function applySelectedRuntimeCallableCall(
+  walk: RustFactWalk,
+  expression: Node,
+  callee: Node,
+  callArguments: readonly (Node | undefined)[],
+  sourceFile: SourceFile,
+  selectedSignature: RustSelectedTargetSignature,
+): TargetTypeRef | undefined {
+  const carrier = selectedSignature.sourceCallableCarrier;
+  const callable = carrier?.kind === "function-pointer"
+    ? { parameters: carrier.args, result: carrier.result }
+    : rustCallableProtocol(carrier);
+  const bindings = selectedSignature.sourceArgumentBindings;
+  const memberParameters = selectedSignature.member.parameters;
+  if (
+    carrier === undefined ||
+    callable === undefined ||
+    bindings === undefined ||
+    !isDenseDataArray(callArguments) ||
+    callArguments.some((argument) => argument === undefined) ||
+    (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !== 0 ||
+    (selectedSignature.targetTypeArguments?.length ?? 0) !== 0 ||
+    callable.parameters.length !== memberParameters.length ||
+    !rustTargetTypeRefEquals(callable.result, selectedSignature.member.returnType)
+  ) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_RUNTIME_CALLABLE_CONTRACT_CONFLICT",
+      "The exact runtime-callable selection does not have one closed argument and result contract.",
+      expression,
+      ["target.capability=rust.source-call.runtime-callable"],
+    );
+    return undefined;
+  }
+  const consumedBindings = new Set<object>();
+  const parameters = memberParameters.map((parameter, index) => {
+    const parameterCarrier = callable.parameters[index];
+    if (parameterCarrier === undefined ||
+      !rustTargetTypeRefEquals(parameterCarrier, parameter.type)) {
+      return undefined;
+    }
+    const form = parameter.paramsArray === true
+      ? "rest" as const
+      : parameter.optional === true ? "optional" as const : "required" as const;
+    const valueCarrier = form === "optional"
+      ? rustOptionElementCarrier(parameterCarrier) ?? parameterCarrier
+      : parameterCarrier;
+    const selectedBindings = bindings.filter((binding) =>
+      form === "rest"
+        ? binding.sourceParameterIndex === index
+        : binding.effectiveArgumentIndex === index);
+    if ((form === "required" && selectedBindings.length !== 1) ||
+      (form === "optional" && selectedBindings.length > 1)) {
+      return undefined;
+    }
+    const inputs = selectedBindings.map((binding) => {
+      consumedBindings.add(binding);
+      const inputCarrier = form === "rest" &&
+          binding.sourceParameterForm === "rest-element"
+        ? valueCarrier.kind === "array" ? valueCarrier.element : undefined
+        : form === "optional" ? parameterCarrier : valueCarrier;
+      return inputCarrier === undefined
+        ? undefined
+        : {
+            sourceArgumentIndex: binding.sourceArgumentIndex,
+            sourceForm: binding.sourceForm,
+            sourceParameterForm: binding.sourceParameterForm,
+            carrier: inputCarrier,
+            ...(binding.spreadElementIndex === undefined
+              ? {}
+              : { spreadElementIndex: binding.spreadElementIndex }),
+          };
+    });
+    return inputs.some((input) => input === undefined)
+      ? undefined
+      : {
+          form,
+          valueCarrier,
+          parameterCarrier,
+          mode: "value" as const,
+          inputs: inputs as readonly NonNullable<typeof inputs[number]>[],
+        };
+  });
+  if (parameters.some((parameter) => parameter === undefined) ||
+    consumedBindings.size !== bindings.length) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_RUNTIME_CALLABLE_ARGUMENT_BINDING_CONFLICT",
+      "The exact runtime-callable parameters do not form a total mapping over the checker-selected effective arguments.",
+      expression,
+      ["target.capability=rust.source-call.runtime-callable-bindings"],
+    );
+    return undefined;
+  }
+  const finalizedParameters = parameters as readonly NonNullable<
+    typeof parameters[number]
+  >[];
+  if (!applySelectedSourceCallArguments(
+    walk,
+    callArguments as readonly Node[],
+    sourceFile,
+    finalizedParameters,
+    bindings,
+  )) {
+    return undefined;
+  }
+  const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??
+    walk.context.facts.resolve(expression, rustOptionalChainFactKey);
+  if (optionalCall !== undefined &&
+    (!rustTargetTypeRefEquals(optionalCall.innerResultCarrier, callable.result) ||
+      optionalCall.operationKind !== "method")) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_OPTIONAL_CALL_RESULT_CONFLICT",
+      "The finalized optional call conflicts with the exact selected runtime-callable result carrier.",
+      expression,
+      ["target.capability=rust.optional-call.exact-result"],
+    );
+    return undefined;
+  }
+  const finalResultCarrier = optionalCall?.resultCarrier ?? callable.result;
+  const structuralMethod = selectedSignature.sourceStructuralMethod;
+  if (structuralMethod !== undefined && (
+    selectedSignature.sourceSelectedReceiverCarrier === undefined ||
+    !rustTargetTypeRefEquals(
+      structuralMethod.receiverCarrier,
+      selectedSignature.sourceSelectedReceiverCarrier,
+    ) || structuralMethod.storageIndex < 0 ||
+    !Number.isSafeInteger(structuralMethod.storageIndex)
+  )) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_STRUCTURAL_METHOD_SELECTION_CONFLICT",
+      "The exact structural-method selection has an invalid receiver or storage identity.",
+      expression,
+      ["target.capability=rust.source-call.structural-method"],
+    );
+    return undefined;
+  }
+  const target: Extract<
+    RustTargetOperationFact,
+    { readonly kind: "source-call" }
+  >["target"] = structuralMethod === undefined
+    ? { form: "callable", carrier }
+    : {
+        form: "structural-method",
+        receiverCarrier: structuralMethod.receiverCarrier,
+        storageIndex: structuralMethod.storageIndex,
+        callableCarrier: carrier,
+      };
+  recordTargetOperation(
+    walk,
+    expression,
+    selectedSignature.member.id,
+    "method",
+    target.form,
+    finalResultCarrier,
+  );
+  setRustOperationFact(walk, expression, {
+    kind: "source-call",
+    operationId: selectedSignature.member.id,
+    target,
+    parameters: finalizedParameters,
+    resultCarrier: callable.result,
+  });
+  if (target.form === "callable") {
+    resolveExpressionCarrier(walk, callee, sourceFile, carrier);
+  }
+  return setCarrierFact(walk, expression, finalResultCarrier);
 }
 
 function applySelectedProjectSourceCall(
@@ -4144,49 +4381,14 @@ function applySelectedProjectSourceCall(
       parameters = callableParameters as import("../rust-facts/keys.js").RustSourceCallParameterPlan[];
     }
   }
-  for (const [index, argument] of (callArguments as readonly Node[]).entries()) {
-    const argumentBindings = bindings.filter((binding) => binding.sourceArgumentIndex === index);
-    if (argumentBindings.length === 0) {
-      appendRustDiagnostic(
-        walk,
-        "RUST_SOURCE_CALL_BINDING_MISSING",
-        `Project-source argument ${index} has no exact selected parameter binding.`,
-        argument,
-        ["target.capability=rust.source-call.argument-bindings"],
-      );
-      return undefined;
-    }
-    const bindingCarriers = parameters.flatMap((parameter) =>
-      parameter.inputs.filter((input) => input.sourceArgumentIndex === index).map((input) => input.carrier));
-    const expected = ast.kindName(argument) === KindSpreadElement
-      ? undefined
-      : bindingCarriers.length > 0 && bindingCarriers.every((carrier) =>
-          rustTargetTypeRefEquals(carrier, bindingCarriers[0]))
-        ? bindingCarriers[0]
-        : undefined;
-    resolveExpressionCarrier(walk, argument, sourceFile, expected);
-    const parameterIndexes = [...new Set(argumentBindings.map((binding) => binding.sourceParameterIndex))];
-    const modes = parameterIndexes.map((parameterIndex) => parameters[parameterIndex]?.mode);
-    if (modes.some((mode) => mode === undefined) || modes.some((mode) => mode !== modes[0])) {
-      appendRustDiagnostic(
-        walk,
-        "RUST_SOURCE_CALL_ARGUMENT_MODE_CONFLICT",
-        `Project-source argument ${index} spans incompatible target parameter modes.`,
-        argument,
-        ["target.capability=rust.source-call.argument-modes"],
-      );
-      return undefined;
-    }
-    const mode = modes[0]!;
-    const passingMode = rustArgumentPassingMode(mode);
-    walk.context.facts.set(argument, rustArgumentPassingKey, {
-      mode: passingMode,
-      ...(mode === "value" ? {} : { storageExpression: argument }),
-    }, [{ message: `rust selected project-source argument ${index} passes as ${passingMode}` }]);
-    validateFlowMarkerAgainstMode(walk, argument, mode);
-    if (mode === "mut-ref") {
-      recordBindingWrite(walk, argument, "referent");
-    }
+  if (!applySelectedSourceCallArguments(
+    walk,
+    callArguments as readonly Node[],
+    sourceFile,
+    parameters,
+    bindings,
+  )) {
+    return undefined;
   }
   if (optionalCall !== undefined &&
     (!rustTargetTypeRefEquals(optionalCall.innerResultCarrier, resultCarrier) ||
@@ -4218,6 +4420,68 @@ function applySelectedProjectSourceCall(
     resultCarrier,
   });
   return setCarrierFact(walk, expression, finalResultCarrier);
+}
+
+function applySelectedSourceCallArguments(
+  walk: RustFactWalk,
+  callArguments: readonly Node[],
+  sourceFile: SourceFile,
+  parameters: readonly import("../rust-facts/keys.js").RustSourceCallParameterPlan[],
+  bindings: readonly NonNullable<RustSelectedTargetSignature["sourceArgumentBindings"]>[number][],
+): boolean {
+  const { ast } = walk.context;
+  for (const [index, argument] of callArguments.entries()) {
+    const argumentBindings = bindings.filter((binding) =>
+      binding.sourceArgumentIndex === index);
+    if (argumentBindings.length === 0) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SOURCE_CALL_BINDING_MISSING",
+        `Selected source argument ${index} has no exact parameter binding.`,
+        argument,
+        ["target.capability=rust.source-call.argument-bindings"],
+      );
+      return false;
+    }
+    const bindingCarriers = parameters.flatMap((parameter) =>
+      parameter.inputs
+        .filter((input) => input.sourceArgumentIndex === index)
+        .map((input) => input.carrier));
+    const expected = ast.kindName(argument) === KindSpreadElement
+      ? undefined
+      : bindingCarriers.length > 0 && bindingCarriers.every((carrier) =>
+          rustTargetTypeRefEquals(carrier, bindingCarriers[0]))
+        ? bindingCarriers[0]
+        : undefined;
+    resolveExpressionCarrier(walk, argument, sourceFile, expected);
+    const modes = parameters
+      .filter((parameter) => parameter.inputs.some((input) =>
+        input.sourceArgumentIndex === index))
+      .map((parameter) => parameter.mode);
+    if (modes.length === 0 || modes.some((mode) => mode !== modes[0])) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SOURCE_CALL_ARGUMENT_MODE_CONFLICT",
+        `Selected source argument ${index} spans incompatible target parameter modes.`,
+        argument,
+        ["target.capability=rust.source-call.argument-modes"],
+      );
+      return false;
+    }
+    const mode = modes[0]!;
+    const passingMode = rustArgumentPassingMode(mode);
+    walk.context.facts.set(argument, rustArgumentPassingKey, {
+      mode: passingMode,
+      ...(mode === "value" ? {} : { storageExpression: argument }),
+    }, [{
+      message: `rust selected source argument ${index} passes as ${passingMode}`,
+    }]);
+    validateFlowMarkerAgainstMode(walk, argument, mode);
+    if (mode === "mut-ref") {
+      recordBindingWrite(walk, argument, "referent");
+    }
+  }
+  return true;
 }
 
 function finalizeProjectSourceTargetTypeArguments(
@@ -5033,16 +5297,54 @@ function resolveRecordLiteralCarrier(
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
+  const properties = requireDenseSourceNodes(walk, ast.properties(expression), "Object literal contains an undefined or non-data property slot.");
+  if (properties === undefined) {
+    return undefined;
+  }
+  const accessorSelection = selectSourceObjectLiteralAccessors(
+    ast,
+    walk.context.semanticsFor(expression),
+    expression,
+  );
+  if (accessorSelection.kind === "rejected") {
+    appendRustDiagnostic(
+      walk,
+      "RUST_OBJECT_LITERAL_ACCESSOR_EVIDENCE_MISSING",
+      accessorSelection.reason,
+      accessorSelection.element,
+      ["target.capability=rust.object-literal.accessor.selected-evidence"],
+    );
+    return undefined;
+  }
+  const accessorsByElement = new Map<Node,
+    Extract<typeof accessorSelection, { readonly kind: "resolved" }>[
+      "members"
+    ][number]
+  >();
+  if (accessorSelection.kind === "resolved") {
+    for (const accessor of accessorSelection.members) {
+      if (accessor.getter === undefined) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_OBJECT_LITERAL_SETTER_ONLY_UNSUPPORTED",
+          `Object-literal setter '${accessor.sourceName}' has no getter and therefore no exact Rust read carrier.`,
+          accessor.setter?.element,
+          ["target.capability=rust.object-literal.accessor.closed-read-write"],
+        );
+        return undefined;
+      }
+      accessorsByElement.set(accessor.getter.element, accessor);
+      if (accessor.setter !== undefined) {
+        accessorsByElement.set(accessor.setter.element, accessor);
+      }
+    }
+  }
   const selectedExpected = expected ?? resolveRustTargetTypeRef(
     walk.context.semanticsFor(expression).getTypeAtLocation(expression),
     rustResolutionContext(walk, expression),
     walk.operationOptions,
   );
   if (selectedExpected === undefined) {
-    return undefined;
-  }
-  const properties = requireDenseSourceNodes(walk, ast.properties(expression), "Object literal contains an undefined or non-data property slot.");
-  if (properties === undefined) {
     return undefined;
   }
   const indexedDefinition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
@@ -5061,6 +5363,14 @@ function resolveRecordLiteralCarrier(
     );
   }
   const explicitPropertiesByName = new Map<string, Node>();
+  if (accessorSelection.kind === "resolved") {
+    for (const accessor of accessorSelection.members) {
+      if (explicitPropertiesByName.has(accessor.sourceName)) {
+        return undefined;
+      }
+      explicitPropertiesByName.set(accessor.sourceName, accessor.getter!.element);
+    }
+  }
   let containsSpread = false;
   for (const property of properties) {
     const kind = ast.kindName(property);
@@ -5069,6 +5379,12 @@ function resolveRecordLiteralCarrier(
       continue;
     }
     if (kind === "KindMethodDeclaration") {
+      continue;
+    }
+    if (kind === "KindGetAccessor" || kind === "KindSetAccessor") {
+      if (!accessorsByElement.has(property)) {
+        return undefined;
+      }
       continue;
     }
     if (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment") {
@@ -5093,6 +5409,13 @@ function resolveRecordLiteralCarrier(
     readonly sourceName: string;
     readonly storageIndex: number;
     readonly carrier: TargetTypeRef;
+    readonly presence: "required" | "optional";
+    readonly readonly: boolean;
+    readonly accessor?: {
+      readonly getter: true;
+      readonly setter: boolean;
+    };
+    readonly method?: true;
   }[];
   let selectedMethodDeclarations: readonly Node[] = [];
   if (sourceValue?.shape === "object") {
@@ -5133,6 +5456,8 @@ function resolveRecordLiteralCarrier(
               implementationDeclaration: implementation.implementation.declaration,
               sourceName: field.sourceName,
               carrier,
+              presence: "required" as const,
+              readonly: ast.hasModifierKind(field.declaration, "readonly"),
             };
       });
     });
@@ -5145,12 +5470,16 @@ function resolveRecordLiteralCarrier(
       readonly sourceName: string;
       readonly storageIndex: number;
       readonly carrier: TargetTypeRef;
+      readonly presence: "required";
+      readonly readonly: boolean;
     }[] = [];
     for (const field of contractFields as readonly {
       readonly contractDeclaration: Node;
       readonly implementationDeclaration: Node;
       readonly sourceName: string;
       readonly carrier: TargetTypeRef;
+      readonly presence: "required";
+      readonly readonly: boolean;
     }[]) {
       const existing = projectFields.find((candidate) =>
         candidate.implementationDeclaration === field.implementationDeclaration);
@@ -5167,6 +5496,8 @@ function resolveRecordLiteralCarrier(
         sourceName: field.sourceName,
         storageIndex: projectFields.length,
         carrier: field.carrier,
+        presence: "required",
+        readonly: field.readonly,
       });
     }
     resultCarrier = selectedExpected;
@@ -5181,6 +5512,12 @@ function resolveRecordLiteralCarrier(
       readonly sourceName: string;
       readonly storageIndex: number;
       readonly carrier: TargetTypeRef;
+      readonly presence: "required";
+      readonly readonly: boolean;
+      readonly accessor?: {
+        readonly getter: true;
+        readonly setter: boolean;
+      };
     }[];
   } else {
     let structuralCarrier = structuralExpected === undefined ? undefined : selectedExpected;
@@ -5212,12 +5549,50 @@ function resolveRecordLiteralCarrier(
     }
     resultCarrier = structuralCarrier;
     storage = "object-handle";
-    selectedFields = structuralValue.fields.map((field, storageIndex) => ({
-      contractDeclarations: Object.freeze([]),
-      sourceName: field.sourceName,
-      storageIndex,
-      carrier: field.type,
-    }));
+    const structuralShape = walk.sourceTypes.structuralObjectForCarrier(structuralCarrier);
+    if (structuralShape === undefined ||
+      structuralShape.fields.length !== structuralValue.fields.length) {
+      return undefined;
+    }
+    const selectedAccessorMembers = accessorSelection.kind === "resolved"
+      ? accessorSelection.members
+      : [];
+    const structuralFields = structuralValue.fields.map((field, storageIndex) => {
+      const sourceField = structuralShape.fields[storageIndex];
+      const matchingAccessors = selectedAccessorMembers.filter((accessor) =>
+        accessor.sourceName === field.sourceName
+      );
+      const accessor = matchingAccessors[0];
+      if (sourceField === undefined || sourceField.sourceName !== field.sourceName ||
+        sourceField.storageIndex !== storageIndex ||
+        !rustTargetTypeRefEquals(sourceField.resultCarrier, field.type) ||
+        sourceField.presence !== field.presence || sourceField.readonly !== field.readonly ||
+        sourceField.accessor?.setter !== field.accessor?.setter ||
+        sourceField.method !== field.method || matchingAccessors.length > 1 ||
+        (accessor !== undefined && (
+          field.method === true || accessor.getter === undefined ||
+          accessor.sourceSelectedDeclarations.length === 0 ||
+          accessor.sourceSelectedDeclarations.some((declaration) =>
+            !sourceField.declarations.includes(declaration)) ||
+          !field.readonly && accessor.setter === undefined
+        ))) {
+        return undefined;
+      }
+      return {
+        contractDeclarations: sourceField.declarations,
+        sourceName: field.sourceName,
+        storageIndex,
+        carrier: field.type,
+        presence: field.presence,
+        readonly: field.readonly,
+        ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
+        ...(field.method === true ? { method: true as const } : {}),
+      };
+    });
+    if (structuralFields.some((field) => field === undefined)) {
+      return undefined;
+    }
+    selectedFields = structuralFields as typeof selectedFields;
   }
   const selectedFieldByName = new Map(selectedFields.map((field) => [field.sourceName, field]));
   if (selectedFieldByName.size !== selectedFields.length) {
@@ -5228,6 +5603,7 @@ function resolveRecordLiteralCarrier(
     { readonly kind: "record-literal" }
   >["contributions"][number][] = [];
   const assignedStorageIndexes = new Set<number>();
+  const assignedAccessorRoles = new Map<number, Set<"get" | "set">>();
   const assignedMethodDeclarations = new Set<Node>();
   for (const property of properties) {
     const kind = ast.kindName(property);
@@ -5248,13 +5624,23 @@ function resolveRecordLiteralCarrier(
         readonly sourceStorageIndex: number;
         readonly targetStorageIndex: number;
         readonly carrier: TargetTypeRef;
+        readonly accessor?: {
+          readonly getter: true;
+          readonly setter: boolean;
+        };
+        readonly method?: true;
       }[] = [];
       for (const sourceField of sourceShape.fields) {
         const targetField = selectedFieldByName.get(sourceField.sourceName);
         if (targetField === undefined) {
           continue;
         }
-        if (!rustTargetTypeRefEquals(sourceField.carrier, targetField.carrier)) {
+        if (!rustTargetTypeRefEquals(sourceField.carrier, targetField.carrier) ||
+          sourceField.method !== targetField.method ||
+          sourceField.method === true && (
+            sourceShape.storage !== "object-handle" ||
+            !rustTargetTypeRefEquals(sourceCarrier, resultCarrier)
+          )) {
           return undefined;
         }
         spreadFields.push({
@@ -5262,6 +5648,10 @@ function resolveRecordLiteralCarrier(
           sourceStorageIndex: sourceField.storageIndex,
           targetStorageIndex: targetField.storageIndex,
           carrier: targetField.carrier,
+          ...(sourceField.accessor === undefined
+            ? {}
+            : { accessor: sourceField.accessor }),
+          ...(sourceField.method === true ? { method: true as const } : {}),
         });
         assignedStorageIndexes.add(targetField.storageIndex);
       }
@@ -5308,6 +5698,76 @@ function resolveRecordLiteralCarrier(
     }
     const selectedElement = walk.context.semanticsFor(property)
       .getResolvedObjectLiteralElementInfo(property);
+    if (kind === "KindGetAccessor" || kind === "KindSetAccessor") {
+      const accessor = accessorsByElement.get(property);
+      const role = kind === "KindGetAccessor" ? "get" as const : "set" as const;
+      const matchingFields = accessor === undefined
+        ? []
+        : selectedFields.filter((field) =>
+            field.method !== true && field.sourceName === accessor.sourceName &&
+            accessor.sourceSelectedDeclarations.length > 0 &&
+            accessor.sourceSelectedDeclarations.every((declaration) =>
+              field.contractDeclarations.includes(declaration))
+          );
+      const targetField = matchingFields.length === 1 ? matchingFields[0] : undefined;
+      const valueCarrier = targetField === undefined
+        ? undefined
+        : rustStructuralPropertyValueCarrier(targetField.carrier, targetField.presence);
+      const callableCarrier = targetField === undefined || valueCarrier === undefined
+        ? undefined
+        : role === "get"
+          ? rustCallableTargetType([resultCarrier], valueCarrier)
+          : rustCallableTargetType(
+              [resultCarrier, valueCarrier],
+              rustUnitTargetType(),
+            );
+      if (role === "set" && targetField?.presence === "optional") {
+        appendRustDiagnostic(
+          walk,
+          "RUST_STRUCTURAL_OPTIONAL_ACCESSOR_WRITE_UNSUPPORTED",
+          `Optional structural property '${targetField.sourceName}' has a source write contract that includes undefined, but its authored setter accepts only the declared value type.`,
+          property,
+          [
+            "target.capability=rust.structural-property.optional-accessor-write",
+            "source.write=exact-selected-property-contract",
+          ],
+        );
+        return undefined;
+      }
+      if (accessor === undefined ||
+        targetField === undefined || valueCarrier === undefined ||
+        role === "set" && targetField.readonly || callableCarrier === undefined ||
+        selectedElement === undefined ||
+        selectedElement.sourceSelectedSymbol !== accessor.sourceSelectedSymbol ||
+        !selectedElement.sourceSelectedDeclarations.every((declaration) =>
+          accessor.sourceSelectedDeclarations.includes(declaration)) ||
+        resolveFunctionExpressionCarrier(
+          walk,
+          property,
+          sourceFile,
+          callableCarrier,
+          {
+            leadingParameters: [{ kind: "this", carrier: resultCarrier }],
+            preserveSourceParameterForms: true,
+          },
+        ) === undefined) {
+        return undefined;
+      }
+      const roles = assignedAccessorRoles.get(targetField.storageIndex) ?? new Set();
+      if (roles.has(role)) {
+        return undefined;
+      }
+      roles.add(role);
+      assignedAccessorRoles.set(targetField.storageIndex, roles);
+      contributions.push({
+        kind: "accessor",
+        property,
+        sourceName: accessor.sourceName,
+        targetStorageIndex: targetField.storageIndex,
+        role,
+      });
+      continue;
+    }
     if (kind === "KindMethodDeclaration") {
       const selectedDeclarations = selectedElement?.sourceSelectedDeclarations ?? [];
       const selectedDeclaration = selectedElement?.sourceSelectedDeclaration;
@@ -5319,14 +5779,66 @@ function resolveRecordLiteralCarrier(
             selectedElement.sourceSelectedType,
             selectedElement.sourceElementType,
           );
-      const selectedCallable = rustCallableProtocol(selectedMemberCarrier);
-      const selectedClosure = rustClosureProtocol(selectedMemberCarrier);
-      const selectedParameterCarriers = selectedMemberCarrier?.kind === "function-pointer"
-        ? selectedMemberCarrier.args
+      const selectedCallableCarrier = rustOptionElementCarrier(selectedMemberCarrier) ??
+        selectedMemberCarrier;
+      const selectedCallable = rustCallableProtocol(selectedCallableCarrier);
+      const selectedClosure = rustClosureProtocol(selectedCallableCarrier);
+      const selectedParameterCarriers = selectedCallableCarrier?.kind === "function-pointer"
+        ? selectedCallableCarrier.args
         : selectedCallable?.parameters ?? selectedClosure?.parameters;
-      const selectedResultCarrier = selectedMemberCarrier?.kind === "function-pointer"
-        ? selectedMemberCarrier.result
+      const selectedResultCarrier = selectedCallableCarrier?.kind === "function-pointer"
+        ? selectedCallableCarrier.result
         : selectedCallable?.result ?? selectedClosure?.result;
+      const sourceNameNode = ast.name(property);
+      const sourceName = sourceNameNode === undefined ? "" : ast.text(sourceNameNode);
+      if (storage === "object-handle") {
+        const methodProjection = selectedDeclaration === undefined
+          ? undefined
+          : walk.sourceTypes.structuralFieldProjectionForDeclaration(
+              selectedDeclaration,
+              resultCarrier,
+            );
+        const targetField = selectedFields.find((field) =>
+          field.method === true && field.sourceName === sourceName &&
+          field.storageIndex === methodProjection?.field.storageIndex);
+        const targetCallableCarrier = targetField === undefined
+          ? undefined
+          : rustStructuralMethodCallableCarrier(
+              targetField.carrier,
+              targetField.presence,
+            );
+        const targetCallable = rustCallableProtocol(targetCallableCarrier);
+        if (selectedElement?.elementKind !== "method" ||
+          selectedDeclaration === undefined || targetField === undefined ||
+          selectedParameterCarriers === undefined || selectedResultCarrier === undefined ||
+          targetCallable === undefined ||
+          targetCallable.parameters.length !== selectedParameterCarriers.length ||
+          targetCallable.parameters.some((carrier, index) =>
+            !rustTargetTypeRefEquals(carrier, selectedParameterCarriers[index])) ||
+          !rustTargetTypeRefEquals(targetCallable.result, selectedResultCarrier)) {
+          return undefined;
+        }
+        const methodCarrier = rustCallableTargetType(
+          [resultCarrier, ...selectedParameterCarriers],
+          selectedResultCarrier,
+        );
+        if (resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
+          leadingParameters: [{ kind: "this", carrier: resultCarrier }],
+          preserveSourceParameterForms: true,
+          selectedMethodDeclaration: selectedDeclaration,
+        }) === undefined) {
+          return undefined;
+        }
+        contributions.push({
+          kind: "structural-method",
+          property,
+          expression: property,
+          sourceName,
+          targetStorageIndex: targetField.storageIndex,
+        });
+        assignedStorageIndexes.add(targetField.storageIndex);
+        continue;
+      }
       const matchedDeclarations = selectedMethodDeclarations.filter((declaration) => {
         const implementation = selectedProjectDefinition === undefined
           ? undefined
@@ -5451,7 +5963,14 @@ function resolveRecordLiteralCarrier(
     });
     assignedStorageIndexes.add(targetField.storageIndex);
   }
-  if (assignedStorageIndexes.size !== selectedFields.length ||
+  const everyFieldAssigned = selectedFields.every((field) => {
+    const roles = assignedAccessorRoles.get(field.storageIndex);
+    const accessorComplete = roles?.has("get") === true &&
+      (field.readonly || roles.has("set"));
+    return field.presence === "optional" ||
+      assignedStorageIndexes.has(field.storageIndex) || accessorComplete;
+  });
+  if (!everyFieldAssigned ||
     selectedMethodDeclarations.some((declaration) => !assignedMethodDeclarations.has(declaration))) {
     return undefined;
   }
@@ -5463,7 +5982,36 @@ function resolveRecordLiteralCarrier(
     sourceName: field.sourceName,
     storageIndex: field.storageIndex,
     carrier: field.carrier,
+    presence: field.presence,
+    readonly: field.readonly,
+    ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
+    ...(field.method === true ? { method: true as const } : {}),
   }));
+  if (storage === "object-handle" && selectedFields.some((field) => {
+    if (field.method === true) {
+      return false;
+    }
+    const kinds = [
+      ...(assignedStorageIndexes.has(field.storageIndex) ? ["stored" as const] : []),
+      ...(assignedAccessorRoles.get(field.storageIndex)?.has("get") === true
+        ? ["accessor" as const]
+        : []),
+    ];
+    return kinds.some((kind) => !walk.sourceTypes.registerStructuralFieldImplementation({
+      carrier: resultCarrier,
+      storageIndex: field.storageIndex,
+      kind,
+    }));
+  })) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_STRUCTURAL_PROPERTY_IMPLEMENTATION_CONFLICT",
+      "A structural property implementation conflicts with its finalized carrier and storage slot.",
+      expression,
+      ["target.capability=rust.structural-property.closed-storage"],
+    );
+    return undefined;
+  }
   setRustOperationFact(walk, expression, {
     kind: "record-literal",
     operationId: "tsonic.rust.record.literal",
@@ -5472,6 +6020,22 @@ function resolveRecordLiteralCarrier(
     fields,
     contributions,
   });
+  if (storage === "project-object") {
+    for (const contribution of contributions) {
+      if (contribution.kind !== "accessor") {
+        continue;
+      }
+      const field = fields.find((candidate) =>
+        candidate.storageIndex === contribution.targetStorageIndex);
+      if (field === undefined) {
+        return undefined;
+      }
+      walk.context.projectFieldDispatch.recordObjectLiteralAccessor(
+        field.contractDeclarations,
+        contribution.role,
+      );
+    }
+  }
   if (contributions.some((contribution) => contribution.kind === "method")) {
     walk.objectLiteralMethodExpressions.push(expression);
   }
@@ -5732,6 +6296,12 @@ interface RustResolvedRecordShape {
     readonly sourceName: string;
     readonly storageIndex: number;
     readonly carrier: TargetTypeRef;
+    readonly presence: "required" | "optional";
+    readonly accessor?: {
+      readonly getter: true;
+      readonly setter: boolean;
+    };
+    readonly method?: true;
   }[];
 }
 
@@ -5765,6 +6335,7 @@ function resolveRustRecordShape(
             sourceName: field.sourceName,
             storageIndex: field.storageIndex,
             carrier: instantiated,
+            presence: "required" as const,
           };
     });
     return fields.some((field) => field === undefined)
@@ -5775,6 +6346,7 @@ function resolveRustRecordShape(
             readonly sourceName: string;
             readonly storageIndex: number;
             readonly carrier: TargetTypeRef;
+            readonly presence: "required";
           }[],
         };
   }
@@ -5787,6 +6359,9 @@ function resolveRustRecordShape(
           sourceName: field.sourceName,
           storageIndex,
           carrier: field.type,
+          presence: field.presence,
+          ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
+          ...(field.method === true ? { method: true as const } : {}),
         })),
       };
 }
@@ -5904,7 +6479,7 @@ function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       walk.operationOptions,
     );
     if (carrier === undefined ||
-      !walk.sourceTypes.registerDeclarationCarrier(declaration, carrier)) {
+      !walk.sourceTypes.registerRepresentationAlias(declaration, carrier)) {
       return;
     }
     setCarrierFact(walk, declaration, carrier);
@@ -5965,14 +6540,18 @@ function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     }, [{ message: "rust representation-identical union declaration" }]);
     return;
   }
-  const finalizedVariants = uniqueVariants.map((variant, index) => ({
-    name: `Variant${index}`,
-    sourceType: variant.sourceType,
-    carrier: variant.carrier,
-    ...(walk.sourceTypes.structuralObjectForType(variant.sourceType) === undefined
-      ? {}
-      : { shape: walk.sourceTypes.structuralObjectForType(variant.sourceType)! }),
-  }));
+  const finalizedVariants = uniqueVariants.map((variant, index) => {
+    const shape = walk.sourceTypes.structuralObjectForType(
+      variant.sourceType,
+      variant.carrier,
+    );
+    return {
+      name: `Variant${index}`,
+      sourceType: variant.sourceType,
+      carrier: variant.carrier,
+      ...(shape === undefined ? {} : { shape }),
+    };
+  });
   const carrier = rustSourceUnionTargetType(
     fileName,
     typeName,
@@ -6553,11 +7132,35 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
   const operationIsFallible = (node: Node): boolean => {
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(node, rustTargetOperationFactKey);
+    const bindingProjection = walk.context.facts.get(node, rustBindingProjectionFactKey) ??
+      walk.context.facts.resolve(node, rustBindingProjectionFactKey);
     const contextualConversion = walk.context.facts.get(
       node,
       rustContextualValueConversionFactKey,
     ) ?? walk.context.facts.resolve(node, rustContextualValueConversionFactKey);
-    return rustTargetOperationIsFallible(operation) ||
+    const projection = bindingProjection?.projection;
+    const bindingProjectionIsFallible = bindingProjection === undefined
+      ? false
+      : projection?.kind === "object-field"
+      ? projection.accessor !== undefined ||
+        projection.storage === "object-handle" &&
+          walk.context.structuralShapes.field(
+            bindingProjection.sourceCarrier,
+            projection.storageIndex,
+          )?.storage === "property"
+      : projection?.kind === "object-rest" &&
+        projection.fields.some((field) => field.accessor !== undefined ||
+          projection.storage === "object-handle" &&
+            walk.context.structuralShapes.field(
+              bindingProjection.sourceCarrier,
+              field.sourceStorageIndex,
+            )?.storage === "property");
+    return rustTargetOperationIsFallible(
+      operation,
+      walk.context.structuralShapes,
+      walk.context.projectFieldDispatch,
+    ) ||
+      bindingProjectionIsFallible ||
       rustValueConversionIsFallible(contextualConversion?.conversion);
   };
   const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
@@ -6893,8 +7496,10 @@ function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: readonly
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         if (operation?.kind === "source-call") {
           const declaration = selectedProjectDeclaration(node);
-          const runtimeCallable = operation.target.form === "callable" &&
-            rustCallableProtocol(operation.target.carrier) !== undefined;
+          const runtimeCallable = (operation.target.form === "callable" &&
+              rustCallableProtocol(operation.target.carrier) !== undefined) ||
+            operation.target.form === "structural-method" &&
+              rustCallableProtocol(operation.target.callableCarrier) !== undefined;
           if (runtimeCallable || declaration !== undefined) {
             const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;
             const isFallible = declaration !== undefined && fallible.has(declaration);

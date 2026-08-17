@@ -49,6 +49,13 @@ export interface RustSourceTypeCarrierValue {
 export interface RustStructuralObjectFieldCarrierValue {
   readonly sourceName: string;
   readonly type: TargetTypeRef;
+  readonly presence: "required" | "optional";
+  readonly readonly: boolean;
+  readonly accessor?: {
+    readonly getter: true;
+    readonly setter: boolean;
+  };
+  readonly method?: true;
 }
 
 export interface RustStructuralObjectCarrierValue {
@@ -148,13 +155,29 @@ export function rustStructuralObjectCarrierValue(
   const seenNames = new Set<string>();
   const normalized: RustStructuralObjectFieldCarrierValue[] = [];
   for (const field of fields) {
-    if (typeof field !== "object" || field === null || Array.isArray(field) ||
-      !hasExactObjectKeys(field, ["sourceName", "type"])) {
+    if (typeof field !== "object" || field === null || Array.isArray(field)) {
       return undefined;
     }
     const candidate = field as Partial<RustStructuralObjectFieldCarrierValue>;
+    const expectedKeys = candidate.accessor !== undefined
+      ? ["accessor", "presence", "readonly", "sourceName", "type"]
+      : candidate.method === true
+        ? ["method", "presence", "readonly", "sourceName", "type"]
+        : ["presence", "readonly", "sourceName", "type"];
     if (typeof candidate.sourceName !== "string" || candidate.sourceName.length === 0 ||
-      seenNames.has(candidate.sourceName) || !isRustTargetTypeRef(candidate.type)) {
+      seenNames.has(candidate.sourceName) || !isRustTargetTypeRef(candidate.type) ||
+      (candidate.presence !== "required" && candidate.presence !== "optional") ||
+      typeof candidate.readonly !== "boolean" ||
+      !hasExactObjectKeys(field, expectedKeys) ||
+      candidate.accessor !== undefined && candidate.method !== undefined ||
+      candidate.method !== undefined && candidate.method !== true ||
+      candidate.accessor !== undefined && (
+        typeof candidate.accessor !== "object" || candidate.accessor === null ||
+        Array.isArray(candidate.accessor) ||
+        !hasExactObjectKeys(candidate.accessor, ["getter", "setter"]) ||
+        candidate.accessor.getter !== true ||
+        typeof candidate.accessor.setter !== "boolean"
+      )) {
       return undefined;
     }
     seenNames.add(candidate.sourceName);
@@ -677,6 +700,11 @@ export function inferRustTargetTypeParameterBindings(
             leftStructural.fields.every((field, index) => {
               const other = rightStructural.fields[index];
               return other !== undefined && field.sourceName === other.sourceName &&
+                field.presence === other.presence &&
+                field.readonly === other.readonly &&
+                field.accessor?.getter === other.accessor?.getter &&
+                field.accessor?.setter === other.accessor?.setter &&
+                field.method === other.method &&
                 match(field.type, other.type);
             });
         }
@@ -757,6 +785,65 @@ export function rustCallableProtocol(
   return argumentsCarrier?.kind === "tuple" && result !== undefined
     ? { parameters: argumentsCarrier.elements, result }
     : undefined;
+}
+
+export function rustStructuralMethodCallableCarrier(
+  fieldCarrier: TargetTypeRef,
+  presence: "required" | "optional",
+): TargetTypeRef | undefined {
+  const callableCarrier = presence === "optional"
+    ? rustOptionElementCarrier(fieldCarrier)
+    : fieldCarrier;
+  return rustCallableProtocol(callableCarrier) === undefined ? undefined : callableCarrier;
+}
+
+export function rustStructuralMethodStorageCarrier(
+  receiverCarrier: TargetTypeRef,
+  fieldCarrier: TargetTypeRef,
+  presence: "required" | "optional",
+): TargetTypeRef | undefined {
+  const callableCarrier = rustStructuralMethodCallableCarrier(fieldCarrier, presence);
+  const callable = rustCallableProtocol(callableCarrier);
+  if (callable === undefined) {
+    return undefined;
+  }
+  const storageCarrier = rustCallableTargetType(
+    [receiverCarrier, ...callable.parameters],
+    callable.result,
+  );
+  return presence === "optional" ? rustOptionTargetType(storageCarrier) : storageCarrier;
+}
+
+export function rustStructuralPropertyValueCarrier(
+  fieldCarrier: TargetTypeRef,
+  presence: "required" | "optional",
+): TargetTypeRef | undefined {
+  return presence === "optional" ? rustOptionElementCarrier(fieldCarrier) : fieldCarrier;
+}
+
+export function rustStructuralPropertyGetterStorageCarrier(
+  receiverCarrier: TargetTypeRef,
+  fieldCarrier: TargetTypeRef,
+  presence: "required" | "optional",
+): TargetTypeRef | undefined {
+  const valueCarrier = rustStructuralPropertyValueCarrier(fieldCarrier, presence);
+  return valueCarrier === undefined
+    ? undefined
+    : rustOptionTargetType(rustCallableTargetType([receiverCarrier], valueCarrier));
+}
+
+export function rustStructuralPropertySetterStorageCarrier(
+  receiverCarrier: TargetTypeRef,
+  fieldCarrier: TargetTypeRef,
+  presence: "required" | "optional",
+): TargetTypeRef | undefined {
+  const valueCarrier = rustStructuralPropertyValueCarrier(fieldCarrier, presence);
+  return valueCarrier === undefined
+    ? undefined
+    : rustOptionTargetType(rustCallableTargetType(
+        [receiverCarrier, valueCarrier],
+        rustUnitTargetType(),
+      ));
 }
 
 export function rustClosureTargetType(

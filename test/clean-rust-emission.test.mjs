@@ -33,6 +33,14 @@ export function buildSite(siteDir: string): BuildResult {
   return new BuildResult(siteDir, currentValue);
 }
 
+export function selectUsed(unusedValue: int32, usedValue: int32): int32 {
+  return usedValue;
+}
+
+export function preserveCollision(_value: int32, value: int32): int32 {
+  return _value;
+}
+
 export function main(): void {
   buildSite("site").pageLabel("built: ");
 }
@@ -48,6 +56,8 @@ export function main(): void {
   assert.match(source, /pub\(crate\) state: rt::ObjectHandle<BuildResultState>/u);
   assert.match(source, /pub fn page_label\([^)]*prefix_text: String/u);
   assert.match(source, /pub fn build_site\(site_dir: String\) -> BuildResult/u);
+  assert.match(source, /pub fn select_used\(_unused_value: i32, used_value: i32\) -> i32/u);
+  assert.match(source, /pub fn preserve_collision\(_value: i32, _value_2: i32\) -> i32/u);
   assert.match(source, /build_site\(String::from\("site"\)\)\.page_label/u);
   assert.doesNotMatch(source, /\b(?:currentValue|outputDir|pagesBuilt|pageLabel|prefixText|buildSite|siteDir)\b/u);
   assert.doesNotMatch(source, /__tsonic_state|state\.\d/u);
@@ -104,6 +114,8 @@ export function main(): void {
   assert.match(source, /type_marker: std::marker::PhantomData<\(T,\)>/u);
   assert.match(source, /state: rt::ObjectHandle<MarkerState<T>>/u);
   assert.match(source, /type_marker: std::marker::PhantomData/u);
+  assert.match(source, /Marker::<i32>::new\(String::from\("ready"\)\)/u);
+  assert.doesNotMatch(source, /Marker::new::<i32>/u);
   validateGeneratedProject("clean-generic-state", result.artifacts);
 });
 

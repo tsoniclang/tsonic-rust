@@ -45,6 +45,12 @@ import type {
   RustProjectMethodPropertyPlanRegistry,
 } from "../source/rust-target-semantics/project-method-properties.js";
 import {
+  createRustProjectFieldDispatchPlanRegistry,
+} from "../source/rust-target-semantics/project-field-dispatch.js";
+import type {
+  RustProjectFieldDispatchPlanRegistry,
+} from "../source/rust-target-semantics/project-field-dispatch.js";
+import {
   createRustSourceCallableSpecializationPlanRegistry,
 } from "../source/rust-target-semantics/source-callable-specializations.js";
 import type {
@@ -78,6 +84,7 @@ export interface RustTranslationContext extends TargetCompileInput {
   readonly projectTypes: RustProjectTypePolicyRegistry;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
   readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
+  readonly projectFieldDispatch: RustProjectFieldDispatchPlanRegistry;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlanRegistry;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly providerSemantics: RustProviderSemantics;
@@ -109,6 +116,7 @@ export function createRustTranslationContext(
   const projectTypes = createRustProjectTypePolicyRegistry();
   const projectMethodDispatch = createRustProjectMethodDispatchPlanRegistry();
   const projectMethodProperties = createRustProjectMethodPropertyPlanRegistry();
+  const projectFieldDispatch = createRustProjectFieldDispatchPlanRegistry();
   const sourceCallableSpecializations = createRustSourceCallableSpecializationPlanRegistry();
   const structuralShapes = createRustStructuralShapePlanRegistry();
   const safetyApplications = createRustSafetyApplicationFactIndex({
@@ -117,7 +125,11 @@ export function createRustTranslationContext(
     sourceFacts: input.source.sourceFacts,
     navigation: input.source.navigation,
   });
-  const names = createRustNamePlan({ ast, sourceFiles });
+  const names = createRustNamePlan({
+    ast,
+    navigation: input.source.navigation,
+    sourceFiles,
+  });
   const diagnostics: TargetDiagnostic[] = [];
   const staticProviderSemantics = mergeRustProviderSemantics(
     rustBuiltInSourceTypeSemantics(),
@@ -136,6 +148,7 @@ export function createRustTranslationContext(
     projectTypes,
     projectMethodDispatch,
     projectMethodProperties,
+    projectFieldDispatch,
     sourceCallableSpecializations,
     structuralShapes,
     safetyApplications,

@@ -208,6 +208,9 @@ function selectObjectProjection(
     }
     const remaining = sourceShape.fields.filter((field) =>
       !extractedSourceNames.has(field.sourceName));
+    if (remaining.some((field) => field.method === true)) {
+      return undefined;
+    }
     const bindingCarrier = resolveObjectRestBindingCarrier(
       name,
       remaining,
@@ -230,6 +233,9 @@ function selectObjectProjection(
             sourceStorageIndex: sourceField.storageIndex,
             targetStorageIndex,
             carrier: sourceField.carrier,
+            ...(sourceField.accessor === undefined
+              ? {}
+              : { accessor: sourceField.accessor }),
           };
     });
     return fields.some((field) => field === undefined)
@@ -244,6 +250,10 @@ function selectObjectProjection(
               readonly sourceStorageIndex: number;
               readonly targetStorageIndex: number;
               readonly carrier: TargetTypeRef;
+              readonly accessor?: {
+                readonly getter: true;
+                readonly setter: boolean;
+              };
             }[],
           },
           normalization: "identity",
@@ -256,6 +266,9 @@ function selectObjectProjection(
   }
   const field = sourceShape.fields.find((candidate) =>
     candidate.sourceName === sourceName);
+  if (field?.method === true) {
+    return undefined;
+  }
   const projectedCarrier = field?.carrier;
   const bindingCarrier = projectedCarrier === undefined
     ? undefined
@@ -272,6 +285,7 @@ function selectObjectProjection(
           kind: "object-field",
           storage: sourceShape.storage,
           storageIndex: field.storageIndex,
+          ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
         },
         normalization,
       };
@@ -283,6 +297,13 @@ interface ObjectBindingSource {
     readonly sourceName: string;
     readonly storageIndex: number;
     readonly carrier: TargetTypeRef;
+    readonly presence: "required" | "optional";
+    readonly readonly: boolean;
+    readonly accessor?: {
+      readonly getter: true;
+      readonly setter: boolean;
+    };
+    readonly method?: true;
   }[];
 }
 
@@ -298,6 +319,10 @@ function resolveObjectBindingSource(
         sourceName: field.sourceName,
         storageIndex,
         carrier: field.type,
+        presence: field.presence,
+        readonly: field.readonly,
+        ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
+        ...(field.method === true ? { method: true as const } : {}),
       })),
     };
   }
@@ -323,6 +348,8 @@ function resolveObjectBindingSource(
           sourceName: field.sourceName,
           storageIndex: field.storageIndex,
           carrier,
+          presence: "required" as const,
+          readonly: false,
         };
   });
   return fields.some((field) => field === undefined)
@@ -333,6 +360,8 @@ function resolveObjectBindingSource(
           readonly sourceName: string;
           readonly storageIndex: number;
           readonly carrier: TargetTypeRef;
+          readonly presence: "required";
+          readonly readonly: false;
         }[],
       };
 }
@@ -342,6 +371,8 @@ function resolveObjectRestBindingCarrier(
   fields: readonly {
     readonly sourceName: string;
     readonly carrier: TargetTypeRef;
+    readonly presence: "required" | "optional";
+    readonly readonly: boolean;
   }[],
   context: RustBindingPatternFactContext,
 ): TargetTypeRef | undefined {
@@ -359,6 +390,8 @@ function resolveObjectRestBindingCarrier(
   const carrier = rustStructuralObjectTargetType(fields.map((field) => ({
     sourceName: field.sourceName,
     type: field.carrier,
+    presence: field.presence,
+    readonly: field.readonly,
   })));
   const canonical = rustStructuralObjectCarrierValue(carrier);
   if (canonical === undefined) {
@@ -386,6 +419,8 @@ function resolveObjectRestBindingCarrier(
       sourceType: propertyType,
       storageIndex,
       resultCarrier: field.type,
+      presence: property.optional ? "optional" as const : "required" as const,
+      readonly: property.readonly,
     };
   });
   return registeredFields.some((field) => field === undefined) ||

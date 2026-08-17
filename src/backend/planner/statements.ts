@@ -1234,6 +1234,32 @@ function planExpressionAsStatement(
           ));
           return undefined;
         }
+        const dispatchPlan = sourceField.dispatch === undefined
+          ? undefined
+          : sourceField.declaration === undefined
+            ? undefined
+            : context.input.projectFieldDispatch.planFor(sourceField.declaration);
+        if (sourceField.dispatch !== undefined && dispatchPlan?.write === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, left),
+            "rust.backend.project-field-dispatch-plan",
+            "Project-source field assignment has no exact finalized writable dispatch plan.",
+          ));
+          return undefined;
+        }
+        const dispatchRoles = dispatchPlan?.write === undefined
+          ? undefined
+          : {
+              read: dispatchPlan.read,
+              write: dispatchPlan.write,
+              errorDomain: context.errorDomain,
+            };
+        const dispatchReadRole = dispatchPlan === undefined
+          ? undefined
+          : {
+              ...dispatchPlan.read,
+              errorDomain: context.errorDomain,
+            };
         const receiverName = allocateRustSyntheticName(context.syntheticNames, "receiver");
         if (fact.kind === "operator-call") {
           const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
@@ -1249,7 +1275,11 @@ function planExpressionAsStatement(
                 fact.resultCarrier,
                 context,
               )
-            : readRustProjectDispatchedField(selectedReceiver, sourceField.dispatch.read);
+            : readRustProjectDispatchedField(
+                selectedReceiver,
+                sourceField.dispatch.read,
+                dispatchReadRole!,
+              );
           const value = planExpression(valueNode, context);
           if (value === undefined) {
             return undefined;
@@ -1278,6 +1308,7 @@ function planExpressionAsStatement(
                 sourceField.dispatch.write,
                 "=",
                 { kind: "path", path: nextName },
+                dispatchRoles!,
               );
           if (current === undefined || next === undefined || written === undefined) {
             return undefined;
@@ -1313,7 +1344,11 @@ function planExpressionAsStatement(
                 fact.resultCarrier,
                 context,
               )
-            : readRustProjectDispatchedField(selectedReceiver, sourceField.dispatch.read);
+            : readRustProjectDispatchedField(
+                selectedReceiver,
+                sourceField.dispatch.read,
+                dispatchReadRole!,
+              );
           const concatenated = rustStringConcat([
             { kind: "path", path: currentName },
             value,
@@ -1335,6 +1370,7 @@ function planExpressionAsStatement(
                 sourceField.dispatch.write,
                 "=",
                 concatenated,
+                dispatchRoles!,
               );
           if (current === undefined || written === undefined) {
             return undefined;
@@ -1368,6 +1404,7 @@ function planExpressionAsStatement(
               sourceField.dispatch.write,
               operator,
               { kind: "path", path: valueName },
+              dispatchRoles!,
             );
         if (written === undefined) {
           return undefined;
@@ -1891,7 +1928,7 @@ function planRustSourceAccessorAssignment(
     const plannedRead = planRustSourceAccessorCall(
       target,
       accessor,
-      read.method,
+      "read",
       [],
       context,
       receiver,
@@ -1935,7 +1972,7 @@ function planRustSourceAccessorAssignment(
   const plannedWrite = planRustSourceAccessorCall(
     target,
     accessor,
-    write.method,
+    "write",
     [next],
     context,
     receiver,

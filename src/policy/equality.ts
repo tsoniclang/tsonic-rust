@@ -51,6 +51,14 @@ export function rustSelectedTargetSignatureEquals(
       left.sourceSelectedReceiverCarrier,
       right.sourceSelectedReceiverCarrier,
     ) &&
+    rustTargetTypeRefEquals(
+      left.sourceCallableCarrier,
+      right.sourceCallableCarrier,
+    ) &&
+    closedMetadataEquals(
+      left.sourceStructuralMethod,
+      right.sourceStructuralMethod,
+    ) &&
     closedMetadataEquals(left.targetTypeArguments, right.targetTypeArguments) &&
     closedMetadataEquals(left.providerDeclaration, right.providerDeclaration) &&
     closedMetadataEquals(left.argumentConversions, right.argumentConversions) &&

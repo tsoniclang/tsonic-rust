@@ -9,7 +9,14 @@ const receiverCarrier = {
   kind: "target-specific",
   target: "rust",
   name: "structural-object",
-  value: { fields: [{ sourceName: "value", type: int32Carrier }] },
+  value: {
+    fields: [{
+      sourceName: "value",
+      type: int32Carrier,
+      presence: "required",
+      readonly: false,
+    }],
+  },
 };
 
 function structuralShape(sourceType, declaration, symbol, resultCarrier = int32Carrier) {
@@ -24,6 +31,7 @@ function structuralShape(sourceType, declaration, symbol, resultCarrier = int32C
       sourceType: {},
       storageIndex: 0,
       resultCarrier,
+      presence: "required",
     }],
   };
 }

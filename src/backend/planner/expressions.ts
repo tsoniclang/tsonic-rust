@@ -106,7 +106,7 @@ import { applyRustErrorBoundary } from "./error-boundary.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceBindingPath, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetType, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetType, rustStructuralMethodStorageCarrier, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import {
   requireRustCarrierRequirements,
   requireRustDefaultValueCarrier,
@@ -160,8 +160,10 @@ import {
 } from "./project-polymorphism-names.js";
 import {
   createRustStructuralObjectFromCarrier,
+  invokeRustStructuralObjectMethod,
   mutateRustStoredObjectField,
   readRustStoredObjectField,
+  readRustStructuralObjectMethodStorage,
   rustDirectProjectFieldStoragePath,
 } from "./project-object-storage.js";
 import { planRustFallibleReturnExpression } from "./completion-exits.js";
@@ -191,6 +193,7 @@ import {
   planRustProjectDowncast,
   planRustProjectTypeTest,
 } from "./project-downcasts.js";
+import { rustObjectLiteralRequiresDispatchImplementation } from "./object-literal-implementations.js";
 import { planRustProgramErrorTypeTest } from "./program-error-operations.js";
 import { rustProjectCallableTargetName } from "../../source/rust-target-semantics/source-member-name.js";
 
@@ -925,7 +928,9 @@ function planExpressionInner(
     }
     case "KindArrowFunction":
     case KindFunctionExpression:
-    case "KindMethodDeclaration": {
+    case "KindMethodDeclaration":
+    case "KindGetAccessor":
+    case "KindSetAccessor": {
       const closureFact = rustOperationFact(node, context);
       if (closureFact === undefined || closureFact.kind !== "closure") {
         context.diagnostics.push(missingFactDiagnostic(
@@ -1122,7 +1127,8 @@ function planExpressionInner(
           }
           if (candidate !== node &&
             (kind === KindFunctionExpression || kind === "KindFunctionDeclaration" ||
-              kind === "KindMethodDeclaration" || kind === "KindClassDeclaration")) {
+              kind === "KindMethodDeclaration" || kind === "KindGetAccessor" ||
+              kind === "KindSetAccessor" || kind === "KindClassDeclaration")) {
             return;
           }
           context.input.ast.forEachChild(candidate, (child) => {
@@ -1221,7 +1227,7 @@ function planExpressionInner(
           context.syntheticNames!,
           "callable_arguments",
         );
-        const tupleName = sourceParameterPlans.length === 0
+        const tupleName = leadingParameterPlans.length + sourceParameterPlans.length === 0
           ? `_${allocatedTupleName}`
           : allocatedTupleName;
         closureParams = [
@@ -1229,11 +1235,23 @@ function planExpressionInner(
           { name: tupleName, mutable: false },
         ];
         closureMove = true;
+        for (const [index, parameter] of leadingParameterPlans.entries()) {
+          bindingStatements.push({
+            kind: "let",
+            name: parameter.name!,
+            mutable: false,
+            init: {
+              kind: "field",
+              receiver: { kind: "path", path: tupleName },
+              name: String(index),
+            },
+          });
+        }
         for (const [index, parameter] of sourceParameterPlans.entries()) {
           let initializer: RustExpr = {
             kind: "field",
             receiver: { kind: "path", path: tupleName },
-            name: String(index),
+            name: String(leadingParameterPlans.length + index),
           };
           if (parameter.form === "default") {
             const defaultNode = Node_Initializer(context.input.ast, parameter.parameter);
@@ -2360,7 +2378,7 @@ function planRustSourceAccessorUpdate(
   const plannedRead = planRustSourceAccessorCall(
     accessorExpression,
     accessor,
-    accessor.read.method,
+    "read",
     [],
     context,
     receiver,
@@ -2383,7 +2401,7 @@ function planRustSourceAccessorUpdate(
       const plannedWrite = planRustSourceAccessorCall(
         accessorExpression,
         accessor,
-        accessor.write!.method,
+        "write",
         [value],
         context,
         receiver,
@@ -2589,6 +2607,22 @@ function planRustSourceFieldUpdate(
       value: mutation,
     };
   }
+  const dispatchPlan = field.declaration === undefined
+    ? undefined
+    : context.input.projectFieldDispatch.planFor(field.declaration);
+  if (dispatchPlan?.write === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, fieldExpression),
+      "rust.backend.project-field-dispatch-plan",
+      "Project-source field update has no exact finalized writable dispatch plan.",
+    ));
+    return undefined;
+  }
+  const dispatchRoles = {
+    read: dispatchPlan.read,
+    write: dispatchPlan.write,
+    errorDomain: context.errorDomain,
+  };
   const fieldName = allocateRustSyntheticName(context.syntheticNames, "update_field");
   const fieldPath: RustExpr = { kind: "path", path: fieldName };
   const overrides = new Map(context.expressionOverrides ?? []);
@@ -2627,7 +2661,10 @@ function planRustSourceFieldUpdate(
       {
         name: fieldName,
         mutable: true,
-        value: readRustProjectDispatchedField(receiverPath, field.dispatch.read),
+        value: readRustProjectDispatchedField(receiverPath, field.dispatch.read, {
+          ...dispatchPlan.read,
+          errorDomain: context.errorDomain,
+        }),
       },
       ...projection.bindings,
       { name: resultName, value: updated },
@@ -2641,6 +2678,7 @@ function planRustSourceFieldUpdate(
         field.dispatch.write,
         "=",
         fieldPath,
+        dispatchRoles,
       ),
       discard: "unit",
       value: { kind: "path", path: resultName },
@@ -4760,9 +4798,14 @@ function sourceCallEffectsMatch(
     return false;
   }
   const isAsync = rustFutureOutputCarrier(fact.resultCarrier) !== undefined;
+  const callableCarrier = fact.target.form === "callable"
+    ? fact.target.carrier
+    : fact.target.form === "structural-method"
+      ? fact.target.callableCarrier
+      : undefined;
   return isAsync
     ? effects.awaiting !== "not-applicable" &&
-      (fact.target.form !== "callable" || fact.target.carrier.kind === "function-pointer" ||
+      (callableCarrier === undefined || callableCarrier.kind === "function-pointer" ||
         effects.invocation === "fallible")
     : effects.awaiting === "not-applicable";
 }
@@ -5028,15 +5071,14 @@ function planSelectedSourceCall(
       break;
     }
     case "constructor": {
-      const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
-      const typePath = value === undefined ? undefined : sourceTypePath(context, value);
+      const owner = rustTypeFromCarrierInContext(fact.target.typeCarrier, context);
       const targetName = fact.target.name;
-      if (typePath !== undefined && isValidRustIdentifier(targetName)) {
+      if (owner !== undefined && isValidRustIdentifier(targetName)) {
         planned = {
-          kind: "call",
-          path: `${typePath}::${targetName}`,
+          kind: "associated-call",
+          owner,
+          method: targetName,
           args: shaped,
-          ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
         };
       }
       break;
@@ -5059,6 +5101,35 @@ function planSelectedSourceCall(
           method: "call",
           args: [{ kind: "tuple-literal", elements: shaped }],
         };
+      }
+      break;
+    }
+    case "structural-method": {
+      const receiverNode = callee !== undefined &&
+          context.input.ast.kindName(callee) === KindPropertyAccessExpression
+        ? Node_Expression(context.input.ast, callee)
+        : undefined;
+      const receiver = receiverNode === undefined
+        ? undefined
+        : planExpression(receiverNode, context);
+      const storageOverride = callee === undefined
+        ? undefined
+        : context.expressionOverrides?.get(callee);
+      if (receiverNode !== undefined && receiver !== undefined) {
+        planned = invokeRustStructuralObjectMethod(
+          fact.target.receiverCarrier,
+          receiver,
+          fact.target.storageIndex,
+          shaped,
+          fact.resultCarrier,
+          context,
+          storageOverride === undefined
+            ? undefined
+            : {
+                expression: storageOverride.expression,
+                carrier: storageOverride.carrier,
+              },
+        );
       }
       break;
     }
@@ -5515,7 +5586,7 @@ export function sourceCallSelectedMemberMatches(
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
-    : fact.target.form === "callable"
+    : fact.target.form === "callable" || fact.target.form === "structural-method"
       ? member.targetName
       : fact.target.form === "function"
         ? fact.target.selectedTargetName
@@ -5530,8 +5601,10 @@ export function sourceCallSelectedMemberMatches(
   if (!identityMatches) {
     return false;
   }
-  const callable = fact.target.form === "callable"
-    ? rustCallableProtocol(fact.target.carrier)
+  const callable = fact.target.form === "callable" || fact.target.form === "structural-method"
+    ? rustCallableProtocol(fact.target.form === "callable"
+        ? fact.target.carrier
+        : fact.target.callableCarrier)
     : undefined;
   if (callable !== undefined) {
     return callable.parameters.length === fact.parameters.length &&
@@ -5740,6 +5813,11 @@ function planOptionalChainExpression(
   }
   const actualResultCarrier = expressionCarrier(node, context);
   const actualGuardCarrier = expressionCarrier(fact.guard, context);
+  const structuralMethodGuard = exactOptionalStructuralMethodGuard(
+    node,
+    fact,
+    context,
+  );
   const sourceElement = rustOptionElementCarrier(fact.sourceGuardCarrier);
   const finalRelationshipValid = fact.lowering === "map"
     ? rustTargetTypeRefEquals(fact.resultCarrier, rustOptionTargetType(fact.innerResultCarrier))
@@ -5769,7 +5847,7 @@ function planOptionalChainExpression(
     fact.guard,
     rustFlowReadProjectionFactKey,
   );
-  if (guardFlowRead !== undefined &&
+  if (structuralMethodGuard === undefined && guardFlowRead !== undefined &&
     (guardFlowRead.kind !== "option-value" ||
       !rustTargetTypeRefEquals(guardFlowRead.sourceCarrier, fact.sourceGuardCarrier) ||
       !rustTargetTypeRefEquals(guardFlowRead.selectedCarrier, fact.selectedGuardCarrier))) {
@@ -5780,7 +5858,9 @@ function planOptionalChainExpression(
     ));
     return undefined;
   }
-  const plannedGuard = planRawExpression(fact.guard, context, "value");
+  const plannedGuard = structuralMethodGuard === undefined
+    ? planRawExpression(fact.guard, context, "value")
+    : planOptionalStructuralMethodStorageGuard(structuralMethodGuard, context);
   if (plannedGuard === undefined) {
     return undefined;
   }
@@ -5801,7 +5881,11 @@ function planOptionalChainExpression(
     node,
     rustSourceAccessorEffectsFactKey,
   );
-  const innerFallible = rustTargetOperationIsFallible(rustOperationFact(node, context)) ||
+  const innerFallible = rustTargetOperationIsFallible(
+    rustOperationFact(node, context),
+    context.input.structuralShapes,
+    context.input.projectFieldDispatch,
+  ) ||
     sourceCallEffects?.invocation === "fallible" ||
     sourceAccessorEffects?.read === "fallible";
   if (innerFallible) {
@@ -5832,6 +5916,74 @@ function planOptionalChainExpression(
   return fact.lowering === "and-then"
     ? { kind: "method-call", receiver: transposed, method: "flatten", args: [] }
     : transposed;
+}
+
+interface RustOptionalStructuralMethodGuard {
+  readonly receiverNode: Node;
+  readonly receiverCarrier: TargetTypeRef;
+  readonly storageIndex: number;
+}
+
+function exactOptionalStructuralMethodGuard(
+  node: Node,
+  fact: RustOptionalChainFact,
+  context: RustPlanContext,
+): RustOptionalStructuralMethodGuard | undefined {
+  const operation = rustOperationFact(node, context);
+  if (operation?.kind !== "source-call" || operation.target.form !== "structural-method") {
+    return undefined;
+  }
+  const callee = context.input.ast.kindName(node) === KindCallExpression
+    ? Node_Expression(context.input.ast, node)
+    : undefined;
+  const receiverNode = callee !== undefined &&
+      context.input.ast.kindName(callee) === KindPropertyAccessExpression
+    ? Node_Expression(context.input.ast, callee)
+    : undefined;
+  const field = context.input.structuralShapes.field(
+    operation.target.receiverCarrier,
+    operation.target.storageIndex,
+  );
+  if (callee !== fact.guard || field?.method !== true || field.presence !== "optional") {
+    return undefined;
+  }
+  const storageCarrier = rustStructuralMethodStorageCarrier(
+    operation.target.receiverCarrier,
+    field.carrier,
+    field.presence,
+  );
+  const selectedStorageCarrier = rustOptionElementCarrier(storageCarrier);
+  if (receiverNode === undefined || storageCarrier === undefined ||
+    selectedStorageCarrier === undefined ||
+    !rustTargetTypeRefEquals(fact.sourceGuardCarrier, storageCarrier) ||
+    !rustTargetTypeRefEquals(fact.selectedGuardCarrier, selectedStorageCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.optional-structural-method-guard",
+      "Optional structural-method lowering conflicts with its exact receiver-bound callable storage contract.",
+    ));
+    return undefined;
+  }
+  return {
+    receiverNode,
+    receiverCarrier: operation.target.receiverCarrier,
+    storageIndex: operation.target.storageIndex,
+  };
+}
+
+function planOptionalStructuralMethodStorageGuard(
+  guard: RustOptionalStructuralMethodGuard,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const receiver = planExpression(guard.receiverNode, context);
+  return receiver === undefined
+    ? undefined
+    : readRustStructuralObjectMethodStorage(
+        guard.receiverCarrier,
+        planRustNonConsumingValue(guard.receiverNode, receiver, context),
+        guard.storageIndex,
+        context,
+      );
 }
 
 function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -5869,7 +6021,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
-    const planned = planRustSourceAccessorCall(node, fact, read.method, [], context);
+    const planned = planRustSourceAccessorCall(node, fact, "read", [], context);
     return planned === undefined
       ? undefined
       : finishRustSourceAccessorCall(node, "read", planned, context);
@@ -5940,6 +6092,17 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
+    const dispatchPlan = fact.declaration === undefined
+      ? undefined
+      : context.input.projectFieldDispatch.planFor(fact.declaration);
+    if (dispatchPlan === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.project-field-dispatch-plan",
+        "Project property dispatch has no exact finalized field-dispatch plan.",
+      ));
+      return undefined;
+    }
     const receiverName = allocateRustSyntheticName(
       context.syntheticNames,
       "dispatch_receiver",
@@ -5953,6 +6116,10 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       value: readRustProjectDispatchedField(
         { kind: "path", path: receiverName },
         fact.dispatch.read,
+        {
+          ...dispatchPlan.read,
+          errorDomain: context.errorDomain,
+        },
       ),
     };
   }
@@ -6300,17 +6467,21 @@ export function sourceAccessorSelectedOperationMatches(
 export function planRustSourceAccessorCall(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
-  method: string,
+  role: "read" | "write",
   args: readonly RustExpr[],
   context: RustPlanContext,
   receiverOverride?: RustExpr,
 ): RustExpr | undefined {
+  const selected = role === "read" ? fact.read : fact.write;
+  if (selected === undefined || args.length !== (role === "read" ? 0 : 1)) {
+    return undefined;
+  }
   if (fact.receiver.kind === "static") {
     const value = rustSourceTypeCarrierValue(fact.receiver.typeCarrier);
     const ownerPath = value === undefined ? undefined : sourceTypePath(context, value);
     return ownerPath === undefined
       ? undefined
-      : { kind: "call", path: `${ownerPath}::${method}`, args };
+      : { kind: "call", path: `${ownerPath}::${selected.method}`, args };
   }
   const receiverNode = Node_Expression(context.input.ast, node);
   const plannedReceiver = receiverOverride ?? (receiverNode === undefined
@@ -6319,9 +6490,43 @@ export function planRustSourceAccessorCall(
   const receiver = receiverNode === undefined || plannedReceiver === undefined
     ? plannedReceiver
     : planRustNonConsumingValue(receiverNode, plannedReceiver, context);
-  return receiver === undefined
+  if (receiver === undefined) {
+    return undefined;
+  }
+  if (fact.dispatch === undefined) {
+    return { kind: "method-call", receiver, method: selected.method, args };
+  }
+  const receiverCarrier = receiverNode === undefined
     ? undefined
-    : { kind: "method-call", receiver, method, args };
+    : effectivePlannedExpressionCarrier(receiverNode, context);
+  const owner = context.input.projectTypes.definitionContainingDeclaration(selected.declaration);
+  const relationship = owner === undefined || receiverCarrier === undefined
+    ? undefined
+    : context.input.projectTypes.relationship(receiverCarrier, owner);
+  if (relationship?.kind !== "related" ||
+    !rustTargetTypeRefEquals(relationship.targetType, fact.dispatch.ownerCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.project-accessor-dispatch-receiver",
+      "Project accessor dispatch conflicts with its exact finalized receiver relationship.",
+    ));
+    return undefined;
+  }
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "method-call",
+      receiver: {
+        kind: "field",
+        receiver,
+        name: rustProjectObjectDispatchField,
+      },
+      method: "clone",
+      args: [],
+    },
+    method: selected.method,
+    args,
+  };
 }
 
 export function finishRustSourceAccessorCall(
@@ -6710,10 +6915,14 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     readonly value: RustExpr;
   }[] = [];
   const valuesByStorageIndex = new Map<number, RustExpr>();
+  const accessorValuesByStorageIndex = new Map<number, {
+    getter?: RustExpr;
+    setter?: RustExpr;
+  }>();
   const finalContributionByStorageIndex = new Map<number, number>();
   const finalContributionByMethod = new Map<Node, number>();
   fact.contributions.forEach((contribution, contributionIndex) => {
-    if (contribution.kind === "property") {
+    if (contribution.kind === "property" || contribution.kind === "structural-method") {
       finalContributionByStorageIndex.set(
         contribution.targetStorageIndex,
         contributionIndex,
@@ -6726,6 +6935,9 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       }
       return;
     }
+    if (contribution.kind === "accessor") {
+      return;
+    }
     for (const field of contribution.fields) {
       finalContributionByStorageIndex.set(field.targetStorageIndex, contributionIndex);
     }
@@ -6733,14 +6945,12 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       finalContributionByMethod.set(method.contractDeclaration, contributionIndex);
     }
   });
-  const objectLiteralImplementation = fact.contributions.some((contribution) =>
-    contribution.kind === "method" ||
-      contribution.kind === "spread" && contribution.methods.length > 0)
+  const requiresObjectLiteralImplementation =
+    rustObjectLiteralRequiresDispatchImplementation(fact, context);
+  const objectLiteralImplementation = requiresObjectLiteralImplementation
     ? context.objectLiteralImplementations?.forExpression(node)
     : undefined;
-  if (fact.contributions.some((contribution) => contribution.kind === "method" ||
-      contribution.kind === "spread" && contribution.methods.length > 0) &&
-    objectLiteralImplementation === undefined) {
+  if (requiresObjectLiteralImplementation && objectLiteralImplementation === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.object-literal-method-implementation",
@@ -6771,6 +6981,96 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
           { kind: "path", path: bindingName },
         );
       }
+      continue;
+    }
+    if (contribution.kind === "structural-method") {
+      const sourceNameNode = ast.name(contribution.property);
+      const sourceName = sourceNameNode === undefined ? "" : ast.text(sourceNameNode);
+      const planned = planExpression(contribution.expression, context);
+      const field = fact.fields.find((candidate) =>
+        candidate.storageIndex === contribution.targetStorageIndex);
+      if (sourceName !== contribution.sourceName || planned === undefined ||
+        field?.method !== true) {
+        return undefined;
+      }
+      const storageCarrier = rustStructuralMethodStorageCarrier(
+        fact.resultCarrier,
+        field.carrier,
+        field.presence,
+      );
+      const rawStorageCarrier = field.presence === "optional"
+        ? rustOptionElementCarrier(storageCarrier)
+        : storageCarrier;
+      if (rawStorageCarrier === undefined ||
+        !rustTargetTypeRefEquals(
+          expressionCarrier(contribution.expression, context),
+          rawStorageCarrier,
+        )) {
+        return undefined;
+      }
+      const bindingName = allocateRustSyntheticName(
+        context.syntheticNames,
+        "record_method",
+      );
+      bindings.push({
+        name: bindingName,
+        value: field.presence === "optional"
+          ? { kind: "call", path: "Some", args: [planned] }
+          : planned,
+      });
+      valuesByStorageIndex.set(
+        contribution.targetStorageIndex,
+        { kind: "path", path: bindingName },
+      );
+      continue;
+    }
+    if (contribution.kind === "accessor") {
+      const sourceNameNode = ast.name(contribution.property);
+      const sourceName = sourceNameNode === undefined ? "" : ast.text(sourceNameNode);
+      const planned = planExpression(contribution.property, context);
+      const field = fact.fields.find((candidate) =>
+        candidate.storageIndex === contribution.targetStorageIndex);
+      const plannedField = fact.storage === "object-handle"
+        ? context.input.structuralShapes.field(
+            fact.resultCarrier,
+            contribution.targetStorageIndex,
+          )
+        : undefined;
+      const plannedAccessor = fact.storage === "project-object"
+        ? objectLiteralImplementation?.accessors.find((candidate) =>
+            candidate.storageIndex === contribution.targetStorageIndex)
+        : undefined;
+      if (sourceName !== contribution.sourceName || planned === undefined ||
+        field === undefined ||
+        (fact.storage === "object-handle" && (
+          plannedField?.storage !== "property" ||
+          contribution.role === "set" &&
+            plannedField.property?.setterTargetName === undefined
+        )) ||
+        (fact.storage === "project-object" && (
+          plannedAccessor === undefined ||
+          contribution.role === "set" && plannedAccessor.setter === undefined
+        ))) {
+        return undefined;
+      }
+      const bindingName = allocateRustSyntheticName(
+        context.syntheticNames,
+        contribution.role === "get" ? "record_getter" : "record_setter",
+      );
+      bindings.push({ name: bindingName, value: planned });
+      const existing = accessorValuesByStorageIndex.get(
+        contribution.targetStorageIndex,
+      ) ?? {};
+      if (existing[contribution.role === "get" ? "getter" : "setter"] !== undefined) {
+        return undefined;
+      }
+      accessorValuesByStorageIndex.set(contribution.targetStorageIndex, {
+        ...existing,
+        [contribution.role === "get" ? "getter" : "setter"]: {
+          kind: "path",
+          path: bindingName,
+        },
+      });
       continue;
     }
     if (contribution.kind === "method") {
@@ -6842,14 +7142,23 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     );
     bindings.push({ name: spreadName, value: plannedSpread });
     for (const field of retainedFields) {
-      const value = readRustStoredObjectField(
-        contribution.sourceStorage,
-        contribution.sourceCarrier,
-        { kind: "path", path: spreadName },
-        field.sourceStorageIndex,
-        field.carrier,
-        context,
-      );
+      const value = field.method === true
+        ? contribution.sourceStorage === "object-handle"
+          ? readRustStructuralObjectMethodStorage(
+              contribution.sourceCarrier,
+              { kind: "path", path: spreadName },
+              field.sourceStorageIndex,
+              context,
+            )
+          : undefined
+        : readRustStoredObjectField(
+            contribution.sourceStorage,
+            contribution.sourceCarrier,
+            { kind: "path", path: spreadName },
+            field.sourceStorageIndex,
+            field.carrier,
+            context,
+          );
       if (value === undefined) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, contribution.property),
@@ -6911,14 +7220,67 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
       );
     }
   }
-  const values: RustExpr[] = [];
+  const structuralInitializers: import("./project-object-storage.js")
+    .RustStructuralObjectFieldInitializer[] = [];
   const projectFields: { name: string; value: RustExpr }[] = [];
   for (const field of [...fact.fields].sort((left, right) => left.storageIndex - right.storageIndex)) {
-    const value = valuesByStorageIndex.get(field.storageIndex);
-    if (field.storageIndex !== values.length || value === undefined) {
+    if (fact.storage === "object-handle" &&
+      field.storageIndex !== structuralInitializers.length) {
       return undefined;
     }
-    values.push(value);
+    const accessor = accessorValuesByStorageIndex.get(field.storageIndex);
+    if (accessor !== undefined) {
+      if (fact.storage === "object-handle") {
+        const plannedField = context.input.structuralShapes.field(
+          fact.resultCarrier,
+          field.storageIndex,
+        );
+        if (plannedField?.storage !== "property" || accessor.getter === undefined ||
+          (accessor.setter !== undefined) !==
+            (plannedField.property?.setterTargetName !== undefined)) {
+          return undefined;
+        }
+        structuralInitializers.push({
+          kind: "accessor",
+          getter: accessor.getter,
+          ...(accessor.setter === undefined ? {} : { setter: accessor.setter }),
+        });
+      } else {
+        const plannedAccessor = objectLiteralImplementation?.accessors.find((candidate) =>
+          candidate.storageIndex === field.storageIndex);
+        if (plannedAccessor === undefined || accessor.getter === undefined ||
+          (accessor.setter !== undefined) !== (plannedAccessor.setter !== undefined)) {
+          return undefined;
+        }
+      }
+      continue;
+    }
+    const value = valuesByStorageIndex.get(field.storageIndex);
+    if (value === undefined) {
+      const storageCarrier = field.method === true
+        ? rustStructuralMethodStorageCarrier(
+            fact.resultCarrier,
+            field.carrier,
+            field.presence,
+          )
+        : field.carrier;
+      const optionType = field.presence === "optional" &&
+          rustOptionElementCarrier(storageCarrier) !== undefined
+        ? rustTypeFromCarrierInContext(storageCarrier, context)
+        : undefined;
+      if (optionType === undefined) {
+        return undefined;
+      }
+      structuralInitializers.push({
+        kind: field.method === true ? "method" : "stored",
+        value: { kind: "associated-value", owner: optionType, name: "None" },
+      });
+      continue;
+    }
+    structuralInitializers.push({
+      kind: field.method === true ? "method" : "stored",
+      value,
+    });
     if (fact.storage === "project-object" && objectLiteralImplementation === undefined) {
       const storagePath = rustDirectProjectFieldStoragePath(
         fact.resultCarrier,
@@ -6938,7 +7300,8 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
   let constructed: RustExpr | undefined;
   if (objectLiteralImplementation !== undefined) {
     if (objectLiteralImplementation.wrapperType.kind !== "named" ||
-      objectLiteralImplementation.stateFields.length !== fact.fields.length ||
+      objectLiteralImplementation.stateFields.length +
+        objectLiteralImplementation.accessors.length !== fact.fields.length ||
       objectLiteralImplementation.implementations.some((implementation) =>
         !methodValues.has(implementation.fieldName))) {
       return undefined;
@@ -6954,6 +7317,23 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
     }
     const identityName = allocateRustSyntheticName(context.syntheticNames, "record_identity");
     const rootName = allocateRustSyntheticName(context.syntheticNames, "record_root");
+    const accessorImplementationFields = objectLiteralImplementation.accessors.flatMap(
+      (accessor): { readonly name: string; readonly value: RustExpr | undefined }[] => {
+        const values = accessorValuesByStorageIndex.get(accessor.storageIndex);
+        return [{
+          name: accessor.getter.fieldName,
+          value: values?.getter,
+        }, ...(accessor.setter === undefined
+          ? []
+          : [{
+              name: accessor.setter.fieldName,
+              value: values?.setter,
+            }])];
+      },
+    );
+    if (accessorImplementationFields.some((field) => field.value === undefined)) {
+      return undefined;
+    }
     bindings.push({
       name: identityName,
       value: { kind: "call", path: "rt::ObjectIdentity::new", args: [] },
@@ -6996,6 +7376,9 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
           }, ...objectLiteralImplementation.implementations.map((implementation) => ({
             name: implementation.fieldName,
             value: methodValues.get(implementation.fieldName)!,
+          })), ...accessorImplementationFields.map((field) => ({
+            name: field.name,
+            value: field.value!,
           }))],
         }],
       },
@@ -7014,7 +7397,11 @@ function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | und
   } else {
     constructed = fact.storage === "project-object"
       ? createRustProjectObject(typePath!, statePath!, projectFields)
-      : createRustStructuralObjectFromCarrier(fact.resultCarrier, values, context);
+      : createRustStructuralObjectFromCarrier(
+          fact.resultCarrier,
+          structuralInitializers,
+          context,
+        );
   }
   return constructed === undefined
     ? undefined

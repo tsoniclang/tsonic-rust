@@ -518,7 +518,22 @@ function planRustLocationStorage(
     rustTargetOperationFactKey,
   );
   if (kind === "KindPropertyAccessExpression" &&
-    operation?.kind === "source-field") {
+    operation?.kind === "source-field" &&
+    operation.valueSemantics.kind === "stored") {
+    const dispatchPlan = operation.dispatch === undefined
+      ? undefined
+      : operation.declaration === undefined
+        ? undefined
+        : context.input.projectFieldDispatch.planFor(operation.declaration);
+    if (operation.dispatch !== undefined &&
+      (dispatchPlan?.write === undefined ||
+        dispatchPlan.read.fallible || dispatchPlan.write.fallible)) {
+      return rejectLocationStorage(
+        expression,
+        context,
+        "A typed location cannot expose a project field whose dynamic dispatch may execute a fallible accessor.",
+      );
+    }
     const ownerName = "location_owner";
     const valueName = "location_value";
     const owner: RustExpr = { kind: "path", path: ownerName };
@@ -531,7 +546,10 @@ function planRustLocationStorage(
           operation.resultCarrier,
           context,
         )
-      : readRustProjectDispatchedField(owner, operation.dispatch.read);
+      : readRustProjectDispatchedField(owner, operation.dispatch.read, {
+          ...dispatchPlan!.read,
+          errorDomain: context.errorDomain,
+        });
     const write = operation.dispatch === undefined
       ? writeRustStoredObjectField(
           operation.storage,
@@ -549,6 +567,11 @@ function planRustLocationStorage(
           operation.dispatch.write,
           "=",
           { kind: "path", path: valueName },
+          {
+            read: dispatchPlan!.read,
+            write: dispatchPlan!.write!,
+            errorDomain: context.errorDomain,
+          },
         );
     if (read === undefined || write === undefined) {
       return rejectLocationStorage(

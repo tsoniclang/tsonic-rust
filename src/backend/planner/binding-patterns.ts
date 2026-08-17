@@ -273,7 +273,11 @@ function planObjectRest(
     }
     values.push(value);
   }
-  return createRustStructuralObjectFromCarrier(fact.bindingCarrier, values, context);
+  return createRustStructuralObjectFromCarrier(
+    fact.bindingCarrier,
+    values.map((value) => ({ kind: "stored" as const, value })),
+    context,
+  );
 }
 
 function planTupleRest(

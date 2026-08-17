@@ -685,9 +685,20 @@ export function project(): boolean {
   const entries = Object.entries(value);
   const reordered = { "01": "leading", tail: "tail", 2: "two", 10: "ten" };
   const reorderedKeys = Object.keys(reordered);
+  let backing = "value";
+  let reads = 0;
+  const accessed = {
+    tail: "tail",
+    get current(): string { reads += 1; return backing; },
+    set current(next: string) { backing = next; },
+  };
+  const accessorKeys = Object.keys(accessed);
+  const accessorValues = Object.values(accessed);
+  const accessorEntries = Object.entries(accessed);
   return keys.length === 4 && values.length === 4 && entries.length === 4 &&
-    reorderedKeys.length === 4 && Object.hasOwn(value, "tail") &&
-    value.hasOwnProperty("01");
+    reorderedKeys.length === 4 && accessorKeys.length === 2 &&
+    accessorValues.length === 2 && accessorEntries.length === 2 &&
+    reads === 2 && Object.hasOwn(value, "tail") && value.hasOwnProperty("01");
 }
 `,
     },
@@ -699,6 +710,7 @@ export function project(): boolean {
   assert.match(text, /object_projection_value/u);
   assert.match(text, /\.with\(\|state\|/u);
   assert.match(text, /\.as_str\(\) == "tail"/u);
+  assert.match(text, /accessor_getter/u);
 });
 
 test("open and spread-derived object projections fail closed", () => {

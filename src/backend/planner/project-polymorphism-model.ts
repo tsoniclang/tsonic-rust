@@ -44,6 +44,7 @@ export interface ProjectFieldPlan {
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
   readonly origin: "project" | "external";
+  readonly readonly: boolean;
   readonly initializer?: Node;
 }
 
@@ -60,6 +61,11 @@ export interface ProjectMethodPropertyPlan {
   readonly callableType: RustType;
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
+}
+
+export interface ProjectAccessorPlan {
+  readonly declaration: Node;
+  readonly role: "read" | "write";
 }
 
 export interface ProjectClassStateLayer {
@@ -128,6 +134,7 @@ export function projectOwnFields(
       carrier: field.carrier,
       type,
       origin: "external",
+      readonly: false,
     });
   }
   const externalFieldCount = fields.length;
@@ -158,6 +165,7 @@ export function projectOwnFields(
       carrier,
       type,
       origin: "project",
+      readonly: context.input.ast.hasModifierKind(layoutField.declaration, "readonly"),
       ...(initializer === undefined ? {} : { initializer }),
     });
   }
@@ -171,6 +179,23 @@ export function projectOwnMethods(
   return (projectMembers(definition, context) ?? []).filter((member) => {
     const kind = context.input.ast.kindName(member);
     return kind === "KindMethodDeclaration" || kind === "KindMethodSignature";
+  });
+}
+
+export function projectOwnAccessors(
+  definition: RustProjectTypeDefinition,
+  context: RustPlanContext,
+): readonly ProjectAccessorPlan[] {
+  return (projectMembers(definition, context) ?? []).flatMap<ProjectAccessorPlan>((member) => {
+    if (context.input.ast.hasModifierKind(member, "static")) {
+      return [];
+    }
+    const kind = context.input.ast.kindName(member);
+    return kind === "KindGetAccessor"
+      ? [{ declaration: member, role: "read" }]
+      : kind === "KindSetAccessor"
+        ? [{ declaration: member, role: "write" }]
+        : [];
   });
 }
 

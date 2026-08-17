@@ -12,6 +12,7 @@ import type {
 import type { RustAssignmentOperator } from "../common/rust-syntax.js";
 import { finalizeRustSourceStyle } from "../backend/rust-ast/source-style.js";
 import { rustExpressionContainsStatementBlock } from "../backend/rust-ast/expressions.js";
+import { rustExpressionChildren } from "../backend/rust-ast/source-usage.js";
 
 // Deterministic printer. Output must be `cargo fmt --check` clean for the
 // supported construct set: 4-space indent, no trailing whitespace, one blank
@@ -1880,6 +1881,19 @@ function printRustExprFitted(
         `${indentText(depth)})`,
       ].join("\n");
     }
+    case "associated-value": {
+      if (expression.trait !== undefined) {
+        return flat;
+      }
+      return appendToLastLine(
+        printRustAssociatedOwnerFitted(
+          expression.owner,
+          depth,
+          column + `::${expression.name}`.length,
+        ),
+        `::${expression.name}`,
+      );
+    }
     case "call":
       return printFittedCall(expression.path, expression.args, depth, column);
     case "invoke":
@@ -1965,7 +1979,7 @@ function printRustExprFitted(
         if (attached.includes("\n") &&
           (chain === undefined || attachedArgumentsPreferExpansion ||
             !rustMethodChainBreaksReceiverWhenExpanded(chain)) &&
-          !columnRequiresVerticalLayout &&
+          (!columnRequiresVerticalLayout || attachedArgumentsPreferExpansion) &&
           (!verticalLayout ||
           chain !== undefined && (!rustMethodChainContainsClosure(chain) ||
             expression.args.length === 1 && expression.args[0]?.kind === "tuple-literal"))) {
@@ -2101,6 +2115,17 @@ function printRustExprFitted(
         : `${rendered}\n${indentText(depth + 1)}.await`;
     }
     case "try": {
+      const chain = rustMethodChain(expression);
+      if (chain !== undefined && expression.expr.kind === "method-call" &&
+        expression.expr.args.length === 0 && rustMethodChainRequiresVerticalLayout(expression)) {
+        return printFittedMethodChain(
+          chain,
+          depth,
+          column,
+          true,
+          methodChainContinuationIndent,
+        );
+      }
       if ((expression.expr.kind === "call" || expression.expr.kind === "associated-call") &&
         !renderedFits(flat, column)) {
         return printNestedCallArgument(expression, depth, column, true);
@@ -2360,8 +2385,7 @@ function printRustExprFitted(
         left,
         ` ${expression.operator} ${printBinaryOperand(expression.right, expression.operator, true)}`,
       );
-      if (left.includes("\n") && expressionIsStatementBlockOperand(expression.left) &&
-        !rustExpressionContainsStatementBlock(expression.right)) {
+      if (left.includes("\n") && expressionIsStatementBlockOperand(expression.left)) {
         const renderedRight = printRustExprFitted(
           expression.right,
           depth,
@@ -3069,7 +3093,7 @@ function rustMethodChainRequiresVerticalLayout(expression: RustExpr): boolean {
   const expandedClosureOpening = rustExpandedMethodClosureOpeningWidth(expression);
   return chain !== undefined &&
     (expandedClosureOpening === undefined || expandedClosureOpening > rustMethodChainWidth) &&
-    printRustExpr(expression).length > rustMethodChainWidth &&
+    printRustExpr(expression).length >= rustMethodChainWidth &&
     chain.steps.filter((step) =>
       step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1;
 }
@@ -4007,6 +4031,15 @@ function printFittedNestedCallWrapper(
         `${outerCallable}(${owner}`,
         `::${nested.method}(`,
       );
+      const attachedArgument = printRustExprFitted(
+        nested.args[0],
+        depth,
+        lastLineLength(opening),
+      );
+      const attached = appendToLastLine(`${opening}${attachedArgument}`, "))");
+      if (renderedFits(attached, column)) {
+        return attached;
+      }
       const argumentIndent = indentText(depth + 1);
       const renderedArgument = printRustExprFitted(
         nested.args[0],
@@ -4209,11 +4242,12 @@ function printNestedCallArgument(
     if (renderedFits(flat, column)) {
       return flat;
     }
-    if (argument.kind === "call" || argument.kind === "associated-call") {
+    if (argument.kind === "associated-call") {
+      return printRustExprFitted(argument, depth, column);
+    }
+    if (argument.kind === "call") {
       return printFittedCall(
-        argument.kind === "call"
-          ? argument.path
-          : `${printRustAssociatedOwner(argument.owner)}::${argument.method}`,
+        argument.path,
         argument.args,
         depth,
         column,
@@ -4223,11 +4257,12 @@ function printNestedCallArgument(
     const receiver = printOperand(argument.receiver, RustPrecedence.Postfix, false);
     return printFittedCall(`${receiver}.${argument.method}`, argument.args, depth, column, true);
   }
-  if (argument.kind === "call" || argument.kind === "associated-call") {
+  if (argument.kind === "associated-call") {
+    return printRustExprFitted(argument, depth, column);
+  }
+  if (argument.kind === "call") {
     return printFittedCall(
-      argument.kind === "call"
-        ? argument.path
-        : `${printRustAssociatedOwner(argument.owner)}::${argument.method}`,
+      argument.path,
       argument.args,
       depth,
       column,
@@ -4510,11 +4545,21 @@ function printRustMatchExpression(
         `${armIndent}}`,
       ];
     }
+    if (rustExpressionContainsTry(arm.expression)) {
+      const valueIndent = indentText(depth + 2);
+      const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
+      return [
+        `${armIndent}${pattern} => {`,
+        `${valueIndent}${value}`,
+        `${armIndent}}`,
+      ];
+    }
     const prefix = `${armIndent}${pattern} => `;
     const flatValue = printRustExpr(arm.expression);
     if (flatValue.includes("\n") || !renderedFits(`${prefix}${flatValue},`, 0)) {
       if (arm.expression.kind === "call" || arm.expression.kind === "associated-call" ||
         arm.expression.kind === "invoke" ||
+        arm.expression.kind === "match" ||
         arm.expression.kind === "method-call" &&
           rustExpressionContainsStatementBlock(arm.expression)) {
         const directValue = printRustExprFitted(
@@ -4536,6 +4581,11 @@ function printRustMatchExpression(
     return [appendToLastLine(`${prefix}${value}`, ",")];
   });
   return [header, ...arms, `${indentText(depth)}}`].join("\n");
+}
+
+function rustExpressionContainsTry(expression: RustExpr): boolean {
+  return expression.kind === "try" ||
+    rustExpressionChildren(expression).some(rustExpressionContainsTry);
 }
 
 function renderedFits(rendered: string, firstColumn: number): boolean {

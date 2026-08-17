@@ -1,4 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { SourceProgramNavigation } from "@tsonic/target-api";
 import {
   rustPascalCaseIdentifier,
   rustScreamingSnakeIdentifier,
@@ -11,7 +12,13 @@ export interface RustNamePlan {
   nameForSourceType(fileName: string, sourceName: string): string | undefined;
 }
 
-type RustNameRole = "module-value" | "type" | "type-parameter" | "value" | "variant";
+type RustNameRole =
+  | "module-value"
+  | "type"
+  | "type-parameter"
+  | "unused-value"
+  | "value"
+  | "variant";
 
 interface RustNameCandidate {
   readonly declaration: Node;
@@ -24,11 +31,18 @@ interface RustNameCandidate {
 
 export function createRustNamePlan(input: {
   readonly ast: AstReader;
+  readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
 }): RustNamePlan {
   const candidates: RustNameCandidate[] = [];
   for (const sourceFile of input.sourceFiles) {
-    collectNameCandidates(sourceFile, sourceFile, input.ast, candidates);
+    collectNameCandidates(
+      sourceFile,
+      sourceFile,
+      input.ast,
+      input.navigation,
+      candidates,
+    );
   }
   const names = new WeakMap<Node, string>();
   const functionNames = new WeakMap<Node, string>();
@@ -126,10 +140,18 @@ function collectNameCandidates(
   node: Node,
   sourceFile: SourceFile,
   ast: AstReader,
+  navigation: SourceProgramNavigation,
   candidates: RustNameCandidate[],
 ): void {
   const scope = declarationScope(node, sourceFile, ast);
-  const role = scope === undefined ? undefined : declarationNameRole(node, scope, ast);
+  const declaredRole = scope === undefined
+    ? undefined
+    : declarationNameRole(node, scope, ast);
+  const role = declaredRole === "value" &&
+      ast.kindName(node) === "KindParameter" &&
+      parameterIsUnused(node, scope, ast, navigation)
+    ? "unused-value"
+    : declaredRole;
   if (role !== undefined && scope !== undefined) {
     const name = ast.name(node);
     const nameKind = name === undefined ? undefined : ast.kindName(name);
@@ -153,9 +175,24 @@ function collectNameCandidates(
   }
   ast.forEachChild(node, (child) => {
     if (child !== undefined) {
-      collectNameCandidates(child, sourceFile, ast, candidates);
+      collectNameCandidates(child, sourceFile, ast, navigation, candidates);
     }
   });
+}
+
+function parameterIsUnused(
+  parameter: Node,
+  callable: Node | undefined,
+  ast: AstReader,
+  navigation: SourceProgramNavigation,
+): boolean {
+  const body = callable === undefined ? undefined : ast.body(callable);
+  const name = ast.name(parameter);
+  const reference = navigation.sourceReferenceFor(name);
+  return body !== undefined &&
+    name !== undefined &&
+    reference?.declaration === parameter &&
+    navigation.referencesWithin(reference.symbol, body).length === 0;
 }
 
 function declarationNameRole(
@@ -254,6 +291,9 @@ function rustNameBase(sourceName: string, role: RustNameRole): string {
   }
   if (role === "module-value") {
     return rustScreamingSnakeIdentifier(sourceName);
+  }
+  if (role === "unused-value") {
+    return `_${rustSnakeCaseIdentifier(sourceName)}`;
   }
   return rustSnakeCaseIdentifier(sourceName);
 }
