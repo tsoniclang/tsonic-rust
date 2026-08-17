@@ -2422,10 +2422,15 @@ function printRustExprFitted(
         return appendToLastLine(`${opening}${rendered}`, "]");
       }
       const elementIndent = indentText(depth + 1);
-      const elements = expression.elements.map((element) => {
-        const rendered = printRustExprFitted(element, depth + 1, elementIndent.length);
-        return appendToLastLine(`${elementIndent}${rendered}`, ",");
-      });
+      const compactElements = expression.elements.map(printRustExpr).join(", ");
+      const elements = expression.kind !== "tuple-literal" &&
+          expression.elements.every(rustFormatArgumentIsAtomic) &&
+          renderedFits(`${compactElements},`, elementIndent.length)
+        ? [`${elementIndent}${compactElements},`]
+        : expression.elements.map((element) => {
+            const rendered = printRustExprFitted(element, depth + 1, elementIndent.length);
+            return appendToLastLine(`${elementIndent}${rendered}`, ",");
+          });
       return [
         expression.kind === "vec-literal" ? "vec![" : expression.kind === "slice-literal" ? "[" : "(",
         ...elements,

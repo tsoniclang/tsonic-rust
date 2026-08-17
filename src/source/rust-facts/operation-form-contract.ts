@@ -256,6 +256,10 @@ function constantIsValid(value: RustProviderConstantArgument): boolean {
   if (value.kind === "integer") {
     return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) && Number.isSafeInteger(value.value);
   }
+  if (value.kind === "float64") {
+    return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) &&
+      typeof value.value === "number" && Number.isFinite(value.value);
+  }
   if (value.kind === "string") {
     return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) && typeof value.value === "string";
   }

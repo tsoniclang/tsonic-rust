@@ -1295,6 +1295,13 @@ function validateTrailingArguments(
       }
       continue;
     }
+    if (argument.kind === "float64") {
+      requireExactKeys(record, ["kind", "value"], `${label}.target.trailingArguments[${index}]`, fail);
+      if (typeof argument.value !== "number" || !Number.isFinite(argument.value)) {
+        fail(`${label}.target.trailingArguments[${index}] must contain a finite float64`);
+      }
+      continue;
+    }
     if (argument.kind === "string") {
       requireExactKeys(record, ["kind", "value"], `${label}.target.trailingArguments[${index}]`, fail);
       if (typeof argument.value !== "string") {

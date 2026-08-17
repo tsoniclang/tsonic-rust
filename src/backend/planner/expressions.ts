@@ -3743,6 +3743,8 @@ function providerConstantExpression(argument: RustProviderConstantArgument): Rus
   switch (argument.kind) {
     case "integer":
       return { kind: "int-literal", text: String(argument.value) };
+    case "float64":
+      return { kind: "float-literal", text: rustFloat64ConstantText(argument.value) };
     case "string":
       return { kind: "str-literal", value: argument.value };
     case "boolean":
@@ -3750,6 +3752,14 @@ function providerConstantExpression(argument: RustProviderConstantArgument): Rus
     case "none":
       return { kind: "none" };
   }
+}
+
+function rustFloat64ConstantText(value: number): string {
+  if (Object.is(value, -0)) {
+    return "-0.0";
+  }
+  const text = String(value);
+  return /[.eE]/u.test(text) ? text : `${text}.0`;
 }
 
 function planProviderOperationExpression(

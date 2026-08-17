@@ -559,6 +559,9 @@ function isProviderConstant(value: unknown): value is RustProviderConstantArgume
   switch (value.kind) {
     case "integer":
       return hasExactKeys(value, ["kind", "value"]) && Number.isSafeInteger(value.value);
+    case "float64":
+      return hasExactKeys(value, ["kind", "value"]) &&
+        typeof value.value === "number" && Number.isFinite(value.value);
     case "string":
       return hasExactKeys(value, ["kind", "value"]) && typeof value.value === "string";
     case "boolean":

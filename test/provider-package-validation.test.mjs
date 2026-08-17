@@ -713,6 +713,25 @@ test("provider operation variants and constants reject malformed runtime metadat
     })),
     /must contain a boolean/u,
   );
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    operations: [operation({
+      form: "call",
+      path: "acme_validation::run",
+      trailingArguments: [{ kind: "float64", value: 0 }],
+    })],
+  })));
+  for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    assert.throws(
+      () => createRustProviderPackage(definition({
+        operations: [operation({
+          form: "call",
+          path: "acme_validation::run",
+          trailingArguments: [{ kind: "float64", value }],
+        })],
+      })),
+      /non-finite number/u,
+    );
+  }
 });
 
 test("generic value-slice forms require closed leading and element carriers", () => {

@@ -866,8 +866,7 @@
   {
     "area": "Node",
     "lane": "buffer extras (copy, slice views, swap, typed reads)",
-    "classification": "blocked",
-    "contract": "requires byte-view carrier contracts"
+    "classification": "implemented"
   },
   {
     "area": "Node",

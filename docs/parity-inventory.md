@@ -7,7 +7,7 @@ proof in the generated Cargo bank), hard-rejected (architecture;
 zero-artifact proof), or blocked by a named contract — and the guard test
 keeps this document and the lane list from drifting. C# lanes without
 Rust rows (Object helpers, Number helpers, bare
-module aliases, Date extras, process and buffer extras) are enumerated in
+module aliases, Date extras, and process extras) are enumerated in
 the blocked section with the contract each requires.
 
 ## Implemented
@@ -63,7 +63,11 @@ the blocked section with the contract each requires.
   url.parse/format with the UrlObject carrier, crypto (randomUUID,
   randomBytes, createHash, createHmac), util (closed string helpers,
   inspect over closed JsValue, format with closed placeholders), and
-  node:assert `ok` with optional string messages.
+  node:assert `ok` with optional string messages. The buffer extras are closed:
+  Buffer copies mutate the
+  selected target, slice/subarray values share backing storage, byte swaps
+  preserve object identity, and the complete C#-visible numeric read/write
+  matrix returns JavaScript numbers through one exact source ABI.
 - Error model, async/await, callbacks, tuples, fixed arrays, records,
   string-literal unions, discriminated object unions with exact selected
   narrowing evidence, generics, statics — see README.
@@ -95,6 +99,5 @@ the blocked section with the contract each requires.
   date-mutation and tzdata contracts.
 - bare module aliases (fs as an alias of node:fs): requires a
   module-alias ownership contract.
-- process extras (argv0, hrtime, memoryUsage, stdio) and buffer extras
-  (copy, slice views, swap, typed reads): requires process-runtime and
-  byte-view carrier contracts.
+- process extras (argv0, hrtime, memoryUsage, stdio): requires exact
+  process-runtime carrier contracts.
