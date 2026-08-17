@@ -388,10 +388,10 @@
     "id": "providers.standard-library-breadth",
     "area": "providers",
     "source": "import { PathBuf } from \"@tsonic/rust/std/path.js\";",
-    "classification": "implementation-gap",
+    "classification": "implemented",
     "csharpProof": "tsonic-csharp/src/providers/dotnet-reflection",
-    "rustProof": "src/providers/compiler/std-catalog.ts",
-    "action": "serve requested public std exports through the compiler-backed provider instead of a hand-curated three-type catalog"
+    "rustProof": "test/rust-stdlib-provider.test.mjs",
+    "action": "retain requested compiler-backed public standard-library exports"
   },
   {
     "id": "providers.generic-bounds",
@@ -403,20 +403,36 @@
     "action": "retain exact Clone and Copy provider bounds through declaration models and generated generic requirements"
   },
   {
-    "id": "providers.borrowed-results",
+    "id": "providers.copy-static-borrowed-results",
+    "area": "providers",
+    "source": "const name = item.staticName(); const copied = item.borrowedCount();",
+    "classification": "implemented",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "retain exact static-string and Copy-value projections from compiler-selected borrowed results"
+  },
+  {
+    "id": "providers.escaping-borrowed-results",
     "area": "providers",
     "source": "const view = buffer.asSlice();",
     "classification": "contract-gap",
-    "rustProof": "src/providers/compiler/rustdoc.ts",
-    "action": "define a selected lifetime relation from receiver or argument storage to the returned borrow"
+    "rustProof": "src/providers/compiler/rustdoc-model.ts",
+    "action": "define a selected lifetime relation from receiver or argument storage to an escaping returned view"
   },
   {
-    "id": "providers.custom-receivers",
+    "id": "providers.owned-custom-receivers",
+    "area": "providers",
+    "source": "const value = boxed.consume();",
+    "classification": "implemented",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "retain exact owned custom receiver projection such as Box<Self> through provider-selected UFCS"
+  },
+  {
+    "id": "providers.borrowed-custom-receivers",
     "area": "providers",
     "source": "pinned.poll(context);",
     "classification": "contract-gap",
-    "rustProof": "src/providers/compiler/rustdoc.ts",
-    "action": "define exact receiver projection and ownership metadata for custom self forms"
+    "rustProof": "src/providers/compiler/rustdoc-model.ts",
+    "action": "define exact lifetime and mutability projection for custom borrowed receivers such as Pin<&mut Self>"
   },
   {
     "id": "providers.c-variadics",
@@ -435,12 +451,20 @@
     "action": "retain exact unsafe read and write operations over the selected mutable static identity"
   },
   {
-    "id": "providers.traits-associated-items",
+    "id": "providers.closed-trait-associated-items",
     "area": "providers",
     "source": "const value = iterator.next();",
+    "classification": "implemented",
+    "rustProof": "test/compiler-provider.test.mjs",
+    "action": "retain exact trait methods, associated constants, and concrete associated-type substitutions"
+  },
+  {
+    "id": "providers.open-associated-types",
+    "area": "providers",
+    "source": "const value: Family<T>::Item<U> = family.make(input);",
     "classification": "contract-gap",
-    "rustProof": "src/providers/compiler/model.ts",
-    "action": "model trait implementations and associated types or constants as exact provider relations"
+    "rustProof": "src/providers/compiler/rustdoc-model.ts",
+    "action": "model unresolved associated types and generic associated types only from exact compiler-owned substitutions"
   },
   {
     "id": "providers.rust-unions",

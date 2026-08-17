@@ -682,6 +682,23 @@ function printRustForBlock(
   if (!flatIterable.includes("\n") && renderedFits(flatHeader, indent.length)) {
     return printRustBlock(statement.body, depth, flatHeader);
   }
+  const attachedColumn = indent.length + prefix.length + 1;
+  const attachedIterable = printRustExprFitted(
+    statement.iterable,
+    depth,
+    attachedColumn,
+    indentText(depth + 1),
+  );
+  if (attachedIterable.includes("\n") && renderedFits(attachedIterable, attachedColumn)) {
+    const body = printRustBlockStatements(statement.body, depth + 1);
+    return [
+      `${indent}${prefix} ${firstLine(attachedIterable)}`,
+      ...remainingLines(attachedIterable),
+      `${indent}{`,
+      ...(body.length === 0 ? [] : [body]),
+      `${indent}}`,
+    ].join("\n");
+  }
   const iterableIndent = indentText(depth + 1);
   const iterable = printRustExprFitted(
     statement.iterable,
@@ -2353,9 +2370,13 @@ function printRustExprFitted(
         return appendToLastLine(left, ` ${expression.operator} ${renderedRight}`);
       }
       const multilineLeftChain = rustMethodChain(expression.left);
+      const multilineLeftClosureStartsOnFirstLine = multilineLeftChain !== undefined &&
+        rustMethodChainContainsClosure(multilineLeftChain) &&
+        firstLine(left).trimEnd().endsWith("{");
       const multilineLeftRequiresOwnOperator = left.includes("\n") &&
         (expression.left.kind === "binary" || expression.left.kind === "index" ||
           multilineLeftChain !== undefined &&
+            !multilineLeftClosureStartsOnFirstLine &&
             !firstLine(left).trimEnd().endsWith("("));
       if (!multilineLeftRequiresOwnOperator && renderedFits(joined, column)) {
         return joined;

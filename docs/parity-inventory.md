@@ -31,7 +31,8 @@ the blocked section with the contract each requires.
   below). UTF-16 results that Rust strings cannot represent fail closed.
 - RegExp: constant literals and new RegExp with literal arguments over the
   oracle-proven subset; test, replace, split, search, global match with
-  null coalescing; regexp property reads.
+  null coalescing; regexp property reads; exec/match result consumption and
+  matchAll result consumption through the exact selected match-array carrier.
 - Math: all source-profile constants and functions, including trigonometric,
   hyperbolic, logarithmic, rounding, bit-conversion, variadic hypot/min/max,
   pow, and random operations; operations whose Rust primitives differ from
@@ -86,11 +87,6 @@ the blocked section with the contract each requires.
   contracts.
 - Fixed-size arrays beyond homogeneous tuples: requires source-core
   length facts.
-- RegExp exec and non-global match result consumption (the match-result
-  carrier and its member rows exist): requires optional-chaining or
-  option-narrowing lanes for nullable object results.
-- String.matchAll result consumption: requires iterator carrier lanes
-  (the call and fallibility lowering are implemented).
 - Object.keys/values/entries, Object.assign, Object.hasOwn:
   requires closed-shape reflection rows over the JsValue carrier.
 - Console calls with open or structural object arguments: requires exact

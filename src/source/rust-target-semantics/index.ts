@@ -2088,6 +2088,7 @@ function resolveCallArgumentOperationPrerequisite(
     return;
   }
   if (kind === KindCallExpression || kind === KindNewExpression ||
+    kind === "KindRegularExpressionLiteral" ||
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindBinaryExpression || kind === KindPrefixUnaryExpression ||
     kind === KindPostfixUnaryExpression) {
@@ -2137,6 +2138,7 @@ function resolveIndependentCallArgumentOperation(
   const { ast } = walk.context;
   const kind = ast.kindName(argument);
   if (kind === KindCallExpression || kind === KindNewExpression ||
+    kind === "KindRegularExpressionLiteral" ||
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindNonNullExpression || kind === "KindAsExpression" ||
     kind === "KindTypeAssertionExpression") {

@@ -820,14 +820,14 @@
   {
     "area": "RegExp",
     "lane": "exec/match result consumption",
-    "classification": "blocked",
-    "contract": "requires optional-chaining or option-coalesce lanes over object and array carriers"
+    "classification": "implemented",
+    "rowMember": "exec"
   },
   {
     "area": "String",
     "lane": "matchAll result consumption",
-    "classification": "blocked",
-    "contract": "requires iterator carrier lanes"
+    "classification": "implemented",
+    "rowMember": "matchAll"
   },
   {
     "area": "Unions",

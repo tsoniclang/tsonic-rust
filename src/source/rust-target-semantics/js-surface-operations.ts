@@ -625,11 +625,17 @@ const jsOperationRows = defineJsOperationRows([
     },
   })),
 
-  // RegExp match-carrier lane.
-  { owner: "RegExpExecArray", member: "index", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion } },
-  { owner: "RegExpExecArray", member: "input", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "input" }, result: { ref: "string" } } },
-  { owner: "RegExpExecArray", member: "length", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "group_count" }, result: { ref: "int32" }, resultConversion: rustUsizeToInt32ValueConversion } },
-  { owner: "RegExpExecArray", member: "index", operationKind: "indexer", lane: "regexp-match", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "group", argModes: ["value"], argConversions: [rustInt32ToUsizeValueConversion] }, result: { ref: "option-of-string" }, params: [{ ref: "int32" }] } },
+  // RegExp match-carrier lane. TSTS preserves the exact declaration owner:
+  // RegExp-specific fields come from either match interface, while inherited
+  // array operations come from the selected Array/ReadonlyArray declaration.
+  ...(["RegExpExecArray", "RegExpMatchArray"] as const).flatMap((owner): readonly JsOperationRowData[] => [
+    { owner, member: "index", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion } },
+    { owner, member: "input", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "input" }, result: { ref: "string" } } },
+  ]),
+  ...(["RegExpExecArray", "RegExpMatchArray", "Array", "ReadonlyArray"] as const).flatMap((owner): readonly JsOperationRowData[] => [
+    { owner, member: "length", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, result: { ref: "int32" }, resultConversion: rustUsizeToInt32ValueConversion } },
+    { owner, member: "index", operationKind: "indexer", lane: "regexp-match", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "group", argModes: ["value"], argConversions: [rustInt32ToUsizeValueConversion] }, result: { ref: "option-of-string" }, params: [{ ref: "int32" }] } },
+  ]),
 
   // RegExp lane: constant, compile-validated, oracle-proven subset.
   { owner: "RegExp", member: "test", operationKind: "call", lane: "regexp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "test", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },

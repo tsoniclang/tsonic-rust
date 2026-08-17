@@ -110,12 +110,10 @@ The remaining closure is ordered by architectural dependency:
 
 1. Class initialization: define the source contract for uninitialized
    target-native static fields before choosing a Rust default.
-2. Provider breadth: replace the hand-maintained Rust standard-library catalog
-   with requested compiler-backed exports.
-3. Shared contracts: specify borrowed results, custom receivers, associated
-   items, fixed-array lengths, and object-literal accessors at their owning
-   layer.
-4. Surface closure: execute every blocked row in `docs/parity-lanes.json`.
+2. Shared contracts: specify escaping borrowed views, borrowed custom
+   receivers, open associated types, fixed-array lengths, and object-literal
+   accessors at their owning layer.
+3. Surface closure: execute every blocked row in `docs/parity-lanes.json`.
 
 Object-literal method syntax and direct callable-valued properties are already
 closed through the same selected contextual contract. For example:
