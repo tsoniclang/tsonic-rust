@@ -102,7 +102,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.displayName, "display name", fail);
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
-    "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "modules", "types", "operations", "crates",
+    "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "moduleAliases", "modules", "types", "operations", "crates",
     "aliasImports", "carrierPaths", "carrierTraits", "binaryEpilogues",
   ], "package", fail);
 
@@ -174,6 +174,8 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
     }
   }
 
+  validateModuleAliases(definition, modulesBySpecifier, exportNamesByModule, fail);
+
   for (const module of definition.modules) {
     const importedExports = validateImports(module, exportNamesByModule, fail);
     for (const exported of module.exports) {
@@ -188,6 +190,30 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   validateBinaryEpilogues(definition, fail);
   validateTypeRelations(definition, exportsById, fail);
   validateOperationRows(definition, exportsById, membersById, signaturesById, fail);
+}
+
+function validateModuleAliases(
+  definition: RustProviderPackageDefinition,
+  modulesBySpecifier: ReadonlyMap<string, RustProviderPackageDefinition["modules"][number]>,
+  occupiedSpecifiers: ReadonlyMap<string, ReadonlySet<string>>,
+  fail: Fail,
+): void {
+  const aliases = new Set<string>();
+  for (const alias of definition.moduleAliases ?? []) {
+    requireExactKeys(asRecord(alias), ["moduleSpecifier", "canonicalModuleSpecifier"], "module alias", fail);
+    requireNonEmpty(alias.moduleSpecifier, "module alias specifier", fail);
+    requireNonEmpty(alias.canonicalModuleSpecifier, `canonical module for alias '${alias.moduleSpecifier}'`, fail);
+    if (!modulesBySpecifier.has(alias.canonicalModuleSpecifier)) {
+      fail(`module alias '${alias.moduleSpecifier}' names unknown canonical module '${alias.canonicalModuleSpecifier}'`);
+    }
+    if (occupiedSpecifiers.has(alias.moduleSpecifier)) {
+      fail(`module alias '${alias.moduleSpecifier}' conflicts with a declared module or source dependency`);
+    }
+    if (aliases.has(alias.moduleSpecifier)) {
+      fail(`duplicate module alias '${alias.moduleSpecifier}'`);
+    }
+    aliases.add(alias.moduleSpecifier);
+  }
 }
 
 function recordSignatures(

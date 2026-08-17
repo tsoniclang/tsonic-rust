@@ -6,8 +6,8 @@ lane carries exactly one classification — implemented (positive runtime
 proof in the generated Cargo bank), hard-rejected (architecture;
 zero-artifact proof), or blocked by a named contract — and the guard test
 keeps this document and the lane list from drifting. C# lanes without
-Rust rows (Object helpers, Number helpers, bare
-module aliases, Date extras, and process stdio) are enumerated in
+Rust rows (Object helpers, Number helpers,
+Date extras, and process stdio) are enumerated in
 the blocked section with the contract each requires.
 
 ## Implemented
@@ -71,6 +71,8 @@ the blocked section with the contract each requires.
   matrix returns JavaScript numbers through one exact source ABI.
   The process identity and metrics lane preserves named/default module forms and
   map timing tuples and memory fields through closed native carriers.
+  Canonical `node:*` modules and their Node-compatible bare module aliases resolve to
+  one provider/module/export identity rather than duplicate declaration models.
 - Error model, async/await, callbacks, tuples, fixed arrays, records,
   string-literal unions, discriminated object unions with exact selected
   narrowing evidence, generics, statics — see README.
@@ -100,6 +102,4 @@ the blocked section with the contract each requires.
   closed source-to-JsValue object conversion facts.
 - Date UTC setters and local-time getters and setters: requires
   date-mutation and tzdata contracts.
-- bare module aliases (fs as an alias of node:fs): requires a
-  module-alias ownership contract.
 - process stdio: requires exact stream and stdio carrier contracts.

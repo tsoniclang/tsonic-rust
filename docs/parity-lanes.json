@@ -848,8 +848,7 @@
   {
     "area": "Node",
     "lane": "bare module aliases (fs vs node:fs)",
-    "classification": "blocked",
-    "contract": "requires a module-alias ownership contract"
+    "classification": "implemented"
   },
   {
     "area": "Node",

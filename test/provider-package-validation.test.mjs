@@ -1106,3 +1106,82 @@ test("module ownership and declaration rendering retain exact provider identity"
     moduleSpecifier: "@acme/validation",
   });
 });
+
+test("provider module aliases retain one canonical provider identity", () => {
+  const canonicalModuleSpecifier = "@acme/validation";
+  const aliasModuleSpecifier = "acme-validation";
+  const valueExport = {
+    id: `${canonicalModuleSpecifier}::Value`,
+    name: "Value",
+    kind: "class",
+    members: [{
+      id: `${canonicalModuleSpecifier}::Value.next`,
+      name: "next",
+      kind: "property",
+      readonly: true,
+      type: {
+        kind: "provider-ref",
+        moduleSpecifier: canonicalModuleSpecifier,
+        exportName: "Value",
+      },
+    }],
+  };
+  const aliased = definition({
+    moduleAliases: [{ moduleSpecifier: aliasModuleSpecifier, canonicalModuleSpecifier }],
+    modules: [{
+      moduleSpecifier: canonicalModuleSpecifier,
+      providerModuleId: "acme.validation",
+      exports: [valueExport],
+    }],
+    operations: [],
+  });
+  const providerPackage = createRustProviderPackage(aliased);
+  assert.deepEqual(providerPackage.moduleOwnership, [
+    {
+      specifierPrefix: canonicalModuleSpecifier,
+      providerId: "tsonic.rust.provider-package.acme-validation.binding",
+    },
+    {
+      specifierPrefix: aliasModuleSpecifier,
+      providerId: "tsonic.rust.provider-package.acme-validation.binding",
+    },
+  ]);
+
+  const provider = createRustProviderPackageSourceProvider(aliased);
+  assert.deepEqual(provider.ownsModule(aliasModuleSpecifier), { kind: "owned" });
+  const resolution = provider.resolveModule(aliasModuleSpecifier);
+  assert.equal(resolution.kind, "virtual");
+  assert.equal(resolution.moduleSpecifier, aliasModuleSpecifier);
+  assert.equal(resolution.providerModuleId, "acme.validation");
+  const model = provider.getDeclarationModel(resolution);
+  assert.equal(model.moduleSpecifier, aliasModuleSpecifier);
+  assert.equal(model.providerModuleId, "acme.validation");
+  assert.deepEqual(model.exports[0].members[0].type, {
+    kind: "provider-ref",
+    moduleSpecifier: aliasModuleSpecifier,
+    exportName: "Value",
+  });
+
+  for (const invalid of [
+    {
+      moduleAliases: [{ moduleSpecifier: "missing", canonicalModuleSpecifier: "@acme/missing" }],
+      pattern: /names unknown canonical module '@acme\/missing'/u,
+    },
+    {
+      moduleAliases: [{ moduleSpecifier: canonicalModuleSpecifier, canonicalModuleSpecifier }],
+      pattern: /conflicts with a declared module or source dependency/u,
+    },
+    {
+      moduleAliases: [
+        { moduleSpecifier: aliasModuleSpecifier, canonicalModuleSpecifier },
+        { moduleSpecifier: aliasModuleSpecifier, canonicalModuleSpecifier },
+      ],
+      pattern: /duplicate module alias 'acme-validation'/u,
+    },
+  ]) {
+    assert.throws(
+      () => createRustProviderPackage(definition({ moduleAliases: invalid.moduleAliases })),
+      invalid.pattern,
+    );
+  }
+});

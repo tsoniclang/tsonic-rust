@@ -77,6 +77,7 @@ export type {
   RustProviderBinaryEpilogueDefinition,
   RustProviderBinaryEpilogueRow,
   RustProviderImmediateCallbackDefinition,
+  RustProviderModuleAliasDefinition,
   RustProviderModuleDefinition,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
