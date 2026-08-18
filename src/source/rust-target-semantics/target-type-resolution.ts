@@ -14,6 +14,7 @@ import type {
   SourceFile,
   Symbol,
   Type,
+  TypeTupleElementInfo,
 } from "@tsonic/tsts";
 import {
   sourcePropertyTypeEvidenceNodes,
@@ -69,6 +70,7 @@ import {
   rustUndefinedTargetType,
   rustVecTargetType,
   rustFixedArrayTargetType,
+  isRustJsArrayCarrier,
   substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
 import { rustProviderOperationOwnerMatches } from "./provider-operation-selection.js";
@@ -463,29 +465,13 @@ function resolveRustCheckerTransformedType(
   if (semantics.isTuple(selectedType)) {
     const infos = semantics.getTupleElementInfos(selectedType);
     const elements = infos.map((element) =>
-      resolveRustEvidenceNodesToCommonCarrier(
-        [
-          ...sourceTupleElementTypeEvidenceNodes(
-            context.ast,
-            semantics,
-            element,
-          ),
-          ...sourceTransformedTypeFactEvidenceNodes(
-            context.ast,
-            semantics,
-            authoredRoot,
-            element.type,
-          ),
-        ],
-        element.type,
+      resolveRustTupleElementTargetTypeWithState(
+        element,
+        semantics,
         context,
         options,
         resolving,
-      ) ?? resolveRustTargetType(
-        element.type,
-        context,
-        options,
-        resolving,
+        authoredRoot,
       )
     );
     return infos.length === 0 || elements.some((element) => element === undefined)
@@ -526,18 +512,23 @@ function resolveStandardSourceTypeTransformation(
       resolving,
     );
   }
-  if (transformation.kind === "tuple") {
-    const elements = transformation.elements.map((element) =>
+  if (transformation.kind === "parameter-list") {
+    const elements = transformation.parameters.map((element) =>
       resolveRustSignatureParameterEvidence(
         element,
         context,
         options,
         resolving,
+        "parameter-list",
       )
     );
     return elements.some((element) => element === undefined)
       ? undefined
-      : rustTupleTargetType(elements as readonly TargetTypeRef[]);
+      : resolveRustSignatureParameterListTarget(
+          transformation.parameters,
+          elements as readonly TargetTypeRef[],
+          options,
+        );
   }
   if (transformation.kind === "structural") {
     return resolveStructuralObjectType(
@@ -556,6 +547,44 @@ function resolveStandardSourceTypeTransformation(
   );
 }
 
+function resolveRustSignatureParameterListTarget(
+  parameters: SourceCallableTypeEvidence["parameters"],
+  elements: readonly TargetTypeRef[],
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  const restIndexes = parameters.flatMap((parameter, index) =>
+    parameter.parameterKind === "rest" ? [index] : []
+  );
+  if (restIndexes.length === 0) {
+    return rustTupleTargetType(elements);
+  }
+  if (restIndexes.length !== 1) {
+    return undefined;
+  }
+  const restIndex = restIndexes[0]!;
+  const restCarrier = elements[restIndex];
+  const restElement = restCarrier?.kind === "array"
+    ? restCarrier.element
+    : isRustJsArrayCarrier(restCarrier)
+      ? restCarrier.typeArguments?.[0]
+      : undefined;
+  if (restElement === undefined) {
+    return undefined;
+  }
+  const homogeneous = elements.every((element, index) => {
+    const value = index === restIndex
+      ? restElement
+      : rustOptionElementCarrier(element) ?? element;
+    return rustTargetTypeRefEquals(value, restElement);
+  });
+  if (!homogeneous) {
+    return undefined;
+  }
+  return options.jsEnabled
+    ? rustJsArrayTargetType(restElement)
+    : rustVecTargetType(restElement);
+}
+
 function resolveRustCallableEvidence(
   callable: SourceCallableTypeEvidence,
   context: RustTargetTypeResolutionContext,
@@ -563,11 +592,12 @@ function resolveRustCallableEvidence(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const parameters = callable.parameters.map((parameter) =>
-    resolveRustSignatureParameterEvidence(
-      parameter,
-      context,
-      options,
-      resolving,
+      resolveRustSignatureParameterEvidence(
+        parameter,
+        context,
+        options,
+        resolving,
+        "callable",
     )
   );
   if (parameters.some((parameter) => parameter === undefined)) {
@@ -589,6 +619,7 @@ function resolveRustSignatureParameterEvidence(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
+  use: "callable" | "parameter-list",
 ): TargetTypeRef | undefined {
   const authoredTypeNode = parameter.declaration === undefined
     ? undefined
@@ -607,7 +638,11 @@ function resolveRustSignatureParameterEvidence(
     options,
     resolving,
   );
-  return resolved === undefined || parameter.parameterKind !== "optional"
+  const optional = use === "parameter-list"
+    ? parameter.parameterKind === "optional"
+    : parameter.omissionKind === "undefined";
+  return resolved === undefined || !optional ||
+      rustOptionElementCarrier(resolved) !== undefined
     ? resolved
     : rustOptionTargetType(resolved);
 }
@@ -718,6 +753,77 @@ function resolveRustEvidenceNodesToCommonCarrier(
     }
     return selected[0];
   });
+  if (carriers.some((carrier) => carrier === undefined)) {
+    return undefined;
+  }
+  const first = carriers[0]!;
+  return carriers.every((carrier) =>
+      carrier !== undefined && rustTargetTypeRefEquals(first, carrier)
+    )
+    ? first
+    : undefined;
+}
+
+export function resolveRustTupleElementTargetType(
+  element: TypeTupleElementInfo,
+  semantics: SourceFileSemantics,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  return resolveRustTupleElementTargetTypeWithState(
+    element,
+    semantics,
+    context,
+    options,
+    new Set<object>(),
+  );
+}
+
+function resolveRustTupleElementTargetTypeWithState(
+  element: TypeTupleElementInfo,
+  semantics: SourceFileSemantics,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+  authoredRoot?: Node,
+): TargetTypeRef | undefined {
+  const evidenceNodes = [
+    ...sourceTupleElementTypeEvidenceNodes(
+      context.ast,
+      semantics,
+      element,
+    ),
+    ...(authoredRoot === undefined
+      ? []
+      : sourceTransformedTypeFactEvidenceNodes(
+          context.ast,
+          semantics,
+          authoredRoot,
+          element.type,
+        )),
+  ];
+  if (evidenceNodes.length === 0) {
+    return resolveRustTargetType(
+      element.type,
+      context,
+      options,
+      resolving,
+    );
+  }
+  const carriers = [...new Set(evidenceNodes)].map((authoredTypeNode) =>
+    resolveRustTypeComponentEvidence(
+      {
+        selectedType: element.type,
+        ...(element.declaration === undefined
+          ? {}
+          : { declaration: element.declaration }),
+        authoredTypeNode,
+      },
+      context,
+      options,
+      resolving,
+    )
+  );
   if (carriers.some((carrier) => carrier === undefined)) {
     return undefined;
   }
@@ -928,32 +1034,14 @@ function resolveRustTargetType(
     if (typeShape.isTuple(type)) {
       const elements = typeShape.getTupleElementInfos(type)
         .map((element) =>
-          (authoredTypeRoot === undefined
-            ? undefined
-            : resolveRustEvidenceNodesToCommonCarrier(
-                [
-                  ...sourceTupleElementTypeEvidenceNodes(
-                    context.ast,
-                    typeShape,
-                    element,
-                  ),
-                  ...sourceTransformedTypeFactEvidenceNodes(
-                    context.ast,
-                    typeShape,
-                    authoredTypeRoot,
-                    element.type,
-                  ),
-                ],
-                element.type,
-                context,
-                options,
-                resolving,
-              )) ?? resolveRustTargetType(
-                element.type,
-                context,
-                options,
-                resolving,
-              )
+          resolveRustTupleElementTargetTypeWithState(
+            element,
+            typeShape,
+            context,
+            options,
+            resolving,
+            authoredTypeRoot,
+          )
         );
       return elements.length > 0 && elements.every((element) => element !== undefined)
         ? rustTupleTargetType(elements as TargetTypeRef[])
@@ -1139,37 +1227,16 @@ function resolveCallableType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  const signatures = denseDefined(context.checker.getCallSignaturesOfType(type));
-  if (signatures === undefined || signatures.length !== 1) {
+  const callable = context.typeShape.selectCallableType(type);
+  if (callable === undefined) {
     return undefined;
   }
-  const signature = signatures[0]!;
-  const declaration = context.checker.getSignatureDeclaration(signature);
+  const declaration = callable.result.declaration;
   if (declaration !== undefined && context.ast.typeParameters(declaration).length > 0) {
     return undefined;
   }
-  const returnType = context.checker.getReturnTypeOfSignature(signature);
-  if (returnType === undefined) {
-    return undefined;
-  }
-  const authoredReturn = declaration === undefined
-    ? undefined
-    : context.ast.typeNode(declaration);
   return resolveRustCallableEvidence(
-    {
-      parameters: context.typeShape.getSignatureParameterInfos(signature),
-      result: {
-        selectedType: returnType,
-        ...(declaration === undefined
-          ? {}
-          : {
-              declaration,
-              ...(authoredReturn === undefined
-                ? {}
-                : { authoredTypeNode: authoredReturn }),
-            }),
-      },
-    },
+    callable,
     context,
     options,
     resolving,

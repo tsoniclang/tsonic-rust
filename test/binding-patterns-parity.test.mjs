@@ -133,7 +133,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     artifactText(result, "src/shapes.rs"),
-    /pub struct LabelRightShape \{\s*pub label: String,\s*pub right: i32,/u,
+    /pub\(crate\) struct LabelRightShape \{\s*pub label: String,\s*pub right: i32,/u,
   );
   assert.match(source, /let remaining: rt::ObjectHandle<crate::shapes::LabelRightShape> =/u);
   assert.match(source, /rt::ObjectHandle::new\(crate::shapes::LabelRightShape \{/u);

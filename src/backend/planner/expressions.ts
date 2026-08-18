@@ -3740,6 +3740,16 @@ function refShape(context: RustPlanContext, argument: RustExpr, node: Node | und
   return { kind: "reference", expr: argument };
 }
 
+function mutRefShape(argument: RustExpr): RustExpr {
+  return {
+    kind: "reference",
+    expr: argument.kind === "vec-literal"
+      ? { kind: "slice-literal", elements: argument.elements }
+      : argument,
+    mutable: true,
+  };
+}
+
 export function applyRustArgumentMode(
   context: RustPlanContext,
   argument: RustExpr,
@@ -3756,7 +3766,7 @@ export function applyRustArgumentMode(
     if (sourceParameterAbi?.mode === "mut-ref") {
       return argument;
     }
-    return { kind: "reference", expr: argument, mutable: true };
+    return mutRefShape(argument);
   }
   return argument;
 }
@@ -4485,7 +4495,7 @@ function applyFinalizedArgumentMode(
     return expression;
   }
   if (input.mode === "mut-ref") {
-    return { kind: "reference", expr: expression, mutable: true };
+    return mutRefShape(expression);
   }
   const borrowedString = rustBorrowedStringView(expression);
   if (borrowedString !== expression) {
@@ -5595,7 +5605,9 @@ function shapeRustSourceCallInput(
     ? selectedInput
     : nonConsumingInput.kind === "string-literal" && !mutable
       ? { kind: "str-literal", value: nonConsumingInput.value }
-      : { kind: "reference", expr: nonConsumingInput, ...(mutable ? { mutable: true } : {}) };
+      : mutable
+        ? mutRefShape(nonConsumingInput)
+        : { kind: "reference", expr: nonConsumingInput };
 }
 
 function selectRustSpreadSourceInput(
@@ -6943,6 +6955,28 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
         return undefined;
       }
       elements.push(planned);
+    }
+    const tupleCarrier = fact.resultCarrier.kind === "tuple"
+      ? fact.resultCarrier
+      : undefined;
+    if (
+      tupleCarrier === undefined ||
+      elements.length + fact.omittedOptionalElementIndexes.length !==
+        tupleCarrier.elements.length ||
+      fact.omittedOptionalElementIndexes.some((index, omittedIndex) =>
+        index !== elements.length + omittedIndex ||
+        rustOptionElementCarrier(tupleCarrier.elements[index]) === undefined
+      )
+    ) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.tuple-optional-elements",
+        "Tuple literal omission evidence conflicts with its exact finalized Rust tuple carrier.",
+      ));
+      return undefined;
+    }
+    for (const _index of fact.omittedOptionalElementIndexes) {
+      elements.push({ kind: "none" });
     }
     return { kind: "tuple-literal", elements };
   }

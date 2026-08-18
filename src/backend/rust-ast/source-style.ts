@@ -16,15 +16,35 @@ export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
   const items = closePublicRustTypeVisibility(model.items);
-  const publicTypes = new Set(items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "trait" || item.kind === "enum") &&
-        item.visibility === "public"
-      ? [item.name]
-      : []));
+  const publicTypes = publicNominalRustTypeNames(items);
   return {
     ...model,
     items: items.map((item) => finalizeRustItemStyle(item, publicTypes)),
   };
+}
+
+export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {
+  const items = closePublicRustTypeVisibility(model.items);
+  const publicTypes = publicDeclaredRustTypeNames(items);
+  return Object.freeze([...new Set(items.flatMap((item) =>
+    publicSignatureTypes(item, publicTypes).flatMap(rustTypeNames)))].sort((left, right) =>
+      left.localeCompare(right, "en")));
+}
+
+function publicNominalRustTypeNames(items: readonly RustItem[]): ReadonlySet<string> {
+  return new Set(items.flatMap((item) =>
+    (item.kind === "struct" || item.kind === "trait" || item.kind === "enum") &&
+        item.visibility === "public"
+      ? [item.name]
+      : []));
+}
+
+function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<string> {
+  return new Set(items.flatMap((item) =>
+    (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
+        item.kind === "type-alias") && item.visibility === "public"
+      ? [item.name]
+      : []));
 }
 
 function finalizeRustItemStyle(
