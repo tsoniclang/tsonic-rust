@@ -12,6 +12,7 @@
   ],
   "exports": {
     ".": "./dist/index.js",
+    "./provider": "./dist/public/provider.js",
     "./package.json": "./package.json"
   },
   "scripts": {

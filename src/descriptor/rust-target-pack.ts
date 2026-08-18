@@ -4,42 +4,51 @@ import type {
   TargetBackend,
   TargetBackendContext,
   TargetPack,
-  TargetProviderContext,
-  TargetRuntimeContributionContext,
-  TargetRuntimeContributions,
-  TargetRuntimeReference,
   TargetSelection,
-  TargetSourceCompilerContributions,
   TargetToolchain,
   TargetToolchainContext,
 } from "@tsonic/target-api";
+import type {
+  TargetProviderContext,
+  TargetProviderSourceProfileContext,
+  TargetRuntimeContributionContext,
+  TargetSourceCompilerContributions,
+  TargetSourceProfileContributions,
+} from "@tsonic/target-api/provider";
+import type {
+  TargetRuntimeContributions,
+  TargetRuntimeReference,
+} from "@tsonic/target-api/artifacts";
 import { createRustBackend } from "../backend/rust-backend.js";
 import {
   cargoCrateAttributeName,
   cargoCratesIoRegistry,
   cargoPathReferenceKind,
   cargoRegistryPatchAttributeName,
-} from "../backend/planner/cargo-project.js";
+} from "../providers/model/cargo-reference.js";
 import {
   readRustTypescriptCompatibilityMode,
   validateRustTargetOptions,
 } from "../options/rust-target-options.js";
 import { createCargoToolchain } from "../toolchain/cargo-toolchain.js";
 import {
+  rustCompatibilitySourceProfileContributions,
   rustJsSurfaceSourceProfileContributions,
-  rustSourceProfileContributions,
-} from "../source/rust-target-semantics/source-profile-declarations.js";
+  rustNativeSourceProfileContributions,
+  rustJsSourceProfileOwnerId,
+} from "../source/profiles/declarations.js";
 import {
   createRustSourceSemanticsExtension,
-} from "../source/rust-source-semantics/source-extension.js";
+} from "../source/extension/source-extension.js";
 import {
   rustSourceSemanticsModules,
-} from "../source/rust-source-semantics/source-modules.js";
+} from "../source/profiles/source-modules.js";
 import {
   createRustCompilerProviderSession,
   rustCompilerProviderSpecifierPrefix,
 } from "../providers/compiler/session.js";
 import type { RustCompilerProviderSession } from "../providers/compiler/session.js";
+import { composeRustProviderSemantics } from "../providers/packages/semantics.js";
 import { readRustUserProjectFile } from "../options/rust-target-options.js";
 
 export const rustTargetId = "rust";
@@ -99,13 +108,36 @@ export function createRustTargetPack(): TargetPack {
         throw new Error("Rust user-owned Cargo mode requires source compilation to establish one immutable compiler-provider session before backend planning.");
       }
       compilerSessions.delete(context.target);
-      return createRustBackend(context, compilerSession?.semantics());
+      return createRustBackend(
+        context,
+        composeRustProviderSemantics(context, compilerSession?.semantics()),
+        rustJsSemanticsEnabled(context.target, context.selectedSurfaces),
+      );
     },
     createToolchain(context: TargetToolchainContext): TargetToolchain {
       validateRustTargetOptions(context.target);
       return createCargoToolchain(context);
     },
   };
+}
+
+function rustSourceProfileContributions(
+  context: TargetProviderSourceProfileContext,
+): TargetSourceProfileContributions {
+  if (context.selectedSurfaces.some((surface) => surface.id === rustJsSourceProfileOwnerId)) {
+    return { declarations: [] };
+  }
+  return readRustTypescriptCompatibilityMode(context.target) === "compat"
+    ? rustCompatibilitySourceProfileContributions()
+    : rustNativeSourceProfileContributions();
+}
+
+function rustJsSemanticsEnabled(
+  target: TargetSelection,
+  selectedSurfaces: readonly { readonly id: string }[],
+): boolean {
+  return selectedSurfaces.some((surface) => surface.id === rustJsSourceProfileOwnerId) ||
+    readRustTypescriptCompatibilityMode(target) === "compat";
 }
 
 function rustRuntimeCrateReference(

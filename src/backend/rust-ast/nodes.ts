@@ -5,7 +5,7 @@ import type {
   RustAssignmentOperator,
   RustBinaryOperator,
   RustPrimitiveTypeName,
-} from "../../common/rust-syntax.js";
+} from "../model/syntax.js";
 
 export type RustType =
   | { readonly kind: "primitive"; readonly name: RustPrimitiveTypeName }
