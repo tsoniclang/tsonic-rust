@@ -2410,8 +2410,9 @@ function printRustExprFitted(
       const multilineLeftRequiresOwnOperator = left.includes("\n") &&
         (expression.left.kind === "binary" || expression.left.kind === "index" ||
           multilineLeftChain !== undefined &&
-            !multilineLeftClosureStartsOnFirstLine &&
-            !firstLine(left).trimEnd().endsWith("("));
+            (multilineLeftChain.base.kind === "match" ||
+              !multilineLeftClosureStartsOnFirstLine &&
+                !firstLine(left).trimEnd().endsWith("(")));
       if (!multilineLeftRequiresOwnOperator && renderedFits(joined, column)) {
         return joined;
       }
@@ -2435,7 +2436,8 @@ function printRustExprFitted(
     case "vec-literal":
     case "slice-literal":
     case "tuple-literal": {
-      if (!flat.includes("\n") && flat.length <= rustNestedCallWidth &&
+      if (!flat.includes("\n") &&
+        !rustExpressionContainsExpandedStructLiteral(expression) &&
         renderedFits(flat, column)) {
         return flat;
       }
@@ -2456,16 +2458,10 @@ function printRustExprFitted(
         return appendToLastLine(`${opening}${rendered}`, "]");
       }
       const elementIndent = indentText(depth + 1);
-      const compactElements = expression.elements.map(printRustExpr).join(", ");
-      const elements = expression.kind !== "tuple-literal" &&
-          expression.elements.every(rustFormatArgumentIsAtomic) &&
-          compactElements.length <= rustNestedCallWidth &&
-          renderedFits(`${compactElements},`, elementIndent.length)
-        ? [`${elementIndent}${compactElements},`]
-        : expression.elements.map((element) => {
-            const rendered = printRustExprFitted(element, depth + 1, elementIndent.length);
-            return appendToLastLine(`${elementIndent}${rendered}`, ",");
-          });
+      const elements = expression.elements.map((element) => {
+        const rendered = printRustExprFitted(element, depth + 1, elementIndent.length);
+        return appendToLastLine(`${elementIndent}${rendered}`, ",");
+      });
       return [
         expression.kind === "vec-literal" ? "vec![" : expression.kind === "slice-literal" ? "[" : "(",
         ...elements,
@@ -3102,9 +3098,12 @@ function rustMethodChain(expression: RustExpr): RustMethodChain | undefined {
 function rustMethodChainRequiresVerticalLayout(expression: RustExpr): boolean {
   const chain = rustMethodChain(expression);
   const expandedClosureOpening = rustExpandedMethodClosureOpeningWidth(expression);
+  const renderedLength = printRustExpr(expression).length;
   return chain !== undefined &&
     (expandedClosureOpening === undefined || expandedClosureOpening > rustMethodChainWidth) &&
-    printRustExpr(expression).length >= rustMethodChainWidth &&
+    (expression.kind === "try"
+      ? renderedLength >= rustMethodChainWidth
+      : renderedLength > rustMethodChainWidth) &&
     chain.steps.filter((step) =>
       step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1;
 }
@@ -4580,6 +4579,16 @@ function printRustMatchExpression(
     }
     const prefix = `${armIndent}${pattern} => `;
     const flatValue = printRustExpr(arm.expression);
+    if (arm.expression.kind === "try" &&
+      prefix.length + flatValue.length + 1 > rustMethodChainWidth) {
+      const valueIndent = indentText(depth + 2);
+      const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
+      return [
+        `${armIndent}${pattern} => {`,
+        `${valueIndent}${value}`,
+        `${armIndent}}`,
+      ];
+    }
     if (flatValue.includes("\n") || !renderedFits(`${prefix}${flatValue},`, 0)) {
       if (arm.expression.kind === "call" || arm.expression.kind === "associated-call" ||
         arm.expression.kind === "invoke" ||

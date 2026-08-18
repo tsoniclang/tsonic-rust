@@ -1,9 +1,11 @@
 import { flowStateFactKey } from "@tsonic/tsts";
 import type { Node } from "@tsonic/tsts";
 import {
+  isRustVecCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
   rustOptionTargetType,
+  rustSliceElementCarrier,
 } from "../rust-target-types.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { RustArgumentMode } from "../rust-facts/keys.js";
@@ -194,7 +196,9 @@ function rustParameterModeForCarriers(
     return "value";
   }
   if (parameterCarrier.kind !== "reference" ||
-    !rustTargetTypeRefEquals(parameterCarrier.referent, valueCarrier)) {
+    !rustTargetTypeRefEquals(parameterCarrier.referent, valueCarrier) &&
+    !(isRustVecCarrier(valueCarrier) &&
+      rustTargetTypeRefEquals(rustSliceElementCarrier(parameterCarrier), valueCarrier.element))) {
     return undefined;
   }
   return parameterCarrier.mutable ? "mut-ref" : "ref";

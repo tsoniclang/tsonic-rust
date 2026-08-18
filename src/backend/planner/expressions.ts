@@ -106,7 +106,7 @@ import { applyRustErrorBoundary } from "./error-boundary.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustSourceBindingPath, sourceTypePath } from "./plan-context.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "./plan-context.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "./render-types.js";
-import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSourcePrimitiveTargetType, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetType, rustStructuralMethodStorageCarrier, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
+import { getRustGeneratorProtocol, isRustBigIntCarrier, isRustBoolCarrier, isRustCopyCarrier, isRustIntegerCarrier, isRustNeverCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier, isRustVecCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustFixedArrayCarrierValue, rustFutureOutputCarrier, rustOptionElementCarrier, rustOptionTargetType, rustPrimitiveTypeName, rustSliceElementCarrier, rustSourcePrimitiveTargetType, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetType, rustStructuralMethodStorageCarrier, substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import {
   requireRustCarrierRequirements,
   requireRustDefaultValueCarrier,
@@ -5579,7 +5579,12 @@ function shapeRustSourceCallInput(
     return selectedInput;
   }
   if (parameter.parameterCarrier.kind !== "reference" ||
-    !rustTargetTypeRefEquals(parameter.parameterCarrier.referent, input.carrier)) {
+    !rustTargetTypeRefEquals(parameter.parameterCarrier.referent, input.carrier) &&
+    !(isRustVecCarrier(input.carrier) &&
+      rustTargetTypeRefEquals(
+        rustSliceElementCarrier(parameter.parameterCarrier),
+        input.carrier.element,
+      ))) {
     return undefined;
   }
   const mutable = parameter.mode === "mut-ref";

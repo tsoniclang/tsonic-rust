@@ -137,13 +137,13 @@ export function createRustStructuralShapePlan(
                 property: Object.freeze({
                   getterTargetName: allocateSnakeName(
                     usedFieldNames,
-                    `__tsonic_get_${targetName}`,
+                    `get_${targetName}`,
                   ),
                   ...(!field.readonly
                     ? {
                         setterTargetName: allocateSnakeName(
                           usedFieldNames,
-                          `__tsonic_set_${targetName}`,
+                          `set_${targetName}`,
                         ),
                       }
                     : {}),

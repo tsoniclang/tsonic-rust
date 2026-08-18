@@ -304,9 +304,6 @@ test("selected source operation identity is never reconstructed through checker 
     "target-type-resolution.ts|resolveCallableType|getCallSignaturesOfType",
     "target-type-resolution.ts|resolveCallableType|getReturnTypeOfSignature",
     "target-type-resolution.ts|resolveCallableType|getSignatureDeclaration",
-    "target-type-resolution.ts|resolveCallableType|getSignatureParameters",
-    "target-type-resolution.ts|resolveCallableType|getSymbolDeclarations",
-    "target-type-resolution.ts|resolveCallableType|getTypeOfSymbol",
   ]);
   const observed = new Set();
   for (const { path, text } of semanticFiles) {

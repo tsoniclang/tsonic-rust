@@ -5,6 +5,7 @@ import {
   rustScreamingSnakeIdentifier,
   rustSnakeCaseIdentifier,
 } from "./rust-identifiers.js";
+import { Node_Initializer } from "./source-ast.js";
 
 export interface RustNamePlan {
   nameForDeclaration(declaration: Node | undefined): string | undefined;
@@ -189,10 +190,15 @@ function parameterIsUnused(
   const body = callable === undefined ? undefined : ast.body(callable);
   const name = ast.name(parameter);
   const reference = navigation.sourceReferenceFor(name);
-  return body !== undefined &&
-    name !== undefined &&
-    reference?.declaration === parameter &&
-    navigation.referencesWithin(reference.symbol, body).length === 0;
+  if (body === undefined || name === undefined || reference?.declaration !== parameter ||
+    navigation.referencesWithin(reference.symbol, body).length !== 0) {
+    return false;
+  }
+  return ast.parameters(callable).every((candidate) => {
+    const initializer = candidate === undefined ? undefined : Node_Initializer(ast, candidate);
+    return initializer === undefined ||
+      navigation.referencesWithin(reference.symbol, initializer).length === 0;
+  });
 }
 
 function declarationNameRole(
@@ -293,7 +299,8 @@ function rustNameBase(sourceName: string, role: RustNameRole): string {
     return rustScreamingSnakeIdentifier(sourceName);
   }
   if (role === "unused-value") {
-    return `_${rustSnakeCaseIdentifier(sourceName)}`;
+    const name = rustSnakeCaseIdentifier(sourceName);
+    return name.startsWith("_") ? name : `_${name}`;
   }
   return rustSnakeCaseIdentifier(sourceName);
 }

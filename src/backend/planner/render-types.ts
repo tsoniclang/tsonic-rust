@@ -64,7 +64,7 @@ export function rustTypeFromCarrier(
     return undefined;
   }
   if (isRustNeverCarrier(carrier)) {
-    return { kind: "never" };
+    return undefined;
   }
   if (carrier.kind === "source-primitive") {
     const name = rustPrimitiveTypeName(carrier.name);

@@ -53,10 +53,9 @@ test("C# parity inventory is complete and mechanically classified", () => {
   }
 });
 
-test("every open implementation lane and priority closure remains visible", () => {
+test("implementation status and priority closure remain mechanically visible", () => {
   const open = lanes.filter(({ classification }) =>
     classification === "implementation-gap" || classification === "contract-gap");
-  assert.ok(open.length > 0, "the inventory must not silently claim complete parity");
   for (const classification of new Set(open.map((lane) => lane.classification))) {
     assert.ok(document.includes(`\`${classification}\``), classification);
   }

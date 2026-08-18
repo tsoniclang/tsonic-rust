@@ -1199,31 +1199,27 @@ function acceptRuntimeCallableCarrierCall(
   sourceDeclaration?: Node,
   optionalGuard?: RustOptionalCallGuard,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
-  const callableEvidence = context.typeShape.selectCallableType(
-    request.source.sourceCallee.type,
-  );
+  const selectedParameters = request.source.sourceSelectedSignatureParameters;
   const protocol = runtimeCallableProtocol(calleeCarrier);
   if (
     calleeCarrier === undefined ||
     protocol === undefined ||
-    callableEvidence === undefined ||
-    callableEvidence.parameters.length !== protocol.parameters.length
+    selectedParameters.length !== protocol.parameters.length
   ) {
     return undefined;
   }
-  const parameters = callableEvidence.parameters.map((parameter, index) => {
+  const parameters = selectedParameters.map((parameter, index) => {
     const type = protocol.parameters[index];
     return type === undefined
       ? undefined
       : {
-          name: context.typeShape.getSymbolName(parameter.sourceSymbol) ||
-            `arg${index}`,
+          name: parameter.parameterName || `arg${index}`,
           type,
           passingMode: "by-value" as const,
-          ...(parameter.parameterKind === "optional"
+          ...(parameter.acceptsOmission
             ? { optional: true as const }
             : {}),
-          ...(parameter.parameterKind === "rest"
+          ...(parameter.rest
             ? { paramsArray: true as const }
             : {}),
         };
@@ -2459,14 +2455,30 @@ function acceptProjectSourceCall(
   if (targetTypeArguments === undefined && (request.source.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
   }
-  const selectedOwnerCarrier = construction && selectedOwnerDefinition !== undefined
-    ? instantiateSelectedProjectConstructionCarrier(
+  const superConstruction = construction &&
+    ast.kindName(request.source.sourceCallee.expression) === "KindSuperKeyword";
+  const containingDefinition = options.projectTypes.definitionContainingDeclaration(
+    asNode(request.source.call, context),
+  );
+  const selectedOwnerRelationship = !superConstruction || selectedOwnerDefinition === undefined ||
+      containingDefinition?.kind !== "class"
+    ? undefined
+    : options.projectTypes.relationship(
+        options.projectTypes.openCarrier(containingDefinition),
         selectedOwnerDefinition,
-        request.source.sourceSelectedMethodTypeArguments ?? [],
-        targetTypeArguments ?? [],
-        options,
-      )
-    : undefined;
+      );
+  const selectedOwnerCarrier = superConstruction
+    ? selectedOwnerRelationship?.kind === "related"
+      ? selectedOwnerRelationship.targetType
+      : undefined
+    : construction && selectedOwnerDefinition !== undefined &&
+        request.source.sourceResultType !== undefined
+      ? resolveRustTargetTypeRef(
+          request.source.sourceResultType,
+          context,
+          options,
+        )
+      : undefined;
   if (construction && selectedOwnerCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,
@@ -2475,20 +2487,17 @@ function acceptProjectSourceCall(
       "Project construction requires an exact selected owner carrier with complete class type arguments.",
     );
   }
-  const containingDefinition = options.projectTypes.definitionContainingDeclaration(
-    asNode(request.source.call, context),
-  );
-  const selectedOwnerRelationship = selectedOwnerDefinition === undefined ||
-      containingDefinition?.kind !== "class"
-    ? undefined
-    : options.projectTypes.relationship(
-        options.projectTypes.openCarrier(containingDefinition),
-        selectedOwnerDefinition,
-      );
+  if (construction &&
+    options.projectTypes.definitionForCarrier(selectedOwnerCarrier) !== selectedOwnerDefinition) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_SELECTED_CONSTRUCTOR_OWNER_CARRIER_CONFLICT",
+      "The checker-selected construction result does not identify the selected project class.",
+    );
+  }
   const ownerCarrier = construction
-    ? selectedOwnerRelationship?.kind === "related"
-      ? selectedOwnerRelationship.targetType
-      : selectedOwnerCarrier
+    ? selectedOwnerCarrier
     : selectedCallReceiverValueCarrier(request, context, options);
   const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration"
     ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
@@ -2628,27 +2637,6 @@ function acceptProjectSourceCall(
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
     },
   }, [{ message: `rust selected project-source call ${member.id}` }]);
-}
-
-function instantiateSelectedProjectConstructionCarrier(
-  definition: import("./project-type-policy.js").RustProjectTypeDefinition,
-  sourceTypeArguments: NonNullable<
-    RustCheckedCallSelectionInput["source"]["sourceSelectedMethodTypeArguments"]
-  >,
-  targetTypeArguments: readonly TargetTypeRef[],
-  options: RustOperationsProviderOptions,
-): TargetTypeRef | undefined {
-  if (sourceTypeArguments.length !== definition.typeParameterNames.length ||
-    targetTypeArguments.length !== definition.typeParameterNames.length ||
-    sourceTypeArguments.some((argument, index) =>
-      argument.typeParameterName !== definition.typeParameterNames[index])) {
-    return undefined;
-  }
-  return substituteRustTargetTypeParameters(
-    options.projectTypes.openCarrier(definition),
-    new Map(definition.typeParameterNames.map((name, index) =>
-      [name, targetTypeArguments[index]!] as const)),
-  );
 }
 
 function selectedProjectConstructor(

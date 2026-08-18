@@ -69,7 +69,6 @@ import {
   rustUndefinedTargetType,
   rustVecTargetType,
   rustFixedArrayTargetType,
-  rustTargetTypeParameterNames,
   substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
 import { rustProviderOperationOwnerMatches } from "./provider-operation-selection.js";
@@ -348,7 +347,7 @@ function resolveRustTargetTypeSyntax(
   if (kind !== "KindTypeReference") {
     return undefined;
   }
-  const selectedType = checker.getTypeFromTypeNode(node);
+  const selectedType = context.semanticsFor(node).getTypeAtLocation(node);
   const standardTransformation = selectedType === undefined
     ? undefined
     : context.semanticsFor(node).selectStandardTypeTransformation(
@@ -647,12 +646,6 @@ function resolveRustTypeComponentEvidence(
     options,
     resolving,
   );
-  const authoredSemanticType = semantics.getTypeFromTypeNode(
-    component.authoredTypeNode,
-  );
-  if (authoredSemanticType === undefined) {
-    return selected;
-  }
   const selection = semantics.selectAuthoredType(
     component.authoredTypeNode,
     component.selectedType,
@@ -676,21 +669,7 @@ function resolveRustTypeComponentEvidence(
       options,
     );
   }
-  const relationship = semantics.getTypeRelationship(
-    authoredSemanticType,
-    component.selectedType,
-  );
-  if (authored === undefined || selected === undefined) {
-    return authored ?? selected;
-  }
-  if (rustTargetTypeRefEquals(authored, selected) ||
-    relationship === "identical") {
-    return authored;
-  }
-  return relationship === "same-declaration" &&
-      rustTargetTypeParameterNames(authored).length === 0
-    ? authored
-    : selected;
+  return selected ?? authored;
 }
 
 function combineRustSelectedTargets(
