@@ -2039,6 +2039,51 @@ test("fallible tuple call arguments use rustfmt-compatible element layout", () =
   );
 });
 
+test("short fallible tuple call arguments remain on one rustfmt line", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "invoke",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "structural_method_5" },
+            method: "call",
+            args: [{
+              kind: "tuple-literal",
+              elements: [{
+                kind: "method-call",
+                receiver: { kind: "path", path: "method_receiver_5" },
+                method: "clone",
+                args: [],
+              }, {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "argument" },
+                  method: "call",
+                  args: [{ kind: "path", path: "()" }],
+                },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /structural_method_5\.call\(\(method_receiver_5\.clone\(\), argument\.call\(\(\)\)\?\)\)/u,
+  );
+});
+
 test("long nested callable construction gives the outer call its own break", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -2088,7 +2133,7 @@ test("long nested callable construction gives the outer call its own break", () 
   );
 });
 
-test("nested callable construction keeps block callbacks attached to the outer call", () => {
+test("long outer callable construction keeps block callbacks attached", () => {
   const source = printRustSourceFile({
     headerComment,
     items: [{

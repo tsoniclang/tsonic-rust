@@ -23,7 +23,6 @@ const rustSingleLineConditionalWidth = 50;
 const rustStructLiteralWidth = 18;
 const rustNestedCallWidth = 60;
 const rustNestedClosureOpeningWidth = 80;
-const rustFallibleTupleWidth = 80;
 const rustMatchArmWidth = 80;
 const rustInlineFormatArgumentWidth = 40;
 const rustMethodChainWidth = 60;
@@ -2447,7 +2446,7 @@ function printRustExprFitted(
         !rustExpressionContainsExpandedStructLiteral(expression) &&
         !(expression.kind === "tuple-literal" &&
           rustExpressionContainsTry(expression) &&
-          column + flat.length > rustFallibleTupleWidth) &&
+          flat.length > rustNestedCallWidth) &&
         renderedFits(flat, column)) {
         return flat;
       }
@@ -3458,12 +3457,11 @@ function printFittedCall(
       : undefined
     : undefined;
   if (soleNestedClosureCall !== undefined) {
-    const nestedClosure = soleNestedClosureCall.args[0]!;
     const nestedCallable = soleNestedClosureCall.kind === "call"
       ? soleNestedClosureCall.path
       : `${printRustAssociatedOwner(soleNestedClosureCall.owner)}::${soleNestedClosureCall.method}`;
     if (callable.length <= rustInlineFieldReceiverWidth &&
-      !rustExpressionContainsStatementBlock(nestedClosure) &&
+      renderedFits(`${nestedCallable}(`, indentText(depth + 1).length) &&
       column + callable.length + nestedCallable.length + 2 >
       rustNestedClosureOpeningWidth) {
       const argumentIndent = indentText(depth + 1);
@@ -4631,7 +4629,8 @@ function printRustMatchExpression(
     const prefix = `${armIndent}${pattern} => `;
     const flatValue = printRustExpr(arm.expression);
     const flatArm = `${pattern} => ${flatValue},`;
-    if (flatValue.includes("\n") || flatArm.length > rustMatchArmWidth ||
+    if (flatValue.includes("\n") ||
+      arm.expression.kind === "try" && flatArm.length > rustMatchArmWidth ||
       !renderedFits(`${prefix}${flatValue},`, 0)) {
       if (arm.expression.kind === "call" || arm.expression.kind === "associated-call" ||
         arm.expression.kind === "invoke" ||
