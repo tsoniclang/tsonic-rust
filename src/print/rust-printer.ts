@@ -22,6 +22,7 @@ const rustFormatWidth = 100;
 const rustSingleLineConditionalWidth = 50;
 const rustStructLiteralWidth = 18;
 const rustNestedCallWidth = 60;
+const rustCompactTrailingClosureWidth = rustNestedCallWidth + " || {".length;
 const rustNestedClosureOpeningWidth = 80;
 const rustMatchArmWidth = 80;
 const rustInlineFormatArgumentWidth = 40;
@@ -2141,19 +2142,23 @@ function printRustExprFitted(
         expression.expr.kind === "try" && expression.expr.expr.kind === "method-call") {
         const chain = rustMethodChain(expression.expr.expr);
         if (chain !== undefined) {
-          const attached = appendToLastLine(
-            printFittedMethodChain(
-              chain,
-              depth,
-              column + prefix.length + 1,
-              false,
-              indentText(depth + 1),
-              true,
-            ),
-            "?",
-          );
-          if (renderedFits(attached, column + prefix.length)) {
-            return `${prefix}${attached}`;
+          const selectorCount = chain.steps.filter((step) =>
+            step.kind === "method" || step.kind === "field" || step.kind === "await").length;
+          if (selectorCount === 1) {
+            const attached = appendToLastLine(
+              printFittedMethodChain(
+                chain,
+                depth,
+                column + prefix.length + 1,
+                false,
+                indentText(depth + 1),
+                true,
+              ),
+              "?",
+            );
+            if (renderedFits(attached, column + prefix.length)) {
+              return `${prefix}${attached}`;
+            }
           }
           const expanded = appendToLastLine(
             printFittedMethodChain(
@@ -2710,9 +2715,15 @@ function printRustLetInitializer(
     );
     const continuationPacksMoreSource = continuation.split("\n").length <
       fittedAtPrefix.split("\n").length;
+    const compactContinuationFitsRustfmtShape =
+      ((initializer.kind === "call" || initializer.kind === "invoke" ||
+          initializer.kind === "associated-call" || initializer.kind === "method-call") &&
+        initializer.args.length === 1 ||
+        firstLine(continuation).length <= rustCompactTrailingClosureWidth);
     if (continuation.includes("\n") &&
-      (prefix.length + firstLine(continuation).length + 1 > rustFormatWidth ||
-        continuationPacksMoreSource) &&
+      (continuationPacksMoreSource
+        ? compactContinuationFitsRustfmtShape
+        : prefix.length + firstLine(continuation).length + 1 > rustFormatWidth) &&
       renderedFits(continuation, continuationIndent.length)) {
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
@@ -2772,9 +2783,6 @@ function printRustLetInitializer(
         : prefix.length + chainBaseAtPrefix.length + 1 <= rustFormatWidth);
     const continuationPacksMoreSource =
       !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit ||
-      (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block") &&
-        continuation.includes("\n") &&
-        continuation.split("\n").length < fittedAtPrefix.split("\n").length ||
       longBindingPrefix &&
         (initializerHasNestedCollectionInvocation ||
           !bindingLineOwnsChainBase && chainBaseIsInvocation &&

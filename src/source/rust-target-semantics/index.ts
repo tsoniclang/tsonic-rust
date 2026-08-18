@@ -5052,13 +5052,16 @@ function contextualTupleOmissions(
   if (presentElementCount > expected.elements.length) {
     return undefined;
   }
+  if (presentElementCount === expected.elements.length) {
+    return [];
+  }
   const semantics = walk.context.semantics(sourceFile);
   const contextual = semantics.selectContextualTupleLiteral(
     expression,
     presentElementCount,
   );
   if (contextual.kind !== "selected") {
-    return presentElementCount === expected.elements.length ? [] : undefined;
+    return undefined;
   }
   const sourceElements = contextual.elements;
   if (sourceElements.length !== expected.elements.length) {
