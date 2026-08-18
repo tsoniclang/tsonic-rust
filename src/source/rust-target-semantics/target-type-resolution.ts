@@ -519,6 +519,7 @@ function resolveStandardSourceTypeTransformation(
         context,
         options,
         resolving,
+        "parameter-list",
       )
     );
     return elements.some((element) => element === undefined)
@@ -591,11 +592,12 @@ function resolveRustCallableEvidence(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const parameters = callable.parameters.map((parameter) =>
-    resolveRustSignatureParameterEvidence(
-      parameter,
-      context,
-      options,
-      resolving,
+      resolveRustSignatureParameterEvidence(
+        parameter,
+        context,
+        options,
+        resolving,
+        "callable",
     )
   );
   if (parameters.some((parameter) => parameter === undefined)) {
@@ -617,6 +619,7 @@ function resolveRustSignatureParameterEvidence(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
+  use: "callable" | "parameter-list",
 ): TargetTypeRef | undefined {
   const authoredTypeNode = parameter.declaration === undefined
     ? undefined
@@ -635,7 +638,10 @@ function resolveRustSignatureParameterEvidence(
     options,
     resolving,
   );
-  return resolved === undefined || parameter.parameterKind !== "optional" ||
+  const optional = use === "parameter-list"
+    ? parameter.parameterKind === "optional"
+    : parameter.omissionKind === "undefined";
+  return resolved === undefined || !optional ||
       rustOptionElementCarrier(resolved) !== undefined
     ? resolved
     : rustOptionTargetType(resolved);
@@ -1221,37 +1227,16 @@ function resolveCallableType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  const signatures = denseDefined(context.checker.getCallSignaturesOfType(type));
-  if (signatures === undefined || signatures.length !== 1) {
+  const callable = context.typeShape.selectCallableType(type);
+  if (callable === undefined) {
     return undefined;
   }
-  const signature = signatures[0]!;
-  const declaration = context.checker.getSignatureDeclaration(signature);
+  const declaration = callable.result.declaration;
   if (declaration !== undefined && context.ast.typeParameters(declaration).length > 0) {
     return undefined;
   }
-  const returnType = context.checker.getReturnTypeOfSignature(signature);
-  if (returnType === undefined) {
-    return undefined;
-  }
-  const authoredReturn = declaration === undefined
-    ? undefined
-    : context.ast.typeNode(declaration);
   return resolveRustCallableEvidence(
-    {
-      parameters: context.typeShape.getSignatureParameterInfos(signature),
-      result: {
-        selectedType: returnType,
-        ...(declaration === undefined
-          ? {}
-          : {
-              declaration,
-              ...(authoredReturn === undefined
-                ? {}
-                : { authoredTypeNode: authoredReturn }),
-            }),
-      },
-    },
+    callable,
     context,
     options,
     resolving,
