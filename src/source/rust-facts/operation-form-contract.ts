@@ -13,6 +13,14 @@ const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;
 const modes = new Set<RustArgumentMode>(["value", "ref", "mut-ref"]);
 
+export function rustProviderOperationFormAcceptsTargetTypeArguments(
+  form: RustProviderOperationForm,
+): boolean {
+  return form.form === "call" || form.form === "free-call" || form.form === "method" ||
+    form.form === "receiver-method" || form.form === "arg-method" ||
+    form.form === "arg-receiver-method" || form.form === "trait-call";
+}
+
 export function rustProviderOperationFormContractViolation(
   operationKind: RustFinalizedOperationKind,
   form: RustProviderOperationForm,
@@ -68,10 +76,29 @@ export function rustProviderOperationFormContractViolation(
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path) && runtimeSourceIndexes.length === 0
         ? undefined
         : "path form must be a zero-argument closed Rust path";
+    case "static":
+      return hasExactKeys(form, ["form", "path"], ["form", "path"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) &&
+          ((operationKind === "property" && runtimeSourceIndexes.length === 0) ||
+            (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
+        ? undefined
+        : "static form must be one closed Rust path with the exact property read/write arity";
     case "call-str-slice":
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path)
         ? undefined
         : "slice-call form must contain one closed Rust path";
+    case "call-c-variadic":
+      return hasExactKeys(
+        form,
+        ["form", "path", "fixedArgumentModes"],
+        ["form", "path", "fixedArgumentModes"],
+      ) && typeof form.path === "string" && rustPathPattern.test(form.path) &&
+        isDenseDataArray(form.fixedArgumentModes) &&
+        form.fixedArgumentModes.every((mode) => modes.has(mode)) &&
+        runtimeSourceIndexes.length === sourceArgumentCount &&
+        sourceArgumentCount >= form.fixedArgumentModes.length
+        ? undefined
+        : "C-variadic call form must contain one path, exact fixed argument modes, and only runtime source arguments";
     case "free-call-str-slice":
       return hasExactKeys(form, ["form", "path", "receiverMode"], ["form", "path", "receiverMode"]) &&
           typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode)
@@ -138,9 +165,11 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "method form must contain one Rust identifier";
     case "field":
-      return hasExactKeys(form, ["form", "name"], ["form", "name"]) && typeof form.name === "string" && rustIdentifierPattern.test(form.name) && runtimeSourceIndexes.length === 0
+      return hasExactKeys(form, ["form", "name"], ["form", "name"]) && typeof form.name === "string" && rustIdentifierPattern.test(form.name) &&
+          ((operationKind === "property" && runtimeSourceIndexes.length === 0) ||
+            (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
         ? undefined
-        : "field form must contain one Rust identifier and no source arguments";
+        : "field form must contain one Rust identifier with the exact property read/write arity";
     case "arg-receiver-method": {
       if (!hasExactKeys(form, ["form", "name", "argModes"], ["form", "name"]) ||
         typeof form.name !== "string" || !rustIdentifierPattern.test(form.name)) {
@@ -164,6 +193,32 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "binary operator form must name its exact std trait and two source arguments";
     }
+    case "trait-call":
+      return hasExactKeys(
+        form,
+        ["form", "owner", "traitPath", "traitTypeArguments", "method", "receiverMode", "argModes"],
+        ["form", "owner", "traitPath", "traitTypeArguments", "method"],
+      ) && isRustTargetTypeRef(form.owner) && typeof form.traitPath === "string" &&
+        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitTypeArguments) &&
+        form.traitTypeArguments.every(isRustTargetTypeRef) && typeof form.method === "string" &&
+        rustIdentifierPattern.test(form.method) &&
+        (form.receiverMode === undefined || modes.has(form.receiverMode)) &&
+        validateModes(form.argModes) === undefined
+        ? undefined
+        : "trait call must carry one exact owner, trait identity, method, receiver mode, and argument modes";
+    case "trait-associated-value":
+      return hasExactKeys(
+        form,
+        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
+        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
+      ) && isRustTargetTypeRef(form.owner) && typeof form.traitPath === "string" &&
+        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitTypeArguments) &&
+        form.traitTypeArguments.every(isRustTargetTypeRef) && typeof form.name === "string" &&
+        rustIdentifierPattern.test(form.name) &&
+        runtimeSourceIndexes.length === 0 &&
+        (operationKind === "property" || operationKind === "method")
+        ? undefined
+        : "trait associated value must carry one exact owner, trait identity, and zero runtime arguments";
     case "call":
       if (!hasExactKeys(form, ["form", "path", "argModes", "argConversions", "argOrder", "trailingArguments", "chain"], ["form", "path"]) ||
         typeof form.path !== "string" || !rustPathPattern.test(form.path)) {
@@ -200,6 +255,10 @@ function constantIsValid(value: RustProviderConstantArgument): boolean {
   }
   if (value.kind === "integer") {
     return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) && Number.isSafeInteger(value.value);
+  }
+  if (value.kind === "float64") {
+    return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) &&
+      typeof value.value === "number" && Number.isFinite(value.value);
   }
   if (value.kind === "string") {
     return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) && typeof value.value === "string";

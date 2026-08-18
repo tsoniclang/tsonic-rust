@@ -9,6 +9,7 @@ import {
 } from "../../common/source-ast.js";
 import {
   rustMutatedBindingFactKey,
+  rustMutatedReferentFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../source/rust-facts/keys.js";
 import type { RustFunctionParam, RustStmt } from "../rust-ast/nodes.js";
@@ -116,11 +117,25 @@ export function planRustCallableParameters(
       ));
       return undefined;
     }
+    const ownedBinding = parameterCarrier !== undefined &&
+      parameterCarrier.kind !== "pointer" &&
+      parameterCarrier.kind !== "reference";
+    const mutable = pattern === undefined &&
+      locationStorage === undefined &&
+      (
+        context.input.facts.getFact(
+          parameter,
+          rustMutatedBindingFactKey,
+        ) !== undefined ||
+        ownedBinding && context.input.facts.getFact(
+          parameter,
+          rustMutatedReferentFactKey,
+        ) !== undefined
+      );
     params.push({
       name: parameterName,
       type: parameterType,
-      mutable: pattern === undefined && locationStorage === undefined && abi?.form !== "default" &&
-        context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+      mutable: abi?.form !== "default" && mutable,
     });
     if (abi?.form === "default") {
       const initializer = Node_Initializer(ast, parameter);
@@ -136,8 +151,7 @@ export function planRustCallableParameters(
         kind: "default",
         initializer,
         name: parameterName,
-        mutable: pattern === undefined && locationStorage === undefined &&
-          context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+        mutable,
       });
     }
     if (pattern !== undefined && sourceCarrier !== undefined) {

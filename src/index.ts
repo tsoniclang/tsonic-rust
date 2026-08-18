@@ -77,6 +77,7 @@ export type {
   RustProviderBinaryEpilogueDefinition,
   RustProviderBinaryEpilogueRow,
   RustProviderImmediateCallbackDefinition,
+  RustProviderModuleAliasDefinition,
   RustProviderModuleDefinition,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
@@ -139,8 +140,6 @@ export {
   rustStringTargetId,
   rustStringTargetType,
   rustUnitTargetType,
-  rustUsizeTargetId,
-  rustUsizeTargetType,
   rustVecTargetType,
   sameRustPrimitiveCarrier,
 } from "./source/rust-target-types.js";

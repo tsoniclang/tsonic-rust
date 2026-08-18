@@ -12,6 +12,7 @@ import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustUndefinedTargetType,
   rustVecTargetType,
 } from "../dist/source/rust-target-types.js";
 import { rustInt32ToFloat64ValueConversion } from "../dist/source/rust-facts/value-conversions.js";
@@ -88,6 +89,26 @@ test("string padding selects one exact overload row from finalized carriers", ()
     receiverCarrier: stringCarrier,
     argumentCarriers: [float64Carrier, float64Carrier],
   }), undefined);
+});
+
+test("array index rows distinguish checked source and runtime result carriers", () => {
+  const elementCarrier = rustSourcePrimitiveTargetType("int32");
+  const selected = selectJsSurfaceOperation({
+    ownerName: "ReadonlyArray",
+    memberName: "index",
+    operationKind: "indexer",
+    receiverCarrier: rustJsArrayTargetType(elementCarrier),
+    argumentCarriers: [elementCarrier],
+  });
+
+  assert.equal(selected?.fact.kind, "provider-operation");
+  assert.deepEqual(selected?.fact.sourceResultCarrier, elementCarrier);
+  assert.deepEqual(selected?.fact.sourceAbsenceCarrier, rustUndefinedTargetType());
+  assert.deepEqual(selected?.fact.resultCarrier, {
+    kind: "target-named",
+    id: "rust.std.Option",
+    typeArguments: [elementCarrier],
+  });
 });
 
 test("unavailable argument carriers defer only when one operation row remains", () => {
@@ -652,6 +673,111 @@ export function timing(): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::JsDate::from_string\("1970-01-02T00:00:00.000Z"\)/u);
+});
+
+test("Boolean, Unicode string, and mutable UTC Date operations use exact runtime rows", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function exact(value: string, month: int32): boolean {
+  const date = new Date(Date.UTC(2020, month));
+  date.setUTCFullYear(2024, 1, 29);
+  date.setUTCHours(1, 2, 3, 4);
+  return value.normalize("NFKC").isWellFormed() &&
+    value.toWellFormed().length >= 0 &&
+    true.toString() === "true" && true.valueOf() &&
+    date.getUTCFullYear() === 2024 && date.getUTCMonth() === 1 &&
+    date.getUTCDay() === 4 && date.toUTCString().endsWith("GMT");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_string::normalize_with_form/u);
+  assert.match(text, /js_string::is_well_formed/u);
+  assert.match(text, /js_abi::boolean_to_string/u);
+  assert.match(text, /js_abi::JsDate::utc/u);
+  assert.match(text, /set_utc_full_year_month_date/u);
+  assert.match(text, /set_utc_hours_minutes_seconds_milliseconds/u);
+  assert.match(text, /get_utc_day_number/u);
+  assert.match(text, /to_utc_string/u);
+});
+
+test("closed object projections lower from exact structural facts", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function project(): boolean {
+  const value = { tail: "tail", 10: "ten", 2: "two", "01": "leading" };
+  const keys = Object.keys(value);
+  const values = Object.values(value);
+  const entries = Object.entries(value);
+  const reordered = { "01": "leading", tail: "tail", 2: "two", 10: "ten" };
+  const reorderedKeys = Object.keys(reordered);
+  let backing = "value";
+  let reads = 0;
+  const accessed = {
+    tail: "tail",
+    get current(): string { reads += 1; return backing; },
+    set current(next: string) { backing = next; },
+  };
+  const accessorKeys = Object.keys(accessed);
+  const accessorValues = Object.values(accessed);
+  const accessorEntries = Object.entries(accessed);
+  return keys.length === 4 && values.length === 4 && entries.length === 4 &&
+    reorderedKeys.length === 4 && accessorKeys.length === 2 &&
+    accessorValues.length === 2 && accessorEntries.length === 2 &&
+    reads === 2 && Object.hasOwn(value, "tail") && value.hasOwnProperty("01");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::JsArray::from_dense\(vec!\[/u);
+  assert.match(text, /object_projection_value/u);
+  assert.match(text, /\.with\(\|state\|/u);
+  assert.match(text, /\.as_str\(\) == "tail"/u);
+  assert.match(text, /record_getter/u);
+});
+
+test("open and spread-derived object projections fail closed", () => {
+  assertRustTargetRejection({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+interface Named { name: string }
+export function keys(value: Named): string[] {
+  return Object.keys(value);
+}
+`,
+    },
+  }, [{
+    code: "RUST_OBJECT_SHAPE_PROJECTION_NOT_CLOSED",
+    message: "Selected Object.keys call requires one exact generated structural object carrier.",
+  }]);
+
+  assertRustTargetRejection({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function keys(): string[] {
+  const base = { first: "one" };
+  return Object.keys({ ...base, second: "two" });
+}
+`,
+    },
+  }, [{
+    code: "RUST_OBJECT_SHAPE_PROJECTION_NOT_CLOSED",
+    message: "Closed Object projection fields do not belong to one unambiguous authored object literal.",
+  }]);
 });
 
 test("mutable JS object assignments preserve reference identity", () => {

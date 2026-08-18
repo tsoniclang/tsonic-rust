@@ -89,6 +89,11 @@ test("generated lint exceptions have one explicit policy owner", () => {
 });
 
 test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
+  assert.throws(
+    () => statSync(join(sourceRoot, "providers/compiler/std-catalog.ts")),
+    /ENOENT/u,
+    "the retired hand-maintained standard-library catalog must remain deleted",
+  );
   for (const { path, text } of sourceFiles) {
     if (path.includes("/providers/compiler/")) {
       continue;
@@ -282,6 +287,7 @@ test("selected source operation identity is never reconstructed through checker 
   }
 
   const allowed = new Set([
+    "operations-provider.ts|runtimeCallableTargetParameters|selectCallParameterSlots",
     "target-type-resolution.ts|resolveRustTargetTypeSyntax|getAuthoredTypeFactSubjects",
     "target-type-resolution.ts|resolveRustTargetTypeSyntax|getSymbolAtLocation",
     "target-type-resolution.ts|resolveSourceTypeParameter|getPrimarySymbolDeclaration",
@@ -299,9 +305,6 @@ test("selected source operation identity is never reconstructed through checker 
     "target-type-resolution.ts|resolveCallableType|getCallSignaturesOfType",
     "target-type-resolution.ts|resolveCallableType|getReturnTypeOfSignature",
     "target-type-resolution.ts|resolveCallableType|getSignatureDeclaration",
-    "target-type-resolution.ts|resolveCallableType|getSignatureParameters",
-    "target-type-resolution.ts|resolveCallableType|getSymbolDeclarations",
-    "target-type-resolution.ts|resolveCallableType|getTypeOfSymbol",
   ]);
   const observed = new Set();
   for (const { path, text } of semanticFiles) {
@@ -356,7 +359,7 @@ test("raw compiler object fields and source-use scans never become semantic inpu
   }
 });
 
-test("provider operation selection uses exact provider identities, never names", () => {
+test("provider operation selection uses canonical provider identities, never import spellings or names", () => {
   const text = readFileSync(join(sourceRoot, "source/rust-target-semantics/provider-operation-selection.ts"), "utf8");
   assert.match(text, /row\.exportId === identity\.exportId/u);
   assert.match(text, /row\.memberId === identity\.memberId/u);
@@ -364,7 +367,7 @@ test("provider operation selection uses exact provider identities, never names",
   assert.match(text, /row\.providerId === identity\.providerId/u);
   assert.match(text, /row\.providerVersion === identity\.providerVersion/u);
   assert.match(text, /row\.providerModuleId === identity\.providerModuleId/u);
-  assert.match(text, /row\.moduleSpecifier === identity\.moduleSpecifier/u);
+  assert.doesNotMatch(text, /row\.moduleSpecifier|identity\.moduleSpecifier/u);
   assert.doesNotMatch(text, /exportName|memberName|sourceName|targetName/u);
 });
 

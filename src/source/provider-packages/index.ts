@@ -4,7 +4,12 @@ import type {
   ProviderDeclarationKind,
   ProviderDeclarationModel,
   ProviderExportDeclaration,
+  ProviderMemberDeclaration,
   ProviderModuleResolution,
+  ProviderParameterDeclaration,
+  ProviderSignatureDeclaration,
+  ProviderTypeExpression,
+  ProviderTypeParameterDeclaration,
   SourceDeclarationProvider,
 } from "@tsonic/tsts";
 import type {
@@ -34,6 +39,7 @@ import {
   rustFixedArrayTargetType,
   rustMoveOnlyNamedTypeTraits,
   rustNamedTargetType,
+  rustNamedTypeCarrierValue,
 } from "../rust-target-types.js";
 import type { RustNamedTypeTraitContract } from "../rust-target-types.js";
 
@@ -62,6 +68,16 @@ export interface RustProviderImmediateCallbackDefinition {
   readonly fallibleTarget: RustProviderOperationForm;
 }
 
+export type RustProviderTypeRequirement =
+  | "clone"
+  | "copy"
+  | { readonly kind: "trait"; readonly path: string };
+
+export interface RustProviderTypeParameterRequirement {
+  readonly name: string;
+  readonly requirements: readonly RustProviderTypeRequirement[];
+}
+
 interface RustProviderOperationDefinitionBase<
   OperationKind extends RustProviderOperationKind = RustProviderOperationKind,
 > {
@@ -74,6 +90,8 @@ interface RustProviderOperationDefinitionBase<
   readonly parameterCarriers?: readonly TargetTypeRef[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly typeParameters?: readonly string[];
+  readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
+  readonly targetTypeArguments?: readonly TargetTypeRef[];
   readonly resultConversion?: RustValueConversion;
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
@@ -99,6 +117,7 @@ export type RustProviderOperationDefinition<
 export interface RustProviderTypeDefinition {
   readonly exportId: string;
   readonly targetCarrier: TargetTypeRef;
+  readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
 }
 
 export interface RustProviderTypeRow extends RustProviderTypeDefinition {
@@ -141,6 +160,11 @@ export interface RustProviderSourceDependency {
   readonly exportedNames: readonly string[];
 }
 
+export interface RustProviderModuleAliasDefinition {
+  readonly moduleSpecifier: string;
+  readonly canonicalModuleSpecifier: string;
+}
+
 interface RustProviderBinaryEpilogueDefinitionBase {
   readonly id: string;
   readonly path: string;
@@ -171,6 +195,7 @@ export interface RustProviderPackageDefinition {
   readonly version: string;
   readonly requiredSurfaces?: readonly string[];
   readonly sourceDependencies?: readonly RustProviderSourceDependency[];
+  readonly moduleAliases?: readonly RustProviderModuleAliasDefinition[];
   readonly modules: readonly RustProviderModuleDefinition[];
   readonly types?: readonly RustProviderTypeDefinition[];
   readonly operations: readonly RustProviderOperationDefinition[];
@@ -212,8 +237,11 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
     id: closedDefinition.id,
     displayName: closedDefinition.displayName,
     ...(closedDefinition.requiredSurfaces === undefined ? {} : { requiredSurfaces: closedDefinition.requiredSurfaces }),
-    moduleOwnership: Object.freeze(closedDefinition.modules.map((module) => Object.freeze({
-      specifierPrefix: module.moduleSpecifier,
+    moduleOwnership: Object.freeze([
+      ...closedDefinition.modules.map((module) => module.moduleSpecifier),
+      ...(closedDefinition.moduleAliases ?? []).map((alias) => alias.moduleSpecifier),
+    ].map((specifierPrefix) => Object.freeze({
+      specifierPrefix,
       providerId: bindingProviderId,
     }))),
     sourceCompilerContributions(): { readonly extensions: readonly CompilerExtension[] } {
@@ -291,14 +319,6 @@ export interface RustProviderSemantics {
 export function mergeRustProviderSemantics(
   ...inputs: readonly RustProviderSemantics[]
 ): RustProviderSemantics {
-  const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
-  const operations = mergeExactRows(inputs.flatMap((input) => input.operations), providerOperationRowIdentity, "operation");
-  const types = mergeExactRows(inputs.flatMap((input) => input.types), providerTypeRowIdentity, "type");
-  const binaryEpilogues = mergeExactRows(
-    inputs.flatMap((input) => input.binaryEpilogues),
-    providerBinaryEpilogueIdentity,
-    "binary epilogue",
-  );
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   for (const input of inputs) {
@@ -317,6 +337,26 @@ export function mergeRustProviderSemantics(
       carrierTraits.set(id, traits);
     }
   }
+  const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
+  const operations = mergeExactRows(
+    inputs.flatMap((input) => input.operations).map((row) =>
+      canonicalizeProviderOperationRow(row, carrierPaths, carrierTraits)),
+    providerOperationRowIdentity,
+    "operation",
+  );
+  const types = mergeExactRows(
+    inputs.flatMap((input) => input.types).map((row) => Object.freeze({
+      ...row,
+      targetCarrier: materializeProviderCarrier(row.targetCarrier, carrierPaths, carrierTraits),
+    })),
+    providerTypeRowIdentity,
+    "type",
+  );
+  const binaryEpilogues = mergeExactRows(
+    inputs.flatMap((input) => input.binaryEpilogues),
+    providerBinaryEpilogueIdentity,
+    "binary epilogue",
+  );
   return Object.freeze({
     exports,
     operations,
@@ -454,19 +494,37 @@ export function collectRustProviderSemanticsFromDefinitions(
   }
   return {
     exports: Object.freeze(exports),
-    operations: Object.freeze(operations),
+    operations: Object.freeze(operations.map((row) =>
+      canonicalizeProviderOperationRow(row, carrierPaths, carrierTraits))),
     carrierPaths,
     carrierTraits,
-    types: Object.freeze(types),
+    types: Object.freeze(types.map((row) => Object.freeze({
+      ...row,
+      targetCarrier: materializeProviderCarrier(row.targetCarrier, carrierPaths, carrierTraits),
+    }))),
     binaryEpilogues: Object.freeze(binaryEpilogues),
   };
+}
+
+function canonicalizeProviderOperationRow(
+  row: RustProviderOperationRow,
+  carrierPaths: ReadonlyMap<string, string>,
+  carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>,
+): RustProviderOperationRow {
+  return materializeProviderOperationRow(
+    row,
+    new Map(),
+    carrierPaths,
+    carrierTraits,
+    row,
+  );
 }
 
 function materializeProviderOperationRow(
   row: RustProviderOperationDefinition,
   aliases: ReadonlyMap<string, string>,
-  carrierPaths: Readonly<Record<string, string>>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
   owner: Pick<RustProviderOperationRow, "providerPackageId" | "providerId" | "providerVersion" | "providerModuleId" | "moduleSpecifier">,
 ): RustProviderOperationRow {
   return {
@@ -482,7 +540,13 @@ function materializeProviderOperationRow(
       : { parameterCarriers: row.parameterCarriers.map((carrier) => materializeProviderCarrier(carrier, carrierPaths, carrierTraits)) }),
     ...(row.resultConversion === undefined
       ? {}
-      : { resultConversion: row.resultConversion }),
+      : {
+          resultConversion: materializeProviderValueConversion(
+            row.resultConversion,
+            carrierPaths,
+            carrierTraits,
+          ),
+        }),
     ...(row.immediateCallback === undefined
       ? {}
       : {
@@ -502,8 +566,8 @@ function materializeProviderOperationRow(
 function materializeProviderOperationForm(
   form: RustProviderOperationForm,
   aliases: ReadonlyMap<string, string>,
-  carrierPaths: Readonly<Record<string, string>>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
 ): RustProviderOperationForm {
   const argConversions = "argConversions" in form && form.argConversions !== undefined
     ? [...form.argConversions]
@@ -513,6 +577,13 @@ function materializeProviderOperationForm(
       ...form,
       path: expandProviderPath(form.path, aliases),
       ...(argConversions === undefined ? {} : { argConversions }),
+    };
+  }
+  if (form.form === "call-c-variadic") {
+    return {
+      ...form,
+      path: expandProviderPath(form.path, aliases),
+      fixedArgumentModes: [...form.fixedArgumentModes],
     };
   }
   if (form.form === "free-call") {
@@ -551,11 +622,21 @@ function materializeProviderOperationForm(
       })),
     };
   }
-  if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path") {
+  if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path" ||
+    form.form === "static") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }
   if (form.form === "binary-operator") {
     return { ...form, trait: expandProviderPath(form.trait, aliases) };
+  }
+  if (form.form === "trait-call" || form.form === "trait-associated-value") {
+    return {
+      ...form,
+      owner: materializeProviderCarrier(form.owner, carrierPaths, carrierTraits),
+      traitPath: expandProviderPath(form.traitPath, aliases),
+      traitTypeArguments: form.traitTypeArguments.map((argument) =>
+        materializeProviderCarrier(argument, carrierPaths, carrierTraits)),
+    };
   }
   if (form.form === "index" && form.indexConversion !== undefined) {
     return form;
@@ -580,6 +661,23 @@ export function materializeProviderCarrier(
   carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract> = {},
 ): TargetTypeRef {
+  const named = rustNamedTypeCarrierValue(carrier);
+  if (named !== undefined) {
+    const typeArguments = named.typeArguments.map((argument) =>
+      materializeProviderCarrier(argument, carrierPaths, carrierTraits));
+    const path = carrierPaths instanceof Map
+      ? carrierPaths.get(named.id)
+      : (carrierPaths as Readonly<Record<string, string>>)[named.id];
+    const traits = carrierTraits instanceof Map
+      ? carrierTraits.get(named.id)
+      : (carrierTraits as Readonly<Record<string, RustNamedTypeTraitContract>>)[named.id];
+    return rustNamedTargetType(
+      named.id,
+      path ?? named.path,
+      typeArguments,
+      traits ?? named.traits,
+    );
+  }
   if (carrier.kind === "target-named") {
     const typeArguments = (carrier.typeArguments ?? []).map((argument) =>
       materializeProviderCarrier(argument, carrierPaths, carrierTraits));
@@ -596,8 +694,14 @@ export function materializeProviderCarrier(
   if (carrier.kind === "array") {
     return { ...carrier, element: materializeProviderCarrier(carrier.element, carrierPaths, carrierTraits) };
   }
+  if (carrier.kind === "slice") {
+    return { ...carrier, element: materializeProviderCarrier(carrier.element, carrierPaths, carrierTraits) };
+  }
   if (carrier.kind === "tuple") {
     return { ...carrier, elements: carrier.elements.map((element) => materializeProviderCarrier(element, carrierPaths, carrierTraits)) };
+  }
+  if (carrier.kind === "reference") {
+    return { ...carrier, referent: materializeProviderCarrier(carrier.referent, carrierPaths, carrierTraits) };
   }
   if (carrier.kind === "pointer") {
     return { ...carrier, pointee: materializeProviderCarrier(carrier.pointee, carrierPaths, carrierTraits) };
@@ -615,6 +719,44 @@ export function materializeProviderCarrier(
     : rustFixedArrayTargetType(materializeProviderCarrier(fixedArray.element, carrierPaths, carrierTraits), fixedArray.length);
 }
 
+function materializeProviderValueConversion(
+  conversion: RustValueConversion,
+  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
+): RustValueConversion {
+  switch (conversion.kind) {
+    case "copy-from-reference":
+      return {
+        ...conversion,
+        target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+      };
+    case "raw-pointer-mut-to-const":
+      return {
+        ...conversion,
+        pointee: materializeProviderCarrier(conversion.pointee, carrierPaths, carrierTraits),
+      };
+    case "source-union-variant":
+    case "bottom-coercion":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+      };
+    case "option-map":
+      return {
+        ...conversion,
+        elementConversion: materializeProviderValueConversion(
+          conversion.elementConversion,
+          carrierPaths,
+          carrierTraits,
+        ) as typeof conversion.elementConversion,
+      };
+    case "semantic-conversion":
+    case "numeric-promotion":
+      return conversion;
+  }
+}
+
 function createRustProviderPackageSourceExtension(definition: RustProviderPackageDefinition): CompilerExtension {
   return {
     identity: {
@@ -629,6 +771,12 @@ function createRustProviderPackageSourceExtension(definition: RustProviderPackag
 
 export function createRustProviderPackageSourceProvider(definition: RustProviderPackageDefinition): SourceDeclarationProvider {
   const modulesBySpecifier = new Map(definition.modules.map((module) => [module.moduleSpecifier, module]));
+  const canonicalSpecifierByPublicSpecifier = new Map<string, string>(
+    definition.modules.map((module) => [module.moduleSpecifier, module.moduleSpecifier]),
+  );
+  for (const alias of definition.moduleAliases ?? []) {
+    canonicalSpecifierByPublicSpecifier.set(alias.moduleSpecifier, alias.canonicalModuleSpecifier);
+  }
   return {
     identity: {
       id: rustProviderBindingProviderId(definition.id),
@@ -637,10 +785,13 @@ export function createRustProviderPackageSourceProvider(definition: RustProvider
     },
     declarationMaterialization: "complete",
     ownsModule(specifier: string) {
-      return modulesBySpecifier.has(specifier) ? { kind: "owned" as const } : { kind: "unowned" as const };
+      return canonicalSpecifierByPublicSpecifier.has(specifier)
+        ? { kind: "owned" as const }
+        : { kind: "unowned" as const };
     },
     resolveModule(specifier: string) {
-      const module = modulesBySpecifier.get(specifier);
+      const canonicalSpecifier = canonicalSpecifierByPublicSpecifier.get(specifier);
+      const module = canonicalSpecifier === undefined ? undefined : modulesBySpecifier.get(canonicalSpecifier);
       if (module === undefined) {
         return {
           extensionId: `tsonic.rust.provider-package.${definition.id}`,
@@ -652,15 +803,16 @@ export function createRustProviderPackageSourceProvider(definition: RustProvider
       }
       return {
         kind: "virtual" as const,
-        moduleSpecifier: module.moduleSpecifier,
-        virtualFileName: `tsts-provider://tsonic-rust/${definition.id}/${encodeURIComponent(module.moduleSpecifier)}.d.ts`,
+        moduleSpecifier: specifier,
+        virtualFileName: `tsts-provider://tsonic-rust/${definition.id}/${encodeURIComponent(specifier)}.d.ts`,
         providerModuleId: module.providerModuleId,
-        packageName: module.moduleSpecifier,
+        packageName: specifier,
         packageVersion: definition.version,
       };
     },
     getDeclarationModel(resolution: ProviderModuleResolution): ProviderDeclarationModel {
-      const module = modulesBySpecifier.get(resolution.moduleSpecifier);
+      const canonicalSpecifier = canonicalSpecifierByPublicSpecifier.get(resolution.moduleSpecifier);
+      const module = canonicalSpecifier === undefined ? undefined : modulesBySpecifier.get(canonicalSpecifier);
       if (module === undefined) {
         throw new Error(`Provider package '${definition.id}' cannot render unowned module '${resolution.moduleSpecifier}'.`);
       }
@@ -668,13 +820,145 @@ export function createRustProviderPackageSourceProvider(definition: RustProvider
         throw new Error(`Provider package '${definition.id}' module '${resolution.moduleSpecifier}' was resolved with provider module id '${resolution.providerModuleId}', expected '${module.providerModuleId}'.`);
       }
       return materializeClosedMetadata({
-        moduleSpecifier: module.moduleSpecifier,
+        moduleSpecifier: resolution.moduleSpecifier,
         providerModuleId: module.providerModuleId,
         ...(module.imports === undefined ? {} : { imports: module.imports }),
-        exports: module.exports,
+        exports: module.exports.map((declaration) => rebaseProviderExport(
+          declaration,
+          module.moduleSpecifier,
+          resolution.moduleSpecifier,
+        )),
       });
     },
   };
+}
+
+function rebaseProviderExport(
+  declaration: ProviderExportDeclaration,
+  canonicalModuleSpecifier: string,
+  publicModuleSpecifier: string,
+): ProviderExportDeclaration {
+  const mapType = (type: ProviderTypeExpression): ProviderTypeExpression =>
+    rebaseProviderType(type, canonicalModuleSpecifier, publicModuleSpecifier);
+  return {
+    ...declaration,
+    ...(declaration.type === undefined ? {} : { type: mapType(declaration.type) }),
+    ...(declaration.typeParameters === undefined
+      ? {}
+      : { typeParameters: declaration.typeParameters.map((parameter) => rebaseProviderTypeParameter(parameter, mapType)) }),
+    ...(declaration.heritage === undefined
+      ? {}
+      : { heritage: declaration.heritage.map((entry) => ({ ...entry, type: mapType(entry.type) })) }),
+    ...(declaration.signatures === undefined
+      ? {}
+      : { signatures: declaration.signatures.map((signature) => rebaseProviderSignature(signature, mapType)) }),
+    ...(declaration.members === undefined
+      ? {}
+      : { members: declaration.members.map((member) => rebaseProviderMember(member, mapType)) }),
+  };
+}
+
+function rebaseProviderMember(
+  member: ProviderMemberDeclaration,
+  mapType: (type: ProviderTypeExpression) => ProviderTypeExpression,
+): ProviderMemberDeclaration {
+  return {
+    ...member,
+    ...(member.type === undefined ? {} : { type: mapType(member.type) }),
+    ...(member.signatures === undefined
+      ? {}
+      : { signatures: member.signatures.map((signature) => rebaseProviderSignature(signature, mapType)) }),
+  };
+}
+
+function rebaseProviderSignature(
+  signature: ProviderSignatureDeclaration,
+  mapType: (type: ProviderTypeExpression) => ProviderTypeExpression,
+): ProviderSignatureDeclaration {
+  return {
+    ...signature,
+    parameters: signature.parameters.map((parameter) => rebaseProviderParameter(parameter, mapType)),
+    ...(signature.returnType === undefined ? {} : { returnType: mapType(signature.returnType) }),
+    ...(signature.typeParameters === undefined
+      ? {}
+      : { typeParameters: signature.typeParameters.map((parameter) => rebaseProviderTypeParameter(parameter, mapType)) }),
+  };
+}
+
+function rebaseProviderParameter(
+  parameter: ProviderParameterDeclaration,
+  mapType: (type: ProviderTypeExpression) => ProviderTypeExpression,
+): ProviderParameterDeclaration {
+  return {
+    ...parameter,
+    type: mapType(parameter.type),
+    ...(parameter.defaultType === undefined ? {} : { defaultType: mapType(parameter.defaultType) }),
+  };
+}
+
+function rebaseProviderTypeParameter(
+  parameter: ProviderTypeParameterDeclaration,
+  mapType: (type: ProviderTypeExpression) => ProviderTypeExpression,
+): ProviderTypeParameterDeclaration {
+  return {
+    ...parameter,
+    ...(parameter.constraints === undefined ? {} : { constraints: parameter.constraints.map(mapType) }),
+    ...(parameter.defaultType === undefined ? {} : { defaultType: mapType(parameter.defaultType) }),
+  };
+}
+
+function rebaseProviderType(
+  type: ProviderTypeExpression,
+  canonicalModuleSpecifier: string,
+  publicModuleSpecifier: string,
+): ProviderTypeExpression {
+  const mapType = (nested: ProviderTypeExpression): ProviderTypeExpression =>
+    rebaseProviderType(nested, canonicalModuleSpecifier, publicModuleSpecifier);
+  switch (type.kind) {
+    case "provider-ref":
+      return {
+        ...type,
+        moduleSpecifier: type.moduleSpecifier === canonicalModuleSpecifier
+          ? publicModuleSpecifier
+          : type.moduleSpecifier,
+        ...(type.typeArguments === undefined ? {} : { typeArguments: type.typeArguments.map(mapType) }),
+      };
+    case "source-global":
+      return {
+        ...type,
+        ...(type.typeArguments === undefined ? {} : { typeArguments: type.typeArguments.map(mapType) }),
+      };
+    case "array":
+      return { ...type, elementType: mapType(type.elementType) };
+    case "tuple":
+      return { ...type, elementTypes: type.elementTypes.map(mapType) };
+    case "union":
+    case "intersection":
+      return { ...type, types: type.types.map(mapType) };
+    case "function":
+      return {
+        ...type,
+        parameters: type.parameters.map((parameter) => rebaseProviderParameter(parameter, mapType)),
+        returnType: mapType(type.returnType),
+        ...(type.typeParameters === undefined
+          ? {}
+          : { typeParameters: type.typeParameters.map((parameter) => rebaseProviderTypeParameter(parameter, mapType)) }),
+      };
+    case "any":
+    case "unknown":
+    case "void":
+    case "never":
+    case "undefined":
+    case "boolean":
+    case "string":
+    case "number":
+    case "bigint":
+    case "object":
+    case "literal":
+    case "source-primitive":
+    case "type-parameter":
+      return type;
+  }
 }
 
 export function rustProviderBindingProviderId(packageId: string): string {

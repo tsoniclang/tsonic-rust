@@ -269,7 +269,9 @@ test("provider paths and named carriers materialize before facts reach the backe
     aliasImports: [{ alias: "api", path: "acme_runtime::api" }],
     carrierPaths: { "acme.materialized.Value": "acme_runtime::Value" },
     carrierTraits: {
-      "acme.materialized.Value": { clone: "always", copy: "never" },
+      "acme.materialized.Value": {
+        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+      },
     },
     crates: [],
   });
@@ -292,7 +294,9 @@ test("provider paths and named carriers materialize before facts reach the backe
     value: {
       id: "acme.materialized.Value",
       path: "acme_runtime::Value",
-      traits: { clone: "always", copy: "never" },
+      traits: {
+        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+      },
       typeArguments: [],
     },
   });
@@ -332,8 +336,10 @@ test("conflicting provider carrier trait contracts fail before operation facts a
 
   assert.throws(
     () => collectRustProviderSemantics(providerContext([
-      packageWithTraits("acme-first", "@acme/first", { clone: "always", copy: "never" }),
-      packageWithTraits("acme-second", "@acme/second", { clone: "never", copy: "never" }),
+      packageWithTraits("acme-first", "@acme/first", {
+        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+      }),
+      packageWithTraits("acme-second", "@acme/second", { implementations: [] }),
     ])),
     /conflicting native trait contracts/u,
   );

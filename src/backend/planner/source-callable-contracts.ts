@@ -1,7 +1,10 @@
 import type { Node } from "@tsonic/tsts";
 import type {
   RustSelectedTargetSignature,
+  TargetTypeRef,
 } from "../../policy/types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
+import { substituteRustTargetTypeParameters } from "../../source/rust-target-types.js";
 import type {
   RustTargetOperationFact,
 } from "../../source/rust-facts/keys.js";
@@ -31,9 +34,13 @@ export function publishRustSourceCallableContract(
   declaration: Node,
   item: Extract<RustItem, { readonly kind: "function" }>,
   context: RustPlanContext,
+  sourceTypeArguments?: readonly TargetTypeRef[],
 ): boolean {
   const callable: RustSourceCallableContract = Object.freeze({
     sourceDeclaration: declaration,
+    ...(sourceTypeArguments === undefined
+      ? {}
+      : { sourceTypeArguments: Object.freeze([...sourceTypeArguments]) }),
     name: item.name,
     isAsync: item.isAsync === true,
     fallible: item.fallible === true,
@@ -74,12 +81,38 @@ export function applyRustSourceCallableRequirements(
     ));
     return false;
   }
-  const callable = context.input.artifacts.sourceCallable(declaration);
+  const targetTypeArguments = (fact.targetTypeArguments ?? []).map((argument) =>
+    context.typeParameterSubstitutions === undefined
+      ? argument
+      : substituteRustTargetTypeParameters(
+          argument,
+          context.typeParameterSubstitutions,
+        ));
+  const specialized = context.input.sourceCallableSpecializations
+    .requiresSpecialization(declaration);
+  const variant = specialized
+    ? context.input.sourceCallableSpecializations.variantForCall(
+        declaration,
+        targetTypeArguments,
+      )
+    : undefined;
+  if (specialized && variant === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, call),
+      "rust.backend.source-callable-specialization",
+      "Selected project-source function call has no exact finite Rust callable specialization.",
+    ));
+    return false;
+  }
+  const callable = context.input.artifacts.sourceCallable(
+    declaration,
+    specialized ? targetTypeArguments : undefined,
+  );
   if (callable === undefined) {
     return true;
   }
   if (callable.sourceDeclaration !== declaration ||
-    callable.name !== fact.target.name) {
+    callable.name !== (variant?.targetName ?? fact.target.name)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
       "rust.backend.source-callable-identity",
@@ -88,7 +121,29 @@ export function applyRustSourceCallableRequirements(
     return false;
   }
   const selectedTypeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const targetTypeArguments = fact.targetTypeArguments ?? [];
+  if (selectedTypeArguments.length !== targetTypeArguments.length) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, call),
+      "rust.backend.source-callable-type-parameters",
+      "Selected source and target callable type-argument evidence has inconsistent arity.",
+    ));
+    return false;
+  }
+  if (specialized) {
+    if (callable.typeParameters.length !== 0 ||
+      !targetTypeRefListsEqual(
+        callable.sourceTypeArguments ?? [],
+        targetTypeArguments,
+      )) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, call),
+        "rust.backend.source-callable-specialization-contract",
+        "Published Rust specialization conflicts with the exact selected source-call instantiation.",
+      ));
+      return false;
+    }
+    return true;
+  }
   if (callable.typeParameters.length !== selectedTypeArguments.length ||
     callable.typeParameters.length !== targetTypeArguments.length ||
     callable.typeParameters.some((parameter, index) =>
@@ -125,6 +180,14 @@ export function applyRustSourceCallableRequirements(
     }
   }
   return true;
+}
+
+function targetTypeRefListsEqual(
+  left: readonly TargetTypeRef[],
+  right: readonly TargetTypeRef[],
+): boolean {
+  return left.length === right.length && left.every((entry, index) =>
+    rustTargetTypeRefEquals(entry, right[index]));
 }
 
 function rustGenericRequirements(

@@ -41,6 +41,72 @@ test("fitting method-call arguments remain on one rustfmt line", () => {
   );
 });
 
+test("single binary call arguments retain rustfmt's attached continuation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "selected",
+      visibility: "public",
+      params: [],
+      returnType: {
+        kind: "named",
+        path: "Result",
+        typeArguments: [
+          { kind: "primitive", name: "i32" },
+          { kind: "named", path: "Error" },
+        ],
+      },
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: "Ok",
+            args: [{
+              kind: "binary",
+              operator: "+",
+              left: {
+                kind: "index",
+                receiver: { kind: "path", path: "values" },
+                index: {
+                  kind: "try",
+                  errorDomain: "runtime",
+                  expr: {
+                    kind: "call",
+                    path: "tsonic_rust_runtime::conversions::i32_to_usize",
+                    args: [{ kind: "int-literal", text: "0" }],
+                  },
+                },
+              },
+              right: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::conversions::usize_to_i32",
+                  args: [{
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "values" },
+                    method: "len",
+                    args: [],
+                  }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /Ok\(values\[tsonic_rust_runtime::conversions::i32_to_usize\(0\)\?\]\n {8}\+ tsonic_rust_runtime::conversions::usize_to_i32\(values\.len\(\)\)\?\)/u,
+  );
+  assert.doesNotMatch(source, /Ok\(\n/u);
+});
+
 test("multi-argument calls follow rustfmt argument width independently of callable width", () => {
   const longArguments = {
     kind: "path",
@@ -310,6 +376,77 @@ test("unary expressions expand long nested calls before outer attachment", () =>
   );
 });
 
+test("unary block arguments remain attached to their outer calls", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "unary",
+              operator: "!",
+              operand: {
+                kind: "block",
+                bindings: [{
+                  name: "matched",
+                  value: { kind: "bool-literal", value: true },
+                }],
+                value: { kind: "path", path: "matched" },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /acme_testing::check\(!\{\n {8}let matched = true;\n {8}matched\n {4}\}\);/u,
+  );
+  assert.doesNotMatch(source, /acme_testing::check\(\n/u);
+});
+
+test("long atomic vectors use rustfmt-compatible element lines", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "values",
+          mutable: false,
+          init: {
+            kind: "vec-literal",
+            elements: ["first", "second", "third", "fourth"].map((value) => ({
+              kind: "call",
+              path: "String::from",
+              args: [{ kind: "str-literal", value }],
+            })),
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let values = vec!\[\n {8}String::from\("first"\),\n {8}String::from\("second"\),\n {8}String::from\("third"\),\n {8}String::from\("fourth"\),\n {4}\];/u,
+  );
+});
+
 test("fallible conversion wrappers own multiline callback method chains", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -574,6 +711,100 @@ test("field and closure method chains retain rustfmt vertical layout", () => {
   );
 });
 
+test("compact field receivers stay attached before expanded closure calls", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "field",
+              receiver: { kind: "path", path: "self" },
+              name: "state",
+            },
+            method: "with_mut",
+            args: [{
+              kind: "closure",
+              params: [{ name: "state", byRefCopy: false }],
+              body: {
+                kind: "assignment",
+                operator: "=",
+                target: { kind: "path", path: "state.method_override" },
+                value: {
+                  kind: "call",
+                  path: "Some",
+                  args: [{ kind: "path", path: "value" }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /self\.state\n        \.with_mut\(\|state\| state\.method_override = Some\(value\)\)/u,
+  );
+});
+
+test("let-bound index closures retain rustfmt's vertical method-chain layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "index_current",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: {
+              kind: "field",
+              receiver: { kind: "path", path: "index_receiver_2" },
+              name: "state",
+            },
+            method: "with",
+            args: [{
+              kind: "closure",
+              params: [{ name: "state", byRefCopy: false }],
+              body: {
+                kind: "index",
+                receiver: {
+                  kind: "field",
+                  receiver: { kind: "path", path: "state" },
+                  name: "index_entries",
+                },
+                index: {
+                  kind: "reference",
+                  expr: { kind: "path", path: "index_key_2" },
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let index_current = index_receiver_2\n        \.state\n        \.with\(\|state\| state\.index_entries\[&index_key_2\]\);/u,
+  );
+});
+
 test("long indexes continue after one-line method-chain receivers", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -683,6 +914,163 @@ test("multiline method-call match arms use rustfmt block arms", () => {
     source,
     /Shape::Variant0\(__tsonic_union_variant_with_a_long_identity\) => \{\n            __tsonic_union_variant_with_a_long_identity\.with\(\|state\| state\.0\.clone\(\)\)\n        \}/u,
   );
+});
+
+test("direct fallible match arms stay in rustfmt expression form", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "match",
+            expression: { kind: "path", path: "command" },
+            arms: [{
+              pattern: {
+                kind: "tuple-variant",
+                path: "Command::Throw",
+                elements: [{ kind: "binding", name: "error" }],
+              },
+              expression: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "call",
+                  path: "Err",
+                  args: [{ kind: "path", path: "error" }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /Command::Throw\(error\) => Err\(error\)\?,/u);
+  assert.doesNotMatch(source, /Command::Throw\(error\) => \{/u);
+});
+
+test("long direct fallible match arms use rustfmt block form", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "match",
+            expression: { kind: "path", path: "selected" },
+            arms: [{
+              pattern: {
+                kind: "tuple-variant",
+                path: "Some",
+                elements: [{ kind: "binding", name: "property_getter_2" }],
+              },
+              expression: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "property_getter_2" },
+                  method: "call",
+                  args: [{
+                    kind: "tuple-literal",
+                    elements: [{
+                      kind: "method-call",
+                      receiver: { kind: "path", path: "property_receiver_2" },
+                      method: "clone",
+                      args: [],
+                    }],
+                  }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /Some\(property_getter_2\) => \{\n {12}property_getter_2\.call\(\(property_receiver_2\.clone\(\),\)\)\?\n {8}\}/u,
+  );
+});
+
+test("calls expand matches whose scrutinee contains a statement block", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "Some",
+            args: [{
+              kind: "match",
+              expression: {
+                kind: "method-call",
+                receiver: {
+                  kind: "block",
+                  bindings: [{
+                    name: "dispatch_receiver",
+                    value: { kind: "reference", expr: { kind: "path", path: "project_this" } },
+                  }],
+                  value: {
+                    kind: "method-call",
+                    receiver: {
+                      kind: "field",
+                      receiver: { kind: "path", path: "dispatch_receiver" },
+                      name: "dispatch",
+                    },
+                    method: "read_json_object_value",
+                    args: [],
+                  },
+                },
+                method: "as_ref",
+                args: [],
+              },
+              arms: [{
+                pattern: {
+                  kind: "tuple-variant",
+                  path: "Some",
+                  elements: [{ kind: "binding", name: "flow_value" }],
+                },
+                expression: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "flow_value" },
+                  method: "clone",
+                  args: [],
+                },
+              }, {
+                pattern: { kind: "path", path: "None" },
+                expression: { kind: "unreachable", message: "flow fact" },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /Some\(\n {8}match \{/u);
+  assert.match(source, /\n {8}\},\n {4}\);/u);
+  assert.doesNotMatch(source, /Some\(match \{/u);
 });
 
 test("two-selector method arguments retain rustfmt vertical layout", () => {
@@ -913,6 +1301,44 @@ test("field-led calls break before selectors when the final call fits there", ()
   assert.match(
     source,
     /dispatch_receiver\n        \.dispatch\n        \.write_counter_value\(dispatch_receiver\.dispatch\.read_counter_value\(\) \+ value\)/u,
+  );
+});
+
+test("deep field-led calls keep their callable attached when arguments must expand", () => {
+  const receiver = { kind: "path", path: "dispatch_receiver_10" };
+  const invocation = {
+    kind: "method-call",
+    receiver: { kind: "field", receiver, name: "dispatch" },
+    method: "write_counter_value",
+    args: [{
+      kind: "binary",
+      operator: "+",
+      left: {
+        kind: "method-call",
+        receiver: { kind: "field", receiver, name: "dispatch" },
+        method: "read_counter_value",
+        args: [],
+      },
+      right: { kind: "path", path: "value_5" },
+    }],
+  };
+  const nestedScope = (depth) => depth === 0
+    ? { statements: [{ kind: "expr", expr: invocation }] }
+    : { statements: [{ kind: "scope", body: nestedScope(depth - 1) }] };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: nestedScope(4),
+    }],
+  });
+
+  assert.match(
+    source,
+    /dispatch_receiver_10\.dispatch\.write_counter_value\(\n                        dispatch_receiver_10\.dispatch\.read_counter_value\(\) \+ value_5,\n                    \)/u,
   );
 });
 
@@ -1568,5 +1994,193 @@ test("long struct field types use rustfmt-compatible continuation indentation", 
   assert.match(
     source,
     /dispatch_identity_identity_specialization_1_implementation:\n {8}rt::Callable<\(Identity, String\), String>,/u,
+  );
+});
+
+test("fallible tuple call arguments use rustfmt-compatible element layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "invoke",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "formatter" },
+            method: "call",
+            args: [{
+              kind: "tuple-literal",
+              elements: [{
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::conversions::f64_to_i32",
+                  args: [{ kind: "float-literal", text: "3.0" }],
+                },
+              }, {
+                kind: "call",
+                path: "String::from",
+                args: [{ kind: "str-literal", value: "items" }],
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /formatter\.call\(\(\n {8}tsonic_rust_runtime::conversions::f64_to_i32\(3\.0\)\?,\n {8}String::from\("items"\),\n {4}\)\)/u,
+  );
+});
+
+test("short fallible tuple call arguments remain on one rustfmt line", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "invoke",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "structural_method_5" },
+            method: "call",
+            args: [{
+              kind: "tuple-literal",
+              elements: [{
+                kind: "method-call",
+                receiver: { kind: "path", path: "method_receiver_5" },
+                method: "clone",
+                args: [],
+              }, {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "argument" },
+                  method: "call",
+                  args: [{ kind: "path", path: "()" }],
+                },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /structural_method_5\.call\(\(method_receiver_5\.clone\(\), argument\.call\(\(\)\)\?\)\)/u,
+  );
+});
+
+test("long nested callable construction gives the outer call its own break", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "invoke",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "call_detached_format",
+            args: [{
+              kind: "associated-call",
+              owner: {
+                kind: "named",
+                path: "rt::Callable",
+                typeArguments: [{
+                  kind: "tuple",
+                  elements: [
+                    { kind: "primitive", name: "i32" },
+                    { kind: "named", path: "String" },
+                  ],
+                }, {
+                  kind: "named",
+                  path: "rt::TsonicResult<String>",
+                }],
+              },
+              method: "new",
+              args: [{
+                kind: "closure",
+                params: [{ name: "callable_arguments", byRefCopy: false }],
+                body: { kind: "path", path: "callable_arguments.1" },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /call_detached_format\(\n {8}rt::Callable::<\(i32, String\), rt::TsonicResult<String>>::new\(/u,
+  );
+});
+
+test("long outer callable construction keeps block callbacks attached", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "invoke",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "tsonic_rust_node::timers::set_timeout_callable",
+            args: [{
+              kind: "associated-call",
+              owner: {
+                kind: "named",
+                path: "rt::Callable",
+                typeArguments: [
+                  { kind: "unit" },
+                  { kind: "named", path: "rt::TsonicResult<()>" },
+                ],
+              },
+              method: "new",
+              args: [{
+                kind: "closure-block",
+                params: [{ name: "_callable_arguments", byRefCopy: false }],
+                body: {
+                  statements: [{
+                    kind: "tail",
+                    expr: {
+                      kind: "call",
+                      path: "Ok::<_, rt::TsonicError>",
+                      args: [{ kind: "path", path: "()" }],
+                    },
+                  }],
+                },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /set_timeout_callable\(rt::Callable::<\(\), rt::TsonicResult<\(\)>>::new\(\n {8}\|_callable_arguments\| \{/u,
   );
 });

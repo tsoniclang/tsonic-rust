@@ -13,6 +13,39 @@ import {
   requireProviderArgumentPassingFacts,
   sourceCallSelectedMemberMatches,
 } from "../dist/backend/planner/expressions.js";
+import {
+  isRustNamedTypeTraitContract,
+  rustNamedTypeCarrierValue,
+  rustNamedTargetType,
+} from "../dist/source/rust-target-types.js";
+
+test("native trait contracts preserve exact conditional Copy and Clone semantics", () => {
+  const traits = {
+    implementations: [
+      {
+        traitPath: "core::clone::Clone",
+        requirements: [{ typeArgumentIndex: 0, traitPath: "core::clone::Clone" }],
+      },
+      {
+        traitPath: "core::marker::Copy",
+        requirements: [{ typeArgumentIndex: 0, traitPath: "core::marker::Copy" }],
+      },
+    ],
+  };
+  assert.equal(isRustNamedTypeTraitContract(traits), true);
+  assert.ok(rustNamedTypeCarrierValue(rustNamedTargetType(
+    "acme.Cell",
+    "acme::Cell",
+    [{ kind: "source-primitive", name: "int32" }],
+    traits,
+  )));
+  assert.equal(rustNamedTypeCarrierValue(rustNamedTargetType(
+    "acme.Cell",
+    "acme::Cell",
+    [],
+    traits,
+  )), undefined, "trait requirements cannot address a missing type argument");
+});
 
 test("value-returning fallible bodies never synthesize an invalid Ok unit", () => {
   const incomplete = { statements: [{ kind: "expr", expr: { kind: "path", path: "work" } }] };
@@ -72,7 +105,7 @@ test("operation fact equality is structural and independent of metadata key orde
     value: {
       id: "acme.Value",
       path: "acme::Value",
-      traits: { clone: "never", copy: "never" },
+      traits: { implementations: [] },
       typeArguments: [],
     },
   };

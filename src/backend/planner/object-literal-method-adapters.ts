@@ -27,7 +27,8 @@ export function planRustObjectLiteralMethodArguments(
   method: RustObjectLiteralMethodDispatchPlan,
   context: RustPlanContext,
 ): { readonly statements: readonly RustStmt[]; readonly adaptedArguments: readonly RustExpr[] } | undefined {
-  if (method.parameters.length !== method.parameterAbis.length) {
+  const adapterPlan = method.adapter;
+  if (adapterPlan === undefined || method.parameters.length !== adapterPlan.parameterAbis.length) {
     return undefined;
   }
   const statements: RustStmt[] = [];
@@ -36,7 +37,7 @@ export function planRustObjectLiteralMethodArguments(
     const parameter = method.parameters[index];
     return parameter === undefined ? undefined : { kind: "path", path: parameter.name };
   };
-  for (const adapter of method.parameterAdapters) {
+  for (const adapter of adapterPlan.parameterAdapters) {
     if (adapter.kind === "omitted") {
       if (adapter.target.form === "optional" || adapter.target.form === "default") {
         adaptedArguments.push({ kind: "none" });

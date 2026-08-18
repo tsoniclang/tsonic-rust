@@ -1,8 +1,10 @@
 import type { TargetTypeRef } from "../../policy/types.js";
+import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { RustAssignmentOperator } from "../../common/rust-syntax.js";
 import { rustProjectObjectLayout } from "../../source/rust-target-semantics/project-object-layout.js";
 import type { RustExpr } from "../rust-ast/nodes.js";
 import type { RustPlanContext } from "./plan-context.js";
+import type { RustStructuralShapeField } from "../../source/rust-target-semantics/structural-shape-plan.js";
 import {
   createRustStructuralObject,
   mutateRustProjectObjectField,
@@ -12,23 +14,86 @@ import {
   writeRustProjectObjectField,
   writeRustStructuralObjectField,
 } from "./project-objects.js";
+import {
+  allocateRustSyntheticName,
+} from "./synthetic-names.js";
+import {
+  rustCallableProtocol,
+  rustOptionElementCarrier,
+  rustOptionTargetType,
+  rustStructuralPropertyGetterStorageCarrier,
+  rustStructuralPropertySetterStorageCarrier,
+  rustStructuralPropertyValueCarrier,
+  rustStructuralMethodCallableCarrier,
+  rustStructuralMethodStorageCarrier,
+} from "../../source/rust-target-types.js";
+
+export type RustStructuralObjectFieldInitializer =
+  | { readonly kind: "stored"; readonly value: RustExpr }
+  | { readonly kind: "method"; readonly value: RustExpr }
+  | {
+      readonly kind: "accessor";
+      readonly getter: RustExpr;
+      readonly setter?: RustExpr;
+    };
 
 export function createRustStructuralObjectFromCarrier(
   carrier: TargetTypeRef,
-  values: readonly RustExpr[],
+  initializers: readonly RustStructuralObjectFieldInitializer[],
   context: RustPlanContext,
 ): RustExpr | undefined {
   const definition = context.input.structuralShapes.definitionForCarrier(carrier);
-  if (definition === undefined || definition.fields.length !== values.length) {
+  if (definition === undefined || definition.fields.length !== initializers.length) {
+    return undefined;
+  }
+  const fields = definition.fields.flatMap((field, index) => {
+    const initializer = initializers[index];
+    if (initializer === undefined ||
+      (field.method === true) !== (initializer.kind === "method") ||
+      (field.storage === "stored" && initializer.kind === "accessor") ||
+      (field.storage === "property" && initializer.kind === "method")) {
+      return [undefined];
+    }
+    if (field.storage === "stored") {
+      if (initializer.kind === "accessor") {
+        return [undefined];
+      }
+      return [{ name: field.targetName, value: initializer.value }];
+    }
+    if (field.property === undefined || initializer.kind === "method") {
+      return [undefined];
+    }
+    const stored = initializer.kind === "accessor"
+      ? { kind: "none" as const }
+      : field.presence === "optional"
+        ? initializer.value
+        : { kind: "call" as const, path: "Some", args: [initializer.value] };
+    const getter = initializer.kind === "accessor"
+      ? { kind: "call" as const, path: "Some", args: [initializer.getter] }
+      : { kind: "none" as const };
+    const setter = initializer.kind === "accessor" && initializer.setter !== undefined
+      ? { kind: "call" as const, path: "Some", args: [initializer.setter] }
+      : { kind: "none" as const };
+    return [{
+      name: field.targetName,
+      value: stored,
+    }, {
+      name: field.property.getterTargetName,
+      value: getter,
+    }, ...(field.property.setterTargetName === undefined
+      ? []
+      : [{
+          name: field.property.setterTargetName,
+          value: setter,
+        }])];
+  });
+  if (fields.some((field) => field === undefined)) {
     return undefined;
   }
   context.usedAliases?.add("rt");
   return createRustStructuralObject(
     `crate::${context.structuralShapesModuleName}::${definition.targetName}`,
-    definition.fields.map((field, index) => ({
-      name: field.targetName,
-      value: values[index]!,
-    })),
+    fields as readonly { readonly name: string; readonly value: RustExpr }[],
   );
 }
 
@@ -62,15 +127,119 @@ export function readRustStoredObjectField(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (storage === "object-handle") {
-    const name = context.input.structuralShapes.fieldName(receiverCarrier, storageIndex);
-    return name === undefined
-      ? undefined
-      : readRustStructuralObjectField(receiver, name, resultCarrier);
+    const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+    if (field === undefined) {
+      return undefined;
+    }
+    if (field.method === true) {
+      return undefined;
+    }
+    return field.storage === "property"
+      ? readRustStructuralObjectProperty(
+          receiverCarrier,
+          receiver,
+          field,
+          resultCarrier,
+          context,
+        )
+      : readRustStructuralObjectField(receiver, field.targetName, resultCarrier);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   return path === undefined
     ? undefined
     : readRustProjectObjectField(receiver, path, resultCarrier);
+}
+
+export function readRustStructuralObjectMethodStorage(
+  receiverCarrier: TargetTypeRef,
+  receiver: RustExpr,
+  storageIndex: number,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+  const storageCarrier = field?.method === true
+    ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
+    : undefined;
+  if (field === undefined || storageCarrier === undefined) {
+    return undefined;
+  }
+  return readRustStructuralObjectField(
+    receiver,
+    field.targetName,
+    storageCarrier,
+  );
+}
+
+export interface RustStructuralMethodStorageOverride {
+  readonly expression: RustExpr;
+  readonly carrier: TargetTypeRef;
+}
+
+export function invokeRustStructuralObjectMethod(
+  receiverCarrier: TargetTypeRef,
+  receiver: RustExpr,
+  storageIndex: number,
+  arguments_: readonly RustExpr[],
+  resultCarrier: TargetTypeRef,
+  context: RustPlanContext,
+  storageOverride?: RustStructuralMethodStorageOverride,
+): RustExpr | undefined {
+  const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+  const callableCarrier = field?.method === true
+    ? rustStructuralMethodCallableCarrier(field.carrier, field.presence)
+    : undefined;
+  const callable = rustCallableProtocol(callableCarrier);
+  const storageCarrier = field?.method === true
+    ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
+    : undefined;
+  const rawStorageCarrier = field?.presence === "optional"
+    ? rustOptionElementCarrier(storageCarrier)
+    : storageCarrier;
+  if (field === undefined || callable === undefined ||
+    rawStorageCarrier === undefined ||
+    callable.parameters.length !== arguments_.length ||
+    !rustTargetTypeRefEquals(callable.result, resultCarrier) ||
+    (field.presence === "required") !== (storageOverride === undefined) ||
+    (storageOverride !== undefined &&
+      !rustTargetTypeRefEquals(storageOverride.carrier, rawStorageCarrier)) ||
+    context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "method_receiver",
+  );
+  const methodName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "structural_method",
+  );
+  const receiverPath: RustExpr = { kind: "path", path: receiverName };
+  const method = storageOverride?.expression ?? readRustStructuralObjectField(
+    receiverPath,
+    field.targetName,
+    rawStorageCarrier,
+  );
+  return {
+    kind: "block",
+    bindings: [{ name: receiverName, value: receiver }, {
+      name: methodName,
+      value: method,
+    }],
+    value: {
+      kind: "method-call",
+      receiver: { kind: "path", path: methodName },
+      method: "call",
+      args: [{
+        kind: "tuple-literal",
+        elements: [{
+          kind: "method-call",
+          receiver: receiverPath,
+          method: "clone",
+          args: [],
+        }, ...arguments_],
+      }],
+    },
+  };
 }
 
 export function writeRustStoredObjectField(
@@ -83,10 +252,23 @@ export function writeRustStoredObjectField(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (storage === "object-handle") {
-    const name = context.input.structuralShapes.fieldName(receiverCarrier, storageIndex);
-    return name === undefined
-      ? undefined
-      : writeRustStructuralObjectField(receiver, name, operator, value);
+    const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+    if (field === undefined) {
+      return undefined;
+    }
+    if (field.method === true || field.readonly) {
+      return undefined;
+    }
+    return field.storage === "property"
+      ? writeRustStructuralObjectProperty(
+          receiverCarrier,
+          receiver,
+          field,
+          operator,
+          value,
+          context,
+        )
+      : writeRustStructuralObjectField(receiver, field.targetName, operator, value);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   return path === undefined
@@ -103,13 +285,309 @@ export function mutateRustStoredObjectField(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (storage === "object-handle") {
-    const name = context.input.structuralShapes.fieldName(receiverCarrier, storageIndex);
-    return name === undefined
-      ? undefined
-      : mutateRustStructuralObjectField(receiver, name, mutation);
+    const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+    if (field === undefined) {
+      return undefined;
+    }
+    if (field.method === true || field.readonly) {
+      return undefined;
+    }
+    return field.storage === "property"
+      ? mutateRustStructuralObjectProperty(
+          receiverCarrier,
+          receiver,
+          field,
+          mutation,
+          context,
+        )
+      : mutateRustStructuralObjectField(receiver, field.targetName, mutation);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   return path === undefined
     ? undefined
     : mutateRustProjectObjectField(receiver, path, mutation);
+}
+
+function readRustStructuralObjectProperty(
+  receiverCarrier: TargetTypeRef,
+  receiver: RustExpr,
+  field: RustStructuralShapeField,
+  resultCarrier: TargetTypeRef,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const valueCarrier = rustStructuralPropertyValueCarrier(field.carrier, field.presence);
+  const storedCarrier = valueCarrier === undefined ? undefined : rustOptionTargetType(valueCarrier);
+  const getterCarrier = rustStructuralPropertyGetterStorageCarrier(
+    receiverCarrier,
+    field.carrier,
+    field.presence,
+  );
+  if (context.syntheticNames === undefined || field.property === undefined ||
+    valueCarrier === undefined || storedCarrier === undefined || getterCarrier === undefined ||
+    !rustTargetTypeRefEquals(resultCarrier, field.carrier)) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "property_receiver",
+  );
+  const getterName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "property_getter",
+  );
+  const storedName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "property_value",
+  );
+  const receiverPath: RustExpr = { kind: "path", path: receiverName };
+  const getterCall = callRustStructuralObjectAccessor(
+    getterName,
+    [cloneExpression(receiverPath)],
+    context,
+  );
+  const presentValue = field.presence === "optional"
+    ? { kind: "call" as const, path: "Some", args: [getterCall] }
+    : getterCall;
+  const storedValue = readRustStructuralObjectField(
+    receiverPath,
+    field.targetName,
+    storedCarrier,
+  );
+  const absentGetterValue: RustExpr = field.presence === "optional"
+    ? storedValue
+    : {
+        kind: "match",
+        expression: storedValue,
+        arms: [{
+          pattern: {
+            kind: "tuple-variant",
+            path: "Some",
+            elements: [{ kind: "binding", name: storedName }],
+          },
+          expression: { kind: "path", path: storedName },
+        }, {
+          pattern: { kind: "path", path: "None" },
+          expression: {
+            kind: "unreachable",
+            message: "required structural property has neither stored data nor a getter",
+          },
+        }],
+      };
+  return {
+    kind: "block",
+    bindings: [{ name: receiverName, value: cloneExpression(receiver) }],
+    value: {
+      kind: "match",
+      expression: readRustStructuralObjectField(
+        receiverPath,
+        field.property.getterTargetName,
+        getterCarrier,
+      ),
+      arms: [{
+        pattern: {
+          kind: "tuple-variant",
+          path: "Some",
+          elements: [{ kind: "binding", name: getterName }],
+        },
+        expression: presentValue,
+      }, {
+        pattern: { kind: "path", path: "None" },
+        expression: absentGetterValue,
+      }],
+    },
+  };
+}
+
+function writeRustStructuralObjectProperty(
+  receiverCarrier: TargetTypeRef,
+  receiver: RustExpr,
+  field: RustStructuralShapeField,
+  operator: RustAssignmentOperator,
+  value: RustExpr,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const valueCarrier = rustStructuralPropertyValueCarrier(field.carrier, field.presence);
+  const setterCarrier = rustStructuralPropertySetterStorageCarrier(
+    receiverCarrier,
+    field.carrier,
+    field.presence,
+  );
+  if (context.syntheticNames === undefined || field.property?.setterTargetName === undefined ||
+    valueCarrier === undefined || setterCarrier === undefined) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "property_receiver",
+  );
+  const setterName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "property_setter",
+  );
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "property_value");
+  const receiverPath: RustExpr = { kind: "path", path: receiverName };
+  const bindings: {
+    readonly name: string;
+    readonly value: RustExpr;
+    readonly mutable?: boolean;
+  }[] = [{ name: receiverName, value: cloneExpression(receiver) }];
+  const selectedValue: RustExpr = { kind: "path", path: valueName };
+  let update: RustExpr | undefined;
+  if (operator !== "=") {
+    const currentValue = readRustStructuralObjectProperty(
+      receiverCarrier,
+      receiverPath,
+      field,
+      field.carrier,
+      context,
+    );
+    if (currentValue === undefined) {
+      return undefined;
+    }
+    bindings.push({
+      name: valueName,
+      mutable: true,
+      value: currentValue,
+    });
+    update = {
+      kind: "assignment",
+      operator,
+      target: { kind: "path", path: valueName },
+      value,
+    };
+  } else {
+    bindings.push({ name: valueName, value });
+  }
+  const setterCall = callRustStructuralObjectAccessor(
+    setterName,
+    [cloneExpression(receiverPath), selectedValue],
+    context,
+  );
+  const storedWrite = writeRustStructuralObjectField(
+    receiverPath,
+    field.targetName,
+    "=",
+    { kind: "call", path: "Some", args: [selectedValue] },
+  );
+  const write: RustExpr = {
+    kind: "match",
+    expression: readRustStructuralObjectField(
+      receiverPath,
+      field.property.setterTargetName,
+      setterCarrier,
+    ),
+    arms: [{
+      pattern: {
+        kind: "tuple-variant",
+        path: "Some",
+        elements: [{ kind: "binding", name: setterName }],
+      },
+      expression: setterCall,
+    }, {
+      pattern: { kind: "path", path: "None" },
+      expression: storedWrite,
+    }],
+  };
+  return {
+    kind: "block",
+    bindings,
+    value: update === undefined
+      ? write
+      : {
+          kind: "evaluate-then",
+          effect: update,
+          discard: "unit",
+          value: write,
+        },
+  };
+}
+
+function mutateRustStructuralObjectProperty(
+  receiverCarrier: TargetTypeRef,
+  receiver: RustExpr,
+  field: RustStructuralShapeField,
+  mutation: (field: RustExpr) => RustExpr | undefined,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (context.syntheticNames === undefined) {
+    return undefined;
+  }
+  const receiverName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "property_receiver",
+  );
+  const valueName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "property_value",
+  );
+  const resultName = allocateRustSyntheticName(
+    context.syntheticNames,
+    "accessor_result",
+  );
+  const receiverPath: RustExpr = { kind: "path", path: receiverName };
+  const currentValue = readRustStructuralObjectProperty(
+    receiverCarrier,
+    receiverPath,
+    field,
+    field.carrier,
+    context,
+  );
+  const storedValue = writeRustStructuralObjectProperty(
+    receiverCarrier,
+    receiverPath,
+    field,
+    "=",
+    { kind: "path", path: valueName },
+    context,
+  );
+  if (currentValue === undefined || storedValue === undefined) {
+    return undefined;
+  }
+  const changed = mutation({ kind: "path", path: valueName });
+  if (changed === undefined) {
+    return undefined;
+  }
+  return {
+    kind: "block",
+    bindings: [{ name: receiverName, value: cloneExpression(receiver) }, {
+      name: valueName,
+      mutable: true,
+      value: currentValue,
+    }, {
+      name: resultName,
+      value: changed,
+    }],
+    value: {
+      kind: "evaluate-then",
+      effect: storedValue,
+      discard: "unit",
+      value: { kind: "path", path: resultName },
+    },
+  };
+}
+
+function callRustStructuralObjectAccessor(
+  bindingName: string,
+  arguments_: readonly RustExpr[],
+  context: RustPlanContext,
+): RustExpr {
+  return {
+    kind: "try",
+    errorDomain: context.errorDomain,
+    expr: {
+      kind: "method-call",
+      receiver: { kind: "path", path: bindingName },
+      method: "call",
+      args: [{ kind: "tuple-literal", elements: arguments_ }],
+    },
+  };
+}
+
+function cloneExpression(expression: RustExpr): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: expression,
+    method: "clone",
+    args: [],
+  };
 }

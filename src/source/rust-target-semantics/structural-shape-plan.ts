@@ -9,12 +9,23 @@ import {
   rustStructuralObjectCarrierValue,
   rustTargetTypeParameterNames,
 } from "../rust-target-types.js";
-import type { RustSourceObjectShape } from "./source-type-registry.js";
+import type {
+  RustSourceObjectShape,
+  RustStructuralFieldImplementation,
+} from "./source-type-registry.js";
 
 export interface RustStructuralShapeField {
   readonly sourceName: string;
   readonly targetName: string;
   readonly carrier: TargetTypeRef;
+  readonly presence: "required" | "optional";
+  readonly readonly: boolean;
+  readonly storage: "stored" | "property";
+  readonly property?: {
+    readonly getterTargetName: string;
+    readonly setterTargetName?: string;
+  };
+  readonly method?: true;
 }
 
 export interface RustStructuralShapeDefinition {
@@ -28,10 +39,14 @@ export interface RustStructuralShapePlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];
   definitionForCarrier(carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined;
   fieldName(carrier: TargetTypeRef, storageIndex: number): string | undefined;
+  field(carrier: TargetTypeRef, storageIndex: number): RustStructuralShapeField | undefined;
 }
 
 export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan {
-  initialize(shapes: readonly RustSourceObjectShape[]): RustStructuralShapePlan;
+  initialize(
+    shapes: readonly RustSourceObjectShape[],
+    implementations: readonly RustStructuralFieldImplementation[],
+  ): RustStructuralShapePlan;
   isInitialized(): boolean;
 }
 
@@ -44,11 +59,14 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     return current;
   };
   return Object.freeze({
-    initialize(shapes: readonly RustSourceObjectShape[]) {
+    initialize(
+      shapes: readonly RustSourceObjectShape[],
+      implementations: readonly RustStructuralFieldImplementation[],
+    ) {
       if (current !== undefined) {
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
-      current = createRustStructuralShapePlan(shapes);
+      current = createRustStructuralShapePlan(shapes, implementations);
       return current;
     },
     isInitialized() {
@@ -63,11 +81,15 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     fieldName(carrier: TargetTypeRef, storageIndex: number) {
       return requireCurrent().fieldName(carrier, storageIndex);
     },
+    field(carrier: TargetTypeRef, storageIndex: number) {
+      return requireCurrent().field(carrier, storageIndex);
+    },
   });
 }
 
 export function createRustStructuralShapePlan(
   shapes: readonly RustSourceObjectShape[],
+  implementations: readonly RustStructuralFieldImplementation[] = [],
 ): RustStructuralShapePlan {
   const uniqueByKey = new Map<string, TargetTypeRef>();
   for (const shape of shapes) {
@@ -92,11 +114,44 @@ export function createRustStructuralShapePlan(
         throw new Error("Rust structural shape plan contains a non-structural carrier.");
       }
       const usedFieldNames = new Set<string>();
-      const fields = structural.fields.map((field): RustStructuralShapeField => Object.freeze({
-        sourceName: field.sourceName,
-        targetName: allocateSnakeName(usedFieldNames, rustSnakeCaseIdentifier(field.sourceName)),
-        carrier: field.type,
-      }));
+      const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
+        const targetName = allocateSnakeName(
+          usedFieldNames,
+          rustSnakeCaseIdentifier(field.sourceName),
+        );
+        const fieldImplementations = implementations.filter((implementation) =>
+          implementation.storageIndex === storageIndex &&
+          rustTargetTypeRefEquals(implementation.carrier, carrier));
+        const propertyStorage = field.accessor !== undefined ||
+          fieldImplementations.some((implementation) => implementation.kind === "accessor");
+        return Object.freeze({
+          sourceName: field.sourceName,
+          targetName,
+          carrier: field.type,
+          presence: field.presence,
+          readonly: field.readonly,
+          storage: propertyStorage ? "property" as const : "stored" as const,
+          ...(!propertyStorage
+            ? {}
+            : {
+                property: Object.freeze({
+                  getterTargetName: allocateSnakeName(
+                    usedFieldNames,
+                    `get_${targetName}`,
+                  ),
+                  ...(!field.readonly
+                    ? {
+                        setterTargetName: allocateSnakeName(
+                          usedFieldNames,
+                          `set_${targetName}`,
+                        ),
+                      }
+                    : {}),
+                }),
+              }),
+          ...(field.method === true ? { method: true as const } : {}),
+        });
+      });
       return Object.freeze({
         carrier,
         targetName: allocatePascalName(usedTypeNames, preferredShapeName(fields)),
@@ -120,6 +175,15 @@ export function createRustStructuralShapePlan(
     fieldName(carrier: TargetTypeRef, storageIndex: number) {
       return Number.isSafeInteger(storageIndex) && storageIndex >= 0
         ? byKey.get(closedMetadataKey(carrier))?.fields[storageIndex]?.targetName
+        : undefined;
+    },
+    field(carrier: TargetTypeRef, storageIndex: number) {
+      if (!Number.isSafeInteger(storageIndex) || storageIndex < 0) {
+        return undefined;
+      }
+      const definition = byKey.get(closedMetadataKey(carrier));
+      return definition !== undefined && rustTargetTypeRefEquals(definition.carrier, carrier)
+        ? definition.fields[storageIndex]
         : undefined;
     },
   });

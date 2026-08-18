@@ -11,7 +11,6 @@ interface RustProviderOwnerIdentity {
   readonly providerId: string;
   readonly providerVersion: string;
   readonly providerModuleId: string;
-  readonly moduleSpecifier: string;
 }
 
 export type RustProviderOperationSelection<
@@ -32,8 +31,7 @@ export function rustProviderOperationOwnerMatches(
 ): boolean {
   return row.providerId === identity.providerId &&
     row.providerVersion === identity.providerVersion &&
-    row.providerModuleId === identity.providerModuleId &&
-    row.moduleSpecifier === identity.moduleSpecifier;
+    row.providerModuleId === identity.providerModuleId;
 }
 
 export function selectRustProviderOperation<OperationKind extends RustProviderOperationKind>(

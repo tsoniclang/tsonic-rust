@@ -20,7 +20,6 @@ import {
 import type {
   RustExpr,
   RustFunctionParam,
-  RustImplFunction,
   RustType,
 } from "../rust-ast/nodes.js";
 import {
@@ -34,7 +33,6 @@ import type { RustPlanContext } from "./plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "./render-types.js";
 import { planRustCallableParameters } from "./callable-parameters.js";
 import { createRustSyntheticNameState } from "./synthetic-names.js";
-import { planProjectMethod } from "./declarations-nominal.js";
 import { rustDeclarationRequiresUnsafe } from "./explicit-safety.js";
 import { rustProjectStateType as rustProjectNamedStateType } from "./project-polymorphism-names.js";
 
@@ -46,6 +44,7 @@ export interface ProjectFieldPlan {
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
   readonly origin: "project" | "external";
+  readonly readonly: boolean;
   readonly initializer?: Node;
 }
 
@@ -56,10 +55,24 @@ export interface ProjectCallableShape {
   readonly isUnsafe: boolean;
 }
 
+export interface ProjectMethodPropertyPlan {
+  readonly declaration: Node;
+  readonly targetName: string;
+  readonly callableType: RustType;
+  readonly params: readonly RustFunctionParam[];
+  readonly returnType?: RustType;
+}
+
+export interface ProjectAccessorPlan {
+  readonly declaration: Node;
+  readonly role: "read" | "write";
+}
+
 export interface ProjectClassStateLayer {
   readonly definition: RustProjectTypeDefinition;
   readonly carrier: TargetTypeRef;
   readonly fields: readonly ProjectFieldPlan[];
+  readonly methodProperties: readonly ProjectMethodPropertyPlan[];
 }
 
 export function projectClassStateLayers(
@@ -78,10 +91,20 @@ export function projectClassStateLayers(
       return undefined;
     }
     const fields = projectOwnFields(owner, relation.targetType, context);
-    if (fields === undefined) {
+    const methodProperties = projectOwnMethodProperties(
+      owner,
+      relation.targetType,
+      context,
+    );
+    if (fields === undefined || methodProperties === undefined) {
       return undefined;
     }
-    layers.push({ definition: owner, carrier: relation.targetType, fields });
+    layers.push({
+      definition: owner,
+      carrier: relation.targetType,
+      fields,
+      methodProperties,
+    });
   }
   return layers;
 }
@@ -111,6 +134,7 @@ export function projectOwnFields(
       carrier: field.carrier,
       type,
       origin: "external",
+      readonly: false,
     });
   }
   const externalFieldCount = fields.length;
@@ -141,6 +165,7 @@ export function projectOwnFields(
       carrier,
       type,
       origin: "project",
+      readonly: context.input.ast.hasModifierKind(layoutField.declaration, "readonly"),
       ...(initializer === undefined ? {} : { initializer }),
     });
   }
@@ -155,6 +180,95 @@ export function projectOwnMethods(
     const kind = context.input.ast.kindName(member);
     return kind === "KindMethodDeclaration" || kind === "KindMethodSignature";
   });
+}
+
+export function projectOwnAccessors(
+  definition: RustProjectTypeDefinition,
+  context: RustPlanContext,
+): readonly ProjectAccessorPlan[] {
+  return (projectMembers(definition, context) ?? []).flatMap<ProjectAccessorPlan>((member) => {
+    if (context.input.ast.hasModifierKind(member, "static")) {
+      return [];
+    }
+    const kind = context.input.ast.kindName(member);
+    return kind === "KindGetAccessor"
+      ? [{ declaration: member, role: "read" }]
+      : kind === "KindSetAccessor"
+        ? [{ declaration: member, role: "write" }]
+        : [];
+  });
+}
+
+export function projectOwnMethodProperties(
+  definition: RustProjectTypeDefinition,
+  receiverCarrier: TargetTypeRef,
+  context: RustPlanContext,
+): readonly ProjectMethodPropertyPlan[] | undefined {
+  const properties: ProjectMethodPropertyPlan[] = [];
+  const seen = new Set<Node>();
+  for (const member of projectOwnMethods(definition, context)) {
+    if (context.input.ast.hasModifierKind(member, "static")) {
+      continue;
+    }
+    const implementation = context.input.source.navigation.callableImplementation(member);
+    const declaration = implementation.kind === "resolved"
+      ? implementation.implementation.declaration
+      : member;
+    if (seen.has(declaration)) {
+      continue;
+    }
+    const usage = context.input.projectMethodProperties.usageFor(member) ??
+      context.input.projectMethodProperties.usageFor(declaration);
+    if (usage?.writable !== true) {
+      continue;
+    }
+    if (context.input.ast.typeParameters(declaration).length !== 0) {
+      return undefined;
+    }
+    const owner = context.input.projectTypes.definitionContainingDeclaration(declaration);
+    const relation = owner === undefined
+      ? undefined
+      : context.input.projectTypes.relationship(receiverCarrier, owner);
+    const shape = owner === undefined || relation?.kind !== "related"
+      ? undefined
+      : projectCallableShape(declaration, {
+          ...context,
+          typeParameterSubstitutions: projectTypeSubstitutions(owner, relation.targetType),
+        });
+    const targetName = owner === undefined
+      ? undefined
+      : context.input.projectTypes.fieldStorageName(owner, declaration);
+    if (shape === undefined || targetName === undefined || shape.isUnsafe || !shape.fallible) {
+      return undefined;
+    }
+    seen.add(declaration);
+    properties.push({
+      declaration,
+      targetName,
+      callableType: rustProjectMethodPropertyCallableType(shape),
+      params: shape.params,
+      ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
+    });
+  }
+  return Object.freeze(properties);
+}
+
+export function rustProjectMethodPropertyCallableType(
+  shape: Pick<ProjectCallableShape, "params" | "returnType">,
+): RustType {
+  const resultType = shape.returnType ?? { kind: "unit" as const };
+  return {
+    kind: "named",
+    path: "rt::Callable",
+    typeArguments: [{
+      kind: "tuple",
+      elements: shape.params.map((parameter) => parameter.type),
+    }, {
+      kind: "named",
+      path: "rt::TsonicResult",
+      typeArguments: [resultType],
+    }],
+  };
 }
 
 export function projectMembers(
@@ -266,6 +380,29 @@ export function projectFieldStoragePath(
   return path;
 }
 
+export function projectMethodPropertyStoragePath(
+  implementation: Node,
+  layers: readonly ProjectClassStateLayer[],
+  context: RustPlanContext,
+): readonly string[] | undefined {
+  const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
+  const ownerIndex = owner === undefined
+    ? -1
+    : layers.findIndex((layer) => layer.definition === owner);
+  const targetName = owner === undefined
+    ? undefined
+    : context.input.projectTypes.fieldStorageName(owner, implementation);
+  if (ownerIndex < 0 || targetName === undefined) {
+    return undefined;
+  }
+  const path: string[] = [];
+  for (let depth = layers.length - 1; depth > ownerIndex; depth -= 1) {
+    path.push(context.input.projectTypes.baseStateFieldName(layers[depth]!.definition));
+  }
+  path.push(targetName);
+  return path;
+}
+
 export function projectStateType(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
@@ -283,24 +420,6 @@ export function projectTypeSubstitutions(
   const value = rustSourceTypeCarrierValue(carrier);
   return new Map(definition.typeParameterNames.map((name, index) =>
     [name, value?.typeArguments[index] ?? { kind: "type-parameter", name }] as const));
-}
-
-export function planProjectStaticMethods(
-  definition: RustProjectTypeDefinition,
-  context: RustPlanContext,
-): readonly RustImplFunction[] | undefined {
-  const methods: RustImplFunction[] = [];
-  for (const member of projectOwnMethods(definition, context)) {
-    if (!context.input.ast.hasModifierKind(member, "static")) {
-      continue;
-    }
-    const planned = planProjectMethod(member, context);
-    if (planned === undefined) {
-      return undefined;
-    }
-    methods.push(planned);
-  }
-  return methods;
 }
 
 export function rustFunctionTypesMatch(
@@ -345,9 +464,8 @@ function rustTypeEquals(left: RustType | undefined, right: RustType | undefined)
     case "fixed-array":
       return right.kind === "fixed-array" && left.length === right.length &&
         rustTypeEquals(left.element, right.element);
-    case "slice-ref":
-      return right.kind === "slice-ref" && left.mutable === right.mutable &&
-        rustTypeEquals(left.element, right.element);
+    case "slice":
+      return right.kind === "slice" && rustTypeEquals(left.element, right.element);
     case "function-pointer":
       return right.kind === "function-pointer" && left.isUnsafe === right.isUnsafe &&
         sameStrings(left.abi, right.abi) &&

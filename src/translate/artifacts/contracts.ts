@@ -8,6 +8,8 @@ import type {
   RustType,
   RustTypeParameter,
 } from "../../backend/rust-ast/nodes.js";
+import { closedMetadataKey } from "../../common/closed-metadata.js";
+import type { TargetTypeRef } from "../../policy/types.js";
 import { printRustType } from "../../print/rust-printer.js";
 
 export type RustArtifactFacet =
@@ -17,6 +19,7 @@ export type RustArtifactFacet =
 
 export interface RustSourceCallableContract {
   readonly sourceDeclaration: Node;
+  readonly sourceTypeArguments?: readonly TargetTypeRef[];
   readonly name: string;
   readonly isAsync: boolean;
   readonly fallible: boolean;
@@ -71,6 +74,11 @@ export function rustSourceCallableSurface(
     fallible: callable.fallible,
     typeParameters: callable.typeParameters,
     parameters: callable.parameters,
+    identityParts: [
+      callable.sourceTypeArguments === undefined
+        ? "open-source-callable"
+        : `closed-source-callable:${closedMetadataKey(callable.sourceTypeArguments)}`,
+    ],
     ...(callable.returnType === undefined
       ? {}
       : { returnType: callable.returnType }),
@@ -85,6 +93,7 @@ export function rustFunctionSurface(
     readonly typeParameters: readonly RustTypeParameter[];
     readonly parameters: readonly RustFunctionParam[];
     readonly returnType?: RustType;
+    readonly identityParts?: readonly string[];
   },
 ): string {
   return encodeRustContractParts([
@@ -92,6 +101,7 @@ export function rustFunctionSurface(
     callable.name,
     callable.isAsync ? "async" : "sync",
     callable.fallible ? "fallible" : "infallible",
+    ...(callable.identityParts ?? []),
     ...callable.typeParameters.map((parameter) =>
       encodeRustContractParts([
         "type-parameter",

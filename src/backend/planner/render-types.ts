@@ -29,9 +29,7 @@ import {
   rustPrimitiveTypeName,
   substituteRustTargetTypeParameters,
   rustStringTargetId,
-  rustIsizeTargetId,
   isRustNeverCarrier,
-  rustUsizeTargetId,
 } from "../../source/rust-target-types.js";
 
 const namedCarrierPaths: Readonly<Record<string, string>> = {
@@ -75,12 +73,6 @@ export function rustTypeFromCarrier(
   if (carrier.kind === "target-named" && carrier.id === rustStringTargetId) {
     return { kind: "string" };
   }
-  if (carrier.kind === "target-named" && carrier.id === rustUsizeTargetId) {
-    return { kind: "primitive", name: "usize" };
-  }
-  if (carrier.kind === "target-named" && carrier.id === rustIsizeTargetId) {
-    return { kind: "primitive", name: "isize" };
-  }
   if (carrier.kind === "target-named" && carrier.id === rustCallableTargetId) {
     const [argumentsCarrier, resultCarrier] = carrier.typeArguments ?? [];
     if (carrier.typeArguments?.length !== 2 || argumentsCarrier?.kind !== "tuple" ||
@@ -123,12 +115,17 @@ export function rustTypeFromCarrier(
   if (carrier.kind === "type-parameter") {
     return { kind: "named", path: carrier.name };
   }
-  if (carrier.kind === "pointer" && carrier.pointee.kind === "target-named" && carrier.pointee.id === rustStringTargetId && carrier.mutability === "const") {
+  if (carrier.kind === "reference" && carrier.referent.kind === "target-named" &&
+    carrier.referent.id === rustStringTargetId && carrier.mutable === false) {
     return rustStrRefType;
   }
-  if (carrier.kind === "pointer" && carrier.pointee.kind === "array") {
-    const element = rustTypeFromCarrier(carrier.pointee.element, resolveSourceTypePath, resolveStructuralShape);
-    return element === undefined ? undefined : { kind: "slice-ref", element, mutable: carrier.mutability === "mut" };
+  if (carrier.kind === "reference") {
+    const referent = rustTypeFromCarrier(carrier.referent, resolveSourceTypePath, resolveStructuralShape);
+    return referent === undefined ? undefined : { kind: "reference", referent, mutable: carrier.mutable };
+  }
+  if (carrier.kind === "slice") {
+    const element = rustTypeFromCarrier(carrier.element, resolveSourceTypePath, resolveStructuralShape);
+    return element === undefined ? undefined : { kind: "slice", element };
   }
   if (carrier.kind === "pointer" &&
     (carrier.mutability === "const" || carrier.mutability === "mut")) {
@@ -330,7 +327,7 @@ export function collectAliasesFromRustType(
     }
     return;
   }
-  if (type.kind === "slice-ref") {
+  if (type.kind === "slice") {
     collectAliasesFromRustType(type.element, register);
     return;
   }

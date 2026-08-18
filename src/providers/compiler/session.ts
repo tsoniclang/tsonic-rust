@@ -20,7 +20,7 @@ import type {
 } from "../../source/provider-packages/index.js";
 import {
   collectRustProviderSemanticsFromDefinitions,
-  createRustProviderPackageSourceProvider,
+  mergeRustProviderSemantics,
   rustProviderBindingProviderId,
 } from "../../source/provider-packages/index.js";
 import type {
@@ -34,14 +34,14 @@ import {
   compilerProviderVersion,
   projectRustCompilerModule,
 } from "./projection.js";
+import { standardModuleRequestFromSpecifier } from "./standard-module-specifier.js";
 import type { RustCompilerProviderProjection } from "./projection.js";
+import type { RustNamedTypeTraitContract } from "../../source/rust-target-types.js";
 import { createRustCompilerWorkerClient } from "./worker-client.js";
 import type { RustCompilerWorkerClient } from "./worker-client.js";
-import {
-  rustStdProviderDefinition,
-} from "./std-catalog.js";
 
 export const rustCompilerProviderSpecifierPrefix = "@tsonic/rust/crates/";
+const rustStandardProviderPackageId = "rust-standard-library";
 const rustCompilerProviderPackageId = "rust-cargo-project";
 const rustCompilerProviderDiagnosticCodes = Object.freeze({
   RUST_COMPILER_PROVIDER_MODULE_UNOWNED: 9_301_001,
@@ -60,14 +60,36 @@ export function createRustCompilerProviderSession(
   context: TargetProviderContext,
   worker: RustCompilerWorkerClient = createRustCompilerWorkerClient(),
 ): RustCompilerProviderSession {
-  const standardDefinition = rustStdProviderDefinition();
-  const standardProvider = createRustProviderPackageSourceProvider(standardDefinition);
-  const emptySemantics = collectRustProviderSemanticsFromDefinitions([]);
+  const standardSnapshot = worker.standardSnapshot();
+  const standardVersion = compilerProviderVersion(standardSnapshot.digest);
+  const standardRegistry = createProjectionRegistry({
+    packageId: rustStandardProviderPackageId,
+    displayName: "Rust standard-library compiler provider",
+    providerVersion: standardVersion,
+  });
+  const standardProvider = createCompilerProvider({
+    packageId: rustStandardProviderPackageId,
+    displayName: "Rust standard-library compiler provider",
+    virtualScope: "standard",
+    snapshot: standardSnapshot,
+    providerVersion: standardVersion,
+    worker,
+    registry: standardRegistry,
+    resolveModule(specifier: string) {
+      const request = standardModuleRequestFromSpecifier(specifier);
+      if (request === undefined) {
+        return undefined;
+      }
+      const dependency = standardSnapshot.dependencies.find((candidate) =>
+        candidate.alias === request.crateName);
+      return dependency === undefined ? undefined : { dependency, modulePath: request.modulePath };
+    },
+  });
   const projectFile = resolveRustUserCargoManifest(context.target, context.projectDirectory);
   if (projectFile.kind === "absent") {
     return Object.freeze({
       sourceProviders: Object.freeze([standardProvider]),
-      semantics: () => emptySemantics,
+      semantics: () => standardRegistry.semantics(),
     });
   }
   if (projectFile.kind === "invalid") {
@@ -76,52 +98,81 @@ export function createRustCompilerProviderSession(
   const manifestPath = projectFile.manifestPath;
   const snapshot = worker.snapshot(manifestPath);
   const providerVersion = compilerProviderVersion(snapshot.digest);
-  const registry = createProjectionRegistry(providerVersion);
+  const registry = createProjectionRegistry({
+    packageId: rustCompilerProviderPackageId,
+    displayName: "Rust Cargo compiler provider",
+    providerVersion,
+  });
   const sourceProviders = [
     standardProvider,
-    createProjectProvider(snapshot, providerVersion, worker, registry),
+    createCompilerProvider({
+      packageId: rustCompilerProviderPackageId,
+      displayName: "Rust Cargo compiler provider",
+      virtualScope: "cargo",
+      snapshot,
+      providerVersion,
+      worker,
+      registry,
+      resolveModule(specifier: string) {
+        return resolveCompilerModule(snapshot, specifier);
+      },
+    }),
   ];
   return Object.freeze({
     snapshot,
     sourceProviders: Object.freeze(sourceProviders),
-    semantics: () => registry.semantics(),
+    semantics: () => mergeRustProviderSemantics(
+      standardRegistry.semantics(),
+      registry.semantics(),
+    ),
   });
 }
 
-function createProjectProvider(
-  snapshot: RustCompilerProjectSnapshot,
-  providerVersion: string,
-  worker: RustCompilerWorkerClient,
-  registry: ProjectionRegistry,
+interface ResolvedCompilerModule {
+  readonly dependency: RustCompilerDependency;
+  readonly modulePath: readonly string[];
+}
+
+function createCompilerProvider(
+  options: {
+    readonly packageId: string;
+    readonly displayName: string;
+    readonly virtualScope: string;
+    readonly snapshot: RustCompilerProjectSnapshot;
+    readonly providerVersion: string;
+    readonly worker: RustCompilerWorkerClient;
+    readonly registry: ProjectionRegistry;
+    readonly resolveModule: (specifier: string) => ResolvedCompilerModule | undefined;
+  },
 ): SourceDeclarationProvider {
-  const providerId = rustProviderBindingProviderId(rustCompilerProviderPackageId);
+  const providerId = rustProviderBindingProviderId(options.packageId);
   return Object.freeze({
     identity: Object.freeze({
       id: providerId,
-      version: providerVersion,
+      version: options.providerVersion,
       extensionContractVersion: TstsSourceProviderContractVersion,
-      configHash: snapshot.digest,
-      displayName: "Rust Cargo compiler provider",
+      configHash: options.snapshot.digest,
+      displayName: options.displayName,
     }),
     declarationMaterialization: "incremental",
     ownsModule(specifier: string) {
-      return resolveCompilerModule(snapshot, specifier) === undefined
+      return options.resolveModule(specifier) === undefined
         ? { kind: "unowned" as const }
         : { kind: "owned" as const };
     },
     resolveModule(specifier: string) {
-      const resolved = resolveCompilerModule(snapshot, specifier);
+      const resolved = options.resolveModule(specifier);
       if (resolved === undefined) {
         return providerDiagnostic(providerId,
           "RUST_COMPILER_PROVIDER_MODULE_UNOWNED",
-          `Rust Cargo compiler provider does not own '${specifier}'.`,
+          `${options.displayName} does not own '${specifier}'.`,
         );
       }
       const { dependency, modulePath } = resolved;
       return Object.freeze({
         kind: "virtual" as const,
         moduleSpecifier: specifier,
-        virtualFileName: `tsts-provider://tsonic-rust/compiler/${encodeURIComponent(dependency.alias)}/${modulePath.length === 0 ? "index" : modulePath.map(encodeURIComponent).join("/")}.d.ts`,
+        virtualFileName: `tsts-provider://tsonic-rust/compiler/${options.virtualScope}/${encodeURIComponent(dependency.alias)}/${modulePath.length === 0 ? "index" : modulePath.map(encodeURIComponent).join("/")}.d.ts`,
         providerModuleId: compilerProviderModuleId(dependency, modulePath),
         packageName: dependency.packageName,
         packageVersion: dependency.packageVersion,
@@ -131,11 +182,11 @@ function createProjectProvider(
       resolution: ProviderModuleResolution,
       request: ProviderDeclarationRequest,
     ): ProviderDeclarationModel | ExtensionDiagnostic {
-      const resolved = resolveCompilerModule(snapshot, resolution.moduleSpecifier);
+      const resolved = options.resolveModule(resolution.moduleSpecifier);
       if (resolved === undefined) {
         return providerDiagnostic(providerId,
           "RUST_COMPILER_PROVIDER_MODULE_UNOWNED",
-          `Rust Cargo compiler provider cannot materialize '${resolution.moduleSpecifier}'.`,
+          `${options.displayName} cannot materialize '${resolution.moduleSpecifier}'.`,
         );
       }
       const { dependency, modulePath } = resolved;
@@ -143,13 +194,13 @@ function createProjectProvider(
       if (resolution.providerModuleId !== expectedModuleId) {
         return providerDiagnostic(providerId,
           "RUST_COMPILER_PROVIDER_IDENTITY_CONFLICT",
-          `Rust Cargo module '${resolution.moduleSpecifier}' resolved as '${resolution.providerModuleId}', expected '${expectedModuleId}'.`,
+          `${options.displayName} module '${resolution.moduleSpecifier}' resolved as '${resolution.providerModuleId}', expected '${expectedModuleId}'.`,
         );
       }
       try {
         const requestedExports = requestedExportNames(request);
-        const module = worker.module({
-          snapshot,
+        const module = options.worker.module({
+          snapshot: options.snapshot,
           dependency,
           modulePath,
           ...(requestedExports === undefined ? {} : { requestedExports }),
@@ -158,12 +209,12 @@ function createProjectProvider(
           providerModuleId: expectedModuleId,
           moduleSpecifier: resolution.moduleSpecifier,
         });
-        registry.add(projection);
+        options.registry.add(projection);
         return materializeClosedMetadata(projection.declarationModel);
       } catch (error) {
         return providerDiagnostic(providerId,
           "RUST_COMPILER_PROVIDER_DECLARATION_FAILED",
-          `Rust Cargo module '${resolution.moduleSpecifier}' cannot be represented: ${error instanceof Error ? error.message : String(error)}`,
+          `${options.displayName} module '${resolution.moduleSpecifier}' cannot be represented: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     },
@@ -175,7 +226,11 @@ interface ProjectionRegistry {
   semantics(): RustProviderSemantics;
 }
 
-function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
+function createProjectionRegistry(options: {
+  readonly packageId: string;
+  readonly displayName: string;
+  readonly providerVersion: string;
+}): ProjectionRegistry {
   const modules = new Map<string, {
     readonly providerModuleId: string;
     readonly exports: Map<string, RustProviderModuleDefinition["exports"][number]>;
@@ -184,6 +239,7 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
   const operationsByIdentity = new Map<string, RustProviderOperationDefinition>();
   const typesByIdentity = new Map<string, RustProviderTypeDefinition>();
   const carrierPaths = new Map<string, string>();
+  const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   let sealed = false;
   return Object.freeze({
     add(projection: RustCompilerProviderProjection): void {
@@ -224,6 +280,13 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
         }
         carrierPaths.set(id, path);
       }
+      for (const [id, traits] of projection.carrierTraits) {
+        const existing = carrierTraits.get(id);
+        if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
+          throw new Error(`Rust compiler-provider carrier '${id}' has conflicting native trait contracts.`);
+        }
+        carrierTraits.set(id, traits);
+      }
     },
     semantics(): RustProviderSemantics {
       sealed = true;
@@ -250,6 +313,9 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
       const carrierPathRecord = Object.fromEntries(
         [...carrierPaths.entries()].sort(([left], [right]) => compareText(left, right)),
       );
+      const carrierTraitRecord = Object.fromEntries(
+        [...carrierTraits.entries()].sort(([left], [right]) => compareText(left, right)),
+      );
       const ownedModuleSpecifiers = new Set(moduleDefinitions.map((module) => module.moduleSpecifier));
       const sourceDependencyNames = new Map<string, Set<string>>();
       for (const module of moduleDefinitions) {
@@ -271,9 +337,9 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
           exportedNames: Object.freeze([...names].sort(compareText)),
         }));
       const definition: RustProviderPackageDefinition = Object.freeze({
-        id: rustCompilerProviderPackageId,
-        displayName: "Rust Cargo compiler provider",
-        version: providerVersion,
+        id: options.packageId,
+        displayName: options.displayName,
+        version: options.providerVersion,
         ...(sourceDependencies.length === 0 ? {} : { sourceDependencies: Object.freeze(sourceDependencies) }),
         modules: Object.freeze(moduleDefinitions),
         types: Object.freeze([...typesByIdentity.entries()]
@@ -286,6 +352,9 @@ function createProjectionRegistry(providerVersion: string): ProjectionRegistry {
         ...(Object.keys(carrierPathRecord).length === 0
           ? {}
           : { carrierPaths: Object.freeze(carrierPathRecord) }),
+        ...(Object.keys(carrierTraitRecord).length === 0
+          ? {}
+          : { carrierTraits: Object.freeze(carrierTraitRecord) }),
       });
       return collectRustProviderSemanticsFromDefinitions([definition]);
     },

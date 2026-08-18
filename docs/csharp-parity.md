@@ -81,22 +81,38 @@ generator protocol.
 Default export expressions and source-ordered class static blocks are
 implemented and proved by `test/module-and-class-initialization-parity.test.mjs`.
 Source-ordered object spread is implemented and proved by
-`test/object-construction-parity.test.mjs`. The remaining source-language
-closure is ordered by architectural dependency:
+`test/object-construction-parity.test.mjs`. Exact interface index signatures,
+method-property reads and writes, and method spread are implemented and proved
+by `test/object-property-parity.test.mjs`. Finite open-generic caller closure
+is proved by `test/native-semantics.test.mjs`. Compiler-backed Clone/Copy
+bounds, mutable statics, C variadics, and Rust unions are proved by
+`test/compiler-provider.test.mjs`.
 
-1. Class initialization: define the source contract for uninitialized
-   target-native static fields before choosing a Rust default.
-2. Object construction: close method reads, writes, and spread over the exact
-   callable storage now shared by method syntax, function expressions, arrow-
-   valued members, and overloaded method implementations.
-3. Declaration contracts: close interface index signatures and propagate
-   finite generic virtual specializations through open generic callers.
-4. Provider breadth: replace the tiny hand-maintained Rust standard-library
-   catalog with requested compiler-backed exports, then close representable
-   generic bounds, mutable statics, C variadics, and unions.
-5. Shared contracts: specify borrowed results, custom receivers, associated
-   items, and fixed-array lengths at their owning layer.
-6. Surface closure: execute every blocked row in `docs/parity-lanes.json`.
+For example:
+
+```ts
+interface Scores {
+  [name: string]: int32;
+}
+
+const scores: Scores = { first: 1 };
+scores["second"] = 2;
+const copied: Scores = { ...scores, third: 3 };
+```
+
+The selected index declaration supplies the exact key and value carriers.
+Rust stores one `HashMap<String, i32>`, snapshots spreads at their source
+position, applies entries in source order, copies `Copy` values, and clones
+only non-`Copy` values. The backend never derives an index contract from the
+`Scores` spelling.
+
+The detailed surface inventory in `docs/parity-lanes.json` is closed by an
+implemented row, a shared hard rejection, or an exact Rust target limit.
+Rust-only APIs whose signatures require a source lifetime or higher-kinded
+associated-type projection stay precisely rejected: TypeScript has no source
+type that can express those contracts. The provider does support owned custom
+receivers, copied borrowed values, owned strings, and compiler-resolved
+concrete associated types.
 
 Object-literal method syntax and direct callable-valued properties are already
 closed through the same selected contextual contract. For example:
@@ -197,7 +213,7 @@ those exact selected type arguments. Overrides, interface dispatch, and
 `super` calls use the same closed specialization plan; no value is erased into
 a dynamic carrier and no type argument is inferred from spelling.
 
-The remaining case is an open generic caller:
+Open generic callers also close through the finite entry-point graph:
 
 ```ts
 function call<T>(base: Base, value: T): T {
@@ -209,10 +225,11 @@ call<string>(base, "one");
 ```
 
 Here the virtual call is open while `call` is checked, but the complete project
-still has two finite instantiations. The callable dependency graph must carry
-those instantiations into `call` before dynamic-dispatch slots are finalized.
-Until that closure exists, Rust rejects at the finite-specialization boundary
-rather than guessing or using a boxed universal value.
+has two finite instantiations. The callable dependency graph carries those
+instantiations into `call` before dynamic-dispatch slots are finalized. A call
+whose type argument remains outside the closed receiver/caller graph still
+fails at the finite-specialization boundary rather than using a boxed universal
+value.
 
 ## Acceptance
 

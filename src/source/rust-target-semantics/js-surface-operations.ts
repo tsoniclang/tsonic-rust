@@ -20,6 +20,7 @@ import {
   rustFixedArrayCarrierValue,
   rustCarrierSupportsClone,
   rustCarrierSupportsJsEquality,
+  isRustBoolCarrier,
   isRustIntegerCarrier,
   isRustJsArrayCarrier,
   isRustSourceStringConvertibleCarrier,
@@ -35,7 +36,9 @@ import {
   rustJsMapTargetType,
   rustJsSetTargetType,
   rustClosureTargetType,
+  rustNullTargetType,
   rustOptionTargetType,
+  rustUndefinedTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
@@ -70,7 +73,7 @@ export interface JsOperationSelection {
   readonly callback?: RustCallbackOperationTemplate;
 }
 
-type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "global" | "console" | "object" | "regexp" | "regexp-match";
+type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "boolean" | "global" | "console" | "object" | "regexp" | "regexp-match";
 
 type JsCarrierRef =
   | { readonly ref: "cb-array-from-map"; readonly arity: 0 | 1 | 2 }
@@ -138,6 +141,8 @@ interface JsOperationRowData {
         readonly target: RustProviderOperationForm;
         readonly resultConversion?: RustValueConversion;
         readonly result: JsCarrierRef;
+        readonly sourceResult?: JsCarrierRef;
+        readonly sourceAbsence?: "undefined" | "null";
         readonly params?: readonly (JsCarrierRef | undefined)[];
         readonly firstArgCarrierId?: string;
 }
@@ -170,6 +175,7 @@ function defineJsOperationRows(rows: readonly JsOperationRowData[]): readonly Js
 }
 
 const zeroArgument = { kind: "integer", value: 0 } as const;
+const oneArgument = { kind: "integer", value: 1 } as const;
 const noneArgument = { kind: "none" } as const;
 export const rustInferCarrier: TargetTypeRef = { kind: "opaque", id: "tsonic.rust.infer" };
 const jsNumberArgumentRows = [
@@ -179,6 +185,80 @@ const jsNumberArgumentRows = [
 const jsNumberArgumentPairs = jsNumberArgumentRows.flatMap((first) =>
   jsNumberArgumentRows.map((second) => ({ first, second }))
 );
+
+interface JsNumberArgumentCombination {
+  readonly variant: string;
+  readonly carriers: readonly ({ readonly ref: "float64" } | { readonly ref: "int32" })[];
+  readonly conversions: readonly (RustValueConversion | undefined)[];
+}
+
+function jsNumberArgumentCombinations(count: number): readonly JsNumberArgumentCombination[] {
+  let combinations: readonly JsNumberArgumentCombination[] = [{
+    variant: "",
+    carriers: [],
+    conversions: [],
+  }];
+  for (let index = 0; index < count; index += 1) {
+    combinations = combinations.flatMap((combination) =>
+      jsNumberArgumentRows.map(({ variant, carrier, conversion }) => ({
+        variant: combination.variant.length === 0 ? variant : `${combination.variant}-${variant}`,
+        carriers: [...combination.carriers, carrier],
+        conversions: [...combination.conversions, conversion],
+      })));
+  }
+  return combinations;
+}
+
+function dateReceiverNumberRows(
+  member: string,
+  targetsByArity: readonly string[],
+): readonly JsOperationRowData[] {
+  return targetsByArity.flatMap((target, targetIndex) => {
+    const arity = targetIndex + 1;
+    return jsNumberArgumentCombinations(arity).map(({ variant, carriers, conversions }) => ({
+      owner: "Date",
+      member,
+      operationKind: "call" as const,
+      lane: "date" as const,
+      variant,
+      shape: {
+        op: "operation" as const,
+        operationKind: "method" as const,
+        target: {
+          form: "receiver-method" as const,
+          name: target,
+          argConversions: conversions,
+        },
+        result: { ref: "float64" as const },
+        params: carriers,
+      },
+    }));
+  });
+}
+
+function dateUtcRows(): readonly JsOperationRowData[] {
+  const defaults = [oneArgument, zeroArgument, zeroArgument, zeroArgument, zeroArgument] as const;
+  return [2, 3, 4, 5, 6, 7].flatMap((arity) =>
+    jsNumberArgumentCombinations(arity).map(({ variant, carriers, conversions }) => ({
+      owner: "DateConstructor",
+      member: "UTC",
+      operationKind: "call" as const,
+      lane: "date" as const,
+      variant,
+      shape: {
+        op: "operation" as const,
+        operationKind: "method" as const,
+        target: {
+          form: "call" as const,
+          path: "js_abi::JsDate::utc",
+          argConversions: conversions,
+          trailingArguments: defaults.slice(arity - 2),
+        },
+        result: { ref: "float64" as const },
+        params: carriers,
+      },
+    })));
+}
 const mapForEachRows = [
   { arity: 0, variant: "zero", targetName: "for_each_zero" },
   { arity: 1, variant: "value", targetName: "for_each_value" },
@@ -287,8 +367,8 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
   { owner, member: "indexOf", operationKind: "call", lane: "js-array", variant: "from", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "index_of", argModes: ["ref", "value"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }, { ref: "float64" }] } },
   { owner, member: "lastIndexOf", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "last_index_of_from_end", argModes: ["ref"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner, member: "lastIndexOf", operationKind: "call", lane: "js-array", variant: "from", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "last_index_of", argModes: ["ref", "value"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }, { ref: "float64" }] } },
-  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "number", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"] }, result: { ref: "option-of-element" }, params: [{ ref: "float64" }] } },
-  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "int32", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "option-of-element" }, params: [{ ref: "int32" }] } },
+  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "number", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"] }, result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, sourceAbsence: "undefined", params: [{ ref: "float64" }] } },
+  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "int32", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, sourceAbsence: "undefined", params: [{ ref: "int32" }] } },
   ...arrayPredicateRows.flatMap((predicateRow) =>
     arrayCallbackRows.map(({ arity, variant, suffix }): JsOperationRowData => ({
       owner,
@@ -520,6 +600,10 @@ const jsOperationRows = defineJsOperationRows([
   ]),
   { owner: "String", member: "toUpperCase", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_upper_case", receiverMode: "ref" }, result: { ref: "string" } } },
   { owner: "String", member: "toLowerCase", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_lower_case", receiverMode: "ref" }, result: { ref: "string" } } },
+  { owner: "String", member: "normalize", operationKind: "call", lane: "string", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::normalize", receiverMode: "ref" }, result: { ref: "string" } } },
+  { owner: "String", member: "normalize", operationKind: "call", lane: "string", variant: "form", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::normalize_with_form", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
+  { owner: "String", member: "isWellFormed", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::is_well_formed", receiverMode: "ref" }, result: { ref: "bool" } } },
+  { owner: "String", member: "toWellFormed", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::to_well_formed", receiverMode: "ref" }, result: { ref: "string" } } },
   { owner: "String", member: "trim", operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim", receiverMode: "ref" }, result: { ref: "string" } } },
   ...[{ member: "trimStart" }, { member: "trimLeft" }].map(({ member }): JsOperationRowData => ({ owner: "String", member, operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim_start", receiverMode: "ref" }, result: { ref: "string" } } })),
   ...[{ member: "trimEnd" }, { member: "trimRight" }].map(({ member }): JsOperationRowData => ({ owner: "String", member, operationKind: "call", lane: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::trim_end", receiverMode: "ref" }, result: { ref: "string" } } })),
@@ -624,11 +708,17 @@ const jsOperationRows = defineJsOperationRows([
     },
   })),
 
-  // RegExp match-carrier lane.
-  { owner: "RegExpExecArray", member: "index", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion } },
-  { owner: "RegExpExecArray", member: "input", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "input" }, result: { ref: "string" } } },
-  { owner: "RegExpExecArray", member: "length", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "group_count" }, result: { ref: "int32" }, resultConversion: rustUsizeToInt32ValueConversion } },
-  { owner: "RegExpExecArray", member: "index", operationKind: "indexer", lane: "regexp-match", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "group", argModes: ["value"], argConversions: [rustInt32ToUsizeValueConversion] }, result: { ref: "option-of-string" }, params: [{ ref: "int32" }] } },
+  // RegExp match-carrier lane. TSTS preserves the exact declaration owner:
+  // RegExp-specific fields come from either match interface, while inherited
+  // array operations come from the selected Array/ReadonlyArray declaration.
+  ...(["RegExpExecArray", "RegExpMatchArray"] as const).flatMap((owner): readonly JsOperationRowData[] => [
+    { owner, member: "index", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion } },
+    { owner, member: "input", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "input" }, result: { ref: "string" } } },
+  ]),
+  ...(["RegExpExecArray", "RegExpMatchArray", "Array", "ReadonlyArray"] as const).flatMap((owner): readonly JsOperationRowData[] => [
+    { owner, member: "length", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, result: { ref: "int32" }, resultConversion: rustUsizeToInt32ValueConversion } },
+    { owner, member: "index", operationKind: "indexer", lane: "regexp-match", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "group", argModes: ["value"], argConversions: [rustInt32ToUsizeValueConversion] }, result: { ref: "option-of-string" }, params: [{ ref: "int32" }] } },
+  ]),
 
   // RegExp lane: constant, compile-validated, oracle-proven subset.
   { owner: "RegExp", member: "test", operationKind: "call", lane: "regexp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "test", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
@@ -744,14 +834,36 @@ const jsOperationRows = defineJsOperationRows([
     { owner: "Global", member, operationKind: "call" as const, lane: "global" as const, variant: "int32", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path, argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "bool" as const }, params: [{ ref: "int32" as const }] } },
   ]),
 
+  { owner: "Boolean", member: "toString", operationKind: "call", lane: "boolean", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::boolean_to_string", receiverMode: "value" }, result: { ref: "string" } } },
+  { owner: "Boolean", member: "valueOf", operationKind: "call", lane: "boolean", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::boolean_value_of", receiverMode: "value" }, result: { ref: "bool" } } },
+
   // Date lane.
   { owner: "DateConstructor", member: "parse", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::parse", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
-  { owner: "DateConstructor", member: "UTC", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::utc" }, result: { ref: "float64" }, params: [{ ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }, { ref: "float64" }] } },
+  ...dateUtcRows(),
   { owner: "Date", member: "toJSON", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_json" }, result: { ref: "string" } } },
   { owner: "Date", member: "valueOf", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
   { owner: "DateConstructor", member: "now", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::now" }, result: { ref: "float64" } } },
   { owner: "Date", member: "toISOString", operationKind: "call", lane: "date", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_iso_string" }, result: { ref: "string" } } },
+  { owner: "Date", member: "toUTCString", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_utc_string" }, result: { ref: "string" } } },
   { owner: "Date", member: "getTime", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
+  ...([
+    ["getUTCFullYear", "get_utc_full_year_number"],
+    ["getUTCMonth", "get_utc_month_number"],
+    ["getUTCDate", "get_utc_date_number"],
+    ["getUTCDay", "get_utc_day_number"],
+    ["getUTCHours", "get_utc_hours_number"],
+    ["getUTCMinutes", "get_utc_minutes_number"],
+    ["getUTCSeconds", "get_utc_seconds_number"],
+    ["getUTCMilliseconds", "get_utc_milliseconds_number"],
+  ] as const).map(([member, name]): JsOperationRowData => ({ owner: "Date", member, operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name }, result: { ref: "float64" } } })),
+  ...dateReceiverNumberRows("setTime", ["set_time"]),
+  ...dateReceiverNumberRows("setUTCMilliseconds", ["set_utc_milliseconds"]),
+  ...dateReceiverNumberRows("setUTCSeconds", ["set_utc_seconds", "set_utc_seconds_milliseconds"]),
+  ...dateReceiverNumberRows("setUTCMinutes", ["set_utc_minutes", "set_utc_minutes_seconds", "set_utc_minutes_seconds_milliseconds"]),
+  ...dateReceiverNumberRows("setUTCHours", ["set_utc_hours", "set_utc_hours_minutes", "set_utc_hours_minutes_seconds", "set_utc_hours_minutes_seconds_milliseconds"]),
+  ...dateReceiverNumberRows("setUTCDate", ["set_utc_date"]),
+  ...dateReceiverNumberRows("setUTCMonth", ["set_utc_month", "set_utc_month_date"]),
+  ...dateReceiverNumberRows("setUTCFullYear", ["set_utc_full_year", "set_utc_full_year_month", "set_utc_full_year_month_date"]),
 ]);
 
 interface JsLaneBindings {
@@ -766,9 +878,9 @@ interface JsLaneBindings {
 }
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
-  if (carrier?.kind === "pointer" && carrier.pointee.kind === "target-named" && carrier.pointee.id === rustStringTargetId) {
+  if (carrier?.kind === "reference" && carrier.referent.kind === "target-named" && carrier.referent.id === rustStringTargetId) {
     // Borrowed string parameters (&str) share the string lane.
-    return { lane: "string", bindings: { receiver: carrier.pointee } };
+    return { lane: "string", bindings: { receiver: carrier.referent } };
   }
   if (carrier?.kind === "target-named") {
     if (isRustJsArrayCarrier(carrier)) {
@@ -792,6 +904,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   }
   if (isRustNumericCarrier(carrier)) {
     return { lane: "number", bindings: { receiver: carrier } };
+  }
+  if (isRustBoolCarrier(carrier)) {
+    return { lane: "boolean", bindings: { receiver: carrier } };
   }
   // Static owners have no receiver carrier; the lane comes from the owner row.
   if (carrier === undefined && ownerName === "StringConstructor") {
@@ -1041,6 +1156,8 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
       return { ...carrier, element: materializeInferredCarrier(carrier.element, inferred) };
     case "tuple":
       return { ...carrier, elements: carrier.elements.map((element) => materializeInferredCarrier(element, inferred)) };
+    case "reference":
+      return { ...carrier, referent: materializeInferredCarrier(carrier.referent, inferred) };
     case "pointer":
       return { ...carrier, pointee: materializeInferredCarrier(carrier.pointee, inferred) };
     case "function-pointer":
@@ -1154,7 +1271,11 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     };
   }
   const resultCarrier = resolveCarrierRef(row.shape.result, bindings);
-  if (resultCarrier === undefined) {
+  const sourceResultCarrier = row.shape.sourceResult === undefined
+    ? undefined
+    : resolveCarrierRef(row.shape.sourceResult, bindings);
+  if (resultCarrier === undefined ||
+    (row.shape.sourceResult !== undefined && sourceResultCarrier === undefined)) {
     return undefined;
   }
   const copyReference = row.shape.result.ref === "option-of-map-value" ? bindings.mapValue : bindings.element;
@@ -1171,6 +1292,14 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       operationKind: row.shape.operationKind,
       target: materializeTarget(target, copyReference),
       resultCarrier,
+      ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
+      ...(row.shape.sourceAbsence === undefined
+        ? {}
+        : {
+            sourceAbsenceCarrier: row.shape.sourceAbsence === "undefined"
+              ? rustUndefinedTargetType()
+              : rustNullTargetType(),
+          }),
       ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
       isAsync: false,
       isFallible: row.fallible === true,

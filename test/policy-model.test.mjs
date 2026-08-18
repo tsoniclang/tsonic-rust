@@ -129,6 +129,7 @@ test("assignment support distinguishes direct Rust places from reference-backed 
     kind: "source-field",
     operationId: "source-field",
     storageIndex: 0,
+    valueSemantics: { kind: "stored" },
     resultCarrier: { kind: "source-primitive", name: "int32" },
   };
   const providerField = {

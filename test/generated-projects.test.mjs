@@ -134,6 +134,13 @@ function extend(values: Set<int32>): void {
   values.add(8);
 }
 
+let nullishChecks: int32 = 0;
+
+function observedUndefined(): undefined {
+  nullishChecks += 1;
+  return undefined;
+}
+
 export function main(): void {
   const xs: int32[] = [1, 2, 3];
   let total: int32 = 0;
@@ -194,6 +201,12 @@ export function main(): void {
   check(values.at(-2) !== undefined);
   check(values[1] === undefined);
   check(values[3] !== undefined);
+  check(values[1] === observedUndefined());
+  check(nullishChecks === 1);
+  check(values[1] === values[4]);
+  check(values[1] !== values[3]);
+  check(values[3] === 4);
+  check(values[1] !== 4);
 
   const name: string = "tsonic";
   check(name.length === 6);
@@ -224,6 +237,16 @@ export function main(): void {
 
   const d = new Date(86400000);
   check(d.getTime() === 86400000);
+
+  const projected = { tail: "tail", 10: "ten", 2: "two", "01": "leading" };
+  check(Object.keys(projected).join(",") === "2,10,tail,01");
+  check(Object.values(projected).join(",") === "two,ten,tail,leading");
+  check(Object.entries(projected).length === 4);
+  check(Object.hasOwn(projected, "tail"));
+  check(!Object.hasOwn(projected, "missing"));
+  check(projected.hasOwnProperty("01"));
+  const reordered = { "01": "leading", tail: "tail", 2: "two", 10: "ten" };
+  check(Object.keys(reordered).join(",") === "2,10,01,tail");
 }
 `,
     },
@@ -353,5 +376,42 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const run = validateGeneratedProject("string-parity-bin", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
+test("generated cargo binary proves Unicode and mutable UTC Date parity", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "unicode_date_parity_proof" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+export function main(): void {
+  check("A\\u030a".normalize() === "Å");
+  check("ﬃ".normalize("NFKC") === "ffi");
+  check("value".isWellFormed());
+  check("value".toWellFormed() === "value");
+  check(false.toString() === "false" && true.valueOf());
+
+  const january: int32 = 0;
+  const date = new Date(Date.UTC(2020, january, 31, 23, 59, 58, 900));
+  const alias = date;
+  date.setUTCMonth(1);
+  date.setUTCSeconds(61, 250);
+  check(alias.toISOString() === "2020-03-03T00:00:01.250Z");
+  check(alias.getUTCFullYear() === 2020);
+  check(alias.getUTCMonth() === 2);
+  check(alias.getUTCDay() === 2);
+  check(alias.toUTCString() === "Tue, 03 Mar 2020 00:00:01 GMT");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("unicode-date-parity-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

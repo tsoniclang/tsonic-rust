@@ -13,18 +13,23 @@ import {
   rustFutureTargetType,
   rustSliceRefTargetType,
   rustStringTargetType,
+  rustTargetTypeParameterNames,
 } from "../rust-target-types.js";
 import {
   rustValueConversionContract,
   selectRustSourceValueConversion,
 } from "./value-conversions.js";
 import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../../common/closed-metadata.js";
-import { rustProviderOperationFormContractViolation } from "./operation-form-contract.js";
+import {
+  rustProviderOperationFormAcceptsTargetTypeArguments,
+  rustProviderOperationFormContractViolation,
+} from "./operation-form-contract.js";
 import type { RustErrorBoundary, RustFallibleErrorBoundary } from "./error-boundary.js";
 import {
   isRustErrorBoundary,
   isRustFallibleErrorBoundary,
 } from "./error-boundary.js";
+import { isRustCVariadicArgumentCarrier } from "./c-variadic.js";
 
 export type RustFinalizedOperationKind =
   | "method"
@@ -120,6 +125,7 @@ export interface RustFinalizedOperationAbi {
   readonly sourceArguments: readonly RustFinalizedSourceArgument[];
   readonly targetReceiver: { readonly kind: "none" } | { readonly kind: "input"; readonly input: RustFinalizedSourceInput };
   readonly targetArguments: readonly RustFinalizedTargetInput[];
+  readonly targetTypeArguments: readonly TargetTypeRef[];
   readonly result: RustFinalizedOperationResult;
   readonly effects: {
     readonly invocation: "infallible" | "fallible";
@@ -145,6 +151,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly resultCarrier: TargetTypeRef;
+  readonly targetTypeArguments?: readonly TargetTypeRef[];
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;
   readonly isFallible: boolean;
@@ -167,6 +174,11 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
         new Set(options.compileTimeSourceArgumentIndexes).size !== options.compileTimeSourceArgumentIndexes.length ||
         options.compileTimeSourceArgumentIndexes.some((index) =>
           !Number.isSafeInteger(index) || index < 0 || index >= options.sourceArgumentCarriers.length))) ||
+    (options.targetTypeArguments !== undefined &&
+      (!isDenseDataArray(options.targetTypeArguments) || options.targetTypeArguments.length === 0 ||
+        options.targetTypeArguments.some((carrier) =>
+          !isRustTargetTypeRef(carrier) || rustTargetTypeParameterNames(carrier).length !== 0) ||
+        !rustProviderOperationFormAcceptsTargetTypeArguments(options.form))) ||
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
     (options.isFallible && !isRustFallibleErrorBoundary(options.errorBoundary)) ||
     (!options.isFallible && options.errorBoundary !== undefined) ||
@@ -189,6 +201,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     options.sourceArgumentCarriers,
     runtimeSourceIndexes,
     options.declaredSourceArgumentCarriers,
+    options.form,
   )) {
     return undefined;
   }
@@ -238,6 +251,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     sourceArguments,
     targetReceiver: mapping.targetReceiver,
     targetArguments: mapping.targetArguments,
+    targetTypeArguments: options.targetTypeArguments ?? [],
     result,
     effects: {
       invocation: options.isFallible && !options.isAsync ? "fallible" : "infallible",
@@ -264,6 +278,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     abi.sourceArguments.length,
     abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex),
   ) !== undefined ||
+    (abi.targetTypeArguments.length > 0 &&
+      !rustProviderOperationFormAcceptsTargetTypeArguments(abi.target)) ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
     (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
     !isRustErrorBoundary(abi.effects.errorBoundary) ||
@@ -386,16 +402,20 @@ function isRustFinalizedOperationAbiShape(value: unknown): value is RustFinalize
     "sourceArguments",
     "targetReceiver",
     "targetArguments",
+    "targetTypeArguments",
     "result",
     "effects",
   ]) || !operationKinds.has(value.operationKind) || !isRecord(value.target) ||
-    !Array.isArray(value.sourceArguments) || !Array.isArray(value.targetArguments)) {
+    !Array.isArray(value.sourceArguments) || !Array.isArray(value.targetArguments) ||
+    !Array.isArray(value.targetTypeArguments)) {
     return false;
   }
   if (!isSourceReceiver(value.sourceReceiver) ||
     !value.sourceArguments.every(isSourceArgument) ||
     !isTargetReceiver(value.targetReceiver) ||
     !value.targetArguments.every(isTargetInput) ||
+    !value.targetTypeArguments.every((carrier) =>
+      isRustTargetTypeRef(carrier) && rustTargetTypeParameterNames(carrier).length === 0) ||
     !isOperationResult(value.result) || !isEffects(value.effects)) {
     return false;
   }
@@ -490,6 +510,9 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
     (value.conversion.kind === "raw-pointer-mut-to-const" &&
       hasExactKeys(value.conversion, ["kind", "pointee"]) &&
       isRustTargetTypeRef(value.conversion.pointee)) ||
+    (value.conversion.kind === "copy-from-reference" &&
+      hasExactKeys(value.conversion, ["kind", "target"]) &&
+      isRustTargetTypeRef(value.conversion.target)) ||
     (value.conversion.kind === "source-union-variant" &&
       hasExactKeys(value.conversion, ["kind", "source", "target", "variantName"]) &&
       isRustTargetTypeRef(value.conversion.source) &&
@@ -518,6 +541,8 @@ function isNonOptionValueConversion(value: unknown): boolean {
       typeof value.source === "string" && typeof value.target === "string") ||
     (value.kind === "raw-pointer-mut-to-const" &&
       hasExactKeys(value, ["kind", "pointee"]) && isRustTargetTypeRef(value.pointee)) ||
+    (value.kind === "copy-from-reference" &&
+      hasExactKeys(value, ["kind", "target"]) && isRustTargetTypeRef(value.target)) ||
     (value.kind === "source-union-variant" &&
       hasExactKeys(value, ["kind", "source", "target", "variantName"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
@@ -534,6 +559,9 @@ function isProviderConstant(value: unknown): value is RustProviderConstantArgume
   switch (value.kind) {
     case "integer":
       return hasExactKeys(value, ["kind", "value"]) && Number.isSafeInteger(value.value);
+    case "float64":
+      return hasExactKeys(value, ["kind", "value"]) &&
+        typeof value.value === "number" && Number.isFinite(value.value);
     case "string":
       return hasExactKeys(value, ["kind", "value"]) && typeof value.value === "string";
     case "boolean":
@@ -645,12 +673,40 @@ function finalizeTargetInputs(
     case "marker":
     case "path":
       return sourceArgumentCount === 0 ? { targetReceiver: none, targetArguments: [] } : undefined;
+    case "static": {
+      if (operationKind === "property" && sourceArgumentCount === 0) {
+        return { targetReceiver: none, targetArguments: [] };
+      }
+      const value = operationKind === "property-set" && sourceArgumentCount === 1
+        ? input.argument(0, "value")
+        : undefined;
+      return value === undefined ? undefined : { targetReceiver: none, targetArguments: [value] };
+    }
     case "call": {
       const args = mappedArguments(form.argOrder, form.argModes, form.argConversions);
       return args === undefined ? undefined : {
         targetReceiver: none,
         targetArguments: [...args, ...constants(form.trailingArguments)],
       };
+    }
+    case "call-c-variadic": {
+      const fixed = form.fixedArgumentModes.map((mode, sourceIndex) =>
+        input.argument(sourceIndex, mode));
+      const tail = indexes.slice(form.fixedArgumentModes.length).map((sourceIndex) => {
+        const carrier = input.sourceArgumentCarrier(sourceIndex);
+        return isRustCVariadicArgumentCarrier(carrier)
+          ? input.argument(sourceIndex, "value")
+          : undefined;
+      });
+      return fixed.some((entry) => entry === undefined) || tail.some((entry) => entry === undefined)
+        ? undefined
+        : {
+            targetReceiver: none,
+            targetArguments: [
+              ...fixed as RustFinalizedSourceInput[],
+              ...tail as RustFinalizedSourceInput[],
+            ],
+          };
     }
     case "free-call": {
       const receiver = input.receiver(form.receiverMode);
@@ -677,10 +733,19 @@ function finalizeTargetInputs(
       };
     }
     case "field": {
-      const receiver = input.receiver("ref");
-      return receiver === undefined || sourceArgumentCount !== 0 ? undefined : {
+      const receiver = input.receiver(operationKind === "property-set" ? "mut-ref" : "ref");
+      if (receiver === undefined) {
+        return undefined;
+      }
+      if (operationKind === "property" && sourceArgumentCount === 0) {
+        return { targetReceiver: { kind: "input", input: receiver }, targetArguments: [] };
+      }
+      const value = operationKind === "property-set" && sourceArgumentCount === 1
+        ? input.argument(0, "value")
+        : undefined;
+      return value === undefined ? undefined : {
         targetReceiver: { kind: "input", input: receiver },
-        targetArguments: [],
+        targetArguments: [value],
       };
     }
     case "index": {
@@ -724,6 +789,25 @@ function finalizeTargetInputs(
       const args = mappedArguments(undefined, undefined, undefined);
       return args?.length === 2 ? { targetReceiver: none, targetArguments: args } : undefined;
     }
+    case "trait-call": {
+      const receiver = form.receiverMode === undefined
+        ? undefined
+        : input.receiver(form.receiverMode);
+      const args = mappedArguments(undefined, form.argModes, undefined);
+      return args === undefined || (form.receiverMode !== undefined && receiver === undefined)
+        ? undefined
+        : {
+            targetReceiver: none,
+            targetArguments: [
+              ...(receiver === undefined ? [] : [receiver]),
+              ...args,
+            ],
+          };
+    }
+    case "trait-associated-value":
+      return sourceArgumentCount === 0
+        ? { targetReceiver: none, targetArguments: [] }
+        : undefined;
     case "call-str-slice": {
       const elements = indexes.map((index) => input.argument(index, "ref"));
       if (elements.some((entry) => entry === undefined)) {
@@ -735,9 +819,9 @@ function finalizeTargetInputs(
         return undefined;
       }
       const elementCarrier = closed[0]?.parameterCarrier ?? {
-        kind: "pointer",
-        pointee: stringCarrier,
-        mutability: "const",
+        kind: "reference",
+        referent: stringCarrier,
+        mutable: false,
       } as const;
       return {
         targetReceiver: none,
@@ -762,9 +846,9 @@ function finalizeTargetInputs(
         return undefined;
       }
       const elementCarrier = closed[0]?.parameterCarrier ?? {
-        kind: "pointer",
-        pointee: stringCarrier,
-        mutability: "const",
+        kind: "reference",
+        referent: stringCarrier,
+        mutable: false,
       } as const;
       return {
         targetReceiver: none,
@@ -1042,16 +1126,10 @@ function carrierAfterMode(carrier: TargetTypeRef, mode: RustArgumentMode): Targe
   if (mode === "value") {
     return carrier;
   }
-  if (carrier.kind === "pointer") {
-    if (mode === "mut-ref" && carrier.mutability !== "mut") {
-      return undefined;
-    }
-    return carrier;
-  }
   return {
-    kind: "pointer",
-    pointee: carrier,
-    mutability: mode === "mut-ref" ? "mut" : "const",
+    kind: "reference",
+    referent: carrier,
+    mutable: mode === "mut-ref",
   };
 }
 
@@ -1059,7 +1137,18 @@ function declaredCarriersMatch(
   source: readonly TargetTypeRef[],
   runtimeSourceIndexes: readonly number[],
   declared: readonly (TargetTypeRef | undefined)[] | undefined,
+  form: RustProviderOperationForm,
 ): boolean {
+  if (form.form === "call-c-variadic") {
+    return declared !== undefined && isDenseDataArray(source) &&
+      isDenseDataArray(runtimeSourceIndexes) && isDenseDataArray(declared) &&
+      runtimeSourceIndexes.length === source.length &&
+      runtimeSourceIndexes.every((sourceIndex, index) => sourceIndex === index) &&
+      declared.length === form.fixedArgumentModes.length &&
+      source.length >= declared.length &&
+      declared.every((carrier, index) => carrier === undefined ||
+        rustTargetTypeRefEquals(source[index]!, carrier));
+  }
   return declared === undefined || (isDenseDataArray(source) && isDenseDataArray(runtimeSourceIndexes) &&
     isDenseDataArray(declared) && runtimeSourceIndexes.length === declared.length &&
     declared.every((carrier, index) => carrier === undefined ||

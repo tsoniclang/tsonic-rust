@@ -3,12 +3,10 @@
 Classification of JS/Node lanes reviewed against the C# target surface.
 The machine-checked list lives in docs/parity-lanes.json; every listed
 lane carries exactly one classification — implemented (positive runtime
-proof in the generated Cargo bank), hard-rejected (architecture;
-zero-artifact proof), or blocked by a named contract — and the guard test
-keeps this document and the lane list from drifting. C# lanes without
-Rust rows (Object helpers, Number helpers, bare
-module aliases, Date extras, process and buffer extras) are enumerated in
-the blocked section with the contract each requires.
+proof in the generated Cargo bank), hard-rejected (shared architecture), or
+target-limit (a precisely rejected capability that cannot preserve the source
+contract in the selected closed Rust runtime). The guard test keeps this
+document and the lane list from drifting.
 
 ## Implemented
 
@@ -21,17 +19,20 @@ the blocked section with the contract each requires.
   callbacks receive every declared argument,
   reduce supports both initial-value and first-present-element forms, and one
   identity-preserving `JsArray<T>` carrier represents dense and sparse arrays.
+- Boolean: primitive toString and valueOf.
 - String: length, toUpperCase, toLowerCase, includes, startsWith,
   endsWith, indexOf, lastIndexOf, slice, substring, substr, at, charAt,
   charCodeAt, codePointAt, repeat, padStart, padEnd, trim, trimStart,
   trimEnd, trimLeft, trimRight, toString, valueOf, concat, split, replace,
-  replaceAll, search, and match; String.fromCharCode and
-  String.fromCodePoint; String.matchAll call and fallibility lowering for
-  constant patterns (consuming the returned match list is a blocked lane
-  below). UTF-16 results that Rust strings cannot represent fail closed.
+  replaceAll, search, match, Unicode normalization, isWellFormed, and
+  toWellFormed; String.fromCharCode and
+  String.fromCodePoint; String.matchAll call, fallibility lowering, and result
+  consumption for constant patterns. UTF-16 results that Rust strings cannot
+  represent fail closed.
 - RegExp: constant literals and new RegExp with literal arguments over the
   oracle-proven subset; test, replace, split, search, global match with
-  null coalescing; regexp property reads.
+  null coalescing; regexp property reads; exec/match result consumption and
+  matchAll result consumption through the exact selected match-array carrier.
 - Math: all source-profile constants and functions, including trigonometric,
   hyperbolic, logarithmic, rounding, bit-conversion, variadic hypot/min/max,
   pow, and random operations; operations whose Rust primitives differ from
@@ -50,19 +51,35 @@ the blocked section with the contract each requires.
   Set algebra rows (union, intersection, difference, symmetricDifference,
   isSubsetOf, isSupersetOf, isDisjointFrom) are runtime-proven through the
   active source profile.
-- Date: UTC carrier constructors, now, parse, UTC, getTime, valueOf,
-  toISOString, toJSON, UTC getters.
+- Date: identity-preserving UTC carrier constructors, now, parse, UTC,
+  getTime, valueOf, toISOString, toUTCString, toJSON, UTC getters, and UTC setters
+  with JavaScript overflow and TimeClip behavior.
 - Console: console.log, console.error, console.warn, console.info, and
   console.debug with exact string, number,
   int32, and boolean arguments through one closed `JsValue` slice ABI;
   empty variadic calls pass an explicit empty slice.
 - Node: path, os, fs, fs/promises (async signatures over synchronous file
   operations), process (cwd, exit, value exports, env with null-preserving
-  reads, fallible execPath property), Buffer, URL, URLSearchParams, legacy
+  reads, fallible execPath property, argv0, version, chdir, available and
+  constrained memory, uptime, hrtime, and memoryUsage), Buffer, URL, URLSearchParams, legacy
   url.parse/format with the UrlObject carrier, crypto (randomUUID,
   randomBytes, createHash, createHmac), util (closed string helpers,
   inspect over closed JsValue, format with closed placeholders), and
-  node:assert `ok` with optional string messages.
+  node:assert `ok` with optional string messages. The buffer extras are closed:
+  Buffer copies mutate the
+  selected target, slice/subarray values share backing storage, byte swaps
+  preserve object identity, and the complete C#-visible numeric read/write
+  matrix returns JavaScript numbers through one exact source ABI.
+  The process identity and metrics lane preserves named/default module forms and
+  maps timing tuples and memory fields through closed native carriers. Named and
+  default process stdio stdout/stderr values use exact sink-backed output carriers
+  with string and Buffer writes, descriptor identity, and terminal detection.
+  Canonical `node:*` modules and their Node-compatible bare module aliases resolve to
+  one provider/module/export identity rather than duplicate declaration models.
+- Object.keys/values/entries and Object.hasOwn/hasOwnProperty over exact generated
+  structural object carriers. Integer-index keys use ECMAScript numeric order;
+  remaining keys preserve the exact authored own-property order. Open nominal,
+  spread-ambiguous, and otherwise unproven runtime shapes fail closed.
 - Error model, async/await, callbacks, tuples, fixed arrays, records,
   string-literal unions, discriminated object unions with exact selected
   narrowing evidence, generics, statics — see README.
@@ -76,29 +93,24 @@ the blocked section with the contract each requires.
 - JSON replacer functions and custom toJSON dispatch.
 - Process termination side effects beyond exit(code).
 
-## Blocked by named external contracts
+## Target limits
 
-- localeCompare, locale case conversion, normalization: requires an ICU
-  contract.
-- Local-timezone Date lanes: requires a tzdata contract.
-- streams and fs.watch, event subscriptions: requires stream and event
-  carrier
-  contracts.
-- Fixed-size arrays beyond homogeneous tuples: requires source-core
-  length facts.
-- RegExp exec and non-global match result consumption (the match-result
-  carrier and its member rows exist): requires optional-chaining or
-  option-narrowing lanes for nullable object results.
-- String.matchAll result consumption: requires iterator carrier lanes
-  (the call and fallibility lowering are implemented).
-- Object.keys/values/entries, Object.assign, Object.hasOwn:
-  requires closed-shape reflection rows over the JsValue carrier.
-- Console calls with open or structural object arguments: requires exact
-  closed source-to-JsValue object conversion facts.
-- Date UTC setters and local-time getters and setters: requires
-  date-mutation and tzdata contracts.
-- bare module aliases (fs as an alias of node:fs): requires a
-  module-alias ownership contract.
-- process extras (argv0, hrtime, memoryUsage, stdio) and buffer extras
-  (copy, slice views, swap, typed reads): requires process-runtime and
-  byte-view carrier contracts.
+- `"a".localeCompare("b", "tr")` and locale case conversion cannot run
+  without one selected ICU locale and data version; host-default locale
+  behavior is not deterministic compiler semantics.
+- local-time getters, setters, and locale strings such as `date.setHours(1)`
+  and `date.toLocaleString()` cannot run without one selected timezone and
+  locale-data version; the target does not silently use the build or execution
+  machine's defaults.
+- streams and fs.watch calls such as `watch(path, callback)` cannot preserve
+  cancellation, backpressure, event ordering, and resource lifetimes because
+  the closed Rust Node capability omits that asynchronous scheduler.
+- `Object.assign(target, source)` cannot add fields while preserving the
+  identity of `target`: two different static Rust record layouts cannot be one
+  object without replacing the closed carrier with runtime reflection.
+- `console.log(openObject)` cannot inspect arbitrary values without runtime
+  reflection. Structural cyclic graphs also have no identity-preserving
+  source-to-`JsValue` graph contract, so the target does not snapshot them.
+- `process.stdin.on("data", callback)` cannot preserve Node stream events
+  without the omitted scheduler. `process.stdout.write(text)` and Buffer writes
+  use the exact sink-backed output contract instead.

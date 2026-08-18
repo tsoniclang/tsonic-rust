@@ -16,6 +16,7 @@ import type {
   RustCompilerDependency,
   RustCompilerModuleModel,
   RustCompilerProjectSnapshot,
+  RustCompilerStandardLibrarySnapshot,
 } from "./model.js";
 import { rustCompilerProviderProtocolVersion } from "./model.js";
 import type {
@@ -39,6 +40,7 @@ interface RustCompilerWorkerSession {
 
 export interface RustCompilerWorkerClient {
   snapshot(manifestPath: string): RustCompilerProjectSnapshot;
+  standardSnapshot(): RustCompilerStandardLibrarySnapshot;
   module(options: {
     readonly snapshot: RustCompilerProjectSnapshot;
     readonly dependency: RustCompilerDependency;
@@ -59,6 +61,20 @@ export function createRustCompilerWorkerClient(root = defaultWorkerRoot()): Rust
       });
       if (response.kind !== "snapshot") {
         throw responseError(response);
+      }
+      return response.snapshot;
+    },
+    standardSnapshot(): RustCompilerStandardLibrarySnapshot {
+      const response = request(session, {
+        protocolVersion: rustCompilerProviderProtocolVersion,
+        id: requestId(),
+        kind: "standard-snapshot",
+      });
+      if (response.kind !== "snapshot") {
+        throw responseError(response);
+      }
+      if (response.snapshot.kind !== "standard-library") {
+        throw new Error("Rust compiler-provider worker returned a non-standard snapshot for the standard library.");
       }
       return response.snapshot;
     },

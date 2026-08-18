@@ -67,6 +67,7 @@ export function prepareRustPreconstructionNode(
         const field = matches.length === 1 ? matches[0] : undefined;
         if (
           fact?.kind !== "source-field" ||
+          fact.valueSemantics.kind !== "stored" ||
           selected?.operationKind !== "property" ||
           selected.operationId !== fact.operationId ||
           field === undefined ||

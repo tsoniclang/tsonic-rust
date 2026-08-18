@@ -9,6 +9,11 @@ import {
   rustCallableTargetType,
   rustClosureTargetType,
 } from "../dist/index.js";
+import {
+  collectRustProviderSemanticsFromDefinitions,
+  mergeRustProviderSemantics,
+} from "../dist/source/provider-packages/index.js";
+import { rustNamedTypeCarrierValue } from "../dist/source/rust-target-types.js";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
 
@@ -219,6 +224,73 @@ test("provider operation carriers are closed and renderable", () => {
       item.label,
     );
   }
+});
+
+test("provider carriers distinguish owned vectors from nested unsized slices", () => {
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [{
+        exportId: "@acme/validation::run",
+        operationKind: "method",
+        target: { form: "call", path: "acme_validation::run" },
+        resultCarrier: { kind: "slice", element: int32Carrier },
+      }],
+    })),
+    /bare Rust slice outside a reference, pointer, or target type argument/u,
+  );
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    carrierPaths: { "acme.Box": "alloc::boxed::Box" },
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: {
+        kind: "target-named",
+        id: "acme.Box",
+        typeArguments: [{ kind: "slice", element: int32Carrier }],
+      },
+    }],
+  })));
+});
+
+test("provider carrier metadata canonicalizes after cross-provider composition", () => {
+  const boxCarrier = { kind: "target-named", id: "acme.Box" };
+  const carrierPaths = { "acme.Box": "alloc::boxed::Box" };
+  const carrierTraits = {
+    "acme.Box": {
+      implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+    },
+  };
+  const owner = definition({
+    id: "acme-carrier-owner",
+    displayName: "Acme carrier owner",
+    carrierPaths,
+    carrierTraits,
+    operations: [],
+  });
+  const consumer = definition({
+    id: "acme-carrier-consumer",
+    displayName: "Acme carrier consumer",
+    carrierPaths,
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: boxCarrier,
+    }],
+  });
+
+  const together = collectRustProviderSemanticsFromDefinitions([consumer, owner]);
+  const separately = mergeRustProviderSemantics(
+    collectRustProviderSemanticsFromDefinitions([consumer]),
+    collectRustProviderSemanticsFromDefinitions([owner]),
+  );
+  const togetherCarrier = rustNamedTypeCarrierValue(together.operations[0].resultCarrier);
+  const separateCarrier = rustNamedTypeCarrierValue(separately.operations[0].resultCarrier);
+
+  assert.deepEqual(togetherCarrier?.traits, carrierTraits["acme.Box"]);
+  assert.deepEqual(separateCarrier, togetherCarrier);
 });
 
 test("runtime Callable is a built-in generic carrier and needs no provider-owned path", () => {
@@ -552,6 +624,29 @@ test("operation type parameters are declared exactly when their carriers use the
       typeParameters: ["T"],
     }],
   })));
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: int32Carrier,
+      typeParameters: ["T"],
+      targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+    }],
+  })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [{
+        exportId: "@acme/validation::run",
+        operationKind: "method",
+        target: { form: "path", path: "acme_validation::VALUE" },
+        resultCarrier: int32Carrier,
+        typeParameters: ["T"],
+        targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+      }],
+    })),
+    /targetTypeArguments requires a non-empty native call or method/u,
+  );
 });
 
 test("argument permutations and structured constants fail closed when malformed", () => {
@@ -618,6 +713,25 @@ test("provider operation variants and constants reject malformed runtime metadat
     })),
     /must contain a boolean/u,
   );
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    operations: [operation({
+      form: "call",
+      path: "acme_validation::run",
+      trailingArguments: [{ kind: "float64", value: 0 }],
+    })],
+  })));
+  for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    assert.throws(
+      () => createRustProviderPackage(definition({
+        operations: [operation({
+          form: "call",
+          path: "acme_validation::run",
+          trailingArguments: [{ kind: "float64", value }],
+        })],
+      })),
+      /non-finite number/u,
+    );
+  }
 });
 
 test("generic value-slice forms require closed leading and element carriers", () => {
@@ -905,7 +1019,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
       value: {
         id: "acme.validation.Value",
         path: "acme_validation::Value",
-        traits: { clone: "never", copy: "never" },
+        traits: { implementations: [] },
         typeArguments: [],
       },
     },
@@ -931,14 +1045,22 @@ test("provider type relations remain target-owned and require closed Rust paths"
   assert.throws(
     () => createRustProviderPackage({
       ...valid,
-      carrierTraits: { "acme.validation.Missing": { clone: "always", copy: "never" } },
+      carrierTraits: {
+        "acme.validation.Missing": {
+          implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+        },
+      },
     }),
     /carrier trait contract 'acme\.validation\.Missing' has no rendered carrier path/u,
   );
   assert.throws(
     () => createRustProviderPackage({
       ...valid,
-      carrierTraits: { "acme.validation.Value": { clone: "never", copy: "always" } },
+      carrierTraits: {
+        "acme.validation.Value": {
+          implementations: [{ traitPath: "core::marker::Copy", requirements: [] }],
+        },
+      },
     }),
     /invalid native trait contract/u,
   );
@@ -983,4 +1105,83 @@ test("module ownership and declaration rendering retain exact provider identity"
     providerModuleId: "acme.validation",
     moduleSpecifier: "@acme/validation",
   });
+});
+
+test("provider module aliases retain one canonical provider identity", () => {
+  const canonicalModuleSpecifier = "@acme/validation";
+  const aliasModuleSpecifier = "acme-validation";
+  const valueExport = {
+    id: `${canonicalModuleSpecifier}::Value`,
+    name: "Value",
+    kind: "class",
+    members: [{
+      id: `${canonicalModuleSpecifier}::Value.next`,
+      name: "next",
+      kind: "property",
+      readonly: true,
+      type: {
+        kind: "provider-ref",
+        moduleSpecifier: canonicalModuleSpecifier,
+        exportName: "Value",
+      },
+    }],
+  };
+  const aliased = definition({
+    moduleAliases: [{ moduleSpecifier: aliasModuleSpecifier, canonicalModuleSpecifier }],
+    modules: [{
+      moduleSpecifier: canonicalModuleSpecifier,
+      providerModuleId: "acme.validation",
+      exports: [valueExport],
+    }],
+    operations: [],
+  });
+  const providerPackage = createRustProviderPackage(aliased);
+  assert.deepEqual(providerPackage.moduleOwnership, [
+    {
+      specifierPrefix: canonicalModuleSpecifier,
+      providerId: "tsonic.rust.provider-package.acme-validation.binding",
+    },
+    {
+      specifierPrefix: aliasModuleSpecifier,
+      providerId: "tsonic.rust.provider-package.acme-validation.binding",
+    },
+  ]);
+
+  const provider = createRustProviderPackageSourceProvider(aliased);
+  assert.deepEqual(provider.ownsModule(aliasModuleSpecifier), { kind: "owned" });
+  const resolution = provider.resolveModule(aliasModuleSpecifier);
+  assert.equal(resolution.kind, "virtual");
+  assert.equal(resolution.moduleSpecifier, aliasModuleSpecifier);
+  assert.equal(resolution.providerModuleId, "acme.validation");
+  const model = provider.getDeclarationModel(resolution);
+  assert.equal(model.moduleSpecifier, aliasModuleSpecifier);
+  assert.equal(model.providerModuleId, "acme.validation");
+  assert.deepEqual(model.exports[0].members[0].type, {
+    kind: "provider-ref",
+    moduleSpecifier: aliasModuleSpecifier,
+    exportName: "Value",
+  });
+
+  for (const invalid of [
+    {
+      moduleAliases: [{ moduleSpecifier: "missing", canonicalModuleSpecifier: "@acme/missing" }],
+      pattern: /names unknown canonical module '@acme\/missing'/u,
+    },
+    {
+      moduleAliases: [{ moduleSpecifier: canonicalModuleSpecifier, canonicalModuleSpecifier }],
+      pattern: /conflicts with a declared module or source dependency/u,
+    },
+    {
+      moduleAliases: [
+        { moduleSpecifier: aliasModuleSpecifier, canonicalModuleSpecifier },
+        { moduleSpecifier: aliasModuleSpecifier, canonicalModuleSpecifier },
+      ],
+      pattern: /duplicate module alias 'acme-validation'/u,
+    },
+  ]) {
+    assert.throws(
+      () => createRustProviderPackage(definition({ moduleAliases: invalid.moduleAliases })),
+      invalid.pattern,
+    );
+  }
 });

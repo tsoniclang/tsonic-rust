@@ -16,18 +16,52 @@ import {
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
 const int32 = { kind: "source-primitive", name: "int32" };
-const isize = { kind: "target-named", id: "rust.core.isize" };
+const isize = { kind: "source-primitive", name: "native-int" };
 const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
 const string = { kind: "target-named", id: "rust.std.String" };
 const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
 const unit = { kind: "tuple", elements: [] };
-const usize = { kind: "target-named", id: "rust.core.usize" };
+const usize = { kind: "source-primitive", name: "native-uint" };
+
+test("provider calls retain closed target-only generic arguments", () => {
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: { form: "call", path: "core::mem::size_of" },
+    sourceArgumentCarriers: [],
+    resultCarrier: usize,
+    targetTypeArguments: [int32],
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(abi);
+  assert.deepEqual(abi.targetTypeArguments, [int32]);
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+  assert.equal(finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: { form: "call", path: "core::mem::size_of" },
+    sourceArgumentCarriers: [],
+    resultCarrier: usize,
+    targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+    isAsync: false,
+    isFallible: false,
+  }), undefined);
+  assert.equal(finalizeRustProviderOperationAbi({
+    operationKind: "property",
+    form: { form: "path", path: "acme::VALUE" },
+    sourceArgumentCarriers: [],
+    resultCarrier: int32,
+    targetTypeArguments: [int32],
+    isAsync: false,
+    isFallible: false,
+  }), undefined);
+});
 
 test("provider results preserve exact borrowed-string ownership conversion", () => {
   const borrowedString = {
-    kind: "pointer",
-    pointee: string,
-    mutability: "const",
+    kind: "reference",
+    referent: string,
+    mutable: false,
   };
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "property",
@@ -588,6 +622,7 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
     { ...abi, target: { ...abi.target, argModes: [] } },
     { ...abi, target: { ...abi.target, argOrder: [0, 0] } },
     { ...abi, targetArguments: [{ ...abi.targetArguments[0], source: { kind: "argument", sourceIndex: 7 } }] },
+    { ...abi, targetTypeArguments: [{ kind: "type-parameter", name: "T" }] },
     { ...abi, result: { ...abi.result, unexpected: true } },
   ];
 
@@ -603,7 +638,7 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
   assert.equal(validateRustFinalizedOperationAbi(cyclic), false);
 });
 
-test("operation finalization rejects unsafe constants, incomplete permutations, and invalid mutable references", () => {
+test("operation finalization rejects unsafe constants and incomplete permutations while preserving raw-pointer identity", () => {
   const base = {
     operationKind: "method",
     sourceArgumentCarriers: [int32, int32],
@@ -627,15 +662,22 @@ test("operation finalization rejects unsafe constants, incomplete permutations, 
       trailingArguments: [{ kind: "integer", value: Number.MAX_SAFE_INTEGER + 1 }],
     },
   }), undefined);
-  assert.equal(finalizeRustProviderOperationAbi({
+  const rawPointer = { kind: "pointer", pointee: int32, mutability: "const" };
+  const rawPointerReceiver = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: { form: "receiver-method", name: "write", mutatesReceiver: true },
-    sourceReceiverCarrier: { kind: "pointer", pointee: int32, mutability: "const" },
+    sourceReceiverCarrier: rawPointer,
     sourceArgumentCarriers: [],
     resultCarrier: unit,
     isAsync: false,
     isFallible: false,
-  }), undefined);
+  });
+  assert.ok(rawPointerReceiver);
+  assert.deepEqual(rawPointerReceiver.targetReceiver.input.parameterCarrier, {
+    kind: "reference",
+    referent: rawPointer,
+    mutable: true,
+  });
 });
 
 test("operation forms fail closed for missing discriminant data, unknown variants, and sparse arrays", () => {
@@ -696,6 +738,7 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
   const malformed = [
     { ...abi, sourceArguments: sparse },
     { ...abi, targetArguments: Array(abi.targetArguments.length) },
+    { ...abi, targetTypeArguments: Array(1) },
     { ...abi, target: { ...abi.target, argModes: Array(1) } },
   ];
   for (const candidate of malformed) {
@@ -707,8 +750,11 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
 test("target type references honor optional target-specific payloads and reject malformed children", () => {
   const sparseTypes = Array(1);
   const payloadFree = { kind: "target-specific", target: "rust", name: "source-nullish" };
+  const slice = { kind: "slice", element: int32 };
   assert.equal(isRustTargetTypeRef(payloadFree), true);
   assert.equal(rustTargetTypeRefEquals(payloadFree, { ...payloadFree }), true);
+  assert.equal(isRustTargetTypeRef(slice), true);
+  assert.equal(rustTargetTypeRefEquals(slice, { kind: "slice", element: { ...int32 } }), true);
   const malformed = [
     { kind: "target-named", id: "acme.Type", typeArguments: sparseTypes },
     { kind: "tuple", elements: sparseTypes },
@@ -717,6 +763,8 @@ test("target type references honor optional target-specific payloads and reject 
     { kind: "target-specific", target: "", name: "opaque" },
     { kind: "target-specific", target: "csharp", name: "opaque" },
     { kind: "target-specific", target: "rust", name: "" },
+    { kind: "slice" },
+    { kind: "slice", element: int32, mutable: false },
   ];
   for (const candidate of malformed) {
     assert.equal(isRustTargetTypeRef(candidate), false);

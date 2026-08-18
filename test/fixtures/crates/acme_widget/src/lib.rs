@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::boxed::Box;
+use std::pin::Pin;
 use tsonic_rust_runtime::{TsonicError, TsonicResult};
 
 pub const ANSWER: i32 = 42;
@@ -17,6 +19,11 @@ pub enum StructuredMode {
 
 pub static GLOBAL_COUNT: i32 = 1;
 pub static mut MUTABLE_COUNT: i32 = 1;
+
+pub union NumberBits {
+    pub integer: u32,
+    pub float: f32,
+}
 
 pub enum SimpleMode {
     Off,
@@ -44,6 +51,73 @@ impl<T> Widget<T> {
     pub fn value(&self) -> &T {
         &self.value
     }
+
+    pub fn into_box_value(self: Box<Self>) -> T {
+        self.value
+    }
+
+    pub fn pinned_count(self: Pin<&mut Self>) -> i32 {
+        self.count
+    }
+}
+
+pub trait Family {
+    type Item<T>;
+}
+
+pub fn pass_family_item<F: Family, T>(value: F::Item<T>) -> F::Item<T> {
+    value
+}
+
+pub trait Metric<T> {
+    type Output;
+
+    const UNIT: i32;
+
+    fn measure(&self, scale: T) -> Self::Output;
+
+    fn reset(&mut self, value: T);
+
+    fn from_metric(value: T) -> Self
+    where
+        Self: Sized;
+}
+
+impl<T: Copy> Metric<T> for Widget<T> {
+    type Output = T;
+
+    const UNIT: i32 = 1;
+
+    fn measure(&self, scale: T) -> Self::Output {
+        let _ = &self.value;
+        scale
+    }
+
+    fn reset(&mut self, value: T) {
+        self.value = value;
+    }
+
+    fn from_metric(value: T) -> Self {
+        Self { count: Self::UNIT, value }
+    }
+}
+
+pub trait ConstantSlot {
+    const SLOT: i32;
+}
+
+pub trait MethodSlot {
+    fn SLOT() -> i32;
+}
+
+impl<T> ConstantSlot for Widget<T> {
+    const SLOT: i32 = 1;
+}
+
+impl<T> MethodSlot for Widget<T> {
+    fn SLOT() -> i32 {
+        2
+    }
 }
 
 pub struct CheckedWidget {
@@ -60,8 +134,34 @@ impl CheckedWidget {
     }
 }
 
+pub struct GenericFactory {
+    pub value: i32,
+}
+
+impl GenericFactory {
+    pub fn new<T>(_marker: T) -> Self {
+        Self { value: 27 }
+    }
+}
+
 pub fn double(value: i32) -> i32 {
     value * 2
+}
+
+pub fn borrowed_answer(value: &i32) -> &i32 {
+    value
+}
+
+pub fn borrowed_label() -> &'static str {
+    "widget"
+}
+
+pub fn borrowed_owned_string(value: &String) -> &String {
+    value
+}
+
+pub fn borrowed_slice(values: &[i32]) -> &[i32] {
+    values
 }
 
 pub fn checked_double(value: i32) -> TsonicResult<i32> {
@@ -82,6 +182,21 @@ pub fn foreign_result(value: i32) -> Result<i32, String> {
 
 pub fn identity<T>(value: T) -> T {
     value
+}
+
+pub fn cloned<T: Clone>(value: &T) -> T {
+    value.clone()
+}
+
+pub fn copied<T>(value: T) -> T
+where
+    T: Copy,
+{
+    value
+}
+
+pub fn integer_bits(value: u32) -> NumberBits {
+    NumberBits { integer: value }
 }
 
 pub fn maybe_positive(value: i32) -> Option<i32> {
@@ -113,6 +228,18 @@ static BYTE: u8 = 23;
 
 pub fn byte_ptr() -> *const u8 {
     &BYTE
+}
+
+static INTEGER_FORMAT: &[u8] = b"%d\0";
+
+pub fn integer_format() -> *const i8 {
+    INTEGER_FORMAT.as_ptr().cast()
+}
+
+#[link(name = "c")]
+unsafe extern "C" {
+    #[link_name = "printf"]
+    pub fn variadic_printf(format: *const i8, ...) -> i32;
 }
 
 pub fn mode_code(mode: Mode) -> i32 {

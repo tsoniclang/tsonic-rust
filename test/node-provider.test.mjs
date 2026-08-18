@@ -83,8 +83,8 @@ export function readOffset(bytes: Buffer): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /f64_to_i32\(index \+ 1\.0\)\?/u);
-  assert.match(text, /u8_to_i32\([\s\S]*read_u8/u);
+  assert.match(text, /read_uint8_number\(&bytes, index \+ 1\.0\)/u);
+  assert.match(text, /f64_to_i32\([\s\S]*read_uint8_number/u);
 });
 
 test("node path, filesystem, and crypto overloads lower through exact provider signatures", async () => {

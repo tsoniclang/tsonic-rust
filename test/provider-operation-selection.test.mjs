@@ -124,6 +124,27 @@ test("provider selection requires the exact declaration provider version", () =>
   );
 });
 
+test("public module aliases select the canonical provider operation owner", () => {
+  const selected = row();
+
+  assert.deepEqual(
+    selectRustProviderOperation(
+      [selected],
+      identity({ moduleSpecifier: "store" }),
+      "method",
+    ),
+    { kind: "selected", row: selected },
+  );
+  assert.deepEqual(
+    selectRustProviderOperation(
+      [selected],
+      identity({ moduleSpecifier: "store", providerModuleId: "acme.other" }),
+      "method",
+    ),
+    { kind: "missing" },
+  );
+});
+
 test("selected provider evidence merges only compatible declaration granularity", () => {
   const exportIdentity = identity({ memberId: undefined, memberName: undefined, signatureId: undefined });
   const signatureIdentity = identity({ signatureId: "acme.Store.get(string)" });

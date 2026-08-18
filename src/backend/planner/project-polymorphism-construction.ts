@@ -459,6 +459,10 @@ export function planProjectClassConstructor(
         name: field.targetName,
         value: values.get(field.declaration)!,
       })),
+      ...ownLayer.methodProperties.map((property) => ({
+        name: property.targetName,
+        value: { kind: "none" as const },
+      })),
       ...(() => {
         const marker = rustProjectStateMarker(definition, context);
         return marker === undefined ? [] : [{ name: marker.name, value: marker.value }];

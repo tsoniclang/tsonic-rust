@@ -19,11 +19,11 @@ import {
   projectIdentityImplementations,
 } from "./project-polymorphism-dispatch.js";
 import {
-  planProjectStaticMethods,
   projectClassStateLayers,
   projectStateType,
   rustRcType,
 } from "./project-polymorphism-model.js";
+import { planProjectStaticMethods } from "./declarations-nominal.js";
 import {
   rustProjectDispatchTraitType,
   rustProjectRootName,
@@ -114,6 +114,15 @@ export function planPolymorphicClassDeclaration(
         ...ownLayer.fields.map((field) => ({
           name: field.targetName,
           type: field.type,
+          visibility: "crate" as const,
+        })),
+        ...ownLayer.methodProperties.map((property) => ({
+          name: property.targetName,
+          type: {
+            kind: "named" as const,
+            path: "Option",
+            typeArguments: [property.callableType],
+          },
           visibility: "crate" as const,
         })),
         ...(stateMarker === undefined

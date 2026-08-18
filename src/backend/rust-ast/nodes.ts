@@ -18,7 +18,7 @@ export type RustType =
   | { readonly kind: "reference"; readonly referent: RustType; readonly mutable: boolean }
   | { readonly kind: "raw-pointer"; readonly pointee: RustType; readonly mutable: boolean }
   | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: number }
-  | { readonly kind: "slice-ref"; readonly element: RustType; readonly mutable: boolean }
+  | { readonly kind: "slice"; readonly element: RustType }
   | { readonly kind: "function-pointer"; readonly parameters: readonly RustType[]; readonly result: RustType; readonly abi?: readonly string[]; readonly isUnsafe?: boolean }
   | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
 
@@ -61,7 +61,7 @@ export type RustExpr =
   | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
   | { readonly kind: "call"; readonly path: string; readonly typeArguments?: readonly RustType[]; readonly args: readonly RustExpr[] }
   | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
-  | { readonly kind: "associated-value"; readonly owner: RustType; readonly name: string }
+  | { readonly kind: "associated-value"; readonly owner: RustType; readonly trait?: RustType; readonly name: string }
   | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly typeArguments?: readonly RustType[]; readonly args: readonly RustExpr[] }
   | {
       readonly kind: "method-call";

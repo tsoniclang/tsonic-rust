@@ -1,5 +1,6 @@
 import {
   targetSourceProfileDeclaration,
+  typescriptNoLibUtilityDeclarations,
 } from "@tsonic/target-api";
 import type {
   TargetProviderSourceProfileContext,
@@ -114,24 +115,6 @@ interface AsyncDisposable {
   [Symbol.asyncDispose](): void | PromiseLike<void>;
 }
 
-type Partial<T> = { [P in keyof T]?: T[P] };
-type Required<T> = { [P in keyof T]-?: T[P] };
-type Readonly<T> = { readonly [P in keyof T]: T[P] };
-type Pick<T, K extends keyof T> = { [P in K]: T[P] };
-type Exclude<T, U> = T extends U ? never : T;
-type Extract<T, U> = T extends U ? T : never;
-type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>;
-type Record<K extends keyof any, T> = { [P in K]: T };
-type NonNullable<T> = T & {};
-type Uppercase<S extends string> = intrinsic;
-type Lowercase<S extends string> = intrinsic;
-type Capitalize<S extends string> = intrinsic;
-type Uncapitalize<S extends string> = intrinsic;
-type Parameters<T extends (...args: any) => any> = T extends (...args: infer P) => any ? P : never;
-type ConstructorParameters<T extends abstract new (...args: any) => any> = T extends abstract new (...args: infer P) => any ? P : never;
-type ReturnType<T extends (...args: any) => any> = T extends (...args: any) => infer R ? R : any;
-type InstanceType<T extends abstract new (...args: any) => any> = T extends abstract new (...args: any) => infer R ? R : any;
-type Awaited<T> = T extends null | undefined ? T : T extends Promise<infer V> ? Awaited<V> : T;
 `.trim();
 
 const rustNativeProfileDeclarations = `
@@ -163,6 +146,16 @@ interface ObjectConstructor {
   is(value: unknown, other: unknown): boolean;
 }
 declare var Object: ObjectConstructor;
+
+interface Boolean {
+  toString(): string;
+  valueOf(): boolean;
+}
+interface BooleanConstructor {
+  new (value?: unknown): Boolean;
+  (value?: unknown): boolean;
+}
+declare var Boolean: BooleanConstructor;
 
 interface Number {
   toString(radix?: number): string;
@@ -228,9 +221,13 @@ interface String {
   repeat(count: number): string;
   padStart(maxLength: number, fillString?: string): string;
   padEnd(maxLength: number, fillString?: string): string;
+  normalize(form?: UnicodeNormalizationForm): string;
   toLowerCase(): string;
   toUpperCase(): string;
+  isWellFormed(): boolean;
+  toWellFormed(): string;
 }
+type UnicodeNormalizationForm = "NFC" | "NFD" | "NFKC" | "NFKD";
 interface StringConstructor {
   new (value?: unknown): String;
   (value?: unknown): string;
@@ -380,7 +377,24 @@ declare var Set: SetConstructor;
 interface Date {
   getTime(): number;
   valueOf(): number;
+  getUTCFullYear(): number;
+  getUTCMonth(): number;
+  getUTCDate(): number;
+  getUTCDay(): number;
+  getUTCHours(): number;
+  getUTCMinutes(): number;
+  getUTCSeconds(): number;
+  getUTCMilliseconds(): number;
+  setTime(time: number): number;
+  setUTCMilliseconds(ms: number): number;
+  setUTCSeconds(sec: number, ms?: number): number;
+  setUTCMinutes(min: number, sec?: number, ms?: number): number;
+  setUTCHours(hours: number, min?: number, sec?: number, ms?: number): number;
+  setUTCDate(date: number): number;
+  setUTCMonth(month: number, date?: number): number;
+  setUTCFullYear(year: number, month?: number, date?: number): number;
   toISOString(): string;
+  toUTCString(): string;
   toJSON(): string;
 }
 interface DateConstructor {
@@ -465,12 +479,20 @@ export function rustSourceProfileContributions(
   if (readRustTypescriptCompatibilityMode(context.target) === "compat") {
     return {
       declarations: [
+        targetSourceProfileDeclaration(
+          "typescript-utilities.d.ts",
+          typescriptNoLibUtilityDeclarations,
+        ),
         targetSourceProfileDeclaration("js-globals.d.ts", rustJsSurfaceProfileDeclarations),
       ],
     };
   }
   return {
     declarations: [
+      targetSourceProfileDeclaration(
+        "typescript-utilities.d.ts",
+        typescriptNoLibUtilityDeclarations,
+      ),
       targetSourceProfileDeclaration("rust-globals.d.ts", rustNativeProfileDeclarations),
     ],
   };
@@ -479,6 +501,10 @@ export function rustSourceProfileContributions(
 export function rustJsSurfaceSourceProfileContributions(): TargetSourceProfileContributions {
   return {
     declarations: [
+      targetSourceProfileDeclaration(
+        "typescript-utilities.d.ts",
+        typescriptNoLibUtilityDeclarations,
+      ),
       targetSourceProfileDeclaration("js-globals.d.ts", rustJsSurfaceProfileDeclarations),
     ],
   };

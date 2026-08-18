@@ -13,14 +13,13 @@ import {
   rustNeverTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
-  rustIsizeTargetType,
   rustJsValueTargetType,
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
   rustBorrowedStrTargetType,
   rustStringTargetType,
-  rustUsizeTargetType,
+  substituteRustTargetTypeParameters,
 } from "../rust-target-types.js";
 import type { RustPrimitiveTypeName } from "../../common/rust-syntax.js";
 import { rustNumericPromotionKind } from "../rust-target-semantics/numeric-promotion.js";
@@ -31,8 +30,8 @@ const uint8Carrier = rustSourcePrimitiveTargetType("uint8");
 const uint32Carrier = rustSourcePrimitiveTargetType("uint32");
 const uint64Carrier = rustSourcePrimitiveTargetType("uint64");
 const float64Carrier = rustSourcePrimitiveTargetType("float64");
-const usizeCarrier = rustUsizeTargetType();
-const isizeCarrier = rustIsizeTargetType();
+const usizeCarrier = rustSourcePrimitiveTargetType("native-uint");
+const isizeCarrier = rustSourcePrimitiveTargetType("native-int");
 const stringCarrier = rustStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 
@@ -66,6 +65,9 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
     }
   | {
       readonly lowering: "owned-string-from-borrowed-str";
+    }
+  | {
+      readonly lowering: "copy-from-reference";
     }
 );
 
@@ -159,6 +161,23 @@ export function rustValueConversionContract(
       fallible: false,
     };
   }
+  if (value.kind === "copy-from-reference") {
+    if (!isRustTargetTypeRef(value.target)) {
+      return undefined;
+    }
+    return {
+      category: "ownership",
+      lowering: "copy-from-reference",
+      sourceMode: "value",
+      source: {
+        kind: "reference",
+        referent: value.target,
+        mutable: false,
+      },
+      target: value.target,
+      fallible: false,
+    };
+  }
   if (value.kind === "numeric-promotion") {
     const source = rustSourcePrimitiveTargetType(value.source);
     const target = rustSourcePrimitiveTargetType(value.target);
@@ -245,11 +264,49 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
       ? `numeric-promotion.${value.source}.${value.target}`
       : value.kind === "raw-pointer-mut-to-const"
         ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
+        : value.kind === "copy-from-reference"
+          ? `copy-from-reference.${JSON.stringify(value.target)}`
         : value.kind === "source-union-variant"
           ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`
           : value.kind === "bottom-coercion"
             ? `bottom-coercion.${JSON.stringify(value.target)}`
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
+}
+
+export function substituteRustValueConversion(
+  value: RustValueConversion,
+  substitutions: ReadonlyMap<string, TargetTypeRef>,
+): RustValueConversion {
+  switch (value.kind) {
+    case "copy-from-reference":
+      return Object.freeze({
+        ...value,
+        target: substituteRustTargetTypeParameters(value.target, substitutions),
+      });
+    case "raw-pointer-mut-to-const":
+      return Object.freeze({
+        ...value,
+        pointee: substituteRustTargetTypeParameters(value.pointee, substitutions),
+      });
+    case "source-union-variant":
+    case "bottom-coercion":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetTypeParameters(value.source, substitutions),
+        target: substituteRustTargetTypeParameters(value.target, substitutions),
+      });
+    case "option-map":
+      return Object.freeze({
+        ...value,
+        elementConversion: substituteRustValueConversion(
+          value.elementConversion,
+          substitutions,
+        ) as typeof value.elementConversion,
+      });
+    case "semantic-conversion":
+    case "numeric-promotion":
+      return value;
+  }
 }
 
 export function selectRustSourceValueConversion(

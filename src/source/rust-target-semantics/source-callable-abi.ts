@@ -1,9 +1,11 @@
 import { flowStateFactKey } from "@tsonic/tsts";
 import type { Node } from "@tsonic/tsts";
 import {
+  isRustVecCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
   rustOptionTargetType,
+  rustSliceElementCarrier,
 } from "../rust-target-types.js";
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import type { RustArgumentMode } from "../rust-facts/keys.js";
@@ -36,8 +38,8 @@ export interface RustSourceParameterAbi {
 export function rustSourceParameterContractCarrier(
   abi: RustSourceParameterAbi,
 ): TargetTypeRef {
-  return abi.parameterCarrier.kind === "pointer"
-    ? abi.parameterCarrier.pointee
+  return abi.parameterCarrier.kind === "reference"
+    ? abi.parameterCarrier.referent
     : abi.parameterCarrier;
 }
 
@@ -86,9 +88,9 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           !requiresOwnedValue &&
           parameterOnlyReadsThroughReceiver(parameter, context)
         ? {
-            kind: "pointer" as const,
-            pointee: base,
-            mutability: "const" as const,
+            kind: "reference" as const,
+            referent: base,
+            mutable: false,
           }
         : parameterLaneCarrier;
       const requiredMode = requiredParameterCarrier === undefined
@@ -158,7 +160,7 @@ export function resolveRustContextualParameterAbi(
     ? selectedParameterCarrier
     : form === "default"
       ? rustOptionElementCarrier(selectedParameterCarrier)
-      : selectedParameterCarrier.kind === "pointer"
+      : selectedParameterCarrier.kind === "reference"
         ? authoredCarrier
         : selectedParameterCarrier;
   if (selectedValueCarrier === undefined) {
@@ -193,11 +195,13 @@ function rustParameterModeForCarriers(
   if (rustTargetTypeRefEquals(valueCarrier, parameterCarrier)) {
     return "value";
   }
-  if (parameterCarrier.kind !== "pointer" ||
-    !rustTargetTypeRefEquals(parameterCarrier.pointee, valueCarrier)) {
+  if (parameterCarrier.kind !== "reference" ||
+    !rustTargetTypeRefEquals(parameterCarrier.referent, valueCarrier) &&
+    !(isRustVecCarrier(valueCarrier) &&
+      rustTargetTypeRefEquals(rustSliceElementCarrier(parameterCarrier), valueCarrier.element))) {
     return undefined;
   }
-  return parameterCarrier.mutability === "mut" ? "mut-ref" : "ref";
+  return parameterCarrier.mutable ? "mut-ref" : "ref";
 }
 
 function parameterUsesFlowState(

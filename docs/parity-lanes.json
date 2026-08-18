@@ -749,20 +749,20 @@
   {
     "area": "Object",
     "lane": "Object.keys/values/entries",
-    "classification": "blocked",
-    "contract": "requires closed-shape reflection rows over the JsValue carrier"
+    "classification": "implemented",
+    "proof": "test/generated-projects.test.mjs"
   },
   {
     "area": "Object",
     "lane": "Object.assign",
-    "classification": "blocked",
-    "contract": "requires closed-shape reflection rows over the JsValue carrier"
+    "classification": "target-limit",
+    "reason": "shape-changing assignment cannot preserve one JavaScript object identity across distinct static Rust record layouts without replacing the closed carrier with dynamic reflection"
   },
   {
     "area": "Object",
     "lane": "Object.hasOwn",
-    "classification": "blocked",
-    "contract": "requires closed-shape reflection rows over the JsValue carrier"
+    "classification": "implemented",
+    "proof": "test/generated-projects.test.mjs"
   },
   {
     "area": "Object",
@@ -788,6 +788,17 @@
     "rowMember": "toFixed"
   },
   {
+    "area": "Boolean",
+    "lane": "Boolean primitive toString and valueOf",
+    "classification": "implemented",
+    "rowMember": "valueOf"
+  },
+  {
+    "area": "Boolean",
+    "lane": "Boolean wrapper-object construction",
+    "classification": "hard-rejected"
+  },
+  {
     "area": "console",
     "lane": "console.log/error/warn/info/debug with closed primitive arguments",
     "classification": "implemented",
@@ -796,38 +807,47 @@
   {
     "area": "console",
     "lane": "console methods with open or structural object arguments",
-    "classification": "blocked",
-    "contract": "requires exact closed source-to-JsValue object conversion facts"
+    "classification": "target-limit",
+    "reason": "open values require runtime reflection and structural values require a cycle- and identity-preserving generated object graph contract that the closed Rust value carrier deliberately does not provide"
   },
   {
     "area": "Date",
     "lane": "local-time getters/setters and locale strings",
-    "classification": "blocked",
-    "contract": "requires tzdata and date-mutation contracts"
+    "classification": "target-limit",
+    "reason": "the deterministic Rust runtime has no selected timezone database or locale-data version and does not defer source semantics to machine-dependent host defaults"
   },
   {
     "area": "Date",
     "lane": "UTC setters and remaining string methods",
-    "classification": "blocked",
-    "contract": "requires a date-mutation contract"
+    "classification": "implemented",
+    "rowMember": "toUTCString",
+    "rowFactory": "dateReceiverNumberRows",
+    "proof": "test/generated-projects.test.mjs"
   },
   {
     "area": "String",
-    "lane": "localeCompare, locale case conversion, normalize",
-    "classification": "blocked",
-    "contract": "requires an ICU contract"
+    "lane": "String.normalize and well-formed methods",
+    "classification": "implemented",
+    "rowMember": "normalize",
+    "proof": "test/generated-projects.test.mjs"
+  },
+  {
+    "area": "String",
+    "lane": "localeCompare and locale case conversion",
+    "classification": "target-limit",
+    "reason": "the deterministic Rust runtime has no selected ICU locale, collation options, or locale-data version"
   },
   {
     "area": "RegExp",
     "lane": "exec/match result consumption",
-    "classification": "blocked",
-    "contract": "requires optional-chaining or option-coalesce lanes over object and array carriers"
+    "classification": "implemented",
+    "rowMember": "exec"
   },
   {
     "area": "String",
     "lane": "matchAll result consumption",
-    "classification": "blocked",
-    "contract": "requires iterator carrier lanes"
+    "classification": "implemented",
+    "rowMember": "matchAll"
   },
   {
     "area": "Unions",
@@ -837,8 +857,9 @@
   {
     "area": "Arrays",
     "lane": "fixed-size arrays beyond homogeneous tuples",
-    "classification": "blocked",
-    "contract": "requires source-core length facts"
+    "classification": "implemented",
+    "contract": "exact source-core FixedArray<T, N> facts lower to native [T; N] carriers",
+    "proof": "test/r8-completion.test.mjs"
   },
   {
     "area": "Node",
@@ -848,26 +869,35 @@
   {
     "area": "Node",
     "lane": "bare module aliases (fs vs node:fs)",
-    "classification": "blocked",
-    "contract": "requires a module-alias ownership contract"
+    "classification": "implemented"
   },
   {
     "area": "Node",
     "lane": "streams and fs.watch",
-    "classification": "blocked",
-    "contract": "requires stream and event carrier contracts"
+    "classification": "target-limit",
+    "reason": "Node stream and watch semantics require an asynchronous event, cancellation, backpressure, and resource-lifetime scheduler that is not part of the closed Rust Node capability"
   },
   {
     "area": "Node",
-    "lane": "process extras (argv0, hrtime, memoryUsage, stdio)",
-    "classification": "blocked",
-    "contract": "requires process-runtime carrier contracts"
+    "lane": "process identity and metrics (argv0, hrtime, memoryUsage)",
+    "classification": "implemented"
+  },
+  {
+    "area": "Node",
+    "lane": "process stdio stdout/stderr output",
+    "classification": "implemented",
+    "proof": "test/node-process-parity.test.mjs"
+  },
+  {
+    "area": "Node",
+    "lane": "process stdio stdin and stream events",
+    "classification": "target-limit",
+    "reason": "stdin and stream event semantics require the asynchronous stream scheduler omitted by the closed Rust Node capability; direct stdout and stderr output remains exact"
   },
   {
     "area": "Node",
     "lane": "buffer extras (copy, slice views, swap, typed reads)",
-    "classification": "blocked",
-    "contract": "requires byte-view carrier contracts"
+    "classification": "implemented"
   },
   {
     "area": "Node",

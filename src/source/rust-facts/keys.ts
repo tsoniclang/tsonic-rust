@@ -17,6 +17,7 @@ import type {
   RustErrorBoundary,
   RustFallibleErrorBoundary,
 } from "./error-boundary.js";
+import type { RustProviderTypeParameterRequirement } from "../provider-packages/index.js";
 
 export type {
   RustAssignmentOperator,
@@ -51,6 +52,7 @@ export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
 export type RustProviderConstantArgument =
   | { readonly kind: "integer"; readonly value: number }
+  | { readonly kind: "float64"; readonly value: number }
   | { readonly kind: "string"; readonly value: string }
   | { readonly kind: "boolean"; readonly value: boolean }
   | { readonly kind: "none" };
@@ -93,6 +95,10 @@ export type RustNonOptionValueConversion =
       readonly pointee: TargetTypeRef;
     }
   | {
+      readonly kind: "copy-from-reference";
+      readonly target: TargetTypeRef;
+    }
+  | {
       readonly kind: "source-union-variant";
       readonly source: TargetTypeRef;
       readonly target: TargetTypeRef;
@@ -118,6 +124,11 @@ export type RustProviderOperationForm =
       readonly form: "marker";
     }
   | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argConversions?: readonly (RustValueConversion | undefined)[]; readonly argOrder?: readonly number[]; readonly trailingArguments?: readonly RustProviderConstantArgument[]; readonly chain?: readonly RustProviderChainStep[] }
+  | {
+      readonly form: "call-c-variadic";
+      readonly path: string;
+      readonly fixedArgumentModes: readonly RustArgumentMode[];
+    }
   | {
       // Free function taking all arguments as one &[&str] slice (variadic
       // string APIs like path join).
@@ -180,6 +191,7 @@ export type RustProviderOperationForm =
       }[];
     }
   | { readonly form: "path"; readonly path: string }
+  | { readonly form: "static"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
   | {
       // Static helper lowering to a method on the first argument
@@ -218,6 +230,22 @@ export type RustProviderOperationForm =
       readonly trait: string;
     }
   | {
+      readonly form: "trait-call";
+      readonly owner: TargetTypeRef;
+      readonly traitPath: string;
+      readonly traitTypeArguments: readonly TargetTypeRef[];
+      readonly method: string;
+      readonly receiverMode?: RustArgumentMode;
+      readonly argModes?: readonly RustArgumentMode[];
+    }
+  | {
+      readonly form: "trait-associated-value";
+      readonly owner: TargetTypeRef;
+      readonly traitPath: string;
+      readonly traitTypeArguments: readonly TargetTypeRef[];
+      readonly name: string;
+    }
+  | {
       // Method call on the receiver, with optional zero-argument chain calls
       // and argument passing modes. mutatesReceiver marks &mut self methods;
       // it is row metadata, never derived from method names.
@@ -238,9 +266,13 @@ export interface RustProviderOperationTemplate<
   readonly operationKind: OperationKind;
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
+  readonly sourceResultCarrier?: TargetTypeRef;
+  readonly sourceAbsenceCarrier?: TargetTypeRef;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly typeParameters?: readonly string[];
+  readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
+  readonly targetTypeArguments?: readonly TargetTypeRef[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
@@ -366,7 +398,38 @@ export type RustTargetOperationFact =
       readonly kind: "provider-operation";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
+      readonly sourceResultCarrier?: TargetTypeRef;
+      readonly sourceAbsenceCarrier?: TargetTypeRef;
       readonly abi: RustFinalizedOperationAbiFor<RustProviderFactOperationKind>;
+    }
+  | {
+      readonly kind: "default-value";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "object-shape-projection";
+      readonly operationId: string;
+      readonly projection: "keys" | "values" | "entries" | "has-own";
+      readonly sourceValue: Node;
+      readonly sourceValueOrigin:
+        | { readonly kind: "receiver" }
+        | { readonly kind: "argument"; readonly index: number };
+      readonly sourceValueCarrier: TargetTypeRef;
+      readonly keyExpression?: Node;
+      readonly fields: readonly {
+        readonly sourceName: string;
+        readonly storageIndex: number;
+        readonly valueCarrier: TargetTypeRef;
+        readonly accessor?: {
+          readonly getter: true;
+          readonly setter: boolean;
+        };
+        readonly method?: true;
+        readonly conversion?: RustValueConversion;
+      }[];
+      readonly storage: "project-object" | "object-handle";
+      readonly resultCarrier: TargetTypeRef;
     }
   | {
       readonly kind: "array-literal";
@@ -412,6 +475,14 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly negated: boolean;
       readonly optionOperand: "left" | "right";
+      readonly optionCarrier: TargetTypeRef;
+      readonly nullishCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "option-equality";
+      readonly operationId: string;
+      readonly negated: boolean;
+      readonly optionCarrier: TargetTypeRef;
     }
   | {
       readonly kind: "option-value-equality";
@@ -450,15 +521,43 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "source-field";
       readonly operationId: string;
+      readonly declaration?: Node;
+      readonly accessMode: "read" | "write" | "read-write";
       readonly receiverCarrier: TargetTypeRef;
       readonly storage: "project-object" | "object-handle";
       readonly storageIndex: number;
+      readonly valueSemantics:
+        | { readonly kind: "stored" }
+        | { readonly kind: "accessor"; readonly writable: boolean }
+        | { readonly kind: "method" };
       readonly resultCarrier: TargetTypeRef;
       readonly dispatch?: {
         readonly read: string;
         readonly write: string;
         readonly ownerCarrier: TargetTypeRef;
       };
+    }
+  | {
+      readonly kind: "source-index-signature";
+      readonly operationId: string;
+      readonly receiverCarrier: TargetTypeRef;
+      readonly keyCarrier: TargetTypeRef;
+      readonly storageName: string;
+      readonly writable: boolean;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "source-method-property";
+      readonly operationId: string;
+      readonly declaration: Node;
+      readonly receiverCarrier: TargetTypeRef;
+      readonly callableCarrier: TargetTypeRef;
+      readonly write?: {
+        readonly dispatchSlot: string;
+        readonly ownerCarrier: TargetTypeRef;
+        readonly storageName?: string;
+      };
+      readonly resultCarrier: TargetTypeRef;
     }
   | {
       readonly kind: "source-static-field";
@@ -475,12 +574,17 @@ export type RustTargetOperationFact =
         | { readonly kind: "instance" }
         | { readonly kind: "static"; readonly typeCarrier: TargetTypeRef };
       readonly read?: {
+        readonly declaration: Node;
         readonly method: string;
         readonly resultCarrier: TargetTypeRef;
       };
       readonly write?: {
+        readonly declaration: Node;
         readonly method: string;
         readonly valueCarrier: TargetTypeRef;
+      };
+      readonly dispatch?: {
+        readonly ownerCarrier: TargetTypeRef;
       };
       readonly resultCarrier: TargetTypeRef;
     }
@@ -495,6 +599,10 @@ export type RustTargetOperationFact =
         readonly field?: {
           readonly storage: "project-object" | "object-handle";
           readonly storageIndex: number;
+          readonly valueSemantics:
+            | { readonly kind: "stored" }
+            | { readonly kind: "accessor"; readonly writable: boolean }
+            | { readonly kind: "method" };
         };
       }[];
       readonly resultCarrier: TargetTypeRef;
@@ -522,6 +630,12 @@ export type RustTargetOperationFact =
           }
         | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef }
         | { readonly form: "callable"; readonly carrier: TargetTypeRef }
+        | {
+            readonly form: "structural-method";
+            readonly receiverCarrier: TargetTypeRef;
+            readonly storageIndex: number;
+            readonly callableCarrier: TargetTypeRef;
+          }
         | {
             readonly form: "constructor";
             readonly name: string;
@@ -551,6 +665,13 @@ export type RustTargetOperationFact =
         readonly sourceName: string;
         readonly storageIndex: number;
         readonly carrier: TargetTypeRef;
+        readonly presence: "required" | "optional";
+        readonly readonly: boolean;
+        readonly accessor?: {
+          readonly getter: true;
+          readonly setter: boolean;
+        };
+        readonly method?: true;
       }[];
       readonly contributions: readonly (
         | {
@@ -566,6 +687,20 @@ export type RustTargetOperationFact =
             readonly contractDeclarations: readonly Node[];
           }
         | {
+            readonly kind: "structural-method";
+            readonly property: Node;
+            readonly expression: Node;
+            readonly sourceName: string;
+            readonly targetStorageIndex: number;
+          }
+        | {
+            readonly kind: "accessor";
+            readonly property: Node;
+            readonly sourceName: string;
+            readonly targetStorageIndex: number;
+            readonly role: "get" | "set";
+          }
+        | {
             readonly kind: "spread";
             readonly property: Node;
             readonly expression: Node;
@@ -573,10 +708,43 @@ export type RustTargetOperationFact =
             readonly sourceCarrier: TargetTypeRef;
             readonly fields: readonly {
               readonly sourceName: string;
-              readonly sourceStorageIndex: number;
-              readonly targetStorageIndex: number;
-              readonly carrier: TargetTypeRef;
+            readonly sourceStorageIndex: number;
+            readonly targetStorageIndex: number;
+            readonly carrier: TargetTypeRef;
+            readonly accessor?: {
+              readonly getter: true;
+              readonly setter: boolean;
+            };
+            readonly method?: true;
             }[];
+            readonly methods: readonly {
+              readonly contractDeclaration: Node;
+              readonly sourceDeclaration: Node;
+              readonly callableCarrier: TargetTypeRef;
+            }[];
+          }
+      )[];
+    }
+  | {
+      readonly kind: "record-index-literal";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly keyCarrier: TargetTypeRef;
+      readonly valueCarrier: TargetTypeRef;
+      readonly storageName: string;
+      readonly contributions: readonly (
+        | {
+            readonly kind: "property";
+            readonly property: Node;
+            readonly sourceName: string;
+            readonly expression: Node;
+          }
+        | {
+            readonly kind: "spread";
+            readonly property: Node;
+            readonly expression: Node;
+            readonly sourceCarrier: TargetTypeRef;
+            readonly sourceStorageName: string;
           }
       )[];
     }
@@ -714,6 +882,8 @@ export type RustTypedLocationPlan = RustTypedLocationPlanBase & (
 export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact): TargetTypeRef | undefined {
   switch (fact.kind) {
     case "provider-operation":
+    case "default-value":
+    case "object-shape-projection":
     case "operator-token":
     case "operator-call":
     case "string-concat":
@@ -722,12 +892,15 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "void-expression":
     case "array-literal":
     case "source-field":
+    case "source-index-signature":
+    case "source-method-property":
     case "source-static-field":
     case "source-accessor":
     case "source-union-field":
     case "source-call":
     case "source-enum-member":
     case "record-literal":
+    case "record-index-literal":
     case "tuple-literal":
     case "tuple-index":
     case "await-op":
@@ -745,6 +918,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "iteration":
       return fact.elementCarrier;
     case "option-check":
+    case "option-equality":
     case "option-value-equality":
       return { kind: "source-primitive", name: "bool" };
     default:
@@ -1003,6 +1177,10 @@ export type RustBindingProjection =
       readonly kind: "object-field";
       readonly storage: "project-object" | "object-handle";
       readonly storageIndex: number;
+      readonly accessor?: {
+        readonly getter: true;
+        readonly setter: boolean;
+      };
     }
   | {
       readonly kind: "object-rest";
@@ -1011,6 +1189,10 @@ export type RustBindingProjection =
         readonly sourceStorageIndex: number;
         readonly targetStorageIndex: number;
         readonly carrier: TargetTypeRef;
+        readonly accessor?: {
+          readonly getter: true;
+          readonly setter: boolean;
+        };
       }[];
     }
   | { readonly kind: "tuple-element"; readonly index: number }

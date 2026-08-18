@@ -7,9 +7,12 @@ import {
   supportedRustdocFormatVersion,
 } from "./model.js";
 import type {
+  RustCompilerCargoProjectSnapshot,
   RustCompilerDependency,
+  RustCompilerMetadataArtifact,
   RustCompilerPackageSource,
   RustCompilerProjectSnapshot,
+  RustCompilerStandardLibrarySnapshot,
 } from "./model.js";
 
 const sourcePackageFileLimit = 100_000;
@@ -20,6 +23,8 @@ const sourcePackageLimit = 4_096;
 const commandBufferLimit = 256 * 1024 * 1024;
 const metadataTimeoutMilliseconds = 120_000;
 const excludedDirectories = new Set([".git", ".temp", "node_modules", "target"]);
+const standardLibraryCrates = Object.freeze(["alloc", "core", "std"]);
+const standardMetadataArtifactLimit = 256;
 
 interface CargoMetadata {
   readonly packages: readonly CargoPackage[];
@@ -46,7 +51,7 @@ interface CargoResolveNode {
   readonly features: readonly string[];
 }
 
-export function createRustCompilerProjectSnapshot(manifestPath: string): RustCompilerProjectSnapshot {
+export function createRustCompilerProjectSnapshot(manifestPath: string): RustCompilerCargoProjectSnapshot {
   const canonicalManifestPath = realpathSync(resolve(manifestPath));
   const metadata = readCargoMetadata(canonicalManifestPath);
   if (metadata.resolve === null) {
@@ -120,6 +125,7 @@ export function createRustCompilerProjectSnapshot(manifestPath: string): RustCom
     packageSources,
   })).digest("hex");
   return Object.freeze({
+    kind: "cargo-project",
     protocolVersion: rustCompilerProviderProtocolVersion,
     manifestPath: canonicalManifestPath,
     rootPackageId: rootPackage.id,
@@ -128,6 +134,140 @@ export function createRustCompilerProjectSnapshot(manifestPath: string): RustCom
     packageSources,
     digest,
   });
+}
+
+export function createRustCompilerStandardLibrarySnapshot(): RustCompilerStandardLibrarySnapshot {
+  const rustcVerboseVersion = runCommand("rustc", ["-vV"], process.cwd());
+  const sysroot = realpathSync(runCommand("rustc", ["--print", "sysroot"], process.cwd()).trim());
+  const targetTriple = runCommand("rustc", ["--print", "host-tuple"], process.cwd()).trim();
+  const targetLibraryDirectory = realpathSync(
+    runCommand("rustc", ["--print", "target-libdir"], process.cwd()).trim(),
+  );
+  const metadataArtifacts = snapshotStandardMetadataArtifacts(targetLibraryDirectory);
+  const manifestPath = realpathSync(join(sysroot, "lib", "rustlib", "src", "rust", "library", "std", "Cargo.toml"));
+  const metadata = readCargoMetadata(manifestPath, {
+    locked: true,
+    offline: true,
+    rustcBootstrap: true,
+    noDependencies: true,
+  });
+  const rootPackage = selectRootPackage(metadata, manifestPath);
+  if (rootPackage.name !== "std") {
+    throw new Error(`Installed Rust standard-library manifest resolves root package '${rootPackage.name}', expected 'std'.`);
+  }
+  const packageById = new Map(metadata.packages.map((pkg) => [pkg.id, pkg]));
+  const selectedPackages = standardLibraryCrates.map((name) => {
+    const candidates = metadata.packages.filter((pkg) => pkg.name === name);
+    if (candidates.length !== 1) {
+      throw new Error(`Installed Rust standard-library graph must contain exactly one '${name}' package; found ${candidates.length}.`);
+    }
+    return candidates[0]!;
+  });
+  const closureIdsByPackage = new Map(selectedPackages.map((pkg) => [
+    pkg.id,
+    Object.freeze([pkg.id]),
+  ]));
+  const sourcePackageIds = new Set([...closureIdsByPackage.values()].flat());
+  if (sourcePackageIds.size > sourcePackageLimit) {
+    throw new Error(`Rust standard-library source snapshot exceeds ${sourcePackageLimit} resolved packages.`);
+  }
+  const packageSources = snapshotPackageSources(sourcePackageIds, packageById);
+  const packageSourceById = new Map(packageSources.map((source) => [source.packageId, source]));
+  const dependencies = selectedPackages.map((pkg): RustCompilerDependency => {
+    const source = packageSourceById.get(pkg.id);
+    if (source === undefined) {
+      throw new Error(`Rust standard-library package '${pkg.name}' has no exact source snapshot.`);
+    }
+    const libraryTarget = selectLibraryTarget(pkg, pkg.name);
+    return Object.freeze({
+      alias: pkg.name,
+      packageId: pkg.id,
+      packageName: pkg.name,
+      packageVersion: pkg.version,
+      crateName: libraryTarget.name,
+      targetCrateName: libraryTarget.name,
+      manifestPath: realpathSync(resolve(pkg.manifest_path)),
+      sourceRoot: source.sourceRoot,
+      sourceDigest: source.sourceDigest,
+      closurePackageIds: closureIdsByPackage.get(pkg.id)!,
+      features: Object.freeze([]),
+    });
+  }).sort((left, right) => compareText(left.alias, right.alias));
+  const compiler = Object.freeze({
+    rustcVerboseVersion,
+    rustdocFormatVersion: supportedRustdocFormatVersion,
+  });
+  const digest = createHash("sha256").update(JSON.stringify({
+    kind: "standard-library",
+    manifestPath,
+    rootPackageId: rootPackage.id,
+    compiler,
+    dependencies,
+    packageSources,
+    targetTriple,
+    targetLibraryDirectory,
+    metadataArtifacts,
+  })).digest("hex");
+  return Object.freeze({
+    kind: "standard-library",
+    protocolVersion: rustCompilerProviderProtocolVersion,
+    manifestPath,
+    rootPackageId: rootPackage.id,
+    compiler,
+    dependencies: Object.freeze(dependencies),
+    packageSources,
+    targetTriple,
+    targetLibraryDirectory,
+    metadataArtifacts,
+    digest,
+  });
+}
+
+export function verifyRustCompilerStandardLibraryMetadata(
+  snapshot: RustCompilerStandardLibrarySnapshot,
+): void {
+  for (const artifact of snapshot.metadataArtifacts) {
+    const stat = statSync(artifact.path);
+    if (stat.size !== artifact.byteLength || stat.mtimeMs !== artifact.modifiedMilliseconds) {
+      throw new Error(
+        `Rust standard-library metadata artifact '${artifact.path}' changed after the compiler-provider snapshot was created.`,
+      );
+    }
+  }
+}
+
+function snapshotStandardMetadataArtifacts(
+  targetLibraryDirectory: string,
+): readonly RustCompilerMetadataArtifact[] {
+  const files = readdirSync(targetLibraryDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^lib[A-Za-z0-9_]+-[0-9a-f]+\.rmeta$/u.test(entry.name))
+    .map((entry) => entry.name)
+    .sort(compareText);
+  if (files.length === 0 || files.length > standardMetadataArtifactLimit) {
+    throw new Error(
+      `Installed Rust target library exposes ${files.length} metadata artifacts; expected 1-${standardMetadataArtifactLimit}.`,
+    );
+  }
+  const names = new Set<string>();
+  return Object.freeze(files.map((name): RustCompilerMetadataArtifact => {
+    const match = /^lib([A-Za-z0-9_]+)-[0-9a-f]+\.rmeta$/u.exec(name);
+    const crateName = match?.[1];
+    if (crateName === undefined || names.has(crateName)) {
+      throw new Error(
+        `Installed Rust target library has no unique metadata artifact identity for '${name}'.`,
+      );
+    }
+    names.add(crateName);
+    const path = realpathSync(join(targetLibraryDirectory, name));
+    const stat = statSync(path);
+    return Object.freeze({
+      crateName,
+      path,
+      byteLength: stat.size,
+      modifiedMilliseconds: stat.mtimeMs,
+      digest: createHash("sha256").update(readFileSync(path)).digest("hex"),
+    });
+  }));
 }
 
 export function verifyRustCompilerDependencySource(
@@ -150,20 +290,48 @@ export function verifyRustCompilerDependencySource(
   }
 }
 
-function readCargoMetadata(manifestPath: string): CargoMetadata {
-  const stdout = runCommand("cargo", [
+function readCargoMetadata(
+  manifestPath: string,
+  options: {
+    readonly locked?: boolean;
+    readonly offline?: boolean;
+    readonly rustcBootstrap?: boolean;
+    readonly noDependencies?: boolean;
+  } = {},
+): CargoMetadata {
+  const args = [
     "metadata",
     "--manifest-path",
     manifestPath,
     "--format-version",
     "1",
-  ], dirname(manifestPath));
+    ...(options.locked === true ? ["--locked"] : []),
+    ...(options.offline === true ? ["--offline"] : []),
+    ...(options.noDependencies === true ? ["--no-deps"] : []),
+  ];
+  const stdout = runCommand("cargo", args, dirname(manifestPath), options.rustcBootstrap === true
+    ? { RUSTC_BOOTSTRAP: "1" }
+    : undefined);
   const value = JSON.parse(stdout) as unknown;
-  if (!isRecord(value) || !Array.isArray(value.packages) || !isRecord(value.resolve) ||
-    !Array.isArray(value.resolve.nodes)) {
+  const validResolve = isRecord(value) && (value.resolve === null ||
+    isRecord(value.resolve) && Array.isArray(value.resolve.nodes));
+  if (!isRecord(value) || !Array.isArray(value.packages) || !validResolve ||
+    (options.noDependencies !== true && value.resolve === null)) {
     throw new Error(`Cargo emitted an invalid metadata document for '${manifestPath}'.`);
   }
   return value as unknown as CargoMetadata;
+}
+
+function selectLibraryTarget(
+  pkg: CargoPackage,
+  dependencyName: string,
+): CargoPackage["targets"][number] {
+  const libraryTargets = pkg.targets.filter((target) =>
+    target.kind.some((kind) => kind === "lib" || kind === "rlib" || kind === "dylib"));
+  if (libraryTargets.length !== 1) {
+    throw new Error(`Cargo dependency '${dependencyName}' must resolve to exactly one library target; found ${libraryTargets.length}.`);
+  }
+  return libraryTargets[0]!;
 }
 
 function selectRootPackage(metadata: CargoMetadata, manifestPath: string): CargoPackage {
@@ -275,10 +443,16 @@ function digestSourceTree(root: string, budget: SourceSnapshotBudget): string {
   }
 }
 
-function runCommand(command: string, args: readonly string[], cwd: string): string {
+function runCommand(
+  command: string,
+  args: readonly string[],
+  cwd: string,
+  environment?: Readonly<Record<string, string>>,
+): string {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
+    env: environment === undefined ? process.env : { ...process.env, ...environment },
     maxBuffer: commandBufferLimit,
     timeout: metadataTimeoutMilliseconds,
     killSignal: "SIGKILL",

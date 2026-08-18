@@ -11,7 +11,13 @@ import type { RustPlanContext } from "./plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "./render-types.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../source/rust-facts/keys.js";
 import { requireRustCarrierRequirements } from "./generic-requirements.js";
-import { planRustCallableGenerics } from "./callable-generics.js";
+import {
+  planRustCallableGenerics,
+  rustCallableSpecialization,
+} from "./callable-generics.js";
+import type {
+  RustSourceCallableSpecializationVariant,
+} from "../../source/rust-target-semantics/source-callable-specializations.js";
 import {
   publishRustSourceCallableContract,
 } from "./source-callable-contracts.js";
@@ -32,13 +38,39 @@ import { applyFallibleShape } from "./fallible-shape.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "./block-flow.js";
 
-export function planFunctionDeclaration(node: Node, outerContext: RustPlanContext): RustItem | undefined {
-  return planRustFunctionItem({
-    callableDeclaration: node,
-    nameDeclaration: node,
-    name: outerContext.input.names.functionNameForDeclaration(node),
-    exported: outerContext.input.ast.hasModifierKind(node, "export"),
-  }, outerContext);
+export function planFunctionDeclarations(
+  node: Node,
+  outerContext: RustPlanContext,
+): readonly RustItem[] | undefined {
+  const specializations = outerContext.input.sourceCallableSpecializations;
+  if (!specializations.requiresSpecialization(node)) {
+    const item = planRustFunctionItem({
+      callableDeclaration: node,
+      nameDeclaration: node,
+      name: outerContext.input.names.functionNameForDeclaration(node),
+      exported: outerContext.input.ast.hasModifierKind(node, "export"),
+    }, outerContext);
+    return item === undefined ? undefined : Object.freeze([item]);
+  }
+  const variants = specializations.variantsForCallable(node);
+  if (variants.length === 0) {
+    return undefined;
+  }
+  const items: RustItem[] = [];
+  for (const variant of variants) {
+    const item = planRustFunctionItem({
+      callableDeclaration: node,
+      nameDeclaration: node,
+      name: variant.targetName,
+      exported: false,
+      specialization: variant,
+    }, outerContext);
+    if (item === undefined) {
+      return undefined;
+    }
+    items.push(item);
+  }
+  return Object.freeze(items);
 }
 
 export function planNativeModuleFunction(
@@ -62,6 +94,7 @@ function planRustFunctionItem(
     readonly nameDeclaration: Node;
     readonly name?: string;
     readonly exported: boolean;
+    readonly specialization?: RustSourceCallableSpecializationVariant;
   },
   outerContext: RustPlanContext,
 ): RustItem | undefined {
@@ -100,7 +133,21 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const genericPlan = planRustCallableGenerics(node, context);
+  const specialization = source.specialization === undefined
+    ? undefined
+    : rustCallableSpecialization(
+        source.specialization.sourceTypeParameterNames,
+        source.specialization.targetTypeArguments,
+      );
+  if (source.specialization !== undefined && specialization === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.callable-specialization",
+      "Callable specialization does not match its exact source type-parameter arity.",
+    ));
+    return undefined;
+  }
+  const genericPlan = planRustCallableGenerics(node, context, specialization);
   if (genericPlan === undefined) {
     return undefined;
   }
@@ -259,7 +306,12 @@ function planRustFunctionItem(
         }],
       },
     };
-    return publishRustSourceCallableContract(node, item, context) ? item : undefined;
+    return publishRustSourceCallableContract(
+      node,
+      item,
+      context,
+      source.specialization?.targetTypeArguments,
+    ) ? item : undefined;
   }
   if (!isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -296,7 +348,12 @@ function planRustFunctionItem(
       ),
     },
   };
-  return publishRustSourceCallableContract(node, item, context)
+  return publishRustSourceCallableContract(
+    node,
+    item,
+    context,
+    source.specialization?.targetTypeArguments,
+  )
     ? item
     : undefined;
 }

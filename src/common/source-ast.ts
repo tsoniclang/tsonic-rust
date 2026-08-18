@@ -270,6 +270,8 @@ export function Node_Type(ast: AstReader, node: Node | undefined): Node | undefi
       return ast.as.AsCallSignatureDeclaration(node)?.Type;
     case "KindConstructSignature":
       return ast.as.AsConstructSignatureDeclaration(node)?.Type;
+    case "KindIndexSignature":
+      return ast.as.AsIndexSignatureDeclaration(node)?.Type;
     case "KindConstructor":
       return ast.as.AsConstructorDeclaration(node)?.Type;
     case "KindGetAccessor":
