@@ -363,7 +363,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   const shapes = artifactText(result, "src/shapes.rs");
-  assert.match(source, /let record_method = Some\(rt::Callable/u);
+  assert.match(source, /let record_method = Some\(\s*rt::Callable/u);
   assert.match(source, /\.with\(\|state\| state\.read\.clone\(\)\)/u);
   assert.match(source, /\.as_ref\(\)\s*\.map\(\|optional_receiver\|/u);
   assert.match(shapes, /Option<rt::Callable/u);

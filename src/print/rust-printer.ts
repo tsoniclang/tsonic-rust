@@ -23,6 +23,8 @@ const rustSingleLineConditionalWidth = 50;
 const rustStructLiteralWidth = 18;
 const rustNestedCallWidth = 60;
 const rustNestedClosureOpeningWidth = 80;
+const rustFallibleTupleWidth = 80;
+const rustMatchArmWidth = 80;
 const rustInlineFormatArgumentWidth = 40;
 const rustMethodChainWidth = 60;
 const rustNestedMethodFirstSegmentWidth = 64;
@@ -2445,7 +2447,7 @@ function printRustExprFitted(
         !rustExpressionContainsExpandedStructLiteral(expression) &&
         !(expression.kind === "tuple-literal" &&
           rustExpressionContainsTry(expression) &&
-          column + flat.length > rustNestedCallWidth) &&
+          column + flat.length > rustFallibleTupleWidth) &&
         renderedFits(flat, column)) {
         return flat;
       }
@@ -3456,10 +3458,13 @@ function printFittedCall(
       : undefined
     : undefined;
   if (soleNestedClosureCall !== undefined) {
+    const nestedClosure = soleNestedClosureCall.args[0]!;
     const nestedCallable = soleNestedClosureCall.kind === "call"
       ? soleNestedClosureCall.path
       : `${printRustAssociatedOwner(soleNestedClosureCall.owner)}::${soleNestedClosureCall.method}`;
-    if (column + callable.length + nestedCallable.length + 2 >
+    if (callable.length <= rustInlineFieldReceiverWidth &&
+      !rustExpressionContainsStatementBlock(nestedClosure) &&
+      column + callable.length + nestedCallable.length + 2 >
       rustNestedClosureOpeningWidth) {
       const argumentIndent = indentText(depth + 1);
       const rendered = printRustExprFitted(
@@ -4540,7 +4545,7 @@ function rustTransparentInvocationOperand(expression: RustExpr): RustExpr {
 function rustFormatArgumentIsAtomic(expression: RustExpr): boolean {
   return expression.kind === "int-literal" || expression.kind === "float-literal" ||
     expression.kind === "bool-literal" || expression.kind === "none" ||
-    expression.kind === "string-literal" || expression.kind === "str-literal" ||
+    expression.kind === "str-literal" ||
     expression.kind === "path" || expression.kind === "associated-value";
 }
 
@@ -4625,7 +4630,9 @@ function printRustMatchExpression(
     }
     const prefix = `${armIndent}${pattern} => `;
     const flatValue = printRustExpr(arm.expression);
-    if (flatValue.includes("\n") || !renderedFits(`${prefix}${flatValue},`, 0)) {
+    const flatArm = `${pattern} => ${flatValue},`;
+    if (flatValue.includes("\n") || flatArm.length > rustMatchArmWidth ||
+      !renderedFits(`${prefix}${flatValue},`, 0)) {
       if (arm.expression.kind === "call" || arm.expression.kind === "associated-call" ||
         arm.expression.kind === "invoke" ||
         arm.expression.kind === "match" ||

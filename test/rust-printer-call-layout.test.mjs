@@ -956,6 +956,57 @@ test("direct fallible match arms stay in rustfmt expression form", () => {
   assert.doesNotMatch(source, /Command::Throw\(error\) => \{/u);
 });
 
+test("long direct fallible match arms use rustfmt block form", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "match",
+            expression: { kind: "path", path: "selected" },
+            arms: [{
+              pattern: {
+                kind: "tuple-variant",
+                path: "Some",
+                elements: [{ kind: "binding", name: "property_getter_2" }],
+              },
+              expression: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "property_getter_2" },
+                  method: "call",
+                  args: [{
+                    kind: "tuple-literal",
+                    elements: [{
+                      kind: "method-call",
+                      receiver: { kind: "path", path: "property_receiver_2" },
+                      method: "clone",
+                      args: [],
+                    }],
+                  }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /Some\(property_getter_2\) => \{\n {12}property_getter_2\.call\(\(property_receiver_2\.clone\(\),\)\)\?\n {8}\}/u,
+  );
+});
+
 test("calls expand matches whose scrutinee contains a statement block", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -2034,5 +2085,57 @@ test("long nested callable construction gives the outer call its own break", () 
   assert.match(
     source,
     /call_detached_format\(\n {8}rt::Callable::<\(i32, String\), rt::TsonicResult<String>>::new\(/u,
+  );
+});
+
+test("nested callable construction keeps block callbacks attached to the outer call", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "invoke",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "tsonic_rust_node::timers::set_timeout_callable",
+            args: [{
+              kind: "associated-call",
+              owner: {
+                kind: "named",
+                path: "rt::Callable",
+                typeArguments: [
+                  { kind: "unit" },
+                  { kind: "named", path: "rt::TsonicResult<()>" },
+                ],
+              },
+              method: "new",
+              args: [{
+                kind: "closure-block",
+                params: [{ name: "_callable_arguments", byRefCopy: false }],
+                body: {
+                  statements: [{
+                    kind: "tail",
+                    expr: {
+                      kind: "call",
+                      path: "Ok::<_, rt::TsonicError>",
+                      args: [{ kind: "path", path: "()" }],
+                    },
+                  }],
+                },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /set_timeout_callable\(rt::Callable::<\(\), rt::TsonicResult<\(\)>>::new\(\n {8}\|_callable_arguments\| \{/u,
   );
 });
