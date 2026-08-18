@@ -47,6 +47,7 @@ import {
 import { rustTargetTypeRefEquals } from "../../policy/equality.js";
 import { rustSourceTypeCarrierValue } from "../rust-target-types.js";
 import {
+  type RustNumericBinaryPromotion,
   rustNumericPromotionConversion,
   selectRustNumericBinaryPromotion,
 } from "./numeric-promotion.js";
@@ -187,6 +188,22 @@ function isRustSourceNumberCarrier(carrier: TargetTypeRef): boolean {
   return carrier.kind === "source-primitive" && carrier.name === "float64";
 }
 
+function selectRustSourceNumberOperands(
+  left: TargetTypeRef,
+  right: TargetTypeRef,
+): RustNumericBinaryPromotion | undefined {
+  if (
+    !isRustSourceNumberCarrier(left) &&
+    !isRustSourceNumberCarrier(right)
+  ) {
+    return undefined;
+  }
+  const promotion = selectRustNumericBinaryPromotion(left, right);
+  return promotion !== undefined && isRustSourceNumberCarrier(promotion.carrier)
+    ? promotion
+    : undefined;
+}
+
 function selectRustIntegralShiftPromotion(
   carrier: TargetTypeRef,
 ): { readonly carrier: TargetTypeRef; readonly conversion?: RustValueConversion } | undefined {
@@ -318,14 +335,17 @@ export function selectRustBinaryOperator(
   }
   const bitwise = bitwiseTokens[operatorKindName];
   if (bitwise !== undefined) {
-    if (isRustSourceNumberCarrier(left) && isRustSourceNumberCarrier(right)) {
+    const sourceNumberOperands = selectRustSourceNumberOperands(left, right);
+    if (sourceNumberOperands !== undefined) {
       return {
         kind: "operator-call",
         rustOperator: bitwise,
-        resultCarrier: rustSourcePrimitiveTargetType("float64"),
+        resultCarrier: sourceNumberOperands.carrier,
         path: sourceNumberBitwisePaths[bitwise]!,
         fallible: false,
         operandModes: ["value", "value"],
+        leftConversion: sourceNumberOperands.leftConversion,
+        rightConversion: sourceNumberOperands.rightConversion,
       };
     }
     const promotion = selectRustNumericBinaryPromotion(left, right);
@@ -341,14 +361,17 @@ export function selectRustBinaryOperator(
   }
   const shift = shiftOperations[operatorKindName];
   if (shift !== undefined) {
-    if (isRustSourceNumberCarrier(left) && isRustSourceNumberCarrier(right)) {
+    const sourceNumberOperands = selectRustSourceNumberOperands(left, right);
+    if (sourceNumberOperands !== undefined) {
       return {
         kind: "operator-call",
         rustOperator: shift.operator,
-        resultCarrier: rustSourcePrimitiveTargetType("float64"),
+        resultCarrier: sourceNumberOperands.carrier,
         path: shift.sourceNumberPath,
         fallible: false,
         operandModes: ["value", "value"],
+        leftConversion: sourceNumberOperands.leftConversion,
+        rightConversion: sourceNumberOperands.rightConversion,
       };
     }
     const promotion = selectRustIntegralShiftPromotion(left);

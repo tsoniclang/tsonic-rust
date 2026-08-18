@@ -54,11 +54,15 @@ test("source number bitwise operations retain the number carrier", { timeout: 30
     files: {
       "index.ts": `
 import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
 
 export function main(): void {
   const left: number = 5;
   const right: number = 3;
+  const nativeLeft: int32 = 5;
+  const nativeRight: int32 = 3;
   const width: number = 32;
+  const nativeWidth: int32 = 32;
   const negativeOne: number = -1;
 
   check((left & right) === 1);
@@ -67,6 +71,10 @@ export function main(): void {
   check((left << width) === 5);
   check((negativeOne >> 1) === -1);
   check((negativeOne >>> 1) === 2147483647);
+  check((left & nativeRight) === 1);
+  check((nativeLeft | right) === 7);
+  check((left << nativeWidth) === 5);
+  check((nativeLeft << width) === 5);
 }
 `,
     },
@@ -77,5 +85,9 @@ export function main(): void {
   assert.match(source, /rt::source_number_bitwise_and/u);
   assert.match(source, /rt::source_number_shift_left/u);
   assert.match(source, /rt::source_number_unsigned_shift_right/u);
+  assert.match(source, /rt::source_number_bitwise_and\(left, native_right as f64\)/u);
+  assert.match(source, /rt::source_number_bitwise_or\(native_left as f64, right\)/u);
+  assert.match(source, /rt::source_number_shift_left\(left, native_width as f64\)/u);
+  assert.match(source, /rt::source_number_shift_left\(native_left as f64, width\)/u);
   validateGeneratedProject("source-number-bitwise", result.artifacts, { run: true });
 });
