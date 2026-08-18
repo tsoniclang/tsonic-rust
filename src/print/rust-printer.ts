@@ -1907,16 +1907,10 @@ function printRustExprFitted(
       );
     case "associated-call":
       {
-        const trailingArgument = expression.args[expression.args.length - 1];
-        const flatOwner = printRustAssociatedCallOwner(expression);
-        const trailingClosureWidth = flatOwner.length > rustNestedCallWidth &&
-            (trailingArgument?.kind === "closure" || trailingArgument?.kind === "closure-block")
-          ? firstLine(printRustExpr(trailingArgument)).length
-          : 0;
         const owner = printRustAssociatedCallOwnerFitted(
           expression,
           depth,
-          column + `::${expression.method}(`.length + trailingClosureWidth,
+          column + `::${expression.method}(`.length,
         );
         if (owner.includes("\n") && expression.args.length === 1 &&
           (expression.args[0]?.kind === "closure" || expression.args[0]?.kind === "closure-block")) {
@@ -2060,50 +2054,8 @@ function printRustExprFitted(
       }
       return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
     }
-    case "closure": {
-      const bodyChain = rustMethodChain(expression.body);
-      const bodySelectorCount = bodyChain?.steps.filter((step) =>
-        step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
-      const bodyHasLongMethodChain = bodyChain !== undefined &&
-        bodySelectorCount >= 3 &&
-        flat.length > rustNestedCallWidth;
-      if (!flat.includes("\n") && renderedFits(flat, column) && !bodyHasLongMethodChain &&
-        !rustMethodChainPrefersVerticalLayout(expression.body) &&
-        !rustExpressionContainsStatementBlock(expression.body)) {
-        return flat;
-      }
-      const params = printRustClosureParams(expression.params);
-      const prefix = `${expression.move === true ? "move " : ""}|${params}|`;
-      const indent = indentText(depth + 1);
-      if (expression.body.kind === "block") {
-        const bindings = expression.body.bindings.flatMap((binding) => {
-          const prefix = `${indent}let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = `;
-          return [
-            ...(binding.attrs ?? []).map((attribute) => `${indent}${attribute}`),
-            printRustLetInitializer(prefix, binding.value, depth + 1),
-          ];
-        });
-        const value = printRustExprFitted(
-          expression.body.value,
-          depth + 1,
-          indent.length,
-          undefined,
-          "statement",
-        );
-        return [
-          `${prefix} {`,
-          ...bindings,
-          `${indent}${value}`,
-          `${indentText(depth)}}`,
-        ].join("\n");
-      }
-      const body = printRustExprFitted(
-        expression.body,
-        depth + 1,
-        indent.length,
-      );
-      return [`${prefix} {`, `${indent}${body}`, `${indentText(depth)}}`].join("\n");
-    }
+    case "closure":
+      return printRustClosureFitted(expression, depth, column);
     case "closure-block": {
       const params = printRustClosureParams(expression.params);
       const prefix = `${expression.move ? "move " : ""}|${params}| ${expression.async ? "async move " : ""}{`;
@@ -2189,6 +2141,20 @@ function printRustExprFitted(
         expression.expr.kind === "try" && expression.expr.expr.kind === "method-call") {
         const chain = rustMethodChain(expression.expr.expr);
         if (chain !== undefined) {
+          const attached = appendToLastLine(
+            printFittedMethodChain(
+              chain,
+              depth,
+              column + prefix.length + 1,
+              false,
+              indentText(depth + 1),
+              true,
+            ),
+            "?",
+          );
+          if (renderedFits(attached, column + prefix.length)) {
+            return `${prefix}${attached}`;
+          }
           const expanded = appendToLastLine(
             printFittedMethodChain(
               chain,
@@ -2520,6 +2486,58 @@ function printRustExprFitted(
   }
 }
 
+function printRustClosureFitted(
+  expression: Extract<RustExpr, { readonly kind: "closure" }>,
+  depth: number,
+  column: number,
+  forceBlock = false,
+): string {
+  const flat = printRustExpr(expression);
+  const bodyChain = rustMethodChain(expression.body);
+  const bodySelectorCount = bodyChain?.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+  const bodyHasLongMethodChain = bodyChain !== undefined &&
+    bodySelectorCount >= 3 &&
+    flat.length > rustNestedCallWidth;
+  if (!forceBlock && !flat.includes("\n") && renderedFits(flat, column) &&
+    !bodyHasLongMethodChain &&
+    !rustMethodChainPrefersVerticalLayout(expression.body) &&
+    !rustExpressionContainsStatementBlock(expression.body)) {
+    return flat;
+  }
+  const params = printRustClosureParams(expression.params);
+  const prefix = `${expression.move === true ? "move " : ""}|${params}|`;
+  const indent = indentText(depth + 1);
+  if (expression.body.kind === "block") {
+    const bindings = expression.body.bindings.flatMap((binding) => {
+      const prefix = `${indent}let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = `;
+      return [
+        ...(binding.attrs ?? []).map((attribute) => `${indent}${attribute}`),
+        printRustLetInitializer(prefix, binding.value, depth + 1),
+      ];
+    });
+    const value = printRustExprFitted(
+      expression.body.value,
+      depth + 1,
+      indent.length,
+      undefined,
+      "statement",
+    );
+    return [
+      `${prefix} {`,
+      ...bindings,
+      `${indent}${value}`,
+      `${indentText(depth)}}`,
+    ].join("\n");
+  }
+  const body = printRustExprFitted(
+    expression.body,
+    depth + 1,
+    indent.length,
+  );
+  return [`${prefix} {`, `${indent}${body}`, `${indentText(depth)}}`].join("\n");
+}
+
 function printRustConditionalArmInline(expression: RustExpr): string {
   return expression.kind === "block"
     ? printRustBlockExpressionInlineContents(expression)
@@ -2670,6 +2688,7 @@ function printRustLetInitializer(
 ): string {
   const flat = printRustExpr(initializer);
   if (!flat.includes("\n") && prefix.length + flat.length + 1 <= rustFormatWidth &&
+    (initializer.kind !== "conditional" || flat.length <= rustSingleLineConditionalWidth) &&
     !rustExpressionContainsStatementBlock(initializer) &&
     !rustExpressionContainsExpandedStructLiteral(initializer) &&
     !rustMethodChainPrefersVerticalLayout(initializer) &&
@@ -2689,8 +2708,11 @@ function printRustLetInitializer(
       depth + 1,
       continuationIndent.length,
     );
+    const continuationPacksMoreSource = continuation.split("\n").length <
+      fittedAtPrefix.split("\n").length;
     if (continuation.includes("\n") &&
-      prefix.length + firstLine(continuation).length + 1 > rustFormatWidth &&
+      (prefix.length + firstLine(continuation).length + 1 > rustFormatWidth ||
+        continuationPacksMoreSource) &&
       renderedFits(continuation, continuationIndent.length)) {
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
@@ -2750,6 +2772,9 @@ function printRustLetInitializer(
         : prefix.length + chainBaseAtPrefix.length + 1 <= rustFormatWidth);
     const continuationPacksMoreSource =
       !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit ||
+      (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block") &&
+        continuation.includes("\n") &&
+        continuation.split("\n").length < fittedAtPrefix.split("\n").length ||
       longBindingPrefix &&
         (initializerHasNestedCollectionInvocation ||
           !bindingLineOwnsChainBase && chainBaseIsInvocation &&
@@ -3562,14 +3587,22 @@ function printFittedCall(
   const trailingClosure = arguments_[arguments_.length - 1];
   if (!forceExpanded &&
     (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block")) {
-    const preceding = arguments_.slice(0, -1).map(printRustExpr);
+    const precedingArguments = arguments_.slice(0, -1);
+    const preceding = precedingArguments.map(printRustExpr);
     if (preceding.every((argument) => !argument.includes("\n"))) {
       const prefix = `${callable}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
-      const renderedClosure = printRustExprFitted(
-        trailingClosure,
-        depth,
-        column + prefix.length,
-      );
+      const renderedClosure = trailingClosure.kind === "closure"
+        ? printRustClosureFitted(
+            trailingClosure,
+            depth,
+            column + prefix.length,
+            arguments_.length > 1 && flatArguments.length > rustNestedCallWidth,
+          )
+        : printRustExprFitted(
+            trailingClosure,
+            depth,
+            column + prefix.length,
+          );
       const expandedClosure = printRustExprFitted(
         trailingClosure,
         depth + 1,
@@ -3579,7 +3612,9 @@ function printFittedCall(
         !expressionIsRightHandBlock(trailingClosure.body) &&
         renderedClosure.includes("\n") &&
         !expandedClosure.includes("\n");
-      if (!expansionMakesClosureCompact &&
+      const callStartsAtLineIndent = column <= indentText(depth).length + 1;
+      const precedingContainsClosure = precedingArguments.some(rustExpressionContainsClosure);
+      if ((!expansionMakesClosureCompact || callStartsAtLineIndent && !precedingContainsClosure) &&
         firstLine(renderedClosure).length + column + prefix.length <= rustFormatWidth) {
         return appendToLastLine(`${prefix}${renderedClosure}`, ")");
       }

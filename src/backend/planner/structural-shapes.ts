@@ -9,6 +9,7 @@ import type {
   RustStructField,
   RustType,
   RustTypeParameter,
+  RustVisibility,
 } from "../rust-ast/nodes.js";
 import { rustLintAttributes } from "../rust-ast/lint-policy.js";
 import { rustPascalCaseIdentifier } from "../../common/rust-identifiers.js";
@@ -30,6 +31,7 @@ export function planRustStructuralShapeModule(
   input: RustTranslationContext,
   moduleNameByFileName: ReadonlyMap<string, string>,
   structuralShapesModuleName: string,
+  publicShapeNames: ReadonlySet<string>,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
   if (input.structuralShapes.definitions.length === 0) {
@@ -45,6 +47,9 @@ export function planRustStructuralShapeModule(
   };
   const structs: RustItem[] = [];
   for (const definition of input.structuralShapes.definitions) {
+    const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
+      ? "public"
+      : "crate";
     const typeParams: readonly RustTypeParameter[] = definition.typeParameterNames.map((name) => ({
       name,
       bounds: [],
@@ -93,6 +98,7 @@ export function planRustStructuralShapeModule(
               typeParams,
               aliasTypeArguments,
               renderedStorageType,
+              visibility,
             )
           : renderedStorageType;
         fields.push({
@@ -159,6 +165,7 @@ export function planRustStructuralShapeModule(
         typeParams,
         aliasTypeArguments,
         getterType,
+        visibility,
       );
       fields.push({
         name: field.property.getterTargetName,
@@ -182,6 +189,7 @@ export function planRustStructuralShapeModule(
           typeParams,
           aliasTypeArguments,
           setterType,
+          visibility,
         );
         fields.push({
           name: field.property.setterTargetName,
@@ -194,7 +202,7 @@ export function planRustStructuralShapeModule(
     structs.push({
       kind: "struct",
       name: definition.targetName,
-      visibility: "public",
+      visibility,
       attrs: [rustLintAttributes.deadCode],
       derives: [],
       ...(typeParams.length === 0 ? {} : { typeParams }),
@@ -218,11 +226,12 @@ function structuralCallableAlias(
   typeParams: readonly RustTypeParameter[],
   typeArguments: readonly RustType[],
   target: RustType,
+  visibility: RustVisibility,
 ): RustType {
   aliases.push({
     kind: "type-alias",
     name,
-    visibility: "public",
+    visibility,
     ...(typeParams.length === 0 ? {} : { typeParams }),
     target,
   });

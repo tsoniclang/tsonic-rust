@@ -205,6 +205,7 @@ import type {
 import {
   resolveRustExactNullishValueCarrier,
   resolveRustTargetTypeRef,
+  resolveRustTupleElementTargetType,
 } from "./target-type-resolution.js";
 import type { RustTargetTypeResolutionContext } from "./target-type-resolution.js";
 import { createRustSourceTypeRegistry } from "./source-type-registry.js";
@@ -4959,16 +4960,26 @@ function resolveArrayLiteralCarrier(
   const hasHoles = elements.some((element) => ast.kindName(element) === KindOmittedExpression);
   const presentElements = elements.filter((element) => ast.kindName(element) !== KindOmittedExpression);
 
-  if (expected?.kind === "tuple" && expected.elements.length > 0 && !hasHoles && presentElements.length === expected.elements.length) {
-    for (const [index, element] of presentElements.entries()) {
-      resolveExpressionCarrier(walk, element, sourceFile, expected.elements[index]);
+  if (expected?.kind === "tuple" && expected.elements.length > 0 && !hasHoles) {
+    const omittedOptionalElementIndexes = contextualTupleOmissions(
+      walk,
+      expression,
+      sourceFile,
+      expected,
+      presentElements.length,
+    );
+    if (omittedOptionalElementIndexes !== undefined) {
+      for (const [index, element] of presentElements.entries()) {
+        resolveExpressionCarrier(walk, element, sourceFile, expected.elements[index]);
+      }
+      setRustOperationFact(walk, expression, {
+        kind: "tuple-literal",
+        operationId: "tsonic.rust.tuple.literal",
+        resultCarrier: expected,
+        omittedOptionalElementIndexes,
+      });
+      return setCarrierFact(walk, expression, expected);
     }
-    setRustOperationFact(walk, expression, {
-      kind: "tuple-literal",
-      operationId: "tsonic.rust.tuple.literal",
-      resultCarrier: expected,
-    });
-    return setCarrierFact(walk, expression, expected);
   }
   let expectedElement: TargetTypeRef | undefined;
   const lane: "native" | "js" = walk.jsEnabled ? "js" : "native";
@@ -5029,6 +5040,54 @@ function resolveArrayLiteralCarrier(
     length: elements.length,
   });
   return setCarrierFact(walk, expression, resultCarrier);
+}
+
+function contextualTupleOmissions(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  expected: Extract<TargetTypeRef, { readonly kind: "tuple" }>,
+  presentElementCount: number,
+): readonly number[] | undefined {
+  if (presentElementCount > expected.elements.length) {
+    return undefined;
+  }
+  const semantics = walk.context.semantics(sourceFile);
+  const contextual = semantics.selectContextualTupleLiteral(
+    expression,
+    presentElementCount,
+  );
+  if (contextual.kind !== "selected") {
+    return presentElementCount === expected.elements.length ? [] : undefined;
+  }
+  const sourceElements = contextual.elements;
+  if (sourceElements.length !== expected.elements.length) {
+    return undefined;
+  }
+  for (let index = 0; index < sourceElements.length; index += 1) {
+    const sourceElement = sourceElements[index]!;
+    if (sourceElement.elementKind !== "required" &&
+      sourceElement.elementKind !== "optional") {
+      return undefined;
+    }
+    const sourceCarrier = resolveRustTupleElementTargetType(
+      sourceElement,
+      semantics,
+      rustResolutionContext(walk, expression),
+      walk.operationOptions,
+    );
+    const contextualCarrier = sourceCarrier === undefined
+      ? undefined
+      : sourceElement.elementKind === "optional"
+        ? rustOptionElementCarrier(sourceCarrier) === undefined
+          ? rustOptionTargetType(sourceCarrier)
+          : sourceCarrier
+        : sourceCarrier;
+    if (!rustTargetTypeRefEquals(contextualCarrier, expected.elements[index])) {
+      return undefined;
+    }
+  }
+  return contextual.omittedOptionalElementIndexes;
 }
 
 function recordForOfFacts(

@@ -32,6 +32,7 @@ import {
 import { planRustProgramErrorModule } from "./program-errors.js";
 import { applyRustErrorBoundary } from "./error-boundary.js";
 import { planRustStructuralShapeModule } from "./structural-shapes.js";
+import { rustPublicSignatureTypeNames } from "../rust-ast/source-style.js";
 
 export function planRustArtifacts(input: RustTranslationContext): TargetCompileResult {
   const diagnostics: TargetDiagnostic[] = [...input.diagnostics];
@@ -59,16 +60,6 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
-  const structuralShapeModel = planRustStructuralShapeModule(
-    input,
-    moduleNameByFileName,
-    structuralShapesModuleName,
-    diagnostics,
-  );
-  if (diagnostics.length > 0) {
-    return { artifacts: [], diagnostics };
-  }
-
   const plannedSources = reconstructRustSourceFiles(
     input,
     identityPlan.identities,
@@ -77,6 +68,21 @@ export function planRustArtifacts(input: RustTranslationContext): TargetCompileR
     diagnostics,
   );
   if (plannedSources === undefined) {
+    return { artifacts: [], diagnostics };
+  }
+  const structuralShapePathPrefix = `crate::${structuralShapesModuleName}::`;
+  const publicStructuralShapeNames = new Set(plannedSources.flatMap((source) =>
+    rustPublicSignatureTypeNames(source.model)
+      .filter((name) => name.startsWith(structuralShapePathPrefix))
+      .map((name) => name.slice(structuralShapePathPrefix.length))));
+  const structuralShapeModel = planRustStructuralShapeModule(
+    input,
+    moduleNameByFileName,
+    structuralShapesModuleName,
+    publicStructuralShapeNames,
+    diagnostics,
+  );
+  if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
 

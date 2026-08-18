@@ -754,6 +754,7 @@ export type RustTargetOperationFact =
       readonly kind: "tuple-literal";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
+      readonly omittedOptionalElementIndexes: readonly number[];
     }
   | {
       readonly kind: "tuple-index";
