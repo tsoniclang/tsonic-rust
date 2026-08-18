@@ -141,6 +141,8 @@ interface Receiver {
 type BoundIncrement = (this: Receiver, delta: int32) => int32;
 type IncrementReceiver = ThisParameterType<BoundIncrement>;
 type DetachedIncrement = OmitThisParameter<BoundIncrement>;
+type BoundFormat = (this: Receiver, value: int32, suffix: string) => string;
+type DetachedFormat = OmitThisParameter<BoundFormat>;
 
 function receiverValue(receiver: IncrementReceiver): int32 {
   return receiver.value;
@@ -148,6 +150,10 @@ function receiverValue(receiver: IncrementReceiver): int32 {
 
 function callDetached(increment: DetachedIncrement): int32 {
   return increment(2 as int32);
+}
+
+function callDetachedFormat(formatter: DetachedFormat): string {
+  return formatter(3 as int32, "items");
 }
 
 function choose<T>(value: T, fallback: NoInfer<T>): T {
@@ -198,6 +204,7 @@ export function main(): void {
   check(pair.left === (8 as int32) && pair.label === "pair");
   check(receiverValue({ value: 9 as int32 }) === (9 as int32));
   check(callDetached((delta: int32): int32 => delta + (1 as int32)) === (3 as int32));
+  check(callDetachedFormat((_value: int32, suffix: string): string => suffix) === "items");
   check(chooseInt(10 as int32) === (10 as int32));
   check(contextualValue() === (11 as int32));
   check(loud() === "READY");

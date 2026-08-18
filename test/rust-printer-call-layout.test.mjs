@@ -1945,3 +1945,94 @@ test("long struct field types use rustfmt-compatible continuation indentation", 
     /dispatch_identity_identity_specialization_1_implementation:\n {8}rt::Callable<\(Identity, String\), String>,/u,
   );
 });
+
+test("fallible tuple call arguments use rustfmt-compatible element layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "invoke",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "formatter" },
+            method: "call",
+            args: [{
+              kind: "tuple-literal",
+              elements: [{
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::conversions::f64_to_i32",
+                  args: [{ kind: "float-literal", text: "3.0" }],
+                },
+              }, {
+                kind: "call",
+                path: "String::from",
+                args: [{ kind: "str-literal", value: "items" }],
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /formatter\.call\(\(\n {8}tsonic_rust_runtime::conversions::f64_to_i32\(3\.0\)\?,\n {8}String::from\("items"\),\n {4}\)\)/u,
+  );
+});
+
+test("long nested callable construction gives the outer call its own break", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "invoke",
+      visibility: "private",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "call_detached_format",
+            args: [{
+              kind: "associated-call",
+              owner: {
+                kind: "named",
+                path: "rt::Callable",
+                typeArguments: [{
+                  kind: "tuple",
+                  elements: [
+                    { kind: "primitive", name: "i32" },
+                    { kind: "named", path: "String" },
+                  ],
+                }, {
+                  kind: "named",
+                  path: "rt::TsonicResult<String>",
+                }],
+              },
+              method: "new",
+              args: [{
+                kind: "closure",
+                params: [{ name: "callable_arguments", byRefCopy: false }],
+                body: { kind: "path", path: "callable_arguments.1" },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /call_detached_format\(\n {8}rt::Callable::<\(i32, String\), rt::TsonicResult<String>>::new\(/u,
+  );
+});

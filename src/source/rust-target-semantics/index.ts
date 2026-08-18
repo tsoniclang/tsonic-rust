@@ -3894,15 +3894,22 @@ function applySelectedRuntimeCallableCall(
     : rustCallableProtocol(carrier);
   const bindings = selectedSignature.sourceArgumentBindings;
   const memberParameters = selectedSignature.member.parameters;
+  const sourceParameterIndexes = selectedSignature.sourceCallableParameterIndexes;
+  const selectedParameters = selectedSignature.sourceSelectedSignatureParameters;
   if (
     carrier === undefined ||
     callable === undefined ||
     bindings === undefined ||
+    sourceParameterIndexes === undefined ||
+    selectedParameters === undefined ||
     !isDenseDataArray(callArguments) ||
     callArguments.some((argument) => argument === undefined) ||
     (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !== 0 ||
     (selectedSignature.targetTypeArguments?.length ?? 0) !== 0 ||
     callable.parameters.length !== memberParameters.length ||
+    sourceParameterIndexes.length !== memberParameters.length ||
+    sourceParameterIndexes.some((index) => !Number.isSafeInteger(index) || index < 0 ||
+      !selectedParameters.some((parameter) => parameter.parameterIndex === index)) ||
     !rustTargetTypeRefEquals(callable.result, selectedSignature.member.returnType)
   ) {
     appendRustDiagnostic(
@@ -3929,7 +3936,7 @@ function applySelectedRuntimeCallableCall(
       : parameterCarrier;
     const selectedBindings = bindings.filter((binding) =>
       form === "rest"
-        ? binding.sourceParameterIndex === index
+        ? binding.sourceParameterIndex === sourceParameterIndexes[index]
         : binding.effectiveArgumentIndex === index);
     if ((form === "required" && selectedBindings.length !== 1) ||
       (form === "optional" && selectedBindings.length > 1)) {

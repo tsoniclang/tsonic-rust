@@ -1199,32 +1199,16 @@ function acceptRuntimeCallableCarrierCall(
   sourceDeclaration?: Node,
   optionalGuard?: RustOptionalCallGuard,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
-  const selectedParameters = request.source.sourceSelectedSignatureParameters;
   const protocol = runtimeCallableProtocol(calleeCarrier);
-  if (
-    calleeCarrier === undefined ||
-    protocol === undefined ||
-    selectedParameters.length !== protocol.parameters.length
-  ) {
+  if (calleeCarrier === undefined || protocol === undefined) {
     return undefined;
   }
-  const parameters = selectedParameters.map((parameter, index) => {
-    const type = protocol.parameters[index];
-    return type === undefined
-      ? undefined
-      : {
-          name: parameter.parameterName || `arg${index}`,
-          type,
-          passingMode: "by-value" as const,
-          ...(parameter.acceptsOmission
-            ? { optional: true as const }
-            : {}),
-          ...(parameter.rest
-            ? { paramsArray: true as const }
-            : {}),
-        };
-  });
-  if (parameters.some((parameter) => parameter === undefined)) {
+  const parameterPlan = runtimeCallableTargetParameters(
+    request,
+    protocol.parameters,
+    context,
+  );
+  if (parameterPlan === undefined) {
     return undefined;
   }
   const optionalResult = selectRustOptionalCallResult(
@@ -1247,12 +1231,13 @@ function acceptRuntimeCallableCarrierCall(
     sourceName: "call",
     targetName: "call",
     kind: "method",
-    parameters: parameters as readonly NonNullable<typeof parameters[number]>[],
+    parameters: parameterPlan.parameters,
     returnType: protocol.result,
   };
   const selectedSignature = {
     member,
     sourceCallableCarrier: calleeCarrier,
+    sourceCallableParameterIndexes: parameterPlan.sourceParameterIndexes,
     ...(sourceSelectedReceiverCarrier === undefined
       ? {}
       : { sourceSelectedReceiverCarrier }),
@@ -1294,6 +1279,42 @@ function acceptRuntimeCallableCarrierCall(
   return acceptRustPolicy({ selectedSignature }, [{
     message: "rust selected exact runtime-callable invocation",
   }]);
+}
+
+function runtimeCallableTargetParameters(
+  request: RustCheckedCallSelectionInput,
+  targetParameters: readonly TargetTypeRef[],
+  context: RustOperationPolicyContext,
+): {
+  readonly parameters: readonly NonNullable<RustTargetMember["parameters"]>[number][];
+  readonly sourceParameterIndexes: readonly number[];
+} | undefined {
+  const expanded = context.checker.selectCallParameterSlots(request.source);
+  if (expanded === undefined) {
+    return undefined;
+  }
+  if (expanded.length !== targetParameters.length) {
+    return undefined;
+  }
+  const parameters = expanded.map((parameter, index) => {
+    const type = targetParameters[index];
+    return type === undefined
+      ? undefined
+      : {
+          name: parameter.sourceParameterName || `arg${index}`,
+          type,
+          passingMode: "by-value" as const,
+          ...(parameter.form === "optional" ? { optional: true as const } : {}),
+          ...(parameter.form === "rest" ? { paramsArray: true as const } : {}),
+        };
+  });
+  if (parameters.some((parameter) => parameter === undefined)) {
+    return undefined;
+  }
+  return {
+    parameters: parameters as readonly NonNullable<typeof parameters[number]>[],
+    sourceParameterIndexes: expanded.map((parameter) => parameter.sourceParameterIndex),
+  };
 }
 
 function runtimeCallableProtocol(
@@ -2467,18 +2488,27 @@ function acceptProjectSourceCall(
         options.projectTypes.openCarrier(containingDefinition),
         selectedOwnerDefinition,
       );
+  const selectedAuthoredOwnerCarrier = construction && selectedOwnerDefinition !== undefined
+    ? instantiateExactSelectedConstructionCarrier(
+        selectedOwnerDefinition,
+        request.source.sourceSelectedMethodTypeArguments ?? [],
+        targetTypeArguments ?? [],
+        options,
+      )
+    : undefined;
+  const selectedResultOwnerCarrier = construction && selectedOwnerDefinition !== undefined &&
+      request.source.sourceResultType !== undefined
+    ? resolveRustTargetTypeRef(
+        request.source.sourceResultType,
+        context,
+        options,
+      )
+    : undefined;
   const selectedOwnerCarrier = superConstruction
     ? selectedOwnerRelationship?.kind === "related"
       ? selectedOwnerRelationship.targetType
       : undefined
-    : construction && selectedOwnerDefinition !== undefined &&
-        request.source.sourceResultType !== undefined
-      ? resolveRustTargetTypeRef(
-          request.source.sourceResultType,
-          context,
-          options,
-        )
-      : undefined;
+    : selectedAuthoredOwnerCarrier ?? selectedResultOwnerCarrier;
   if (construction && selectedOwnerCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,
@@ -2637,6 +2667,27 @@ function acceptProjectSourceCall(
       ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
     },
   }, [{ message: `rust selected project-source call ${member.id}` }]);
+}
+
+function instantiateExactSelectedConstructionCarrier(
+  definition: import("./project-type-policy.js").RustProjectTypeDefinition,
+  sourceTypeArguments: NonNullable<
+    RustCheckedCallSelectionInput["source"]["sourceSelectedMethodTypeArguments"]
+  >,
+  targetTypeArguments: readonly TargetTypeRef[],
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  if (sourceTypeArguments.length !== definition.typeParameterNames.length ||
+    targetTypeArguments.length !== definition.typeParameterNames.length ||
+    sourceTypeArguments.some((argument, index) =>
+      argument.typeParameterName !== definition.typeParameterNames[index])) {
+    return undefined;
+  }
+  return substituteRustTargetTypeParameters(
+    options.projectTypes.openCarrier(definition),
+    new Map(definition.typeParameterNames.map((name, index) =>
+      [name, targetTypeArguments[index]!] as const)),
+  );
 }
 
 function selectedProjectConstructor(

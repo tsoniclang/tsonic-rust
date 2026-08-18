@@ -64,6 +64,7 @@ export interface RustSelectedTargetSignature {
   readonly member: RustTargetMember;
   readonly sourceSelectedReceiverCarrier?: RustTargetTypeRef;
   readonly sourceCallableCarrier?: RustTargetTypeRef;
+  readonly sourceCallableParameterIndexes?: readonly number[];
   readonly sourceStructuralMethod?: {
     readonly receiverCarrier: RustTargetTypeRef;
     readonly storageIndex: number;

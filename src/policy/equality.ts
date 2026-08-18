@@ -56,6 +56,10 @@ export function rustSelectedTargetSignatureEquals(
       right.sourceCallableCarrier,
     ) &&
     closedMetadataEquals(
+      left.sourceCallableParameterIndexes,
+      right.sourceCallableParameterIndexes,
+    ) &&
+    closedMetadataEquals(
       left.sourceStructuralMethod,
       right.sourceStructuralMethod,
     ) &&
