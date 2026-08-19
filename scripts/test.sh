@@ -62,7 +62,13 @@ export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }--max-old-space-size=${hea
 export CARGO_BUILD_JOBS="${cargo_build_jobs}"
 
 if (( $# == 0 )); then
-  test_arguments=(test/*.test.mjs test/architecture/*.test.mjs)
+  mapfile -d '' -t test_arguments < <(
+    find test -type f -name '*.test.mjs' -print0 | sort -z
+  )
+  if (( ${#test_arguments[@]} == 0 )); then
+    printf 'No Rust test files were discovered.\n' >&2
+    exit 2
+  fi
 else
   test_arguments=("$@")
 fi

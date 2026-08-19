@@ -79,14 +79,14 @@ generator protocol.
 ## Implementation closure
 
 Default export expressions and source-ordered class static blocks are
-implemented and proved by `test/module-and-class-initialization-parity.test.mjs`.
+implemented and proved by `test/backend/planner/declarations/module-and-class-initialization-parity.test.mjs`.
 Source-ordered object spread is implemented and proved by
-`test/object-construction-parity.test.mjs`. Exact interface index signatures,
+`test/backend/planner/expressions/object-construction-parity.test.mjs`. Exact interface index signatures,
 method-property reads and writes, and method spread are implemented and proved
-by `test/object-property-parity.test.mjs`. Finite open-generic caller closure
-is proved by `test/native-semantics.test.mjs`. Compiler-backed Clone/Copy
+by `test/backend/planner/expressions/object-property-parity.test.mjs`. Finite open-generic caller closure
+is proved by `test/backend/planner/expressions/native-semantics.test.mjs`. Compiler-backed Clone/Copy
 bounds, mutable statics, C variadics, and Rust unions are proved by
-`test/compiler-provider.test.mjs`.
+`test/providers/compiler/rustdoc/compiler-provider.test.mjs`.
 
 For example:
 

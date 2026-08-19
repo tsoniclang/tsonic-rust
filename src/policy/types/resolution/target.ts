@@ -1,0 +1,326 @@
+import {
+  rustBigIntTargetType,
+  rustJsArrayTargetType,
+  rustNullTargetType,
+  rustNullishSourceTargetType,
+  rustNeverTargetType,
+  rustOptionElementCarrier,
+  rustOptionTargetType,
+  rustSourcePrimitiveTargetType,
+  rustStructuralObjectTargetType,
+  rustStringTargetType,
+  rustTupleTargetType,
+  rustUnitTargetType,
+  rustUndefinedTargetType,
+  rustVecTargetType,
+} from "../target-types.js";
+import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
+import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
+import { isRustStructuralObjectFieldDeclaration } from "../source-shapes.js";
+import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
+import { resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState } from "./tuples.js";
+import { rustTargetTypeRefEquals } from "../equality.js";
+import {
+  sourcePropertyTypeEvidenceNodes,
+  sourceTransformedTypeFactEvidenceNodes,
+} from "@tsonic/target-api/source";
+import type { Node, Symbol, Type } from "@tsonic/tsts";
+import type { SourceFileSemantics } from "@tsonic/target-api/source";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
+import type { TargetTypeRef } from "../model.js";
+
+export function resolveRustTargetType(
+  type: Type | undefined,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+  authoredTypeRoot?: Node,
+): TargetTypeRef | undefined {
+  if (type === undefined || resolving.has(type)) {
+    return undefined;
+  }
+  const existingStructuralObject = authoredTypeRoot === undefined
+    ? options.sourceTypes.structuralObjectForType(type)
+    : undefined;
+  if (existingStructuralObject !== undefined) {
+    return existingStructuralObject.carrier;
+  }
+  const primitive = resolveSourcePrimitive(type, context);
+  if (primitive !== undefined) {
+    return primitive;
+  }
+  const substitutionBase = context.typeShape.getSubstitutionBaseType(type);
+  if (substitutionBase !== undefined) {
+    return resolveRustTargetType(
+      substitutionBase,
+      context,
+      options,
+      resolving,
+      authoredTypeRoot,
+    );
+  }
+  resolving.add(type);
+  try {
+    const { checker, typeShape } = context;
+    if (typeShape.isNever(type)) {
+      return rustNeverTargetType();
+    }
+    if (typeShape.isAny(type) || typeShape.isUnknown(type)) {
+      return undefined;
+    }
+    const symbol = checker.getTypeAliasSymbol(type) ?? checker.getTypeSymbol(type);
+    const providerIdentity = resolveProviderTypeIdentity(
+      typeShape.getTypeFactSubjects(type),
+      context,
+    );
+    if (providerIdentity !== undefined) {
+      const base = providerCarrierFromRelations(providerIdentity, options);
+      if (base !== undefined) {
+        return instantiateTargetType(base, type, context, options, resolving);
+      }
+    }
+
+    const sourceProfileType = resolveOwnedSourceProfileTypeName(symbol, context, options.sourceProfiles);
+    if (sourceProfileType !== undefined) {
+      const sourceProfileCarrier = resolveSourceProfileCarrier(sourceProfileType, type, context, options, resolving);
+      if (sourceProfileCarrier !== undefined) {
+        return sourceProfileCarrier;
+      }
+    }
+
+    const sourceTypeArguments = context.typeShape.getEffectiveTypeArguments(type);
+    const resolvedSourceTypeArguments = sourceTypeArguments?.map((argument) =>
+      resolveRustTargetType(argument, context, options, resolving));
+    const sourceType = resolvedSourceTypeArguments === undefined ||
+        resolvedSourceTypeArguments.some((argument) => argument === undefined)
+      ? undefined
+      : resolveProjectSourceCarrier(
+          symbol,
+          resolvedSourceTypeArguments as readonly TargetTypeRef[],
+          context,
+          options,
+        );
+    if (sourceType !== undefined) {
+      return sourceType;
+    }
+
+    const typeParameter = resolveSourceTypeParameter(symbol, undefined, context);
+    if (typeParameter !== undefined) {
+      return typeParameter;
+    }
+
+    const callable = resolveCallableType(type, context, options, resolving);
+    if (callable !== undefined) {
+      return callable;
+    }
+
+    if (typeShape.isNullish(type)) {
+      return rustNullishSourceTargetType();
+    }
+    if (typeShape.isStringLike(type)) {
+      return rustStringTargetType();
+    }
+    if (typeShape.isBooleanLike(type)) {
+      return rustSourcePrimitiveTargetType("bool");
+    }
+    if (typeShape.isNumberLike(type)) {
+      return rustSourcePrimitiveTargetType("float64");
+    }
+    if (typeShape.isBigIntLike(type)) {
+      return rustBigIntTargetType();
+    }
+    if (typeShape.isVoidLike(type)) {
+      return rustUnitTargetType();
+    }
+    if (typeShape.isUnion(type)) {
+      return resolveUnion(type, context, options, resolving);
+    }
+    if (typeShape.isTuple(type)) {
+      const elements = typeShape.getTupleElementInfos(type)
+        .map((element) =>
+          resolveRustTupleElementTargetTypeWithState(
+            element,
+            typeShape,
+            context,
+            options,
+            resolving,
+            authoredTypeRoot,
+          )
+        );
+      return elements.length > 0 && elements.every((element) => element !== undefined)
+        ? rustTupleTargetType(elements as TargetTypeRef[])
+        : undefined;
+    }
+
+    if (typeShape.isArrayLike(type) && typeShape.isTypeReference(type)) {
+      const [elementType] = typeShape.getTypeArguments(type);
+      const element = resolveRustTargetType(elementType, context, options, resolving);
+      return element === undefined
+        ? undefined
+        : options.jsEnabled
+          ? rustJsArrayTargetType(element)
+          : rustVecTargetType(element);
+    }
+    return resolveStructuralObjectType(
+      type,
+      context,
+      options,
+      resolving,
+      authoredTypeRoot,
+    );
+  } finally {
+    resolving.delete(type);
+  }
+}
+
+export function resolveRustExactNullishValueCarrier(
+  type: Type,
+  queries: SourceFileSemantics,
+): TargetTypeRef | undefined {
+  if (!queries.isNullish(type)) {
+    return undefined;
+  }
+  return queries.isNever(queries.removeMissingOrUndefined(type))
+    ? rustUndefinedTargetType()
+    : rustNullTargetType();
+}
+
+export function resolveStructuralObjectType(
+  type: Type,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+  authoredTypeRoot?: Node,
+): TargetTypeRef | undefined {
+  const { checker, typeShape } = context;
+  if (typeShape.getCallSignatures(type).length !== 0 ||
+    typeShape.getConstructSignatures(type).length !== 0 ||
+    typeShape.getIndexInfos(type).length !== 0) {
+    return undefined;
+  }
+  const properties = denseDefined(typeShape.getPropertyInfos(type));
+  if (properties === undefined || properties.length === 0) {
+    return undefined;
+  }
+  const selected = properties.map((property) => {
+    const declarations = denseDefined([...new Set([
+      ...checker.getSymbolDeclarations(property.symbol),
+      ...property.rootSymbols.flatMap((symbol) =>
+        checker.getSymbolDeclarations(symbol)
+      ),
+    ])]);
+    const projectDeclarations = declarations?.filter((declaration) =>
+      context.source.navigation.isProjectDeclaration(declaration) &&
+      isRustStructuralObjectFieldDeclaration(declaration, context.ast));
+    const getters = projectDeclarations?.filter((declaration) =>
+      context.ast.kindName(declaration) === "KindGetAccessor") ?? [];
+    const setters = projectDeclarations?.filter((declaration) =>
+      context.ast.kindName(declaration) === "KindSetAccessor") ?? [];
+    const methods = projectDeclarations?.filter((declaration) => {
+      const kind = context.ast.kindName(declaration);
+      return kind === "KindMethodDeclaration" || kind === "KindMethodSignature";
+    }) ?? [];
+    const ordinaryDeclarations = projectDeclarations?.filter((declaration) => {
+      const kind = context.ast.kindName(declaration);
+      return kind !== "KindGetAccessor" && kind !== "KindSetAccessor" &&
+        kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature";
+    }) ?? [];
+    const authoredTypeNodes = [
+      ...sourcePropertyTypeEvidenceNodes(context.ast, typeShape, property),
+      ...(authoredTypeRoot === undefined
+        ? []
+        : sourceTransformedTypeFactEvidenceNodes(
+            context.ast,
+            typeShape,
+            authoredTypeRoot,
+            property.type,
+          )),
+    ];
+    const authoredCarriers = authoredTypeNodes.map((node) =>
+      resolveRustAuthoredTargetType(node, context, options, resolving));
+    const authoredCarrier = authoredCarriers.length > 0 &&
+        authoredCarriers.every((carrier) =>
+          carrier !== undefined && rustTargetTypeRefEquals(carrier, authoredCarriers[0]))
+      ? authoredCarriers[0]
+      : undefined;
+    const selectedFieldCarrier = authoredTypeNodes.length === 0
+      ? resolveRustTargetType(property.type, context, options, resolving)
+      : authoredCarrier;
+    const fieldCarrier = selectedFieldCarrier === undefined
+      ? undefined
+      : property.optional && rustOptionElementCarrier(selectedFieldCarrier) === undefined
+        ? rustOptionTargetType(selectedFieldCarrier)
+        : selectedFieldCarrier;
+    const accessor = getters.length === 1 && setters.length <= 1 &&
+        ordinaryDeclarations.length === 0 && methods.length === 0
+      ? { getter: true as const, setter: setters.length === 1 }
+      : undefined;
+    const method = methods.length === 1 && getters.length === 0 &&
+        setters.length === 0 && ordinaryDeclarations.length === 0
+      ? true as const
+      : undefined;
+    const hasExactTransformedIdentity = authoredTypeRoot !== undefined &&
+      projectDeclarations !== undefined && projectDeclarations.length === 0;
+    return projectDeclarations === undefined ||
+        (!hasExactTransformedIdentity && projectDeclarations.length === 0) ||
+        (!hasExactTransformedIdentity && projectDeclarations.length !== declarations?.length) ||
+        fieldCarrier === undefined
+        || getters.length > 1 || setters.length > 1 ||
+        getters.length === 0 && setters.length > 0 ||
+        getters.length > 0 && (ordinaryDeclarations.length > 0 || methods.length > 0) ||
+        methods.length > 1 || methods.length > 0 && ordinaryDeclarations.length > 0
+      ? undefined
+      : {
+          declarations: Object.freeze(projectDeclarations),
+          symbols: Object.freeze([...new Set([
+            property.symbol,
+            ...property.rootSymbols,
+          ])]),
+          sourceName: property.name,
+          sourceType: property.type,
+          resultCarrier: fieldCarrier,
+          presence: property.optional ? "optional" as const : "required" as const,
+          readonly: property.readonly,
+          ...(accessor === undefined ? {} : { accessor }),
+          ...(method === undefined ? {} : { method }),
+        };
+  });
+  if (selected.some((field) => field === undefined)) {
+    return undefined;
+  }
+  const fields = [...(selected as readonly {
+    readonly declarations: readonly Node[];
+    readonly symbols: readonly Symbol[];
+    readonly sourceName: string;
+    readonly sourceType: Type;
+    readonly resultCarrier: TargetTypeRef;
+    readonly presence: "required" | "optional";
+    readonly readonly: boolean;
+    readonly accessor?: {
+      readonly getter: true;
+      readonly setter: boolean;
+    };
+    readonly method?: true;
+  }[])]
+    .sort((left, right) => left.sourceName.localeCompare(right.sourceName))
+    .map((field, storageIndex) => ({ ...field, storageIndex }));
+  if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
+    return undefined;
+  }
+  const carrier = rustStructuralObjectTargetType(fields.map((field) => ({
+    sourceName: field.sourceName,
+    type: field.resultCarrier,
+    presence: field.presence,
+    readonly: field.readonly,
+    ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
+    ...(field.method === true ? { method: true as const } : {}),
+  })));
+  return options.sourceTypes.registerStructuralObject({
+    sourceType: type,
+    carrier,
+    storage: "object-handle",
+    fields,
+  })
+    ? carrier
+    : undefined;
+}

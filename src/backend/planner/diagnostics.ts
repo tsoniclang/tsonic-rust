@@ -1,5 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { TargetDiagnostic } from "@tsonic/target-api";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
 export interface RustDiagnosticInput {
   readonly ast: AstReader;

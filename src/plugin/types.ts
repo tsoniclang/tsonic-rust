@@ -3,7 +3,9 @@
 export type {
   TsonicPlugin,
   TsonicTargetPlugin,
+} from "@tsonic/target-api";
+export type {
   TsonicTargetCapabilityPlugin,
   TargetCapabilityContext,
   TargetProviderModuleOwnership,
-} from "@tsonic/target-api";
+} from "@tsonic/target-api/provider";

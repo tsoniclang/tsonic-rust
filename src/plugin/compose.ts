@@ -1,4 +1,4 @@
-import type { TsonicTargetCapabilityPlugin } from "@tsonic/target-api";
+import type { TsonicTargetCapabilityPlugin } from "@tsonic/target-api/provider";
 
 // Local capability composition checks for the Rust target. This is NOT host
 // discovery: the host discovers installed plugins and hands the composed set

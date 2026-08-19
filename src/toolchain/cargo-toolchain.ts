@@ -1,4 +1,9 @@
-import type { TargetToolchain, TargetToolchainContext, TargetToolchainInput, TargetToolchainResult } from "@tsonic/target-api";
+import type {
+  TargetToolchain,
+  TargetToolchainContext,
+  TargetToolchainInput,
+  TargetToolchainResult,
+} from "@tsonic/target-api";
 
 // Source-to-source stage: the toolchain reports produced artifacts
 // deterministically; generated projects are validated by the cargo proof

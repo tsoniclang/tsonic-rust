@@ -1,0 +1,287 @@
+import type { TargetTypeRef } from "../types/model.js";
+import {
+  isRustTargetTypeRef,
+  rustTargetTypeRefEquals,
+} from "../types/equality.js";
+import type {
+  RustValueConversion,
+  RustValueConversionId,
+} from "../operations/model.js";
+import {
+  isRustNeverCarrier,
+  isRustNumericCarrier,
+  rustNeverTargetType,
+  rustOptionTargetType,
+  rustJsValueTargetType,
+  rustPrimitiveTypeName,
+  rustSourceUnionCarrierValue,
+  rustSourcePrimitiveTargetType,
+  rustBorrowedStrTargetType,
+  rustStringTargetType,
+  substituteRustTargetTypeParameters,
+} from "../types/target-types.js";
+import type { RustPrimitiveTypeName } from "../../backend/model/syntax.js";
+import { rustNumericPromotionKind } from "../operations/numeric-promotion-model.js";
+
+const boolCarrier = rustSourcePrimitiveTargetType("bool");
+const int32Carrier = rustSourcePrimitiveTargetType("int32");
+const uint8Carrier = rustSourcePrimitiveTargetType("uint8");
+const uint32Carrier = rustSourcePrimitiveTargetType("uint32");
+const uint64Carrier = rustSourcePrimitiveTargetType("uint64");
+const float64Carrier = rustSourcePrimitiveTargetType("float64");
+const usizeCarrier = rustSourcePrimitiveTargetType("native-uint");
+const isizeCarrier = rustSourcePrimitiveTargetType("native-int");
+const stringCarrier = rustStringTargetType();
+const jsValueCarrier = rustJsValueTargetType();
+
+interface RustValueConversionContractBase {
+  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "ownership";
+  readonly sourceMode: "value" | "ref";
+  readonly source: TargetTypeRef;
+  readonly target: TargetTypeRef;
+  readonly fallible: boolean;
+}
+
+export type RustValueConversionContract = RustValueConversionContractBase & (
+  | {
+      readonly lowering: "call";
+      readonly path: string;
+    }
+  | {
+      readonly lowering: "numeric-cast";
+      readonly targetType: RustPrimitiveTypeName;
+    }
+  | {
+      readonly lowering: "identity";
+    }
+  | {
+      readonly lowering: "source-union-variant";
+      readonly variantName: string;
+    }
+  | {
+      readonly lowering: "option-map";
+      readonly element: RustValueConversionContract;
+    }
+  | {
+      readonly lowering: "owned-string-from-borrowed-str";
+    }
+  | {
+      readonly lowering: "copy-from-reference";
+    }
+);
+
+export function rustValueConversionContract(
+  value: RustValueConversion,
+): RustValueConversionContract | undefined {
+  if (value.kind === "option-map") {
+    const element = rustValueConversionContract(value.elementConversion);
+    return element === undefined
+      ? undefined
+      : {
+          category: element.category,
+          lowering: "option-map",
+          sourceMode: "value",
+          source: rustOptionTargetType(element.source),
+          target: rustOptionTargetType(element.target),
+          element,
+          fallible: element.fallible,
+        };
+  }
+  if (value.kind === "bottom-coercion") {
+    return isRustNeverCarrier(value.source) && isRustTargetTypeRef(value.target)
+      ? {
+          category: "exact",
+          lowering: "identity",
+          sourceMode: "value",
+          source: rustNeverTargetType(),
+          target: value.target,
+          fallible: false,
+        }
+      : undefined;
+  }
+  if (value.kind === "source-union-variant") {
+    const union = rustSourceUnionCarrierValue(value.target);
+    const matches = union?.variants.filter((variant) =>
+      variant.name === value.variantName &&
+      rustTargetTypeRefEquals(variant.carrier, value.source)) ?? [];
+    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+        matches.length === 1
+      ? {
+          category: "exact",
+          lowering: "source-union-variant",
+          sourceMode: "value",
+          source: value.source,
+          target: value.target,
+          variantName: value.variantName,
+          fallible: false,
+        }
+      : undefined;
+  }
+  if (value.kind === "raw-pointer-mut-to-const") {
+    if (!isRustTargetTypeRef(value.pointee)) {
+      return undefined;
+    }
+    return {
+      category: "exact",
+      lowering: "identity",
+      sourceMode: "value",
+      source: {
+        kind: "pointer",
+        pointee: value.pointee,
+        mutability: "mut",
+      },
+      target: {
+        kind: "pointer",
+        pointee: value.pointee,
+        mutability: "const",
+      },
+      fallible: false,
+    };
+  }
+  if (value.kind === "copy-from-reference") {
+    if (!isRustTargetTypeRef(value.target)) {
+      return undefined;
+    }
+    return {
+      category: "ownership",
+      lowering: "copy-from-reference",
+      sourceMode: "value",
+      source: {
+        kind: "reference",
+        referent: value.target,
+        mutable: false,
+      },
+      target: value.target,
+      fallible: false,
+    };
+  }
+  if (value.kind === "numeric-promotion") {
+    const source = rustSourcePrimitiveTargetType(value.source);
+    const target = rustSourcePrimitiveTargetType(value.target);
+    const targetType = rustPrimitiveTypeName(value.target);
+    return isRustNumericCarrier(source) && isRustNumericCarrier(target) &&
+        rustNumericPromotionKind(value.source, value.target) === value.target &&
+        targetType !== undefined
+      ? {
+          category: "numeric-promotion",
+          lowering: "numeric-cast",
+          sourceMode: "value",
+          source,
+          target,
+          targetType,
+          fallible: false,
+        }
+      : undefined;
+  }
+  switch (value.id) {
+    case "checked-i32-to-usize":
+      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::i32_to_usize", "value", int32Carrier, usizeCarrier, true);
+    case "checked-i32-to-u8":
+      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::i32_to_u8", "value", int32Carrier, uint8Carrier, true);
+    case "checked-usize-to-i32":
+      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::usize_to_i32", "value", usizeCarrier, int32Carrier, true);
+    case "checked-isize-to-i32":
+      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::isize_to_i32", "value", isizeCarrier, int32Carrier, true);
+    case "checked-u32-to-i32":
+      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::u32_to_i32", "value", uint32Carrier, int32Carrier, true);
+    case "exact-u8-to-i32":
+      return contract(value.id, "exact", "tsonic_rust_runtime::conversions::u8_to_i32", "value", uint8Carrier, int32Carrier, false);
+    case "exact-i32-to-f64":
+      return contract(value.id, "exact", "tsonic_rust_runtime::conversions::i32_to_f64", "value", int32Carrier, float64Carrier, false);
+    case "checked-f64-to-i32-trunc":
+      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::f64_to_i32", "value", float64Carrier, int32Carrier, true);
+    case "js-number-from-isize":
+      return contract(value.id, "js-number", "tsonic_rust_runtime::conversions::isize_to_f64", "value", isizeCarrier, float64Carrier, false);
+    case "js-number-from-usize":
+      return contract(value.id, "js-number", "tsonic_rust_runtime::conversions::usize_to_f64", "value", usizeCarrier, float64Carrier, false);
+    case "js-number-from-u64":
+      return contract(value.id, "js-number", "tsonic_rust_runtime::conversions::u64_to_f64", "value", uint64Carrier, float64Carrier, false);
+    case "js-value-from-bool":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", boolCarrier, jsValueCarrier, false);
+    case "js-value-from-f64":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", float64Carrier, jsValueCarrier, false);
+    case "js-value-from-i32":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", int32Carrier, jsValueCarrier, false);
+    case "js-value-from-string":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
+    case "js-value-clone":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
+    case "owned-string-from-borrowed-str":
+      return {
+        category: "ownership",
+        lowering: "owned-string-from-borrowed-str",
+        sourceMode: "value",
+        source: rustBorrowedStrTargetType(),
+        target: stringCarrier,
+        fallible: false,
+      };
+  }
+}
+
+function contract(
+  _id: RustValueConversionId,
+  category: RustValueConversionContract["category"],
+  path: string,
+  sourceMode: RustValueConversionContract["sourceMode"],
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  fallible: boolean,
+): RustValueConversionContract {
+  return { category, lowering: "call", path, sourceMode, source, target, fallible };
+}
+
+export function rustValueConversionIsFallible(value: RustValueConversion | undefined): boolean {
+  return value !== undefined && rustValueConversionContract(value)?.fallible === true;
+}
+
+export function rustValueConversionIdentity(value: RustValueConversion): string {
+  return value.kind === "semantic-conversion"
+    ? value.id
+    : value.kind === "numeric-promotion"
+      ? `numeric-promotion.${value.source}.${value.target}`
+      : value.kind === "raw-pointer-mut-to-const"
+        ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
+        : value.kind === "copy-from-reference"
+          ? `copy-from-reference.${JSON.stringify(value.target)}`
+        : value.kind === "source-union-variant"
+          ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`
+          : value.kind === "bottom-coercion"
+            ? `bottom-coercion.${JSON.stringify(value.target)}`
+            : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
+}
+
+export function substituteRustValueConversion(
+  value: RustValueConversion,
+  substitutions: ReadonlyMap<string, TargetTypeRef>,
+): RustValueConversion {
+  switch (value.kind) {
+    case "copy-from-reference":
+      return Object.freeze({
+        ...value,
+        target: substituteRustTargetTypeParameters(value.target, substitutions),
+      });
+    case "raw-pointer-mut-to-const":
+      return Object.freeze({
+        ...value,
+        pointee: substituteRustTargetTypeParameters(value.pointee, substitutions),
+      });
+    case "source-union-variant":
+    case "bottom-coercion":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetTypeParameters(value.source, substitutions),
+        target: substituteRustTargetTypeParameters(value.target, substitutions),
+      });
+    case "option-map":
+      return Object.freeze({
+        ...value,
+        elementConversion: substituteRustValueConversion(
+          value.elementConversion,
+          substitutions,
+        ) as typeof value.elementConversion,
+      });
+    case "semantic-conversion":
+    case "numeric-promotion":
+      return value;
+  }
+}

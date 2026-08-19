@@ -8,8 +8,8 @@ import type {
   ProviderModuleResolution,
   SourceDeclarationProvider,
 } from "@tsonic/tsts";
-import type { TargetProviderContext } from "@tsonic/target-api";
-import { materializeClosedMetadata } from "../../common/closed-metadata.js";
+import type { TargetProviderContext } from "@tsonic/target-api/provider";
+import { materializeClosedMetadata } from "../../policy/model/closed-data.js";
 import { resolveRustUserCargoManifest } from "../../options/rust-user-project.js";
 import type {
   RustProviderModuleDefinition,
@@ -17,28 +17,28 @@ import type {
   RustProviderPackageDefinition,
   RustProviderSemantics,
   RustProviderTypeDefinition,
-} from "../../source/provider-packages/index.js";
+} from "../packages/model.js";
 import {
-  collectRustProviderSemanticsFromDefinitions,
   mergeRustProviderSemantics,
-  rustProviderBindingProviderId,
-} from "../../source/provider-packages/index.js";
+  collectRustProviderSemanticsFromDefinitions,
+} from "../packages/semantics.js";
+import { rustProviderBindingProviderId } from "../packages/source-provider.js";
 import type {
   RustCompilerDependency,
   RustCompilerProjectSnapshot,
-} from "./model.js";
+} from "./model/model.js";
 import {
   compilerModulePathFromSpecifier,
   compilerModuleSpecifier,
   compilerProviderModuleId,
   compilerProviderVersion,
   projectRustCompilerModule,
-} from "./projection.js";
-import { standardModuleRequestFromSpecifier } from "./standard-module-specifier.js";
-import type { RustCompilerProviderProjection } from "./projection.js";
-import type { RustNamedTypeTraitContract } from "../../source/rust-target-types.js";
-import { createRustCompilerWorkerClient } from "./worker-client.js";
-import type { RustCompilerWorkerClient } from "./worker-client.js";
+} from "./projection/projection.js";
+import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
+import type { RustCompilerProviderProjection } from "./projection/projection.js";
+import type { RustNamedTypeTraitContract } from "../../policy/types/model.js";
+import { createRustCompilerWorkerClient } from "./protocol/worker-client.js";
+import type { RustCompilerWorkerClient } from "./protocol/worker-client.js";
 
 export const rustCompilerProviderSpecifierPrefix = "@tsonic/rust/crates/";
 const rustStandardProviderPackageId = "rust-standard-library";

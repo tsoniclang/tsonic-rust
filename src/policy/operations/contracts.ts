@@ -7,22 +7,21 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
-import type {
-  SourceFileSemantics,
-  TargetDiagnostic,
-} from "@tsonic/target-api";
-import type { RustSourcePolicyContext } from "../context.js";
+import type { SourceFileSemantics } from "@tsonic/target-api/source";
+import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import type { RustSourcePolicyContext } from "../model/context.js";
+import type { RustPlanWriter } from "../model/selections.js";
 import type {
   RustSelectedTargetOperation,
   RustSelectedTargetSignature,
   RustTargetCallArgumentSlot,
   RustTargetParameter,
   TargetTypeRef,
-} from "../types.js";
+} from "../types/model.js";
 import type {
   RustCallbackOperationTemplate,
   RustProviderOperationTemplate,
-} from "../../source/rust-facts/keys.js";
+} from "./model.js";
 
 type ResolvedSourceCallInfo = NonNullable<
   ReturnType<SourceFileSemantics["getResolvedCallInfo"]>
@@ -33,6 +32,7 @@ type ResolvedSourcePropertyAccessInfo = NonNullable<
 >;
 
 export interface RustOperationPolicyContext extends RustSourcePolicyContext {
+  readonly facts: RustPlanWriter;
   readonly currentSourceFile: SourceFile;
   readonly sourceFiles: readonly SourceFile[];
   readonly checker: SourceFileSemantics;

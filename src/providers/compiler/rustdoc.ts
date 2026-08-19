@@ -2,19 +2,19 @@ import type {
   RustCompilerDependency,
   RustCompilerModuleModel,
   RustCompilerProjectSnapshot,
-} from "./model.js";
-import { verifyRustCompilerDependencySource } from "./cargo-snapshot.js";
+} from "./model/model.js";
+import { verifyRustCompilerDependencySource } from "./snapshot/cargo-snapshot.js";
 import {
   loadRustdocDocument,
   validateDependencyBelongsToSnapshot,
-} from "./rustdoc-artifact.js";
-import { normalizeModule } from "./rustdoc-model.js";
+} from "./snapshot/rustdoc-artifact.js";
+import { normalizeModule } from "./model/rustdoc-model.js";
 import {
   collectModuleStandardTypeLocations,
   loadStandardLibraryContext,
   loadStandardLibraryCrateDocument,
   resolveStandardLibraryItem,
-} from "./rustdoc-standard-library.js";
+} from "./projection/standard-library.js";
 
 export function loadRustCompilerModule(options: {
   readonly snapshot: RustCompilerProjectSnapshot;

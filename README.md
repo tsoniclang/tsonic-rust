@@ -80,7 +80,8 @@ package: it ships as the separately installed `@tsonic/rust-nodejs`
 capability plugin, which owns `node:*` module declarations, operation
 rows, and the `tsonic_rust_node` runtime crate contribution. This target
 package exposes the standard `createTsonicPlugin()` entrypoint and the
-generic capability authoring helpers (`createRustProviderPackage` with
+generic capability authoring helpers from `@tsonic/target-rust/provider`
+(`createRustProviderPackage` with
 creation-time identity validation, alias-import and carrier-path
 contribution, and `composeRustCapabilities` for fail-closed local
 composition). Capability crates enter the generated Cargo manifest only
@@ -140,7 +141,7 @@ parser contract — see the rust-js JS parity inventory
 (docs/js-parity.md); lazy quantifiers, backreferences, lookaround,
 named groups, word boundaries, and dynamic patterns reject
 deterministically). Every unsupported lane diagnoses
-deterministically; see `test/capability-ledger.test.mjs`.
+deterministically; see `test/architecture/capability-ledger.test.mjs`.
 
 ## Build and test
 
@@ -175,5 +176,5 @@ Use `createRustProviderPackage`: declare virtual modules
 (`exportId`/`memberId`/`signatureId` plus a Rust operation
 form), and cargo crate contributions. Concrete names live only in row data;
 the generic matcher contains no per-name branching. See
-`src/source/provider-packages/index.ts` and the `@acme/*` fixtures under
+`src/public/provider.ts` and the `@acme/*` fixtures under
 `test/helpers/rust-session.mjs`.
