@@ -1,11 +1,11 @@
 import { appendToLastLine, firstLine, renderedFits } from "../patterns.js";
 import { indentText, printRustType } from "../types.js";
 import { printRustAssociatedOwner, printRustSingleCollectionCallContinuation, rustMethodChain, rustMethodChainPrefersVerticalLayout } from "./chains.js";
-import { printRustClosureParams } from "./nested-calls.js";
+import { printRustClosureParams } from "./closure-params.js";
 import { printRustExpr } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
 import { rustCompactTrailingClosureWidth, rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
-import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustInvocationHasNestedExpandedCollection } from "./inspection.js";
+import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic, rustInvocationHasNestedExpandedCollection } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/rust-ast/expressions.js";
 import type { RustExpr, RustType } from "../../../backend/rust-ast/nodes.js";
 
@@ -240,12 +240,19 @@ export function printRustLetInitializer(
   const trailingClosure = initializerArguments?.[initializerArguments.length - 1];
   if (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block") {
     const continuationIndent = indentText(depth + 1);
-    const continuation = printRustExprFitted(
-      initializer,
-      depth + 1,
-      continuationIndent.length,
-    );
-    if (initializerArguments?.length === 1 &&
+    const continuation = trailingClosure.kind === "closure" &&
+        rustFormatArgumentCanShareLine(trailingClosure.body) &&
+        !flat.includes("\n") && renderedFits(flat, continuationIndent.length)
+      ? flat
+      : printRustExprFitted(
+          initializer,
+          depth + 1,
+          continuationIndent.length,
+        );
+    const compactClosureOwnsContinuation = initializerArguments?.length === 1 ||
+      trailingClosure.kind === "closure" &&
+        !rustFormatArgumentIsAtomic(trailingClosure.body);
+    if (compactClosureOwnsContinuation &&
       renderedFits(continuation, continuationIndent.length) &&
       !continuation.includes("\n") && !renderedFits(flat, prefix.length + 1)) {
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;

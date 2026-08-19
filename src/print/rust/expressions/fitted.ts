@@ -2,8 +2,10 @@ import { appendToLastLine, escapeRustString, firstLine, lastLine, lastLineLength
 import { expressionIsRightHandBlock, expressionIsStatementBlockOperand, expressionNeedsParentheses, expressionPrecedence, printBinaryOperand, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText } from "../types.js";
 import { printFittedCall } from "./calls.js";
-import { printFittedLeftAssociativeBinaryChain, printFittedLogicalChain, printFittedMethodChain, printRustFormatArgument, rustBinaryOperandPrefersExpandedCall, rustExpandedMethodClosureOpeningWidth, rustMethodCallKeepsTrailingClosureAttached, rustMethodChain, rustMethodChainBreaksReceiverForClosure, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstMethodRequiresExpansion, rustMethodChainPrefersVerticalLayout, rustMethodChainRequiresVerticalLayout } from "./chains.js";
-import { printNestedCallArgument, printRustClosureParams } from "./nested-calls.js";
+import { printFittedLeftAssociativeBinaryChain, printFittedLogicalChain, printFittedMethodChain, rustBinaryOperandPrefersExpandedCall, rustExpandedMethodClosureOpeningWidth, rustMethodCallKeepsTrailingClosureAttached, rustMethodChain, rustMethodChainBreaksReceiverForClosure, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstMethodRequiresExpansion, rustMethodChainPrefersVerticalLayout, rustMethodChainRequiresVerticalLayout } from "./chains.js";
+import { printRustClosureParams } from "./closure-params.js";
+import { printRustFormatArgument } from "./format-arguments.js";
+import { printNestedCallArgument } from "./nested-calls.js";
 import { printRustAssociatedCallOwner, printRustAssociatedCallOwnerFitted, printRustAssociatedOwnerFitted, printRustBlockExpressionLines, printRustClosureFitted, printRustConditionalArmLines } from "./blocks.js";
 import { printRustBlockStatements } from "../blocks.js";
 import { printRustExpr, rustExpressionContainsClosure } from "./core.js";

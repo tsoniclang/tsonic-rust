@@ -34,9 +34,8 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
               kind: "closure",
               params: [],
               body: {
-                kind: "call",
-                path: "String::from",
-                args: [{ kind: "str-literal", value: "none" }],
+                kind: "owned-string-from-borrowed-str",
+                expression: { kind: "str-literal", value: "none" },
               },
             }],
           },
@@ -58,6 +57,35 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
               path: "String::from",
               args: [{ kind: "str-literal", value: "SET" }],
             },
+          },
+        }, {
+          kind: "expr",
+          expr: {
+            kind: "string-concat",
+            parts: [{
+              kind: "owned-string-from-borrowed-str",
+              expression: { kind: "str-literal", value: ":" },
+            }, {
+              kind: "call",
+              path: "rt::option_coalesce",
+              args: [{
+                kind: "field",
+                receiver: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "values" },
+                  method: "clone",
+                  args: [],
+                },
+                name: "1",
+              }, {
+                kind: "path",
+                path: "std::convert::identity",
+              }, {
+                kind: "closure",
+                params: [],
+                body: { kind: "string-literal", value: "none" },
+              }],
+            }],
           },
         }, {
           kind: "expr",
@@ -160,11 +188,15 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
 
   assert.match(
     source,
-    /let field_label: String =\n {8}rt::option_coalesce\(label\.clone\(\), std::convert::identity, \|\| \{\n {12}String::from\("none"\)\n {8}\}\);/u,
+    /let field_label: String =\n {8}rt::option_coalesce\(label\.clone\(\), std::convert::identity, \|\| String::from\("none"\)\);/u,
   );
   assert.match(
     source,
     /let loud: String = if selected \{\n {8}String::from\("READY"\)\n {4}\} else \{\n {8}String::from\("SET"\)\n {4}\};/u,
+  );
+  assert.match(
+    source,
+    /rt::option_coalesce\(values\.clone\(\)\.1, std::convert::identity, \|\| String::from\(\n {12}"none"\n {8}\)\),/u,
   );
   assert.match(source, /rt::source_string\(&callable\.call\(\(\n/u);
   assert.doesNotMatch(source, /rt::source_string\(&callable\n {8}\.call/u);

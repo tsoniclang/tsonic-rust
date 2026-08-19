@@ -3,7 +3,7 @@ import { expressionIsRightHandBlock, printBinaryOperand, printOperand, RustPrece
 import { printRustAssociatedCallOwner, printRustBlockExpressionInlineContents, printRustConditionalArmInline } from "./blocks.js";
 import { printRustAssociatedOwner, printRustCallTypeArguments, rustMethodChainPrefersVerticalLayout } from "./chains.js";
 import { printRustBlockStatements } from "../blocks.js";
-import { printRustClosureParams } from "./nested-calls.js";
+import { printRustClosureParams } from "./closure-params.js";
 import { printRustType } from "../types.js";
 import type { RustExpr } from "../../../backend/rust-ast/nodes.js";
 

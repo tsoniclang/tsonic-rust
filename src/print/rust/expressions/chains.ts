@@ -2,12 +2,11 @@ import { appendToLastLine, firstLine, lastLine, lastLineLength, remainingLines, 
 import { expressionIsRightHandBlock, expressionIsStatementBlockOperand, expressionPrecedence, operatorPrecedence, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText, printRustType } from "../types.js";
 import { printFittedCall } from "./calls.js";
-import { printRustAssociatedCallOwner } from "./blocks.js";
-import { printRustExpr, rustExpressionContainsClosure, rustExpressionContainsPreferredVerticalMethodChain } from "./core.js";
+import { printRustExpr, rustExpressionContainsClosure } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
 import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/rust-ast/expressions.js";
-import { rustFormatWidth, rustInlineClosureFieldReceiverWidth, rustInlineFieldReceiverWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth } from "../formatting.js";
+import { rustFormatWidth, rustInlineClosureFieldReceiverWidth, rustInlineFieldReceiverWidth, rustMethodChainWidth, rustNestedCallWidth } from "../formatting.js";
 import type { RustExpr, RustType } from "../../../backend/rust-ast/nodes.js";
 import type { RustExpressionGrammarPosition } from "./precedence.js";
 
@@ -181,102 +180,6 @@ function collectLeftAssociativeBinaryOperands(
     return;
   }
   operands.push(expression);
-}
-
-export function printRustFormatArgument(
-  expression: RustExpr,
-  depth: number,
-  column: number,
-): string {
-  if ((expression.kind === "call" || expression.kind === "associated-call") &&
-    expression.args.length === 1) {
-    const flat = printRustExpr(expression);
-    if (flat.length < rustInlineFormatArgumentWidth * 2 &&
-      !flat.includes("\n") && renderedFits(`${flat},`, column) &&
-      !rustExpressionContainsStatementBlock(expression) &&
-      !rustExpressionContainsPreferredVerticalMethodChain(expression) &&
-      !rustExpressionContainsExpandedStructLiteral(expression)) {
-      return flat;
-    }
-    const argument = expression.args[0]!;
-    const callable = expression.kind === "call"
-      ? expression.path
-      : `${printRustAssociatedCallOwner(expression)}::${expression.method}`;
-    const prefix = `${callable}(`;
-    const borrowedNested = printBorrowedNestedRustFormatArgument(
-      callable,
-      argument,
-      depth,
-      column,
-    );
-    if (borrowedNested !== undefined) {
-      return borrowedNested;
-    }
-    const renderedArgument = printRustExprFitted(
-      argument,
-      depth,
-      column + prefix.length,
-    );
-    if (renderedArgument.includes("\n")) {
-      if (argument.kind === "reference" &&
-        argument.expr.kind !== "block" && argument.expr.kind !== "evaluate-then" &&
-        rustExpressionContainsStatementBlock(argument)) {
-        return printFittedCall(callable, [argument], depth, column, true);
-      }
-      const attached = appendToLastLine(`${prefix}${renderedArgument}`, ",)");
-      if (firstLine(attached).length <= rustNestedCallWidth &&
-        (renderedFits(attached, column) || rustExpressionContainsStatementBlock(argument))) {
-        return attached;
-      }
-      return printFittedCall(callable, [argument], depth, column, true);
-    }
-  }
-  return printRustExprFitted(expression, depth, column);
-}
-
-function printBorrowedNestedRustFormatArgument(
-  outerCallable: string,
-  argument: RustExpr,
-  depth: number,
-  column: number,
-): string | undefined {
-  if (argument.kind !== "reference") {
-    return undefined;
-  }
-  const nested = argument.expr;
-  const nestedCall = nested.kind === "call"
-    ? { callable: nested.path, arguments: nested.args }
-    : nested.kind === "associated-call"
-      ? {
-          callable: `${printRustAssociatedCallOwner(nested)}::${nested.method}`,
-          arguments: nested.args,
-        }
-      : nested.kind === "method-call"
-        ? {
-            callable: `${printOperand(nested.receiver, RustPrecedence.Postfix, false)}.${nested.method}`,
-            arguments: nested.args,
-          }
-        : undefined;
-  const nestedArgument = nestedCall?.arguments[0];
-  if (nestedCall === undefined || nestedCall.arguments.length !== 1 ||
-    nestedArgument === undefined || rustExpressionContainsStatementBlock(nestedArgument) ||
-    rustExpressionContainsExpandedStructLiteral(nestedArgument) ||
-    rustExpressionContainsPreferredVerticalMethodChain(nestedArgument)) {
-    return undefined;
-  }
-  const referencePrefix = argument.mutable === true ? "&mut " : "&";
-  const opening = `${outerCallable}(${referencePrefix}${nestedCall.callable}(`;
-  const renderedArgument = printRustExpr(nestedArgument);
-  const argumentIndent = indentText(depth + 1);
-  if (!renderedFits(opening, column) || renderedArgument.includes("\n") ||
-    !renderedFits(renderedArgument, argumentIndent.length)) {
-    return undefined;
-  }
-  return [
-    opening,
-    `${argumentIndent}${renderedArgument}`,
-    `${indentText(depth)}))`,
-  ].join("\n");
 }
 
 function printFittedLogicalOperand(

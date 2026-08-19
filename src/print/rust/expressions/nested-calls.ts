@@ -216,16 +216,6 @@ function collectNestedClosureCallChain(
   }
 }
 
-export function printRustClosureParams(
-  params: readonly { readonly name: string; readonly mutable?: boolean; readonly byRefCopy?: boolean }[],
-): string {
-  return params
-    .map((param) => param.byRefCopy === true
-      ? param.mutable === true ? `&(mut ${param.name})` : `&${param.name}`
-      : `${param.mutable === true ? "mut " : ""}${param.name}`)
-    .join(", ");
-}
-
 export function printNestedCallArgument(
   argument: Extract<RustExpr, { readonly kind: "call" | "associated-call" | "method-call" | "try" }>,
   depth: number,

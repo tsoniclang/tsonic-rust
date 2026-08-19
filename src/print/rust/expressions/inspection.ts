@@ -204,6 +204,9 @@ export function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
     return true;
   }
   switch (expression.kind) {
+    case "bottom":
+    case "owned-string-from-borrowed-str":
+      return rustFormatArgumentCanShareLine(expression.expression);
     case "call":
     case "associated-call":
       return expression.args.every(rustFormatArgumentCanShareLine);
