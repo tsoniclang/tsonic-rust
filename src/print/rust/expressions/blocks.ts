@@ -232,11 +232,12 @@ export function printRustLetInitializer(
         initializer.expr.kind === "associated-call" || initializer.expr.kind === "method-call")
     ? initializer.expr
     : initializer;
-  const trailingClosure = initializerInvocation.kind === "call" ||
+  const initializerArguments = initializerInvocation.kind === "call" ||
       initializerInvocation.kind === "invoke" ||
       initializerInvocation.kind === "associated-call" || initializerInvocation.kind === "method-call"
-    ? initializerInvocation.args[initializerInvocation.args.length - 1]
+    ? initializerInvocation.args
     : undefined;
+  const trailingClosure = initializerArguments?.[initializerArguments.length - 1];
   if (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block") {
     const continuationIndent = indentText(depth + 1);
     const continuation = printRustExprFitted(
@@ -244,7 +245,8 @@ export function printRustLetInitializer(
       depth + 1,
       continuationIndent.length,
     );
-    if (renderedFits(continuation, continuationIndent.length) &&
+    if (initializerArguments?.length === 1 &&
+      renderedFits(continuation, continuationIndent.length) &&
       !continuation.includes("\n") && !renderedFits(flat, prefix.length + 1)) {
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
