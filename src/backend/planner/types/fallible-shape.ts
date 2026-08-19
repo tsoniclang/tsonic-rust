@@ -143,18 +143,31 @@ export function applyFallibleShape(
   }
   const wrap = (statement: RustStmt): RustStmt => {
     if (statement.kind === "return" && statement.expr !== undefined) {
-      return { kind: "return", expr: applyRustFallibleResultExpression(statement.expr, options) };
+      return {
+        kind: "return",
+        expr: applyRustFallibleResultExpression(statement.expr, {
+          errorDomain: options.errorDomain,
+          ...(options.errorTypePath === undefined ? {} : { errorTypePath: options.errorTypePath }),
+        }),
+      };
     }
     if (statement.kind === "return") {
       return {
         kind: "return",
-        expr: options.errorTypePath === undefined
-          ? { kind: "path", path: "Ok(())" }
-          : { kind: "call", path: `Ok::<_, ${options.errorTypePath}>`, args: [{ kind: "path", path: "()" }] },
+        expr: applyRustFallibleResultExpression(
+          { kind: "path", path: "()" },
+          options,
+        ),
       };
     }
     if (statement.kind === "tail") {
-      return { kind: "tail", expr: applyRustFallibleResultExpression(statement.expr, options) };
+      return {
+        kind: "tail",
+        expr: applyRustFallibleResultExpression(statement.expr, {
+          errorDomain: options.errorDomain,
+          ...(options.errorTypePath === undefined ? {} : { errorTypePath: options.errorTypePath }),
+        }),
+      };
     }
     if (statement.kind === "if") {
       return {
@@ -179,9 +192,10 @@ export function applyFallibleShape(
   if (!options.hasReturnValue && !rustBlockTerminates({ statements: wrapped })) {
     wrapped.push({
       kind: "tail",
-      expr: options.errorTypePath === undefined
-        ? { kind: "path", path: "Ok(())" }
-        : { kind: "call", path: `Ok::<_, ${options.errorTypePath}>`, args: [{ kind: "path", path: "()" }] },
+      expr: applyRustFallibleResultExpression(
+        { kind: "path", path: "()" },
+        options,
+      ),
     });
   }
   return { ...body, statements: wrapped };

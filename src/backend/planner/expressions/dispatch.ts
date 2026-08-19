@@ -1,5 +1,4 @@
 import {
-  applyRustFallibleResultExpression,
   rustBottomAfterEffect,
   rustBottomExpression,
 } from "../types/fallible-shape.js";
@@ -53,7 +52,6 @@ import {
   planRustNonConsumingValue,
 } from "./typed-locations.js";
 import {
-  rustFallibleFactKey,
   rustFutureValueFactKey,
   rustSourceBindingFactKey,
   rustSourceCallableValueFactKey,
@@ -62,7 +60,8 @@ import {
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyFinalizedValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
-import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustCallableConstructionType, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
+import { registerRustProviderErrorCarrier } from "../context.js";
+import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planArrayLiteral, planElementAccess } from "./elements.js";
 import { planBinaryExpression } from "./binary.js";
@@ -83,6 +82,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../rust-ast/nodes.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { planRustSourceCallableValue } from "./source-callable-value.js";
 
 export function planExpressionInner(
   node: Node,
@@ -185,81 +185,7 @@ export function planExpressionInner(
       }
       const callableValue = context.input.facts.getFact(node, rustSourceCallableValueFactKey);
       if (callableValue !== undefined) {
-        if (context.syntheticNames === undefined) {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, node),
-            "rust.backend.callable-value-name",
-            "Project-source callable values require a finalized hygienic-name scope.",
-          ));
-          return undefined;
-        }
-        const fallible = context.input.facts.getFact(
-          callableValue.sourceDeclaration,
-          rustFallibleFactKey,
-        ) !== undefined;
-        const callableType = rustCallableConstructionType(
-          callableValue.carrier,
-          context,
-        );
-        const declarationModule = context.moduleNameByFileName.get(callableValue.fileName);
-        const callableName = callableValue.name;
-        if (callableType === undefined || declarationModule === undefined ||
-          callableName === undefined || !isValidRustIdentifier(callableName)) {
-          return undefined;
-        }
-        const allocatedArgumentsName = allocateRustSyntheticName(
-          context.syntheticNames,
-          "callable_arguments",
-        );
-        const argumentsName = callableValue.parameterCarriers.length === 0
-          ? `_${allocatedArgumentsName}`
-          : allocatedArgumentsName;
-        const path = declarationModule === context.moduleName
-          ? callableName
-          : `crate::${declarationModule}::${callableName}`;
-        context.usedAliases?.add("rt");
-        const invocation: RustExpr = {
-          kind: "call",
-          path,
-          args: callableValue.parameterCarriers.map((_carrier, index) => {
-            const value: RustExpr = {
-              kind: "field",
-              receiver: { kind: "path", path: argumentsName },
-              name: String(index),
-            };
-            const mode = callableValue.argumentModes[index];
-            return mode === "ref"
-              ? { kind: "reference", expr: value }
-              : mode === "mut-ref"
-                ? { kind: "reference", expr: value, mutable: true }
-                : value;
-          }),
-        };
-        const callableResult = fallible
-          ? invocation
-          : applyRustFallibleResultExpression(invocation, {
-              errorDomain: context.errorDomain,
-            });
-        const mutableArguments = callableValue.argumentModes.some((mode) => mode === "mut-ref");
-        const implementation: RustExpr = mutableArguments
-          ? {
-              kind: "closure-block",
-              params: [{ name: argumentsName, mutable: true }],
-              move: true,
-              async: false,
-              body: { statements: [{ kind: "tail", expr: callableResult }] },
-            }
-          : {
-              kind: "closure",
-              params: [{ name: argumentsName, byRefCopy: false }],
-              body: callableResult,
-            };
-        return {
-          kind: "associated-call",
-          owner: callableType,
-          method: "new",
-          args: [implementation],
-        };
+        return planRustSourceCallableValue(callableValue, context);
       }
       if (binding === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -534,7 +460,15 @@ export function planExpressionInner(
           ));
           return undefined;
         }
-        awaited = applyRustErrorBoundary(awaited, future.errorBoundary, context.errorDomain);
+        if (future.errorBoundary === "provider-native" && future.errorCarrier !== undefined) {
+          registerRustProviderErrorCarrier(context.input, future.errorCarrier);
+        }
+        awaited = applyRustErrorBoundary(
+          awaited,
+          future.errorBoundary,
+          context.errorDomain,
+          future.errorCarrier,
+        );
       }
       const converted = applyFinalizedValueConversion(
         context,

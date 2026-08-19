@@ -789,6 +789,7 @@ export function finalizeProviderOperationFact(
     isAsync: template.isAsync,
     isFallible: template.isFallible,
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
+    ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
     isUnsafe: template.isUnsafe,
   });
   if (abi === undefined) {

@@ -92,11 +92,18 @@ export interface RustResourceManagementFact {
   } & (
     | {
         readonly fallible: true;
-        readonly errorBoundary: RustFallibleErrorBoundary;
+        readonly errorBoundary: "provider-native";
+        readonly errorCarrier: TargetTypeRef;
+      }
+    | {
+        readonly fallible: true;
+        readonly errorBoundary: Exclude<RustFallibleErrorBoundary, "provider-native">;
+        readonly errorCarrier?: never;
       }
     | {
         readonly fallible: false;
         readonly errorBoundary: "none";
+        readonly errorCarrier?: never;
       }
   );
 }

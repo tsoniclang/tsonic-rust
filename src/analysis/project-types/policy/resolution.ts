@@ -1,6 +1,6 @@
 import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../policy/names/generated.js";
 import { compareProjectDefinitions, definitionKey, denseNodes, heritageKindIssue, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
-import { rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../policy/names/identifiers.js";
+import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../policy/names/identifiers.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../../policy/types/target-types.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
@@ -249,9 +249,30 @@ export function createRustProjectTypePolicy(
       return fileOrder === 0 ? left.sourceName.localeCompare(right.sourceName, "en") : fileOrder;
     }));
   const programErrorVariantByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
-  programErrorDefinitions.forEach((definition, index) => {
-    programErrorVariantByDefinition.set(definition, `Project${index}`);
-  });
+  const usedProgramErrorVariantsByComponent = new Map<string, Set<string>>();
+  for (const definition of programErrorDefinitions) {
+    const componentId = host.sourcePackageComponentForFile(definition.fileName);
+    if (componentId === undefined) {
+      issues.push({
+        node: definition.declaration,
+        code: "RUST_PROJECT_ERROR_SOURCE_PACKAGE_MISSING",
+        message: `Project error '${definition.sourceName}' has no exact source-package component identity.`,
+      });
+      continue;
+    }
+    const usedProgramErrorVariants = usedProgramErrorVariantsByComponent.get(componentId) ??
+      new Set(["Runtime", "Suppressed"]);
+    usedProgramErrorVariantsByComponent.set(componentId, usedProgramErrorVariants);
+    const base = rustPascalCaseIdentifier(definition.sourceName);
+    let variant = base;
+    let suffix = 2;
+    while (usedProgramErrorVariants.has(variant)) {
+      variant = `${base}${suffix}`;
+      suffix += 1;
+    }
+    usedProgramErrorVariants.add(variant);
+    programErrorVariantByDefinition.set(definition, variant);
+  }
 
   const classLineage = (
     definition: RustProjectTypeDefinition,

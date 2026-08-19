@@ -145,9 +145,10 @@ export function readRustStoredObjectField(
       : readRustStructuralObjectField(receiver, field.targetName, resultCarrier);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
-  return path === undefined
+  const representation = rustProjectObjectRepresentation(receiverCarrier, context);
+  return path === undefined || representation === undefined
     ? undefined
-    : readRustProjectObjectField(receiver, path, resultCarrier);
+    : readRustProjectObjectField(receiver, path, resultCarrier, representation);
 }
 
 export function readRustStructuralObjectMethodStorage(
@@ -271,9 +272,10 @@ export function writeRustStoredObjectField(
       : writeRustStructuralObjectField(receiver, field.targetName, operator, value);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
-  return path === undefined
+  const representation = rustProjectObjectRepresentation(receiverCarrier, context);
+  return path === undefined || representation === undefined
     ? undefined
-    : writeRustProjectObjectField(receiver, path, operator, value);
+    : writeRustProjectObjectField(receiver, path, operator, value, representation);
 }
 
 export function mutateRustStoredObjectField(
@@ -303,9 +305,19 @@ export function mutateRustStoredObjectField(
       : mutateRustStructuralObjectField(receiver, field.targetName, mutation);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
-  return path === undefined
+  const representation = rustProjectObjectRepresentation(receiverCarrier, context);
+  return path === undefined || representation === undefined
     ? undefined
-    : mutateRustProjectObjectField(receiver, path, mutation);
+    : mutateRustProjectObjectField(receiver, path, mutation, representation);
+}
+
+export function rustProjectObjectRepresentation(
+  carrier: TargetTypeRef,
+  context: RustPlanContext,
+) {
+  return context.input.objectRepresentations.representationFor(
+    context.input.projectTypes.definitionForCarrier(carrier),
+  );
 }
 
 function readRustStructuralObjectProperty(

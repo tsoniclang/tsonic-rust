@@ -307,7 +307,7 @@ export function resolveArrayLiteralCarrier(
     appendRustDiagnostic(
       walk,
       "RUST_JS_SURFACE_REQUIRED",
-      "Sparse array literals require the js surface or compat mode for the Rust target.",
+      "Sparse array literals require the js surface for the Rust target.",
       expression,
       ["target.capability=rust.js.sparse-array"],
     );

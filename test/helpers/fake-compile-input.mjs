@@ -22,7 +22,12 @@ export function fakeAstReader(sourceFiles = []) {
     }
   }
   return {
+    is: {
+      IsNewExpression: () => false,
+      IsObjectLiteralExpression: () => false,
+    },
     statements: (sourceFile) => sourceFile.statements ?? [],
+    members: () => [],
     kindName: (node) => node.kindName,
     pos: (node) => node.pos,
     end: (node) => node.end,
@@ -68,12 +73,62 @@ export function fakeCompileInput({
       moduleDependencies: () => [],
       moduleReferences: () => [],
       moduleHasTopLevelAwait: () => false,
+      moduleExports: () => [],
       memberDispatch: () => undefined,
+      memberImplementation: () => ({ kind: "unrelated" }),
+      callableImplementation: () => ({ kind: "unrelated" }),
       classConstructors: () => ({ kind: "resolved", constructors: [] }),
       declaredHeritage: () => ({ kind: "resolved", edges: [] }),
       declaredHeritagePath: () => ({ kind: "unrelated" }),
       bindingWritesWithin: () => [],
+      symbolReferencesWithin: () => [],
       hasReferenceOutside: () => false,
+      declarationUses: () => [],
+      declarationUseSummary: (declaration) => ({
+        declaration,
+        uses: [],
+        directCallCount: 0,
+        firstClassUseCount: 0,
+        bindingWritten: false,
+        memberWritten: false,
+        constructorInitialized: false,
+        mutatedAfterInitialization: false,
+        receiverUsed: false,
+        identityCompared: false,
+        conditionallyRead: false,
+        aliasedOrStored: false,
+        captured: false,
+        exported: false,
+        escapeKinds: [],
+        hasUnclassifiedValueUse: false,
+      }),
+      parameterUseSummary: () => undefined,
+      expressionResultUse: () => ({ kind: "discarded" }),
+      expressionEffects: () => ({
+        invokes: false,
+        mutates: false,
+        suspends: false,
+        mayThrow: false,
+      }),
+      expressionValueFlow: (expression) => ({
+        expression,
+        aliasDeclarations: [],
+        uses: [],
+        bindingAliased: false,
+        memberWritten: false,
+        receiverUsed: false,
+        identityCompared: false,
+        captured: false,
+        returned: false,
+        yielded: false,
+        passedAsArgument: false,
+        storedOutsideBinding: false,
+        exported: false,
+        discarded: true,
+        hasUnclassifiedUse: false,
+        escapes: false,
+      }),
+      countedLoop: () => undefined,
       isProjectShape: () => false,
       isProjectConstructibleObject: () => false,
       isProjectDeclaration: () => false,
@@ -95,6 +150,7 @@ export function fakeCompileInput({
   };
   return {
     source,
+    sourcePackages: fakeSourcePackageGraph(sourceFiles),
     project: { entryPoint: "src/index.ts", targets: [target] },
     target,
     runtimeReferences,
@@ -104,6 +160,29 @@ export function fakeCompileInput({
       outputRoot: "out",
       targetOutputRoot: "out/rust",
     },
+  };
+}
+
+export function fakeSourcePackageGraph(
+  sourceFiles,
+  { packageRoot = ".", sourceRoot = "src", exports = [] } = {},
+) {
+  const packageId = "fixture:root";
+  const componentId = "fixture:component";
+  return {
+    fingerprint: "fixture-source-package-graph",
+    rootPackageId: packageId,
+    packages: [{
+      id: packageId,
+      name: "fixture",
+      packageRoot,
+      sourceRoot,
+      sourceFiles: sourceFiles.map((sourceFile) => sourceFile.fileName),
+      dependencies: [],
+      exports,
+      componentId,
+    }],
+    components: [{ id: componentId, packages: [packageId], dependencies: [] }],
   };
 }
 

@@ -1,7 +1,4 @@
-import type {
-  TargetSelection,
-  TargetTypescriptCompatibilityMode,
-} from "@tsonic/target-api";
+import type { TargetSelection } from "@tsonic/target-api";
 
 export type RustOutputType = "lib" | "bin";
 
@@ -12,7 +9,6 @@ const supportedRustTargetOptionKeys = Object.freeze([
   "edition",
   "outputType",
   "projectFile",
-  "typescriptCompatibility",
 ]);
 
 const crateNamePattern = /^[a-z][a-z0-9_]*$/u;
@@ -32,7 +28,6 @@ export function validateRustTargetOptions(target: TargetSelection): void {
   readRustEdition(target);
   readRustOutputType(target);
   readRustUserProjectFile(target);
-  readRustTypescriptCompatibilityMode(target);
 }
 
 export function readRustCrateName(target: TargetSelection): string {
@@ -70,17 +65,6 @@ export function readRustOutputType(target: TargetSelection): RustOutputType {
 
 export function readRustUserProjectFile(target: TargetSelection): string | undefined {
   return readOptionalStringOption(target, "projectFile");
-}
-
-export function readRustTypescriptCompatibilityMode(target: TargetSelection): TargetTypescriptCompatibilityMode {
-  const value = target.options?.typescriptCompatibility;
-  if (value === undefined) {
-    return "strict-native";
-  }
-  if (value !== "strict-native" && value !== "compat") {
-    throw new Error("Rust target option 'typescriptCompatibility' must be either 'strict-native' or 'compat'.");
-  }
-  return value;
 }
 
 function readOptionalStringOption(target: TargetSelection, key: string): string | undefined {

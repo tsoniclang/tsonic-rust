@@ -751,7 +751,7 @@ function printRustStatementExpr(
       ? expression.expr.path
       : `${printRustAssociatedCallOwner(expression.expr)}::${expression.expr.method}`;
     const flat = printRustExpr(expression.expr);
-    const forceExpanded = !renderedFits(flat, column) ||
+    const forceExpanded = !renderedFits(`${flat}?`, column) ||
       expression.expr.args.length > 1 && flat.length > rustNestedCallWidth &&
         expression.expr.args.filter((argument) =>
           argument.kind === "call" || argument.kind === "associated-call" ||

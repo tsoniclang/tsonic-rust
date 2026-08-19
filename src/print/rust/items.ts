@@ -1,4 +1,4 @@
-import { appendToLastLine, lastLineLength, renderedFits } from "./patterns.js";
+import { appendToLastLine, firstLine, lastLineLength, renderedFits } from "./patterns.js";
 import { finalizeRustSourceStyle } from "../../backend/rust-ast/source-style.js";
 import { indentText, printRustType } from "./types.js";
 import { printRustBlockStatements } from "./blocks.js";
@@ -51,7 +51,15 @@ export function printRustItem(item: RustItem): string {
       if (renderedFits(`${prefix} ${target};`, 0)) {
         return `${prefix} ${target};`;
       }
-      return `${prefix}\n${appendToLastLine(`${indentText(1)}${printRustTypeFitted(item.target, 1, indentText(1).length)}`, ";")}`;
+      const targetIndent = indentText(1);
+      if (!target.includes("\n") && renderedFits(`${target};`, targetIndent.length)) {
+        return `${prefix}\n${targetIndent}${target};`;
+      }
+      const fitted = printRustTypeFitted(item.target, 0, prefix.length + 1);
+      if (prefix.length + 1 + firstLine(fitted).length <= rustFormatWidth) {
+        return appendToLastLine(`${prefix} ${fitted}`, ";");
+      }
+      return `${prefix}\n${appendToLastLine(`${targetIndent}${printRustTypeFitted(item.target, 1, targetIndent.length)}`, ";")}`;
     }
     case "const": {
       const constAttrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
@@ -60,7 +68,9 @@ export function printRustItem(item: RustItem): string {
     }
     case "thread-local": {
       const attrs = (item.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
-      const declaration = `${printRustVisibility(item.visibility)}static ${item.name}: ${printRustType(item.type)} = const { ${printRustExpr(item.value)} };`;
+      const value = printRustExpr(item.value);
+      const initializer = item.constInitializer ? `const { ${value} }` : value;
+      const declaration = `${printRustVisibility(item.visibility)}static ${item.name}: ${printRustType(item.type)} = ${initializer};`;
       return `std::thread_local! {\n${attrs}    ${declaration}\n}`;
     }
     case "struct": {

@@ -9,7 +9,7 @@ function references(contextOptions) {
   return pack.provider.runtimeContributions(fakeRuntimeContributionContext(contextOptions)).references;
 }
 
-test("strict-native mode contributes only the shared rust runtime crate", () => {
+test("the target provider contributes only the shared Rust runtime crate", () => {
   const refs = references({ target: { id: "rust", options: {} } });
 
   assert.equal(refs.length, 1);
@@ -20,25 +20,17 @@ test("strict-native mode contributes only the shared rust runtime crate", () => 
   assert.match(runtime.include, /rust-runtime\/crates\/tsonic_rust_runtime$/u);
 });
 
-test("compat mode without js surface adds the rust-js crate", () => {
-  const refs = references({ target: { id: "rust", options: { typescriptCompatibility: "compat" } } });
+test("the JS surface contributes exactly the rust-js crate", () => {
+  const pack = createRustTargetPack();
+  const surface = pack.surfaces.find((candidate) => candidate.id === "js");
+  assert.ok(surface);
+  const refs = surface.runtimeContributions(
+    fakeRuntimeContributionContext({ target: { id: "rust", options: {} } }),
+  ).references;
 
-  assert.deepEqual(
-    refs.map((reference) => reference.attributes.crate),
-    ["tsonic_rust_runtime", "tsonic_rust_js"],
-  );
-  const jsReference = refs[1];
-  assert.match(jsReference.include, /rust-js\/crates\/tsonic_rust_js$/u);
-  assert.equal(jsReference.attributes.registryPatch, "crates-io");
-});
-
-test("compat mode with a selected js surface does not duplicate the rust-js crate", () => {
-  const refs = references({
-    target: { id: "rust", options: { typescriptCompatibility: "compat" } },
-    selectedSurfaces: [{ id: "js" }],
-  });
-
-  assert.deepEqual(refs.map((reference) => reference.attributes.crate), ["tsonic_rust_runtime"]);
+  assert.deepEqual(refs.map((reference) => reference.attributes.crate), ["tsonic_rust_js"]);
+  assert.match(refs[0].include, /rust-js\/crates\/tsonic_rust_js$/u);
+  assert.equal(refs[0].attributes.registryPatch, "crates-io");
 });
 
 test("runtime crate references resolve to installed package paths", () => {

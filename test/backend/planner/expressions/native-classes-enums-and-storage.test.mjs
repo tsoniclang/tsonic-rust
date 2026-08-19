@@ -100,8 +100,9 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.doesNotMatch(text, /#value/u);
-  assert.match(text, /struct LeftState \{\s*pub\(crate\) value: i32,/u);
-  assert.match(text, /struct RightState \{\s*pub\(crate\) value: i32,/u);
+  assert.match(text, /struct Left \{\s*pub\(crate\) value: i32,/u);
+  assert.match(text, /struct Right \{\s*pub\(crate\) value: i32,/u);
+  assert.match(text, /fn increment\(&mut self\) -> i32/u);
   assert.equal(validateGeneratedProject("private-field-bin", result.artifacts, { run: true }).status, 0);
 });
 
@@ -638,7 +639,7 @@ export function grow(xs: int32[]): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn grow\(xs: js_abi::JsArray<i32>\)/u);
-  assert.match(text, /xs\s*\.push_many\(\[4\]\)/u);
+  assert.match(text, /xs\.push_many_discard\(\[4\]\)/u);
   assert.doesNotMatch(text, /f64_to_i32/u);
 });
 

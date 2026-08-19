@@ -322,8 +322,10 @@ export function passByValue(page: Page): string { return consume(page); }
   assert.doesNotMatch(output, /page\.clone\(\)\.(?:read_title|rename)\(/u);
   assert.match(output, /let receiver = &page;/u);
   assert.match(output, /let accessor_receiver = &page;/u);
-  assert.match(output, /dispatch_receiver(?:_\d+)? = value\.clone\(\);/u);
-  assert.match(output, /consume\(page\.clone\(\)\)/u);
+  assert.match(output, /dispatch_receiver(?:_\d+)? = value;/u);
+  assert.doesNotMatch(output, /dispatch_receiver(?:_\d+)? = value\.clone\(\);/u);
+  assert.match(output, /consume\(page\)/u);
+  assert.doesNotMatch(output, /consume\(page\.clone\(\)\)/u);
   validateGeneratedProject("non-consuming-project-access", result.artifacts);
 });
 

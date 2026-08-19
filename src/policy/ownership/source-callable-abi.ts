@@ -89,7 +89,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
           isRustStringCarrier(base) &&
           !requiresOwnedValue &&
-          parameterOnlyReadsThroughReceiver(parameter, context)
+          parameterCanUseSharedBorrow(parameter, context)
         ? {
             kind: "reference" as const,
             referent: base,
@@ -223,16 +223,16 @@ function parameterUsesFlowState(
   if (body === undefined) {
     return false;
   }
-  return context.source.navigation
-    .referencesWithin(declarationReference.symbol, body)
-    .some((reference) => {
+  return context.source.navigation.declarationUses(parameter)
+    .filter((use) => !use.captured)
+    .some(({ reference }) => {
       const flow = context.facts.resolve(reference, flowStateFactKey) ??
         context.facts.get(reference, flowStateFactKey);
       return flow?.state === state;
     });
 }
 
-function parameterOnlyReadsThroughReceiver(
+function parameterCanUseSharedBorrow(
   parameter: Node,
   context: RustTargetTypeResolutionContext,
 ): boolean {
@@ -247,12 +247,19 @@ function parameterOnlyReadsThroughReceiver(
   if (body === undefined) {
     return false;
   }
-  const references = context.source.navigation.referencesWithin(
-    declarationReference.symbol,
-    body,
-  );
-  return references.length > 0 && references.every((reference) =>
-    referenceOnlyReadsThroughReceiver(reference, context));
+  const summary = context.source.navigation.parameterUseSummary(parameter);
+  if (summary === undefined || summary.uses.length === 0 ||
+    summary.bindingWritten || summary.memberWritten || summary.captured ||
+    summary.returned || summary.yielded || summary.aliasedOrStored ||
+    summary.exported) {
+    return false;
+  }
+  return summary.uses.every(({ reference, role }) => {
+    const flow = context.facts.resolve(reference, flowStateFactKey) ??
+      context.facts.get(reference, flowStateFactKey);
+    return flow?.state === "borrowed-shared" ||
+      role === "receiver";
+  });
 }
 
 function enclosingCallable(
@@ -276,33 +283,4 @@ function enclosingCallable(
     current = ast.parent(current);
   }
   return undefined;
-}
-
-function referenceOnlyReadsThroughReceiver(
-  reference: Node,
-  context: RustTargetTypeResolutionContext,
-): boolean {
-  const { ast } = context;
-  let current = reference;
-  for (;;) {
-    const parent = ast.parent(current);
-    if (parent === undefined) {
-      return false;
-    }
-    if (ast.is.IsParenthesizedExpression(parent)) {
-      const expression = ast.as.AsParenthesizedExpression(parent)?.Expression;
-      if (expression !== current) {
-        return false;
-      }
-      current = parent;
-      continue;
-    }
-    if (ast.is.IsPropertyAccessExpression(parent)) {
-      return ast.as.AsPropertyAccessExpression(parent)?.Expression === current;
-    }
-    if (ast.is.IsElementAccessExpression(parent)) {
-      return ast.as.AsElementAccessExpression(parent)?.Expression === current;
-    }
-    return false;
-  }
 }

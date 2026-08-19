@@ -24,7 +24,7 @@ import { applyRustValueConversion, finishProviderOperationExpression, planProvid
 import { diagnosticInput } from "../program/plan-context.js";
 import { isDenseDataArray } from "../../../policy/model/closed-data.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
-import { isRustBigIntCarrier, isRustIntegerCarrier } from "../../../policy/types/target-types.js";
+import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustStringConcat } from "../../rust-ast/expressions.js";
 import { parseSourceBigIntLiteral, parseSourceIntegerLiteral } from "../../../policy/types/literals.js";
@@ -150,15 +150,17 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
     if (value === undefined) {
       return undefined;
     }
-    context.usedAliases?.add("rt");
-    parts.push({
-      kind: "call",
-      path: "rt::source_string",
-      args: [{
-        kind: "reference",
-        expr: planRustNonConsumingValue(expression, value, context),
-      }],
-    });
+    const selectedValue = planRustNonConsumingValue(expression, value, context);
+    if (isRustStringCarrier(substitution.carrier)) {
+      parts.push(selectedValue);
+    } else {
+      context.usedAliases?.add("rt");
+      parts.push({
+        kind: "call",
+        path: "rt::source_string",
+        args: [{ kind: "reference", expr: selectedValue }],
+      });
+    }
     parts.push({ kind: "string-literal", value: context.input.ast.text(literal) });
   }
   return rustStringConcat(parts);

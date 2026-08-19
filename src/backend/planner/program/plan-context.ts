@@ -3,9 +3,11 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import type { RustGenericRequirementSet } from "../types/generic-requirements.js";
 import type { RustGeneratorFact, RustSourceBindingFact } from "../../../analysis/facts/keys.js";
+import { rustModuleBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../policy/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
+import { rustSourceItemIdentity } from "./source-package-facades.js";
 import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../../rust-ast/nodes.js";
 import {
   isValidRustIdentifier,
@@ -61,15 +63,17 @@ export interface RustPlanContext {
   readonly input: RustPlanningContext;
   readonly sourceFile: SourceFile;
   readonly moduleName: string;
+  readonly crateName?: string;
   readonly moduleNameByFileName: ReadonlyMap<string, string>;
+  readonly externalCrateNameByFileName: ReadonlyMap<string, string>;
+  readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
+  readonly externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>;
   readonly programModuleName: string;
   readonly structuralShapesModuleName: string;
+  readonly publicImplementationItemIdentities: ReadonlySet<string>;
   readonly diagnostics: TargetDiagnostic[];
   readonly errorDomain: RustErrorDomain;
   readonly planBlock: (node: Node, context: RustPlanContext) => RustBlock | undefined;
-  // Identifier names with a proven write (assignment or increment) in the
-  // enclosing function body. `let mut` is emitted only for proven writes.
-  readonly mutatedNames?: ReadonlySet<string>;
   readonly syntheticNames?: RustSyntheticNameState;
   readonly controlFlow?: RustControlFlowState;
   readonly controlTargets?: readonly RustControlTarget[];
@@ -97,6 +101,16 @@ export interface RustPlanContext {
   readonly projectDispatchRoot?: RustExpr;
   readonly objectLiteralImplementations?: RustObjectLiteralImplementationRegistry;
   readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../../policy/types/model.js").TargetTypeRef>;
+}
+
+export function rustSourceItemIsPubliclyReachable(
+  context: RustPlanContext,
+  itemName: string,
+): boolean {
+  return context.publicImplementationItemIdentities.has(rustSourceItemIdentity(
+    context.input.ast.getFileName(context.sourceFile),
+    itemName,
+  ));
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS
@@ -137,17 +151,19 @@ export function rustSourceBindingPath(
   context: RustPlanContext,
   binding: RustSourceBindingFact,
 ): string | undefined {
-  const name = context.input.names.nameForDeclaration(binding.sourceDeclaration);
+  const moduleBinding = binding.scope === "module"
+    ? context.input.facts.getFact(binding.sourceDeclaration, rustModuleBindingFactKey)
+    : undefined;
+  const name = moduleBinding?.storage === "native-callable" && moduleBinding.value !== undefined
+    ? moduleBinding.value.name
+    : context.input.names.nameForDeclaration(binding.sourceDeclaration);
   if (name === undefined || !isValidRustIdentifier(name)) {
     return undefined;
   }
   if (binding.scope === "lexical") {
     return name;
   }
-  const declarationModule = context.moduleNameByFileName.get(binding.fileName);
-  return declarationModule !== undefined && declarationModule !== context.moduleName
-    ? `crate::${declarationModule}::${name}`
-    : name;
+  return sourceModuleItemPath(context, binding.fileName, name);
 }
 
 export function isUpperSnakeName(name: string): boolean {
@@ -167,5 +183,29 @@ export function sourceTypePath(
   if (moduleName === undefined || typeName === undefined || !isValidRustIdentifier(typeName)) {
     return undefined;
   }
-  return moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
+  return sourceModuleItemPath(context, value.fileName, typeName);
+}
+
+export function sourceModuleItemPath(
+  context: Pick<
+    RustPlanContext,
+    "moduleName" | "crateName" | "moduleNameByFileName" | "externalCrateNameByFileName" |
+      "externalItemPathByIdentity"
+  >,
+  fileName: string,
+  itemName: string,
+): string | undefined {
+  const moduleName = context.moduleNameByFileName.get(fileName);
+  if (moduleName === undefined) {
+    return undefined;
+  }
+  const externalCrate = context.externalCrateNameByFileName.get(fileName);
+  if (externalCrate !== undefined && externalCrate !== context.crateName) {
+    return context.externalItemPathByIdentity.get(
+      rustSourceItemIdentity(fileName, itemName),
+    );
+  }
+  return moduleName === context.moduleName
+    ? itemName
+    : `crate::${moduleName}::${itemName}`;
 }

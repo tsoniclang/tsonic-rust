@@ -18,6 +18,7 @@ const float64 = { kind: "source-primitive", name: "float64" };
 const int32 = { kind: "source-primitive", name: "int32" };
 const isize = { kind: "source-primitive", name: "native-int" };
 const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
+const providerError = { kind: "target-named", id: "rust.test.ProviderError" };
 const string = { kind: "target-named", id: "rust.std.String" };
 const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
 const unit = { kind: "tuple", elements: [] };
@@ -166,6 +167,7 @@ test("compile-time source arguments must be declared explicitly and remain in th
     isAsync: false,
     isFallible: true,
     errorBoundary: "provider-native",
+    errorCarrier: providerError,
   };
 
   assert.equal(finalizeRustProviderOperationAbi(options), undefined);

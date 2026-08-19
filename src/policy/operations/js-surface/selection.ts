@@ -8,6 +8,7 @@ import {
   isRustJsArrayCarrier,
   isRustSourceStringConvertibleCarrier,
   rustJsValueTargetType,
+  rustJsErrorTargetType,
   rustStringTargetId,
   rustVecTargetType,
   isRustNumericCarrier,
@@ -388,7 +389,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
             carrier,
             argumentCarriers[index],
             index,
-            request.argumentCompatibility,
+            request.argumentMatchScore,
           ));
     if (argumentScores.some((score) => score === undefined)) {
       return [];
@@ -412,12 +413,19 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     return undefined;
   }
   const { row, parameterCarriers } = selected;
-  const target = materializeVariadicTarget(row.shape.target, bindings.element);
+  const discardResult = request.resultUse === "discarded" &&
+    row.shape.op === "operation" && row.shape.discardedTarget !== undefined;
+  const target = materializeVariadicTarget(
+    discardResult && row.shape.op === "operation"
+      ? row.shape.discardedTarget!
+      : row.shape.target,
+    bindings.element,
+  );
   if (target === undefined) {
     return undefined;
   }
   const selectedParameterCarriers = row.variadic === true ? undefined : parameterCarriers;
-  const operationId = `tsonic.rust.js.${row.owner}.${row.member}.${row.operationKind}${row.variant === undefined ? "" : `.${row.variant}`}`;
+  const operationId = `tsonic.rust.js.${row.owner}.${row.member}.${row.operationKind}${row.variant === undefined ? "" : `.${row.variant}`}${discardResult ? ".discarded" : ""}`;
   if (row.shape.op === "set") {
     if (parameterCarriers.some((carrier) => carrier === undefined)) {
       return undefined;
@@ -432,7 +440,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
     };
   }
-  const resultCarrier = resolveCarrierRef(row.shape.result, bindings);
+  const resultCarrier = discardResult
+    ? rustUnitTargetType()
+    : resolveCarrierRef(row.shape.result, bindings);
   const sourceResultCarrier = row.shape.sourceResult === undefined
     ? undefined
     : resolveCarrierRef(row.shape.sourceResult, bindings);
@@ -466,7 +476,10 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       isAsync: false,
       isFallible: row.fallible === true,
       errorBoundary: row.fallible === true ? "provider-native" : "none",
-      ...(row.shape.resultConversion === undefined ? {} : { resultConversion: row.shape.resultConversion }),
+      ...(row.fallible === true ? { errorCarrier: rustJsErrorTargetType() } : {}),
+      ...(discardResult || row.shape.resultConversion === undefined
+        ? {}
+        : { resultConversion: row.shape.resultConversion }),
     },
     resultCarrier,
     ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
@@ -502,33 +515,33 @@ function jsArgumentCarrierMatchScore(
   expected: TargetTypeRef | undefined,
   actual: TargetTypeRef | undefined,
   index: number,
-  compatibility: JsOperationRequest["argumentCompatibility"],
+  relationScore: JsOperationRequest["argumentMatchScore"],
 ): number | undefined {
   if (actual === undefined) {
     return expected === undefined
       ? undefined
-      : compatibility?.(expected, actual, index);
+      : relationScore?.(expected, actual, index);
   }
   if (expected === undefined || (expected.kind === "opaque" && expected.id === "tsonic.rust.infer")) {
     return 0;
   }
   if (expected.kind === "closure" && actual.kind === "closure") {
     if (expected.args.length !== actual.args.length) {
-      return compatibility?.(expected, actual, index);
+      return relationScore?.(expected, actual, index);
     }
     const scores = [
       ...expected.args.map((argument, argumentIndex) =>
-        jsArgumentCarrierMatchScore(argument, actual.args[argumentIndex], index, compatibility)),
-      jsArgumentCarrierMatchScore(expected.result, actual.result, index, compatibility),
+        jsArgumentCarrierMatchScore(argument, actual.args[argumentIndex], index, relationScore)),
+      jsArgumentCarrierMatchScore(expected.result, actual.result, index, relationScore),
     ];
     return scores.some((score) => score === undefined)
-      ? compatibility?.(expected, actual, index)
+      ? relationScore?.(expected, actual, index)
       : (scores as number[]).reduce((total, score) => total + score, 0);
   }
   if (rustTargetTypeRefEquals(expected, actual)) {
     return 0;
   }
-  return compatibility?.(expected, actual, index);
+  return relationScore?.(expected, actual, index);
 }
 
 // Constructor rows: matched by lib class declaration identity plus argument

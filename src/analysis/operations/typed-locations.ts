@@ -1,8 +1,10 @@
 import type {
+  AstReader,
   Node,
   ProviderDeclarationIdentity,
   SourceCallMarkerKind,
 } from "@tsonic/tsts";
+import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import {
   acceptRustPolicy,
   rejectRustPolicy,
@@ -464,28 +466,14 @@ function rustTypedLocationStorageRoot(
   readonly storage: "local-location" | "module-cell";
   readonly carrier?: TargetTypeRef;
 } | undefined {
-  let expression = storage;
-  while (true) {
-    const kind = context.ast.kindName(expression);
-    if (kind !== "KindPropertyAccessExpression" &&
-      kind !== "KindElementAccessExpression" &&
-      kind !== "KindParenthesizedExpression") {
-      break;
-    }
-    const receiver = Node_Expression(context.ast, expression);
-    if (receiver === undefined) {
-      return undefined;
-    }
-    expression = receiver;
-  }
-  if (context.ast.kindName(expression) !== "KindIdentifier") {
-    return undefined;
-  }
-  const reference = context.source.navigation.sourceReferenceFor(expression);
-  const declaration = reference?.project === true
-    ? reference.declaration
-    : undefined;
-  if (declaration === undefined ||
+  const root = rustTypedLocationStorageRootReference(
+    storage,
+    context.ast,
+    context.source.navigation,
+  );
+  const expression = root?.expression;
+  const declaration = root?.declaration;
+  if (expression === undefined || declaration === undefined ||
     (context.ast.kindName(declaration) !== "KindVariableDeclaration" &&
       context.ast.kindName(declaration) !== "KindParameter")) {
     return undefined;
@@ -512,9 +500,12 @@ function rustTypedLocationStorageRoot(
   if (!functionLocal && !moduleBinding) {
     return undefined;
   }
-  if (moduleBinding &&
-    context.facts.get(declaration, rustModuleBindingFactKey)?.storage !== "module-cell") {
-    return undefined;
+  if (moduleBinding) {
+    const binding = context.facts.get(declaration, rustModuleBindingFactKey);
+    if (binding?.storage !== "module-cell" &&
+      !(binding?.storage === "native-callable" && binding.value !== undefined)) {
+      return undefined;
+    }
   }
   return {
     expression,
@@ -526,6 +517,34 @@ function rustTypedLocationStorageRoot(
       options,
     ),
   };
+}
+
+export function rustTypedLocationStorageRootReference(
+  storage: Node,
+  ast: AstReader,
+  navigation: SourceProgramNavigation,
+): { readonly expression: Node; readonly declaration: Node } | undefined {
+  let expression = storage;
+  while (true) {
+    const kind = ast.kindName(expression);
+    if (kind !== "KindPropertyAccessExpression" &&
+      kind !== "KindElementAccessExpression" &&
+      kind !== "KindParenthesizedExpression") {
+      break;
+    }
+    const receiver = Node_Expression(ast, expression);
+    if (receiver === undefined) {
+      return undefined;
+    }
+    expression = receiver;
+  }
+  if (ast.kindName(expression) !== "KindIdentifier") {
+    return undefined;
+  }
+  const reference = navigation.sourceReferenceFor(expression);
+  return reference?.project === true
+    ? { expression, declaration: reference.declaration }
+    : undefined;
 }
 
 function rejectRustTypedLocation<T>(

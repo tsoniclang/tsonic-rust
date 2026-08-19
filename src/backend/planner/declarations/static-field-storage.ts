@@ -1,7 +1,7 @@
 import type { RustExpr } from "../../rust-ast/nodes.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { isValidRustIdentifier } from "../program/plan-context.js";
+import { isValidRustIdentifier, sourceModuleItemPath } from "../program/plan-context.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
 
 type RustSourceStaticFieldFact = Extract<
@@ -13,13 +13,10 @@ export function rustSourceStaticFieldCell(
   fact: RustSourceStaticFieldFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const moduleName = context.moduleNameByFileName.get(fact.storageFileName);
-  if (moduleName === undefined || !isValidRustIdentifier(fact.storageName)) {
+  const path = sourceModuleItemPath(context, fact.storageFileName, fact.storageName);
+  if (path === undefined || !isValidRustIdentifier(fact.storageName)) {
     return undefined;
   }
-  const path = moduleName === context.moduleName
-    ? fact.storageName
-    : `crate::${moduleName}::${fact.storageName}`;
   return { kind: "path", path };
 }
 

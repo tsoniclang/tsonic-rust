@@ -32,6 +32,9 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
     (options.isFallible && !isRustFallibleErrorBoundary(options.errorBoundary)) ||
     (!options.isFallible && options.errorBoundary !== undefined) ||
+    (options.errorBoundary === "provider-native"
+      ? !isRustTargetTypeRef(options.errorCarrier)
+      : options.errorCarrier !== undefined) ||
     (options.isUnsafe !== undefined && typeof options.isUnsafe !== "boolean")) {
     return undefined;
   }
@@ -111,6 +114,9 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       errorBoundary: options.isFallible && isRustFallibleErrorBoundary(options.errorBoundary)
         ? options.errorBoundary
         : "none",
+      ...(options.errorBoundary === "provider-native" && options.errorCarrier !== undefined
+        ? { errorCarrier: options.errorCarrier }
+        : {}),
       safety: options.isUnsafe ? "requires-unsafe" : "safe",
     },
   };

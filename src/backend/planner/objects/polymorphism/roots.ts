@@ -17,6 +17,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
+import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -27,7 +28,8 @@ export function planProjectRootImplementations(
 ): readonly RustItem[] | undefined {
   const lineage = context.input.projectTypes.classLineage(concrete);
   const interfaces = context.input.projectTypes.interfacesForClass(concrete);
-  if (lineage === undefined || interfaces === undefined) {
+  const representation = context.input.objectRepresentations.representationFor(concrete);
+  if (lineage === undefined || interfaces === undefined || representation === undefined) {
     return undefined;
   }
   const items: RustItem[] = [];
@@ -95,6 +97,7 @@ export function planProjectRootImplementations(
       relation.targetType,
       rootType,
       layers,
+      representation,
       implementationFor,
       accessorImplementationFor,
       context,
@@ -132,6 +135,7 @@ function planRootContractFunctions(
   contractCarrier: TargetTypeRef,
   rootType: RustType,
   layers: readonly ProjectClassStateLayer[],
+  representation: RustObjectRepresentation,
   implementationFor: (
     implementation: Node,
     targetTypeArguments: readonly TargetTypeRef[],
@@ -197,6 +201,7 @@ function planRootContractFunctions(
               { kind: "path", path: "self" },
               storagePath,
               field.carrier,
+              representation,
             ),
             fallible: false,
           }
@@ -241,15 +246,18 @@ function planRootContractFunctions(
       const writeValue = implementation.kind === "stored"
         ? storagePath === undefined
           ? undefined
-          : {
-              expression: writeRustProjectObjectField(
+          : (() => {
+              const expression = writeRustProjectObjectField(
                 { kind: "path", path: "self" },
                 storagePath,
                 "=",
                 { kind: "path", path: "value" },
-              ),
-              fallible: false,
-            }
+                representation,
+              );
+              return expression === undefined
+                ? undefined
+                : { expression, fallible: false as const };
+            })()
         : implementation.setter === undefined
           ? undefined
           : (() => {
@@ -419,6 +427,15 @@ function planRootContractFunctions(
           return undefined;
         }
         if (!functions.some((candidate) => candidate.name === write)) {
+          const replacement = writeRustProjectMethodOverride(
+            { kind: "path", path: "self" },
+            storagePath,
+            { kind: "path", path: "value" },
+            representation,
+          );
+          if (replacement === undefined) {
+            return undefined;
+          }
           functions.push({
             name: write,
             visibility: "private",
@@ -427,11 +444,7 @@ function planRootContractFunctions(
             body: {
               statements: [{
                 kind: "expr",
-                expr: writeRustProjectMethodOverride(
-                  { kind: "path", path: "self" },
-                  storagePath,
-                  { kind: "path", path: "value" },
-                ),
+                expr: replacement,
               }],
             },
           });

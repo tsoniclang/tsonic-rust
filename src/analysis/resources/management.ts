@@ -71,6 +71,7 @@ export function selectRustResourceManagement(
       alternative.disposal.kind !== first.disposal.kind ||
       alternative.disposal.fallible !== first.disposal.fallible ||
       alternative.disposal.errorBoundary !== first.disposal.errorBoundary ||
+      !optionalCarrierEquals(alternative.disposal.errorCarrier, first.disposal.errorCarrier) ||
       !resourceDisposalTargetsEqual(alternative.disposal.target, first.disposal.target))) {
     return rejected("Rust resource alternatives must resolve to one identical carrier and disposal operation.");
   }
@@ -198,21 +199,42 @@ function selectDisposalAlternative(
   if (!isRustUnitCarrier(row.resultCarrier)) {
     return rejected("The selected provider resource disposer must have an exact void result.");
   }
+  const target = { form: "provider" as const, target: row.target };
+  const disposal: RustResourceManagementFact["disposal"] = row.isFallible !== true
+    ? {
+        kind: alternative.kind,
+        fallible: false,
+        errorBoundary: "none",
+        target,
+      }
+    : row.errorBoundary === "provider-native"
+      ? {
+          kind: alternative.kind,
+          fallible: true,
+          errorBoundary: "provider-native",
+          errorCarrier: row.errorCarrier,
+          target,
+        }
+      : {
+          kind: alternative.kind,
+          fallible: true,
+          errorBoundary: row.errorBoundary,
+          target,
+        };
   return {
     kind: "selected",
     resourceCarrier,
-    disposal: row.isFallible === true ? {
-      kind: alternative.kind,
-      fallible: true,
-      errorBoundary: row.errorBoundary,
-      target: { form: "provider", target: row.target },
-    } : {
-      kind: alternative.kind,
-      fallible: false,
-      errorBoundary: "none",
-      target: { form: "provider", target: row.target },
-    },
+    disposal,
   };
+}
+
+function optionalCarrierEquals(
+  left: TargetTypeRef | undefined,
+  right: TargetTypeRef | undefined,
+): boolean {
+  return left === undefined
+    ? right === undefined
+    : right !== undefined && rustTargetTypeRefEquals(left, right);
 }
 
 function providerDisposalTargetIsSupported(

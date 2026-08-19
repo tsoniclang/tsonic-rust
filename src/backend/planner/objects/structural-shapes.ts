@@ -30,11 +30,17 @@ import {
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
   moduleNameByFileName: ReadonlyMap<string, string>,
+  externalCrateNameByFileName: ReadonlyMap<string, string>,
+  externalItemPathByIdentity: ReadonlyMap<string, string>,
+  externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>,
   structuralShapesModuleName: string,
+  rootComponentId: string,
   publicShapeNames: ReadonlySet<string>,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
-  if (input.structuralShapes.definitions.length === 0) {
+  const definitions = input.structuralShapes.definitions.filter((definition) =>
+    definition.componentId === rootComponentId);
+  if (definitions.length === 0) {
     return undefined;
   }
   const usedAliases = new Set<string>();
@@ -42,11 +48,14 @@ export function planRustStructuralShapeModule(
     input,
     moduleName: structuralShapesModuleName,
     moduleNameByFileName,
+    externalCrateNameByFileName,
+    externalItemPathByIdentity,
+    externalStructuralShapeModuleByFileName,
     structuralShapesModuleName,
     usedAliases,
   };
   const structs: RustItem[] = [];
-  for (const definition of input.structuralShapes.definitions) {
+  for (const definition of definitions) {
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
       ? "public"
       : "crate";

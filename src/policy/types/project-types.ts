@@ -151,6 +151,7 @@ export interface RustProjectTypePolicyHost {
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
+  sourcePackageComponentForFile(fileName: string): string | undefined;
   resolveSelectedType(
     authoredTypeNode: Node | undefined,
     selectedType: Type,

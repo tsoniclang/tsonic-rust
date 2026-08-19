@@ -83,7 +83,7 @@ export function rustExpressionContainsExpandedStructLiteral(expression: RustExpr
       return false;
   }
 }
-function rustExpressionContainsExpandedCollectionLiteral(expression: RustExpr): boolean {
+export function rustExpressionContainsExpandedCollectionLiteral(expression: RustExpr): boolean {
   switch (expression.kind) {
     case "vec-literal":
     case "slice-literal":
@@ -190,6 +190,9 @@ function rustTransparentInvocationOperand(expression: RustExpr): RustExpr {
 }
 
 export function rustFormatArgumentIsAtomic(expression: RustExpr): boolean {
+  if (expression.kind === "unary") {
+    return rustFormatArgumentIsAtomic(expression.operand);
+  }
   return expression.kind === "int-literal" || expression.kind === "float-literal" ||
     expression.kind === "bool-literal" || expression.kind === "none" ||
     expression.kind === "str-literal" ||
@@ -197,7 +200,7 @@ export function rustFormatArgumentIsAtomic(expression: RustExpr): boolean {
 }
 
 export function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
-  if (rustFormatArgumentIsAtomic(expression)) {
+  if (expression.kind === "string-literal" || rustFormatArgumentIsAtomic(expression)) {
     return true;
   }
   switch (expression.kind) {

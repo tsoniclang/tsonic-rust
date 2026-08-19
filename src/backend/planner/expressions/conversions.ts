@@ -14,6 +14,7 @@ import {
 } from "../../../analysis/facts/finalized-operation-abi.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { registerRustProviderErrorCarrier } from "../context.js";
 import { applyRustProviderLocationScope, planRustProviderLocationScope } from "../project/provider-location-scope.js";
 import { diagnosticInput, registerAliasFromPath, sourceTypePath } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -651,7 +652,16 @@ export function finishProviderOperationExpression(
       ));
       return undefined;
     }
-    raw = applyRustErrorBoundary(raw, fact.abi.effects.errorBoundary, context.errorDomain);
+    if (fact.abi.effects.errorBoundary === "provider-native" &&
+      fact.abi.effects.errorCarrier !== undefined) {
+      registerRustProviderErrorCarrier(context.input, fact.abi.effects.errorCarrier);
+    }
+    raw = applyRustErrorBoundary(
+      raw,
+      fact.abi.effects.errorBoundary,
+      context.errorDomain,
+      fact.abi.effects.errorCarrier,
+    );
   }
   if (fact.abi.result.kind === "async") {
     return raw;

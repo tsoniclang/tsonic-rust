@@ -83,7 +83,8 @@ export function read(type: string): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn new\(r#type: String\)/u);
   assert.match(text, /pub fn read\(r#type: String\) -> String/u);
-  assert.match(text, /Label::new\(r#type\.clone\(\)\)/u);
+  assert.match(text, /Label::new\(r#type\)/u);
+  assert.doesNotMatch(text, /Label::new\(r#type\.clone\(\)\)/u);
   validateGeneratedProject("native-raw-identifiers", result.artifacts);
 });
 
@@ -108,7 +109,8 @@ export function read(value: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn r#match\(&self, value: String\) -> String/u);
-  assert.match(text, /matcher\.r#match\(value\.clone\(\)\)/u);
+  assert.match(text, /matcher\.r#match\(value\)/u);
+  assert.doesNotMatch(text, /value\.clone\(\)/u);
   assert.doesNotMatch(text, /matcher\.clone\(\)\.r#match/u);
   validateGeneratedProject("native-raw-method-identifiers", result.artifacts);
 });
@@ -383,9 +385,11 @@ export function first(entry: [int32, string]): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pair\(a: i32, label: String\) -> \(i32, String\)/u);
-  assert.match(text, /let entry: \(i32, String\) = \(a, label\.clone\(\)\);/u);
+  assert.match(text, /let entry: \(i32, String\) = \(a, label\);/u);
+  assert.doesNotMatch(text, /\(a, label\.clone\(\)\)/u);
   assert.match(text, /pub fn first\(entry: \(i32, String\)\) -> i32/u);
-  assert.match(text, /entry\.clone\(\)\.0/u);
+  assert.match(text, /entry\.0/u);
+  assert.doesNotMatch(text, /entry\.clone\(\)\.0/u);
 });
 
 test("homogeneous tuple carriers support checked dynamic indexing", { timeout: 300_000 }, () => {
@@ -626,7 +630,7 @@ export async function main(): Promise<void> {}
   assert.deepEqual(asyncMain.result.diagnostics, []);
   assert.match(
     artifactText(asyncMain.result, "src/main.rs"),
-    /tsonic_rust_runtime::block_on\(async_main::index::main\(\)\)/u,
+    /tsonic_rust_runtime::block_on\(async_main::tsonic_entry\(\)\)/u,
   );
 });
 

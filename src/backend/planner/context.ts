@@ -9,6 +9,8 @@ import {
 import type {
   RustArtifactGraph,
 } from "./artifacts/index.js";
+import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import type { TargetTypeRef } from "../../policy/types/model.js";
 
 export interface RustPlanningContext
   extends TargetCompileInput,
@@ -16,6 +18,7 @@ export interface RustPlanningContext
   readonly backend: TargetBackendContext;
   readonly program: RustTargetProgram;
   readonly artifacts: RustArtifactGraph;
+  readonly providerErrorCarriers: TargetTypeRef[];
 }
 
 export function createRustPlanningContext(
@@ -29,5 +32,16 @@ export function createRustPlanningContext(
     backend,
     program,
     artifacts: createRustArtifactGraph(program.ast),
+    providerErrorCarriers: [],
   });
+}
+
+export function registerRustProviderErrorCarrier(
+  context: RustPlanningContext,
+  carrier: TargetTypeRef,
+): void {
+  if (!context.providerErrorCarriers.some((candidate) =>
+    rustTargetTypeRefEquals(candidate, carrier))) {
+    context.providerErrorCarriers.push(carrier);
+  }
 }

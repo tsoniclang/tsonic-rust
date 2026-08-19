@@ -168,12 +168,7 @@ export function finalizeRustPreparedCheckedCall(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const template = callbackFallible
-    ? {
-        ...prepared.template,
-        target: prepared.callback.fallibleTarget,
-        isFallible: true,
-        errorBoundary: "source-program" as const,
-      }
+    ? callbackFallibleTemplate(prepared)
     : prepared.template;
   return acceptSelectedCall(
     request,
@@ -188,6 +183,18 @@ export function finalizeRustPreparedCheckedCall(
         : { providerDeclaration: prepared.providerDeclaration }),
     },
   );
+}
+
+function callbackFallibleTemplate(
+  prepared: RustPreparedDeferredCheckedCall,
+): RustProviderOperationTemplate {
+  const { errorCarrier: _providerErrorCarrier, ...template } = prepared.template;
+  return {
+    ...template,
+    target: prepared.callback.fallibleTarget,
+    isFallible: true,
+    errorBoundary: "source-program",
+  };
 }
 
 function replaceRustInferCarrier(

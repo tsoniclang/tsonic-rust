@@ -4,6 +4,7 @@ import type {
   SourceFile,
 } from "@tsonic/tsts";
 import type { TargetCompilationPaths } from "@tsonic/target-api";
+import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustReservedIdentifiers } from "../../policy/names/identifiers.js";
 
@@ -14,6 +15,9 @@ export interface RustSourceFileOutputIdentity {
   readonly moduleName: string;
   readonly artifactPath: string;
   readonly childModuleNames: readonly string[];
+  readonly packageId: string;
+  readonly componentId: string;
+  readonly externalCrateName?: string;
 }
 
 export type RustSourceOutputIdentityPlan =
@@ -30,22 +34,53 @@ export interface RustSourceOutputIdentityPlannerHost {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly paths: TargetCompilationPaths;
+  readonly sourcePackages: TargetSourcePackageGraph;
 }
 
 export function planRustSourceOutputIdentities(
   host: RustSourceOutputIdentityPlannerHost,
 ): RustSourceOutputIdentityPlan {
   const diagnostics: TargetDiagnostic[] = [];
+  const packageBySourceFile = sourcePackageByFileName(host.sourcePackages);
+  const rootPackage = host.sourcePackages.packages.find((entry) =>
+    entry.id === host.sourcePackages.rootPackageId);
+  if (rootPackage === undefined) {
+    return {
+      kind: "rejected",
+      diagnostics: [sourcePackageIdentityDiagnostic(
+        "RUST_ROOT_SOURCE_PACKAGE_MISSING",
+        "The checked source-package graph has no root package entry.",
+      )],
+    };
+  }
+  const externalCrateNames = externalSourcePackageCrateNames(
+    host.sourcePackages,
+    rootPackage.componentId,
+    diagnostics,
+  );
+  const packageCountByComponent = new Map(host.sourcePackages.components.map((component) =>
+    [component.id, component.packages.length] as const));
   const sourcePaths: {
     readonly fileName: string;
     readonly relativeSourcePath: string;
     readonly sourceSegments: readonly string[];
+    readonly packageId: string;
+    readonly componentId: string;
+    readonly externalCrateName?: string;
   }[] = [];
   const seenSourcePaths = new Map<string, string>();
   for (const sourceFile of host.sourceFiles) {
     const fileName = host.ast.getFileName(sourceFile);
-    const relativeSourcePath = projectRelativeSourcePath(
-      host.paths.projectRoot,
+    const sourcePackage = packageBySourceFile.get(normalizePath(resolve(fileName)));
+    if (sourcePackage === undefined) {
+      diagnostics.push(sourcePackageIdentityDiagnostic(
+        "RUST_SOURCE_PACKAGE_IDENTITY_MISSING",
+        `Source file '${fileName}' has no exact package identity in the checked source-package graph.`,
+      ));
+      continue;
+    }
+    const relativeSourcePath = packageRelativeSourcePath(
+      sourcePackage.sourceRoot,
       fileName,
       diagnostics,
     );
@@ -79,14 +114,29 @@ export function planRustSourceOutputIdentities(
       continue;
     }
     seenSourcePaths.set(normalizedSourcePath, fileName);
-    sourcePaths.push({ fileName, relativeSourcePath, sourceSegments });
+    const localComponent = sourcePackage.componentId === rootPackage.componentId;
+    const localSegments = (packageCountByComponent.get(sourcePackage.componentId) ?? 0) > 1
+      ? [rustModuleSegmentBase(sourcePackage.name ?? "package"), ...sourceSegments]
+      : sourceSegments;
+    sourcePaths.push({
+      fileName,
+      relativeSourcePath,
+      sourceSegments: localSegments,
+      packageId: sourcePackage.id,
+      componentId: sourcePackage.componentId,
+      ...(localComponent
+        ? {}
+        : { externalCrateName: externalCrateNames.get(sourcePackage.componentId)! }),
+    });
   }
   if (diagnostics.length > 0) {
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   }
 
-  const root = createModuleSegmentNode();
+  const rootsByComponent = new Map<string, ModuleSegmentNode>();
   for (const sourcePath of sourcePaths) {
+    const root = rootsByComponent.get(sourcePath.componentId) ?? createModuleSegmentNode();
+    rootsByComponent.set(sourcePath.componentId, root);
     let node = root;
     for (const segment of sourcePath.sourceSegments) {
       const child = node.children.get(segment) ?? createModuleSegmentNode();
@@ -94,18 +144,23 @@ export function planRustSourceOutputIdentities(
       node = child;
     }
   }
-  assignRustModuleSegmentNames(root);
+  for (const root of rootsByComponent.values()) {
+    assignRustModuleSegmentNames(root);
+  }
 
   const byFileName = new Map<string, RustSourceFileOutputIdentity>();
   const byModuleName = new Map<string, string>();
   const byArtifactPath = new Map<string, string>();
   for (const sourcePath of sourcePaths) {
     const { fileName, relativeSourcePath } = sourcePath;
+    const root = rootsByComponent.get(sourcePath.componentId)!;
     const moduleSegments = resolveRustModuleSegments(root, sourcePath.sourceSegments);
     const moduleName = moduleSegments.join("::");
     const artifactPath = `src/${moduleSegments.join("/")}.rs`;
-    const moduleOwner = byModuleName.get(moduleName);
-    const artifactOwner = byArtifactPath.get(artifactPath);
+    const moduleIdentity = `${sourcePath.componentId}\u0000${moduleName}`;
+    const artifactIdentity = `${sourcePath.componentId}\u0000${artifactPath}`;
+    const moduleOwner = byModuleName.get(moduleIdentity);
+    const artifactOwner = byArtifactPath.get(artifactIdentity);
     if (moduleOwner !== undefined && moduleOwner !== fileName) {
       diagnostics.push(identityCollisionDiagnostic(
         "RUST_SOURCE_MODULE_IDENTITY_COLLISION",
@@ -126,8 +181,8 @@ export function planRustSourceOutputIdentities(
       ));
       continue;
     }
-    byModuleName.set(moduleName, fileName);
-    byArtifactPath.set(artifactPath, fileName);
+    byModuleName.set(moduleIdentity, fileName);
+    byArtifactPath.set(artifactIdentity, fileName);
     const moduleNode = resolveModuleSegmentNode(root, sourcePath.sourceSegments);
     byFileName.set(fileName, Object.freeze({
       fileName,
@@ -140,6 +195,11 @@ export function planRustSourceOutputIdentities(
           .map((child) => child.rustName!)
           .sort(compareNames),
       ),
+      packageId: sourcePath.packageId,
+      componentId: sourcePath.componentId,
+      ...(sourcePath.externalCrateName === undefined
+        ? {}
+        : { externalCrateName: sourcePath.externalCrateName }),
     }));
   }
 
@@ -164,6 +224,35 @@ export function allocateRustSupportModuleName(
 ): string {
   const usedNames = new Set(additionalReservedNames);
   for (const identity of identities.values()) {
+    if (identity.externalCrateName !== undefined) {
+      continue;
+    }
+    const topLevelName = identity.moduleSegments[0];
+    if (topLevelName !== undefined) {
+      usedNames.add(topLevelName);
+    }
+  }
+  const baseName = rustModuleSegmentBase(preferredName);
+  let candidate = baseName;
+  let suffix = 2;
+  while (usedNames.has(candidate)) {
+    candidate = `${baseName}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+export function allocateRustComponentSupportModuleName(
+  identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
+  componentId: string,
+  preferredName: string,
+  additionalReservedNames: readonly string[] = [],
+): string {
+  const usedNames = new Set(additionalReservedNames);
+  for (const identity of identities.values()) {
+    if (identity.componentId !== componentId) {
+      continue;
+    }
     const topLevelName = identity.moduleSegments[0];
     if (topLevelName !== undefined) {
       usedNames.add(topLevelName);
@@ -290,48 +379,93 @@ function rustModuleSegmentBase(sourceName: string): string {
   return value.length <= 120 ? value : value.slice(0, 120).replace(/_+$/u, "");
 }
 
+export function rustModuleSegmentName(sourceName: string): string {
+  return rustModuleSegmentBase(sourceName);
+}
+
 function compareNames(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function projectRelativeSourcePath(
-  projectRootValue: string,
+function packageRelativeSourcePath(
+  sourceRootValue: string,
   fileName: string,
   diagnostics: TargetDiagnostic[],
 ): string | undefined {
-  const projectRoot = normalizePath(resolve(projectRootValue));
+  const sourceRoot = normalizePath(resolve(sourceRootValue));
   const absoluteFileName = normalizePath(resolve(fileName));
-  const relativeName = normalizePath(relative(projectRoot, absoluteFileName));
+  const relativeName = normalizePath(relative(sourceRoot, absoluteFileName));
   if (relativeName.length !== 0 && relativeName !== "." &&
     relativeName !== ".." && !relativeName.startsWith("../")) {
     return relativeName;
-  }
-  const installedSourcePath = installedSourcePackageRelativePath(absoluteFileName);
-  if (installedSourcePath !== undefined) {
-    return installedSourcePath;
   }
   diagnostics.push({
     code: "RUST_SOURCE_OUTSIDE_PROJECT_ROOT",
     category: "error",
     source: "tsonic-rust",
-    message: `Source file '${fileName}' is outside project root '${projectRoot}' and is not an installed source-package file. Rust output identity must be rooted in the checked TSTS source graph.`,
+    message: `Source file '${fileName}' is outside its exact source-package root '${sourceRoot}'.`,
     evidence: ["target.capability=rust.backend.source-output-identity"],
   });
   return undefined;
 }
 
-function installedSourcePackageRelativePath(
-  absoluteFileName: string,
-): string | undefined {
-  const marker = "/node_modules/";
-  const markerIndex = absoluteFileName.indexOf(marker);
-  if (markerIndex < 0) {
-    return undefined;
+function sourcePackageByFileName(
+  graph: TargetSourcePackageGraph,
+): ReadonlyMap<string, TargetSourcePackageGraph["packages"][number]> {
+  const result = new Map<string, TargetSourcePackageGraph["packages"][number]>();
+  for (const sourcePackage of graph.packages) {
+    for (const sourceFile of sourcePackage.sourceFiles) {
+      result.set(normalizePath(resolve(sourceFile)), sourcePackage);
+    }
   }
-  const packageRelativePath = absoluteFileName.slice(markerIndex + marker.length);
-  return packageRelativePath.length === 0
-    ? undefined
-    : `node_modules/${packageRelativePath}`;
+  return result;
+}
+
+function externalSourcePackageCrateNames(
+  graph: TargetSourcePackageGraph,
+  rootComponentId: string,
+  diagnostics: TargetDiagnostic[],
+): ReadonlyMap<string, string> {
+  const packagesById = new Map(graph.packages.map((entry) => [entry.id, entry] as const));
+  const candidates = graph.components
+    .filter((component) => component.id !== rootComponentId)
+    .map((component) => {
+      const names = component.packages.map((packageId) => packagesById.get(packageId)?.name);
+      if (names.some((name) => name === undefined)) {
+        diagnostics.push(sourcePackageIdentityDiagnostic(
+          "RUST_SOURCE_PACKAGE_NAME_MISSING",
+          `External source-package component '${component.id}' contains a package without an explicit package name.`,
+        ));
+        return undefined;
+      }
+      const base = rustModuleSegmentBase((names as string[]).sort(compareNames).join("_"));
+      return { component, base };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
+  const groups = new Map<string, typeof candidates>();
+  for (const candidate of candidates) {
+    const entries = groups.get(candidate.base) ?? [];
+    entries.push(candidate);
+    groups.set(candidate.base, entries);
+  }
+  return new Map(candidates.map(({ component, base }) => {
+    const collision = (groups.get(base)?.length ?? 0) > 1;
+    const digest = component.id.slice(component.id.lastIndexOf(":") + 1, component.id.length);
+    return [component.id, collision ? `${base}_${digest.slice(0, 8)}` : base] as const;
+  }));
+}
+
+function sourcePackageIdentityDiagnostic(
+  code: string,
+  message: string,
+): TargetDiagnostic {
+  return {
+    code,
+    category: "error",
+    source: "tsonic-rust",
+    message,
+    evidence: ["target.capability=rust.backend.source-package-identity"],
+  };
 }
 
 function stripTypeScriptExtension(value: string): string | undefined {

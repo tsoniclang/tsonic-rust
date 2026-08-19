@@ -7,7 +7,7 @@ import {
 } from "../../../../policy/types/target-types.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { applyRustSourceCallableRequirements } from "../../artifacts/source-callable-contracts.js";
-import { diagnosticInput, isValidRustIdentifier, sourceTypePath } from "../../program/plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, sourceModuleItemPath, sourceTypePath } from "../../program/plan-context.js";
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
 import { isDenseDataArray } from "../../../../policy/model/closed-data.js";
 import {
@@ -150,16 +150,14 @@ export function planSelectedSourceCall(
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
     case "function": {
-      const moduleName = context.moduleNameByFileName.get(fact.target.fileName);
       const targetName = callableSpecialization?.targetName ?? fact.target.name;
-      if (moduleName === undefined || !isValidRustIdentifier(targetName)) {
+      const path = sourceModuleItemPath(context, fact.target.fileName, targetName);
+      if (path === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
       planned = {
         kind: "call",
-        path: moduleName === context.moduleName
-          ? targetName
-          : `crate::${moduleName}::${targetName}`,
+        path,
         args: shaped,
         ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
       };

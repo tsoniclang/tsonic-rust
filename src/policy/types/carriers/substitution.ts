@@ -52,7 +52,7 @@ export function substituteRustTargetTypeParameters(
       }
       const structuralObject = rustStructuralObjectCarrierValue(type);
       if (structuralObject !== undefined) {
-        return rustStructuralObjectTargetType(structuralObject.fields.map((field) => ({
+        return rustStructuralObjectTargetType(structuralObject.ownerFileName, structuralObject.fields.map((field) => ({
           ...field,
           type: substituteRustTargetTypeParameters(field.type, substitutions),
         })));

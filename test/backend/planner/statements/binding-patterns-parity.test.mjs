@@ -27,7 +27,7 @@ export function read(pair: Pair, tuple: [int32, int32]): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let binding = pair\.clone\(\);/u);
+  assert.match(source, /let binding = pair;/u);
   assert.match(source, /let first: i32 = binding\.state\.with/u);
   assert.match(source, /let right: i32 = binding\.state\.with/u);
   assert.match(source, /let head: i32 = binding_2\[0\];/u);

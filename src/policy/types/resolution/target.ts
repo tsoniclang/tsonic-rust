@@ -307,7 +307,15 @@ export function resolveStructuralObjectType(
   if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
     return undefined;
   }
-  const carrier = rustStructuralObjectTargetType(fields.map((field) => ({
+  const ownerFileNames = new Set([
+    ...fields.flatMap((field) => field.declarations),
+    ...(authoredTypeRoot === undefined ? [] : [authoredTypeRoot]),
+  ].map((node) => context.ast.getFileName(context.ast.getSourceFile(node))));
+  if (ownerFileNames.size !== 1) {
+    return undefined;
+  }
+  const ownerFileName = [...ownerFileNames][0]!;
+  const carrier = rustStructuralObjectTargetType(ownerFileName, fields.map((field) => ({
     sourceName: field.sourceName,
     type: field.resultCarrier,
     presence: field.presence,

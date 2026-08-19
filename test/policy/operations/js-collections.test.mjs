@@ -267,7 +267,7 @@ export function main(): void {
   assert.match(source, /map\.get_eq/u);
   assert.match(
     source,
-    /set\s*\.add_eq\(first\.clone\(\)\)\s*\.add_eq\(first\.clone\(\)\)\s*\.add_eq\(same_value\.clone\(\)\)/u,
+    /set\s*\.add_eq\(first\.clone\(\)\)\s*\.add_eq\(first\.clone\(\)\)\s*\.add_eq_discard\(same_value\.clone\(\)\)/u,
   );
   assert.equal(validateGeneratedProject("js-project-identity-collections", result.artifacts, { run: true }).status, 0);
 });

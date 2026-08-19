@@ -34,10 +34,47 @@ export function negateRustBooleanExpression(expression: RustExpr): RustExpr {
 }
 
 export function rustStringConcat(parts: readonly RustExpr[]): RustExpr {
+  const flattened = parts.flatMap((part) =>
+    part.kind === "string-concat" ? part.parts : [part]);
+  const nonEmpty = flattened.filter((part) =>
+    !((part.kind === "string-literal" || part.kind === "str-literal") &&
+      part.value.length === 0));
+  if (nonEmpty.length === 0) {
+    return { kind: "string-literal", value: "" };
+  }
+  if (nonEmpty.length === 1) {
+    const only = nonEmpty[0]!;
+    return only.kind === "str-literal"
+      ? { kind: "string-literal", value: only.value }
+      : only;
+  }
+  const normalized: RustExpr[] = [];
+  for (const part of nonEmpty) {
+    const selected = rustBorrowedStringView(part);
+    if ((selected.kind === "string-literal" || selected.kind === "str-literal") &&
+      selected.value.length === 0) {
+      continue;
+    }
+    const previous = normalized[normalized.length - 1];
+    if ((previous?.kind === "string-literal" || previous?.kind === "str-literal") &&
+      (selected.kind === "string-literal" || selected.kind === "str-literal")) {
+      normalized[normalized.length - 1] = {
+        kind: "string-literal",
+        value: previous.value + selected.value,
+      };
+      continue;
+    }
+    normalized.push(selected);
+  }
+  if (normalized.length === 1) {
+    const only = normalized[0]!;
+    return only.kind === "str-literal"
+      ? { kind: "string-literal", value: only.value }
+      : only;
+  }
   return {
     kind: "string-concat",
-    parts: parts.flatMap((part) => part.kind === "string-concat" ? part.parts : [part])
-      .map(rustBorrowedStringView),
+    parts: normalized,
   };
 }
 

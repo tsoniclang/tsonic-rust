@@ -28,6 +28,11 @@ const maximumReconstructionsPerSourceFile = 32;
 export function reconstructRustSourceFiles(
   input: RustPlanningContext,
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
+  externalItemPathByIdentity: ReadonlyMap<string, string>,
+  externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>,
+  publicModuleNames: ReadonlySet<string>,
+  publicImplementationItemIdentities: ReadonlySet<string>,
+  errorDomain: import("../../rust-ast/nodes.js").RustErrorDomain,
   programModuleName: string,
   structuralShapesModuleName: string,
   diagnostics: TargetDiagnostic[],
@@ -35,6 +40,10 @@ export function reconstructRustSourceFiles(
   const sourceFilesByOwner = new Map<string, SourceFile>();
   const ownerBySourceFile = new Map<SourceFile, string>();
   for (const sourceFile of input.sourceFiles) {
+    const identity = identitiesByFileName.get(input.ast.getFileName(sourceFile));
+    if (identity?.externalCrateName !== undefined) {
+      continue;
+    }
     const owner = sourceFileArtifactOwner(input, sourceFile);
     if (owner === undefined) {
       diagnostics.push(reconstructionDiagnostic(
@@ -94,13 +103,25 @@ export function reconstructRustSourceFiles(
         planRustSourceFile(
           sourceFile,
           identity.moduleName,
+          identity.externalCrateName,
           new Map(
             [...identitiesByFileName].map(([candidateFileName, candidate]) =>
               [candidateFileName, candidate.moduleName] as const),
           ),
+          new Map(
+            [...identitiesByFileName]
+              .filter(([, candidate]) => candidate.externalCrateName !== undefined)
+              .map(([candidateFileName, candidate]) =>
+                [candidateFileName, candidate.externalCrateName!] as const),
+          ),
+          externalItemPathByIdentity,
+          externalStructuralShapeModuleByFileName,
           programModuleName,
           structuralShapesModuleName,
           identity.childModuleNames,
+          publicModuleNames,
+          publicImplementationItemIdentities,
+          errorDomain,
           input,
           candidateDiagnostics,
         )
@@ -129,6 +150,7 @@ export function reconstructRustSourceFiles(
         sourceFile,
         owner,
         ownerBySourceFile,
+        identitiesByFileName,
       );
       if (moduleDependencies.kind === "rejected") {
         return moduleDependencies;
@@ -175,6 +197,9 @@ export function reconstructRustSourceFiles(
     return undefined;
   }
   return Object.freeze(input.sourceFiles.flatMap((sourceFile) => {
+    if (identitiesByFileName.get(input.ast.getFileName(sourceFile))?.externalCrateName !== undefined) {
+      return [];
+    }
     const owner = ownerBySourceFile.get(sourceFile);
     const planned = owner === undefined ? undefined : plannedByOwner.get(owner);
     return planned === undefined ? [] : [planned];
@@ -186,6 +211,7 @@ function sourceFilePublicDependencies(
   sourceFile: SourceFile,
   owner: string,
   ownerBySourceFile: ReadonlyMap<SourceFile, string>,
+  identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ):
   | {
       readonly kind: "resolved";
@@ -198,6 +224,11 @@ function sourceFilePublicDependencies(
     } {
   const dependencies: TargetArtifactDependency<RustArtifactFacet>[] = [];
   for (const reference of input.source.navigation.moduleReferences(sourceFile)) {
+    if (identitiesByFileName.get(
+      input.ast.getFileName(reference.sourceFile),
+    )?.externalCrateName !== undefined) {
+      continue;
+    }
     const dependencyOwner = ownerBySourceFile.get(reference.sourceFile) ??
       sourceFileArtifactOwner(input, reference.sourceFile);
     if (dependencyOwner === undefined) {

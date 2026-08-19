@@ -1,11 +1,11 @@
-import { appendToLastLine, firstLine, lastLine, lastLineLength, remainingLines, renderedFits } from "../patterns.js";
+import { appendToLastLine, firstLine, lastLine, lastLineLength, remainingLines, renderedFits, rustExpressionContainsTry } from "../patterns.js";
 import { expressionIsRightHandBlock, expressionIsStatementBlockOperand, expressionPrecedence, operatorPrecedence, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText, printRustType } from "../types.js";
 import { printFittedCall } from "./calls.js";
 import { printRustAssociatedCallOwner } from "./blocks.js";
 import { printRustExpr, rustExpressionContainsClosure, rustExpressionContainsPreferredVerticalMethodChain } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
-import { rustExpressionContainsExpandedStructLiteral } from "./inspection.js";
+import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/rust-ast/expressions.js";
 import { rustFormatWidth, rustInlineClosureFieldReceiverWidth, rustInlineFieldReceiverWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth } from "../formatting.js";
 import type { RustExpr, RustType } from "../../../backend/rust-ast/nodes.js";
@@ -218,6 +218,11 @@ export function printRustFormatArgument(
       column + prefix.length,
     );
     if (renderedArgument.includes("\n")) {
+      if (argument.kind === "reference" &&
+        argument.expr.kind !== "block" && argument.expr.kind !== "evaluate-then" &&
+        rustExpressionContainsStatementBlock(argument)) {
+        return printFittedCall(callable, [argument], depth, column, true);
+      }
       const attached = appendToLastLine(`${prefix}${renderedArgument}`, ",)");
       if (firstLine(attached).length <= rustNestedCallWidth &&
         (renderedFits(attached, column) || rustExpressionContainsStatementBlock(argument))) {
@@ -414,26 +419,39 @@ export function rustMethodChainPrefersVerticalLayout(expression: RustExpr): bool
 }
 
 export function rustBinaryOperandPrefersExpandedCall(expression: RustExpr): boolean {
-  const call = expression.kind === "call" || expression.kind === "associated-call"
+  const call = expression.kind === "call" || expression.kind === "associated-call" ||
+      expression.kind === "invoke"
     ? expression
     : expression.kind === "try" &&
-        (expression.expr.kind === "call" || expression.expr.kind === "associated-call")
+        (expression.expr.kind === "call" || expression.expr.kind === "associated-call" ||
+          expression.expr.kind === "invoke")
       ? expression.expr
       : undefined;
-  return call !== undefined && call.args.length > 1 &&
-    (expression.kind === "try" || call.args.some((argument) => argument.kind === "try")) &&
+  if (call === undefined || call.args.length <= 1) {
+    return false;
+  }
+  const trailing = call.args[call.args.length - 1];
+  const selectionArguments = trailing?.kind === "closure" &&
+      rustFormatArgumentIsAtomic(trailing.body)
+    ? call.args.slice(0, -1)
+    : call.args;
+  return selectionArguments.some((argument) =>
+      rustExpressionContainsTry(argument) || rustExpressionContainsClosure(argument)) &&
     printRustExpr(expression).length > rustNestedCallWidth;
 }
 
 export function rustMethodChainBreaksReceiverWhenExpanded(chain: RustMethodChain): boolean {
   const first = chain.steps[0];
+  const selectorCount = chain.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field" || step.kind === "await").length;
   const firstSelectorWidth = first?.kind === "method" || first?.kind === "field"
     ? first.name.length + 1
     : first?.kind === "await" ? ".await".length
       : first?.kind === "try" ? 1 : 0;
-  return chain.steps.filter((step) =>
-    step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1 ||
-    printRustExpr(chain.base).length + firstSelectorWidth > rustInlineFieldReceiverWidth ||
+  const laterFallibleArgument = chain.steps.some((step, index) =>
+    index > 0 && step.kind === "method" && step.args.some(rustExpressionContainsTry));
+  return selectorCount > 1 && laterFallibleArgument ||
+    printRustExpr(chain.base).length + firstSelectorWidth > rustMethodChainWidth ||
     chain.steps.some((step, index) =>
       step.kind === "try" && chain.steps[index + 1]?.kind === "method");
 }
@@ -524,7 +542,12 @@ export function rustMethodChainBreaksReceiverForClosure(
 ): boolean {
   const selectorCount = chain.steps.filter((step) =>
     step.kind === "method" || step.kind === "field" || step.kind === "await").length;
-  return selectorCount > 1 && rustMethodChainContainsClosure(chain) &&
+  const containsNestedClosureInSingleArgument = chain.steps.some((step) =>
+    step.kind === "method" && step.args.length === 1 && step.args.some((argument) =>
+      argument.kind !== "closure" && argument.kind !== "closure-block" &&
+      rustExpressionContainsClosure(argument)));
+  return (selectorCount > 1 && rustMethodChainContainsClosure(chain) ||
+      selectorCount === 1 && containsNestedClosureInSingleArgument) &&
     (!renderedFits(flat, column) ||
       flat.length > rustMethodChainWidth &&
         rustMethodChainLastSelectorWidth(chain) <= rustMethodChainWidth);
@@ -615,7 +638,9 @@ export function printFittedMethodChain(
     const inlineFirstMethod = !selectedBreakBeforeFirstSelector && !emittedCall &&
       !rendered.includes("\n") &&
       (forceAttachFirstSelector ||
-        lastLineLength(rendered) + firstLine(inlineMethod).length <= rustInlineFieldReceiverWidth);
+        (inlineMethod.includes("\n")
+          ? renderedFits(`${rendered}.${step.name}(`, column)
+          : renderedFits(`${rendered}${inlineMethod}`, column)));
     const method = inlineFirstMethod
       ? inlineMethod
       : printFittedCall(

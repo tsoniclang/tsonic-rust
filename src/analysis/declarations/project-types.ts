@@ -41,8 +41,9 @@ export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: reado
             ast.kindName(member) === "KindGetAccessor" ||
             ast.kindName(member) === "KindSetAccessor") &&
           !ast.hasModifierKind(member, "static")) {
-          walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
-            { message: "rust reference-backed project object method self mode" },
+          const mode = walk.context.objectRepresentations.methodSelfMode(member);
+          walk.context.facts.set(member, rustSelfModeFactKey, { mode }, [
+            { message: `rust ${mode} project object method self mode` },
           ]);
         }
       }

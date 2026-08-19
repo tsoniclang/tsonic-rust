@@ -6,7 +6,12 @@ import {
   rustNamedTypeCarrierValue,
 } from "../../policy/types/target-types.js";
 import type { RustNamedTypeTraitContract } from "../../policy/types/model.js";
-import type { RustProviderOperationDefinition, RustProviderOperationRow } from "./model.js";
+import type {
+  RustProviderBinaryEpilogueDefinition,
+  RustProviderBinaryEpilogueRow,
+  RustProviderOperationDefinition,
+  RustProviderOperationRow,
+} from "./model.js";
 import type { RustProviderOperationForm, RustValueConversion } from "../../policy/operations/model.js";
 import type { TargetTypeRef } from "../../policy/types/model.js";
 
@@ -31,8 +36,14 @@ export function materializeProviderOperationRow(
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
   owner: Pick<RustProviderOperationRow, "providerPackageId" | "providerId" | "providerVersion" | "providerModuleId" | "moduleSpecifier">,
 ): RustProviderOperationRow {
-  return {
-    ...row,
+  const {
+    isFallible,
+    errorBoundary,
+    errorCarrier,
+    ...definition
+  } = row;
+  const materialized = {
+    ...definition,
     ...owner,
     target: materializeProviderOperationForm(row.target, aliases, carrierPaths, carrierTraits),
     resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths, carrierTraits),
@@ -64,6 +75,61 @@ export function materializeProviderOperationRow(
             ),
           },
         }),
+  };
+  if (isFallible !== true) {
+    return materialized;
+  }
+  if (errorBoundary === "provider-native") {
+    return {
+      ...materialized,
+      isFallible: true,
+      errorBoundary,
+      errorCarrier: materializeProviderCarrier(
+        errorCarrier,
+        carrierPaths,
+        carrierTraits,
+      ),
+    };
+  }
+  return {
+    ...materialized,
+    isFallible: true,
+    errorBoundary,
+  };
+}
+
+export function materializeProviderBinaryEpilogueRow(
+  epilogue: RustProviderBinaryEpilogueDefinition,
+  aliases: ReadonlyMap<string, string>,
+  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
+  owner: Pick<RustProviderBinaryEpilogueRow, "providerPackageId" | "providerVersion">,
+): RustProviderBinaryEpilogueRow {
+  const base = {
+    id: epilogue.id,
+    path: expandProviderPath(epilogue.path, aliases),
+    requiredCrate: epilogue.requiredCrate,
+    ...owner,
+  };
+  if (epilogue.isFallible !== true) {
+    return base;
+  }
+  if (epilogue.errorBoundary === "provider-native") {
+    return {
+      ...base,
+      isFallible: true,
+      errorBoundary: "provider-native",
+      errorCarrier: materializeProviderCarrier(
+        epilogue.errorCarrier,
+        carrierPaths,
+        carrierTraits,
+      ),
+    };
+  }
+  return {
+    ...base,
+    isFallible: true,
+    errorBoundary: epilogue.errorBoundary,
   };
 }
 

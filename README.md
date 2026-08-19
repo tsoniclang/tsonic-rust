@@ -66,7 +66,7 @@ planning strengthens a callable contract—for example, `allocatePointer<T>`
 adds `T: Clone + 'static`—every exact source-call dependent is reconstructed
 to a fixed point before any Cargo project is published.
 
-JS surface (selected surface or compat mode): dense `Vec<T>` and sparse
+JS surface (selected explicitly with `surfaces: ["js"]`): dense `Vec<T>` and sparse
 `JsArray<T>` lanes with callback iteration (map/filter/reduce/some/every as
 Rust closures), string operations, Map/Set with SameValueZero runtime
 semantics, Date (UTC carrier), JSON parse/stringify through fallible rows,

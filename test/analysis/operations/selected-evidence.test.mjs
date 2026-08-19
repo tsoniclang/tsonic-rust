@@ -607,7 +607,9 @@ export function currentPlatform(platform: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /pub fn current_platform\(platform: String\) -> String \{\n    platform\.clone\(\)\n\}/u);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /pub fn current_platform\(platform: String\) -> String \{\n    platform\n\}/u);
+  assert.doesNotMatch(source, /platform\.clone\(\)/u);
 });
 
 test("a selected provider value without a target relation fails closed", () => {

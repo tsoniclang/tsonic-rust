@@ -1,5 +1,6 @@
 import { collectImportActivatedTargetCapabilities, collectRuntimeActivatedTargetCapabilities } from "../../../../tsonic/packages/host/dist/target/capability-activation.js";
 import { collectTargetSourceProfileContributions, createTargetSourceCompilerComposition, getTargetRequiredProviderModules } from "../../../../tsonic/packages/host/dist/index.js";
+import { collectTargetSourcePackageGraph } from "../../../../tsonic/packages/host/dist/source-package-inputs.js";
 import { createRustTargetPack } from "../../../dist/index.js";
 import { composeRustCapabilities } from "../../../dist/plugin/compose.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
@@ -56,8 +57,16 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
   if (sourceProfile.diagnostics.length !== 0) {
     throw new Error(sourceProfile.diagnostics.map((diagnostic) => diagnostic.message).join("\n"));
   }
+  const projectFiles = new Map(
+    Object.entries(files).map(([name, text]) => [`/src/${name}`, text]),
+  );
+  const sourcePackages = withFixtureEntryExport(
+    collectTargetSourcePackageGraph("/src", "/src", projectFiles),
+    projectFiles,
+    entryPoint,
+  );
   const fileMap = new Map([
-    ...Object.entries(files).map(([name, text]) => [`/src/${name}`, text]),
+    ...projectFiles,
     ...sourceProfile.files.map((file) => [file.path, file.text]),
   ]);
   const composition = createTargetSourceCompilerComposition(providerContext);
@@ -84,8 +93,33 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
     providerContext,
     runtimeContributionContext,
     paths,
+    sourcePackages,
     runtimeActivatedCapabilities: packages.filter((capability) => activation.runtimeIds.has(capability.id)),
   };
+}
+
+function withFixtureEntryExport(sourcePackages, projectFiles, entryPoint) {
+  const entryFile = entryPoint.startsWith("/")
+    ? entryPoint
+    : `/src/${entryPoint.replace(/^\.\//u, "")}`;
+  if (!projectFiles.has(entryFile)) {
+    return sourcePackages;
+  }
+  const packages = sourcePackages.packages.map((sourcePackage) =>
+    sourcePackage.id !== sourcePackages.rootPackageId
+      ? sourcePackage
+      : Object.freeze({
+          ...sourcePackage,
+          exports: Object.freeze([{
+            specifier: ".",
+            sourceFile: entryFile,
+          }]),
+        }));
+  return Object.freeze({
+    ...sourcePackages,
+    fingerprint: `${sourcePackages.fingerprint}:fixture-entry:${entryFile}`,
+    packages: Object.freeze(packages),
+  });
 }
 
 function collectCapabilityActivation(files, candidates, targetId) {
@@ -139,9 +173,10 @@ function checkedRustSource(harness) {
   return harness.checkedSource;
 }
 
-function createRustCompileInputFromSession({ source, project, target, runtimeReferences, paths }) {
+function createRustCompileInputFromSession({ source, sourcePackages, project, target, runtimeReferences, paths }) {
   return {
     source: createTargetSourceProgram(source),
+    sourcePackages,
     project,
     target,
     runtimeReferences,
@@ -172,13 +207,13 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
   const runtimeReferences = runtimeReferencesForHarness(harness);
   const input = createRustCompileInputFromSession({
     source,
+    sourcePackages: harness.sourcePackages,
     project: harness.project,
     target,
     runtimeReferences,
     paths: harness.paths,
   });
-  const jsEnabled = target.options?.typescriptCompatibility === "compat" ||
-    harness.providerContext.selectedSurfaces.some((surface) => surface.id === "js");
+  const jsEnabled = harness.providerContext.selectedSurfaces.some((surface) => surface.id === "js");
   const analysis = analyzeRustTargetProgram(
     harness.providerContext,
     input,
@@ -223,6 +258,7 @@ export function compileRustThroughTargetPack({
   const source = checkRustSession(harness);
   const input = createRustCompileInputFromSession({
     source,
+    sourcePackages: harness.sourcePackages,
     project: harness.project,
     target,
     runtimeReferences: runtimeReferencesForHarness(harness),

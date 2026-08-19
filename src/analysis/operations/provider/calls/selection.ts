@@ -18,7 +18,7 @@ import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallT
 import { closedMetadataKey } from "../../../../policy/model/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { mapSelectedRegExpConstruction } from "../values.js";
-import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentCompatibility } from "../result.js";
+import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentMatchScore } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../policy/types/target-types.js";
@@ -246,9 +246,10 @@ export function selectRustCheckedCall(
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,
-      argumentCompatibility: selectedArgumentCompatibility(selectedCallArgumentNodes(request), context, options),
+      argumentMatchScore: selectedArgumentMatchScore(selectedCallArgumentNodes(request), context, options),
       carrierSupportsProjectIdentity: (carrier) =>
         options.projectTypes.definitionForCarrier(carrier) !== undefined,
+      resultUse: context.source.navigation.expressionResultUse(request.source.call),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(

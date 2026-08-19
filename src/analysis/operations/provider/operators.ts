@@ -12,7 +12,7 @@ import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
 } from "../../facts/keys.js";
-import { acceptDeclarationOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationTemplate, rejectSelectedOperation, selectedArgumentCompatibility } from "./result.js";
+import { acceptDeclarationOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationTemplate, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "../../../policy/evidence/selected-source.js";
 import {
@@ -324,7 +324,7 @@ function mapSelectedAssignment(
     receiverCarrier,
     argumentCarriers: assignmentSubjects.map((subject) =>
       resolveRustTargetTypeRef(subject, context, options)),
-    argumentCompatibility: selectedArgumentCompatibility(assignmentSubjects, context, options),
+    argumentMatchScore: selectedArgumentMatchScore(assignmentSubjects, context, options),
   });
   if (selection === undefined || selection.fact.kind !== "runtime-set") {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED", `The selected JavaScript assignment '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust setter operation.`);
@@ -476,6 +476,7 @@ function mapSelectedProviderAssignment(
     isAsync: template.isAsync,
     isFallible: template.isFallible,
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
+    ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
     isUnsafe: template.isUnsafe,
   });
   if (abi === undefined) {

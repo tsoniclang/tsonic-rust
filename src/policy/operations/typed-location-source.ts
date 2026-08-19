@@ -48,6 +48,11 @@ export type RustSafeTypedLocationSourceFact = Extract<
   }
 >;
 
+export type RustAddressOfSourceFact = Extract<
+  RustTypedLocationSourceFact,
+  { readonly operation: "address-of" }
+>;
+
 export function selectRustTypedLocationSourceOperation(
   subject: ExtensionFactSubject,
   marker: SourceCallMarkerKind,
@@ -57,14 +62,36 @@ export function selectRustTypedLocationSourceOperation(
   if (!isRustTypedLocationOperation(marker)) {
     return { kind: "not-typed-location" };
   }
-  const sourceOperation = resolveFact(subject, pointerOperationFactKey) ??
-    getFact(subject, pointerOperationFactKey);
+  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact, getFact);
   return sourceOperation !== undefined &&
       isRustTypedLocationSourceFact(sourceOperation) &&
       sourceOperation.operation === marker &&
       sourceOperation.call === subject
     ? { kind: "selected", operation: marker, sourceOperation }
     : { kind: "evidence-missing", operation: marker };
+}
+
+export function selectRustAddressOfSourceOperation(
+  subject: ExtensionFactSubject,
+  resolveFact: RustTypedLocationFactLookup,
+  getFact: RustTypedLocationFactLookup,
+): RustAddressOfSourceFact | undefined {
+  const sourceOperation = rustTypedLocationSourceFact(subject, resolveFact, getFact);
+  return sourceOperation?.operation === "address-of" && sourceOperation.call === subject
+    ? sourceOperation
+    : undefined;
+}
+
+function rustTypedLocationSourceFact(
+  subject: ExtensionFactSubject,
+  resolveFact: RustTypedLocationFactLookup,
+  getFact: RustTypedLocationFactLookup,
+): RustTypedLocationSourceFact | undefined {
+  const sourceOperation = resolveFact(subject, pointerOperationFactKey) ??
+    getFact(subject, pointerOperationFactKey);
+  return sourceOperation !== undefined && isRustTypedLocationSourceFact(sourceOperation)
+    ? sourceOperation
+    : undefined;
 }
 
 function isRustTypedLocationSourceFact(

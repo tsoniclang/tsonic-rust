@@ -39,10 +39,11 @@ import type { TargetTypeRef } from "../../policy/types/model.js";
 
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
-  values: readonly (Node | undefined)[],
+  values: readonly (Node | undefined)[] | undefined,
   message: string,
 ): readonly Node[] | undefined {
-  if (!isDenseDataArray(values) || values.some((value) => value === undefined)) {
+  if (values === undefined || !isDenseDataArray(values) ||
+    values.some((value) => value === undefined)) {
     appendMalformedSourceAst(walk, message);
     return undefined;
   }

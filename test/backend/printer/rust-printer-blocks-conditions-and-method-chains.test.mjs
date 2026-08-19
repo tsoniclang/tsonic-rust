@@ -492,6 +492,45 @@ test("pure method chains keep the first fitting call attached to their receiver"
   );
 });
 
+test("fitting collection chains keep their first argument-bearing call attached", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "map" },
+              method: "set",
+              args: [
+                { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "a" }] },
+                { kind: "int-literal", text: "1" },
+              ],
+            },
+            method: "set_discard",
+            args: [
+              { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "b" }] },
+              { kind: "int-literal", text: "2" },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /map\.set\(String::from\("a"\), 1\)\n        \.set_discard\(String::from\("b"\), 2\);/u,
+  );
+});
+
 test("field-led calls stay attached when their argument list must expand", () => {
   const source = printRustSourceFile({
     headerComment,

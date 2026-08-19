@@ -32,6 +32,7 @@ import type { RustSyntheticNameState } from "../names/synthetic.js";
 import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
 import type { RustBindingExpressionPlanner } from "../bindings/patterns.js";
 import { rustOptionDefaultValue } from "../option-default.js";
+import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../policy/types/target-types.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
@@ -120,6 +121,12 @@ export function planRustCallableParameters(
     const ownedBinding = parameterCarrier !== undefined &&
       parameterCarrier.kind !== "pointer" &&
       parameterCarrier.kind !== "reference";
+    const objectRepresentation = context.input.objectRepresentations.representationFor(
+      context.input.projectTypes.definitionForCarrier(parameterCarrier),
+    );
+    const referentMutationRequiresMutableBinding =
+      rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier) &&
+      (objectRepresentation === undefined || objectRepresentation.kind === "value");
     const mutable = pattern === undefined &&
       locationStorage === undefined &&
       (
@@ -127,10 +134,11 @@ export function planRustCallableParameters(
           parameter,
           rustMutatedBindingFactKey,
         ) !== undefined ||
-        ownedBinding && context.input.facts.getFact(
-          parameter,
-          rustMutatedReferentFactKey,
-        ) !== undefined
+        ownedBinding && referentMutationRequiresMutableBinding &&
+          context.input.facts.getFact(
+            parameter,
+            rustMutatedReferentFactKey,
+          ) !== undefined
       );
     params.push({
       name: parameterName,

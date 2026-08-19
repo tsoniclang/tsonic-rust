@@ -15,12 +15,13 @@ export interface JsOperationRequest {
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly authoredMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
-  readonly argumentCompatibility?: (
+  readonly argumentMatchScore?: (
     expected: TargetTypeRef,
     actual: TargetTypeRef | undefined,
     index: number,
   ) => number | undefined;
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
+  readonly resultUse?: "consumed" | "discarded";
 }
 
 export interface JsOperationSelection {
@@ -96,6 +97,7 @@ export interface JsOperationRowData {
         readonly op: "operation";
         readonly operationKind: "method" | "constructor" | "property" | "indexer";
         readonly target: RustProviderOperationForm;
+        readonly discardedTarget?: RustProviderOperationForm;
         readonly resultConversion?: RustValueConversion;
         readonly result: JsCarrierRef;
         readonly sourceResult?: JsCarrierRef;

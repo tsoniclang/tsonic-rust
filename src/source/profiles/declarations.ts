@@ -477,18 +477,6 @@ export function rustNativeSourceProfileContributions(): TargetSourceProfileContr
   };
 }
 
-export function rustCompatibilitySourceProfileContributions(): TargetSourceProfileContributions {
-  return {
-    declarations: [
-      targetSourceProfileDeclaration(
-        "typescript-utilities.d.ts",
-        typescriptNoLibUtilityDeclarations,
-      ),
-      targetSourceProfileDeclaration("js-globals.d.ts", rustJsSurfaceProfileDeclarations),
-    ],
-  };
-}
-
 export function rustJsSurfaceSourceProfileContributions(): TargetSourceProfileContributions {
   return {
     declarations: [

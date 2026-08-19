@@ -7,7 +7,7 @@ import { printOperand, RustPrecedence } from "./precedence.js";
 import { printRustAssociatedCallOwnerFitted } from "./blocks.js";
 import { printRustExpr } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
-import { rustExpressionContainsExpandedStructLiteral } from "./inspection.js";
+import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/rust-ast/expressions.js";
 import { rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustNestedClosureOpeningWidth } from "../formatting.js";
 import type { RustExpr } from "../../../backend/rust-ast/nodes.js";
@@ -285,6 +285,7 @@ export function printNestedCallArgument(
     }
   }
   const compactNestedCall = !rustExpressionContainsExpandedStructLiteral(argument) &&
+    !rustExpressionContainsExpandedCollectionLiteral(argument) &&
     (argument.kind === "method-call"
     ? renderedFits(flatArgument, column)
     : flatArgument.length <= rustNestedCallWidth);

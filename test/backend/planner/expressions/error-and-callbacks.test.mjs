@@ -69,8 +69,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /matches!\(error\.clone\(\), rt::TsonicError::Project[0-9]+\(_\)\)/u);
-  assert.match(source, /rt::TsonicError::Project[0-9]+\(program_error\)/u);
+  assert.match(source, /matches!\(error\.clone\(\), rt::TsonicError::NamedError\(_\)\)/u);
+  assert.match(source, /rt::TsonicError::NamedError\(program_error\)/u);
   assert.equal(validateGeneratedProject("caught-project-error", result.artifacts, { run: true }).status, 0);
 });
 
@@ -199,8 +199,8 @@ export function roundtrip(text: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn roundtrip\(text: String\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /js_abi::json_parse\(&text\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_abi::json_parse\(&text\)\?/u);
+  assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
 });
 
 test("node fs read lowers through the fallible provider row", async () => {
@@ -252,7 +252,7 @@ export function forwards(text: string): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn catches\(text: String\) -> String \{/u);
   assert.match(text, /pub fn forwards\(text: String\) -> String \{/u);
-  assert.match(text, /catches\(text\.clone\(\)\)/u);
+  assert.match(text, /catches\(text\)/u);
   assert.doesNotMatch(text, /pub fn (?:catches|forwards)[^{]+TsonicResult/u);
   assert.doesNotMatch(text, /catches\(text\)\?/u);
 });
@@ -279,10 +279,10 @@ export function inspectJson(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\s*\.map_err\(\s*tsonic_rust_runtime::TsonicError::from,?\s*\)\?;/u);
+  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
   assert.match(
     text,
-    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
+    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
   );
   assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });
@@ -666,7 +666,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /Ok::<_, rt::TsonicError>\(\s*js_string::replace_all\(&value, "a", "b"\)[\s\S]*\?\s*,?\s*\)/u,
+    /Ok\(js_string::replace_all\(value, "a", "b"\)\?\)/u,
   );
   assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });

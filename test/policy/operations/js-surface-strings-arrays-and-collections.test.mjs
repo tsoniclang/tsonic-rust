@@ -112,13 +112,13 @@ test("array index rows distinguish checked source and runtime result carriers", 
 });
 
 test("unavailable argument carriers defer only when one operation row remains", () => {
-  const unresolvedCompatibility = (_expected, actual) => actual === undefined ? 100 : undefined;
+  const unresolvedMatchScore = (_expected, actual) => actual === undefined ? 100 : undefined;
   const json = selectJsSurfaceOperation({
     ownerName: "JSON",
     memberName: "stringify",
     operationKind: "call",
     argumentCarriers: [undefined],
-    argumentCompatibility: unresolvedCompatibility,
+    argumentMatchScore: unresolvedMatchScore,
   });
   assert.equal(json?.fact.operationId, "tsonic.rust.js.JSON.stringify.call");
 
@@ -128,7 +128,7 @@ test("unavailable argument carriers defer only when one operation row remains", 
     operationKind: "call",
     receiverCarrier: rustStringTargetType(),
     argumentCarriers: [undefined],
-    argumentCompatibility: unresolvedCompatibility,
+    argumentMatchScore: unresolvedMatchScore,
   }), undefined);
 });
 
@@ -222,8 +222,8 @@ export function pad(): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pad\(\) -> rt::TsonicResult<String>/u);
-  assert.match(text, /js_string::pad_start_with\("7", 3\.0, "0"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /js_string::pad_end\("x", 2\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_string::pad_start_with\("7", 3\.0, "0"\)\?/u);
+  assert.match(text, /js_string::pad_end\("x", 2\.0\)\?/u);
 });
 
 test("JS arrays lower to one identity-preserving carrier with fact-backed iteration", () => {
@@ -279,7 +279,7 @@ export function edit(values: int32[]): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /values\.push_many\(\[2, 3\]\)/u);
-  assert.match(text, /values\.unshift_many\(\[0, 1\]\)/u);
+  assert.match(text, /values\.unshift_many_discard\(\[0, 1\]\)/u);
   assert.match(text, /values\.splice_many\(1\.0, 2\.0, \[7, 8\]\)/u);
   assert.match(text, /values\.fill_all\(4\)/u);
   assert.match(text, /values\.fill_from\(5, 1\.0\)/u);
@@ -396,7 +396,7 @@ export function values(): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /left[\s\S]*\.concat\(\[[\s\S]*JsArrayConcatItem::Value\([\s\S]*f64_to_i32\(4\.0\)\?[\s\S]*JsArrayConcatItem::Array\(right\.clone\(\)\)[\s\S]*\]\)/u);
+  assert.match(text, /left[\s\S]*\.concat\(\[[\s\S]*JsArrayConcatItem::Value\([\s\S]*f64_to_i32\(4\.0\)\?[\s\S]*JsArrayConcatItem::Array\(right\)[\s\S]*\]\)/u);
 });
 
 test("sparse arrays lower to JsArray with holes, length writes, and at()", () => {
@@ -473,8 +473,11 @@ export function probe(text: string, index: int32): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_string::char_at\(text, 0\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /js_string::char_at\(text, tsonic_rust_runtime::conversions::i32_to_f64\(index\)\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_string::char_at\(&text, 0\.0\)\?/u);
+  assert.match(
+    text,
+    /js_string::char_at\(\s*&text,\s*tsonic_rust_runtime::conversions::i32_to_f64\(index\),?\s*\)\?/u,
+  );
   assert.match(text, /js_abi::JsDate::new\(\)/u);
 });
 
@@ -502,11 +505,11 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /pub fn probe\(text: &str, values: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
   assert.match(text, /values\.slice_to\(1\.0, 3\.0\)/u);
   assert.match(text, /copied\.join\("-"\)/u);
-  assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /js_string::repeat\(text, 2\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)\?/u);
+  assert.match(text, /js_string::repeat\(text, 2\.0\)\?/u);
   assert.match(
     text,
-    /let point: f64 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}std::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
+    /let point: f64 =\n {8}rt::option_coalesce\(js_string::code_point_at\(text, 0\.0\), std::convert::identity, \|\| 0\.0\);/u,
   );
 });
 
@@ -536,16 +539,16 @@ export function probe(text: string, index: int32): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_string::split\(text, ",", 2\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_string::split\(text, ",", 2\.0\)\?/u);
   assert.match(text, /js_string::char_code_at\(text, tsonic_rust_runtime::conversions::i32_to_f64\(index\)\)/u);
   assert.match(text, /js_string::last_index_of\([\s\S]*text,[\s\S]*"a",[\s\S]*i32_to_f64\(index\),[\s\S]*\)/u);
-  assert.match(text, /js_string::substring\(text, 1\.0, 3\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /js_string::substr\(text, -2\.0, 1\.0\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_string::substring\(text, 1\.0, 3\.0\)\?/u);
+  assert.match(text, /js_string::substr\(\s*text,\s*-2\.0,\s*1\.0,?\s*\)\?/u);
   assert.match(text, /js_string::replace\(text, "a", "\[\$&\]"\)/u);
-  assert.match(text, /js_string::replace_all\(&js_string::replace\(text, "a", "\[\$&\]"\), "b", "B"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_string::replace_all\(&js_string::replace\(text, "a", "\[\$&\]"\), "b", "B"\)\?/u);
   assert.match(text, /js_string::concat\(text, &\["-", section\.as_str\(\)\]\)/u);
-  assert.match(text, /js_string::from_char_code\(&\[65\.0, 66\.0\]\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /js_string::from_code_point\(&\[128512\.0\]\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /js_string::from_char_code\(&\[65\.0, 66\.0\]\)\?/u);
+  assert.match(text, /js_string::from_code_point\(&\[128512\.0\]\)\?/u);
   assert.match(text, /js_string::trim_start\(text\)/u);
   assert.match(text, /js_string::identity/u);
 });
@@ -631,10 +634,10 @@ export function collections(): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let m: js_abi::JsMap<i32, String> = js_abi::JsMap::new\(\);/u);
-  assert.match(text, /m\.set\(1, String::from\("one"\)\);/u);
+  assert.match(text, /m\.set_discard\(1, String::from\("one"\)\);/u);
   assert.match(text, /m\.has\(&1\)/u);
   assert.match(text, /m\.get\(&2\)\.is_none\(\)/u);
-  assert.match(text, /s\.add\(4\);/u);
+  assert.match(text, /s\.add_discard\(4\);/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(m\.len\(\)\)\? == 1/u);
 });
 

@@ -32,7 +32,11 @@ export function planContractImplementation(
 ): RustItem | undefined {
   const trait = rustProjectDispatchTraitType(contract.carrier, context);
   const fields = projectOwnFields(contract.definition, contract.carrier, context);
-  if (trait === undefined || fields === undefined || wrapperType.kind !== "named") {
+  const representation = context.input.objectRepresentations.representationFor(
+    contract.definition,
+  );
+  if (trait === undefined || fields === undefined || representation === undefined ||
+    wrapperType.kind !== "named") {
     return undefined;
   }
   const functions: RustImplFunction[] = [];
@@ -87,6 +91,7 @@ export function planContractImplementation(
           { kind: "path", path: "self" },
           stateField.targetName,
           field.carrier,
+          representation,
         )
       : {
           kind: "method-call",
@@ -132,6 +137,7 @@ export function planContractImplementation(
             stateField.targetName,
             "=",
             { kind: "path", path: "value" },
+            representation,
           )
         : accessor?.setter === undefined
           ? undefined
@@ -238,6 +244,7 @@ export function planContractImplementation(
             expression: readRustProjectMethodOverride(
               { kind: "path", path: "self" },
               method.override.fieldName,
+              representation,
             ),
             body: {
               statements: [{
@@ -381,6 +388,15 @@ export function planContractImplementation(
         implementations.some((candidate) => candidate.override !== override)) {
         return undefined;
       }
+      const replacement = writeRustProjectMethodOverride(
+        { kind: "path", path: "self" },
+        override.fieldName,
+        { kind: "path", path: "value" },
+        representation,
+      );
+      if (replacement === undefined) {
+        return undefined;
+      }
       functions.push({
         name: write,
         visibility: "private",
@@ -389,11 +405,7 @@ export function planContractImplementation(
         body: {
           statements: [{
             kind: "expr",
-            expr: writeRustProjectMethodOverride(
-              { kind: "path", path: "self" },
-              override.fieldName,
-              { kind: "path", path: "value" },
-            ),
+            expr: replacement,
           }],
         },
       });

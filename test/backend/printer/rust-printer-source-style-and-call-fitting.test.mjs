@@ -466,7 +466,7 @@ test("a nested call owns the fitting break inside a wider expression", () => {
   assert.match(text, /usize_to_i32\(js_string::js_len\(\n            &tsonic_rust_node::os::platform\(\),\n        \)\)\? > 0/u);
 });
 
-test("a fitting fallible nested call remains horizontal", () => {
+test("fallible statement calls reserve the trailing semicolon before fitting nested calls", () => {
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -505,7 +505,7 @@ test("a fitting fallible nested call remains horizontal", () => {
 
   assert.match(
     text,
-    /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(16\)\?\)\?/u,
+    /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(\n {12}16,\n {8}\)\?\)\?/u,
   );
 });
 

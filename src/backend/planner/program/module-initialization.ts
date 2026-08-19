@@ -4,11 +4,11 @@ import type { RustPlanningContext } from "../context.js";
 import { stronglyConnectedSourceFiles } from "../../../analysis/program/module-graph.js";
 import type { RustErrorDomain, RustItem, RustStmt } from "../../rust-ast/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
+import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
 
 export interface RustModuleInitializer {
   readonly sourceFile: SourceFile;
-  readonly moduleName: string;
-  readonly functionName: string;
+  readonly path: string;
   readonly asynchronous: boolean;
   readonly fallible: boolean;
 }
@@ -16,7 +16,8 @@ export interface RustModuleInitializer {
 export function planRustModuleInitializers(
   input: RustPlanningContext,
   plannedSources: readonly PlannedRustSourceFile[],
-  entrySourceFile: SourceFile,
+  roots: readonly SourceFile[],
+  packageInitializers: RustSourcePackageInitializerPlan,
   diagnostics: TargetDiagnostic[],
 ): readonly RustModuleInitializer[] | undefined {
   const plannedBySourceFile = new Map(
@@ -25,7 +26,8 @@ export function planRustModuleInitializers(
   if (!validateRuntimeModuleGraph(
     input,
     plannedBySourceFile,
-    entrySourceFile,
+    roots,
+    packageInitializers,
     diagnostics,
   )) {
     return undefined;
@@ -45,17 +47,26 @@ export function planRustModuleInitializers(
     visited.add(sourceFile);
     const planned = plannedBySourceFile.get(sourceFile);
     const initialization = planned?.moduleInitialization;
+    const contract = packageInitializers.byFileName.get(input.ast.getFileName(sourceFile));
     if (planned !== undefined && initialization !== undefined) {
       ordered.push({
         sourceFile,
-        moduleName: planned.moduleName,
-        functionName: initialization.functionName,
+        path: `crate::${planned.moduleName}::${initialization.functionName}`,
         asynchronous: initialization.asynchronous,
         fallible: initialization.fallible,
       });
+    } else if (planned === undefined && contract?.crateName !== undefined) {
+      ordered.push({
+        sourceFile,
+        path: `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}`,
+        asynchronous: contract.asynchronous,
+        fallible: contract.fallible,
+      });
     }
   };
-  visit(entrySourceFile);
+  for (const root of roots) {
+    visit(root);
+  }
   return Object.freeze(ordered);
 }
 
@@ -80,7 +91,7 @@ export function planRustCrateInitializer(
   const statements: RustStmt[] = initializers.map((initializer) => {
     const call = {
       kind: "call" as const,
-      path: `crate::${initializer.moduleName}::${initializer.functionName}`,
+      path: initializer.path,
       args: [],
     };
     const execution = initializer.asynchronous
@@ -128,10 +139,11 @@ export function planRustCrateInitializer(
 function validateRuntimeModuleGraph(
   input: RustPlanningContext,
   plannedBySourceFile: ReadonlyMap<SourceFile, PlannedRustSourceFile>,
-  entrySourceFile: SourceFile,
+  roots: readonly SourceFile[],
+  packageInitializers: RustSourcePackageInitializerPlan,
   diagnostics: TargetDiagnostic[],
 ): boolean {
-  const reachable = collectReachableSourceFiles(input, entrySourceFile);
+  const reachable = collectReachableSourceFiles(input, roots);
   const components = stronglyConnectedSourceFiles(input.source.navigation, reachable);
   let valid = true;
   for (const component of components) {
@@ -142,7 +154,8 @@ function validateRuntimeModuleGraph(
       continue;
     }
     const initialized = component.filter((sourceFile) =>
-      plannedBySourceFile.get(sourceFile)?.moduleInitialization !== undefined);
+      plannedBySourceFile.get(sourceFile)?.moduleInitialization !== undefined ||
+      packageInitializers.byFileName.has(input.ast.getFileName(sourceFile)));
     if (initialized.length === 0) {
       continue;
     }
@@ -170,7 +183,7 @@ function validateRuntimeModuleGraph(
 
 function collectReachableSourceFiles(
   input: RustPlanningContext,
-  entrySourceFile: SourceFile,
+  roots: readonly SourceFile[],
 ): ReadonlySet<SourceFile> {
   const reachable = new Set<SourceFile>();
   const visit = (sourceFile: SourceFile): void => {
@@ -182,6 +195,8 @@ function collectReachableSourceFiles(
       visit(dependency.sourceFile);
     }
   };
-  visit(entrySourceFile);
+  for (const root of roots) {
+    visit(root);
+  }
   return reachable;
 }

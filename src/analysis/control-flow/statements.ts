@@ -117,14 +117,14 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
   }
   for (const declaration of declarationSlots as readonly Node[]) {
     recordCallableValueSignatureForDeclaration(walk, declaration);
-    const nativeFunction = moduleLevel
+    const nativeCallable = moduleLevel
       ? walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
         walk.context.facts.resolve(declaration, rustModuleBindingFactKey)
       : undefined;
-    if (nativeFunction?.storage === "native-function") {
+    if (nativeCallable?.storage === "native-callable") {
       recordNativeModuleFunctionBodyFacts(
         walk,
-        nativeFunction.callableDeclaration,
+        nativeCallable.callableDeclaration,
         sourceFile,
       );
       continue;

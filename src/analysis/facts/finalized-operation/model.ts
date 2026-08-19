@@ -100,6 +100,7 @@ export interface RustFinalizedOperationAbi {
     readonly invocation: "infallible" | "fallible";
     readonly awaiting: "not-applicable" | "infallible" | "fallible";
     readonly errorBoundary: RustErrorBoundary;
+    readonly errorCarrier?: TargetTypeRef;
     readonly safety: "safe" | "requires-unsafe";
   };
 }
@@ -125,5 +126,6 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly isAsync: boolean;
   readonly isFallible: boolean;
   readonly errorBoundary?: RustFallibleErrorBoundary;
+  readonly errorCarrier?: TargetTypeRef;
   readonly isUnsafe?: boolean;
 }

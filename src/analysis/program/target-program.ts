@@ -9,6 +9,7 @@ import type {
   AnalyzeRustTargetProgramResult,
   RustTargetProgram,
 } from "./model.js";
+import { createRustModuleInitializationPlan } from "./module-initialization-facts.js";
 
 export function analyzeRustTargetProgram(
   backend: TargetBackendContext,
@@ -30,12 +31,14 @@ export function analyzeRustTargetProgram(
     };
   }
 
+  const moduleInitialization = createRustModuleInitializationPlan(context);
   const program: RustTargetProgram = Object.freeze({
     source: context.source,
     ast: context.ast,
     sourceFiles: context.sourceFiles,
     facts: context.facts.seal(),
     projectTypes: context.projectTypes.seal(),
+    objectRepresentations: context.objectRepresentations.seal(),
     projectMethodDispatch: context.projectMethodDispatch.seal(),
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
@@ -43,6 +46,7 @@ export function analyzeRustTargetProgram(
     structuralShapes: context.structuralShapes.seal(),
     providerSemantics: context.providerSemantics,
     safetyApplications: context.safetyApplications,
+    moduleInitialization,
     names: context.names,
     analysis: context.analysis,
     semantics: context.semantics,

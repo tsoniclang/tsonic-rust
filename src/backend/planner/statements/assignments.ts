@@ -25,9 +25,10 @@ import {
 import { isRustAssignmentOperator } from "../../model/syntax.js";
 import { isRustCopyCarrier, isRustStringCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
-import { planRustSharedReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
+import { planRustMutableProjectReceiver, planRustSharedReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustSourceStaticFieldLocation } from "../declarations/static-field-storage.js";
+import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../rust-ast/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node } from "@tsonic/tsts";
@@ -62,8 +63,12 @@ export function planRustSourceMethodPropertyAssignment(
   const receiverDefinition = context.input.projectTypes.definitionForCarrier(
     method.receiverCarrier,
   );
+  const representation = context.input.objectRepresentations.representationFor(
+    receiverDefinition,
+  );
   if (receiverNode === undefined || plannedReceiver === undefined || value === undefined ||
-    receiverDefinition === undefined || context.syntheticNames === undefined) {
+    receiverDefinition === undefined || representation === undefined ||
+    context.syntheticNames === undefined) {
     return undefined;
   }
   const receiverName = allocateRustSyntheticName(
@@ -93,6 +98,7 @@ export function planRustSourceMethodPropertyAssignment(
           receiver,
           method.write.storageName,
           replacement,
+          representation,
         );
   if (write === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -108,7 +114,12 @@ export function planRustSourceMethodPropertyAssignment(
       kind: "block",
       bindings: [{
         name: receiverName,
-        value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+        value: planRustMutableProjectReceiver(
+          receiverNode,
+          plannedReceiver,
+          method.receiverCarrier,
+          context,
+        ),
       }, {
         name: valueName,
         value,
@@ -538,8 +549,9 @@ export function planRustSourceIndexAssignment(
     : planExpression(receiverNode, context);
   const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
   const value = planExpression(valueNode, context);
+  const representation = rustProjectObjectRepresentation(index.receiverCarrier, context);
   if (receiverNode === undefined || plannedReceiver === undefined || keyNode === undefined ||
-    key === undefined || value === undefined ||
+    key === undefined || value === undefined || representation === undefined ||
     !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
     return undefined;
   }
@@ -554,7 +566,12 @@ export function planRustSourceIndexAssignment(
     readonly value: RustExpr;
   }[] = [{
     name: receiverName,
-    value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+    value: planRustMutableProjectReceiver(
+      receiverNode,
+      plannedReceiver,
+      index.receiverCarrier,
+      context,
+    ),
   }, {
     name: keyName,
     value: key,
@@ -569,6 +586,7 @@ export function planRustSourceIndexAssignment(
         index.storageName,
         keyPath,
         index.resultCarrier,
+        representation,
       ),
     }, {
       name: valueName,
@@ -590,17 +608,22 @@ export function planRustSourceIndexAssignment(
   } else {
     bindings.push({ name: valueName, value });
   }
+  const write = writeRustProjectObjectIndex(
+    receiverPath,
+    index.storageName,
+    keyPath,
+    next,
+    representation,
+  );
+  if (write === undefined) {
+    return undefined;
+  }
   return [{
     kind: "expr",
     expr: {
       kind: "block",
       bindings,
-      value: writeRustProjectObjectIndex(
-        receiverPath,
-        index.storageName,
-        keyPath,
-        next,
-      ),
+      value: write,
     },
   }];
 }

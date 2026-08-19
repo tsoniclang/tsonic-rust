@@ -230,7 +230,7 @@ export function planProjectMethod(
       ...(isUnsafe ? { isUnsafe: true } : {}),
       visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
       ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
-      ...(isStatic ? {} : { selfParam: "ref" as const }),
+      ...(isStatic ? {} : { selfParam: selfMode!.mode }),
       ...(typeParams.length === 0 ? {} : { typeParams }),
       params,
       returnType: generatorReturnType,
@@ -283,7 +283,7 @@ export function planProjectMethod(
     ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
     ...(fallible ? { fallible: true } : {}),
     ...(sourceAsync ? { isAsync: true } : {}),
-    ...(isStatic ? {} : { selfParam: "ref" as const }),
+    ...(isStatic ? {} : { selfParam: selfMode!.mode }),
     ...(typeParams.length === 0 ? {} : { typeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
@@ -306,7 +306,9 @@ function planDirectProjectMethodOverridePrelude(
   const targetName = owner === undefined
     ? undefined
     : context.input.projectTypes.fieldStorageName(owner, member);
+  const representation = context.input.objectRepresentations.representationFor(owner);
   if (owner?.kind !== "class" || targetName === undefined ||
+    representation === undefined ||
     context.input.facts.getFact(member, rustFallibleFactKey) === undefined ||
     syntheticNames === undefined) {
     return undefined;
@@ -321,6 +323,7 @@ function planDirectProjectMethodOverridePrelude(
     expression: readRustProjectMethodOverride(
       { kind: "path", path: "self" },
       targetName,
+      representation,
     ),
     body: {
       statements: [{

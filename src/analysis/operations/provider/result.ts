@@ -289,6 +289,7 @@ export function providerOperationTemplate<
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,
     errorBoundary: row.isFallible === true ? row.errorBoundary : "none",
+    ...(row.errorCarrier === undefined ? {} : { errorCarrier: row.errorCarrier }),
     isUnsafe: row.isUnsafe === true,
   };
 }
@@ -519,11 +520,11 @@ export function normalizeSelectedArgumentCarrier(
     : actual;
 }
 
-export function selectedArgumentCompatibility(
+export function selectedArgumentMatchScore(
   subjects: readonly ExtensionFactSubject[],
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
-): NonNullable<Parameters<typeof selectJsSurfaceOperation>[0]["argumentCompatibility"]> {
+): NonNullable<Parameters<typeof selectJsSurfaceOperation>[0]["argumentMatchScore"]> {
   return (expected, actual, index) => {
     const subject = subjects[index];
     const node = asNode(subject, context);

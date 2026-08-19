@@ -315,7 +315,11 @@ test("long calls on the left of comparisons expand before the operator", () => {
                   {
                     kind: "closure",
                     params: [],
-                    body: { kind: "int-literal", text: "-1" },
+                    body: {
+                      kind: "unary",
+                      operator: "-",
+                      operand: { kind: "int-literal", text: "1" },
+                    },
                   },
                 ],
               },

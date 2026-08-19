@@ -16,6 +16,49 @@ export interface PlannedRustModuleCell {
   readonly initialization: RustStmt;
 }
 
+export function planRustHoistedModuleCell(
+  name: string,
+  type: RustType,
+  value: RustExpr,
+  visibility: RustVisibility,
+  syntheticNames: RustSyntheticNameState,
+  attrs: readonly string[] = [],
+): readonly RustItem[] {
+  const callableAlias = type.kind === "named" && type.path === "rt::Callable"
+    ? allocateRustSyntheticTypeName(syntheticNames, `${name}_callable`)
+    : undefined;
+  const storedType: RustType = callableAlias === undefined
+    ? type
+    : { kind: "named", path: callableAlias };
+  return [
+    ...(callableAlias === undefined
+      ? []
+      : [{
+          kind: "type-alias" as const,
+          name: callableAlias,
+          visibility: "private" as const,
+          target: type,
+        }]),
+    {
+      kind: "thread-local" as const,
+      name,
+      visibility,
+      ...(attrs.length === 0 ? {} : { attrs }),
+      type: {
+        kind: "named" as const,
+        path: "rt::ModuleCell",
+        typeArguments: [storedType],
+      },
+      value: {
+        kind: "call" as const,
+        path: "rt::ModuleCell::initialized",
+        args: [value],
+      },
+      constInitializer: false,
+    },
+  ];
+}
+
 export function planRustModuleCell(
   name: string,
   type: RustType,
@@ -53,6 +96,7 @@ export function planRustModuleCell(
           typeArguments: [storedType],
         },
         value: { kind: "call", path: "rt::ModuleCell::new", args: [] },
+        constInitializer: true,
       },
     ],
     initialization: {

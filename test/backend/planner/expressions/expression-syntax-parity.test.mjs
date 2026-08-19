@@ -155,7 +155,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /value\.clone\(\)\.unwrap\(\)/u);
+  assert.match(source, /value\.unwrap\(\)/u);
   assert.match(source, /get_number[\s\S]*Some\(flow_value\)/u);
   assert.equal(validateGeneratedProject("non-null-projection", result.artifacts, { run: true }).status, 0);
 });
@@ -548,8 +548,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::BigInt::checked_div\(left\.clone\(\), right\.clone\(\)\)/u);
-  assert.match(source, /rt::BigInt::checked_rem\(left\.clone\(\), right\.clone\(\)\)/u);
+  assert.match(source, /rt::BigInt::checked_div\(left, right\)/u);
+  assert.match(source, /rt::BigInt::checked_rem\(left, right\)/u);
   assert.match(source, /rt::BigInt::checked_div\(current(?:_[0-9]+)?, value(?:_[0-9]+)?\)\?/u);
   assert.match(source, /rt::BigInt::checked_rem\(\s*current(?:_[0-9]+)?,\s*value(?:_[0-9]+)?,?\s*\)\?/u);
   validateGeneratedProject("expression-bigint-division", result.artifacts, { run: true });

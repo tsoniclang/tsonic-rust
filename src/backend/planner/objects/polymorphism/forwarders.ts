@@ -224,7 +224,11 @@ export function planRootCallableForwarder(
   overrideStoragePath: readonly string[] | undefined,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
+  const representation = context.input.objectRepresentations.representationFor(
+    context.input.projectTypes.definitionContainingDeclaration(implementation),
+  );
   if (
+    representation === undefined ||
     (helper.fallible === true) !== contractShape.fallible ||
     (helper.isUnsafe === true) !== contractShape.isUnsafe ||
     !rustFunctionTypesMatch(
@@ -274,6 +278,7 @@ export function planRootCallableForwarder(
               expression: readRustProjectMethodOverride(
                 { kind: "path", path: "self" },
                 overrideStoragePath,
+                representation,
               ),
               body: {
                 statements: [{

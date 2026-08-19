@@ -1,4 +1,4 @@
-import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier } from "./carriers.js";
+import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier } from "./carriers.js";
 import { builtInTargetCarrierIds } from "./model.js";
 import { isClosedMetadata } from "../../../policy/model/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../policy/operations/error-boundary.js";
@@ -495,9 +495,10 @@ function validateBinaryEpilogues(definition: RustProviderPackageDefinition, fail
   const crates = new Set(definition.crates.map((crate) => crate.crateName));
   for (const epilogue of definition.binaryEpilogues ?? []) {
     const record = asRecord(epilogue);
+    const epilogueId = epilogue.id;
     requireExactKeys(
       record,
-      ["id", "path", "requiredCrate", "isFallible", "errorBoundary"],
+      ["id", "path", "requiredCrate", "isFallible", "errorBoundary", "errorCarrier"],
       "binary epilogue",
       fail,
     );
@@ -515,6 +516,21 @@ function validateBinaryEpilogues(definition: RustProviderPackageDefinition, fail
     }
     if (epilogue.isFallible !== true && record.errorBoundary !== undefined) {
       fail(`infallible binary epilogue '${epilogue.id}' cannot declare an errorBoundary`);
+    }
+    if (record.errorBoundary === "provider-native") {
+      if (!isRustTargetTypeRef(record.errorCarrier)) {
+        fail(`provider-native binary epilogue '${epilogueId}' requires an exact errorCarrier`);
+      } else {
+        validateCarrier(
+          record.errorCarrier,
+          definition,
+          `binary epilogue '${epilogueId}'.errorCarrier`,
+          fail,
+          { position: "return" },
+        );
+      }
+    } else if (record.errorCarrier !== undefined) {
+      fail(`binary epilogue '${epilogueId}' cannot declare an errorCarrier outside a provider-native boundary`);
     }
     if (ids.has(epilogue.id)) {
       fail(`duplicate binary epilogue id '${epilogue.id}'`);

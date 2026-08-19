@@ -91,15 +91,22 @@ export const rustSourceCallableValueFactKey: RustPlanKey<RustSourceCallableValue
 
 export type RustModuleBindingFact =
   | {
-      readonly declarationKind: "const";
+      readonly declarationKind: "const" | "function";
       readonly storage: "native-const";
       readonly valueCarrier: TargetTypeRef;
     }
   | {
-      readonly declarationKind: "const";
-      readonly storage: "native-function";
+      readonly declarationKind: "const" | "function";
+      readonly storage: "native-callable";
       readonly callableDeclaration: Node;
       readonly name: string;
+      readonly value?: {
+        readonly name: string;
+        readonly carrier: TargetTypeRef;
+        readonly parameterCarriers: readonly TargetTypeRef[];
+        readonly argumentModes: readonly RustArgumentMode[];
+        readonly resultCarrier: TargetTypeRef;
+      };
     }
   | {
       readonly declarationKind: "const" | "let" | "var";
@@ -111,13 +118,31 @@ export const rustModuleBindingFactKey: RustPlanKey<RustModuleBindingFact> = defi
   "moduleBinding",
   (left, right) => left.declarationKind === right.declarationKind &&
     left.storage === right.storage &&
-    (left.storage === "native-function"
-      ? right.storage === "native-function" &&
+    (left.storage === "native-callable"
+      ? right.storage === "native-callable" &&
         left.callableDeclaration === right.callableDeclaration &&
-        left.name === right.name
-      : right.storage !== "native-function" &&
+        left.name === right.name &&
+        nativeCallableValuesEqual(left.value, right.value)
+      : right.storage !== "native-callable" &&
         rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier)),
 );
+
+function nativeCallableValuesEqual(
+  left: Extract<RustModuleBindingFact, { readonly storage: "native-callable" }>["value"],
+  right: Extract<RustModuleBindingFact, { readonly storage: "native-callable" }>["value"],
+): boolean {
+  return left === undefined
+    ? right === undefined
+    : right !== undefined &&
+      rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+      left.name === right.name &&
+      left.parameterCarriers.length === right.parameterCarriers.length &&
+      left.parameterCarriers.every((carrier, index) =>
+        rustTargetTypeRefEquals(carrier, right.parameterCarriers[index])) &&
+      left.argumentModes.length === right.argumentModes.length &&
+      left.argumentModes.every((mode, index) => mode === right.argumentModes[index]) &&
+      rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier);
+}
 
 function rustTypedLocationPlanEquals(
   left: RustTypedLocationPlan,

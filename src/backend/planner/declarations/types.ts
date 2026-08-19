@@ -1,5 +1,9 @@
 import { carrierOf } from "./classes.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  rustSourceItemIsPubliclyReachable,
+} from "../program/plan-context.js";
 import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
@@ -71,6 +75,9 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     kind: "enum",
     name: enumName,
     visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
+    ...(rustSourceItemIsPubliclyReachable(context, enumName)
+      ? {}
+      : { attrs: [rustLintAttributes.deadCode] }),
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
     variants,
   }];
@@ -220,11 +227,25 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   if (fields.length !== layout.fields.length) {
     return undefined;
   }
+  const representation = context.input.objectRepresentations.representationFor(definition);
+  const stateCarrier = representation === undefined
+    ? undefined
+    : rustProjectObjectType(stateType, representation);
+  if (representation === undefined || stateCarrier === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.interface-representation",
+      "Project interface has no exact shared Rust object representation.",
+    ));
+    return undefined;
+  }
   context.usedAliases?.add("rt");
   const exported = ast.hasModifierKind(node, "export");
   const interfaceAttributes = [
     ...(structAttributes(interfaceName) ?? []),
-    ...(exported ? [] : [rustLintAttributes.deadCode]),
+    ...(rustSourceItemIsPubliclyReachable(context, interfaceName)
+      ? []
+      : [rustLintAttributes.deadCode]),
   ];
   return [{
     kind: "struct",
@@ -253,7 +274,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [{
       name: rustProjectObjectStateField,
-      type: rustProjectObjectType(stateType),
+      type: stateCarrier,
       visibility: "crate",
     }],
   }];
@@ -291,7 +312,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     kind: "enum",
     name: aliasName,
     visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
-    ...(ast.hasModifierKind(node, "export")
+    ...(rustSourceItemIsPubliclyReachable(context, aliasName)
       ? {}
       : { attrs: [rustLintAttributes.deadCode] }),
     derives: fact.kind === "string-literal"

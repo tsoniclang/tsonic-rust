@@ -264,6 +264,7 @@ export interface RustProviderOperationTemplate<
   readonly isAsync: boolean;
   readonly isFallible: boolean;
   readonly errorBoundary: RustErrorBoundary;
+  readonly errorCarrier?: TargetTypeRef;
   readonly isUnsafe?: boolean;
 }
 

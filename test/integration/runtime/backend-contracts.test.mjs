@@ -199,6 +199,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
     isAsync: false,
     isFallible: true,
     errorBoundary: "provider-native",
+    errorCarrier: { kind: "target-named", id: "rust.test.ProviderError" },
   });
   assert.ok(abi);
   const runtimeArgument = {};
@@ -291,8 +292,8 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\n    pub\(crate\) state: rt::ObjectHandle<EmptyState>,\n\}/u);
-  assert.match(text, /state: rt::ObjectHandle::new\(EmptyState \{\}\)/u);
+  assert.match(text, /pub struct Empty \{\n    pub\(crate\) state: rt::ObjectRef<EmptyState>,\n\}/u);
+  assert.match(text, /state: rt::ObjectRef::new\(EmptyState \{\}\)/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
 
@@ -341,7 +342,7 @@ export class Secret {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /    pub\(crate\) state: rt::ObjectHandle<SecretState>,/u);
+  assert.match(text, /    pub\(crate\) state: rt::ObjectRef<SecretState>,/u);
   assert.doesNotMatch(text, /    (?:pub )?value: i32,/u);
   assert.match(text, /    fn hidden\(&self\) -> i32/u);
   assert.doesNotMatch(text, /    pub fn hidden\(&self\)/u);
@@ -362,7 +363,7 @@ export function main(): void {}
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) \{\n    structured_main::index::main\(\);\n\}/u,
+    /fn main\(\) \{\n    structured_main::tsonic_entry\(\);\n\}/u,
   );
   validateGeneratedProject("backend-structured-main", result.artifacts, { run: true });
 });
@@ -387,7 +388,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /exact_entry_path::index::main\(\);/u,
+    /exact_entry_path::tsonic_entry\(\);/u,
   );
   validateGeneratedProject("backend-exact-entry-path", result.artifacts, { run: true });
 });
@@ -410,7 +411,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)> \{\n    fallible_main::index::main\(\)\?;\n    Ok\(\(\)\)\n\}/u,
+    /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)> \{\n    fallible_main::tsonic_entry\(\)\?;\n    Ok\(\(\)\)\n\}/u,
   );
   validateGeneratedProject("backend-fallible-main", result.artifacts, { run: true });
 });

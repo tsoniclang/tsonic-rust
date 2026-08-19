@@ -1,5 +1,8 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
+import { rustTypeFromCarrier } from "../types/render.js";
+import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../policy/types/target-types.js";
+import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import {
   createRustSourceFile,
   type RustExpr,
@@ -8,6 +11,7 @@ import {
   type RustSourceFileModel,
   type RustType,
 } from "../../rust-ast/nodes.js";
+import type { RustExternalSourcePackageError } from "./source-package-errors.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -62,10 +66,13 @@ function path(name: string): RustExpr {
 export function planRustProgramErrorModule(
   input: RustPlanningContext,
   moduleNameByFileName: ReadonlyMap<string, string>,
+  includedFileNames: ReadonlySet<string>,
+  externalPackageErrors: readonly RustExternalSourcePackageError[],
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
-  const definitions = input.projectTypes.programErrorDefinitions;
-  if (definitions.length === 0) {
+  const definitions = input.projectTypes.programErrorDefinitions.filter((definition) =>
+    includedFileNames.has(definition.fileName));
+  if (definitions.length === 0 && externalPackageErrors.length === 0) {
     return undefined;
   }
 
@@ -93,6 +100,55 @@ export function planRustProgramErrorModule(
     return undefined;
   }
   const exactProjectVariants = projectVariants.filter((variant) => variant !== undefined);
+  const usedVariantNames = new Set([
+    "Runtime",
+    "Suppressed",
+    ...exactProjectVariants.map(({ variant }) => variant),
+  ]);
+  const externalVariants = externalPackageErrors.map((external) => {
+    let variant = external.preferredVariantName;
+    let suffix = 2;
+    while (usedVariantNames.has(variant)) {
+      variant = `${external.preferredVariantName}${suffix}`;
+      suffix += 1;
+    }
+    usedVariantNames.add(variant);
+    return Object.freeze({
+      ...external,
+      variant,
+      type: namedType(external.typePath),
+    });
+  });
+  const providerErrorTypes: RustType[] = [];
+  for (const carrier of input.providerErrorCarriers) {
+    if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||
+      rustTargetTypeRefEquals(carrier, rustProgramErrorTargetType())) {
+      continue;
+    }
+    const type = rustTypeFromCarrier(carrier);
+    if (type === undefined) {
+      diagnostics.push({
+        code: "RUST_PROVIDER_ERROR_CARRIER_UNRENDERABLE",
+        category: "error",
+        source: "tsonic-rust",
+        message: "A selected provider-native error carrier has no exact renderable Rust type.",
+        evidence: [
+          "target.capability=rust.error.provider-conversion",
+          `carrier=${JSON.stringify(carrier)}`,
+        ],
+      });
+      continue;
+    }
+    if (![runtimeErrorType, runtimeJsErrorType, ...providerErrorTypes].some((existing) =>
+      JSON.stringify(existing) === JSON.stringify(type))) {
+      providerErrorTypes.push(type);
+    }
+  }
+  providerErrorTypes.sort((left, right) =>
+    JSON.stringify(left).localeCompare(JSON.stringify(right), "en"));
+  if (diagnostics.length > 0) {
+    return undefined;
+  }
 
   const items: RustItem[] = [
     {
@@ -109,6 +165,7 @@ export function planRustProgramErrorModule(
       variants: [
         { name: "Runtime", fields: [runtimeErrorType] },
         ...exactProjectVariants.map(({ variant, type }) => ({ name: variant, fields: [type] })),
+        ...externalVariants.map(({ variant, type }) => ({ name: variant, fields: [type] })),
         {
           name: "Suppressed",
           fields: [boxType(programErrorType), boxType(programErrorType)],
@@ -124,9 +181,15 @@ export function planRustProgramErrorModule(
     },
     fromImplementation(runtimeErrorType, "Runtime", false),
     fromImplementation(runtimeJsErrorType, "Runtime", true),
+    ...providerErrorTypes.map((type) => fromImplementation(type, "Runtime", true)),
     ...exactProjectVariants.map(({ variant, type }) =>
       fromImplementation(type, variant, false)),
-    displayImplementation(exactProjectVariants.map(({ variant }) => variant)),
+    ...externalVariants.map(({ variant, type }) =>
+      fromImplementation(type, variant, false)),
+    displayImplementation([
+      ...exactProjectVariants.map(({ variant }) => variant),
+      ...externalVariants.map(({ variant }) => variant),
+    ]),
     debugImplementation(),
     {
       kind: "impl",

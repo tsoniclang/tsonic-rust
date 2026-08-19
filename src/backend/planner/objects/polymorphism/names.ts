@@ -3,6 +3,7 @@ import type { RustProjectTypeDefinition } from "../../../../analysis/project-typ
 import { rustSourceTypeCarrierValue } from "../../../../policy/types/target-types.js";
 import type { RustExpr, RustType, RustTypeParameter } from "../../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import { sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 
 export function rustProjectDispatchTraitName(
@@ -88,10 +89,10 @@ function rustProjectGeneratedType(
 ): RustType | undefined {
   const value = rustSourceTypeCarrierValue(carrier);
   const definition = context.input.projectTypes.definitionForCarrier(carrier);
-  const moduleName = value === undefined
+  const path = value === undefined || definition === undefined
     ? undefined
-    : context.moduleNameByFileName.get(value.fileName);
-  if (value === undefined || definition === undefined || moduleName === undefined ||
+    : sourceModuleItemPath(context, value.fileName, generatedName(definition));
+  if (value === undefined || definition === undefined || path === undefined ||
     value.typeArguments.length !== definition.typeParameterNames.length) {
     return undefined;
   }
@@ -102,9 +103,7 @@ function rustProjectGeneratedType(
   }
   return {
     kind: "named",
-    path: moduleName === context.moduleName
-      ? generatedName(definition)
-      : `crate::${moduleName}::${generatedName(definition)}`,
+    path,
     ...(typeArguments.length === 0
       ? {}
       : { typeArguments: typeArguments as readonly RustType[] }),

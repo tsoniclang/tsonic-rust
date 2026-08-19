@@ -4,7 +4,11 @@ import { isRustNeverCarrier, isRustUnitCarrier } from "../../../policy/types/tar
 import type { RustBlock, RustItem } from "../../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "../statements/index.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  rustSourceItemIsPubliclyReachable,
+} from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
@@ -33,6 +37,7 @@ import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
+import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
 
@@ -122,6 +127,12 @@ function planRustFunctionItem(
   const isExported = source.exported;
   const name = source.name ??
     outerContext.input.names.nameForDeclaration(source.nameDeclaration) ?? "";
+  const declarationAttributes = [
+    ...(rustSourceItemIsPubliclyReachable(outerContext, name)
+      ? []
+      : [rustLintAttributes.deadCode]),
+    ...safetyAttributes,
+  ];
   let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -273,9 +284,9 @@ function planRustFunctionItem(
       kind: "function",
       name,
       visibility: isExported ? "public" : "crate",
-      ...(safetyAttributes.length === 0
+      ...(declarationAttributes.length === 0
         ? {}
-        : { attrs: safetyAttributes }),
+        : { attrs: declarationAttributes }),
       ...(isUnsafe ? { isUnsafe: true } : {}),
       ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
       params,
@@ -324,9 +335,9 @@ function planRustFunctionItem(
     kind: "function",
     name,
     visibility: isExported ? "public" : "crate",
-    ...(safetyAttributes.length === 0
+    ...(declarationAttributes.length === 0
       ? {}
-      : { attrs: safetyAttributes }),
+      : { attrs: declarationAttributes }),
     ...(isAsync ? { isAsync: true } : {}),
     ...(isUnsafe ? { isUnsafe: true } : {}),
     ...(fallible ? { fallible: true } : {}),

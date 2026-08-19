@@ -16,7 +16,7 @@ import { missingFactDiagnostic } from "../../diagnostics.js";
 import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
 import { planFinalizedTargetInput, planProviderOperationExpression } from "../conversions.js";
-import { planRustNonConsumingValue, planRustSharedReceiver } from "../typed-locations.js";
+import { planRustMutableProjectReceiver, planRustNonConsumingValue } from "../typed-locations.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../objects/project-objects.js";
 import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTargetOperationIsDirectLocation } from "../../../../analysis/facts/target-operation.js";
@@ -49,7 +49,12 @@ export function planRustSourceFieldUpdate(
   const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   const receiver = receiverNode === undefined || plannedReceiver === undefined
     ? plannedReceiver
-    : planRustSharedReceiver(receiverNode, plannedReceiver, context);
+    : planRustMutableProjectReceiver(
+        receiverNode,
+        plannedReceiver,
+        field.receiverCarrier,
+        context,
+      );
   if (receiver === undefined || context.syntheticNames === undefined) {
     return undefined;
   }

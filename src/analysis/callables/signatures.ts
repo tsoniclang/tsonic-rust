@@ -1,5 +1,6 @@
 import {
   KindFunctionExpression,
+  KindFunctionDeclaration,
   KindArrayBindingPattern,
   KindNonNullExpression,
   KindObjectBindingPattern,
@@ -88,10 +89,14 @@ export function recordTopLevelCallableValueSignatureFacts(
   walk: RustFactWalk,
   sourceFile: SourceFile,
 ): void {
-  recordCallableValueSignaturesForStatements(
+  const statements = requireDenseSourceNodes(
     walk,
-    walk.context.ast.statements(sourceFile) as readonly Node[],
+    walk.context.ast.statements(sourceFile),
+    "Source file contains an undefined or non-data top-level statement slot.",
   );
+  if (statements !== undefined) {
+    recordCallableValueSignaturesForStatements(walk, statements);
+  }
 }
 
 export function recordPredeclaredNativeFunctionBindingFacts(
@@ -99,39 +104,121 @@ export function recordPredeclaredNativeFunctionBindingFacts(
   sourceFile: SourceFile,
 ): void {
   const { ast } = walk.context;
-  for (const statement of ast.statements(sourceFile)) {
-    if (statement === undefined || ast.kindName(statement) !== KindVariableStatement) {
+  const statements = requireDenseSourceNodes(
+    walk,
+    ast.statements(sourceFile),
+    "Source file contains an undefined or non-data top-level statement slot.",
+  );
+  if (statements === undefined) {
+    return;
+  }
+  for (const statement of statements) {
+    if (ast.kindName(statement) === KindFunctionDeclaration) {
+      const valueName = walk.context.names.callableValueNameForDeclaration(statement);
+      const implementationName = walk.context.names.functionNameForDeclaration(statement);
+      const value = finalizedNativeCallableValue(walk, statement, valueName);
+      if (valueName !== undefined && implementationName !== undefined && value !== undefined) {
+        setCarrierFact(walk, statement, value.carrier);
+        walk.context.facts.set(statement, rustModuleBindingFactKey, {
+          declarationKind: "function",
+          storage: "native-callable",
+          callableDeclaration: statement,
+          name: implementationName,
+          value,
+        }, [{ message: "rust finalized hoisted module callable value" }]);
+      }
       continue;
     }
-    const declarations = VariableDeclarationList_Declarations(
-      ast,
-      VariableStatement_DeclarationList(ast, statement),
-    );
-    if (declarations === undefined) {
+    if (ast.kindName(statement) !== KindVariableStatement) {
       continue;
+    }
+    const declarations = requireDenseSourceNodes(
+      walk,
+      VariableDeclarationList_Declarations(
+        ast,
+        VariableStatement_DeclarationList(ast, statement),
+      ),
+      "Variable statement contains an undefined or non-data declaration slot.",
+    );
+    if (declarations === undefined || declarations.length === 0) {
+      return;
     }
     for (const declaration of declarations) {
-      if (declaration === undefined || ast.kindName(declaration) !== KindVariableDeclaration ||
+      if (ast.kindName(declaration) !== KindVariableDeclaration ||
         ast.variableDeclarationKind(declaration) !== "const") {
         continue;
       }
-      const candidate = walk.moduleBindings.nativeFunction(declaration);
+      const candidate = walk.moduleBindings.nativeCallable(declaration);
       if (candidate === undefined || !nativeModuleFunctionAbiIsFinalized(
         walk,
         candidate.callableDeclaration,
       )) {
         continue;
       }
+      const valueName = candidate.valueObserved
+        ? walk.context.names.nameForDeclaration(declaration)
+        : undefined;
+      const value = finalizedNativeCallableValue(
+        walk,
+        candidate.callableDeclaration,
+        valueName,
+      );
+      if (candidate.valueObserved && value === undefined) {
+        continue;
+      }
+      if (value !== undefined) {
+        setCarrierFact(walk, declaration, value.carrier);
+      }
       walk.context.facts.set(declaration, rustModuleBindingFactKey, {
         declarationKind: "const",
-        storage: "native-function",
+        storage: "native-callable",
         callableDeclaration: candidate.callableDeclaration,
         name: candidate.name,
+        ...(value !== undefined
+          ? { value }
+          : {}),
       }, [
-        { message: "rust finalized native module function storage" },
+        { message: "rust finalized native module callable storage" },
       ]);
     }
   }
+}
+
+function finalizedNativeCallableValue(
+  walk: RustFactWalk,
+  callableDeclaration: Node,
+  valueName: string | undefined,
+): Extract<
+  import("../facts/keys.js").RustModuleBindingFact,
+  { readonly storage: "native-callable" }
+>["value"] | undefined {
+  const parameterAbis = walk.context.ast.parameters(callableDeclaration).map((parameter) =>
+    parameter === undefined
+      ? undefined
+      : walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
+        walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey));
+  const resultCarrier = walk.context.facts.get(
+    callableDeclaration,
+    rustSourceCallableReturnFactKey,
+  )?.returnCarrier ?? walk.context.facts.resolve(
+    callableDeclaration,
+    rustSourceCallableReturnFactKey,
+  )?.returnCarrier;
+  if (valueName === undefined || resultCarrier === undefined ||
+    parameterAbis.some((abi) => abi === undefined)) {
+    return undefined;
+  }
+  const closed = parameterAbis as import("../facts/keys.js").RustSourceParameterAbiFact[];
+  return {
+    name: valueName,
+    carrier: rustCallableTargetType(
+      closed.map((abi) => abi.parameterCarrier),
+      resultCarrier,
+    ),
+    parameterCarriers: closed.map((abi) => abi.parameterCarrier),
+    argumentModes: closed.map((abi) => abi.mode),
+    resultCarrier,
+  };
 }
 
 function nativeModuleFunctionAbiIsFinalized(
@@ -206,11 +293,15 @@ function recordCallableValueSignatureFacts(
   expression: Node,
 ): void {
   const { ast } = walk.context;
-  const nativeFunction = walk.moduleBindings.nativeFunction(declaration);
-  if (nativeFunction?.callableDeclaration === expression) {
+  const nativeCallable = walk.moduleBindings.nativeCallable(declaration);
+  if (nativeCallable?.callableDeclaration === expression) {
     const nativeSignature = resolveAuthoredCallableValueSignature(walk, expression);
     if (nativeSignature !== undefined) {
       recordCallableValueSignaturePlan(walk, expression, nativeSignature);
+      setCarrierFact(walk, declaration, rustCallableTargetType(
+        nativeSignature.parameters.map(({ abi }) => abi.parameterCarrier),
+        nativeSignature.returnCarrier,
+      ));
       return;
     }
   }

@@ -1,5 +1,6 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { registerRustProviderErrorCarrier } from "../context.js";
 import {
   BreakOrContinueStatement_Label,
   KindVariableDeclaration,
@@ -8,7 +9,7 @@ import {
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planStatementSequence } from "./core.js";
-import { planVariableStatement } from "./variables.js";
+import { planVariableStatement } from "./variable-declarations.js";
 import { rustResourceManagementFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustStmt } from "../../rust-ast/nodes.js";
@@ -245,7 +246,15 @@ function planResourceCleanup(
     disposal = { kind: "await", expr: disposal };
   }
   if (fact.disposal.fallible) {
-    disposal = applyRustErrorBoundary(disposal, fact.disposal.errorBoundary, context.errorDomain);
+    if (fact.disposal.errorBoundary === "provider-native") {
+      registerRustProviderErrorCarrier(context.input, fact.disposal.errorCarrier);
+    }
+    disposal = applyRustErrorBoundary(
+      disposal,
+      fact.disposal.errorBoundary,
+      context.errorDomain,
+      fact.disposal.errorCarrier,
+    );
   }
   const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };
   if (!fact.nullable) {

@@ -1,7 +1,12 @@
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../objects/project-objects.js";
-import { diagnosticInput, isValidRustIdentifier, rustLocalBindingName } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  rustLocalBindingName,
+  rustSourceItemIsPubliclyReachable,
+} from "../program/plan-context.js";
 import {
   KindClassStaticBlockDeclaration,
   Node_Initializer,
@@ -36,6 +41,7 @@ import type {
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -79,6 +85,16 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
+  const representation = context.input.objectRepresentations.representationFor(definition);
+  if (representation === undefined || representation.kind === "open-hierarchy" ||
+    representation.kind === "closed-hierarchy") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.class-representation",
+      "Non-polymorphic class declaration has no exact Rust object representation.",
+    ));
+    return undefined;
+  }
   const openType = rustTypeFromCarrierInContext(
     context.input.projectTypes.openCarrier(definition),
     context,
@@ -91,11 +107,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
-  const stateType = rustProjectStateType(
-    context.input.projectTypes.openCarrier(definition),
-    context,
-  );
-  if (stateType === undefined) {
+  const stateType = representation.kind === "value"
+    ? undefined
+    : rustProjectStateType(
+        context.input.projectTypes.openCarrier(definition),
+        context,
+      );
+  if (representation.kind !== "value" && stateType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.class-state-carrier",
@@ -246,6 +264,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     stateMarker,
     fields,
     methodProperties,
+    representation,
     context,
   );
   if (failed || constructorFn === undefined) {
@@ -285,17 +304,48 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   if (fields.length !== layout.fields.length) {
     return undefined;
   }
-  context.usedAliases?.add("rt");
+  if (representation.kind !== "value") {
+    context.usedAliases?.add("rt");
+  }
   const exported = ast.hasModifierKind(node, "export");
   const generatedStructAttributes = [
     ...(structAttributes(className) ?? []),
-    ...(exported ? [] : [rustLintAttributes.deadCode]),
+    ...(rustSourceItemIsPubliclyReachable(context, className)
+      ? []
+      : [rustLintAttributes.deadCode]),
   ];
-  const stateField: RustStructField = {
-    name: rustProjectObjectStateField,
-    type: rustProjectObjectType(stateType),
-    visibility: "crate",
-  };
+  const stateCarrier = stateType === undefined
+    ? undefined
+    : rustProjectObjectType(stateType, representation);
+  const valueFields: readonly RustStructField[] = [
+    ...fields.map((field) => ({
+      name: field.targetName,
+      type: field.type,
+      visibility: "crate" as const,
+    })),
+    ...methodProperties.map((property) => ({
+      name: property.targetName,
+      type: {
+        kind: "named" as const,
+        path: "Option",
+        typeArguments: [property.callableType],
+      },
+      visibility: "crate" as const,
+    })),
+    ...(stateMarker === undefined
+      ? []
+      : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
+  ];
+  if (representation.kind !== "value" && stateCarrier === undefined) {
+    return undefined;
+  }
+  const stateField: RustStructField | undefined = stateCarrier === undefined
+    ? undefined
+    : {
+        name: rustProjectObjectStateField,
+        type: stateCarrier,
+        visibility: "crate",
+      };
   const stateItem: RustItem = {
     kind: "struct",
     name: definition.stateName,
@@ -303,26 +353,16 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     attrs: [rustLintAttributes.deadCode],
     derives: [],
     ...(typeParams.length === 0 ? {} : { typeParams }),
-    fields: [
-      ...fields.map((field) => ({
-        name: field.targetName,
-        type: field.type,
-        visibility: "crate" as const,
-      })),
-      ...methodProperties.map((property) => ({
-        name: property.targetName,
-        type: {
-          kind: "named" as const,
-          path: "Option",
-          typeArguments: [property.callableType],
-        },
-        visibility: "crate" as const,
-      })),
-      ...(stateMarker === undefined
-        ? []
-        : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
-    ],
+    fields: valueFields,
   };
+  const structFields = representation.kind === "value"
+    ? valueFields
+    : stateField === undefined
+      ? undefined
+      : [stateField];
+  if (structFields === undefined) {
+    return undefined;
+  }
   const structItem: RustItem = {
     kind: "struct",
     name: className,
@@ -330,7 +370,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     visibility: exported ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
-    fields: [stateField],
+    fields: structFields,
   };
   const implementation: RustItem = {
     kind: "impl",
@@ -340,7 +380,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   };
   const defaultImplementation = rustDefaultImplementation(openType, typeParams, constructorFn);
   return [
-    stateItem,
+    ...(representation.kind === "value" ? [] : [stateItem]),
     structItem,
     implementation,
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
@@ -356,6 +396,7 @@ function planConstructor(
   stateMarker: ReturnType<typeof rustProjectStateMarker>,
   fields: readonly PlannedProjectObjectField[],
   methodProperties: readonly ProjectMethodPropertyPlan[],
+  representation: RustObjectRepresentation,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const { ast } = context.input;
@@ -511,10 +552,13 @@ function planConstructor(
           ? []
           : [{ name: stateMarker.name, value: stateMarker.value }],
       ),
+      representation,
     ),
   });
   const constructorAttributes = [
-    ...(ast.hasModifierKind(classDeclaration, "export") ? [] : [rustLintAttributes.deadCode]),
+    ...(rustSourceItemIsPubliclyReachable(context, className)
+      ? []
+      : [rustLintAttributes.deadCode]),
     ...safetyAttributes,
   ];
   return {

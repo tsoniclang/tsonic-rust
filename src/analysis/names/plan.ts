@@ -7,6 +7,7 @@ import {
   rustSnakeCaseIdentifier,
 } from "../../policy/names/identifiers.js";
 import { Node_Initializer } from "@tsonic/target-api/source";
+import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 
 type RustNameRole =
   | "module-value"
@@ -28,6 +29,7 @@ interface RustNameCandidate {
 export function createRustNamePlan(input: {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
+  readonly runtimeValueUses: RustRuntimeValueUsePlan;
   readonly sourceFiles: readonly SourceFile[];
 }): RustNamePlan {
   const candidates: RustNameCandidate[] = [];
@@ -42,6 +44,7 @@ export function createRustNamePlan(input: {
   }
   const names = new WeakMap<Node, string>();
   const functionNames = new WeakMap<Node, string>();
+  const callableValueNames = new WeakMap<Node, string>();
   const sourceTypeNames = new Map<string, string>();
   const scopes = groupCandidates(candidates);
   for (const bases of scopes.values()) {
@@ -98,12 +101,48 @@ export function createRustNamePlan(input: {
       });
     }
   }
+  const moduleValueNames = new Map<Node, Set<string>>();
+  for (const candidate of candidates) {
+    if (input.ast.kindName(candidate.scope) !== "KindSourceFile") {
+      continue;
+    }
+    const used = moduleValueNames.get(candidate.scope) ?? new Set<string>();
+    const name = names.get(candidate.declaration);
+    if (name !== undefined && (candidate.role === "module-value" ||
+      input.ast.kindName(candidate.declaration) === "KindFunctionDeclaration")) {
+      used.add(name);
+    }
+    moduleValueNames.set(candidate.scope, used);
+  }
+  const topLevelFunctions = candidates
+    .filter((candidate) => input.ast.kindName(candidate.scope) === "KindSourceFile" &&
+      input.ast.kindName(candidate.declaration) === "KindFunctionDeclaration")
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  for (const candidate of topLevelFunctions) {
+    if (!input.runtimeValueUses.hasFirstClassUse(candidate.declaration)) {
+      continue;
+    }
+    const used = moduleValueNames.get(candidate.scope) ?? new Set<string>();
+    const base = `${rustScreamingSnakeIdentifier(candidate.sourceName)}_CALLABLE`;
+    let valueName = base;
+    let suffix = 2;
+    while (used.has(valueName)) {
+      valueName = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    used.add(valueName);
+    moduleValueNames.set(candidate.scope, used);
+    callableValueNames.set(candidate.declaration, valueName);
+  }
   return Object.freeze({
     nameForDeclaration(declaration: Node | undefined) {
       return declaration === undefined ? undefined : names.get(declaration);
     },
     functionNameForDeclaration(declaration: Node | undefined) {
       return declaration === undefined ? undefined : functionNames.get(declaration);
+    },
+    callableValueNameForDeclaration(declaration: Node | undefined) {
+      return declaration === undefined ? undefined : callableValueNames.get(declaration);
     },
     nameForSourceType(fileName: string, sourceName: string) {
       return sourceTypeNames.get(sourceTypeIdentity(fileName, sourceName));

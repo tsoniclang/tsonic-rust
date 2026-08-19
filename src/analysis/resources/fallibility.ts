@@ -174,7 +174,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
             ? undefined
             : walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
               walk.context.facts.resolve(declaration, rustModuleBindingFactKey);
-          if (binding?.storage === "native-function") {
+          if (binding?.storage === "native-callable") {
             addRegion(
               binding.callableDeclaration,
               ast.body(binding.callableDeclaration),

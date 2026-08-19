@@ -1,5 +1,6 @@
 import {
   rustJsArrayTargetType,
+  rustJsErrorTargetType,
   rustJsValueTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
@@ -87,6 +88,7 @@ export function mapSelectedJsSpecialCall(
       isAsync: false,
       isFallible: true,
       errorBoundary: "provider-native",
+      errorCarrier: rustJsErrorTargetType(),
     }, [{ kind: "target-named", id: "rust.js.JsRegExp" }], context, options, {
       sourceName: memberName,
     });
@@ -126,6 +128,7 @@ export function mapSelectedJsSpecialCall(
     isAsync: false,
     isFallible: true,
     errorBoundary: "provider-native",
+    errorCarrier: rustJsErrorTargetType(),
   }, [rustJsValueTargetType()], context, options, {
     sourceName: memberName,
   });

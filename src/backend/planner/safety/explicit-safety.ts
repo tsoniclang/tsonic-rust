@@ -280,17 +280,7 @@ function exactSafetyOperation(
   expression: Node,
   input: RustPlanningContext,
 ): RustSafetyOperation | undefined {
-  let current: Node | undefined = expression;
-  while (current !== undefined) {
-    const operation = input.safetyApplications.operationForSubject(current);
-    if (operation !== undefined) {
-      return operation;
-    }
-    current = input.ast.kindName(current) === "KindParenthesizedExpression"
-      ? Node_Expression(input.ast, current)
-      : undefined;
-  }
-  return undefined;
+  return input.safetyApplications.operationForExpression(expression);
 }
 
 function uniqueApplications(

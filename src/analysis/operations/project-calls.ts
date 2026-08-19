@@ -200,7 +200,7 @@ export function applySelectedProjectSourceCall(
     ? undefined
     : walk.context.facts.get(calleeReferenceDeclaration, rustModuleBindingFactKey) ??
       walk.context.facts.resolve(calleeReferenceDeclaration, rustModuleBindingFactKey);
-  const directModuleFunction = calleeModuleBinding?.storage === "native-function" &&
+  const directModuleFunction = calleeModuleBinding?.storage === "native-callable" &&
     calleeModuleBinding.callableDeclaration === selectedDeclaration;
   const directCallableDeclaration = calleeReferenceDeclaration === selectedDeclaration ||
     (calleeImplementation?.kind === "resolved" &&
@@ -352,6 +352,9 @@ export function applySelectedProjectSourceCall(
               },
             }),
       };
+      if (mutatesSelf) {
+        recordBindingWrite(walk, receiver, "referent");
+      }
     }
   } else if (declarationKind === KindFunctionDeclaration) {
     const name = walk.context.names.functionNameForDeclaration(selectedDeclaration);

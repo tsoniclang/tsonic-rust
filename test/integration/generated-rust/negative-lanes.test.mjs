@@ -55,7 +55,7 @@ export function mix(a: int32, b: float64): float64 {
   assert.match(text, /a as f64 \+ b/u);
 });
 
-test("dynamic any member access fails closed in strict-native mode", () => {
+test("dynamic any member access fails closed without selected evidence", () => {
   const options = {
     files: {
       "index.ts": `

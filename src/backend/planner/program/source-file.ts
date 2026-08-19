@@ -37,6 +37,7 @@ import {
   diagnosticInput,
   isUpperSnakeName,
   isValidRustIdentifier,
+  rustSourceItemIsPubliclyReachable,
   rustRuntimeAliasImports,
 } from "./plan-context.js";
 import type { RustPlanContext } from "./plan-context.js";
@@ -44,7 +45,6 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planBlockLike, planStatement } from "../statements/index.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import {
-  allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
 import {
@@ -62,10 +62,13 @@ import {
 } from "../safety/explicit-safety.js";
 import {
   planRustModuleCell,
+  planRustHoistedModuleCell,
   type PlannedRustModuleCell,
 } from "../project/module-storage.js";
 import { planRustClassInitialization } from "../declarations/class-static-fields.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
+import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
+import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -81,32 +84,63 @@ export interface PlannedRustSourceFile {
 export function planRustSourceFile(
   sourceFile: SourceFile,
   moduleName: string,
+  crateName: string | undefined,
   moduleNameByFileName: ReadonlyMap<string, string>,
+  externalCrateNameByFileName: ReadonlyMap<string, string>,
+  externalItemPathByIdentity: ReadonlyMap<string, string>,
+  externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>,
   programModuleName: string,
   structuralShapesModuleName: string,
   childModuleNames: readonly string[],
+  publicModuleNames: ReadonlySet<string>,
+  publicImplementationItemIdentities: ReadonlySet<string>,
+  errorDomain: import("../../rust-ast/nodes.js").RustErrorDomain,
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
 ): PlannedRustSourceFile {
+  const diagnosticsBeforePlanning = diagnostics.length;
   diagnoseRustSafetyApplications(sourceFile, input, diagnostics);
   const usedAliases = new Set<string>();
   const context: RustPlanContext = {
     input,
     sourceFile,
     moduleName,
+    ...(crateName === undefined ? {} : { crateName }),
     moduleNameByFileName,
+    externalCrateNameByFileName,
+    externalItemPathByIdentity,
+    externalStructuralShapeModuleByFileName,
     programModuleName,
     structuralShapesModuleName,
+    publicImplementationItemIdentities,
     diagnostics,
-    errorDomain: input.projectTypes.programErrorDefinitions.length === 0 ? "runtime" : "project",
+    errorDomain,
     usedAliases,
     planBlock: planBlockLike,
   };
   const plannedModule = planModuleItems(context);
+  const initializationRequirement = input.moduleInitialization.requirementFor(sourceFile);
+  if (initializationRequirement.kind === "unresolved") {
+    diagnostics.push(unsupportedConstructDiagnostic(
+      { ast: input.ast, sourceFile, node: initializationRequirement.node },
+      "rust.backend.module-initialization-facts",
+      initializationRequirement.reason,
+    ));
+  } else if (diagnostics.length === diagnosticsBeforePlanning &&
+    (initializationRequirement.kind === "required") !==
+    (plannedModule.initialization !== undefined)) {
+    diagnostics.push(unsupportedConstructDiagnostic(
+      { ast: input.ast, sourceFile, node: sourceFile },
+      "rust.backend.module-initialization-facts",
+      initializationRequirement.kind === "required"
+        ? "Finalized module facts require initialization, but planning produced no initializer."
+        : "Planning produced a module initializer although finalized module facts prove initialization unnecessary.",
+    ));
+  }
   const aliases = Object.freeze(new Set(usedAliases));
   const useItems: RustItem[] = [...aliases]
     .sort((left, right) => left.localeCompare(right, "en"))
-    .map((alias) => alias === "rt" && input.projectTypes.programErrorDefinitions.length > 0
+    .map((alias) => alias === "rt" && errorDomain === "project"
       ? { path: `crate::${programModuleName}`, alias: "rt" }
       : rustRuntimeAliasImports.get(alias))
     .filter((entry): entry is { path: string; alias: string } =>
@@ -120,7 +154,7 @@ export function planRustSourceFile(
       ...childModuleNames.map((name): RustItem => ({
         kind: "mod-decl",
         name,
-        visibility: "public",
+        visibility: publicModuleNames.has(`${moduleName}::${name}`) ? "public" : "crate",
       })),
       ...plannedModule.items,
     ]),
@@ -144,9 +178,9 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
   const items: RustItem[] = [];
   const initializationStatements = [] as import("../../rust-ast/nodes.js").RustStmt[];
   const syntheticNames = createRustSyntheticNameState(ast, context.sourceFile, []);
-  const initializationFunctionName = allocateRustSyntheticName(
-    syntheticNames,
-    "module_init",
+  const initializationFunctionName = rustModuleInitializerFunctionName(
+    context.input,
+    context.sourceFile,
   );
   const objectLiteralImplementations = createRustObjectLiteralImplementationRegistry(
     context.sourceFile,
@@ -200,6 +234,40 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       const plannedFunctions = planFunctionDeclarations(statement, context);
       if (plannedFunctions !== undefined) {
         items.push(...plannedFunctions);
+        const binding = context.input.facts.getFact(statement, rustModuleBindingFactKey);
+        if (binding?.storage === "native-callable" && binding.value !== undefined) {
+          const value = planRustSourceCallableValue({
+            form: "function",
+            sourceDeclaration: statement,
+            fileName: ast.getFileName(context.sourceFile),
+            name: binding.name,
+            carrier: binding.value.carrier,
+            parameterCarriers: binding.value.parameterCarriers,
+            argumentModes: binding.value.argumentModes,
+            resultCarrier: binding.value.resultCarrier,
+          }, initializationContext);
+          const type = rustTypeFromCarrierInContext(binding.value.carrier, initializationContext);
+          if (value === undefined || type === undefined ||
+            !rustCarrierSupportsClone(binding.value.carrier)) {
+            context.diagnostics.push(unsupportedConstructDiagnostic(
+              diagnosticInput(context, statement),
+              "rust.backend.hoisted-callable-value",
+              "Observed function declarations require one exact renderable Clone-capable callable value.",
+            ));
+          } else {
+            initializationContext.usedAliases?.add("rt");
+            items.push(...planRustHoistedModuleCell(
+              binding.value.name,
+              type,
+              value,
+              ast.hasModifierKind(statement, "export") ? "public" : "crate",
+              syntheticNames,
+              rustSourceItemIsPubliclyReachable(context, binding.value.name)
+                ? []
+                : [rustLintAttributes.deadCode],
+            ));
+          }
+        }
       } else {
         ensureTopLevelPlanningDiagnostic(
           context,
@@ -463,18 +531,57 @@ function planTopLevelVariableStatement(
     const visibility = ast.hasModifierKind(statement, "export")
       ? "public" as const
       : "crate" as const;
-    if (binding.storage === "native-function") {
+    if (binding.storage === "native-callable") {
       const item = planNativeModuleFunction(
         declaration,
         binding.callableDeclaration,
         binding.name,
-        visibility === "public",
+        binding.value === undefined && visibility === "public",
         context,
       );
       if (item === undefined) {
         return undefined;
       }
       items.push(item);
+      if (binding.value === undefined) {
+        continue;
+      }
+      const value = planRustSourceCallableValue({
+        form: "function",
+        sourceDeclaration: binding.callableDeclaration,
+        fileName: ast.getFileName(context.sourceFile),
+        name: binding.name,
+        carrier: binding.value.carrier,
+        parameterCarriers: binding.value.parameterCarriers,
+        argumentModes: binding.value.argumentModes,
+        resultCarrier: binding.value.resultCarrier,
+      }, context);
+      const rustType = rustTypeFromCarrierInContext(binding.value.carrier, context);
+      if (value === undefined || rustType === undefined ||
+        !rustCarrierSupportsClone(binding.value.carrier)) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          { ast, sourceFile: context.sourceFile, node: declaration },
+          "rust.backend.module-callable-value",
+          "Observed module callable values require one exact renderable Clone-capable carrier.",
+        ));
+        return undefined;
+      }
+      context.usedAliases?.add("rt");
+      const planned = planRustModuleCell(
+        binding.value.name,
+        rustType,
+        value,
+        visibility,
+        context.syntheticNames!,
+        [
+          ...(isUpperSnakeName(binding.value.name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
+          ...(rustSourceItemIsPubliclyReachable(context, binding.value.name)
+            ? []
+            : [rustLintAttributes.deadCode]),
+        ],
+      );
+      items.push(...planned.items);
+      initialization.push(planned.initialization);
       continue;
     }
     const rustType = rustTypeFromCarrierInContext(binding.valueCarrier, context);
@@ -491,13 +598,17 @@ function planTopLevelVariableStatement(
       return undefined;
     }
     if (binding.storage === "native-const") {
+      const attrs = [
+        ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
+        ...(rustSourceItemIsPubliclyReachable(context, name)
+          ? []
+          : [rustLintAttributes.deadCode]),
+      ];
       items.push({
         kind: "const",
         name,
         visibility,
-        ...(isUpperSnakeName(name)
-          ? {}
-          : { attrs: [rustLintAttributes.nonUpperCaseGlobal] }),
+        ...(attrs.length === 0 ? {} : { attrs }),
         type: rustType,
         value,
       });
@@ -518,7 +629,12 @@ function planTopLevelVariableStatement(
       value,
       visibility,
       context.syntheticNames!,
-      isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal],
+      [
+        ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
+        ...(rustSourceItemIsPubliclyReachable(context, name)
+          ? []
+          : [rustLintAttributes.deadCode]),
+      ],
     );
     items.push(...planned.items);
     initialization.push(planned.initialization);

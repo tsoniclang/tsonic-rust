@@ -29,7 +29,7 @@ export function probe(): int32 {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /bytes\s*\.to_string_enc\("hex"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /bytes\.to_string_enc\("hex"\)\?/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(bytes\.len\(\)\)\?/u);
 });
 

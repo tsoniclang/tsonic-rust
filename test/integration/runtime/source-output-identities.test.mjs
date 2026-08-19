@@ -10,6 +10,7 @@ import {
 } from "../../../dist/analysis/program/source-output-identities.js";
 import {
   fakeAstReader,
+  fakeSourcePackageGraph,
   fakeSourceFile,
 } from "../../helpers/fake-compile-input.mjs";
 
@@ -73,6 +74,10 @@ test("source path collisions receive local readable suffixes without hash names"
   const plan = planRustSourceOutputIdentities({
     ast: fakeAstReader([first, second]),
     sourceFiles: [first, second],
+    sourcePackages: fakeSourcePackageGraph([first, second], {
+      packageRoot: "/project",
+      sourceRoot: "/project",
+    }),
     paths: {
       projectFilePath: "/project/tsonic.json",
       projectRoot: "/project",
@@ -99,6 +104,10 @@ test("source path allocation reserves sibling bases before assigning collision s
   const plan = planRustSourceOutputIdentities({
     ast: fakeAstReader(files),
     sourceFiles: files,
+    sourcePackages: fakeSourcePackageGraph(files, {
+      packageRoot: "/project",
+      sourceRoot: "/project",
+    }),
     paths: {
       projectFilePath: "/project/tsonic.json",
       projectRoot: "/project",
@@ -141,7 +150,7 @@ export function childValue(): string { return "child"; }
     "src/template.rs",
     "src/template/template_2.rs",
   ]);
-  assert.match(artifactText(result, "src/template.rs"), /pub mod template_2;/u);
+  assert.match(artifactText(result, "src/template.rs"), /pub\(crate\) mod template_2;/u);
   assert.match(
     artifactText(result, "src/index.rs"),
     /crate::template::parent_value\(\).*crate::template::template_2::child_value\(\)/su,
@@ -161,12 +170,13 @@ test("an authored parent module owns its child declaration", () => {
   assert.deepEqual(result.artifacts.map((artifact) => artifact.path), [
     "Cargo.toml",
     "src/lib.rs",
+    "src/initializers.rs",
     "src/build.rs",
     "src/build/site.rs",
     "src/index.rs",
   ]);
-  assert.match(artifactText(result, "src/build.rs"), /pub mod site;/u);
-  assert.equal(artifactText(result, "src/lib.rs").match(/pub mod build;/gu)?.length, 1);
+  assert.match(artifactText(result, "src/build.rs"), /pub\(crate\) mod site;/u);
+  assert.equal(artifactText(result, "src/lib.rs").match(/pub\(crate\) mod build;/gu)?.length, 1);
 });
 
 test("source output identity rejects files outside the checked project root", () => {
@@ -174,6 +184,10 @@ test("source output identity rejects files outside the checked project root", ()
   const plan = planRustSourceOutputIdentities({
     ast: fakeAstReader([sourceFile]),
     sourceFiles: [sourceFile],
+    sourcePackages: fakeSourcePackageGraph([sourceFile], {
+      packageRoot: "/project",
+      sourceRoot: "/project",
+    }),
     paths: {
       projectFilePath: "/project/tsonic.json",
       projectRoot: "/project",

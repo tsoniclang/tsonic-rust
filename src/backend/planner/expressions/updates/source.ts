@@ -14,9 +14,9 @@ import { findRustUpdateProjectField, planRustBorrowedUpdateLocation, planRustDir
 import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccessorSelectedOperationMatches, sourceIndexSelectedOperationMatches, sourceStaticFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../properties.js";
 import { isRustBigIntCarrier } from "../../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
+import { mutateRustStoredObjectField, rustProjectObjectRepresentation } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
-import { planRustSharedReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
+import { planRustMutableProjectReceiver, planRustSharedReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { planRustSourceUnionFieldProjection } from "../unions.js";
 import { readRustProjectObjectIndex, writeRustProjectObjectIndex } from "../../objects/project-objects.js";
 import { rustSourceStaticFieldLocation } from "../../declarations/static-field-storage.js";
@@ -295,8 +295,10 @@ function planRustSourceIndexUpdate(
     ? undefined
     : planExpression(receiverNode, context);
   const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
+  const representation = rustProjectObjectRepresentation(index.receiverCarrier, context);
   if (receiverNode === undefined || plannedReceiver === undefined || keyNode === undefined ||
-    key === undefined || !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
+    key === undefined || representation === undefined ||
+    !rustTargetTypeRefEquals(expressionCarrier(keyNode, context), index.keyCarrier)) {
     return undefined;
   }
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_update_receiver");
@@ -306,7 +308,12 @@ function planRustSourceIndexUpdate(
   return planRustUpdateValue({
     locationBindings: [{
       name: receiverName,
-      value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
+      value: planRustMutableProjectReceiver(
+        receiverNode,
+        plannedReceiver,
+        index.receiverCarrier,
+        context,
+      ),
     }, {
       name: keyName,
       value: key,
@@ -316,12 +323,14 @@ function planRustSourceIndexUpdate(
       index.storageName,
       selectedKey,
       index.resultCarrier,
+      representation,
     ),
     write: (value) => writeRustProjectObjectIndex(
       receiver,
       index.storageName,
       selectedKey,
       value,
+      representation,
     ),
     update,
     step,

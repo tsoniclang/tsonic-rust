@@ -183,7 +183,7 @@ export function aliases(): boolean {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let same_date: js_abi::JsDate = date\.clone\(\);/u);
   assert.match(text, /let same_pattern: js_abi::JsRegExp = pattern\.clone\(\);/u);
-  assert.match(text, /same_pattern\.test\("1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /same_pattern\.test\("1"\)\?/u);
   assert.match(text, /same_date == date/u);
   assert.match(text, /i32_to_f64\(pattern\.last_index\(\)\) == 1\.0/u);
 });
@@ -195,7 +195,7 @@ test("js surface contributes the rust-js cargo dependency", () => {
   assert.match(manifest, /tsonic_rust_js = \{ path = ".*rust-js\/crates\/tsonic_rust_js" \}/u);
 });
 
-test("strict-native without js surface rejects sparse-array JS APIs during source checking", () => {
+test("the native source profile rejects sparse-array JS APIs", () => {
   const harness = createRustSession({ files: { "index.ts": sparseSource } });
   const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
 
@@ -203,7 +203,7 @@ test("strict-native without js surface rejects sparse-array JS APIs during sourc
   assert.match(diagnostics, /TS2550: Property 'at' does not exist/u);
 });
 
-test("strict-native without js surface excludes JS string members from the source contract", () => {
+test("the native source profile excludes JS string members", () => {
   const harness = createRustSession({
     files: {
       "index.ts": `
@@ -218,20 +218,9 @@ export function probe(name: string): boolean {
   assert.match(diagnostics, /TS2550: Property 'includes' does not exist/u);
 });
 
-test("compat mode enables JS carrier lanes without explicit surface selection", () => {
-  const { result } = compileRust({
-    target: { id: "rust", options: { typescriptCompatibility: "compat" } },
-    files: { "index.ts": sparseSource },
-  });
-
-  assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsArray::from_sparse\(3,/u);
-  assert.match(artifactText(result, "Cargo.toml"), /tsonic_rust_js/u);
-});
-
-test("dynamic any member access fails closed even in compat mode", () => {
+test("dynamic any member access fails closed under the JS surface without selected evidence", () => {
   const options = {
-    target: { id: "rust", options: { typescriptCompatibility: "compat" } },
+    surfaces: ["js"],
     files: {
       "index.ts": `
 declare const value: any;
@@ -292,7 +281,7 @@ export function caller(): int32 {
   assert.match(text, /pub fn sum\(xs: js_abi::JsArray<i32>\) -> rt::TsonicResult<i32> \{/u);
   assert.match(text, /for x in xs\.iter_values\(\) \{/u);
   assert.match(text, /total \+ tsonic_rust_runtime::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
-  assert.match(text, /sum\(values\.clone\(\)\)/u);
+  assert.match(text, /sum\(values\)/u);
 });
 
 test("undefined unions take the Option lane only under the js surface", () => {
