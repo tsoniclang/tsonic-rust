@@ -154,6 +154,77 @@ export function writeRustProjectObjectField(
   };
 }
 
+export function readRustProjectPrivateField(
+  receiver: RustExpr,
+  storagePath: readonly string[],
+  accessor: string,
+  representation: RustObjectRepresentation,
+): RustExpr | undefined {
+  if (storagePath.length === 0) {
+    return undefined;
+  }
+  const ownerPath = storagePath.slice(0, -1);
+  const read = (owner: RustExpr): RustExpr => ({
+    kind: "method-call",
+    receiver: owner,
+    method: accessor,
+    args: [],
+  });
+  if (representation.kind === "value") {
+    return read(rustProjectObjectDirectPath(receiver, ownerPath));
+  }
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with",
+    args: [{
+      kind: "closure",
+      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      body: read(rustProjectObjectStatePath(ownerPath)),
+    }],
+  };
+}
+
+export function writeRustProjectPrivateField(
+  receiver: RustExpr,
+  storagePath: readonly string[],
+  accessor: string,
+  value: RustExpr,
+  representation: RustObjectRepresentation,
+): RustExpr | undefined {
+  if (storagePath.length === 0 || representation.kind === "shared-immutable") {
+    return undefined;
+  }
+  const ownerPath = storagePath.slice(0, -1);
+  const write = (owner: RustExpr): RustExpr => ({
+    kind: "method-call",
+    receiver: owner,
+    method: accessor,
+    args: [value],
+  });
+  if (representation.kind === "value") {
+    return write(rustProjectObjectDirectPath(receiver, ownerPath));
+  }
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with_mut",
+    args: [{
+      kind: "closure",
+      params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
+      body: write(rustProjectObjectStatePath(ownerPath)),
+    }],
+  };
+}
+
 export function readRustProjectMethodOverride(
   receiver: RustExpr,
   storagePath: string | readonly string[],

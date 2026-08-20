@@ -249,7 +249,7 @@ export function childValue(): string { return "child"; }
   ]);
   assert.match(
     artifactText(result, "src/template.rs"),
-    /pub\(crate\) mod template_2;/u,
+    /#\[doc\(hidden\)\]\s+pub mod template_2;/u,
   );
   assert.match(
     artifactText(result, "src/index.rs"),
@@ -277,9 +277,9 @@ test("an authored parent module owns its child declaration", () => {
   ]);
   assert.match(
     artifactText(result, "src/build.rs"),
-    /pub\(crate\) mod site;/u,
+    /#\[doc\(hidden\)\]\s+pub mod site;/u,
   );
-  assert.equal(artifactText(result, "src/lib.rs").match(/pub\(crate\) mod build;/gu)?.length, 1);
+  assert.equal(artifactText(result, "src/lib.rs").match(/pub mod build;/gu)?.length, 1);
 });
 
 test("source output identity rejects files outside the checked project root", () => {

@@ -98,7 +98,9 @@ export function planRustSourceFile(
   structuralShapesModuleName: string,
   childModuleNames: readonly string[],
   publicModuleNames: ReadonlySet<string>,
+  publicImplementationModuleNames: ReadonlySet<string>,
   publicImplementationItemIdentities: ReadonlySet<string>,
+  publishesImplementationAbi: boolean,
   errorDomain: import("../../rust-ast/nodes.js").RustErrorDomain,
   sourcePackageErrors: RustSourcePackageErrorPlan,
   input: RustPlanningContext,
@@ -120,6 +122,7 @@ export function planRustSourceFile(
     programModuleName,
     structuralShapesModuleName,
     publicImplementationItemIdentities,
+    publishesImplementationAbi,
     diagnostics,
     errorDomain,
     sourcePackageErrors,
@@ -159,11 +162,19 @@ export function planRustSourceFile(
     .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
   const model = createRustSourceFile([
     ...useItems,
-    ...childModuleNames.map((name): RustItem => ({
-      kind: "mod-decl",
-      name,
-      visibility: publicModuleNames.has(`${moduleName}::${name}`) ? "public" : "crate",
-    })),
+    ...childModuleNames.map((name): RustItem => {
+      const childModuleName = `${moduleName}::${name}`;
+      const sourcePublic = publicModuleNames.has(childModuleName);
+      const implementationPublic = publicImplementationModuleNames.has(childModuleName);
+      return {
+        kind: "mod-decl",
+        name,
+        visibility: sourcePublic || implementationPublic ? "public" : "crate",
+        ...(implementationPublic && !sourcePublic
+          ? { attrs: ["#[doc(hidden)]"] }
+          : {}),
+      };
+    }),
     ...plannedModule.items,
   ]);
   return Object.freeze({

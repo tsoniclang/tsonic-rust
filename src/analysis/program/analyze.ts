@@ -28,6 +28,7 @@ import { rustStructuralObjectCarrierValue } from "../../policy/types/target-type
 import { rustLocationStorageFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";
+import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -56,6 +57,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       return;
     }
   }
+  const externallyExtensibleDeclarations = collectExternallyExtensibleDeclarations(
+    context,
+    projectSourceFiles,
+  );
   const moduleBindings = createRustModuleBindingPolicy(context);
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {
@@ -72,6 +77,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     },
     sourceCallableAbi,
     projectTypes: context.projectTypes,
+    projectMethodDispatch: context.projectMethodDispatch,
     projectMethodProperties: context.projectMethodProperties,
   };
   const walk: RustFactWalk = {
@@ -103,6 +109,12 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
+    externallyExtensible(declaration) {
+      return externallyExtensibleDeclarations.has(declaration);
+    },
+    targetNameForCallable(declaration) {
+      return rustProjectCallableTargetName(declaration, context);
+    },
     sourcePackageComponentForFile(fileName) {
       return context.sourcePackages.packages.find((entry) =>
         entry.sourceFiles.includes(fileName))?.componentId;
@@ -316,4 +328,41 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+}
+
+function collectExternallyExtensibleDeclarations(
+  context: RustAnalysisContext,
+  sourceFiles: readonly SourceFile[],
+): ReadonlySet<Node> {
+  const rootPackage = context.sourcePackages.packages.find((sourcePackage) =>
+    sourcePackage.id === context.sourcePackages.rootPackageId);
+  if (rootPackage === undefined) {
+    return Object.freeze(new Set<Node>());
+  }
+  const sourceFileByName = new Map(sourceFiles.map((sourceFile) =>
+    [normalizeSourceFileName(context.ast.getFileName(sourceFile)), sourceFile] as const));
+  const result = new Set<Node>();
+  for (const sourcePackage of context.sourcePackages.packages) {
+    const publishesLibrary = sourcePackage.componentId !== rootPackage.componentId ||
+      context.rootPublishesLibrary;
+    if (!publishesLibrary) {
+      continue;
+    }
+    for (const sourceExport of sourcePackage.exports) {
+      const sourceFile = sourceFileByName.get(normalizeSourceFileName(sourceExport.sourceFile));
+      if (sourceFile === undefined) {
+        continue;
+      }
+      for (const exported of context.source.navigation.moduleExports(sourceFile)) {
+        if (context.ast.is.IsClassDeclaration(exported.declaration)) {
+          result.add(exported.declaration);
+        }
+      }
+    }
+  }
+  return Object.freeze(result);
+}
+
+function normalizeSourceFileName(value: string): string {
+  return value.split("\\").join("/");
 }

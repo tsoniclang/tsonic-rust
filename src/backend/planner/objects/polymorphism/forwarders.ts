@@ -280,7 +280,7 @@ export function planRootMethodForwarder(
           contractOwner,
           contractRelation.targetType,
         ),
-      }, specialization)
+      }, { methodTypeArgumentSubstitutions: specialization })
     : undefined;
   if (contractShape === undefined) {
     return undefined;
@@ -466,10 +466,14 @@ export function projectAccessorCallableShape(
   role: "read" | "write",
   context: RustPlanContext,
 ): ProjectCallableShape | undefined {
-  const shape = projectCallableShape(declaration, {
-    ...context,
-    typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier),
-  });
+  const shape = projectCallableShape(
+    declaration,
+    {
+      ...context,
+      typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier),
+    },
+    { safetyPlacement: role === "read" ? "getter" : "setter" },
+  );
   if (shape === undefined || shape.params.length !== (role === "read" ? 0 : 1)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),

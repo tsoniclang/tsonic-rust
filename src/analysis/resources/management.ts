@@ -23,6 +23,7 @@ import {
 } from "../../policy/evidence/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 
 export interface RustProjectDisposerEffects {
   readonly selfMode: { readonly mode: "ref" | "mut-ref" };
@@ -130,10 +131,29 @@ function selectDisposalAlternative(
       : context.semanticsFor(declaration).getResolvedWellKnownSymbolInfo(name);
     const expectedKind = alternative.kind === "sync" ? "dispose" : "async-dispose";
     const effects = projectDisposerEffects(declaration);
+    const targetName = rustProjectCallableTargetName(declaration, context);
+    const owner = options.projectTypes.definitionContainingDeclaration(declaration);
     if (wellKnown?.kind !== expectedKind || effects === undefined ||
+      targetName === undefined || owner === undefined ||
       effects.async !== (alternative.kind === "async")) {
       return rejected("The selected project-source disposer has no exact Rust well-known method contract.");
     }
+    const polymorphic = options.projectTypes.isPolymorphic(owner);
+    const relationship = polymorphic
+      ? options.projectTypes.relationship(resourceCarrier, owner)
+      : undefined;
+    const dispatchVariant = polymorphic
+      ? options.projectMethodDispatch.variantForMember(declaration, [])
+      : undefined;
+    if (polymorphic && (relationship?.kind !== "related" || dispatchVariant === undefined)) {
+      return rejected("The selected project-source disposer has no exact Rust dispatch contract.");
+    }
+    const dispatch = relationship?.kind === "related" && dispatchVariant !== undefined
+      ? {
+          virtualSlot: dispatchVariant.virtualSlot,
+          ownerCarrier: relationship.targetType,
+        }
+      : undefined;
     const sourceResult = resolveRustTargetTypeRef(
       Node_Type(context.ast, declaration),
       context,
@@ -154,8 +174,9 @@ function selectDisposalAlternative(
         errorBoundary: "source-program",
         target: {
           form: "source-method",
-          name: alternative.kind === "sync" ? "dispose" : "dispose_async",
+          name: targetName,
           receiverMode: effects.selfMode.mode,
+          ...(dispatch === undefined ? {} : { dispatch }),
         },
       } : {
         kind: alternative.kind,
@@ -163,8 +184,9 @@ function selectDisposalAlternative(
         errorBoundary: "none",
         target: {
           form: "source-method",
-          name: alternative.kind === "sync" ? "dispose" : "dispose_async",
+          name: targetName,
           receiverMode: effects.selfMode.mode,
+          ...(dispatch === undefined ? {} : { dispatch }),
         },
       },
     };

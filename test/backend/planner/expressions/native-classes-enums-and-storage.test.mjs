@@ -42,19 +42,34 @@ test("classes lower to reference-backed object wrappers with fact-backed members
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[doc\(hidden\)\][\s\S]*pub struct CounterState \{\n    pub value: i32,\n\}/u);
-  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    #\[doc\(hidden\)\]\n    pub state: rt::ObjectHandle<CounterState>,\n\}/u);
+  assert.match(text, /#\[doc\(hidden\)\][\s\S]*pub trait CounterDispatch/u);
+  assert.match(
+    text,
+    /#\[doc\(hidden\)\][\s\S]*pub struct CounterState \{\s+pub value: i32,/u,
+  );
+  assert.match(
+    text,
+    /pub struct Counter \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u,
+  );
+  assert.match(
+    text,
+    /pub\(crate\) struct CounterRoot \{\s+identity: rt::ObjectIdentity,\s+state: rt::ObjectHandle<CounterState>,/u,
+  );
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
   assert.match(text, /let field_value: i32 = value;/u);
-  assert.match(text, /state: rt::ObjectHandle::new\(CounterState \{ value: field_value \}\)/u);
-  assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
-  assert.match(text, /\.with_mut\(\|state\| state\.value \+= value_2\)/u);
-  assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
+  assert.match(text, /pub fn initialize_state\(value: i32\) -> CounterState/u);
+  assert.match(text, /state: rt::ObjectHandle::new\(state\)/u);
+  assert.match(text, /fn exact_counter_add/u);
+  assert.match(
+    text,
+    /write_counter_value\(dispatch_receiver\.dispatch\.read_counter_value\(\) \+ value_2\)/u,
+  );
+  assert.match(text, /fn exact_counter_current/u);
   assert.match(text, /let counter: Counter = Counter::new\(10\);/u);
-  assert.match(text, /counter\.add\(5\);/u);
-  assert.match(text, /counter\.current\(\)/u);
-  assert.doesNotMatch(text, /counter\.clone\(\)\.(?:add|current)\(/u);
+  assert.match(text, /dispatch_counter_add\(5\)/u);
+  assert.match(text, /dispatch_counter_current\(\)/u);
+  assert.doesNotMatch(text, /counter\.(?:add|current)\(/u);
 });
 
 test("value-class mutation propagates through exact this-receiver calls", { timeout: 300_000 }, () => {
@@ -331,8 +346,8 @@ export function write(value: Value, next: int32): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn read_value_current\(&self\) -> Result<i32, rt::TsonicError>/u);
-  assert.match(text, /fn write_value_current\(&self, _value: i32\) -> Result<\(\), rt::TsonicError>/u);
+  assert.match(text, /fn read_value_current\(self: std::rc::Rc<Self>\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(text, /fn write_value_current\(self: std::rc::Rc<Self>, _value: i32\) -> Result<\(\), rt::TsonicError>/u);
   assert.match(text, /pub fn read\(value: Value\) -> Result<i32, rt::TsonicError>[\s\S]*read_value_current\(\)/u);
   assert.match(text, /write_value_current\(accessor_value\)\?/u);
   validateGeneratedProject("class-accessor-fallibility", result.artifacts);
@@ -360,10 +375,10 @@ export function create(): Initialized {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /impl Initialized \{\n    pub fn new\(\) -> Initialized/u);
+  assert.match(text, /impl Initialized \{[\s\S]*pub fn new\(\) -> Initialized/u);
   assert.match(text, /impl Default for Initialized \{\n    fn default\(\) -> Self \{\n        Self::new\(\)/u);
   assert.match(text, /let field_value: i32 = 42;/u);
-  assert.match(text, /impl Empty \{\n    pub fn new\(\) -> Empty/u);
+  assert.match(text, /impl Empty \{[\s\S]*pub fn new\(\) -> Empty/u);
   assert.match(text, /impl Default for Empty \{\n    fn default\(\) -> Self \{\n        Self::new\(\)/u);
 });
 

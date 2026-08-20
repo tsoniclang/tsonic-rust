@@ -197,6 +197,11 @@ export function createRustProjectTypePolicy(
 
   const polymorphic = new Set<RustProjectTypeDefinition>();
   for (const definition of definitions) {
+    if (definition.kind === "class" && host.externallyExtensible(definition.declaration)) {
+      polymorphic.add(definition);
+    }
+  }
+  for (const definition of definitions) {
     if (definition.kind === "interface" &&
       (denseNodes(host.ast.members(definition.declaration)) ?? []).some((member) =>
         host.ast.kindName(member) === "KindMethodSignature")) {
@@ -475,7 +480,9 @@ export function createRustProjectTypePolicy(
     ];
     for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
       const kind = host.ast.kindName(member);
-      const targetName = host.names.nameForDeclaration(member);
+      const targetName = kind === "KindMethodDeclaration" || kind === "KindMethodSignature"
+        ? host.targetNameForCallable(member)
+        : host.names.nameForDeclaration(member);
       if (targetName === undefined) {
         continue;
       }

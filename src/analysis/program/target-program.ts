@@ -16,12 +16,14 @@ export function analyzeRustTargetProgram(
   input: TargetCompileInput,
   providerSemantics: RustProviderSemantics,
   jsEnabled: boolean,
+  rootPublishesLibrary: boolean,
 ): AnalyzeRustTargetProgramResult {
   const context = createRustAnalysisContext(
     backend,
     input,
     providerSemantics,
     jsEnabled,
+    rootPublishesLibrary,
   );
   analyzeRustProgram(context);
   if (context.diagnostics.length > 0) {

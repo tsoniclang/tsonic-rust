@@ -158,7 +158,7 @@ export class Box {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn no_annotation\(a: f64\) -> f64/u);
-  assert.match(text, /pub fn value\(&self\) -> f64/u);
+  assert.match(text, /fn dispatch_box_value\(self: std::rc::Rc<Self>\) -> f64/u);
 });
 
 test("throw Error requires the exact selected one-message constructor shape", () => {

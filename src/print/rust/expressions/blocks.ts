@@ -227,6 +227,25 @@ export function printRustLetInitializer(
     return `${prefix}${flat};`;
   }
   const fittedAtPrefix = printRustExprFitted(initializer, depth, prefix.length + 1);
+  const methodChain = rustMethodChain(initializer);
+  const chainBaseAtPrefix = methodChain === undefined
+    ? undefined
+    : printRustExprFitted(methodChain.base, depth, prefix.length + 1);
+  const longBindingPrefix = prefix.length > 40;
+  const chainBaseIsInvocation = methodChain?.base.kind === "call" ||
+    methodChain?.base.kind === "associated-call" || methodChain?.base.kind === "invoke";
+  const chainBaseHasNestedCollectionInvocation = methodChain !== undefined &&
+    rustInvocationHasNestedExpandedCollection(methodChain.base);
+  const bindingLineOwnsChainBase = chainBaseAtPrefix !== undefined &&
+    (chainBaseAtPrefix.includes("\n")
+      ? prefix.length + firstLine(chainBaseAtPrefix).length + 1 <= rustFormatWidth &&
+        !(longBindingPrefix && chainBaseIsInvocation &&
+          chainBaseHasNestedCollectionInvocation)
+      : prefix.length + chainBaseAtPrefix.length + 1 <= rustFormatWidth);
+  const methodChainSelectorCount = methodChain?.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+  const bindingLineOwnsMultiSelectorChainBase = bindingLineOwnsChainBase &&
+    methodChainSelectorCount > 1;
   const initializerInvocation = initializer.kind === "try" &&
       (initializer.expr.kind === "call" || initializer.expr.kind === "invoke" ||
         initializer.expr.kind === "associated-call" || initializer.expr.kind === "method-call")
@@ -254,7 +273,8 @@ export function printRustLetInitializer(
         !rustFormatArgumentIsAtomic(trailingClosure.body);
     if (compactClosureOwnsContinuation &&
       renderedFits(continuation, continuationIndent.length) &&
-      !continuation.includes("\n") && !renderedFits(flat, prefix.length + 1)) {
+      !continuation.includes("\n") && !renderedFits(flat, prefix.length + 1) &&
+      !bindingLineOwnsMultiSelectorChainBase) {
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
     const continuationPacksMoreSource = continuation.split("\n").length <
@@ -300,11 +320,6 @@ export function printRustLetInitializer(
       return `${prefix.trimEnd()}\n${continuationIndent}${collectionCallContinuation};`;
     }
     const compactContinuationWidth = continuationIndent.length + firstLine(continuation).length + 1;
-    const longBindingPrefix = prefix.length > 40;
-    const methodChain = rustMethodChain(initializer);
-    const chainBaseAtPrefix = methodChain === undefined
-      ? undefined
-      : printRustExprFitted(methodChain.base, depth, prefix.length + 1);
     const chainBaseAtContinuation = methodChain === undefined
       ? undefined
       : printRustExprFitted(
@@ -312,23 +327,14 @@ export function printRustLetInitializer(
           depth + 1,
           continuationIndent.length,
         );
-    const chainBaseIsInvocation = methodChain?.base.kind === "call" ||
-      methodChain?.base.kind === "associated-call" || methodChain?.base.kind === "invoke";
     const initializerHasNestedCollectionInvocation =
       rustInvocationHasNestedExpandedCollection(initializer);
-    const chainBaseHasNestedCollectionInvocation = methodChain !== undefined &&
-      rustInvocationHasNestedExpandedCollection(methodChain.base);
     const compactContinuationLimit = methodChain === undefined
       ? rustFormatWidth
       : rustFormatWidth - 4;
-    const bindingLineOwnsChainBase = chainBaseAtPrefix !== undefined &&
-      (chainBaseAtPrefix.includes("\n")
-        ? prefix.length + firstLine(chainBaseAtPrefix).length + 1 <= rustFormatWidth &&
-          !(longBindingPrefix && chainBaseIsInvocation &&
-            chainBaseHasNestedCollectionInvocation)
-        : prefix.length + chainBaseAtPrefix.length + 1 <= rustFormatWidth);
     const continuationPacksMoreSource =
-      !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit ||
+      !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit &&
+        !bindingLineOwnsMultiSelectorChainBase ||
       longBindingPrefix &&
         (initializerHasNestedCollectionInvocation ||
           !bindingLineOwnsChainBase && chainBaseIsInvocation &&

@@ -153,7 +153,7 @@ export function add({ left, right }: Pair): int32 {
   return left + right;
 }
 
-export class Accumulator {
+class Accumulator {
   total: int32;
 
   constructor([left, right]: [int32, int32]) {

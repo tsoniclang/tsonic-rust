@@ -285,8 +285,12 @@ export function createImplementationPlan(
     const shape = projectCallableShape(
       dispatch.contractMethod,
       { ...context, typeParameterSubstitutions: substitutions },
-      new Map(variant.sourceTypeParameterNames.map((name, index) =>
-        [name, variant.targetTypeArguments[index]!] as const)),
+      {
+        methodTypeArgumentSubstitutions: new Map(
+          variant.sourceTypeParameterNames.map((name, index) =>
+            [name, variant.targetTypeArguments[index]!] as const),
+        ),
+      },
     );
     if (shape === undefined || shape.params.length !== dispatch.parameters.length ||
       dispatch.parameterAdapters.length !== implementation.parameterCount ||
@@ -362,7 +366,7 @@ export function createImplementationPlan(
               ownerRelation.targetType,
             ),
           },
-          new Map(),
+          { methodTypeArgumentSubstitutions: new Map() },
         );
     if (source === undefined || callable === undefined || callableType === undefined ||
       variant === undefined || shape === undefined ||

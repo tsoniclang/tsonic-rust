@@ -77,6 +77,7 @@ export interface RustPlanContext {
   readonly programModuleName: string;
   readonly structuralShapesModuleName: string;
   readonly publicImplementationItemIdentities: ReadonlySet<string>;
+  readonly publishesImplementationAbi: boolean;
   readonly diagnostics: TargetDiagnostic[];
   readonly errorDomain: RustErrorDomain;
   readonly sourcePackageErrors: RustSourcePackageErrorPlan;
@@ -195,10 +196,18 @@ export function rustSourceItemIsPubliclyReachable(
   context: RustPlanContext,
   itemName: string,
 ): boolean {
-  return context.publicImplementationItemIdentities.has(rustSourceItemIdentity(
+  return context.publishesImplementationAbi ||
+    context.publicImplementationItemIdentities.has(rustSourceItemIdentity(
     context.input.ast.getFileName(context.sourceFile),
     itemName,
   ));
+}
+
+export function rustProjectTypeHasPublicImplementationAbi(
+  context: RustPlanContext,
+  itemName: string,
+): boolean {
+  return rustSourceItemIsPubliclyReachable(context, itemName);
 }
 
 // Target-owned runtime aliases: the shared runtime and the target's own JS

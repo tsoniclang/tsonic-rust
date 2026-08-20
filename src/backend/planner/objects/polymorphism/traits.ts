@@ -15,7 +15,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustErrorBoundaryForProjectMember,
   rustErrorType,
-  rustSourceItemIsPubliclyReachable,
+  rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
@@ -205,7 +205,9 @@ export function planProjectDispatchTrait(
       );
       const shape = specialization === undefined
         ? undefined
-        : projectCallableShape(member, context, specialization);
+        : projectCallableShape(member, context, {
+            methodTypeArgumentSubstitutions: specialization,
+          });
       if (shape === undefined) {
         return undefined;
       }
@@ -251,7 +253,7 @@ export function planProjectDispatchTrait(
   }
   const typeParams = rustProjectTypeParameters(definition);
   const publiclyReachable = context.input.projectTypes.programErrorVariant(definition) !== undefined ||
-    rustSourceItemIsPubliclyReachable(context, definition.targetName);
+    rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
   return {
     kind: "trait",
     name: rustProjectDispatchTraitName(definition),

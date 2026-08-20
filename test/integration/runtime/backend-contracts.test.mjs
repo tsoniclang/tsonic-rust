@@ -315,8 +315,8 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\n    #\[doc\(hidden\)\]\n    pub state: rt::ObjectRef<EmptyState>,\n\}/u);
-  assert.match(text, /state: rt::ObjectRef::new\(EmptyState \{\}\)/u);
+  assert.match(text, /pub struct Empty \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: std::rc::Rc<dyn EmptyDispatch>,\n\}/u);
+  assert.match(text, /let root = std::rc::Rc::new\(EmptyRoot \{/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
 
@@ -365,12 +365,12 @@ export class Secret {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /    #\[doc\(hidden\)\]\n    pub state: rt::ObjectRef<SecretState>,/u);
+  assert.match(text, /pub struct Secret \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: std::rc::Rc<dyn SecretDispatch>,\n\}/u);
   assert.match(text, /    value: i32,/u);
   assert.doesNotMatch(text, /    pub(?:\(crate\))? value: i32,/u);
-  assert.match(text, /    fn hidden\(&self\) -> i32/u);
-  assert.doesNotMatch(text, /    pub fn hidden\(&self\)/u);
-  assert.match(text, /    pub fn reveal\(&self\) -> i32/u);
+  assert.match(text, /fn exact_secret_hidden\(self: std::rc::Rc<Self>\) -> i32/u);
+  assert.doesNotMatch(text, /pub fn (?:exact_secret_hidden|hidden)\(/u);
+  assert.match(text, /fn dispatch_secret_reveal\(self: std::rc::Rc<Self>\) -> i32/u);
   validateGeneratedProject("backend-private-members", result.artifacts);
 });
 

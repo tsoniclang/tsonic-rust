@@ -34,6 +34,7 @@ import {
   diagnosticInput,
   rustErrorBoundaryForDeclaration,
   rustErrorType,
+  rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
@@ -503,12 +504,21 @@ export function planProjectClassConstructor(
     ],
   };
   statements.push({ kind: "tail", expr: state });
+  const publishesImplementationAbi = rustProjectTypeHasPublicImplementationAbi(
+    context,
+    definition.targetName,
+  );
   const initialize: RustImplFunction = {
     name: constructorSignature.initializeName,
-    visibility: "crate",
-    ...(initializationSafetyAttributes.length === 0
+    visibility: publishesImplementationAbi ? "public" : "crate",
+    ...(!publishesImplementationAbi && initializationSafetyAttributes.length === 0
       ? {}
-      : { attrs: initializationSafetyAttributes }),
+      : {
+          attrs: [
+            ...(publishesImplementationAbi ? ["#[doc(hidden)]"] : []),
+            ...initializationSafetyAttributes,
+          ],
+        }),
     params: parameterPlan.params,
     ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
     returnType: stateType,

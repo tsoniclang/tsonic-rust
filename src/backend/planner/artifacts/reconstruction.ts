@@ -175,7 +175,9 @@ export function reconstructRustSourceFiles(
           component.structuralShapesModuleName,
           identity.childModuleNames,
           component.publicModuleNames,
+          component.publicImplementationModuleNames,
           component.publicImplementationItemIdentities,
+          component.publishesImplementationAbi,
           component.errorDomain,
           sourcePackageErrors,
           input,
@@ -211,10 +213,19 @@ export function reconstructRustSourceFiles(
         return moduleDependencies;
       }
       if (component.crateName !== undefined) {
+        const itemNames = rustSourceFileItemNames(captured.value.model);
         plannedExternalItemIdentitiesByOwner.set(owner, new Set(
-          rustSourceFileItemNames(captured.value.model).map((itemName) =>
-            rustSourceItemIdentity(fileName, itemName)),
+          itemNames.map((itemName) => rustSourceItemIdentity(fileName, itemName)),
         ));
+        for (const itemName of itemNames) {
+          const itemIdentity = rustSourceItemIdentity(fileName, itemName);
+          if (!externalItemPathByIdentity.has(itemIdentity)) {
+            externalItemPathByIdentity.set(
+              itemIdentity,
+              `${component.crateName}::${identity.moduleName}::${itemName}`,
+            );
+          }
+        }
       }
       const candidate = rustSourceFileContractCandidate(
         owner,

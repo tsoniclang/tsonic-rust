@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { KindPrivateIdentifier } from "@tsonic/target-api/source";
 import type { RustVisibility } from "../../rust-ast/nodes.js";
+import { rustProjectMemberIsPrivate } from "../../../analysis/project-types/member-privacy.js";
 
 export function rustProjectImplementationVisibility(
   publiclyReachable: boolean,
@@ -13,9 +13,7 @@ export function rustProjectMemberStorageVisibility(
   declaration: Node,
   publiclyReachable: boolean,
 ): RustVisibility {
-  const name = ast.name(declaration);
-  if (ast.hasModifierKind(declaration, "private") ||
-    (name !== undefined && ast.kindName(name) === KindPrivateIdentifier)) {
+  if (rustProjectMemberIsPrivate(ast, declaration)) {
     return "private";
   }
   return rustProjectImplementationVisibility(publiclyReachable);

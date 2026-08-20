@@ -5,7 +5,6 @@ import {
   rustSourceTypeCarrierValue,
   substituteRustTargetTypeParameters,
 } from "../../../../policy/types/target-types.js";
-import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { applyRustSourceCallableRequirements } from "../../artifacts/source-callable-contracts.js";
 import {
   diagnosticInput,
@@ -28,8 +27,10 @@ import { planExpression } from "../entry.js";
 import { planPromotedSourceMethodCall, shapeRustSourceCallParameters, sourceCallSelectedMemberMatches } from "./arguments.js";
 import { planRustNonConsumingValue, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { rustBottomAfterEffect, rustBottomExpression } from "../../types/fallible-shape.js";
-import { rustProjectDispatchTraitType } from "../../objects/polymorphism/names.js";
-import { rustProjectObjectDispatchField } from "../../objects/project-objects.js";
+import {
+  planRustExactProjectMethodCall,
+  planRustVirtualProjectMethodCall,
+} from "../../objects/project-method-dispatch.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
@@ -198,66 +199,30 @@ export function planSelectedSourceCall(
           ));
           break;
         }
-        const dispatchReceiver = fact.target.dispatch.selected === "exact"
-          ? context.projectDispatchRoot
+        planned = fact.target.dispatch.selected === "exact"
+          ? planRustExactProjectMethodCall(
+              node,
+              context.projectDispatchRoot,
+              fact.target.dispatch.ownerCarrier,
+              dispatchVariant.exactSlot,
+              shaped,
+              context,
+            )
           : receiverNode === undefined
             ? undefined
-            : planExpression(receiverNode, context);
-        if (dispatchReceiver !== undefined) {
-          if (fact.target.dispatch.selected === "exact") {
-            const trait = rustProjectDispatchTraitType(
-              fact.target.dispatch.ownerCarrier,
-              context,
-            );
-            if (trait !== undefined) {
-              planned = {
-                kind: "associated-call",
-                owner: { kind: "named", path: "Self" },
-                trait,
-                method: dispatchVariant.exactSlot,
-                args: [{
-                  kind: "method-call",
-                  receiver: dispatchReceiver,
-                  method: "clone",
-                  args: [],
-                }, ...shaped],
-              };
-            }
-          } else {
-            if (context.syntheticNames === undefined) {
-              context.diagnostics.push(missingFactDiagnostic(
-                diagnosticInput(context, node),
-                "rust.backend.project-dispatch-temporary",
-                "Project method dispatch requires a finalized hygienic-name scope.",
-              ));
-              break;
-            }
-            const receiverName = allocateRustSyntheticName(
-              context.syntheticNames,
-              "dispatch_receiver",
-            );
-            const root = {
-                kind: "field" as const,
-                receiver: { kind: "path" as const, path: receiverName },
-                name: rustProjectObjectDispatchField,
-              };
-            planned = {
-              kind: "block",
-              bindings: [{ name: receiverName, value: dispatchReceiver }],
-              value: {
-                kind: "method-call",
-                receiver: {
-                  kind: "method-call",
-                  receiver: root,
-                  method: "clone",
-                  args: [],
-                },
-                method: dispatchVariant.virtualSlot,
-                args: shaped,
-              },
-            };
-          }
-        }
+            : (() => {
+                const receiver = planExpression(receiverNode, context);
+                return receiver === undefined
+                  ? undefined
+                  : planRustVirtualProjectMethodCall(
+                      node,
+                      receiver,
+                      fact.target.dispatch.ownerCarrier,
+                      dispatchVariant.virtualSlot,
+                      shaped,
+                      context,
+                    );
+              })();
         break;
       }
       const promoted = receiverNode === undefined || !fact.target.mutatesSelf

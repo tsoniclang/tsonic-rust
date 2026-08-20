@@ -156,7 +156,13 @@ export function projectOwnFields(
       definition,
       layoutField.declaration,
     );
-    if (carrier === undefined || type === undefined || targetName === undefined) {
+    if (carrier === undefined || isRustNeverCarrier(carrier) ||
+      type === undefined || targetName === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, layoutField.declaration),
+        "rust.backend.class",
+        `Class field '${layoutField.sourceName}' has no supported Rust storage identity or carrier fact.`,
+      ));
       return undefined;
     }
     const initializer = Node_Initializer(context.input.ast, layoutField.declaration);
@@ -237,7 +243,7 @@ export function projectOwnMethodProperties(
       : projectCallableShape(declaration, {
           ...context,
           typeParameterSubstitutions: projectTypeSubstitutions(owner, relation.targetType),
-        });
+        }, { methodTypeArgumentSubstitutions: new Map() });
     const targetName = owner === undefined
       ? undefined
       : context.input.projectTypes.fieldStorageName(owner, declaration);
@@ -288,8 +294,12 @@ export function projectMembers(
 export function projectCallableShape(
   member: Node,
   context: RustPlanContext,
-  methodTypeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>,
+  options?: {
+    readonly methodTypeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly safetyPlacement?: "declaration" | "getter" | "setter";
+  },
 ): ProjectCallableShape | undefined {
+  const methodTypeArgumentSubstitutions = options?.methodTypeArgumentSubstitutions;
   const methodTypeParameters = context.input.ast.typeParameters(member);
   const methodTypeParameterNames = methodTypeParameters.map((parameter) => {
     const name = parameter === undefined ? undefined : context.input.ast.name(parameter);
@@ -349,7 +359,7 @@ export function projectCallableShape(
     ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
     isUnsafe: rustDeclarationRequiresUnsafe(
       member,
-      "declaration",
+      options?.safetyPlacement ?? "declaration",
       selectedContext.input,
     ),
   };

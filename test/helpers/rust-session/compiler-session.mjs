@@ -6,6 +6,7 @@ import { composeRustCapabilities } from "../../../dist/plugin/compose.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { materializeRustArtifacts } from "../../../dist/backend/emission/materialize.js";
 import { planRustArtifacts } from "../../../dist/backend/planner/program/index.js";
+import { readRustOutputType } from "../../../dist/options/rust-target-options.js";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
@@ -15,7 +16,7 @@ import {
 } from "@tsonic/target-api/source";
 import assert from "node:assert/strict";
 
-export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" } = {}) {
+export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts", sourcePackages } = {}) {
   const pack = createRustTargetPack();
   target = surfaces.length === 0 || target.surfaces !== undefined
     ? target
@@ -60,7 +61,7 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
   const projectFiles = new Map(
     Object.entries(files).map(([name, text]) => [`/src/${name}`, text]),
   );
-  const sourcePackages = withFixtureEntryExport(
+  sourcePackages ??= withFixtureEntryExport(
     collectTargetSourcePackageGraph("/src", "/src", projectFiles),
     projectFiles,
     entryPoint,
@@ -184,8 +185,8 @@ function createRustCompileInputFromSession({ source, sourcePackages, project, ta
   };
 }
 
-export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" }) {
-  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
+export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts", sourcePackages }) {
+  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint, sourcePackages });
   const source = checkRustSession(harness);
   const extensionDiagnostics = source.extensionDiagnostics
     .filter((diagnostic) => diagnostic.category === "error")
@@ -219,6 +220,7 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
     input,
     composeRustProviderSemantics(harness.providerContext),
     jsEnabled,
+    readRustOutputType(target) === "lib",
   );
   if (analysis.kind === "rejected") {
     const diagnostics = withBoundedDiagnosticInspection(analysis.diagnostics);
@@ -253,8 +255,9 @@ export function compileRustThroughTargetPack({
   capabilities = [],
   surfaces = [],
   entryPoint = "index.ts",
+  sourcePackages,
 }) {
-  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
+  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint, sourcePackages });
   const source = checkRustSession(harness);
   const input = createRustCompileInputFromSession({
     source,

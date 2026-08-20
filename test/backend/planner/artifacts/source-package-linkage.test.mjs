@@ -15,8 +15,15 @@ import {
 import {
   artifactText,
   compileRust,
+  repositoryRoot,
+  rustRuntimeCratePath,
 } from "../../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import {
+  runCargo,
+  validateGeneratedProject,
+  writeGeneratedProject,
+} from "../../../helpers/cargo-projects.mjs";
+import { join, resolve } from "node:path";
 test("source-package components are dependency ordered and ignore inactive packages", () => {
   const identities = new Map([
     ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],
@@ -43,9 +50,11 @@ test("source-package components are dependency ordered and ignore inactive packa
   ]);
   assert.deepEqual(result.components[0].dependencyComponentIds, []);
   assert.equal(result.components[0].crateName, "dependency_crate");
+  assert.equal(result.components[0].publishesImplementationAbi, true);
   assert.equal(result.components[0].errorDomain, "project");
   assert.deepEqual(result.components[1].dependencyComponentIds, ["dependency"]);
   assert.equal(result.components[1].crateName, undefined);
+  assert.equal(result.components[1].publishesImplementationAbi, false);
   assert.equal(result.components[1].errorDomain, "project");
 });
 
@@ -60,6 +69,7 @@ test("library roots retain exact facade linkage and component cycles fail closed
   }, new Map([[rootIdentity.fileName, rootIdentity]]), facadePlan("root", ["root"]));
   assert.equal(library.kind, "accepted");
   assert.equal(Object.hasOwn(library.components[0], "targetLinkage"), false);
+  assert.equal(library.components[0].publishesImplementationAbi, true);
 
   const dependencyIdentity = sourceIdentity(
     "/dep/index.ts",
@@ -171,7 +181,7 @@ test("source-package Cargo identities fail closed on target crate collisions", (
   ]);
 });
 
-test("source-package facades expose only exact authored exports", { timeout: 300_000 }, () => {
+test("source-package facades expose only authored exports over a hidden library ABI", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     target: {
       id: "rust",
@@ -195,16 +205,16 @@ export function increment(value: int32): int32 {
   assert.deepEqual(result.diagnostics, []);
   const library = artifactText(result, "src/lib.rs");
   const implementation = artifactText(result, "src/index.rs");
-  assert.match(library, /pub\(crate\) mod index;/u);
+  assert.match(library, /#\[doc\(hidden\)\]\s+pub mod index;/u);
   assert.match(library, /pub use crate::index::increment;/u);
-  assert.match(implementation, /fn internal_increment\(value: i32\) -> i32/u);
-  assert.doesNotMatch(implementation, /pub fn internal_increment/u);
+  assert.doesNotMatch(library, /pub use crate::index::internal_increment;/u);
+  assert.match(implementation, /pub fn internal_increment\(value: i32\) -> i32/u);
   assert.match(implementation, /pub fn increment\(value: i32\) -> i32/u);
   assert.doesNotMatch(implementation, /#\[doc\(hidden\)\]/u);
   validateGeneratedProject("exact-source-facade-lib", result.artifacts);
 });
 
-test("public project classes expose one closed cross-crate storage ABI", { timeout: 300_000 }, () => {
+test("exported library classes expose one stable externally extensible ABI", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     target: {
       id: "rust",
@@ -240,10 +250,12 @@ class InternalModel {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/model.rs");
+  assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub trait ModelDispatch/u);
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct ModelState \{\s+pub value: i32,/u);
-  assert.match(source, /pub struct Model \{\s+#\[doc\(hidden\)\]\s+pub state: rt::ObjectHandle<ModelState>,/u);
-  assert.match(source, /pub\(crate\) struct InternalModelState \{\s+pub\(crate\) value: i32,/u);
-  assert.match(source, /pub\(crate\) struct InternalModel \{\s+pub\(crate\) state: rt::ObjectRef<InternalModelState>,/u);
+  assert.match(source, /pub struct Model \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u);
+  assert.match(source, /#\[doc\(hidden\)\]\s+pub fn initialize_state/u);
+  assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct InternalModelState \{\s+pub value: i32,/u);
+  assert.match(source, /pub struct InternalModel \{\s+#\[doc\(hidden\)\]\s+pub state: rt::ObjectRef<InternalModelState>,/u);
   validateGeneratedProject("public-class-storage-lib", result.artifacts);
 });
 
@@ -290,7 +302,117 @@ export class Derived extends Base implements Readable {
   assert.match(source, /pub struct Readable \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u);
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct BaseState \{\s+pub value: i32,/u);
   assert.match(source, /pub struct Base \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u);
+  assert.match(source, /#\[doc\(hidden\)\]\s+pub fn initialize_state/u);
   validateGeneratedProject("public-dispatch-storage-lib", result.artifacts);
+});
+
+test("user-owned Cargo links a separately generated source-package implementation ABI", { timeout: 300_000 }, () => {
+  const engineFiles = {
+    "index.ts": `export { EngineBase } from "./base.js";`,
+    "base.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { normalize } from "./internal/helper.js";
+
+export class EngineBase {
+  value: int32;
+  #secret: int32;
+
+  constructor(value: int32) {
+    this.value = normalize(value);
+    this.#secret = normalize(value);
+  }
+
+  read(): int32 {
+    return this.#secret;
+  }
+}
+`,
+    "internal/helper.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export const normalize = (value: int32): int32 => value;
+`,
+  };
+  const engine = compileRust({
+    files: engineFiles,
+    target: { id: "rust", options: { outputType: "lib", crateName: "acme_engine" } },
+  }).result;
+  assert.deepEqual(engine.diagnostics, []);
+
+  const dependencyRoot = "/src/node_modules/@acme/engine";
+  const consumerFiles = {
+    "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { EngineBase } from "@acme/engine/index.js";
+
+export class Consumer extends EngineBase {
+  constructor(value: int32) {
+    super(value);
+  }
+
+  doubled(): int32 {
+    return this.read() * 2;
+  }
+}
+`,
+    "node_modules/@acme/engine/package.json": JSON.stringify({
+      name: "@acme/engine",
+      type: "module",
+      exports: { "./index.js": "./index.ts" },
+    }),
+    "node_modules/@acme/engine/index.ts": engineFiles["index.ts"],
+    "node_modules/@acme/engine/base.ts": engineFiles["base.ts"],
+    "node_modules/@acme/engine/internal/helper.ts": engineFiles["internal/helper.ts"],
+  };
+  const consumer = compileRust({
+    files: consumerFiles,
+    target: {
+      id: "rust",
+      options: {
+        outputType: "lib",
+        crateName: "consumer",
+        projectFile: resolve(
+          repositoryRoot,
+          "test/fixtures/crates/acme_testing/Cargo.toml",
+        ),
+      },
+    },
+    sourcePackages: sourcePackageGraph(dependencyRoot),
+  }).result;
+  assert.deepEqual(consumer.diagnostics, []);
+  assert.equal(consumer.artifacts.some((artifact) => artifact.path === "Cargo.toml"), false);
+  assert.equal(consumer.artifacts.some((artifact) => artifact.path.startsWith("crates/")), false);
+
+  const engineLibrary = artifactText(engine, "src/lib.rs");
+  const engineBase = artifactText(engine, "src/base.rs");
+  const engineHelper = artifactText(engine, "src/internal/helper.rs");
+  const consumerSource = artifactText(consumer, "src/index.rs");
+  assert.match(engineLibrary, /#\[doc\(hidden\)\]\s+pub mod internal;/u);
+  assert.match(engineBase, /#\[doc\(hidden\)\]\s+pub fn initialize_state/u);
+  assert.match(engineBase, /crate::internal::helper::normalize/u);
+  assert.match(engineBase, /\n\s+secret: i32,/u);
+  assert.doesNotMatch(engineBase, /\n\s+pub secret: i32,/u);
+  assert.match(engineHelper, /pub fn normalize\(value: i32\) -> i32/u);
+  assert.match(consumerSource, /acme_engine::EngineBase::initialize_state/u);
+
+  const combined = writeGeneratedProject("source-package-user-cargo-abi", [
+    ...engine.artifacts.map((artifact) => ({
+      ...artifact,
+      path: `engine/${artifact.path}`,
+    })),
+    ...consumer.artifacts.map((artifact) => ({
+      ...artifact,
+      path: `consumer/${artifact.path}`,
+    })),
+    {
+      path: "consumer/Cargo.toml",
+      text: `[package]\nname = "consumer"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\npath = "src/lib.rs"\n\n[dependencies]\nacme_engine = { path = "../engine" }\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }\n`,
+    },
+  ]);
+  const consumerRoot = join(combined, "consumer");
+  runCargo(consumerRoot, ["generate-lockfile", "--offline"]);
+  runCargo(consumerRoot, ["fmt", "--all", "--check"]);
+  runCargo(consumerRoot, ["check", "--all-targets", "--locked", "--offline"]);
 });
 
 test("cross-package error planning preserves each component-owned Result ABI", () => {
@@ -426,7 +548,54 @@ function component(componentId, dependencyComponentIds, crateName, root = false)
     structuralShapesModuleName: "shapes",
     publicModuleNames: new Set(),
     publicImplementationItemIdentities: new Set(),
+    publishesImplementationAbi: !root,
     errorDomain: "runtime",
     root,
   };
+}
+
+function sourcePackageGraph(dependencyRoot) {
+  const rootPackageId = "source-package:.";
+  const dependencyPackageId = "source-package:node_modules/@acme/engine";
+  const rootComponentId = "source-package-component:consumer";
+  const dependencyComponentId = "source-package-component:engine";
+  return Object.freeze({
+    fingerprint: "source-package-user-cargo-abi",
+    rootPackageId,
+    packages: Object.freeze([Object.freeze({
+      id: rootPackageId,
+      name: "consumer",
+      packageRoot: "/src",
+      sourceRoot: "/src",
+      sourceFiles: Object.freeze(["/src/index.ts"]),
+      dependencies: Object.freeze([dependencyPackageId]),
+      exports: Object.freeze([{ specifier: ".", sourceFile: "/src/index.ts" }]),
+      componentId: rootComponentId,
+    }), Object.freeze({
+      id: dependencyPackageId,
+      name: "@acme/engine",
+      packageRoot: dependencyRoot,
+      sourceRoot: dependencyRoot,
+      sourceFiles: Object.freeze([
+        `${dependencyRoot}/index.ts`,
+        `${dependencyRoot}/base.ts`,
+        `${dependencyRoot}/internal/helper.ts`,
+      ]),
+      dependencies: Object.freeze([]),
+      exports: Object.freeze([{
+        specifier: "./index.js",
+        sourceFile: `${dependencyRoot}/index.ts`,
+      }]),
+      componentId: dependencyComponentId,
+    })]),
+    components: Object.freeze([Object.freeze({
+      id: dependencyComponentId,
+      packages: Object.freeze([dependencyPackageId]),
+      dependencies: Object.freeze([]),
+    }), Object.freeze({
+      id: rootComponentId,
+      packages: Object.freeze([rootPackageId]),
+      dependencies: Object.freeze([dependencyComponentId]),
+    })]),
+  });
 }

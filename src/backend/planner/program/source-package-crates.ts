@@ -129,6 +129,7 @@ export function planRustSourcePackageCrateContent(
   const publicModuleNames = facadePlan.publicModuleNamesByComponent.get(
     component.componentId,
   ) ?? new Set<string>();
+  const publicImplementationModuleNames = component.publicImplementationModuleNames;
   const publicTopLevelModuleNames = new Set([...publicModuleNames]
     .filter((name) => !name.includes("::")));
   const libraryItems: RustItem[] = [
@@ -160,11 +161,18 @@ export function planRustSourcePackageCrateContent(
           visibility: "public" as const,
           attrs: ["#[doc(hidden)]"],
         }]),
-    ...[...topLevelModuleNames].sort(compareNames).map((name): RustItem => ({
-      kind: "mod-decl",
-      name,
-      visibility: publicTopLevelModuleNames.has(name) ? "public" : "crate",
-    })),
+    ...[...topLevelModuleNames].sort(compareNames).map((name): RustItem => {
+      const sourcePublic = publicTopLevelModuleNames.has(name);
+      const implementationPublic = publicImplementationModuleNames.has(name);
+      return {
+        kind: "mod-decl",
+        name,
+        visibility: sourcePublic || implementationPublic ? "public" : "crate",
+        ...(implementationPublic && !sourcePublic
+          ? { attrs: ["#[doc(hidden)]"] }
+          : {}),
+      };
+    }),
     ...facades.rootItems,
   ];
   return Object.freeze({
@@ -233,6 +241,7 @@ export function materializeRustSourcePackageCrateArtifacts(
     componentIdentities,
     plan.syntheticModules,
     facadePlan.publicModuleNamesByComponent.get(plan.component.componentId) ?? new Set(),
+    plan.component.publicImplementationModuleNames,
   );
   for (const source of [...plan.sources].sort((left, right) =>
     compareNames(left.moduleName, right.moduleName))) {
@@ -467,6 +476,7 @@ function planSyntheticModuleArtifacts(
   identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
   facadeModules: ReadonlyMap<string, RustSourceFileModel>,
   publicModuleNames: ReadonlySet<string>,
+  publicImplementationModuleNames: ReadonlySet<string>,
 ): RustPlannedSourceArtifact[] {
   const authoredModules = new Set(
     [...identities.values()].map((identity) => identity.moduleName),
@@ -499,13 +509,20 @@ function planSyntheticModuleArtifacts(
       return rustSourceArtifact(
         `src/${moduleName.split("::").join("/")}.rs`,
         createRustSourceFile([
-          ...[...children].sort(compareNames).map((name): RustItem => ({
-            kind: "mod-decl",
-            name,
-            visibility: publicModuleNames.has(`${moduleName}::${name}`)
-              ? "public"
-              : "crate",
-          })),
+          ...[...children].sort(compareNames).map((name): RustItem => {
+            const sourcePublic = publicModuleNames.has(`${moduleName}::${name}`);
+            const implementationPublic = publicImplementationModuleNames.has(
+              `${moduleName}::${name}`,
+            );
+            return {
+              kind: "mod-decl",
+              name,
+              visibility: sourcePublic || implementationPublic ? "public" : "crate",
+              ...(implementationPublic && !sourcePublic
+                ? { attrs: ["#[doc(hidden)]"] }
+                : {}),
+            };
+          }),
           ...(facade?.items ?? []),
         ]),
       );

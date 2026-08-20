@@ -73,8 +73,12 @@ export const rustYieldFactKey: RustPlanKey<RustYieldFact> =
 export type RustResourceDisposalTarget =
   | {
       readonly form: "source-method";
-      readonly name: "dispose" | "dispose_async";
+      readonly name: string;
       readonly receiverMode: "ref" | "mut-ref";
+      readonly dispatch?: {
+        readonly virtualSlot: string;
+        readonly ownerCarrier: TargetTypeRef;
+      };
     }
   | {
       readonly form: "provider";

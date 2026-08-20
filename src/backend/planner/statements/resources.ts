@@ -21,6 +21,7 @@ import type { RustBlock, RustExpr, RustStmt } from "../../rust-ast/nodes.js";
 import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from "../program/plan-context.js";
 import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
 
 export function directResourceDeclaration(
   statement: Node,
@@ -150,6 +151,7 @@ export function planResourceManagedBody(
     "resource",
   );
   const cleanup = planResourceCleanup(
+    declaration,
     resourceName,
     cleanupResourceName,
     fact,
@@ -221,6 +223,7 @@ export function collectRustCompletionDispatch(
 }
 
 function planResourceCleanup(
+  declaration: Node,
   resourceName: string,
   cleanupResourceName: string,
   fact: RustResourceManagementFact,
@@ -240,6 +243,7 @@ function planResourceCleanup(
     path: fact.nullable ? cleanupResourceName : resourceName,
   };
   let disposal = planResourceDisposalExpression(
+    declaration,
     receiver,
     fact,
     fact.nullable,
@@ -314,6 +318,7 @@ export function resourceDisposalReceiverMode(
 }
 
 function planResourceDisposalExpression(
+  subject: Node,
   receiver: RustExpr,
   fact: RustResourceManagementFact,
   alreadyBorrowed: boolean,
@@ -321,6 +326,16 @@ function planResourceDisposalExpression(
 ): RustExpr | undefined {
   const target = fact.disposal.target;
   if (target.form === "source-method") {
+    if (target.dispatch !== undefined) {
+      return planRustVirtualProjectMethodCall(
+        subject,
+        receiver,
+        target.dispatch.ownerCarrier,
+        target.dispatch.virtualSlot,
+        [],
+        context,
+      );
+    }
     return {
       kind: "method-call",
       receiver,

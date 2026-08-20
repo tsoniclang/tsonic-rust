@@ -4,6 +4,7 @@ import type { RustSourceFileOutputIdentity } from "../../../analysis/program/sou
 import { allocateRustComponentSupportModuleName } from "../../../analysis/program/source-output-identities.js";
 import type { RustErrorDomain } from "../../rust-ast/nodes.js";
 import type { RustSourcePackageFacadePlan } from "./source-package-facades.js";
+import { readRustOutputType } from "../../../options/rust-target-options.js";
 
 export interface RustSourcePackageComponentPlan {
   readonly componentId: string;
@@ -13,7 +14,9 @@ export interface RustSourcePackageComponentPlan {
   readonly programModuleName: string;
   readonly structuralShapesModuleName: string;
   readonly publicModuleNames: ReadonlySet<string>;
+  readonly publicImplementationModuleNames: ReadonlySet<string>;
   readonly publicImplementationItemIdentities: ReadonlySet<string>;
+  readonly publishesImplementationAbi: boolean;
   readonly errorDomain: RustErrorDomain;
   readonly root: boolean;
 }
@@ -129,6 +132,10 @@ export function planRustSourcePackageComponents(
       "program",
       [structuralShapesModuleName],
     );
+    const publishesImplementationAbi = !root || readRustOutputType(input.target) === "lib";
+    const publicImplementationModuleNames = publishesImplementationAbi
+      ? allModuleAncestors(componentIdentities.map((identity) => identity.moduleName))
+      : Object.freeze(new Set<string>());
     plans.push(Object.freeze({
       componentId,
       sourceFileNames: Object.freeze(new Set(componentIdentities.map((identity) =>
@@ -139,9 +146,11 @@ export function planRustSourcePackageComponents(
       structuralShapesModuleName,
       publicModuleNames: facades.publicModuleNamesByComponent.get(componentId) ??
         Object.freeze(new Set<string>()),
+      publicImplementationModuleNames,
       publicImplementationItemIdentities:
         facades.publicImplementationItemIdentitiesByComponent.get(componentId) ??
           Object.freeze(new Set<string>()),
+      publishesImplementationAbi,
       errorDomain: componentReachesError(componentId) ? "project" : "runtime",
       root,
     }));
@@ -149,6 +158,17 @@ export function planRustSourcePackageComponents(
   return diagnostics.length === 0
     ? { kind: "accepted", components: Object.freeze(plans) }
     : { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+}
+
+function allModuleAncestors(moduleNames: readonly string[]): ReadonlySet<string> {
+  const result = new Set<string>();
+  for (const moduleName of moduleNames) {
+    const segments = moduleName.split("::");
+    for (let length = 1; length <= segments.length; length += 1) {
+      result.add(segments.slice(0, length).join("::"));
+    }
+  }
+  return Object.freeze(result);
 }
 
 function rejected(

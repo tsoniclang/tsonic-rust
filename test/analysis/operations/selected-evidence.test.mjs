@@ -273,7 +273,7 @@ export function read(value: Counter | undefined): int32 {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /match value\.as_ref\(\) \{[\s\S]*Some\(flow_value\) => flow_value\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\}\s*\.state/su,
+    /let dispatch_receiver(?:_\d+)? = &match value\.as_ref\(\) \{[\s\S]*Some\(flow_value(?:_\d+)?\) => flow_value(?:_\d+)?\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\};[\s\S]*dispatch_receiver(?:_\d+)?\.dispatch\.read_counter_value\(\)/su,
   );
   assert.equal(
     source.match(/match value\.as_ref\(\)/gsu)?.length,

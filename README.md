@@ -128,7 +128,12 @@ identities and target carriers flow into Rust operation selection. Unsupported
 Rust signatures fail at the virtual import boundary. In `projectFile` mode,
 Tsonic emits source artifacts only and never creates or mutates `Cargo.toml`;
 the user-owned Cargo project controls dependencies, features, profiles, and
-the inclusion of generated source.
+the inclusion of generated source. Compiler-source packages are linked the
+same way: each package is generated as its own Rust library, while the
+consumer's user-owned manifest declares the corresponding path or registry
+dependency. A generated library exposes its authored facade plus a stable
+`#[doc(hidden)]` implementation ABI so separately generated subclasses and
+exact inherited method bodies can link without widening the TypeScript API.
 
 ## Explicitly unsupported (fail-closed, classified)
 

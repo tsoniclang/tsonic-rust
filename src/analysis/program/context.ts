@@ -66,6 +66,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly sourcePackages: TargetCompileInput["sourcePackages"];
+  readonly rootPublishesLibrary: boolean;
   readonly facts: RustPlanBuilder;
   readonly projectTypes: RustProjectTypePolicyRegistry;
   readonly objectRepresentations: RustObjectRepresentationPlanRegistry;
@@ -89,6 +90,7 @@ export function createRustAnalysisContext(
   input: TargetCompileInput,
   providerSemantics: RustProviderSemantics,
   jsEnabled: boolean,
+  rootPublishesLibrary: boolean,
 ): RustAnalysisContext {
   const ast = input.source.ast;
   const rawSourceFiles: readonly (SourceFile | undefined)[] = input.source.sourceFiles;
@@ -117,6 +119,7 @@ export function createRustAnalysisContext(
     ast,
     sourceFiles,
     sourcePackages: input.sourcePackages,
+    rootPublishesLibrary,
     facts: createRustPlanBuilder(input.source.sourceFacts),
     projectTypes: createRustProjectTypePolicyRegistry(),
     objectRepresentations: createRustObjectRepresentationPlanRegistry(),

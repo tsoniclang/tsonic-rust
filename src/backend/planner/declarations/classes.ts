@@ -7,7 +7,7 @@ import {
   rustErrorBoundaryForDeclaration,
   rustErrorType,
   rustLocalBindingName,
-  rustSourceItemIsPubliclyReachable,
+  rustProjectTypeHasPublicImplementationAbi,
 } from "../program/plan-context.js";
 import {
   KindClassStaticBlockDeclaration,
@@ -77,7 +77,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     return undefined;
   }
   const exported = ast.hasModifierKind(node, "export");
-  const publiclyReachable = rustSourceItemIsPubliclyReachable(context, className);
+  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, className);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -587,7 +587,7 @@ function planConstructor(
     ),
   });
   const constructorAttributes = [
-    ...(rustSourceItemIsPubliclyReachable(context, className)
+    ...(rustProjectTypeHasPublicImplementationAbi(context, className)
       ? []
       : [rustLintAttributes.deadCode]),
     ...safetyAttributes,

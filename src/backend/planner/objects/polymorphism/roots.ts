@@ -8,7 +8,13 @@ import {
   projectOwnMethods,
 } from "./model.js";
 import { planProjectDowncastRouteImplementation, planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape } from "./forwarders.js";
-import { readRustProjectObjectField, writeRustProjectMethodOverride, writeRustProjectObjectField } from "../project-objects.js";
+import {
+  readRustProjectObjectField,
+  readRustProjectPrivateField,
+  writeRustProjectMethodOverride,
+  writeRustProjectObjectField,
+  writeRustProjectPrivateField,
+} from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../rust-ast/nodes.js";
@@ -24,6 +30,7 @@ import type { RustProjectTypeDefinition } from "../../../../analysis/project-typ
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
+import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -168,9 +175,13 @@ function planRootContractFunctions(
     return undefined;
   }
   for (const field of fields) {
+    const privateField = field.origin === "project" &&
+      rustProjectMemberIsPrivate(context.input.ast, field.declaration);
     const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
     const implementation = field.origin === "external"
       ? { kind: "stored" as const, declaration: field.declaration }
+      : privateField
+        ? { kind: "stored" as const, declaration: field.declaration }
       : context.input.projectFieldDispatch.implementationFor(
           concrete,
           field.declaration,
@@ -188,14 +199,24 @@ function planRootContractFunctions(
     const readValue: { readonly expression: RustExpr; readonly errorType?: RustType } | undefined = implementation?.kind === "stored"
       ? storagePath === undefined
         ? undefined
-        : {
-            expression: readRustProjectObjectField(
-              { kind: "path", path: "self" },
-              storagePath,
-              field.carrier,
-              representation,
-            ),
-          }
+        : (() => {
+            const expression = privateField
+              ? read === undefined
+                ? undefined
+                : readRustProjectPrivateField(
+                    { kind: "path", path: "self" },
+                    storagePath,
+                    read,
+                    representation,
+                  )
+              : readRustProjectObjectField(
+                  { kind: "path", path: "self" },
+                  storagePath,
+                  field.carrier,
+                  representation,
+                );
+            return expression === undefined ? undefined : { expression };
+          })()
       : implementation?.kind === "accessor"
         ? planProjectFieldAccessorCall(
             rootType,
@@ -251,13 +272,23 @@ function planRootContractFunctions(
         ? storagePath === undefined
           ? undefined
           : (() => {
-              const expression = writeRustProjectObjectField(
-                { kind: "path", path: "self" },
-                storagePath,
-                "=",
-                { kind: "path", path: "value" },
-                representation,
-              );
+              const expression = privateField
+                ? write === undefined
+                  ? undefined
+                  : writeRustProjectPrivateField(
+                      { kind: "path", path: "self" },
+                      storagePath,
+                      write,
+                      { kind: "path", path: "value" },
+                      representation,
+                    )
+                : writeRustProjectObjectField(
+                    { kind: "path", path: "self" },
+                    storagePath,
+                    "=",
+                    { kind: "path", path: "value" },
+                    representation,
+                  );
               return expression === undefined
                 ? undefined
                 : { expression };

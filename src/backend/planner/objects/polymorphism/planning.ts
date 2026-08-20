@@ -6,7 +6,7 @@ import type { RustProjectTypeDefinition } from "../../../../analysis/project-typ
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import {
   diagnosticInput,
-  rustSourceItemIsPubliclyReachable,
+  rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
@@ -40,6 +40,7 @@ import {
   rustProjectImplementationVisibility,
   rustProjectMemberStorageVisibility,
 } from "../project-storage-abi.js";
+import { planProjectPrivateStateAccessors } from "./private-fields.js";
 
 export function planPolymorphicClassDeclaration(
   declaration: Node,
@@ -49,6 +50,7 @@ export function planPolymorphicClassDeclaration(
   if (definition?.kind !== "class" || !context.input.projectTypes.isPolymorphic(definition)) {
     return undefined;
   }
+  const diagnosticCountBeforeShape = context.diagnostics.length;
   const openCarrier = context.input.projectTypes.openCarrier(definition);
   const wrapperType = rustTypeFromCarrierInContext(openCarrier, context);
   const dispatchType = rustProjectDispatchTraitType(openCarrier, context);
@@ -57,15 +59,40 @@ export function planPolymorphicClassDeclaration(
   const stateType = layers === undefined ? undefined : projectStateType(layers, context);
   if (wrapperType === undefined || dispatchType === undefined || rootType === undefined ||
     layers === undefined || stateType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.project-polymorphism-carrier",
-      "Polymorphic project class has no exact wrapper, dispatch, root, or state carrier.",
-    ));
+    if (context.diagnostics.length === diagnosticCountBeforeShape) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.project-polymorphism-carrier",
+        "Polymorphic project class has no exact wrapper, dispatch, root, or state carrier.",
+      ));
+    }
     return undefined;
   }
+  const diagnosticCountBeforeTrait = context.diagnostics.length;
   const trait = planProjectDispatchTrait(definition, openCarrier, context);
+  if (trait === undefined) {
+    if (context.diagnostics.length === diagnosticCountBeforeTrait) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.project-polymorphism-dispatch",
+        "Polymorphic project class has no complete exact dispatch-trait plan.",
+      ));
+    }
+    return undefined;
+  }
+  const diagnosticCountBeforeConstructor = context.diagnostics.length;
   const constructor = planProjectClassConstructor(definition, wrapperType, rootType, layers, context);
+  if (constructor === undefined) {
+    if (context.diagnostics.length === diagnosticCountBeforeConstructor) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.project-polymorphism-construction",
+        "Polymorphic project class has no complete exact construction plan.",
+      ));
+    }
+    return undefined;
+  }
+  const diagnosticCountBeforeRootImplementations = context.diagnostics.length;
   const rootImplementations = planProjectRootImplementations(
     definition,
     openCarrier,
@@ -73,13 +100,33 @@ export function planPolymorphicClassDeclaration(
     layers,
     context,
   );
-  if (trait === undefined || constructor === undefined || rootImplementations === undefined) {
+  if (rootImplementations === undefined) {
+    if (context.diagnostics.length === diagnosticCountBeforeRootImplementations) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.project-polymorphism-root",
+        "Polymorphic project class has no complete exact root implementation plan.",
+      ));
+    }
     return undefined;
   }
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
   const stateMarker = rustProjectStateMarker(definition, context);
+  const programErrorVariant = context.input.projectTypes.programErrorVariant(definition);
+  const publiclyReachable = programErrorVariant !== undefined ||
+    rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
+  const exported = context.input.ast.hasModifierKind(declaration, "export");
   const ownLayer = layers[layers.length - 1]!;
+  const privateStateAccessors = planProjectPrivateStateAccessors(
+    stateType,
+    ownLayer,
+    publiclyReachable,
+    context,
+  );
+  if (privateStateAccessors === undefined) {
+    return undefined;
+  }
   const baseLayer = layers[layers.length - 2];
   const baseStateType = baseLayer === undefined
     ? undefined
@@ -96,10 +143,6 @@ export function planPolymorphicClassDeclaration(
   if (staticMethods === undefined || externalErrorImplementations === undefined) {
     return undefined;
   }
-  const programErrorVariant = context.input.projectTypes.programErrorVariant(definition);
-  const publiclyReachable = programErrorVariant !== undefined ||
-    rustSourceItemIsPubliclyReachable(context, definition.targetName);
-  const exported = context.input.ast.hasModifierKind(declaration, "export");
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const defaultImplementation = rustDefaultImplementation(
     wrapperType,
@@ -156,6 +199,7 @@ export function planPolymorphicClassDeclaration(
             }]),
       ],
     },
+    ...privateStateAccessors,
     {
       kind: "struct",
       name: definition.targetName,
@@ -319,7 +363,7 @@ export function planPolymorphicInterfaceDeclaration(
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
   const exported = context.input.ast.hasModifierKind(declaration, "export");
-  const publiclyReachable = rustSourceItemIsPubliclyReachable(
+  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
     context,
     definition.targetName,
   );

@@ -182,21 +182,6 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
   if (cargoProject.project === undefined) {
     return { artifacts: [], diagnostics: [...diagnostics, ...cargoProject.diagnostics] };
   }
-  if (cargoProject.project.kind === "user-owned" &&
-    componentPlans.some((component) => !component.root)) {
-    diagnostics.push({
-      code: "RUST_USER_PROJECT_SOURCE_PACKAGE_CRATES_UNDECLARED",
-      category: "error",
-      source: "tsonic-rust",
-      message:
-        "User-owned Cargo mode requires the user project to declare generated source-package crates explicitly; the current target contract has no exact declaration for those paths.",
-      evidence: [
-        "target.capability=rust.backend.source-package-crates",
-        `projectFile=${cargoProject.project.manifestPath}`,
-      ],
-    });
-    return { artifacts: [], diagnostics };
-  }
   const sourcePackageCargo = cargoProject.project.kind === "generated"
     ? planRustSourcePackageCargo(cargoProject.project.manifest, componentPlans, diagnostics)
     : undefined;

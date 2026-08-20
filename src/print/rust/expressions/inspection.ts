@@ -210,6 +210,9 @@ export function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
     case "call":
     case "associated-call":
       return expression.args.every(rustFormatArgumentCanShareLine);
+    case "method-call":
+      return rustFormatArgumentCanShareLine(expression.receiver) &&
+        expression.args.every(rustFormatArgumentCanShareLine);
     case "field":
       return rustFormatArgumentCanShareLine(expression.receiver);
     case "index":

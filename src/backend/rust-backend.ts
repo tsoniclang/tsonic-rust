@@ -9,6 +9,7 @@ import { createRustPlanningContext } from "./planner/context.js";
 import type { RustProviderSemantics } from "../providers/packages/model.js";
 import { analyzeRustTargetProgram } from "../analysis/program/index.js";
 import { materializeRustArtifacts } from "./emission/materialize.js";
+import { readRustOutputType } from "../options/rust-target-options.js";
 
 export function createRustBackend(
   context: TargetBackendContext,
@@ -22,6 +23,7 @@ export function createRustBackend(
         input,
         providerSemantics,
         jsEnabled,
+        readRustOutputType(input.target) === "lib",
       );
       return analysis.kind === "rejected"
         ? { artifacts: [], diagnostics: analysis.diagnostics }

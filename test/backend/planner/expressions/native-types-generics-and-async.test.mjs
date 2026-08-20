@@ -92,7 +92,7 @@ test("Rust keyword-shaped project methods use one raw identifier at declaration 
   const { result } = compileRust({
     files: {
       "index.ts": `
-export class Matcher {
+class Matcher {
   match(value: string): string {
     return value;
   }

@@ -2,7 +2,7 @@ import { carrierOf } from "./classes.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
-  rustSourceItemIsPubliclyReachable,
+  rustProjectTypeHasPublicImplementationAbi,
 } from "../program/plan-context.js";
 import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -76,10 +76,10 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     kind: "enum",
     name: enumName,
     visibility: ast.hasModifierKind(node, "export") ||
-        rustSourceItemIsPubliclyReachable(context, enumName)
+        rustProjectTypeHasPublicImplementationAbi(context, enumName)
       ? "public"
       : "crate",
-    ...(rustSourceItemIsPubliclyReachable(context, enumName)
+    ...(rustProjectTypeHasPublicImplementationAbi(context, enumName)
       ? {}
       : { attrs: [rustLintAttributes.deadCode] }),
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
@@ -100,7 +100,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return undefined;
   }
   const exported = ast.hasModifierKind(node, "export");
-  const publiclyReachable = rustSourceItemIsPubliclyReachable(context, interfaceName);
+  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, interfaceName);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   if (ast.extendsHeritageElements(node).length > 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -250,7 +250,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   context.usedAliases?.add("rt");
   const interfaceAttributes = [
     ...(structAttributes(interfaceName) ?? []),
-    ...(rustSourceItemIsPubliclyReachable(context, interfaceName)
+    ...(rustProjectTypeHasPublicImplementationAbi(context, interfaceName)
       ? []
       : [rustLintAttributes.deadCode]),
   ];
@@ -328,10 +328,10 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     kind: "enum",
     name: aliasName,
     visibility: ast.hasModifierKind(node, "export") ||
-        rustSourceItemIsPubliclyReachable(context, aliasName)
+        rustProjectTypeHasPublicImplementationAbi(context, aliasName)
       ? "public"
       : "crate",
-    ...(rustSourceItemIsPubliclyReachable(context, aliasName)
+    ...(rustProjectTypeHasPublicImplementationAbi(context, aliasName)
       ? {}
       : { attrs: [rustLintAttributes.deadCode] }),
     derives: fact.kind === "string-literal"
