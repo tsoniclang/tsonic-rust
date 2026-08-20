@@ -86,6 +86,9 @@ function finalizeRustImplFunctionStyle(
     fn.params.length === 0 && fn.returnType?.kind === "string") {
     attrs = appendRustAttribute(attrs, rustLintAttributes.inherentToString);
   }
+  if (inherent && fn.name === "next" && fn.selfParam !== undefined && fn.params.length === 0) {
+    attrs = appendRustAttribute(attrs, rustLintAttributes.shouldImplementTrait);
+  }
   return { ...fn, attrs, body: finalizeRustFunctionBodyStyle(fn.body) };
 }
 

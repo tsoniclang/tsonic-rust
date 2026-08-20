@@ -36,6 +36,13 @@ test("source style attributes are item-local and derived from exact Rust signatu
         returnType: { kind: "string" },
         body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "owner" } }] },
       }, {
+        name: "next",
+        visibility: "public",
+        selfParam: "mut-ref",
+        params: [],
+        returnType: { kind: "string" },
+        body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "value" } }] },
+      }, {
         name: "configure",
         visibility: "public",
         params: parameters,
@@ -45,6 +52,7 @@ test("source style attributes are item-local and derived from exact Rust signatu
   });
 
   assert.match(text, /#\[expect\(clippy::inherent_to_string, reason = "authored toString contract"\)\]\n    pub fn to_string/u);
+  assert.match(text, /#\[expect\(clippy::should_implement_trait, reason = "preserves the authored method contract"\)\]\n    pub fn next/u);
   assert.match(
     text,
     /#\[expect\(clippy::too_many_arguments, reason = "checked source signature"\)\]\n    pub fn configure/u,

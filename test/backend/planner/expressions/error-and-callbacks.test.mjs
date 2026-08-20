@@ -699,3 +699,30 @@ export function sorted(values: int32[]): int32[] {
   assert.match(source, /pub fn sorted[\s\S]*?\{\n\s*values\s*\.try_sort/u);
   assert.doesNotMatch(source, /Ok::<_, rt::TsonicError>\(\s*values\s*\.try_sort/u);
 });
+
+test("capture-free exact forwarding callbacks use their native Rust function directly", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+function compare(left: number, right: number): number {
+  if (left < 0 || right < 0) throw new Error("negative");
+  return left - right;
+}
+
+export function sorted(values: number[]): number[] {
+  return values.sort((left, right) => compare(left, right));
+}
+
+export function reversed(values: number[]): number[] {
+  return values.sort((left, right) => compare(right, left));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /values\.try_sort\(compare\)/u);
+  assert.match(source, /values\.try_sort\(\|left, right\| compare\(right, left\)\)/u);
+});
