@@ -12,9 +12,14 @@ import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProject
 import { rustProjectObjectIdentityField } from "../project-objects.js";
 import type { RustItem, RustTraitFunction, RustType } from "../../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
+import {
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+  rustSourceItemIsPubliclyReachable,
+} from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -245,11 +250,16 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const typeParams = rustProjectTypeParameters(definition);
+  const publiclyReachable = context.input.projectTypes.programErrorVariant(definition) !== undefined ||
+    rustSourceItemIsPubliclyReachable(context, definition.targetName);
   return {
     kind: "trait",
     name: rustProjectDispatchTraitName(definition),
-    visibility: "crate",
-    attrs: [rustLintAttributes.deadCode],
+    visibility: rustProjectImplementationVisibility(publiclyReachable),
+    attrs: [
+      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
+      rustLintAttributes.deadCode,
+    ],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
     functions,

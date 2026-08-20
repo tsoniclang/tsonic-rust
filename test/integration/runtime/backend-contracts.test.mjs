@@ -315,7 +315,7 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\n    pub\(crate\) state: rt::ObjectRef<EmptyState>,\n\}/u);
+  assert.match(text, /pub struct Empty \{\n    #\[doc\(hidden\)\]\n    pub state: rt::ObjectRef<EmptyState>,\n\}/u);
   assert.match(text, /state: rt::ObjectRef::new\(EmptyState \{\}\)/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
@@ -365,8 +365,9 @@ export class Secret {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /    pub\(crate\) state: rt::ObjectRef<SecretState>,/u);
-  assert.doesNotMatch(text, /    (?:pub )?value: i32,/u);
+  assert.match(text, /    #\[doc\(hidden\)\]\n    pub state: rt::ObjectRef<SecretState>,/u);
+  assert.match(text, /    value: i32,/u);
+  assert.doesNotMatch(text, /    pub(?:\(crate\))? value: i32,/u);
   assert.match(text, /    fn hidden\(&self\) -> i32/u);
   assert.doesNotMatch(text, /    pub fn hidden\(&self\)/u);
   assert.match(text, /    pub fn reveal\(&self\) -> i32/u);

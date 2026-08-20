@@ -72,6 +72,7 @@ test("empty program emits a deterministic cargo library project", () => {
     'edition = "2021"',
     "",
     "[workspace]",
+    'resolver = "3"',
     "",
     "[dependencies]",
     `tsonic_rust_runtime = { path = "${runtimeCrate}" }`,

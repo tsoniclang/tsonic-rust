@@ -44,6 +44,10 @@ import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../policy/types/model.js";
 import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
+import {
+  rustProjectImplementationVisibility,
+  rustProjectMemberStorageVisibility,
+} from "../objects/project-storage-abi.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -52,6 +56,7 @@ export interface PlannedProjectObjectField {
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
+  readonly visibility: import("../../rust-ast/nodes.js").RustVisibility;
   readonly initializer?: Node;
 }
 
@@ -71,6 +76,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
+  const exported = ast.hasModifierKind(node, "export");
+  const publiclyReachable = rustSourceItemIsPubliclyReachable(context, className);
+  const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -190,6 +198,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         storageIndex: layoutField.storageIndex,
         carrier: fieldCarrier,
         type: fieldType,
+        visibility: rustProjectMemberStorageVisibility(ast, member, publiclyReachable),
         ...(initializer === undefined ? {} : { initializer }),
       });
       continue;
@@ -309,10 +318,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   if (representation.kind !== "value") {
     context.usedAliases?.add("rt");
   }
-  const exported = ast.hasModifierKind(node, "export");
   const generatedStructAttributes = [
     ...(structAttributes(className) ?? []),
-    ...(rustSourceItemIsPubliclyReachable(context, className)
+    ...(publiclyReachable
       ? []
       : [rustLintAttributes.deadCode]),
   ];
@@ -323,7 +331,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ...fields.map((field) => ({
       name: field.targetName,
       type: field.type,
-      visibility: "crate" as const,
+      visibility: field.visibility,
     })),
     ...methodProperties.map((property) => ({
       name: property.targetName,
@@ -332,11 +340,17 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         path: "Option",
         typeArguments: [property.callableType],
       },
-      visibility: "crate" as const,
+      visibility: storageVisibility,
+      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
     })),
     ...(stateMarker === undefined
       ? []
-      : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
+      : [{
+          name: stateMarker.name,
+          type: stateMarker.type,
+          visibility: storageVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        }]),
   ];
   if (representation.kind !== "value" && stateCarrier === undefined) {
     return undefined;
@@ -346,13 +360,17 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     : {
         name: rustProjectObjectStateField,
         type: stateCarrier,
-        visibility: "crate",
+        visibility: storageVisibility,
+        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
       };
   const stateItem: RustItem = {
     kind: "struct",
     name: definition.stateName,
-    visibility: "crate",
-    attrs: [rustLintAttributes.deadCode],
+    visibility: storageVisibility,
+    attrs: [
+      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
+      rustLintAttributes.deadCode,
+    ],
     derives: [],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: valueFields,
@@ -369,9 +387,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: className,
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
-    visibility: exported || rustSourceItemIsPubliclyReachable(context, className)
-      ? "public"
-      : "crate",
+    visibility: exported || publiclyReachable ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: structFields,

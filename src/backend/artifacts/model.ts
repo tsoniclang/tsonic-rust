@@ -5,7 +5,7 @@ import type { CargoManifestPlan } from "../project-model/cargo.js";
 export type RustPlannedArtifact =
   | {
       readonly kind: "project";
-      readonly path: "Cargo.toml";
+      readonly path: "Cargo.toml" | `crates/${string}/Cargo.toml`;
       readonly manifest: CargoManifestPlan;
     }
   | {

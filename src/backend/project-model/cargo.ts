@@ -12,4 +12,7 @@ export interface CargoManifestPlan {
   readonly edition: RustEdition;
   readonly outputType: RustOutputType;
   readonly dependencies: readonly CargoDependency[];
+  readonly workspace?: {
+    readonly members: readonly string[];
+  };
 }

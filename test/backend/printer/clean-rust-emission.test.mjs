@@ -51,9 +51,9 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /const CURRENT_VALUE: i32 = 40;/u);
-  assert.match(source, /pub\(crate\) struct BuildResultState \{\s*pub\(crate\) output_dir: String,\s*pub\(crate\) pages_built: i32,/u);
+  assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct BuildResultState \{\s*pub output_dir: String,\s*pub pages_built: i32,/u);
   assert.match(source, /pub struct BuildResult/u);
-  assert.match(source, /pub\(crate\) state: rt::ObjectRef<BuildResultState>/u);
+  assert.match(source, /#\[doc\(hidden\)\]\s*pub state: rt::ObjectRef<BuildResultState>/u);
   assert.match(source, /pub fn page_label\([^)]*prefix_text: String/u);
   assert.match(source, /pub fn build_site\(site_dir: String\) -> BuildResult/u);
   assert.match(source, /pub fn select_used\(_unused_value: i32, used_value: i32\) -> i32/u);

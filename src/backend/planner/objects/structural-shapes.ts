@@ -33,6 +33,7 @@ export function planRustStructuralShapeModule(
   externalCrateNameByFileName: ReadonlyMap<string, string>,
   externalItemPathByIdentity: ReadonlyMap<string, string>,
   externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>,
+  crateName: string | undefined,
   structuralShapesModuleName: string,
   rootComponentId: string,
   publicShapeNames: ReadonlySet<string>,
@@ -51,6 +52,7 @@ export function planRustStructuralShapeModule(
     externalCrateNameByFileName,
     externalItemPathByIdentity,
     externalStructuralShapeModuleByFileName,
+    ...(crateName === undefined ? {} : { crateName }),
     structuralShapesModuleName,
     usedAliases,
   };

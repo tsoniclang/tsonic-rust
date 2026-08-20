@@ -228,6 +228,7 @@ export interface RustStructField {
   readonly name: string;
   readonly type: RustType;
   readonly visibility: RustVisibility;
+  readonly attrs?: readonly string[];
 }
 
 export interface RustImplFunction {

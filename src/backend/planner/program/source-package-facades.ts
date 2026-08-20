@@ -22,6 +22,10 @@ export interface RustSourcePackageFacadeExport {
 export interface RustSourcePackageFacadePlan {
   readonly rootComponentId: string;
   readonly rootExports: readonly RustSourcePackageFacadeExport[];
+  readonly exportsByComponentId: ReadonlyMap<
+    string,
+    readonly RustSourcePackageFacadeExport[]
+  >;
   readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
   readonly publicTopLevelModules: ReadonlySet<string>;
   readonly publicModuleNames: ReadonlySet<string>;
@@ -146,6 +150,9 @@ export function planRustSourcePackageFacades(
   }
   const rootExports = Object.freeze(exports.filter((entry) =>
     entry.componentId === rootPackage.componentId));
+  const exportsByComponentId = new Map(input.sourcePackages.components.map((component) =>
+    [component.id, Object.freeze(exports.filter((entry) =>
+      entry.componentId === component.id))] as const));
   const publicModuleNamesByComponent = new Map<string, ReadonlySet<string>>();
   const publicImplementationItemIdentitiesByComponent = new Map<
     string,
@@ -177,6 +184,7 @@ export function planRustSourcePackageFacades(
     plan: Object.freeze({
       rootComponentId: rootPackage.componentId,
       rootExports,
+      exportsByComponentId: new Map(exportsByComponentId),
       externalItemPathByIdentity,
       publicTopLevelModules: Object.freeze(new Set([...publicModuleNames]
         .filter((name) => !name.includes("::")))),

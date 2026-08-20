@@ -30,7 +30,10 @@ const minimumRustArtifactReconstructionCount = 64;
 const maximumReconstructionsPerSourceFile = 32;
 
 export interface RustSourceFileReconstructionPlan {
-  readonly rootSources: readonly PlannedRustSourceFile[];
+  readonly sourcesByComponentId: ReadonlyMap<
+    string,
+    readonly PlannedRustSourceFile[]
+  >;
   readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
 }
 
@@ -277,17 +280,20 @@ export function reconstructRustSourceFiles(
     ));
     return undefined;
   }
-  const rootSources = input.sourceFiles.flatMap((sourceFile) => {
-    const identity = identitiesByFileName.get(input.ast.getFileName(sourceFile));
-    if (identity?.componentId !== rootComponent.componentId) {
-      return [];
-    }
-    const owner = ownerBySourceFile.get(sourceFile);
-    const planned = owner === undefined ? undefined : plannedByOwner.get(owner);
-    return planned === undefined ? [] : [planned];
-  });
+  const sourcesByComponentId = new Map(components.map((component) => [
+    component.componentId,
+    Object.freeze(input.sourceFiles.flatMap((sourceFile) => {
+      const identity = identitiesByFileName.get(input.ast.getFileName(sourceFile));
+      if (identity?.componentId !== component.componentId) {
+        return [];
+      }
+      const owner = ownerBySourceFile.get(sourceFile);
+      const planned = owner === undefined ? undefined : plannedByOwner.get(owner);
+      return planned === undefined ? [] : [planned];
+    })),
+  ] as const));
   return Object.freeze({
-    rootSources: Object.freeze(rootSources),
+    sourcesByComponentId: new Map(sourcesByComponentId),
     externalItemPathByIdentity: new Map(externalItemPathByIdentity),
   });
 }

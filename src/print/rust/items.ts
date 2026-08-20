@@ -178,20 +178,21 @@ export function printRustItem(item: RustItem): string {
 }
 
 function printRustStructField(field: RustStructField): string {
+  const attrs = (field.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
   const prefix = `    ${printRustVisibility(field.visibility)}${field.name}:`;
   const flatType = printRustType(field.type);
   const flat = `${prefix} ${flatType},`;
   if (!flatType.includes("\n") && renderedFits(flat, 0)) {
-    return flat;
+    return `${attrs}${flat}`;
   }
   const typeIndent = indentText(2);
-  return [
+  return `${attrs}${[
     prefix,
     appendToLastLine(
       `${typeIndent}${printRustTypeFitted(field.type, 2, typeIndent.length)}`,
       ",",
     ),
-  ].join("\n");
+  ].join("\n")}`;
 }
 
 function printRustSelfParam(

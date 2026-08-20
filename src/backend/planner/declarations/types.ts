@@ -17,6 +17,7 @@ import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "./classes.js";
 import type { RustItem, RustStructField } from "../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustProjectImplementationVisibility } from "../objects/project-storage-abi.js";
 
 export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input;
@@ -98,6 +99,9 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ));
     return undefined;
   }
+  const exported = ast.hasModifierKind(node, "export");
+  const publiclyReachable = rustSourceItemIsPubliclyReachable(context, interfaceName);
+  const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   if (ast.extendsHeritageElements(node).length > 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -186,7 +190,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
           path: "std::collections::HashMap",
           typeArguments: [keyType, valueType],
         },
-        visibility: "crate",
+        visibility: storageVisibility,
       };
       continue;
     }
@@ -225,6 +229,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       storageIndex: layoutField.storageIndex,
       carrier: fieldCarrier,
       type: fieldType,
+      visibility: storageVisibility,
     });
   }
   if (fields.length !== layout.fields.length) {
@@ -243,7 +248,6 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const exported = ast.hasModifierKind(node, "export");
   const interfaceAttributes = [
     ...(structAttributes(interfaceName) ?? []),
     ...(rustSourceItemIsPubliclyReachable(context, interfaceName)
@@ -253,34 +257,41 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   return [{
     kind: "struct",
     name: definition.stateName,
-    visibility: "crate",
-    attrs: [rustLintAttributes.deadCode],
+    visibility: storageVisibility,
+    attrs: [
+      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
+      rustLintAttributes.deadCode,
+    ],
     derives: [],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [
       ...fields.map((field) => ({
         name: field.targetName,
         type: field.type,
-        visibility: "crate" as const,
+        visibility: field.visibility,
       })),
       ...(indexField === undefined ? [] : [indexField]),
       ...(stateMarker === undefined
         ? []
-        : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
+        : [{
+            name: stateMarker.name,
+            type: stateMarker.type,
+            visibility: storageVisibility,
+            ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+          }]),
     ],
   }, {
     kind: "struct",
     name: interfaceName,
     ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
-    visibility: exported || rustSourceItemIsPubliclyReachable(context, interfaceName)
-      ? "public"
-      : "crate",
+    visibility: exported || publiclyReachable ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [{
       name: rustProjectObjectStateField,
       type: stateCarrier,
-      visibility: "crate",
+      visibility: storageVisibility,
+      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
     }],
   }];
 }

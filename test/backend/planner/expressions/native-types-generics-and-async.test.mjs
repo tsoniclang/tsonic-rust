@@ -268,8 +268,8 @@ export function shift(p: Point, dx: int32): Point {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub\(crate\) struct PointState \{\s*pub\(crate\) x: i32,\s*pub\(crate\) y: i32,/u);
-  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*pub\(crate\) state: rt::ObjectHandle<PointState>,/u);
+  assert.match(text, /#\[doc\(hidden\)\][\s\S]*pub struct PointState \{\s*pub x: i32,\s*pub y: i32,/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*#\[doc\(hidden\)\]\s*pub state: rt::ObjectHandle<PointState>,/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /let record_x = 0;/u);
   assert.match(text, /let record_y = 0;/u);

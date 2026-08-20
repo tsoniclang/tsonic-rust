@@ -42,8 +42,8 @@ test("classes lower to reference-backed object wrappers with fact-backed members
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub\(crate\) struct CounterState \{\n    pub\(crate\) value: i32,\n\}/u);
-  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) state: rt::ObjectHandle<CounterState>,\n\}/u);
+  assert.match(text, /#\[doc\(hidden\)\][\s\S]*pub struct CounterState \{\n    pub value: i32,\n\}/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    #\[doc\(hidden\)\]\n    pub state: rt::ObjectHandle<CounterState>,\n\}/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
   assert.match(text, /let field_value: i32 = value;/u);

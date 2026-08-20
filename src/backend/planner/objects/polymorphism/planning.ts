@@ -36,6 +36,10 @@ import {
   rustProjectTypeParameters,
 } from "./names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import {
+  rustProjectImplementationVisibility,
+  rustProjectMemberStorageVisibility,
+} from "../project-storage-abi.js";
 
 export function planPolymorphicClassDeclaration(
   declaration: Node,
@@ -92,6 +96,11 @@ export function planPolymorphicClassDeclaration(
   if (staticMethods === undefined || externalErrorImplementations === undefined) {
     return undefined;
   }
+  const programErrorVariant = context.input.projectTypes.programErrorVariant(definition);
+  const publiclyReachable = programErrorVariant !== undefined ||
+    rustSourceItemIsPubliclyReachable(context, definition.targetName);
+  const exported = context.input.ast.hasModifierKind(declaration, "export");
+  const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const defaultImplementation = rustDefaultImplementation(
     wrapperType,
     typeParams,
@@ -102,8 +111,11 @@ export function planPolymorphicClassDeclaration(
     {
       kind: "struct",
       name: definition.stateName,
-      visibility: "crate",
-      attrs: [rustLintAttributes.deadCode],
+      visibility: implementationVisibility,
+      attrs: [
+        ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
+        rustLintAttributes.deadCode,
+      ],
       derives: [],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
@@ -112,12 +124,17 @@ export function planPolymorphicClassDeclaration(
           : [{
               name: context.input.projectTypes.baseStateFieldName(definition),
               type: baseStateType,
-              visibility: "crate" as const,
+              visibility: implementationVisibility,
+              ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
             }]),
         ...ownLayer.fields.map((field) => ({
           name: field.targetName,
           type: field.type,
-          visibility: "crate" as const,
+          visibility: rustProjectMemberStorageVisibility(
+            context.input.ast,
+            field.declaration,
+            publiclyReachable,
+          ),
         })),
         ...ownLayer.methodProperties.map((property) => ({
           name: property.targetName,
@@ -126,25 +143,26 @@ export function planPolymorphicClassDeclaration(
             path: "Option",
             typeArguments: [property.callableType],
           },
-          visibility: "crate" as const,
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         })),
         ...(stateMarker === undefined
           ? []
-          : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
+          : [{
+              name: stateMarker.name,
+              type: stateMarker.type,
+              visibility: implementationVisibility,
+              ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+            }]),
       ],
     },
     {
       kind: "struct",
       name: definition.targetName,
-      visibility: context.input.projectTypes.programErrorVariant(definition) !== undefined
-        ? "public"
-        : context.input.ast.hasModifierKind(declaration, "export") ||
-            rustSourceItemIsPubliclyReachable(context, definition.targetName)
-          ? "public"
-          : "crate",
+      visibility: exported || publiclyReachable ? "public" : "crate",
       attrs: [
         rustLintAttributes.deadCode,
-        ...(context.input.projectTypes.programErrorVariant(definition) === undefined
+        ...(programErrorVariant === undefined
           ? []
           : ["#[doc(hidden)]"]),
       ],
@@ -154,12 +172,14 @@ export function planPolymorphicClassDeclaration(
         {
           name: rustProjectObjectIdentityField,
           type: { kind: "named", path: "rt::ObjectIdentity" },
-          visibility: "crate",
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
         {
           name: rustProjectObjectDispatchField,
           type: rustRcType({ kind: "trait-object", trait: dispatchType }),
-          visibility: "crate",
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
       ],
     },
@@ -298,15 +318,18 @@ export function planPolymorphicInterfaceDeclaration(
   }
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
+  const exported = context.input.ast.hasModifierKind(declaration, "export");
+  const publiclyReachable = rustSourceItemIsPubliclyReachable(
+    context,
+    definition.targetName,
+  );
+  const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   return [
     trait,
     {
       kind: "struct",
       name: definition.targetName,
-      visibility: context.input.ast.hasModifierKind(declaration, "export") ||
-          rustSourceItemIsPubliclyReachable(context, definition.targetName)
-        ? "public"
-        : "crate",
+      visibility: exported || publiclyReachable ? "public" : "crate",
       attrs: [rustLintAttributes.deadCode],
       derives: ["Clone"],
       ...(typeParams.length === 0 ? {} : { typeParams }),
@@ -314,12 +337,14 @@ export function planPolymorphicInterfaceDeclaration(
         {
           name: rustProjectObjectIdentityField,
           type: { kind: "named", path: "rt::ObjectIdentity" },
-          visibility: "crate",
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
         {
           name: rustProjectObjectDispatchField,
           type: rustRcType({ kind: "trait-object", trait: dispatchType }),
-          visibility: "crate",
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
       ],
     },
