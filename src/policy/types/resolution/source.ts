@@ -39,7 +39,7 @@ import type {
   SourceTypeComponentEvidence,
 } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -117,7 +117,7 @@ export function resolveRustTargetTypeRef(
   }
   const type = node === undefined
     ? subject as Type
-    : context.semanticsFor(node).getTypeAtLocation(node);
+    : context.semanticsFor(node).types.expressionType(node);
   return resolveRustTargetType(type, context, options, new Set<object>());
 }
 
@@ -165,7 +165,7 @@ export function resolveRustTargetTypeSyntax(
   if (primitive !== undefined) {
     return primitive;
   }
-  const { ast, checker } = context;
+  const { ast } = context;
   const kind = ast.kindName(node);
   if (kind === "KindNullKeyword") {
     return rustNullTargetType();
@@ -199,7 +199,7 @@ export function resolveRustTargetTypeSyntax(
   }
   if (kind === "KindFunctionType") {
     return resolveRustTargetType(
-      context.semanticsFor(node).getTypeAtLocation(node),
+      context.semanticsFor(node).types.expressionType(node),
       context,
       options,
       resolving,
@@ -277,7 +277,7 @@ export function resolveRustTargetTypeSyntax(
       }
     }
     return resolveRustTargetType(
-      context.semanticsFor(node).getTypeAtLocation(node),
+      context.semanticsFor(node).types.expressionType(node),
       context,
       options,
       resolving,
@@ -286,10 +286,10 @@ export function resolveRustTargetTypeSyntax(
   if (kind !== "KindTypeReference") {
     return undefined;
   }
-  const selectedType = context.semanticsFor(node).getTypeAtLocation(node);
+  const selectedType = context.semanticsFor(node).types.expressionType(node);
   const standardTransformation = selectedType === undefined
     ? undefined
-    : context.semanticsFor(node).selectStandardTypeTransformation(
+    : context.semanticsFor(node).types.standardTransformation(
         node,
         selectedType,
       );
@@ -313,11 +313,15 @@ export function resolveRustTargetTypeSyntax(
     return undefined;
   }
   const typeName = TypeReferenceNode_TypeName(ast, node);
-  const symbol = typeName === undefined
+  const referencedDeclaration = typeName === undefined
     ? undefined
-    : checker.getSymbolAtLocation(typeName);
+    : context.source.navigation.sourceReferenceFor(typeName)?.declaration;
+  const selectedTypeSymbol = selectedType === undefined
+    ? undefined
+    : context.currentSemantics.declarations.typeAliasSymbol(selectedType) ??
+      context.currentSemantics.declarations.typeSymbol(selectedType);
   const provider = resolveProviderTypeIdentity(
-    checker.getAuthoredTypeFactSubjects(node),
+    context.semanticsFor(node).facts.authoredTypeSubjects(node),
     context,
   );
   if (provider !== undefined) {
@@ -326,26 +330,29 @@ export function resolveRustTargetTypeSyntax(
       ? undefined
       : instantiateProviderTargetType(relation, typeArguments as TargetTypeRef[]);
   }
-  const sourceProfileName = resolveOwnedSourceProfileTypeName(symbol, context, options.sourceProfiles);
+  const sourceProfileName = resolveOwnedSourceProfileTypeName(
+    selectedTypeSymbol,
+    context,
+    options.sourceProfiles,
+  );
   if (sourceProfileName !== undefined) {
     return resolveSourceProfileCarrierFromArguments(sourceProfileName, typeArguments as TargetTypeRef[], options);
   }
   const sourceType = resolveProjectSourceCarrier(
-    symbol,
+    selectedTypeSymbol,
     typeArguments as readonly TargetTypeRef[],
     context,
     options,
-    typeName === undefined
-      ? undefined
-      : context.source.navigation.sourceReferenceFor(typeName)?.declaration,
+    referencedDeclaration,
   );
   if (sourceType !== undefined) {
     return sourceType;
   }
-  const referencedDeclaration = context.source.navigation.sourceReferenceFor(node)?.declaration;
+  const selectedDeclaration = context.source.navigation.sourceReferenceFor(node)?.declaration ??
+    referencedDeclaration;
   const typeParameter = resolveSourceTypeParameter(
-    symbol,
-    referencedDeclaration,
+    selectedTypeSymbol,
+    selectedDeclaration,
     context,
   );
   if (typeParameter !== undefined) {
@@ -370,7 +377,7 @@ function resolveRustCheckerTransformedType(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const semantics = context.semanticsFor(authoredRoot);
-  const standard = semantics.selectStandardTypeTransformation(
+  const standard = semantics.types.standardTransformation(
     authoredRoot,
     selectedType,
   );
@@ -399,8 +406,8 @@ function resolveRustCheckerTransformedType(
   if (direct !== undefined) {
     return direct;
   }
-  if (semantics.isTuple(selectedType)) {
-    const infos = semantics.getTupleElementInfos(selectedType);
+  if (semantics.types.isTuple(selectedType)) {
+    const infos = semantics.types.tupleElementInfos(selectedType);
     const elements = infos.map((element) =>
       resolveRustTupleElementTargetTypeWithState(
         element,
@@ -618,7 +625,7 @@ export function resolveRustTypeComponentEvidence(
     options,
     resolving,
   );
-  const selection = semantics.selectAuthoredType(
+  const selection = semantics.types.authoredSelection(
     component.authoredTypeNode,
     component.selectedType,
   );
@@ -677,7 +684,7 @@ function resolveRustEvidenceNodesToCommonCarrier(
   }
   const carriers = [...new Set(nodes)].map((node) => {
     const semantics = context.semanticsFor(node);
-    const selection = semantics.selectAuthoredType(node, selectedType);
+    const selection = semantics.types.authoredSelection(node, selectedType);
     if (selection.kind !== "authored-members") {
       return undefined;
     }

@@ -1,4 +1,4 @@
-import type { RustExpr } from "../rust-ast/nodes.js";
+import type { RustExpr } from "../target-ast/nodes.js";
 
 export function rustOptionDefaultValue(
   option: RustExpr,

@@ -46,7 +46,7 @@ import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustOptionalCallGuard } from "./selection.js";
-import type { RustTargetMember, TargetTypeRef } from "../../../../policy/types/model.js";
+import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function instantiateExactSelectedConstructionCarrier(
   definition: import("../../../project-types/type-policy.js").RustProjectTypeDefinition,

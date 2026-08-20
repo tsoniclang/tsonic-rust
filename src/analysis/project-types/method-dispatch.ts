@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
 import { closedMetadataKey, isDenseDataArray } from "../../policy/model/closed-data.js";
 import { allocateRustGeneratedName } from "../../policy/names/generated.js";

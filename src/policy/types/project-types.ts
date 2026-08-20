@@ -14,7 +14,7 @@ import type {
 } from "@tsonic/target-api/source";
 import type { RustExternalProjectBase, RustExternalProjectField } from "./external-project-types.js";
 import type { RustNamePlan } from "../names/model.js";
-import type { TargetTypeRef } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustProjectTypeIssue {
   readonly node: Node;

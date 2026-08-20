@@ -23,7 +23,7 @@ import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const { ast } = walk.context;

@@ -1,4 +1,4 @@
-import type { RustBlock, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
 
 export function rustBlockTerminates(block: RustBlock): boolean {
   const last = block.statements[block.statements.length - 1];

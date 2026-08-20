@@ -2,10 +2,10 @@ import { closedMetadataEquals } from "../../../policy/model/closed-data.js";
 import { defineRustPlanKey } from "../../../policy/model/keys.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustArgumentMode, RustOptionalChainFact, RustProviderFactOperationKind } from "../../../policy/operations/model.js";
+import type { RustArgumentMode, RustOptionalChainFact, RustProviderFactOperationKind } from "../../../target-model/operations/model.js";
 import type { RustPlanKey } from "../../../policy/model/keys.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "./facts.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: RustTargetOperationFact): boolean {
   return closedMetadataEquals(left, right);

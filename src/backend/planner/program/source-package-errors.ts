@@ -1,10 +1,10 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
 import { rustPascalCaseIdentifier } from "../../../policy/names/identifiers.js";
-import type { RustSourceFileOutputIdentity } from "../../../analysis/program/source-output-identities.js";
+import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
-import type { RustErrorDomain } from "../../rust-ast/nodes.js";
+import type { RustErrorDomain } from "../../target-ast/nodes.js";
 
 export interface RustExternalSourcePackageError {
   readonly componentId: string;
@@ -70,7 +70,7 @@ export function planRustSourcePackageErrors(
   ));
   const componentIdByDefinition = new Map<RustProjectTypeDefinition, string>();
   const definitionsByComponentId = new Map<string, RustProjectTypeDefinition[]>();
-  for (const definition of input.projectTypes.programErrorDefinitions) {
+  for (const definition of input.program.projectTypes.programErrorDefinitions) {
     const componentId = componentIdByFileName.get(definition.fileName);
     if (componentId === undefined) {
       diagnostics.push(errorPlanDiagnostic(
@@ -80,7 +80,7 @@ export function planRustSourcePackageErrors(
       ));
       continue;
     }
-    const variant = input.projectTypes.programErrorVariant(definition);
+    const variant = input.program.projectTypes.programErrorVariant(definition);
     if (variant === undefined) {
       diagnostics.push(errorPlanDiagnostic(
         "RUST_PROGRAM_ERROR_VARIANT_MISSING",
@@ -108,7 +108,7 @@ export function planRustSourcePackageErrors(
     const usedVariantNames = new Set([
       "Runtime",
       "Suppressed",
-      ...definitions.map((definition) => input.projectTypes.programErrorVariant(definition)!),
+      ...definitions.map((definition) => input.program.projectTypes.programErrorVariant(definition)!),
     ]);
     const externalErrors: RustExternalSourcePackageError[] = [];
     for (const dependencyComponentId of component.dependencyComponentIds) {

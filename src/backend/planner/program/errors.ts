@@ -11,7 +11,7 @@ import {
   type RustPattern,
   type RustSourceFileModel,
   type RustType,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -77,7 +77,7 @@ export function planRustProgramErrorModule(
   }
 
   const projectVariants = definitions.map((definition) => {
-    const variant = input.projectTypes.programErrorVariant(definition);
+    const variant = input.program.projectTypes.programErrorVariant(definition);
     const moduleName = moduleNameByFileName.get(definition.fileName);
     if (variant === undefined || moduleName === undefined) {
       diagnostics.push({
@@ -105,7 +105,7 @@ export function planRustProgramErrorModule(
     type: namedType(external.typePath),
   }));
   const providerErrorTypes: RustType[] = [];
-  for (const carrier of input.providerErrorCarriers) {
+  for (const carrier of input.providerErrors.seal()) {
     if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||
       rustTargetTypeRefEquals(carrier, rustProgramErrorTargetType())) {
       continue;

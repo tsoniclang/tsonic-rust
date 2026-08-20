@@ -8,34 +8,28 @@ import { rustProviderBindingProviderId } from "./source-provider.js";
 import { validateProviderPackageDefinition } from "./validation.js";
 import { snapshotClosedMetadata } from "../../policy/model/closed-data.js";
 import { rustBuiltInSourceTypeSemantics } from "../builtins/source-types.js";
-import type { RustNamedTypeTraitContract } from "../../policy/types/model.js";
+import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
 import type { RustProviderBinaryEpilogueRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
-import type { TargetCapabilityContext, TargetProviderContext } from "@tsonic/target-api/provider";
+import type { SelectedTargetCapabilityContributions } from "@tsonic/target-api/provider";
 
 export function rustProviderPolicyContributionsOf(
-  context: TargetProviderContext,
+  capabilities: readonly SelectedTargetCapabilityContributions[],
 ): readonly RustProviderPolicyContribution[] {
   const contributions: RustProviderPolicyContribution[] = [];
-  for (const capability of context.selectedCapabilities) {
-    const capabilityContext: TargetCapabilityContext = {
-      project: context.project,
-      target: context.target,
-      targetPack: context.targetPack,
-      selectedCapabilities: context.selectedCapabilities,
-      selectedSurfaces: context.selectedSurfaces,
-      capability,
-    };
-    for (const contribution of capability.createTargetContributions?.(capabilityContext) ?? []) {
+  for (const capability of capabilities) {
+    for (const contribution of capability.contributions) {
       if (contribution.kind !== rustProviderPolicyContributionKind) {
-        continue;
+        throw new Error(
+          `Rust capability '${capability.capabilityId}' supplied unsupported target contribution kind '${contribution.kind}'.`,
+        );
       }
       const candidate = contribution as RustProviderPolicyContribution;
       if (candidate.contractVersion !== 1 || candidate.definition === undefined) {
-        throw new Error(`Rust capability '${capability.id}' contributed an invalid '${rustProviderPolicyContributionKind}' contract.`);
+        throw new Error(`Rust capability '${capability.capabilityId}' contributed an invalid '${rustProviderPolicyContributionKind}' contract.`);
       }
-      if (candidate.definition.id !== capability.id) {
-        throw new Error(`Rust capability '${capability.id}' contributed provider metadata owned by '${candidate.definition.id}'.`);
+      if (candidate.definition.id !== capability.capabilityId) {
+        throw new Error(`Rust capability '${capability.capabilityId}' contributed provider metadata owned by '${candidate.definition.id}'.`);
       }
       validateProviderPackageDefinition(candidate.definition);
       contributions.push(snapshotClosedMetadata(candidate));
@@ -56,7 +50,7 @@ export function mergeExactRows<T>(
     if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(row)) {
       throw new Error(`Rust provider ${kind} '${identity}' has conflicting definitions.`);
     }
-    byIdentity.set(identity, row);
+    byIdentity.set(identity, snapshotClosedMetadata(row));
   }
   return Object.freeze([...byIdentity.entries()]
     .sort(([left], [right]) => left.localeCompare(right, "en"))
@@ -80,20 +74,20 @@ export function providerBinaryEpilogueIdentity(row: RustProviderBinaryEpilogueRo
 }
 
 export function collectRustProviderSemantics(
-  context: TargetProviderContext,
+  capabilities: readonly SelectedTargetCapabilityContributions[],
 ): RustProviderSemantics {
   return collectRustProviderSemanticsFromDefinitions(
-    rustProviderPolicyContributionsOf(context).map((contribution) => contribution.definition),
+    rustProviderPolicyContributionsOf(capabilities).map((contribution) => contribution.definition),
   );
 }
 
 export function composeRustProviderSemantics(
-  context: TargetProviderContext,
+  capabilities: readonly SelectedTargetCapabilityContributions[],
   compilerProviderSemantics?: RustProviderSemantics,
 ): RustProviderSemantics {
   return mergeRustProviderSemantics(
     rustBuiltInSourceTypeSemantics(),
-    collectRustProviderSemantics(context),
+    collectRustProviderSemantics(capabilities),
     ...(compilerProviderSemantics === undefined ? [] : [compilerProviderSemantics]),
   );
 }
@@ -139,7 +133,7 @@ export function collectRustProviderSemanticsFromDefinitions(
       if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
         throw new Error(`Rust provider carrier '${carrierId}' has conflicting native trait contracts.`);
       }
-      carrierTraits.set(carrierId, traits);
+      carrierTraits.set(carrierId, snapshotClosedMetadata(traits));
     }
     for (const type of definition.types ?? []) {
       const owner = moduleByExportId.get(type.exportId);
@@ -161,7 +155,7 @@ export function collectRustProviderSemanticsFromDefinitions(
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
     binaryEpilogues.push(...(definition.binaryEpilogues ?? []).map((epilogue) =>
-      Object.freeze(materializeProviderBinaryEpilogueRow(
+      snapshotClosedMetadata(materializeProviderBinaryEpilogueRow(
         epilogue,
         aliases,
         carrierPathRows,
@@ -185,18 +179,20 @@ export function collectRustProviderSemanticsFromDefinitions(
       });
     }));
   }
-  return {
+  const canonicalCarrierPaths = freezeSortedRecord(carrierPaths);
+  const canonicalCarrierTraits = freezeSortedRecord(carrierTraits);
+  return Object.freeze({
     exports: Object.freeze(exports),
     operations: Object.freeze(operations.map((row) =>
-      canonicalizeProviderOperationRow(row, carrierPaths, carrierTraits))),
-    carrierPaths,
-    carrierTraits,
-    types: Object.freeze(types.map((row) => Object.freeze({
+      snapshotClosedMetadata(canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits)))),
+    carrierPaths: canonicalCarrierPaths,
+    carrierTraits: canonicalCarrierTraits,
+    types: Object.freeze(types.map((row) => snapshotClosedMetadata({
       ...row,
-      targetCarrier: materializeProviderCarrier(row.targetCarrier, carrierPaths, carrierTraits),
+      targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
     }))),
     binaryEpilogues: Object.freeze(binaryEpilogues),
-  };
+  });
 }
 
 export function mergeRustProviderSemantics(
@@ -205,32 +201,34 @@ export function mergeRustProviderSemantics(
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   for (const input of inputs) {
-    for (const [id, path] of input.carrierPaths) {
+    for (const [id, path] of Object.entries(input.carrierPaths)) {
       const existing = carrierPaths.get(id);
       if (existing !== undefined && existing !== path) {
         throw new Error(`Rust provider carrier '${id}' has conflicting target paths '${existing}' and '${path}'.`);
       }
       carrierPaths.set(id, path);
     }
-    for (const [id, traits] of input.carrierTraits) {
+    for (const [id, traits] of Object.entries(input.carrierTraits)) {
       const existing = carrierTraits.get(id);
       if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
         throw new Error(`Rust provider carrier '${id}' has conflicting native trait contracts.`);
       }
-      carrierTraits.set(id, traits);
+      carrierTraits.set(id, snapshotClosedMetadata(traits));
     }
   }
+  const canonicalCarrierPaths = freezeSortedRecord(carrierPaths);
+  const canonicalCarrierTraits = freezeSortedRecord(carrierTraits);
   const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
   const operations = mergeExactRows(
     inputs.flatMap((input) => input.operations).map((row) =>
-      canonicalizeProviderOperationRow(row, carrierPaths, carrierTraits)),
+      canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits)),
     providerOperationRowIdentity,
     "operation",
   );
   const types = mergeExactRows(
-    inputs.flatMap((input) => input.types).map((row) => Object.freeze({
+    inputs.flatMap((input) => input.types).map((row) => snapshotClosedMetadata({
       ...row,
-      targetCarrier: materializeProviderCarrier(row.targetCarrier, carrierPaths, carrierTraits),
+      targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
     })),
     providerTypeRowIdentity,
     "type",
@@ -245,7 +243,13 @@ export function mergeRustProviderSemantics(
     operations,
     types,
     binaryEpilogues,
-    carrierPaths: new Map([...carrierPaths.entries()].sort(([left], [right]) => left.localeCompare(right, "en"))),
-    carrierTraits: new Map([...carrierTraits.entries()].sort(([left], [right]) => left.localeCompare(right, "en"))),
+    carrierPaths: canonicalCarrierPaths,
+    carrierTraits: canonicalCarrierTraits,
   });
+}
+
+function freezeSortedRecord<T>(entries: ReadonlyMap<string, T>): Readonly<Record<string, T>> {
+  return Object.freeze(Object.fromEntries(
+    [...entries.entries()].sort(([left], [right]) => left.localeCompare(right, "en")),
+  ));
 }

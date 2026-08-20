@@ -1,25 +1,27 @@
-import type {
-  TargetBackendContext,
-  TargetCompileInput,
-} from "@tsonic/target-api";
-import type { RustProviderSemantics } from "../../providers/packages/model.js";
+import {
+  rejectedTargetStage,
+  resolvedTargetStage,
+} from "@tsonic/target-api/artifacts";
 import { analyzeRustProgram } from "./analyze.js";
 import { createRustAnalysisContext } from "./context.js";
 import type {
   AnalyzeRustTargetProgramResult,
+  RustTargetAnalysisRequest,
   RustTargetProgram,
 } from "./model.js";
 import { createRustModuleInitializationPlan } from "./module-initialization-facts.js";
 
 export function analyzeRustTargetProgram(
-  backend: TargetBackendContext,
-  input: TargetCompileInput,
-  providerSemantics: RustProviderSemantics,
-  jsEnabled: boolean,
-  rootPublishesLibrary: boolean,
+  request: RustTargetAnalysisRequest,
 ): AnalyzeRustTargetProgramResult {
+  const {
+    input,
+    configuration,
+    providerSemantics,
+    jsEnabled,
+    rootPublishesLibrary,
+  } = request;
   const context = createRustAnalysisContext(
-    backend,
     input,
     providerSemantics,
     jsEnabled,
@@ -27,16 +29,13 @@ export function analyzeRustTargetProgram(
   );
   analyzeRustProgram(context);
   if (context.diagnostics.length > 0) {
-    return {
-      kind: "rejected",
-      diagnostics: Object.freeze([...context.diagnostics]),
-    };
+    return rejectedTargetStage(context.diagnostics);
   }
 
   const moduleInitialization = createRustModuleInitializationPlan(context);
   const program: RustTargetProgram = Object.freeze({
+    configuration,
     source: context.source,
-    ast: context.ast,
     sourceFiles: context.sourceFiles,
     facts: context.facts.seal(),
     projectTypes: context.projectTypes.seal(),
@@ -51,13 +50,12 @@ export function analyzeRustTargetProgram(
     moduleInitialization,
     names: context.names,
     analysis: context.analysis,
-    semantics: context.semantics,
-    semanticsFor: context.semanticsFor,
   });
-  return { kind: "resolved", program };
+  return resolvedTargetStage(program);
 }
 
 export type {
   AnalyzeRustTargetProgramResult,
+  RustTargetAnalysisRequest,
   RustTargetProgram,
 } from "./model.js";

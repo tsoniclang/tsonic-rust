@@ -1,20 +1,38 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createRustBackend } from "../../../dist/backend/rust-backend.js";
+import { dirname } from "node:path";
+import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
+import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
 import {
-  fakeBackendContext,
   fakeCompileInput,
   fakeSourceFile,
   fakeStatement,
 } from "../../helpers/fake-compile-input.mjs";
 
-const backendContext = fakeBackendContext();
-const providerSemantics = composeRustProviderSemantics(backendContext);
+const providerSemantics = composeRustProviderSemantics([]);
+
+function compile(input) {
+  const configuration = createRustTargetConfiguration(
+    input.target,
+    dirname(input.paths.projectFilePath),
+    input.paths.targetOutputRoot,
+  );
+  const result = compileRustTarget(Object.freeze({
+    input,
+    configuration,
+    providerSemantics,
+    jsEnabled: false,
+    rootPublishesLibrary: configuration.outputType === "lib",
+  }));
+  return {
+    artifacts: result.kind === "resolved" ? result.value.artifacts : [],
+    diagnostics: result.diagnostics,
+  };
+}
 
 test("any source statement fails closed with a deterministic diagnostic and no artifacts", () => {
-  const backend = createRustBackend(backendContext, providerSemantics, false);
-  const result = backend.compile(fakeCompileInput({
+  const result = compile(fakeCompileInput({
     sourceFiles: [fakeSourceFile({
       fileName: "src/app.ts",
       text: "const x = 1;\n",
@@ -41,8 +59,7 @@ test("any source statement fails closed with a deterministic diagnostic and no a
 });
 
 test("every statement in every source file produces its own diagnostic", () => {
-  const backend = createRustBackend(backendContext, providerSemantics, false);
-  const result = backend.compile(fakeCompileInput({
+  const result = compile(fakeCompileInput({
     sourceFiles: [
       fakeSourceFile({
         fileName: "src/a.ts",
@@ -68,9 +85,8 @@ test("every statement in every source file produces its own diagnostic", () => {
 });
 
 test("diagnostic spans track multi-byte source text by utf-8 byte offsets", () => {
-  const backend = createRustBackend(backendContext, providerSemantics, false);
   const text = 'const s = "héllo";\n';
-  const result = backend.compile(fakeCompileInput({
+  const result = compile(fakeCompileInput({
     sourceFiles: [fakeSourceFile({
       fileName: "src/unicode.ts",
       text,

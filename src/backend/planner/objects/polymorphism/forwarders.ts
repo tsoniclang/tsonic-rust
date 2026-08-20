@@ -13,7 +13,7 @@ import {
   sourceTypePath,
 } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
-import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
+import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { planProjectMethod } from "../../declarations/nominal.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
@@ -21,11 +21,11 @@ import { rustProjectDispatchTraitType } from "./names.js";
 import { rustSourceTypeCarrierValue } from "../../../../policy/types/target-types.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
-import type { RustExpr, RustImplFunction, RustType } from "../../../rust-ast/nodes.js";
+import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustProjectDowncastRoute } from "../../../../policy/types/project-types.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
-import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectCallableShape } from "./model.js";
 
 export function planProjectFieldAccessorCall(
@@ -128,7 +128,7 @@ export function planRootAccessorImplementation(
   role: "read" | "write",
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const targetName = context.input.projectTypes.memberSlotName(accessor, role);
+  const targetName = context.input.program.projectTypes.memberSlotName(accessor, role);
   return targetName === undefined
     ? undefined
     : planRootCallableImplementation(
@@ -197,15 +197,15 @@ function planRootCallableImplementation(
     readonly fallibleBoundary?: import("../../program/source-package-errors.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
-  const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
+  const owner = context.input.program.projectTypes.definitionContainingDeclaration(implementation);
   if (owner === undefined) {
     return undefined;
   }
-  const ownerRelation = context.input.projectTypes.relationship(concreteCarrier, owner);
+  const ownerRelation = context.input.program.projectTypes.relationship(concreteCarrier, owner);
   if (ownerRelation.kind !== "related") {
     return undefined;
   }
-  const syntheticNames = createRustSyntheticNameState(context.input.ast, implementation, []);
+  const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, implementation, []);
   const thisBindingName = allocateRustSyntheticName(syntheticNames, "project_this");
   const thisPlan = projectThisOverrides(
     implementation,
@@ -264,11 +264,11 @@ export function planRootMethodForwarder(
   overrideStoragePath: readonly string[] | undefined,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const contractOwner = context.input.projectTypes.definitionContainingDeclaration(contractMember);
+  const contractOwner = context.input.program.projectTypes.definitionContainingDeclaration(contractMember);
   if (contractOwner === undefined) {
     return undefined;
   }
-  const contractRelation = context.input.projectTypes.relationship(concreteCarrier, contractOwner);
+  const contractRelation = context.input.program.projectTypes.relationship(concreteCarrier, contractOwner);
   const specialization = rustCallableSpecialization(
     variant.sourceTypeParameterNames,
     variant.targetTypeArguments,
@@ -333,8 +333,8 @@ export function planRootCallableForwarder(
   overrideStoragePath: readonly string[] | undefined,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const representation = context.input.objectRepresentations.representationFor(
-    context.input.projectTypes.definitionContainingDeclaration(implementation),
+  const representation = context.input.program.objectRepresentations.representationFor(
+    context.input.program.projectTypes.definitionContainingDeclaration(implementation),
   );
   if (representation === undefined || !rootCallableMatchesShape(helper, contractShape)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -403,8 +403,8 @@ function applyRootMethodOverride(
   if (overrideStoragePath === undefined) {
     return callable;
   }
-  const representation = context.input.objectRepresentations.representationFor(
-    context.input.projectTypes.definitionContainingDeclaration(implementation),
+  const representation = context.input.program.objectRepresentations.representationFor(
+    context.input.program.projectTypes.definitionContainingDeclaration(implementation),
   );
   if (representation === undefined) {
     return undefined;
@@ -513,11 +513,11 @@ function projectThisOverrides(
     return { overrides };
   }
   const visit = (node: Node): void => {
-    const kind = context.input.ast.kindName(node);
+    const kind = context.input.program.source.ast.kindName(node);
     if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-      const selected = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-      const selectedDefinition = context.input.projectTypes.definitionForCarrier(selected);
-      const ownerDefinition = context.input.projectTypes.definitionForCarrier(ownerCarrier);
+      const selected = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+      const selectedDefinition = context.input.program.projectTypes.definitionForCarrier(selected);
+      const ownerDefinition = context.input.program.projectTypes.definitionForCarrier(ownerCarrier);
       if (selectedDefinition === ownerDefinition) {
         overrides.set(node, {
           carrier: ownerCarrier,
@@ -527,7 +527,7 @@ function projectThisOverrides(
       }
       return;
     }
-    context.input.ast.forEachChild(node, (child) => {
+    context.input.program.source.ast.forEachChild(node, (child) => {
       if (child !== undefined) {
         visit(child);
       }

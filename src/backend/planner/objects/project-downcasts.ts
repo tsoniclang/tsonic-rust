@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   RustProjectDowncastFact,
   RustTargetOperationFact,
@@ -11,7 +11,7 @@ import {
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
 } from "../../../policy/types/target-types.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -53,11 +53,11 @@ export function planRustProjectDowncastValue(
   targetCarrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const sourceDefinition = context.input.projectTypes.definitionForCarrier(dispatchCarrier);
-  const targetDefinition = context.input.projectTypes.definitionForCarrier(targetCarrier);
+  const sourceDefinition = context.input.program.projectTypes.definitionForCarrier(dispatchCarrier);
+  const targetDefinition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
   const route = sourceDefinition === undefined
     ? undefined
-    : context.input.projectTypes.downcastRoute(sourceDefinition, targetCarrier);
+    : context.input.program.projectTypes.downcastRoute(sourceDefinition, targetCarrier);
   const targetValue = rustSourceTypeCarrierValue(targetCarrier);
   const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
@@ -73,7 +73,7 @@ export function planRustProjectDowncastValue(
     return undefined;
   }
   const valueName = allocateRustSyntheticName(
-    context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+    context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "downcast_value",
   );
   const sourceExpression = planRustNonConsumingProjectValue(node, expression, context);
@@ -121,7 +121,7 @@ function planRustNonConsumingProjectValue(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
-  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier) &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
@@ -146,10 +146,10 @@ export function planRustProjectTypeTest(
   if (fact.lowering.kind === "option-presence") {
     return { kind: "method-call", receiver: expression, method: "is_some", args: [] };
   }
-  const sourceDefinition = context.input.projectTypes.definitionForCarrier(fact.dispatchCarrier);
+  const sourceDefinition = context.input.program.projectTypes.definitionForCarrier(fact.dispatchCarrier);
   const route = sourceDefinition === undefined
     ? undefined
-    : context.input.projectTypes.downcastRoute(sourceDefinition, fact.targetCarrier);
+    : context.input.program.projectTypes.downcastRoute(sourceDefinition, fact.targetCarrier);
   if (route === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),

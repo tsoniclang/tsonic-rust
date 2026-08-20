@@ -14,7 +14,7 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustBindingProjectionFactKey,
   type RustBindingNormalization,
@@ -377,11 +377,11 @@ function resolveObjectRestBindingCarrier(
   context: RustBindingPatternFactContext,
 ): TargetTypeRef | undefined {
   const semantics = context.semanticsFor(binding);
-  const sourceType = semantics.getTypeAtLocation(binding);
+  const sourceType = semantics.types.expressionType(binding);
   if (sourceType === undefined) {
     return undefined;
   }
-  const properties = semantics.getPropertyInfos(sourceType);
+  const properties = semantics.types.propertyInfos(sourceType);
   if (properties.length !== fields.length ||
     new Set(properties.map((property) => property.name)).size !== properties.length ||
     new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
@@ -404,7 +404,7 @@ function resolveObjectRestBindingCarrier(
     const propertyType = property?.type;
     const declarations = property === undefined
       ? undefined
-      : semantics.getSymbolDeclarations(property.symbol);
+      : semantics.declarations.symbolDeclarations(property.symbol);
     if (property === undefined || propertyType === undefined ||
       declarations === undefined || declarations.length === 0 ||
       !isDenseDataArray(declarations) || declarations.some((declaration) => declaration === undefined) ||

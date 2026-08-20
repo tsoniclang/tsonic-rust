@@ -231,18 +231,20 @@ test("compile-time provider arguments never require runtime carrier or passing f
   const context = {
     diagnostics: [],
     input: {
-      facts: {
-        getArgumentPassingFact(node) {
-          assert.equal(node, runtimeArgument);
-          return { mode: "borrow-shared" };
-        },
-        getRuntimeCarrierFact(node) {
-          assert.equal(node, runtimeArgument);
-          return { carrier: jsValue };
-        },
-        getTargetConversionFact(node) {
-          assert.equal(node, runtimeArgument);
-          return undefined;
+      program: {
+        facts: {
+          getArgumentPassingFact(node) {
+            assert.equal(node, runtimeArgument);
+            return { mode: "borrow-shared" };
+          },
+          getRuntimeCarrierFact(node) {
+            assert.equal(node, runtimeArgument);
+            return { carrier: jsValue };
+          },
+          getTargetConversionFact(node) {
+            assert.equal(node, runtimeArgument);
+            return undefined;
+          },
         },
       },
     },

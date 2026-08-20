@@ -5,7 +5,7 @@ import type {
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import { createTargetArtifactContractGraph } from "@tsonic/target-api/artifacts";
 import { closedMetadataKey } from "../../../policy/model/closed-data.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   TargetArtifactContractGraph,
   TargetArtifactDependency,

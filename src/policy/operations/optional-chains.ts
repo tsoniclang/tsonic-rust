@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
-import type { TargetTypeRef } from "../types/model.js";
-import type { RustOptionalChainFact } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustOptionalChainFact } from "../../target-model/operations/model.js";
 import {
   rustOptionElementCarrier,
   rustOptionTargetType,

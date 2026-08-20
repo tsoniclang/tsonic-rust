@@ -1,19 +1,10 @@
-import type { TargetSelection } from "@tsonic/target-api";
 import type {
   TargetDiagnostic,
   TargetRuntimeReference,
 } from "@tsonic/target-api/artifacts";
-import type { TargetCompilationPaths } from "@tsonic/target-api";
-import { existsSync, realpathSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
 import { materializeCargoCrate } from "../../../providers/model/cargo-package.js";
-import {
-  readRustCrateName,
-  readRustEdition,
-  readRustOutputType,
-} from "../../../options/rust-target-options.js";
-import type { CargoDependency, CargoManifestPlan } from "../../project-model/cargo.js";
-import { resolveRustUserCargoManifest } from "../../../options/rust-user-project.js";
+import type { RustTargetConfiguration } from "../../../target-model/configuration/model.js";
+import type { CargoDependency, CargoManifestPlan } from "../../artifact-model/project/cargo.js";
 import {
   invalidCargoRuntimeReferenceDiagnostic,
   missingRuntimeReferenceDiagnostic,
@@ -21,10 +12,10 @@ import {
 import { isValidRustIdentifier } from "../program/plan-context.js";
 import {
   cargoCrateAttributeName,
-  cargoCratesIoRegistry,
   cargoPathReferenceKind,
   cargoRegistryPatchAttributeName,
 } from "../../../providers/model/cargo-reference.js";
+import { cargoCratesIoRegistry } from "../../../target-model/project/model.js";
 
 export interface CargoManifestPlanResult {
   readonly manifest?: CargoManifestPlan;
@@ -41,28 +32,26 @@ export interface RustCargoProjectPlanResult {
 }
 
 export function planRustCargoProject(
-  target: TargetSelection,
-  paths: TargetCompilationPaths,
+  configuration: RustTargetConfiguration,
   runtimeReferences: readonly TargetRuntimeReference[],
 ): RustCargoProjectPlanResult {
-  const resolution = resolveRustUserCargoManifest(target, dirname(paths.projectFilePath));
-  if (resolution.kind === "absent") {
-    const generated = planCargoManifest(target, runtimeReferences);
+  if (configuration.project.kind === "generated") {
+    const generated = planCargoManifest(configuration, runtimeReferences);
     return generated.manifest === undefined
       ? { diagnostics: generated.diagnostics }
       : { project: { kind: "generated", manifest: generated.manifest }, diagnostics: [] };
   }
-  if (resolution.kind === "invalid") {
-    return { diagnostics: [userCargoProjectDiagnostic(resolution.message, resolution.path)] };
-  }
-  const diagnostic = validateUserCargoManifestLocation(paths, resolution.manifestPath);
-  return diagnostic === undefined
-    ? { project: { kind: "user-owned", manifestPath: resolution.manifestPath }, diagnostics: [] }
-    : { diagnostics: [diagnostic] };
+  return {
+    project: {
+      kind: "user-owned",
+      manifestPath: configuration.project.manifestPath,
+    },
+    diagnostics: [],
+  };
 }
 
 export function planCargoManifest(
-  target: TargetSelection,
+  configuration: RustTargetConfiguration,
   runtimeReferences: readonly TargetRuntimeReference[],
 ): CargoManifestPlanResult {
   const diagnostics: TargetDiagnostic[] = [];
@@ -150,64 +139,21 @@ export function planCargoManifest(
       diagnostics.push(missingRuntimeReferenceDiagnostic(reference.kind, reference.include));
       continue;
     }
-    dependenciesByName.set(crateName, dependency);
+    dependenciesByName.set(crateName, Object.freeze(dependency));
   }
   if (diagnostics.length > 0) {
     return { diagnostics };
   }
   return {
-    manifest: {
-      packageName: readRustCrateName(target),
-      edition: readRustEdition(target),
-      outputType: readRustOutputType(target),
-      dependencies: [...dependenciesByName.values()].sort((left, right) => left.name.localeCompare(right.name, "en")),
-      workspace: { members: [] },
-    },
+    manifest: Object.freeze({
+      packageName: configuration.crateName,
+      edition: configuration.edition,
+      outputType: configuration.outputType,
+      dependencies: Object.freeze(
+        [...dependenciesByName.values()].sort((left, right) => left.name.localeCompare(right.name, "en")),
+      ),
+      workspace: Object.freeze({ members: Object.freeze([]) }),
+    }),
     diagnostics: [],
   };
-}
-
-function validateUserCargoManifestLocation(
-  paths: TargetCompilationPaths,
-  manifestPath: string,
-): TargetDiagnostic | undefined {
-  const outputRoot = canonicalExistingPath(paths.targetOutputRoot);
-  const relativeToOutput = normalizePath(relative(outputRoot, manifestPath));
-  if (relativeToOutput.length === 0 || relativeToOutput === "." ||
-    (!relativeToOutput.startsWith("../") && relativeToOutput !== "..")) {
-    return userCargoProjectDiagnostic(
-      `Rust target option 'projectFile' must not point inside generated target output root '${paths.targetOutputRoot}': ${manifestPath}`,
-      manifestPath,
-    );
-  }
-  return undefined;
-}
-
-function canonicalExistingPath(path: string): string {
-  const resolved = resolve(path);
-  if (!existsSync(resolved)) {
-    return resolved;
-  }
-  try {
-    return realpathSync(resolved);
-  } catch {
-    return resolved;
-  }
-}
-
-function userCargoProjectDiagnostic(message: string, manifestPath: string): TargetDiagnostic {
-  return {
-    code: "RUST_USER_PROJECT_INVALID",
-    category: "error",
-    source: "tsonic-rust",
-    message,
-    evidence: [
-      `projectFile: ${manifestPath}`,
-      "Tsonic emits Rust source in user-owned Cargo mode but never creates or mutates the native Cargo manifest.",
-    ],
-  };
-}
-
-function normalizePath(path: string): string {
-  return path.split("\\").join("/");
 }

@@ -6,8 +6,8 @@ import {
   type RustSourceParameterAbiFact,
 } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import { rustBorrowedStringView } from "../../rust-ast/expressions.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import { rustBorrowedStringView } from "../../target-ast/expressions.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -18,7 +18,7 @@ export function planRustCallArguments(
   context: RustPlanContext,
 ): readonly RustExpr[] | undefined {
   const arguments_: RustExpr[] = [];
-  for (const argument of context.input.ast.arguments(node)) {
+  for (const argument of context.input.program.source.ast.arguments(node)) {
     if (argument === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -48,7 +48,7 @@ export function applyRustArgumentMode(
   if (mode === "mut-ref") {
     const sourceParameterAbi = node === undefined
       ? undefined
-      : context.input.facts.getFact(node, rustSourceParameterAbiFactKey);
+      : context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
     return sourceParameterAbi?.mode === "mut-ref"
       ? argument
       : createRustMutableReferenceArgument(argument);
@@ -76,7 +76,7 @@ export function applyFinalizedRustArgumentMode(
   if (input.mode === "value") {
     return expression;
   }
-  const sourceParameterAbi = context.input.facts.getFact(
+  const sourceParameterAbi = context.input.program.facts.getFact(
     sourceNode,
     rustSourceParameterAbiFactKey,
   );
@@ -114,7 +114,7 @@ function createRustSharedReferenceArgument(
   }
   const sourceParameterAbi = node === undefined
     ? undefined
-    : context.input.facts.getFact(node, rustSourceParameterAbiFactKey);
+    : context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
   if (sourceParameterAbi?.mode === "ref" || sourceParameterAbi?.mode === "mut-ref") {
     return argument;
   }

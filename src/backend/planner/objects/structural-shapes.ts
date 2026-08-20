@@ -2,7 +2,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import {
   createRustSourceFile,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 import type {
   RustItem,
   RustSourceFileModel,
@@ -10,8 +10,8 @@ import type {
   RustType,
   RustTypeParameter,
   RustVisibility,
-} from "../../rust-ast/nodes.js";
-import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
+} from "../../target-ast/nodes.js";
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustPascalCaseIdentifier } from "../../../policy/names/identifiers.js";
 import {
   rustRuntimeAliasImports,
@@ -39,7 +39,7 @@ export function planRustStructuralShapeModule(
   publicShapeNames: ReadonlySet<string>,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
-  const definitions = input.structuralShapes.definitions.filter((definition) =>
+  const definitions = input.program.structuralShapes.definitions.filter((definition) =>
     definition.componentId === rootComponentId);
   if (definitions.length === 0) {
     return undefined;

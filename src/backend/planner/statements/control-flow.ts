@@ -28,7 +28,7 @@ import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.
 import { expressionCarrier, negateRustPlannedBooleanExpression, planExpression } from "../expressions/index.js";
 import { isRustBoolCarrier, isRustIntegerCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression } from "../../rust-ast/expressions.js";
+import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
 import { planBlockLike, planStatementSequence } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
@@ -36,9 +36,9 @@ import { planForInStatement, planForOfStatement } from "./iteration.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustBlock, RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 function planCondition(condition: Node, context: RustPlanContext, construct: string) {
   const carrier: TargetTypeRef | undefined = expressionCarrier(condition, context);
@@ -66,7 +66,7 @@ function planEmbeddedBlock(node: Node | undefined, context: RustPlanContext): Ru
 }
 
 export function planIfStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const condition = Node_Expression(context.input.ast, node);
+  const condition = Node_Expression(context.input.program.source.ast, node);
   if (condition === undefined) {
     return undefined;
   }
@@ -74,8 +74,8 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
   if (planned === undefined) {
     return undefined;
   }
-  const thenBlock = planEmbeddedBlock(IfStatement_ThenStatement(context.input.ast, node), context);
-  const elseStatement = IfStatement_ElseStatement(context.input.ast, node);
+  const thenBlock = planEmbeddedBlock(IfStatement_ThenStatement(context.input.program.source.ast, node), context);
+  const elseStatement = IfStatement_ElseStatement(context.input.program.source.ast, node);
   const elseBlock = elseStatement === undefined ? undefined : planEmbeddedBlock(elseStatement, context);
   if (thenBlock === undefined || (elseStatement !== undefined && elseBlock === undefined)) {
     return undefined;
@@ -88,7 +88,7 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
       ? {}
       : {
           else: elseBlock,
-          ...(context.input.ast.is.IsIfStatement(elseStatement) ? { elseIf: true as const } : {}),
+          ...(context.input.program.source.ast.is.IsIfStatement(elseStatement) ? { elseIf: true as const } : {}),
         }),
   }];
 }
@@ -97,7 +97,7 @@ export function planLabeledStatement(
   node: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const labelNode = LabeledStatement_Label(ast, node);
   const bodyNode = LabeledStatement_Statement(ast, node);
   const sourceLabel = labelNode === undefined ? "" : ast.text(labelNode);
@@ -137,8 +137,8 @@ export function planSwitchStatement(
   node: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const { ast } = context.input.program.source;
+  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   const discriminantNode = SwitchStatement_Expression(ast, node);
   const clauseNodes = CaseBlock_Clauses(ast, SwitchStatement_CaseBlock(ast, node));
   if (fact?.kind !== "switch" || discriminantNode === undefined || clauseNodes === undefined ||
@@ -287,7 +287,7 @@ export function planWhileStatement(
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const condition = Node_Expression(context.input.ast, node);
+  const condition = Node_Expression(context.input.program.source.ast, node);
   if (condition === undefined) {
     return undefined;
   }
@@ -300,7 +300,7 @@ export function planWhileStatement(
     return undefined;
   }
   const body = planEmbeddedBlock(
-    IterationStatement_Statement(context.input.ast, node),
+    IterationStatement_Statement(context.input.program.source.ast, node),
     withRustControlTarget(context, target),
   );
   if (body === undefined) {
@@ -326,8 +326,8 @@ export function planDoStatement(
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const condition = Node_Expression(context.input.ast, node);
-  const bodyNode = DoStatement_Statement(context.input.ast, node);
+  const condition = Node_Expression(context.input.program.source.ast, node);
+  const bodyNode = DoStatement_Statement(context.input.program.source.ast, node);
   if (condition === undefined || bodyNode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -375,9 +375,9 @@ export function planForStatement(
   if (counted !== undefined) {
     return counted;
   }
-  const initializer = ForStatement_Initializer(context.input.ast, node);
-  const condition = ForStatement_Condition(context.input.ast, node);
-  const incrementor = ForStatement_Incrementor(context.input.ast, node);
+  const initializer = ForStatement_Initializer(context.input.program.source.ast, node);
+  const condition = ForStatement_Condition(context.input.program.source.ast, node);
+  const incrementor = ForStatement_Incrementor(context.input.program.source.ast, node);
   const planLoop = (loopContext: RustPlanContext): RustBlock | undefined => {
     const conditionExpr = condition === undefined
       ? { kind: "bool-literal" as const, value: true }
@@ -393,7 +393,7 @@ export function planForStatement(
       return undefined;
     }
     const body = planEmbeddedBlock(
-      IterationStatement_Statement(loopContext.input.ast, node),
+      IterationStatement_Statement(loopContext.input.program.source.ast, node),
       withRustControlTarget(loopContext, target),
     );
     if (body === undefined) {
@@ -427,8 +427,8 @@ export function planForStatement(
   }
   const declarations = collectVariableDeclarations(initializer, context);
   const resourceDeclaration = declarations.length === 1 &&
-      (context.input.ast.variableDeclarationKind(declarations[0]) === "using" ||
-        context.input.ast.variableDeclarationKind(declarations[0]) === "await using")
+      (context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "using" ||
+        context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "await using")
     ? declarations[0]
     : undefined;
   const initStatements = planVariableStatement(initializer, context);
@@ -442,7 +442,7 @@ export function planForStatement(
       : [{ kind: "scope", body: { statements: [...initStatements, ...loop.statements] } }];
   }
   const fact = resourceFactForPlanning(resourceDeclaration, context);
-  const resourceName = context.input.names.nameForDeclaration(resourceDeclaration) ?? "";
+  const resourceName = context.input.program.names.nameForDeclaration(resourceDeclaration) ?? "";
   if (fact === undefined || !isValidRustIdentifier(resourceName)) {
     return undefined;
   }
@@ -463,11 +463,11 @@ function planCountedForStatement(
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const counted = context.input.source.navigation.countedLoop(node);
+  const counted = context.input.program.source.navigation.countedLoop(node);
   if (counted === undefined) {
     return undefined;
   }
-  const counterSummary = context.input.source.navigation.declarationUseSummary(
+  const counterSummary = context.input.program.source.navigation.declarationUseSummary(
     counted.counterDeclaration,
   );
   const startCarrier = expressionCarrier(counted.start, context);
@@ -478,7 +478,7 @@ function planCountedForStatement(
     !countedLoopBoundIsStable(counted.bound, context)) {
     return undefined;
   }
-  const binding = context.input.names.nameForDeclaration(counted.counterDeclaration) ?? "";
+  const binding = context.input.program.names.nameForDeclaration(counted.counterDeclaration) ?? "";
   const start = planExpression(counted.start, context);
   const bound = planExpression(counted.bound, context);
   const target = createRustLoopTarget(context, [], sourceLabel);
@@ -506,7 +506,7 @@ function countedLoopBoundIsStable(
   bound: Node,
   context: RustPlanContext,
 ): boolean {
-  const effects = context.input.source.navigation.expressionEffects(bound);
+  const effects = context.input.program.source.navigation.expressionEffects(bound);
   if (effects.invokes || effects.mutates || effects.suspends || effects.mayThrow) {
     return false;
   }
@@ -516,17 +516,17 @@ function countedLoopBoundIsStable(
     if (node === undefined || !stable) {
       return;
     }
-    const selected = context.input.source.navigation.sourceReferenceFor(node);
+    const selected = context.input.program.source.navigation.sourceReferenceFor(node);
     const declaration = selected?.declaration;
     if (declaration !== undefined && !visited.has(declaration)) {
       visited.add(declaration);
-      const summary = context.input.source.navigation.declarationUseSummary(declaration);
+      const summary = context.input.program.source.navigation.declarationUseSummary(declaration);
       if (summary.bindingWritten) {
         stable = false;
         return;
       }
     }
-    context.input.ast.forEachChild(node, visit);
+    context.input.program.source.ast.forEachChild(node, visit);
   };
   visit(bound);
   return stable;
@@ -605,6 +605,6 @@ function planIncrementor(node: Node, context: RustPlanContext): readonly RustStm
 
 
 export function isConstLiteralInitializer(node: Node, context: RustPlanContext): boolean {
-  const kind = context.input.ast.kindName(node);
+  const kind = context.input.program.source.ast.kindName(node);
   return kind === KindNumericLiteral || kind === KindStringLiteral || kind === "KindTrueKeyword" || kind === "KindFalseKeyword";
 }

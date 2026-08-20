@@ -7,10 +7,10 @@ import {
 } from "./model.js";
 import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
-import { rustLintAttributes } from "../../../rust-ast/lint-policy.js";
+import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
 import { rustProjectObjectIdentityField } from "../project-objects.js";
-import type { RustItem, RustTraitFunction, RustType } from "../../../rust-ast/nodes.js";
+import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustErrorBoundaryForProjectMember,
@@ -18,7 +18,7 @@ import {
   rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 
 export function projectIdentityImplementations(
@@ -121,7 +121,7 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const functions: RustTraitFunction[] = [];
-  for (const route of context.input.projectTypes.downcastRoutesFor(definition)) {
+  for (const route of context.input.program.projectTypes.downcastRoutesFor(definition)) {
     const returnType = projectDowncastReturnType(route, context);
     if (returnType === undefined) {
       return undefined;
@@ -134,11 +134,11 @@ export function planProjectDispatchTrait(
     });
   }
   for (const field of fields) {
-    const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
-    const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
+    const dispatch = context.input.program.projectFieldDispatch.planFor(field.declaration);
+    const read = context.input.program.projectTypes.memberSlotName(field.declaration, "read");
     const write = dispatch?.write === undefined
       ? undefined
-      : context.input.projectTypes.memberSlotName(field.declaration, "write");
+      : context.input.program.projectTypes.memberSlotName(field.declaration, "write");
     if (dispatch === undefined || read === undefined ||
       dispatch.write !== undefined && write === undefined) {
       return undefined;
@@ -178,7 +178,7 @@ export function planProjectDispatchTrait(
       accessor.role,
       context,
     );
-    const slot = context.input.projectTypes.memberSlotName(
+    const slot = context.input.program.projectTypes.memberSlotName(
       accessor.declaration,
       accessor.role,
     );
@@ -195,10 +195,10 @@ export function planProjectDispatchTrait(
     });
   }
   for (const member of projectOwnMethods(definition, context)) {
-    if (context.input.ast.hasModifierKind(member, "static")) {
+    if (context.input.program.source.ast.hasModifierKind(member, "static")) {
       continue;
     }
-    for (const variant of context.input.projectMethodDispatch.variantsForMember(member)) {
+    for (const variant of context.input.program.projectMethodDispatch.variantsForMember(member)) {
       const specialization = rustCallableSpecialization(
         variant.sourceTypeParameterNames,
         variant.targetTypeArguments,
@@ -230,7 +230,7 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   for (const property of methodProperties) {
-    const write = context.input.projectTypes.memberSlotName(
+    const write = context.input.program.projectTypes.memberSlotName(
       property.declaration,
       "method-write",
     );
@@ -246,13 +246,13 @@ export function planProjectDispatchTrait(
       params: [{ name: "value", type: property.callableType }],
     });
   }
-  const superTraits = context.input.projectTypes.heritageForDefinition(definition).map((edge) =>
+  const superTraits = context.input.program.projectTypes.heritageForDefinition(definition).map((edge) =>
     rustProjectDispatchTraitType(edge.targetType, context));
   if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }
   const typeParams = rustProjectTypeParameters(definition);
-  const publiclyReachable = context.input.projectTypes.programErrorVariant(definition) !== undefined ||
+  const publiclyReachable = context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
     rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
   return {
     kind: "trait",

@@ -7,7 +7,7 @@ import type {
   RustSelectedTargetOperation,
   RustSelectedTargetSignature,
   RustTargetTypeRef,
-} from "./model.js";
+} from "../../target-model/types/model.js";
 
 export function rustTargetTypeRefEquals(
   left: RustTargetTypeRef | undefined,

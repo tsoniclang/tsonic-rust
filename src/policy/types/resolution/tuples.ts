@@ -4,8 +4,7 @@ import {
   TypeReferenceNode_TypeName,
   TypeOperatorNode_Type,
 } from "@tsonic/target-api/source";
-import { denseDefined } from "./project.js";
-import { resolveOwnedSourceProfileTypeName } from "./providers.js";
+import { resolveOwnedSourceProfileTypeNameForDeclaration } from "./providers.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustTargetTypeSyntax, resolveRustTypeComponentEvidence } from "./source.js";
 import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../target-types.js";
@@ -17,7 +16,7 @@ import {
 import type { Node, TypeTupleElementInfo } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function resolveRustTupleElementTargetType(
   element: TypeTupleElementInfo,
@@ -98,7 +97,7 @@ export function resolveRustAuthoredTargetType(
 ): TargetTypeRef | undefined {
   return resolveRustTargetTypeSyntax(node, context, options, resolving) ??
     resolveRustTargetType(
-      context.semanticsFor(node).getTypeAtLocation(node),
+      context.semanticsFor(node).types.expressionType(node),
       context,
       options,
       resolving,
@@ -110,17 +109,9 @@ export function resolveReferencedDeclarationType(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
-  const { ast, checker } = context;
-  const symbols = [checker.getSymbolAtLocation(node)];
-  for (const symbol of symbols) {
-    if (symbol === undefined) {
-      continue;
-    }
-    const declarations = denseDefined(checker.getSymbolDeclarations(symbol));
-    if (declarations === undefined) {
-      return undefined;
-    }
-    for (const declaration of declarations) {
+  const { ast } = context;
+  const declaration = context.source.navigation.referenceFor(node)?.declaration;
+  if (declaration !== undefined) {
       const declarationCarrier = context.facts.getRuntimeCarrierFact(declaration)?.carrier;
       if (declarationCarrier !== undefined) {
         return declarationCarrier;
@@ -141,7 +132,6 @@ export function resolveReferencedDeclarationType(
       if (selectedResult !== undefined) {
         return selectedResult;
       }
-    }
   }
   return undefined;
 }
@@ -165,7 +155,7 @@ function sourceParameterTypeIsReadonlyArray(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
 ): boolean {
-  const { ast, checker } = context;
+  const { ast } = context;
   if (ast.kindName(typeNode) === "KindTypeOperator") {
     const inner = TypeOperatorNode_Type(ast, typeNode);
     return inner !== undefined && ast.kindName(inner) === "KindArrayType";
@@ -174,8 +164,12 @@ function sourceParameterTypeIsReadonlyArray(
     return false;
   }
   const typeName = TypeReferenceNode_TypeName(ast, typeNode);
-  const symbol = typeName === undefined
+  const declaration = typeName === undefined
     ? undefined
-    : checker.getSymbolAtLocation(typeName);
-  return resolveOwnedSourceProfileTypeName(symbol, context, options.sourceProfiles) === "ReadonlyArray";
+    : context.source.navigation.sourceReferenceFor(typeName)?.declaration;
+  return resolveOwnedSourceProfileTypeNameForDeclaration(
+    declaration,
+    context,
+    options.sourceProfiles,
+  ) === "ReadonlyArray";
 }

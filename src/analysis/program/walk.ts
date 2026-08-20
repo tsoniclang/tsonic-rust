@@ -39,7 +39,7 @@ import type { RustSourceCallableAbiResolver } from "../../policy/ownership/sourc
 import type { RustSourceProfileRegistry } from "../../policy/types/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -50,7 +50,6 @@ export interface RustFactWalk {
   readonly jsEnabled: boolean;
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
-  readonly providerCarrierPaths: ReadonlyMap<string, string>;
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly operationOptions: RustOperationsProviderOptions;
   readonly operationAttempts: WeakSet<object>;
@@ -83,12 +82,11 @@ export function rustResolutionContext(
   walk: RustFactWalk,
   node: Node,
 ): RustTargetTypeResolutionContext {
-  const checker = walk.context.semanticsFor(node);
+  const semantics = walk.context.semanticsFor(node);
   return {
     ...walk.context,
-    currentSourceFile: checker.sourceFile,
-    checker,
-    typeShape: checker,
+    currentSourceFile: semantics.sourceFile,
+    currentSemantics: semantics,
   };
 }
 
@@ -133,7 +131,7 @@ export function recordPolicySelection<T extends { readonly operation?: unknown }
   const deferredKind = operation === undefined
     ? undefined
     : rustPostCheckOperationKind(
-        (operation as import("../../policy/types/model.js").RustSelectedTargetOperation).operationId,
+        (operation as import("../../target-model/types/model.js").RustSelectedTargetOperation).operationId,
       );
   if (deferredKind !== undefined) {
     walk.postCheckOperations.set(subject, deferredKind);
@@ -143,7 +141,7 @@ export function recordPolicySelection<T extends { readonly operation?: unknown }
     walk.context.facts.set(
       subject,
       rustSelectedOperationKey,
-      operation as import("../../policy/types/model.js").RustSelectedTargetOperation,
+      operation as import("../../target-model/types/model.js").RustSelectedTargetOperation,
     );
   }
 }
@@ -188,11 +186,11 @@ export function selectExpressionOperation(
     if (isSharedSourceMarkerOperation(walk, expression)) {
       return;
     }
-    const source = semantics.getResolvedCallInfo(expression);
+    const source = semantics.operations.call(expression);
     if (source === undefined) {
       return;
     }
-    const sourceSelectedDeclaration = semantics.getSignatureDeclaration(source.selectedSignature);
+    const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(source.selectedSignature);
     const request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput = {
       target: "rust",
       source,
@@ -210,7 +208,7 @@ export function selectExpressionOperation(
     return;
   }
   if (kind === KindPropertyAccessExpression) {
-    const source = semantics.getResolvedPropertyAccessInfo(expression);
+    const source = semantics.operations.propertyAccess(expression);
     if (source === undefined || source.callCallee) {
       return;
     }
@@ -222,7 +220,7 @@ export function selectExpressionOperation(
     return;
   }
   if (kind === KindElementAccessExpression) {
-    const source = semantics.getResolvedElementAccessInfo(expression);
+    const source = semantics.operations.elementAccess(expression);
     if (source === undefined || source.callCallee) {
       return;
     }
@@ -252,7 +250,7 @@ export function selectExpressionOperation(
     const operand = Node_Expression(ast, expression);
     const source = operand === undefined || ast.kindName(operand) !== KindElementAccessExpression
       ? undefined
-      : semantics.getResolvedElementAccessInfo(operand);
+      : semantics.operations.elementAccess(operand);
     if (operand === undefined || source === undefined || source.callCallee) {
       appendRustDiagnostic(
         walk,
@@ -281,7 +279,7 @@ export function selectExpressionOperation(
     if (sourceExpression === undefined || explicitTargetTypeNode === undefined) {
       return;
     }
-    const target = semantics.getTypeAtLocation(explicitTargetTypeNode);
+    const target = semantics.types.authoredType(explicitTargetTypeNode);
     if (target === undefined) {
       return;
     }

@@ -3,7 +3,7 @@ import { rustRegExpSubsetViolation } from "../../policy/regexp/subset.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 function appendRegExpDiagnostic(walk: RustFactWalk, expression: Node, violation: string): void {
   appendRustDiagnostic(

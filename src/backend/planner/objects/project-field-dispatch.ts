@@ -1,5 +1,5 @@
 import type { RustProjectFieldDispatchPlan } from "../../../analysis/project-types/field-dispatch.js";
-import type { RustType } from "../../rust-ast/nodes.js";
+import type { RustType } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import {
   diagnosticInput,

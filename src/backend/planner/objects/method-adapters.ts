@@ -10,7 +10,7 @@ import {
   isRustVecCarrier,
   rustCarrierSupportsClone,
 } from "../../../policy/types/target-types.js";
-import type { RustExpr, RustStmt, RustType } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import {
   lowerRustValueConversion,
   planRustProjectUpcast,
@@ -93,7 +93,7 @@ export function planRustObjectLiteralMethodArguments(
         continue;
       }
       const names = context.syntheticNames ?? createRustSyntheticNameState(
-        context.input.ast,
+        context.input.program.source.ast,
         method.contractMethod,
         [],
       );
@@ -195,7 +195,7 @@ export function planRustObjectLiteralMethodArguments(
       continue;
     }
     const names = context.syntheticNames ?? createRustSyntheticNameState(
-      context.input.ast,
+      context.input.program.source.ast,
       method.contractMethod,
       [],
     );
@@ -319,7 +319,7 @@ function applyRustObjectLiteralValueAdapterRaw(
     }
     case "option-map": {
       const names = context.syntheticNames ?? createRustSyntheticNameState(
-        context.input.ast,
+        context.input.program.source.ast,
         node,
         [],
       );

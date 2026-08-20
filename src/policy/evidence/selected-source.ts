@@ -239,7 +239,7 @@ export function resolveSelectedSourceProfilePropertyMembers(
     return undefined;
   }
   const declarations = context.semanticsFor(expression)
-    .getSymbolDeclarations(selectedSymbol);
+    .declarations.symbolDeclarations(selectedSymbol);
   const members = declarations.map((declaration) =>
     resolveSelectedSourceProfileMember(context, declaration, sourceProfiles)
   );

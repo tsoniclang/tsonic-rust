@@ -4,7 +4,7 @@ import { finalizeProviderOperationFromSubjects } from "./conversions.js";
 import { isProjectSourceDeclaration } from "../../../policy/evidence/selected-source.js";
 import { isRustCopyCarrier } from "../../../policy/types/target-types.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../../policy/types/target-types.js";
-import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../policy/conversions/model.js";
+import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../target-model/conversions/model.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { selectedValueCarrier } from "./operators.js";
 import type {
@@ -18,7 +18,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationTemplate } from "../../facts/keys.js";
 import type { RustStructuralFieldRegistration, RustSourceUnion } from "../../project-types/source-type-registry.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function isProjectAccessorDeclaration(
   declaration: Node | undefined,
@@ -283,9 +283,10 @@ function selectedSourceUnionVariantIndexes(
   const all = Object.freeze(union.variants.map((_, index) => index));
   const selectedReceiverType = request.sourceReceiverType;
   if (selectedReceiverType !== undefined) {
-    const selectedRefinement = context.source.semantics
-      .forNode(request.receiver)
-      .selectTypeRefinement(union.sourceType, selectedReceiverType);
+    const selectedRefinement = context.currentSemantics.types.refinement(
+      union.sourceType,
+      selectedReceiverType,
+    );
     if (selectedRefinement.kind === "exact") {
       return all;
     }

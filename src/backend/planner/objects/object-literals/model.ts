@@ -1,12 +1,12 @@
 import { createImplementationPlan } from "./registry.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustFunctionParam, RustItem, RustType } from "../../../rust-ast/nodes.js";
+import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustObjectLiteralMethodParameterAbi, RustObjectLiteralMethodParameterAdapter, RustObjectLiteralValueAdapter } from "../../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
-import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export type RustObjectLiteralMethodImplementationPlan = {
   readonly kind: "authored";
@@ -108,7 +108,7 @@ export function rustObjectLiteralRequiresDispatchImplementation(
     return true;
   }
   return fact.fields.some((field) => field.contractDeclarations.some((declaration) => {
-    const dispatch = context.input.projectFieldDispatch.planFor(declaration);
+    const dispatch = context.input.program.projectFieldDispatch.planFor(declaration);
     return dispatch === undefined ||
       dispatch.read.selfMode !== "ref" || dispatch.read.fallible ||
       dispatch.write !== undefined &&
@@ -124,7 +124,7 @@ export function createRustObjectLiteralImplementationRegistry(
   const plans = new Map<Node, RustObjectLiteralImplementationPlan>();
   const items: RustItem[] = [];
   const visit = (node: Node): void => {
-    const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
     if (fact?.kind === "record-literal" &&
       rustObjectLiteralRequiresDispatchImplementation(fact, context)) {
       const plan = createImplementationPlan(node, fact, context, names);
@@ -133,7 +133,7 @@ export function createRustObjectLiteralImplementationRegistry(
         items.push(...plan.items);
       }
     }
-    context.input.ast.forEachChild(node, (child) => {
+    context.input.program.source.ast.forEachChild(node, (child) => {
       if (child !== undefined) {
         visit(child);
       }

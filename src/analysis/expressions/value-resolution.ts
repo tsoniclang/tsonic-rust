@@ -75,7 +75,7 @@ import { selectRustCheckedPropertyAccess } from "../operations/provider/index.js
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolveExpressionCarrierUncached(
   walk: RustFactWalk,
@@ -250,7 +250,7 @@ export function resolveExpressionCarrierUncached(
     }
     case "KindYieldExpression": {
       const generatorDeclaration = walk.currentGeneratorDeclaration;
-      const source = walk.context.semantics(sourceFile).getResolvedYieldInfo(expression);
+      const source = walk.context.semantics(sourceFile).operations.yield(expression);
       if (generatorDeclaration === undefined || source === undefined ||
         source.generator.declaration !== generatorDeclaration) {
         appendRustDiagnostic(
@@ -497,7 +497,7 @@ export function resolveExpressionCarrierUncached(
     }
     case KindPropertyAccessExpression: {
       const semantics = walk.context.semanticsFor(expression);
-      const source = semantics.getResolvedPropertyAccessInfo(expression);
+      const source = semantics.operations.propertyAccess(expression);
       if (source === undefined || source.callCallee) {
         return undefined;
       }

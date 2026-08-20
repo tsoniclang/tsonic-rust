@@ -12,7 +12,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import type {
   RustExpr,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 import {
   missingFactDiagnostic,
 } from "../diagnostics.js";
@@ -32,7 +32,7 @@ export function tryPlanRustNativePointerOperation(
   context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): RustNativePointerOperationPlan {
-  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (fact?.kind !== "native-pointer") {
     return { handled: false };
   }
@@ -105,7 +105,7 @@ function nativePointerFactIsClosed(
   fact: Extract<RustTargetOperationFact, { readonly kind: "native-pointer" }>,
   context: RustPlanContext,
 ): boolean {
-  const pointerCarrier = context.input.facts.getRuntimeCarrierFact(
+  const pointerCarrier = context.input.program.facts.getRuntimeCarrierFact(
     fact.pointerExpression,
   )?.carrier;
   if (!rustTargetTypeRefEquals(pointerCarrier, fact.pointerCarrier) ||
@@ -118,7 +118,7 @@ function nativePointerFactIsClosed(
   if (fact.operation === "store") {
     const valueCarrier = fact.valueExpression === undefined
       ? undefined
-      : context.input.facts.getRuntimeCarrierFact(fact.valueExpression)?.carrier;
+      : context.input.program.facts.getRuntimeCarrierFact(fact.valueExpression)?.carrier;
     return fact.pointerCarrier.mutability === "mut" &&
       rustTargetTypeRefEquals(fact.valueCarrier, fact.pointeeCarrier) &&
       rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) &&
@@ -127,7 +127,7 @@ function nativePointerFactIsClosed(
   }
   const offsetCarrier = fact.offsetExpression === undefined
     ? undefined
-    : context.input.facts.getRuntimeCarrierFact(fact.offsetExpression)?.carrier;
+    : context.input.program.facts.getRuntimeCarrierFact(fact.offsetExpression)?.carrier;
   return rustTargetTypeRefEquals(offsetCarrier, fact.offsetCarrier) &&
     fact.offsetCarrier?.kind === "source-primitive" &&
     fact.offsetCarrier.name === "native-int" &&

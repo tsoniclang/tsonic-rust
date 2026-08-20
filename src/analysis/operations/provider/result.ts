@@ -42,7 +42,7 @@ import type {
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationRow } from "../../../providers/packages/model.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function acceptRustOperation(
   subject: ExtensionFactSubject,

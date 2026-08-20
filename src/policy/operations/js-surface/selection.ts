@@ -26,8 +26,8 @@ import {
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { rustTargetTypeRefEquals } from "../../types/equality.js";
 import type { JsCarrierRef, JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
-import type { RustProviderOperationForm } from "../model.js";
-import type { TargetTypeRef } from "../../types/model.js";
+import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 interface JsLaneBindings {
   readonly element?: TargetTypeRef;

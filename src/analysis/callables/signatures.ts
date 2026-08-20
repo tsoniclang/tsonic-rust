@@ -40,7 +40,7 @@ import { rustRuntimeCarrierKey } from "../../policy/model/selections.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { ExtensionFactSubject, Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 function promiseInnerCarrier(
   walk: RustFactWalk,
@@ -380,7 +380,7 @@ function resolveAuthoredCallableValueSignature(
 ): RustCallableValueSignaturePlan | undefined {
   const { ast } = walk.context;
   if (ast.hasModifierKind(expression, "async") ||
-    walk.context.semanticsFor(expression).getResolvedGeneratorInfo(expression) !== undefined) {
+    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
     return undefined;
   }
   const parameters = ast.parameters(expression);
@@ -427,7 +427,7 @@ function recordCallableValueSignaturePlan(
 export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): void {
   const { ast } = walk.context;
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
-  const sourceGenerator = walk.context.semanticsFor(declaration).getResolvedGeneratorInfo(declaration);
+  const sourceGenerator = walk.context.semanticsFor(declaration).operations.generator(declaration);
   if (sourceGenerator !== undefined) {
     const carrier = resolveRustTargetTypeRef(
       Node_Type(ast, declaration) ?? sourceGenerator.sourceReturnType ?? sourceReturn,
@@ -472,14 +472,14 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
 
 function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
   const semantics = walk.context.semanticsFor(declaration);
-  const callableType = semantics.getDeclaredValueType(declaration);
+  const callableType = semantics.declarations.declaredValueType(declaration);
   if (callableType === undefined) {
     return undefined;
   }
-  const signatures = semantics.getCallSignaturesOfType(callableType).filter((signature) =>
-    semantics.getSignatureDeclaration(signature) === declaration);
+  const signatures = semantics.types.callSignatures(callableType).filter((signature) =>
+    semantics.declarations.signatureDeclaration(signature) === declaration);
   return signatures.length === 1
-    ? semantics.getReturnTypeOfSignature(signatures[0]!)
+    ? semantics.types.returnType(signatures[0]!)
     : undefined;
 }
 

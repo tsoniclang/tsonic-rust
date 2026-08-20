@@ -1,7 +1,7 @@
 import { hasExactObjectKeys } from "./primitives.js";
 import { isDenseDataArray } from "../../model/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export const rustStringTargetId = "rust.std.String";
 export const rustBigIntTargetId = "rust.runtime.BigInt";

@@ -8,7 +8,7 @@ import {
   rustCarrierSupportsClone,
 } from "../../../policy/types/target-types.js";
 import { rustProjectStaticFieldStorage } from "../../../analysis/project-types/object-layout.js";
-import type { RustItem, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustItem, RustStmt } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
 import { planBlockLike } from "../statements/index.js";
@@ -26,7 +26,7 @@ export function planRustClassInitialization(
   declaration: Node,
   context: RustPlanContext,
 ): PlannedRustClassInitialization | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const items: RustItem[] = [];
   const initialization: RustStmt[] = [];
   for (const member of ast.members(declaration)) {
@@ -55,7 +55,7 @@ export function planRustClassInitialization(
     const storage = rustProjectStaticFieldStorage(
       member,
       ast,
-      context.input.projectTypes.memberSlotName(member, "static"),
+      context.input.program.projectTypes.memberSlotName(member, "static"),
     );
     if (storage === undefined) {
       continue;
@@ -69,7 +69,7 @@ export function planRustClassInitialization(
       ));
       return undefined;
     }
-    const carrier = context.input.facts.getRuntimeCarrierFact(member)?.carrier;
+    const carrier = context.input.program.facts.getRuntimeCarrierFact(member)?.carrier;
     const type = rustTypeFromCarrierInContext(carrier, context);
     if (carrier === undefined || type === undefined) {
       context.diagnostics.push(missingFactDiagnostic(

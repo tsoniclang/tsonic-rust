@@ -4,7 +4,7 @@ import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
 import {
   allocateRustComponentSupportModuleName,
   type RustSourceFileOutputIdentity,
-} from "../../../analysis/program/source-output-identities.js";
+} from "../names/source-output-identities.js";
 import type { RustPlanningContext } from "../context.js";
 import {
   allocateRustSyntheticName,
@@ -38,7 +38,7 @@ export function planRustSourcePackageInitializers(
 } {
   const diagnostics: TargetDiagnostic[] = [];
   const facadeModuleNameByComponent = new Map<string, string>();
-  for (const component of input.sourcePackages.components) {
+  for (const component of input.input.sourcePackages.components) {
     const shapesName = allocateRustComponentSupportModuleName(
       identitiesByFileName,
       component.id,
@@ -62,8 +62,8 @@ export function planRustSourcePackageInitializers(
   }
 
   const pending: Omit<RustSourcePackageModuleInitializer, "facadeFunctionName">[] = [];
-  for (const sourceFile of input.sourceFiles) {
-    const fileName = input.ast.getFileName(sourceFile);
+  for (const sourceFile of input.program.sourceFiles) {
+    const fileName = input.program.source.ast.getFileName(sourceFile);
     const identity = identitiesByFileName.get(fileName);
     if (identity === undefined) {
       diagnostics.push(initializerDiagnostic(
@@ -72,7 +72,7 @@ export function planRustSourcePackageInitializers(
       ));
       continue;
     }
-    const requirement = input.moduleInitialization.requirementFor(sourceFile);
+    const requirement = input.program.moduleInitialization.requirementFor(sourceFile);
     if (requirement.kind === "unresolved") {
       diagnostics.push({
         ...initializerDiagnostic(
@@ -104,8 +104,8 @@ export function planRustSourcePackageInitializers(
       implementationModuleName: identity.moduleName,
       implementationFunctionName: rustModuleInitializerFunctionName(input, sourceFile),
       facadeModuleName,
-      asynchronous: input.source.navigation.moduleHasTopLevelAwait(sourceFile),
-      fallible: input.facts.getFact(sourceFile, rustFallibleFactKey) !== undefined,
+      asynchronous: input.program.source.navigation.moduleHasTopLevelAwait(sourceFile),
+      fallible: input.program.facts.getFact(sourceFile, rustFallibleFactKey) !== undefined,
     });
   }
   if (diagnostics.length > 0) {
@@ -143,11 +143,11 @@ export function planRustSourcePackageInitializers(
 }
 
 export function rustModuleInitializerFunctionName(
-  input: Pick<RustPlanningContext, "ast">,
+  input: RustPlanningContext,
   sourceFile: SourceFile,
 ): string {
   return allocateRustSyntheticName(
-    createRustSyntheticNameState(input.ast, sourceFile, []),
+    createRustSyntheticNameState(input.program.source.ast, sourceFile, []),
     "module_init",
   );
 }

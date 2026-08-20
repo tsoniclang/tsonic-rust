@@ -25,10 +25,10 @@ import { rustOptionElementCarrier, rustOptionTargetType, rustStructuralMethodSto
 import { rustTargetOperationIsFallible } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustOptionalChainFact } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -77,7 +77,7 @@ export function planNewExpression(node: Node, context: RustPlanContext): RustExp
     const args = planRustCallArguments(node, context);
     return args === undefined
       ? undefined
-      : planSelectedSourceCall(node, Node_Expression(context.input.ast, node), args, fact, context);
+      : planSelectedSourceCall(node, Node_Expression(context.input.program.source.ast, node), args, fact, context);
   }
   if (fact === undefined || fact.kind !== "provider-operation" || fact.abi.operationKind !== "constructor") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -98,7 +98,7 @@ export function planNewExpression(node: Node, context: RustPlanContext): RustExp
   if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.provider-constructor-carrier")) {
     return undefined;
   }
-  const argumentNodes = [...context.input.ast.arguments(node)];
+  const argumentNodes = [...context.input.program.source.ast.arguments(node)];
   if (argumentNodes.length !== fact.abi.sourceArguments.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -137,7 +137,7 @@ export function effectiveMemberResultCarrier(
   innerResultCarrier: TargetTypeRef,
   context: RustPlanContext,
 ): TargetTypeRef | undefined {
-  const optional = context.input.facts.getFact(node, rustOptionalChainFactKey);
+  const optional = context.input.program.facts.getFact(node, rustOptionalChainFactKey);
   if (optional === undefined) {
     return innerResultCarrier;
   }
@@ -158,7 +158,7 @@ export function planOptionalChainExpression(
   expectedKind: RustOptionalChainFact["operationKind"],
   planInner: (context: RustPlanContext) => RustExpr | undefined,
 ): RustExpr | undefined {
-  const fact = context.input.facts.getFact(node, rustOptionalChainFactKey);
+  const fact = context.input.program.facts.getFact(node, rustOptionalChainFactKey);
   if (fact === undefined) {
     return planInner(context);
   }
@@ -194,7 +194,7 @@ export function planOptionalChainExpression(
     ));
     return undefined;
   }
-  const guardFlowRead = context.input.facts.getFact(
+  const guardFlowRead = context.input.program.facts.getFact(
     fact.guard,
     rustFlowReadProjectionFactKey,
   );
@@ -227,15 +227,15 @@ export function planOptionalChainExpression(
   if (body === undefined) {
     return undefined;
   }
-  const sourceCallEffects = context.input.facts.getFact(node, rustSourceCallEffectsFactKey);
-  const sourceAccessorEffects = context.input.facts.getFact(
+  const sourceCallEffects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
+  const sourceAccessorEffects = context.input.program.facts.getFact(
     node,
     rustSourceAccessorEffectsFactKey,
   );
   const innerFallible = rustTargetOperationIsFallible(
     rustOperationFact(node, context),
-    context.input.structuralShapes,
-    context.input.projectFieldDispatch,
+    context.input.program.structuralShapes,
+    context.input.program.projectFieldDispatch,
   ) ||
     sourceCallEffects?.invocation === "fallible" ||
     sourceAccessorEffects?.read === "fallible";
@@ -293,14 +293,14 @@ function exactOptionalStructuralMethodGuard(
   if (operation?.kind !== "source-call" || operation.target.form !== "structural-method") {
     return undefined;
   }
-  const callee = context.input.ast.kindName(node) === KindCallExpression
-    ? Node_Expression(context.input.ast, node)
+  const callee = context.input.program.source.ast.kindName(node) === KindCallExpression
+    ? Node_Expression(context.input.program.source.ast, node)
     : undefined;
   const receiverNode = callee !== undefined &&
-      context.input.ast.kindName(callee) === KindPropertyAccessExpression
-    ? Node_Expression(context.input.ast, callee)
+      context.input.program.source.ast.kindName(callee) === KindPropertyAccessExpression
+    ? Node_Expression(context.input.program.source.ast, callee)
     : undefined;
-  const field = context.input.structuralShapes.field(
+  const field = context.input.program.structuralShapes.field(
     operation.target.receiverCarrier,
     operation.target.storageIndex,
   );

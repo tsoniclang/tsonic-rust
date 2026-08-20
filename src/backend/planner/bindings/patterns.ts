@@ -23,7 +23,7 @@ import {
   rustStructuralObjectCarrierValue,
   rustTupleTargetType,
 } from "../../../policy/types/target-types.js";
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import {
   createRustStructuralObjectFromCarrier,
   readRustStoredObjectField,
@@ -51,17 +51,17 @@ export function planRustBindingPattern(
   context: RustPlanContext,
   planExpression: RustBindingExpressionPlanner,
 ): readonly RustStmt[] | undefined {
-  const kind = context.input.ast.kindName(pattern);
+  const kind = context.input.program.source.ast.kindName(pattern);
   if (kind !== KindArrayBindingPattern && kind !== KindObjectBindingPattern) {
     return undefined;
   }
   const statements: RustStmt[] = [];
-  for (const element of context.input.ast.elements(pattern)) {
-    if (element === undefined || context.input.ast.kindName(element) === KindOmittedExpression) {
+  for (const element of context.input.program.source.ast.elements(pattern)) {
+    if (element === undefined || context.input.program.source.ast.kindName(element) === KindOmittedExpression) {
       continue;
     }
-    if (context.input.ast.kindName(element) !== KindBindingElement ||
-      !context.input.ast.is.IsBindingElement(element)) {
+    if (context.input.program.source.ast.kindName(element) !== KindBindingElement ||
+      !context.input.program.source.ast.is.IsBindingElement(element)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, pattern),
         "rust.backend.binding-pattern-shape",
@@ -69,7 +69,7 @@ export function planRustBindingPattern(
       ));
       return undefined;
     }
-    const fact = context.input.facts.getFact(element, rustBindingProjectionFactKey);
+    const fact = context.input.program.facts.getFact(element, rustBindingProjectionFactKey);
     if (fact === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, element),
@@ -93,13 +93,13 @@ export function planRustBindingPattern(
     if (normalized === undefined) {
       return undefined;
     }
-    const name = Node_Name(context.input.ast, element);
-    const nameKind = name === undefined ? "" : context.input.ast.kindName(name);
+    const name = Node_Name(context.input.program.source.ast, element);
+    const nameKind = name === undefined ? "" : context.input.program.source.ast.kindName(name);
     if (name === undefined) {
       return undefined;
     }
     if (nameKind === KindIdentifier) {
-      const bindingName = context.input.names.nameForDeclaration(element) ?? "";
+      const bindingName = context.input.program.names.nameForDeclaration(element) ?? "";
       if (!isValidRustIdentifier(bindingName)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, name),
@@ -120,7 +120,7 @@ export function planRustBindingPattern(
       statements.push({
         kind: "let",
         name: bindingName,
-        mutable: context.input.facts.getFact(element, rustMutatedBindingFactKey) !== undefined,
+        mutable: context.input.program.facts.getFact(element, rustMutatedBindingFactKey) !== undefined,
         type: bindingType,
         init: normalized,
       });
@@ -401,7 +401,7 @@ function normalizeBindingValue(
       args: [{ kind: "str-literal", value: "statically non-null destructuring binding" }],
     };
   }
-  const initializer = Node_Initializer(context.input.ast, element);
+  const initializer = Node_Initializer(context.input.program.source.ast, element);
   const fallback = initializer === undefined ? undefined : planExpression(initializer, context);
   if (fallback === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

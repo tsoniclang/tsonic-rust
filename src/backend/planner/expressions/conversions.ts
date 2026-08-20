@@ -14,13 +14,12 @@ import {
 } from "../../../analysis/facts/finalized-operation-abi.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
-import { registerRustProviderErrorCarrier } from "../context.js";
 import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } from "../project/provider-evaluation-scope.js";
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType, sourceTypePath } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { rustBinaryOperatorTraitPath } from "../../model/syntax.js";
+import { rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustEffectiveValueCarrier, rustValueCarrierTransitionTarget } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/facts/target-operation.js";
@@ -34,11 +33,11 @@ import type {
   RustValueConversion,
 } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustType } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
 import type { RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
   applyFinalizedRustArgumentMode,
   applyRustArgumentMode,
@@ -66,7 +65,7 @@ export function applyRustValueConversion(
   if (validateSourceCarrier) {
     const sourceCarrier = node === undefined
       ? undefined
-      : rustEffectiveValueCarrier(context.input.facts, node);
+      : rustEffectiveValueCarrier(context.input.program.facts, node);
     if (sourceCarrier === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node ?? context.sourceFile),
@@ -155,7 +154,7 @@ export function lowerRustValueConversion(
     case "option-map": {
       const valueName = allocateRustSyntheticName(
         context.syntheticNames ?? createRustSyntheticNameState(
-          context.input.ast,
+          context.input.program.source.ast,
           node ?? context.sourceFile,
           [],
         ),
@@ -592,7 +591,7 @@ export function finishProviderOperationExpression(
     }
     if (fact.abi.effects.errorBoundary === "provider-native" &&
       fact.abi.effects.errorCarrier !== undefined) {
-      registerRustProviderErrorCarrier(context.input, fact.abi.effects.errorCarrier);
+      context.input.providerErrors.register(fact.abi.effects.errorCarrier);
     }
     raw = applyRustErrorBoundary(
       raw,
@@ -710,9 +709,9 @@ export function planFinalizedSourceInput(
   }
   const expressionOverride = context.expressionOverrides?.get(sourceNode);
   const sourceCarrier = expressionOverride?.carrier ??
-    context.input.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
+    context.input.program.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
   const convertedCarrier = expressionOverride === undefined
-    ? rustValueCarrierTransitionTarget(context.input.facts, sourceNode)
+    ? rustValueCarrierTransitionTarget(context.input.program.facts, sourceNode)
     : undefined;
   if (sourceCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

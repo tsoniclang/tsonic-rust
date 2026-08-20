@@ -2,7 +2,7 @@ import { isDenseDataArray } from "../../model/closed-data.js";
 import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustNamedTargetType, rustNamedTypeCarrierValue } from "./native.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustSourceUnionTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "./source-types.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,

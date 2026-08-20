@@ -1,4 +1,4 @@
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { isValidRustIdentifier, sourceModuleItemPath } from "../program/plan-context.js";

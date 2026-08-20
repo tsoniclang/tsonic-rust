@@ -44,7 +44,7 @@ import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolveFunctionExpressionCarrier(
   walk: RustFactWalk,
@@ -93,7 +93,7 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   if (ast.hasModifierKind(expression, "async") ||
-    walk.context.semanticsFor(expression).getResolvedGeneratorInfo(expression) !== undefined) {
+    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
     return undefined;
   }
   const callable = rustCallableProtocol(selectedExpected);

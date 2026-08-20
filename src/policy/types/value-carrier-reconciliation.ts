@@ -1,5 +1,5 @@
 import { rustTargetTypeRefEquals } from "./equality.js";
-import type { TargetTypeRef } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustContextualValueConversionFact,
   RustFlowReadProjectionFact,

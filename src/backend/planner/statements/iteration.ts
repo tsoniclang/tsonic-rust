@@ -30,18 +30,18 @@ import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planRuntimeSetStatement(
   expression: Node,
   fact: Extract<import("../../../analysis/facts/keys.js").RustTargetOperationFact, { kind: "runtime-set" }>,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const left = BinaryExpression_Left(context.input.ast, expression);
-  const right = BinaryExpression_Right(context.input.ast, expression);
+  const { ast } = context.input.program.source;
+  const left = BinaryExpression_Left(context.input.program.source.ast, expression);
+  const right = BinaryExpression_Right(context.input.program.source.ast, expression);
   if (left === undefined || right === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
@@ -57,7 +57,7 @@ export function planRuntimeSetStatement(
       ? "index-set"
       : undefined;
   const indexNode = leftKind === "KindElementAccessExpression"
-    ? ElementAccessExpression_ArgumentExpression(context.input.ast, left)
+    ? ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, left)
     : undefined;
   const sourceArgumentNodes = indexNode === undefined ? [right] : [indexNode, right];
   if (!validateRustFinalizedOperationAbi(fact.abi) ||
@@ -85,7 +85,7 @@ export function planRuntimeSetStatement(
     });
     return undefined;
   }
-  const selectedResult = context.input.facts.getRuntimeCarrierFact(right)?.carrier;
+  const selectedResult = context.input.program.facts.getRuntimeCarrierFact(right)?.carrier;
   if (selectedResult === undefined || !selectedOperatorIdentityMatches(
     expression,
     fact.operationId,
@@ -100,7 +100,7 @@ export function planRuntimeSetStatement(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(context.input.ast, left);
+  const receiverNode = Node_Expression(context.input.program.source.ast, left);
   const receiver = fact.abi.targetReceiver.kind === "input" && receiverNode !== undefined
     ? planFinalizedSourceInput(
         context,
@@ -269,7 +269,7 @@ function selectedOperatorIdentityMatches(
   resultCarrier: TargetTypeRef,
   context: RustPlanContext,
 ): boolean {
-  const selected = context.input.facts.getSelectedTargetOperator(expression);
+  const selected = context.input.program.facts.getSelectedTargetOperator(expression);
   return selected !== undefined && selected.operationKind === "operator" &&
     selected.operationId === operationId && selected.targetOperation === targetOperation &&
     selected.resultType !== undefined && rustTargetTypeRefEquals(selected.resultType, resultCarrier);
@@ -280,8 +280,8 @@ export function planForOfStatement(
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const { ast } = context.input.program.source;
+  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind === "for-in") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -290,7 +290,7 @@ export function planForOfStatement(
     ));
     return undefined;
   }
-  const selectedIteration = context.input.facts.getSelectedTargetIteration(node);
+  const selectedIteration = context.input.program.facts.getSelectedTargetIteration(node);
   if (selectedIteration === undefined || selectedIteration.operationKind !== "iteration" ||
     selectedIteration.operationId !== fact.operationId || selectedIteration.resultType === undefined ||
     !rustTargetTypeRefEquals(selectedIteration.resultType, fact.elementCarrier)) {
@@ -301,14 +301,14 @@ export function planForOfStatement(
     ));
     return undefined;
   }
-  const initializer = ForInOrOfStatement_Initializer(context.input.ast, node);
+  const initializer = ForInOrOfStatement_Initializer(context.input.program.source.ast, node);
   const declarations = initializer === undefined
     ? []
     : collectVariableDeclarations(initializer, context);
   const bindingDeclaration = declarations.length === 1 ? declarations[0] : undefined;
   const bindingNameNode = bindingDeclaration === undefined
     ? undefined
-    : Node_Name(context.input.ast, bindingDeclaration);
+    : Node_Name(context.input.program.source.ast, bindingDeclaration);
   const bindingNameKind = bindingNameNode === undefined ? "" : ast.kindName(bindingNameNode);
   const bindingPattern = bindingNameNode !== undefined &&
       (bindingNameKind === KindArrayBindingPattern || bindingNameKind === KindObjectBindingPattern)
@@ -316,7 +316,7 @@ export function planForOfStatement(
     : undefined;
   let binding = "";
   if (bindingNameNode !== undefined && bindingNameKind === KindIdentifier) {
-    binding = context.input.names.nameForDeclaration(bindingDeclaration) ?? "";
+    binding = context.input.program.names.nameForDeclaration(bindingDeclaration) ?? "";
   } else if (bindingPattern !== undefined && context.syntheticNames !== undefined) {
     binding = allocateRustSyntheticName(context.syntheticNames, "binding_element");
   }
@@ -328,12 +328,12 @@ export function planForOfStatement(
     ));
     return undefined;
   }
-  const iterableNode = Node_Expression(context.input.ast, node);
+  const iterableNode = Node_Expression(context.input.program.source.ast, node);
   const iterable = iterableNode === undefined ? undefined : planExpression(iterableNode, context);
   if (iterable === undefined) {
     return undefined;
   }
-  const bodyNode = ForInOrOfStatement_Statement(context.input.ast, node);
+  const bodyNode = ForInOrOfStatement_Statement(context.input.program.source.ast, node);
   if (bodyNode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -476,8 +476,8 @@ export function planForInStatement(
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const { ast } = context.input.program.source;
+  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind !== "for-in" ||
     (fact.lowering.kind !== "dense-index-keys" && fact.lowering.kind !== "js-array-index-keys" &&
       fact.lowering.kind !== "static-keys")) {
@@ -488,7 +488,7 @@ export function planForInStatement(
     ));
     return undefined;
   }
-  const selectedIteration = context.input.facts.getSelectedTargetIteration(node);
+  const selectedIteration = context.input.program.facts.getSelectedTargetIteration(node);
   if (selectedIteration === undefined || selectedIteration.operationKind !== "iteration" ||
     selectedIteration.operationId !== fact.operationId || selectedIteration.resultType === undefined ||
     !rustTargetTypeRefEquals(selectedIteration.resultType, fact.elementCarrier)) {
@@ -615,9 +615,9 @@ function planForInBinding(
   const declarations = collectVariableDeclarations(initializer, context);
   if (declarations.length === 1) {
     const declaration = declarations[0]!;
-    const directName = context.input.names.nameForDeclaration(declaration) ?? "";
-    const carrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
-    const declarationKind = context.input.ast.variableDeclarationKind(declaration);
+    const directName = context.input.program.names.nameForDeclaration(declaration) ?? "";
+    const carrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
+    const declarationKind = context.input.program.source.ast.variableDeclarationKind(declaration);
     if (!isValidRustIdentifier(directName) || carrier === undefined ||
       !rustTargetTypeRefEquals(carrier, elementCarrier) ||
       declarationKind === "using" || declarationKind === "await using") {
@@ -626,28 +626,28 @@ function planForInBinding(
     return {
       kind: "declaration",
       name: directName,
-      mutable: context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined,
+      mutable: context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined,
     };
   }
-  if (context.input.ast.kindName(initializer) !== KindIdentifier) {
+  if (context.input.program.source.ast.kindName(initializer) !== KindIdentifier) {
     return rejectForInBinding(initializer, context, "for-in assignment targets require one exact identifier location.");
   }
-  const assignmentDeclaration = context.input.facts.getFact(
+  const assignmentDeclaration = context.input.program.facts.getFact(
     initializer,
     rustSourceBindingFactKey,
   )?.sourceDeclaration;
   if (assignmentDeclaration === undefined) {
     return rejectForInBinding(initializer, context, "for-in assignment targets require one exact source declaration.");
   }
-  const assignmentName = context.input.names.nameForDeclaration(assignmentDeclaration) ?? "";
+  const assignmentName = context.input.program.names.nameForDeclaration(assignmentDeclaration) ?? "";
   if (!isValidRustIdentifier(assignmentName)) {
     return rejectForInBinding(initializer, context, "for-in assignment targets require one planned Rust binding name.");
   }
-  const carrier = context.input.facts.getRuntimeCarrierFact(assignmentDeclaration)?.carrier;
+  const carrier = context.input.program.facts.getRuntimeCarrierFact(assignmentDeclaration)?.carrier;
   if (carrier === undefined || !rustTargetTypeRefEquals(carrier, elementCarrier)) {
     return rejectForInBinding(initializer, context, "for-in assignment targets require one declaration carrier matching the finalized String key carrier.");
   }
-  if (context.input.facts.getFact(assignmentDeclaration, rustMutatedBindingFactKey) === undefined) {
+  if (context.input.program.facts.getFact(assignmentDeclaration, rustMutatedBindingFactKey) === undefined) {
     return rejectForInBinding(initializer, context, "for-in assignment targets require one finalized mutable-binding fact.");
   }
   return { kind: "assignment", name: assignmentName };

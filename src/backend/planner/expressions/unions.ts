@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustSourceUnionCarrierValue } from "../../../policy/types/target-types.js";
-import type { RustExpr, RustPattern } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, rustLocalBindingName, sourceTypePath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";

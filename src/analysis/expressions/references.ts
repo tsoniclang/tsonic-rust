@@ -40,7 +40,7 @@ import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
 import { tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSelectedTargetSignature, TargetTypeRef } from "../../policy/types/model.js";
+import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
 
 export function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFile: SourceFile): TargetTypeRef | undefined {
@@ -117,8 +117,8 @@ export function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, s
     }
   }
   const semantics = walk.context.semantics(sourceFile);
-  const semanticType = semantics.getTypeAtLocation(identifier);
-  const nullishCarrier = semanticType !== undefined && semantics.isNullish(semanticType)
+  const semanticType = semantics.types.expressionType(identifier);
+  const nullishCarrier = semanticType !== undefined && semantics.types.isNullish(semanticType)
     ? resolveRustExactNullishValueCarrier(semanticType, semantics)
     : undefined;
   return nullishCarrier === undefined

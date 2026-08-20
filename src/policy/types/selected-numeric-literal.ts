@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { AstReader } from "@tsonic/tsts";
-import type { TargetTypeRef } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   KindBigIntLiteral,
   KindMinusToken,
@@ -14,7 +14,7 @@ import {
 import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
-} from "../operations/model.js";
+} from "../../target-model/operations/model.js";
 
 type SourcePrimitiveName = Extract<
   TargetTypeRef,

@@ -26,7 +26,7 @@ import { isDenseDataArray } from "../../../policy/model/closed-data.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression, rustStringConcat } from "../../rust-ast/expressions.js";
+import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
 import { parseSourceBigIntLiteral, parseSourceIntegerLiteral } from "../../../policy/types/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustFallibleReturnExpression } from "../statements/completion-exits.js";
@@ -37,9 +37,9 @@ import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } fro
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustType } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustSelectedTargetOperation as TargetOperationFact, TargetTypeRef } from "../../../policy/types/model.js";
+import type { RustSelectedTargetOperation as TargetOperationFact, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 
 export function rustCallableConstructionType(
@@ -125,8 +125,8 @@ export function finishRuntimeCallableExpression(
 
 export function planTemplateExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
-  const head = TemplateExpression_Head(context.input.ast, node);
-  const spans = TemplateExpression_TemplateSpans(context.input.ast, node);
+  const head = TemplateExpression_Head(context.input.program.source.ast, node);
+  const spans = TemplateExpression_TemplateSpans(context.input.program.source.ast, node);
   if (fact?.kind !== "template-string" || head === undefined || spans === undefined ||
     !isDenseDataArray(spans) || spans.some((span) => span === undefined) ||
     spans.length !== fact.substitutions.length ||
@@ -138,14 +138,14 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
     ));
     return undefined;
   }
-  const parts: RustExpr[] = [{ kind: "string-literal", value: context.input.ast.text(head) }];
+  const parts: RustExpr[] = [{ kind: "string-literal", value: context.input.program.source.ast.text(head) }];
   for (const [index, span] of (spans as readonly Node[]).entries()) {
-    const expression = TemplateSpan_Expression(context.input.ast, span);
-    const literal = TemplateSpan_Literal(context.input.ast, span);
+    const expression = TemplateSpan_Expression(context.input.program.source.ast, span);
+    const literal = TemplateSpan_Literal(context.input.program.source.ast, span);
     const substitution = fact.substitutions[index];
     const actualCarrier = expression === undefined
       ? undefined
-      : rustEffectiveValueCarrier(context.input.facts, expression);
+      : rustEffectiveValueCarrier(context.input.program.facts, expression);
     if (expression === undefined || literal === undefined || substitution === undefined ||
       substitution.expression !== expression || actualCarrier === undefined ||
       !rustTargetTypeRefEquals(actualCarrier, substitution.carrier)) {
@@ -171,24 +171,24 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
         args: [{ kind: "reference", expr: selectedValue }],
       });
     }
-    parts.push({ kind: "string-literal", value: context.input.ast.text(literal) });
+    parts.push({ kind: "string-literal", value: context.input.program.source.ast.text(literal) });
   }
   return rustStringConcat(parts);
 }
 
 export function planDeleteExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
-  const operand = Node_Expression(context.input.ast, node);
-  const receiver = operand === undefined ? undefined : Node_Expression(context.input.ast, operand);
+  const operand = Node_Expression(context.input.program.source.ast, node);
+  const receiver = operand === undefined ? undefined : Node_Expression(context.input.program.source.ast, operand);
   const index = operand === undefined
     ? undefined
-    : ElementAccessExpression_ArgumentExpression(context.input.ast, operand);
+    : ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, operand);
   if (fact?.kind !== "provider-operation" || fact.abi.operationKind !== "indexer" ||
-    operand === undefined || context.input.ast.kindName(operand) !== KindElementAccessExpression ||
+    operand === undefined || context.input.program.source.ast.kindName(operand) !== KindElementAccessExpression ||
     receiver === undefined || index === undefined ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.delete-carrier") ||
     !selectedOperationMatches(
-      context.input.facts.getSelectedTargetOperator(node),
+      context.input.program.facts.getSelectedTargetOperator(node),
       fact.operationId,
       "indexer",
       fact.resultCarrier,
@@ -215,7 +215,7 @@ export function planDeleteExpression(node: Node, context: RustPlanContext): Rust
 
 export function expressionCarrier(node: Node, context: RustPlanContext): TargetTypeRef | undefined {
   return context.expressionOverrides?.get(node)?.carrier ??
-    context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+    context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
 }
 
 function rustPartialComparison(left: RustExpr, right: RustExpr): RustExpr {
@@ -264,21 +264,21 @@ export function negateRustPlannedBooleanExpression(
 ): RustExpr {
   let selectedExpression = sourceExpression;
   while (selectedExpression !== undefined) {
-    const kind = context.input.ast.kindName(selectedExpression);
+    const kind = context.input.program.source.ast.kindName(selectedExpression);
     if (kind !== KindParenthesizedExpression && kind !== KindSatisfiesExpression &&
       kind !== KindNonNullExpression && kind !== "KindAsExpression" &&
       kind !== "KindTypeAssertionExpression") {
       break;
     }
-    selectedExpression = Node_Expression(context.input.ast, selectedExpression);
+    selectedExpression = Node_Expression(context.input.program.source.ast, selectedExpression);
   }
   if (selectedExpression === undefined ||
-    context.input.ast.kindName(selectedExpression) !== KindBinaryExpression ||
+    context.input.program.source.ast.kindName(selectedExpression) !== KindBinaryExpression ||
     planned.kind !== "binary") {
     return negateRustBooleanExpression(planned);
   }
-  const left = BinaryExpression_Left(context.input.ast, selectedExpression);
-  const right = BinaryExpression_Right(context.input.ast, selectedExpression);
+  const left = BinaryExpression_Left(context.input.program.source.ast, selectedExpression);
+  const right = BinaryExpression_Right(context.input.program.source.ast, selectedExpression);
   const inverse = planned.operator === "<" ? ">="
     : planned.operator === "<=" ? ">"
       : planned.operator === ">" ? "<="
@@ -321,7 +321,7 @@ export function effectivePlannedExpressionCarrier(
   context: RustPlanContext,
 ): TargetTypeRef | undefined {
   return context.expressionOverrides?.get(node)?.carrier ??
-    rustEffectiveValueCarrier(context.input.facts, node);
+    rustEffectiveValueCarrier(context.input.program.facts, node);
 }
 
 export function requireExpressionCarrier(
@@ -343,7 +343,7 @@ export function requireExpressionCarrier(
 }
 
 export function rustOperationFact(node: Node, context: RustPlanContext): RustTargetOperationFact | undefined {
-  return context.input.facts.getFact(node, rustTargetOperationFactKey);
+  return context.input.program.facts.getFact(node, rustTargetOperationFactKey);
 }
 
 export function selectedOperationMatches(
@@ -374,7 +374,7 @@ export function providerSelectedCallMatches(
   if (!validateRustFinalizedOperationAbi(fact.abi)) {
     return false;
   }
-  const selected = context.input.facts.getSelectedTargetCall(node);
+  const selected = context.input.program.facts.getSelectedTargetCall(node);
   const expectedMemberKind = fact.abi.operationKind === "constructor" ? "constructor" : "method";
   return selected !== undefined && selected.member.id === fact.operationId &&
     selected.member.kind === expectedMemberKind && selected.member.returnType !== undefined &&
@@ -401,13 +401,13 @@ export function planSourceConversion(node: Node, context: RustPlanContext): Rust
     return undefined;
   }
   if (!selectedOperationMatches(
-      context.input.facts.getSelectedTargetOperator(node),
+      context.input.program.facts.getSelectedTargetOperator(node),
       fact.operationId,
       "operator",
       fact.resultCarrier,
-      context.input.facts.getFact(node, rustProjectUpcastFactKey) !== undefined
+      context.input.program.facts.getFact(node, rustProjectUpcastFactKey) !== undefined
         ? "project-upcast"
-        : context.input.facts.getFact(node, rustProjectDowncastFactKey) !== undefined
+        : context.input.program.facts.getFact(node, rustProjectDowncastFactKey) !== undefined
           ? "project-downcast"
         : fact.conversion === undefined ? "identity" : "runtime-conversion",
     )) {
@@ -418,7 +418,7 @@ export function planSourceConversion(node: Node, context: RustPlanContext): Rust
     ));
     return undefined;
   }
-  const operand = Node_Expression(context.input.ast, node);
+  const operand = Node_Expression(context.input.program.source.ast, node);
   const planned = operand === undefined ? undefined : planExpression(operand, context);
   if (planned === undefined || fact.conversion === undefined) {
     return planned;
@@ -427,7 +427,7 @@ export function planSourceConversion(node: Node, context: RustPlanContext): Rust
 }
 
 export function planNumericLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = rustValueCarrierBeforeOptionProjection(context.input.facts, node);
+  const carrier = rustValueCarrierBeforeOptionProjection(context.input.program.facts, node);
   if (carrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -441,7 +441,7 @@ export function planNumericLiteral(node: Node, context: RustPlanContext): RustEx
 
 export function planBigIntLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const carrier = expressionCarrier(node, context);
-  const value = parseSourceBigIntLiteral(context.input.ast.text(node));
+  const value = parseSourceBigIntLiteral(context.input.program.source.ast.text(node));
   if (value !== undefined && isRustIntegerCarrier(carrier)) {
     return { kind: "int-literal", text: value.toString(10) };
   }
@@ -466,7 +466,7 @@ export function planNumericLiteralWithCarrier(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const text = context.input.ast.text(node);
+  const text = context.input.program.source.ast.text(node);
   if (isFloatCarrier(carrier)) {
     const floatText = text.includes(".") || text.includes("e") || text.includes("E") ? text : `${text}.0`;
     return { kind: "float-literal", text: floatText };

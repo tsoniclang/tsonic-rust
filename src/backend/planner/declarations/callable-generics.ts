@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
-import type { RustTypeParameter } from "../../rust-ast/nodes.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustTypeParameter } from "../../target-ast/nodes.js";
 import {
   applyRustGenericRequirements,
   createRustGenericRequirementSet,
@@ -22,7 +22,7 @@ export function planRustCallableGenerics(
 ): RustCallableGenericPlan | undefined {
   const sourceTypeParameterNames: string[] = [];
   const targetTypeParameters: RustTypeParameter[] = [];
-  for (const typeParameter of context.input.ast.typeParameters(declaration)) {
+  for (const typeParameter of context.input.program.source.ast.typeParameters(declaration)) {
     if (typeParameter === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, declaration),
@@ -31,9 +31,9 @@ export function planRustCallableGenerics(
       ));
       return undefined;
     }
-    const sourceNameNode = context.input.ast.name(typeParameter);
-    const sourceName = sourceNameNode === undefined ? "" : context.input.ast.text(sourceNameNode);
-    const targetName = context.input.names.nameForDeclaration(typeParameter) ?? "";
+    const sourceNameNode = context.input.program.source.ast.name(typeParameter);
+    const sourceName = sourceNameNode === undefined ? "" : context.input.program.source.ast.text(sourceNameNode);
+    const targetName = context.input.program.names.nameForDeclaration(typeParameter) ?? "";
     if (sourceName.length === 0 || !isValidRustIdentifier(targetName)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, typeParameter),

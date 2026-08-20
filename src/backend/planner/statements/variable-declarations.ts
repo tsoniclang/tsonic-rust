@@ -26,7 +26,7 @@ import { requireRustLocationValueCarrier } from "../types/generic-requirements.j
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -53,13 +53,13 @@ function planVariableDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const nameNode = Node_Name(context.input.ast, declaration);
+  const { ast } = context.input.program.source;
+  const nameNode = Node_Name(context.input.program.source.ast, declaration);
   const nameKind = nameNode === undefined ? "" : ast.kindName(nameNode);
   if (nameNode !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern)) {
     return planBindingVariableDeclaration(declaration, nameNode, context);
   }
-  const name = context.input.names.nameForDeclaration(declaration) ?? "";
+  const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -68,7 +68,7 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  const initializer = Node_Initializer(context.input.ast, declaration);
+  const initializer = Node_Initializer(context.input.program.source.ast, declaration);
   const locationStorage = rustLocationStorageForDeclaration(declaration, context);
   if (initializer === undefined && locationStorage !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -82,10 +82,10 @@ function planVariableDeclaration(
   if (initializer !== undefined && planned === undefined) {
     return undefined;
   }
-  const typeNode = Node_Type(context.input.ast, declaration);
+  const typeNode = Node_Type(context.input.program.source.ast, declaration);
   const annotatedCarrier = typeNode === undefined
     ? undefined
-    : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
+    : context.input.program.facts.getRuntimeCarrierFact(typeNode)?.carrier;
   let rustType;
   if (typeNode !== undefined) {
     const renderedCarrier = locationStorage === undefined
@@ -101,7 +101,7 @@ function planVariableDeclaration(
       return undefined;
     }
   }
-  const declarationCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  const declarationCarrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
   if (declarationCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
@@ -136,20 +136,20 @@ function planVariableDeclaration(
     return undefined;
   }
   const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
-  const resourceFact = context.input.facts.getFact(declaration, rustResourceManagementFactKey);
-  const sourceUseSummary = context.input.source.navigation.declarationUseSummary(declaration);
-  const objectRepresentation = context.input.objectRepresentations.representationFor(
-    context.input.projectTypes.definitionForCarrier(declarationCarrier),
+  const resourceFact = context.input.program.facts.getFact(declaration, rustResourceManagementFactKey);
+  const sourceUseSummary = context.input.program.source.navigation.declarationUseSummary(declaration);
+  const objectRepresentation = context.input.program.objectRepresentations.representationFor(
+    context.input.program.projectTypes.definitionForCarrier(declarationCarrier),
   );
   const referentMutationRequiresMutableBinding =
     rustCarrierReferentMutationRequiresMutableBinding(declarationCarrier) &&
     (objectRepresentation === undefined || objectRepresentation.kind === "value");
   const mutable = locationStorage === undefined &&
     (sourceUseSummary.bindingWritten ||
-      context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
+      context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
       (objectRepresentation?.kind === "value" && sourceUseSummary.memberWritten) ||
       (ownedBinding && referentMutationRequiresMutableBinding &&
-        context.input.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
+        context.input.program.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
       resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
   let init: RustExpr | undefined;
   if (initializer !== undefined) {
@@ -189,8 +189,8 @@ function planBindingVariableDeclaration(
   pattern: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const initializer = Node_Initializer(context.input.ast, declaration);
-  const sourceCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  const initializer = Node_Initializer(context.input.program.source.ast, declaration);
+  const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
   if (initializer === undefined || sourceCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),

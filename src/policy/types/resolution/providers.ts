@@ -27,7 +27,7 @@ import type {
 import type { RustProviderTypeRow } from "../../../providers/packages/model.js";
 import type { RustSourceProfileRegistry } from "../source-profile.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function resolveProviderTypeIdentity(
   subjects: readonly ExtensionFactSubject[],
@@ -75,8 +75,8 @@ export function instantiateTargetType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  const rawArguments = context.typeShape.isTypeReference(type)
-    ? context.typeShape.getTypeArguments(type)
+  const rawArguments = context.currentSemantics.types.isTypeReference(type)
+    ? context.currentSemantics.types.typeArguments(type)
     : [];
   const arguments_ = denseDefined(rawArguments);
   if (arguments_ === undefined) {
@@ -114,30 +114,46 @@ export function resolveOwnedSourceProfileTypeName(
   if (symbol === undefined) {
     return undefined;
   }
-  const declarations = denseDefined(context.checker.getSymbolDeclarations(symbol));
+  const declarations = denseDefined(
+    context.currentSemantics.declarations.symbolDeclarations(symbol),
+  );
   if (declarations === undefined) {
     return undefined;
   }
   for (const declaration of declarations) {
-    if (sourceProfiles.profileForNode(declaration, context.ast) === undefined) {
-      continue;
-    }
-    if (!context.ast.is.IsClassDeclaration(declaration) &&
-      !context.ast.is.IsInterfaceDeclaration(declaration) &&
-      !context.ast.is.IsTypeAliasDeclaration(declaration) &&
-      !context.ast.is.IsEnumDeclaration(declaration)) {
-      continue;
-    }
-    const nameNode = context.ast.name(declaration);
-    if (!context.ast.is.IsIdentifier(nameNode)) {
-      continue;
-    }
-    const name = context.ast.text(nameNode);
-    if (name.length > 0) {
+    const name = resolveOwnedSourceProfileTypeNameForDeclaration(
+      declaration,
+      context,
+      sourceProfiles,
+    );
+    if (name !== undefined) {
       return name;
     }
   }
   return undefined;
+}
+
+export function resolveOwnedSourceProfileTypeNameForDeclaration(
+  declaration: import("@tsonic/tsts").Node | undefined,
+  context: RustTargetTypeResolutionContext,
+  sourceProfiles: RustSourceProfileRegistry,
+): string | undefined {
+  if (
+    declaration === undefined ||
+    sourceProfiles.profileForNode(declaration, context.ast) === undefined ||
+    (!context.ast.is.IsClassDeclaration(declaration) &&
+      !context.ast.is.IsInterfaceDeclaration(declaration) &&
+      !context.ast.is.IsTypeAliasDeclaration(declaration) &&
+      !context.ast.is.IsEnumDeclaration(declaration))
+  ) {
+    return undefined;
+  }
+  const nameNode = context.ast.name(declaration);
+  if (!context.ast.is.IsIdentifier(nameNode)) {
+    return undefined;
+  }
+  const name = context.ast.text(nameNode);
+  return name.length === 0 ? undefined : name;
 }
 
 export function resolveSourceProfileCarrier(
@@ -159,10 +175,10 @@ export function resolveSourceProfileCarrier(
   if (options.jsEnabled && (name === "RegExpExecArray" || name === "RegExpMatchArray")) {
     return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
   }
-  if (!context.typeShape.isTypeReference(type)) {
+  if (!context.currentSemantics.types.isTypeReference(type)) {
     return undefined;
   }
-  const arguments_ = context.typeShape.getTypeArguments(type);
+  const arguments_ = context.currentSemantics.types.typeArguments(type);
   const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, context, options, resolving));
   const direct = targetArguments.every((argument) => argument !== undefined)
     ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options)

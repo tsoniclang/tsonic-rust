@@ -27,7 +27,7 @@ import type { ProjectMethodPropertyPlan } from "../objects/polymorphism/model.js
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { rustDefaultImplementation } from "./default-implementation.js";
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
-import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import { rustProjectStateType, rustProjectStateMarker, rustProjectTypeParameters } from "../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -39,10 +39,10 @@ import type {
   RustItem,
   RustStmt,
   RustStructField,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
 import {
   rustProjectImplementationVisibility,
@@ -56,18 +56,18 @@ export interface PlannedProjectObjectField {
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
-  readonly visibility: import("../../rust-ast/nodes.js").RustVisibility;
+  readonly visibility: import("../../target-ast/nodes.js").RustVisibility;
   readonly initializer?: Node;
 }
 
 export function carrierOf(context: RustPlanContext, node: Node | undefined) {
-  return node === undefined ? undefined : context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  return node === undefined ? undefined : context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
 }
 
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const { ast } = context.input;
-  const definition = context.input.projectTypes.definitionForDeclaration(node);
-  const className = context.input.names.nameForDeclaration(node) ?? "";
+  const { ast } = context.input.program.source;
+  const definition = context.input.program.projectTypes.definitionForDeclaration(node);
+  const className = context.input.program.names.nameForDeclaration(node) ?? "";
   if (!isValidRustIdentifier(className)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -95,7 +95,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
-  const representation = context.input.objectRepresentations.representationFor(definition);
+  const representation = context.input.program.objectRepresentations.representationFor(definition);
   if (representation === undefined || representation.kind === "open-hierarchy" ||
     representation.kind === "closed-hierarchy") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -106,7 +106,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     return undefined;
   }
   const openType = rustTypeFromCarrierInContext(
-    context.input.projectTypes.openCarrier(definition),
+    context.input.program.projectTypes.openCarrier(definition),
     context,
   );
   if (openType === undefined) {
@@ -120,7 +120,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const stateType = representation.kind === "value"
     ? undefined
     : rustProjectStateType(
-        context.input.projectTypes.openCarrier(definition),
+        context.input.program.projectTypes.openCarrier(definition),
         context,
       );
   if (representation.kind !== "value" && stateType === undefined) {
@@ -168,7 +168,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       }
       const fieldNameNode = ast.name(member);
       const sourceFieldName = ast.text(fieldNameNode ?? member);
-      const fieldName = context.input.projectTypes.fieldStorageName(definition, member) ?? "";
+      const fieldName = context.input.program.projectTypes.fieldStorageName(definition, member) ?? "";
       const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
       const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
       if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -209,7 +209,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     }
     if (memberKind === "KindMethodDeclaration") {
       if (ast.body(member) === undefined) {
-        const implementation = context.input.source.navigation
+        const implementation = context.input.program.source.navigation
           .callableImplementation(member);
         if (implementation.kind !== "resolved" ||
           implementation.implementation.declaration === member) {
@@ -255,7 +255,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const constructorMember = constructorImplementations[0];
   const methodProperties = projectOwnMethodProperties(
     definition,
-    context.input.projectTypes.openCarrier(definition),
+    context.input.program.projectTypes.openCarrier(definition),
     context,
   );
   if (methodProperties === undefined) {
@@ -290,7 +290,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     implFunctions.push(...planned);
   }
   for (const accessor of accessors) {
-    const targetName = context.input.projectTypes.memberSlotName(
+    const targetName = context.input.program.projectTypes.memberSlotName(
       accessor.declaration,
       accessor.role,
     );
@@ -419,7 +419,7 @@ function planConstructor(
   representation: RustObjectRepresentation,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const isUnsafe = rustDeclarationRequiresUnsafe(
     classDeclaration,
     "constructor",
@@ -452,7 +452,7 @@ function planConstructor(
     return undefined;
   }
   const params = parameterPlan.params;
-  const fallible = context.input.facts.getFact(
+  const fallible = context.input.program.facts.getFact(
     member ?? classDeclaration,
     rustFallibleFactKey,
   ) !== undefined;

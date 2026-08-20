@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { acmeSuperbunapiCapability, acmeTestingPackage, artifactText, buildInstalledLayout, compileRust } from "../../helpers/rust-session.mjs";
-import { composeRustCapabilities } from "../../../dist/plugin/compose.js";
+import {
+  captureTargetCapabilityContributions,
+  selectInstalledTargetCapabilities,
+  validateTargetModuleOwnership,
+} from "../../../../tsonic/packages/host/dist/target/extensions.js";
+import { createRustTargetPack } from "../../../dist/index.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { fakeCompileInput } from "../../helpers/fake-compile-input.mjs";
 
@@ -55,39 +60,50 @@ test("duplicate module ownership fails closed in local composition", async () =>
   const first = acmeSuperbunapiCapability();
   const second = { ...acmeSuperbunapiCapability(), id: "acme-superbunapi-second" };
   assert.throws(
-    () => composeRustCapabilities("rust", [first, second], []),
-    /Ambiguous Tsonic capability ownership/u,
+    () => validateTargetModuleOwnership(
+      { id: "rust", options: {} },
+      createRustTargetPack().provider,
+      [first, second],
+    ),
+    /Ambiguous Tsonic provider ownership/u,
   );
 });
 
 test("duplicate capability identities and overlapping ownership fail closed", () => {
   const first = acmeSuperbunapiCapability();
-  assert.throws(
-    () => composeRustCapabilities("rust", [first, first], []),
-    /selected capability '@acme\/rust-superbunapi' more than once/u,
+  assert.match(
+    selectInstalledTargetCapabilities({ id: "rust", options: {} }, [first, first]).error,
+    /Ambiguous Tsonic capability ownership/u,
   );
   const broad = { ...first, id: "broad", moduleOwnership: [{ specifierPrefix: "node:" }] };
   const narrow = { ...first, id: "narrow", moduleOwnership: [{ specifierPrefix: "node:fs" }] };
-  assert.throws(
-    () => composeRustCapabilities("rust", [broad, narrow], []),
-    /module prefixes 'node:' and 'node:fs'/u,
+  assert.match(
+    selectInstalledTargetCapabilities({ id: "rust", options: {} }, [broad, narrow]).error,
+    /module prefixes 'node:' \(broad\) and 'node:fs' \(narrow\)/u,
   );
 });
 
 test("capability composition enforces required selected surfaces", () => {
   const capability = { ...acmeSuperbunapiCapability(), requiredSurfaces: ["js"] };
-  assert.throws(
-    () => composeRustCapabilities("rust", [capability], []),
-    /requires unselected surface 'js'/u,
+  assert.match(
+    selectInstalledTargetCapabilities({ id: "rust", options: {} }, [capability], []).error,
+    /requires surface 'js'/u,
   );
-  assert.doesNotThrow(() => composeRustCapabilities("rust", [capability], ["js"]));
+  assert.equal(
+    "selectedCapabilities" in selectInstalledTargetCapabilities(
+      { id: "rust", options: {} },
+      [capability],
+      [{ id: "js" }],
+    ),
+    true,
+  );
 });
 
-test("wrong-target capabilities fail closed in local composition", async () => {
+test("wrong-target capabilities are not selected for the active target", async () => {
   const capability = { ...acmeSuperbunapiCapability(), targetId: "csharp" };
-  assert.throws(
-    () => composeRustCapabilities("rust", [capability], []),
-    /targets 'csharp', not selected target 'rust'/u,
+  assert.deepEqual(
+    selectInstalledTargetCapabilities({ id: "rust", options: {} }, [capability], []),
+    { selectedCapabilities: [] },
   );
 });
 
@@ -117,20 +133,46 @@ test("simulated installed layout resolves target runtime crates end to end", { t
     project,
     projectDirectory: consumerRoot,
     target,
-    targetPack,
-    selectedSurfaces: [jsSurface],
-    selectedCapabilities: [nodeCapability],
-    paths: { projectRoot: consumerRoot },
+    selectedCapabilityIds: [nodeCapability.id],
+    selectedSurfaceIds: [jsSurface.id],
+    paths: {
+      projectFilePath: resolve(consumerRoot, "tsonic.json"),
+      projectRoot: consumerRoot,
+      outputRoot: resolve(consumerRoot, "out"),
+      targetOutputRoot: resolve(consumerRoot, "out/rust"),
+    },
   };
+  const capturedCapabilities = captureTargetCapabilityContributions({
+    project,
+    projectDirectory: consumerRoot,
+    target,
+    selectedCapabilities: [nodeCapability],
+    selectedSurfaces: [jsSurface],
+  });
+  const targetSession = targetPack.createCompilationSession({
+    project,
+    projectDirectory: consumerRoot,
+    target,
+    paths: context.paths,
+    selectedSurfaceIds: context.selectedSurfaceIds,
+    capabilities: capturedCapabilities,
+  });
+  targetSession.sourceProfileContributions();
+  targetSession.sourceCompilerContributions();
   const references = [
-    ...targetPack.provider.runtimeContributions(context).references,
+    ...targetSession.runtimeContributions().references,
     ...jsSurface.runtimeContributions(context).references,
-    ...nodeCapability.runtimeContributions(context).references,
+    ...nodeCapability.runtimeContributions({ ...context, capability: nodeCapability }).references,
   ];
-  const result = targetPack.createBackend(context).compile(fakeCompileInput({
+  const compiled = targetSession.compile(fakeCompileInput({
     target,
     runtimeReferences: references,
   }));
+  targetSession.close();
+  const result = {
+    artifacts: compiled.kind === "resolved" ? compiled.value.artifacts : [],
+    diagnostics: compiled.diagnostics,
+  };
   assert.deepEqual(result.diagnostics, []);
   const generatedManifest = result.artifacts.find((artifact) => artifact.path === "Cargo.toml")?.text;
   assert.equal(typeof generatedManifest, "string");

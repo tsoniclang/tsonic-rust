@@ -22,7 +22,7 @@ export type {
 export type {
   RustProviderTypeParameterRequirement,
   RustProviderTypeRequirement,
-} from "../../policy/operations/model.js";
+} from "../../target-model/operations/model.js";
 export {
   collectRustProviderOperationRows,
   createRustProviderPackage,

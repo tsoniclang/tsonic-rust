@@ -3,7 +3,7 @@ import {
   Node_Initializer,
   Node_Type,
 } from "@tsonic/target-api/source";
-import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import {
   rustAsyncFunctionFactKey,
   rustFallibleFactKey,
@@ -21,8 +21,8 @@ import type {
   RustExpr,
   RustFunctionParam,
   RustType,
-} from "../../../rust-ast/nodes.js";
-import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
+} from "../../../target-ast/nodes.js";
+import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
@@ -83,13 +83,13 @@ export function projectClassStateLayers(
   concreteCarrier: TargetTypeRef,
   context: RustPlanContext,
 ): readonly ProjectClassStateLayer[] | undefined {
-  const lineage = context.input.projectTypes.classLineage(definition);
+  const lineage = context.input.program.projectTypes.classLineage(definition);
   if (lineage === undefined) {
     return undefined;
   }
   const layers: ProjectClassStateLayer[] = [];
   for (const owner of lineage) {
-    const relation = context.input.projectTypes.relationship(concreteCarrier, owner);
+    const relation = context.input.program.projectTypes.relationship(concreteCarrier, owner);
     if (relation.kind !== "related") {
       return undefined;
     }
@@ -117,15 +117,15 @@ export function projectOwnFields(
   receiverCarrier: TargetTypeRef,
   context: RustPlanContext,
 ): readonly ProjectFieldPlan[] | undefined {
-  const layout = rustProjectObjectLayout(definition.declaration, context.input.ast);
+  const layout = rustProjectObjectLayout(definition.declaration, context.input.program.source.ast);
   if (layout === undefined || layout.kind !== definition.kind) {
     return undefined;
   }
   const fields: ProjectFieldPlan[] = [];
-  const externalBase = context.input.projectTypes.externalBaseForDefinition(definition);
+  const externalBase = context.input.program.projectTypes.externalBaseForDefinition(definition);
   for (const field of externalBase?.fields ?? []) {
     const type = rustTypeFromCarrierInContext(field.carrier, context);
-    const targetName = context.input.projectTypes.fieldStorageName(definition, field.declaration);
+    const targetName = context.input.program.projectTypes.fieldStorageName(definition, field.declaration);
     if (type === undefined || targetName === undefined) {
       return undefined;
     }
@@ -142,17 +142,17 @@ export function projectOwnFields(
   }
   const externalFieldCount = fields.length;
   for (const layoutField of layout.fields) {
-    const declared = context.input.facts.getRuntimeCarrierFact(layoutField.declaration)?.carrier ??
-      context.input.facts.getRuntimeCarrierFact(Node_Type(context.input.ast, layoutField.declaration))?.carrier;
+    const declared = context.input.program.facts.getRuntimeCarrierFact(layoutField.declaration)?.carrier ??
+      context.input.program.facts.getRuntimeCarrierFact(Node_Type(context.input.program.source.ast, layoutField.declaration))?.carrier;
     const carrier = declared === undefined
       ? undefined
-      : context.input.projectTypes.instantiateMemberCarrier(
+      : context.input.program.projectTypes.instantiateMemberCarrier(
           layoutField.declaration,
           receiverCarrier,
           declared,
         );
     const type = rustTypeFromCarrierInContext(carrier, context);
-    const targetName = context.input.projectTypes.fieldStorageName(
+    const targetName = context.input.program.projectTypes.fieldStorageName(
       definition,
       layoutField.declaration,
     );
@@ -165,7 +165,7 @@ export function projectOwnFields(
       ));
       return undefined;
     }
-    const initializer = Node_Initializer(context.input.ast, layoutField.declaration);
+    const initializer = Node_Initializer(context.input.program.source.ast, layoutField.declaration);
     fields.push({
       declaration: layoutField.declaration,
       sourceName: layoutField.sourceName,
@@ -174,7 +174,7 @@ export function projectOwnFields(
       carrier,
       type,
       origin: "project",
-      readonly: context.input.ast.hasModifierKind(layoutField.declaration, "readonly"),
+      readonly: context.input.program.source.ast.hasModifierKind(layoutField.declaration, "readonly"),
       ...(initializer === undefined ? {} : { initializer }),
     });
   }
@@ -186,7 +186,7 @@ export function projectOwnMethods(
   context: RustPlanContext,
 ): readonly Node[] {
   return (projectMembers(definition, context) ?? []).filter((member) => {
-    const kind = context.input.ast.kindName(member);
+    const kind = context.input.program.source.ast.kindName(member);
     return kind === "KindMethodDeclaration" || kind === "KindMethodSignature";
   });
 }
@@ -196,10 +196,10 @@ export function projectOwnAccessors(
   context: RustPlanContext,
 ): readonly ProjectAccessorPlan[] {
   return (projectMembers(definition, context) ?? []).flatMap<ProjectAccessorPlan>((member) => {
-    if (context.input.ast.hasModifierKind(member, "static")) {
+    if (context.input.program.source.ast.hasModifierKind(member, "static")) {
       return [];
     }
-    const kind = context.input.ast.kindName(member);
+    const kind = context.input.program.source.ast.kindName(member);
     return kind === "KindGetAccessor"
       ? [{ declaration: member, role: "read" }]
       : kind === "KindSetAccessor"
@@ -216,28 +216,28 @@ export function projectOwnMethodProperties(
   const properties: ProjectMethodPropertyPlan[] = [];
   const seen = new Set<Node>();
   for (const member of projectOwnMethods(definition, context)) {
-    if (context.input.ast.hasModifierKind(member, "static")) {
+    if (context.input.program.source.ast.hasModifierKind(member, "static")) {
       continue;
     }
-    const implementation = context.input.source.navigation.callableImplementation(member);
+    const implementation = context.input.program.source.navigation.callableImplementation(member);
     const declaration = implementation.kind === "resolved"
       ? implementation.implementation.declaration
       : member;
     if (seen.has(declaration)) {
       continue;
     }
-    const usage = context.input.projectMethodProperties.usageFor(member) ??
-      context.input.projectMethodProperties.usageFor(declaration);
+    const usage = context.input.program.projectMethodProperties.usageFor(member) ??
+      context.input.program.projectMethodProperties.usageFor(declaration);
     if (usage?.writable !== true) {
       continue;
     }
-    if (context.input.ast.typeParameters(declaration).length !== 0) {
+    if (context.input.program.source.ast.typeParameters(declaration).length !== 0) {
       return undefined;
     }
-    const owner = context.input.projectTypes.definitionContainingDeclaration(declaration);
+    const owner = context.input.program.projectTypes.definitionContainingDeclaration(declaration);
     const relation = owner === undefined
       ? undefined
-      : context.input.projectTypes.relationship(receiverCarrier, owner);
+      : context.input.program.projectTypes.relationship(receiverCarrier, owner);
     const shape = owner === undefined || relation?.kind !== "related"
       ? undefined
       : projectCallableShape(declaration, {
@@ -246,7 +246,7 @@ export function projectOwnMethodProperties(
         }, { methodTypeArgumentSubstitutions: new Map() });
     const targetName = owner === undefined
       ? undefined
-      : context.input.projectTypes.fieldStorageName(owner, declaration);
+      : context.input.program.projectTypes.fieldStorageName(owner, declaration);
     if (shape === undefined || targetName === undefined || shape.isUnsafe ||
       shape.errorType === undefined) {
       return undefined;
@@ -285,7 +285,7 @@ export function projectMembers(
   definition: RustProjectTypeDefinition,
   context: RustPlanContext,
 ): readonly Node[] | undefined {
-  const members = context.input.ast.members(definition.declaration);
+  const members = context.input.program.source.ast.members(definition.declaration);
   return members.every((member) => member !== undefined)
     ? members as readonly Node[]
     : undefined;
@@ -300,10 +300,10 @@ export function projectCallableShape(
   },
 ): ProjectCallableShape | undefined {
   const methodTypeArgumentSubstitutions = options?.methodTypeArgumentSubstitutions;
-  const methodTypeParameters = context.input.ast.typeParameters(member);
+  const methodTypeParameters = context.input.program.source.ast.typeParameters(member);
   const methodTypeParameterNames = methodTypeParameters.map((parameter) => {
-    const name = parameter === undefined ? undefined : context.input.ast.name(parameter);
-    return name === undefined ? undefined : context.input.ast.text(name);
+    const name = parameter === undefined ? undefined : context.input.program.source.ast.name(parameter);
+    return name === undefined ? undefined : context.input.program.source.ast.text(name);
   });
   const methodSpecializationValid = methodTypeParameters.length === 0
     ? methodTypeArgumentSubstitutions === undefined || methodTypeArgumentSubstitutions.size === 0
@@ -312,9 +312,9 @@ export function projectCallableShape(
       methodTypeParameterNames.every((name) =>
         name !== undefined && name.length > 0 && methodTypeArgumentSubstitutions.has(name));
   if (!methodSpecializationValid ||
-    context.input.facts.getFact(member, rustGeneratorFactKey) !== undefined ||
-    context.input.facts.getFact(member, rustAsyncFunctionFactKey) !== undefined ||
-    context.input.ast.hasModifierKind(member, "async")) {
+    context.input.program.facts.getFact(member, rustGeneratorFactKey) !== undefined ||
+    context.input.program.facts.getFact(member, rustAsyncFunctionFactKey) !== undefined ||
+    context.input.program.source.ast.hasModifierKind(member, "async")) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
       "rust.backend.project-dispatch-object-safety",
@@ -329,13 +329,13 @@ export function projectCallableShape(
   const selectedContext = substitutions.size === 0
     ? context
     : { ...context, typeParameterSubstitutions: substitutions };
-  const syntheticNames = createRustSyntheticNameState(selectedContext.input.ast, member, []);
+  const syntheticNames = createRustSyntheticNameState(selectedContext.input.program.source.ast, member, []);
   const parameterPlan = planRustCallableParameters(member, selectedContext, syntheticNames, { requireStatic: false });
-  const returnCarrier = selectedContext.input.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
+  const returnCarrier = selectedContext.input.program.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
   if (parameterPlan === undefined || returnCarrier === undefined) {
     return undefined;
   }
-  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  const fallible = context.input.program.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const errorBoundary = fallible
     ? rustErrorBoundaryForProjectMember(member, selectedContext)
     : undefined;
@@ -370,7 +370,7 @@ export function projectMemberImplementation(
   contractMember: Node,
   context: RustPlanContext,
 ): Node | undefined {
-  const selected = context.input.projectTypes.memberImplementation(concrete, contractMember);
+  const selected = context.input.program.projectTypes.memberImplementation(concrete, contractMember);
   if (selected.kind !== "resolved") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, contractMember),
@@ -399,7 +399,7 @@ export function projectFieldStoragePath(
   const { ownerIndex, field } = matches[0]!;
   const path: string[] = [];
   for (let depth = layers.length - 1; depth > ownerIndex; depth -= 1) {
-    path.push(context.input.projectTypes.baseStateFieldName(layers[depth]!.definition));
+    path.push(context.input.program.projectTypes.baseStateFieldName(layers[depth]!.definition));
   }
   path.push(field.targetName);
   return path;
@@ -410,19 +410,19 @@ export function projectMethodPropertyStoragePath(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
 ): readonly string[] | undefined {
-  const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
+  const owner = context.input.program.projectTypes.definitionContainingDeclaration(implementation);
   const ownerIndex = owner === undefined
     ? -1
     : layers.findIndex((layer) => layer.definition === owner);
   const targetName = owner === undefined
     ? undefined
-    : context.input.projectTypes.fieldStorageName(owner, implementation);
+    : context.input.program.projectTypes.fieldStorageName(owner, implementation);
   if (ownerIndex < 0 || targetName === undefined) {
     return undefined;
   }
   const path: string[] = [];
   for (let depth = layers.length - 1; depth > ownerIndex; depth -= 1) {
-    path.push(context.input.projectTypes.baseStateFieldName(layers[depth]!.definition));
+    path.push(context.input.program.projectTypes.baseStateFieldName(layers[depth]!.definition));
   }
   path.push(targetName);
   return path;

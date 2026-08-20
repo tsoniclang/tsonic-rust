@@ -15,7 +15,7 @@ import type {
   RustImplFunction,
   RustItem,
   RustType,
-} from "../../../rust-ast/nodes.js";
+} from "../../../target-ast/nodes.js";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
@@ -23,7 +23,7 @@ import {
   rustErrorType,
 } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
-import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
+import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 
 export function planContractImplementation(
   contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInterfaceContract,
@@ -36,7 +36,7 @@ export function planContractImplementation(
 ): RustItem | undefined {
   const trait = rustProjectDispatchTraitType(contract.carrier, context);
   const fields = projectOwnFields(contract.definition, contract.carrier, context);
-  const representation = context.input.objectRepresentations.representationFor(
+  const representation = context.input.program.objectRepresentations.representationFor(
     contract.definition,
   );
   if (trait === undefined || fields === undefined || representation === undefined ||
@@ -44,7 +44,7 @@ export function planContractImplementation(
     return undefined;
   }
   const functions: RustImplFunction[] = [];
-  for (const route of context.input.projectTypes.downcastRoutesFor(contract.definition)) {
+  for (const route of context.input.program.projectTypes.downcastRoutesFor(contract.definition)) {
     const implementation = planProjectDowncastRouteImplementation(route, false, context);
     if (implementation === undefined) {
       return undefined;
@@ -52,15 +52,15 @@ export function planContractImplementation(
     functions.push(implementation);
   }
   for (const field of fields) {
-    const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
+    const dispatch = context.input.program.projectFieldDispatch.planFor(field.declaration);
     const stateField = stateFields.find((candidate) =>
       candidate.contractDeclarations.includes(field.declaration));
     const accessor = accessors.find((candidate) =>
       candidate.contractDeclarations.includes(field.declaration));
-    const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
+    const read = context.input.program.projectTypes.memberSlotName(field.declaration, "read");
     const write = dispatch?.write === undefined
       ? undefined
-      : context.input.projectTypes.memberSlotName(field.declaration, "write");
+      : context.input.program.projectTypes.memberSlotName(field.declaration, "write");
     if (dispatch === undefined || (stateField === undefined) === (accessor === undefined) ||
       read === undefined || dispatch.write !== undefined && write === undefined) {
       return undefined;
@@ -176,10 +176,10 @@ export function planContractImplementation(
     }
   }
   for (const contractMethod of projectOwnMethods(contract.definition, context)) {
-    if (context.input.ast.hasModifierKind(contractMethod, "static")) {
+    if (context.input.program.source.ast.hasModifierKind(contractMethod, "static")) {
       continue;
     }
-    for (const variant of context.input.projectMethodDispatch.variantsForMember(contractMethod)) {
+    for (const variant of context.input.program.projectMethodDispatch.variantsForMember(contractMethod)) {
       const method = methods.find((candidate) =>
         candidate.contractMethod === contractMethod &&
         candidate.variant.virtualSlot === variant.virtualSlot);
@@ -391,12 +391,12 @@ export function planContractImplementation(
         },
       });
     }
-    const usage = context.input.projectMethodProperties.usageFor(contractMethod);
+    const usage = context.input.program.projectMethodProperties.usageFor(contractMethod);
     if (usage?.writable === true) {
       const implementations = methods.filter((candidate) =>
         candidate.contractMethod === contractMethod);
       const override = implementations[0]?.override;
-      const write = context.input.projectTypes.memberSlotName(
+      const write = context.input.program.projectTypes.memberSlotName(
         contractMethod,
         "method-write",
       );

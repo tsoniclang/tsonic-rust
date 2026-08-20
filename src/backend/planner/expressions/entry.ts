@@ -36,9 +36,9 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export type RustExpressionResultUse = "value" | "discarded";
 
@@ -52,21 +52,21 @@ export function planExpression(
   if (planned === undefined || resultUse === "discarded") {
     return planned;
   }
-  const flowRead = context.input.facts.getFact(node, rustFlowReadProjectionFactKey);
-  const upcast = context.input.facts.getFact(node, rustProjectUpcastFactKey);
-  const downcast = context.input.facts.getFact(node, rustProjectDowncastFactKey);
-  const contextualConversion = context.input.facts.getFact(
+  const flowRead = context.input.program.facts.getFact(node, rustFlowReadProjectionFactKey);
+  const upcast = context.input.program.facts.getFact(node, rustProjectUpcastFactKey);
+  const downcast = context.input.program.facts.getFact(node, rustProjectDowncastFactKey);
+  const contextualConversion = context.input.program.facts.getFact(
     node,
     rustContextualValueConversionFactKey,
   );
-  const projection = context.input.facts.getFact(node, rustOptionProjectionFactKey);
+  const projection = context.input.program.facts.getFact(node, rustOptionProjectionFactKey);
   let currentCarrier = override?.carrier ??
     flowRead?.sourceCarrier ??
     upcast?.sourceCarrier ??
     downcast?.sourceCarrier ??
     contextualConversion?.sourceCarrier ??
     projection?.sourceCarrier ??
-    context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+    context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   let flowSelected = planned;
   if (flowRead !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, flowRead.sourceCarrier)) {
@@ -260,15 +260,15 @@ function applyRustContextualValueConversion(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const sourceCarrier = rustValueCarrierBeforeContextualConversion(
-    context.input.facts,
+    context.input.program.facts,
     node,
   );
   if (!rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
-    const left = context.input.ast.kindName(node) === KindBinaryExpression
-      ? BinaryExpression_Left(context.input.ast, node)
+    const left = context.input.program.source.ast.kindName(node) === KindBinaryExpression
+      ? BinaryExpression_Left(context.input.program.source.ast, node)
       : undefined;
-    const right = context.input.ast.kindName(node) === KindBinaryExpression
-      ? BinaryExpression_Right(context.input.ast, node)
+    const right = context.input.program.source.ast.kindName(node) === KindBinaryExpression
+      ? BinaryExpression_Right(context.input.program.source.ast, node)
       : undefined;
     const diagnostic = missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -282,9 +282,9 @@ function applyRustContextualValueConversion(
         `carrier.current=${JSON.stringify(sourceCarrier)}`,
         `carrier.source=${JSON.stringify(fact.sourceCarrier)}`,
         `carrier.target=${JSON.stringify(fact.targetCarrier)}`,
-        `carrier.left=${JSON.stringify(context.input.facts.getRuntimeCarrierFact(left)?.carrier)}`,
-        `carrier.right=${JSON.stringify(context.input.facts.getRuntimeCarrierFact(right)?.carrier)}`,
-        `operation=${JSON.stringify(context.input.facts.getFact(node, rustTargetOperationFactKey))}`,
+        `carrier.left=${JSON.stringify(context.input.program.facts.getRuntimeCarrierFact(left)?.carrier)}`,
+        `carrier.right=${JSON.stringify(context.input.program.facts.getRuntimeCarrierFact(right)?.carrier)}`,
+        `operation=${JSON.stringify(context.input.program.facts.getFact(node, rustTargetOperationFactKey))}`,
       ],
     });
     return undefined;
@@ -299,14 +299,14 @@ function rustExpressionUnsafeRequirement(
   if (rustSelectedCallRequiresUnsafe(node, context.input)) {
     return "call";
   }
-  const operation = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (operation?.kind === "source-accessor" &&
     rustSelectedAccessorRequiresUnsafe(node, "getter", context.input)) {
     return "accessor";
   }
-  const kind = context.input.ast.kindName(node);
+  const kind = context.input.program.source.ast.kindName(node);
   if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
-    const operand = Node_Operand(context.input.ast, node);
+    const operand = Node_Operand(context.input.program.source.ast, node);
     const accessor = operand === undefined
       ? undefined
       : findRustUpdateSourceAccessor(operand, context);
@@ -329,12 +329,12 @@ export function planRustProjectUpcast(
   actual: TargetTypeRef | undefined,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const targetDefinition = context.input.projectTypes.definitionForCarrier(fact.targetCarrier);
+  const targetDefinition = context.input.program.projectTypes.definitionForCarrier(fact.targetCarrier);
   const targetValue = rustSourceTypeCarrierValue(fact.targetCarrier);
   const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
   const relationship = targetDefinition === undefined
     ? { kind: "unrelated" as const }
-    : context.input.projectTypes.relationship(fact.sourceCarrier, targetDefinition);
+    : context.input.program.projectTypes.relationship(fact.sourceCarrier, targetDefinition);
   if (!rustTargetTypeRefEquals(actual, fact.sourceCarrier) ||
     relationship.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, fact.targetCarrier) ||
@@ -347,7 +347,7 @@ export function planRustProjectUpcast(
     return undefined;
   }
   const valueName = allocateRustSyntheticName(
-    context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+    context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "upcast_value",
   );
   return {

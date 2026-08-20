@@ -3,7 +3,7 @@ import type {
   RustItem,
   RustType,
   RustTypeParameter,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 
 export function rustDefaultImplementation(
   target: RustType,

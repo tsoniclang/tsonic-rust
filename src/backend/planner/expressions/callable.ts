@@ -44,9 +44,9 @@ import { rustOptionDefaultValue } from "../option-default.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 function collapseExactForwardingClosure(
   closure: RustExpr,
@@ -67,7 +67,7 @@ export function planCallableExpression(
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const closureFact = rustOperationFact(node, context);
   if (closureFact === undefined || closureFact.kind !== "closure") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -88,7 +88,7 @@ export function planCallableExpression(
   const resultCarrier = closureFact.resultCarrier.kind === "function-pointer"
     ? closureFact.resultCarrier.result
     : nativeClosureProtocol?.result ?? callableProtocol?.result;
-  const captureFact = context.input.facts.getFact(node, rustClosureCaptureFactKey);
+  const captureFact = context.input.program.facts.getFact(node, rustClosureCaptureFactKey);
   if (captureFact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -114,7 +114,7 @@ export function planCallableExpression(
     ));
     return undefined;
   }
-  const sourceParams = context.input.ast.parameters(node);
+  const sourceParams = context.input.program.source.ast.parameters(node);
   const leadingParameters = closureFact.leadingParameters ?? [];
   if (allParameterCarriers === undefined || resultCarrier === undefined ||
     leadingParameters.length > allParameterCarriers.length ||
@@ -177,13 +177,13 @@ export function planCallableExpression(
       return undefined;
     }
     const parameterName = bindingPattern === undefined
-      ? context.input.names.nameForDeclaration(parameter) ?? ""
+      ? context.input.program.names.nameForDeclaration(parameter) ?? ""
       : allocateRustSyntheticName(context.syntheticNames!, "binding_parameter");
     if (!isValidRustIdentifier(parameterName)) {
       return undefined;
     }
     const parameterCarrier = parameterCarriers[index];
-    const parameterAbi = context.input.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+    const parameterAbi = context.input.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
     if (parameterCarrier === undefined || parameterAbi === undefined ||
       !rustTargetTypeRefEquals(parameterCarrier, parameterAbi.parameterCarrier) ||
       (callableProtocol === undefined && closureFact.parameterForms === "required-only" &&
@@ -200,7 +200,7 @@ export function planCallableExpression(
       form: parameterAbi.form,
       byRefCopy,
       mutable: bindingPattern === undefined &&
-        context.input.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+        context.input.program.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
     });
     if (bindingPattern !== undefined) {
       if (byRefCopy) {
@@ -218,11 +218,11 @@ export function planCallableExpression(
       });
     }
   }
-  const bodyNode = context.input.ast.body(node);
+  const bodyNode = context.input.program.source.ast.body(node);
   if (bodyNode === undefined) {
     return undefined;
   }
-  const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
   const resultIsFallible = callableProtocol !== undefined || fallible;
   const callableErrorBoundary = resultIsFallible
     ? context.fallibleBoundary ?? rustCurrentErrorBoundary(context)
@@ -261,9 +261,9 @@ export function planCallableExpression(
       continue;
     }
     const visitThis = (candidate: Node): void => {
-      const kind = context.input.ast.kindName(candidate);
+      const kind = context.input.program.source.ast.kindName(candidate);
       if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-        const carrier = context.input.facts.getRuntimeCarrierFact(candidate)?.carrier;
+        const carrier = context.input.program.facts.getRuntimeCarrierFact(candidate)?.carrier;
         if (rustTargetTypeRefEquals(carrier, parameter.carrier)) {
           expressionOverrides.set(candidate, {
             carrier: parameter.carrier,
@@ -279,7 +279,7 @@ export function planCallableExpression(
           kind === "KindSetAccessor" || kind === "KindClassDeclaration")) {
         return;
       }
-      context.input.ast.forEachChild(candidate, (child) => {
+      context.input.program.source.ast.forEachChild(candidate, (child) => {
         if (child !== undefined) {
           visitThis(child);
         }
@@ -308,11 +308,11 @@ export function planCallableExpression(
     )) {
       return undefined;
     }
-    const binding = context.input.facts.getFact(capture.reference, rustSourceBindingFactKey);
+    const binding = context.input.program.facts.getFact(capture.reference, rustSourceBindingFactKey);
     if (binding === undefined) {
       return undefined;
     }
-    const sourceName = context.input.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
+    const sourceName = context.input.program.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
     const sourcePath = rustSourceBindingPath(context, binding);
     if (!isValidRustIdentifier(sourceName)) {
       return undefined;
@@ -402,7 +402,7 @@ export function planCallableExpression(
         name: String(leadingParameterPlans.length + index),
       };
       if (parameter.form === "default") {
-        const defaultNode = Node_Initializer(context.input.ast, parameter.parameter);
+        const defaultNode = Node_Initializer(context.input.program.source.ast, parameter.parameter);
         const defaultValue = defaultNode === undefined
           ? undefined
           : planExpression(defaultNode, callableClosureContext);
@@ -432,7 +432,7 @@ export function planCallableExpression(
     }
     bindingStatements.push(...planned);
   }
-  if (context.input.ast.kindName(bodyNode) !== "KindBlock") {
+  if (context.input.program.source.ast.kindName(bodyNode) !== "KindBlock") {
     const body = planExpression(bodyNode, callableClosureContext);
     if (body === undefined) {
       return undefined;

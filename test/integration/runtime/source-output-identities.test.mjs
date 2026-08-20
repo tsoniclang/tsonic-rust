@@ -7,7 +7,7 @@ import {
 import {
   planRustSourceOutputIdentities,
   rustModuleNameForSourcePath,
-} from "../../../dist/analysis/program/source-output-identities.js";
+} from "../../../dist/backend/planner/names/source-output-identities.js";
 import {
   planRustSourcePackageFacades,
 } from "../../../dist/backend/planner/program/source-package-facades.js";
@@ -204,12 +204,14 @@ test("facade planning ignores valid package exports outside the checked closure"
     components: [{ id: componentId, packages: [packageId], dependencies: [] }],
   };
   const result = planRustSourcePackageFacades({
-    ast: fakeAstReader([root]),
-    sourceFiles: [root],
-    sourcePackages,
-    source: {
-      navigation: {
-        moduleExports: () => [],
+    input: { sourcePackages },
+    program: {
+      sourceFiles: [root],
+      source: {
+        ast: fakeAstReader([root]),
+        navigation: {
+          moduleExports: () => [],
+        },
       },
     },
   }, new Map());

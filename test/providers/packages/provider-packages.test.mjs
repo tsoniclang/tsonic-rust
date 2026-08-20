@@ -4,6 +4,7 @@ import {
   acmeFilesPackage,
   acmePlatformPackage,
   acmeVectorsPackage,
+  analyzeRust,
   artifactText,
   compileRust,
   createRustSession,
@@ -11,16 +12,10 @@ import {
 } from "../../helpers/rust-session.mjs";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { collectRustProviderSemantics } from "../../../dist/providers/packages/index.js";
+import { captureRustProviderContributions } from "../../helpers/provider-contributions.mjs";
 
 function providerContext(selectedCapabilities) {
-  return {
-    project: { entryPoint: "src/index.ts", targets: [{ id: "rust" }] },
-    projectDirectory: "/src",
-    target: { id: "rust", options: {} },
-    targetPack: { id: "rust" },
-    selectedCapabilities,
-    selectedSurfaces: [],
-  };
+  return captureRustProviderContributions(selectedCapabilities);
 }
 
 test("provider call lowers to the mapped Rust operation with cargo dependency", () => {
@@ -49,7 +44,7 @@ export function load(path: string): string {
 
 test("provider call records selected signature and operation facts by identity", () => {
   const packages = [acmeFilesPackage()];
-  const compiled = compileRust({
+  const analyzed = analyzeRust({
     packages,
     files: {
       "index.ts": `
@@ -61,8 +56,7 @@ export function load(path: string): string {
 `,
     },
   });
-  assert.deepEqual(compiled.result.diagnostics, []);
-  const { source, translationContext } = compiled;
+  const { source, program } = analyzed;
   const { ast } = source;
   const sourceFile = source.sourceFiles.find((file) => ast.getFileName(file) === "/src/index.ts");
   assert.ok(sourceFile);
@@ -75,17 +69,17 @@ export function load(path: string): string {
   };
   visit(sourceFile);
 
-  const selected = translationContext.facts.getSelectedTargetCall(callNode);
+  const selected = program.facts.getSelectedTargetCall(callNode);
   assert.equal(selected.member.id, "tsonic.rust.provider.10:acme-files47:tsonic.rust.provider-package.acme-files.binding5:1.0.010:acme.files11:@acme/files21:@acme/files::readText");
   assert.equal(selected.providerDeclaration.exportId, "@acme/files::readText");
-  const operation = translationContext.facts.getSelectedTargetOperation(callNode);
+  const operation = program.facts.getSelectedTargetOperation(callNode);
   assert.equal(operation.operationId, selected.member.id);
   assert.equal(operation.operationKind, "method");
   assert.equal(operation.targetOperation, "acme_files::read_text");
 });
 
 test("provider call argument passing facts preserve exact Rust row modes", () => {
-  const compiled = compileRust({
+  const analyzed = analyzeRust({
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
@@ -100,19 +94,18 @@ export function modes(value: Vector, factor: int32): int32 {
 `,
     },
   });
-  assert.deepEqual(compiled.result.diagnostics, []);
-  const { source, translationContext } = compiled;
+  const { source, program } = analyzed;
   const { ast } = source;
   const sourceFile = source.sourceFiles.find((file) => ast.getFileName(file) === "/src/index.ts");
   assert.ok(sourceFile);
   const modes = new Map();
   const visit = (node) => {
     if (ast.kindName(node) === "KindCallExpression") {
-      const selection = translationContext.facts.getSelectedTargetCall(node);
+      const selection = program.facts.getSelectedTargetCall(node);
       const exportId = selection?.providerDeclaration?.exportId;
       if (exportId !== undefined) {
         modes.set(exportId, ast.arguments(node).map((argument) =>
-          argument === undefined ? undefined : translationContext.facts.getArgumentPassingFact(argument)?.mode));
+          argument === undefined ? undefined : program.facts.getArgumentPassingFact(argument)?.mode));
       }
     }
     ast.forEachChild(node, (child) => child && visit(child));

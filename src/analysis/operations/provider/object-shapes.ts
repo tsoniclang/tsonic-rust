@@ -35,7 +35,7 @@ import type {
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustSourceObjectField, RustSourceObjectShape } from "../../project-types/source-type-registry.js";
-import type { RustTargetMember, TargetTypeRef } from "../../../policy/types/model.js";
+import type { RustTargetMember, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../facts/keys.js";
 
 export function mapSelectedJsSpecialCall(

@@ -11,7 +11,7 @@ import type {
   RustArtifactSnapshot,
 } from "./index.js";
 import type { RustPlanningContext } from "../context.js";
-import type { RustSourceFileOutputIdentity } from "../../../analysis/program/source-output-identities.js";
+import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import {
   rustSourceFileContractCandidate,
 } from "./source-file-contract.js";
@@ -24,7 +24,7 @@ import type {
 import type { RustSourcePackageComponentPlan } from "../program/source-package-components.js";
 import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
-import type { RustSourceFileModel } from "../../rust-ast/nodes.js";
+import type { RustSourceFileModel } from "../../target-ast/nodes.js";
 
 const minimumRustArtifactReconstructionCount = 64;
 const maximumReconstructionsPerSourceFile = 32;
@@ -61,7 +61,7 @@ export function reconstructRustSourceFiles(
       .map(([fileName, identity]) =>
         [fileName, identity.externalCrateName!] as const),
   );
-  for (const sourceFile of input.sourceFiles) {
+  for (const sourceFile of input.program.sourceFiles) {
     const owner = sourceFileArtifactOwner(input, sourceFile);
     if (owner === undefined) {
       diagnostics.push(reconstructionDiagnostic(
@@ -79,7 +79,7 @@ export function reconstructRustSourceFiles(
     }
     sourceFilesByOwner.set(owner, sourceFile);
     ownerBySourceFile.set(sourceFile, owner);
-    const fileName = input.ast.getFileName(sourceFile);
+    const fileName = input.program.source.ast.getFileName(sourceFile);
     const identity = identitiesByFileName.get(fileName);
     const component = identity === undefined
       ? undefined
@@ -126,7 +126,7 @@ export function reconstructRustSourceFiles(
       if (sourceFile === undefined) {
         return input.artifacts.reconstructArtifact(owner);
       }
-      const fileName = input.ast.getFileName(sourceFile);
+      const fileName = input.program.source.ast.getFileName(sourceFile);
       const identity = identitiesByFileName.get(fileName);
       if (identity === undefined) {
         return {
@@ -293,8 +293,8 @@ export function reconstructRustSourceFiles(
   }
   const sourcesByComponentId = new Map(components.map((component) => [
     component.componentId,
-    Object.freeze(input.sourceFiles.flatMap((sourceFile) => {
-      const identity = identitiesByFileName.get(input.ast.getFileName(sourceFile));
+    Object.freeze(input.program.sourceFiles.flatMap((sourceFile) => {
+      const identity = identitiesByFileName.get(input.program.source.ast.getFileName(sourceFile));
       if (identity?.componentId !== component.componentId) {
         return [];
       }
@@ -344,7 +344,7 @@ function sourceFilePublicDependencies(
       readonly reason: string;
     } {
   const dependencies: TargetArtifactDependency<RustArtifactFacet>[] = [];
-  for (const reference of input.source.navigation.moduleReferences(sourceFile)) {
+  for (const reference of input.program.source.navigation.moduleReferences(sourceFile)) {
     const dependencyOwner = ownerBySourceFile.get(reference.sourceFile) ??
       sourceFileArtifactOwner(input, reference.sourceFile);
     if (dependencyOwner === undefined) {
@@ -372,7 +372,7 @@ function sourceFileArtifactOwner(
   input: RustPlanningContext,
   sourceFile: SourceFile,
 ): string | undefined {
-  const identity = sourceFileIdentity(input.ast, sourceFile);
+  const identity = sourceFileIdentity(input.program.source.ast, sourceFile);
   return identity === undefined ? undefined : `source-file:${identity}`;
 }
 

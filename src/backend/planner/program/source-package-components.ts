@@ -1,10 +1,9 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
-import type { RustSourceFileOutputIdentity } from "../../../analysis/program/source-output-identities.js";
-import { allocateRustComponentSupportModuleName } from "../../../analysis/program/source-output-identities.js";
-import type { RustErrorDomain } from "../../rust-ast/nodes.js";
+import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
+import { allocateRustComponentSupportModuleName } from "../names/source-output-identities.js";
+import type { RustErrorDomain } from "../../target-ast/nodes.js";
 import type { RustSourcePackageFacadePlan } from "./source-package-facades.js";
-import { readRustOutputType } from "../../../options/rust-target-options.js";
 
 export interface RustSourcePackageComponentPlan {
   readonly componentId: string;
@@ -29,7 +28,7 @@ export function planRustSourcePackageComponents(
   | { readonly kind: "accepted"; readonly components: readonly RustSourcePackageComponentPlan[] }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
   const diagnostics: TargetDiagnostic[] = [];
-  const componentById = new Map(input.sourcePackages.components.map((component) =>
+  const componentById = new Map(input.input.sourcePackages.components.map((component) =>
     [component.id, component] as const));
   if (!componentById.has(facades.rootComponentId)) {
     return rejected(
@@ -82,7 +81,7 @@ export function planRustSourcePackageComponents(
 
   const componentByFileName = new Map([...identities].map(([fileName, identity]) =>
     [fileName, identity.componentId] as const));
-  const errorComponents = new Set(input.projectTypes.programErrorDefinitions.flatMap((definition) => {
+  const errorComponents = new Set(input.program.projectTypes.programErrorDefinitions.flatMap((definition) => {
     const componentId = componentByFileName.get(definition.fileName);
     return componentId === undefined ? [] : [componentId];
   }));
@@ -132,7 +131,7 @@ export function planRustSourcePackageComponents(
       "program",
       [structuralShapesModuleName],
     );
-    const publishesImplementationAbi = !root || readRustOutputType(input.target) === "lib";
+    const publishesImplementationAbi = !root || input.program.configuration.outputType === "lib";
     const publicImplementationModuleNames = publishesImplementationAbi
       ? allModuleAncestors(componentIdentities.map((identity) => identity.moduleName))
       : Object.freeze(new Set<string>());

@@ -4,7 +4,7 @@ import type {
   RustStmt,
   RustType,
   RustVisibility,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 import {
   allocateRustSyntheticName,
   allocateRustSyntheticTypeName,

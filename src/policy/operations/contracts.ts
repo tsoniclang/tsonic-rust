@@ -17,26 +17,24 @@ import type {
   RustTargetCallArgumentSlot,
   RustTargetParameter,
   TargetTypeRef,
-} from "../types/model.js";
+} from "../../target-model/types/model.js";
 import type {
   RustCallbackOperationTemplate,
   RustProviderOperationTemplate,
-} from "./model.js";
+} from "../../target-model/operations/model.js";
 
 type ResolvedSourceCallInfo = NonNullable<
-  ReturnType<SourceFileSemantics["getResolvedCallInfo"]>
+  ReturnType<SourceFileSemantics["operations"]["call"]>
 >;
 
 type ResolvedSourcePropertyAccessInfo = NonNullable<
-  ReturnType<SourceFileSemantics["getResolvedPropertyAccessInfo"]>
+  ReturnType<SourceFileSemantics["operations"]["propertyAccess"]>
 >;
 
 export interface RustOperationPolicyContext extends RustSourcePolicyContext {
   readonly facts: RustPlanWriter;
   readonly currentSourceFile: SourceFile;
-  readonly sourceFiles: readonly SourceFile[];
-  readonly checker: SourceFileSemantics;
-  readonly typeShape: SourceFileSemantics;
+  readonly currentSemantics: SourceFileSemantics;
   readonly extensionId: "tsonic.rust.policy";
 }
 

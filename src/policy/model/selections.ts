@@ -8,7 +8,7 @@ import type {
   RustSelectedTargetOperation,
   RustSelectedTargetSignature,
   RustTargetTypeRef,
-} from "../types/model.js";
+} from "../../target-model/types/model.js";
 import { defineRustPlanKey } from "./keys.js";
 import type { RustPlanKey } from "./keys.js";
 import {

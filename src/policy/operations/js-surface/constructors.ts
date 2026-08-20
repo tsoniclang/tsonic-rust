@@ -7,7 +7,7 @@ import {
 import { resolveCarrierRef } from "./selection.js";
 import { rustTargetTypeRefEquals } from "../../types/equality.js";
 import type { JsCarrierRef, JsOperationSelection } from "./model.js";
-import type { TargetTypeRef } from "../../types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 interface JsConstructorRowData {
   readonly className: string;

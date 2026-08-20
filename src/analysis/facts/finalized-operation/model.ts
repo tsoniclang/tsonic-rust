@@ -4,9 +4,9 @@ import type {
   RustProviderConstantArgument,
   RustProviderOperationForm,
   RustValueConversion,
-} from "../../../policy/operations/model.js";
-import type { RustErrorBoundary, RustFallibleErrorBoundary } from "../../../policy/operations/error-boundary.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+} from "../../../target-model/operations/model.js";
+import type { RustErrorBoundary, RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export type RustFinalizedSourceArgumentRole = "parameter" | "index" | "compile-time";
 

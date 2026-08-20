@@ -1,43 +1,59 @@
-import type { TargetSelection } from "@tsonic/target-api";
 import { realpathSync, statSync } from "node:fs";
-import { basename, isAbsolute, resolve } from "node:path";
-import { readRustUserProjectFile } from "./rust-target-options.js";
+import { basename, isAbsolute, relative, resolve } from "node:path";
+import type { RustProjectConfiguration } from "../target-model/configuration/model.js";
 
-export type RustUserCargoManifestResolution =
-  | { readonly kind: "absent" }
-  | { readonly kind: "invalid"; readonly path: string; readonly message: string }
-  | { readonly kind: "resolved"; readonly manifestPath: string };
-
-export function resolveRustUserCargoManifest(
-  target: TargetSelection,
+export function resolveRustProjectConfiguration(
+  configured: string | undefined,
   projectDirectory: string,
-): RustUserCargoManifestResolution {
-  const configured = readRustUserProjectFile(target);
+  targetOutputRoot: string,
+): RustProjectConfiguration {
   if (configured === undefined) {
-    return { kind: "absent" };
+    return Object.freeze({ kind: "generated" });
   }
   const candidate = isAbsolute(configured)
     ? resolve(configured)
     : resolve(projectDirectory, configured);
   if (basename(candidate) !== "Cargo.toml") {
-    return invalid(candidate, `Rust target option 'projectFile' must point to Cargo.toml: ${candidate}`);
+    throw new Error(`Rust target option 'projectFile' must point to Cargo.toml: ${candidate}`);
   }
   let manifestPath: string;
   try {
     manifestPath = realpathSync(candidate);
   } catch {
-    return invalid(candidate, `Rust target option 'projectFile' does not exist: ${candidate}`);
+    throw new Error(`Rust target option 'projectFile' does not exist: ${candidate}`);
   }
+  let isFile: boolean;
   try {
-    if (!statSync(manifestPath).isFile()) {
-      return invalid(manifestPath, `Rust target option 'projectFile' must point to a file: ${manifestPath}`);
-    }
+    isFile = statSync(manifestPath).isFile();
   } catch {
-    return invalid(manifestPath, `Rust target option 'projectFile' cannot be read: ${manifestPath}`);
+    throw new Error(`Rust target option 'projectFile' cannot be read: ${manifestPath}`);
   }
-  return { kind: "resolved", manifestPath };
+  if (!isFile) {
+    throw new Error(`Rust target option 'projectFile' must point to a file: ${manifestPath}`);
+  }
+  const outputRoot = canonicalExistingPath(targetOutputRoot);
+  const relativeToOutput = normalizePath(relative(outputRoot, manifestPath));
+  if (
+    relativeToOutput.length === 0 ||
+    relativeToOutput === "." ||
+    (!relativeToOutput.startsWith("../") && relativeToOutput !== "..")
+  ) {
+    throw new Error(
+      `Rust target option 'projectFile' must not point inside generated target output root '${targetOutputRoot}': ${manifestPath}`,
+    );
+  }
+  return Object.freeze({ kind: "user-owned", manifestPath });
 }
 
-function invalid(path: string, message: string): RustUserCargoManifestResolution {
-  return { kind: "invalid", path, message };
+function canonicalExistingPath(path: string): string {
+  const resolved = resolve(path);
+  try {
+    return realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function normalizePath(path: string): string {
+  return path.split("\\").join("/");
 }

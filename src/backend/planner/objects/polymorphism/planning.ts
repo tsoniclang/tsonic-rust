@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustItem, RustType } from "../../../rust-ast/nodes.js";
-import { rustLintAttributes } from "../../../rust-ast/lint-policy.js";
+import type { RustItem, RustType } from "../../../target-ast/nodes.js";
+import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustDefaultImplementation } from "../../declarations/default-implementation.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
@@ -46,12 +46,12 @@ export function planPolymorphicClassDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const definition = context.input.projectTypes.definitionForDeclaration(declaration);
-  if (definition?.kind !== "class" || !context.input.projectTypes.isPolymorphic(definition)) {
+  const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
+  if (definition?.kind !== "class" || !context.input.program.projectTypes.isPolymorphic(definition)) {
     return undefined;
   }
   const diagnosticCountBeforeShape = context.diagnostics.length;
-  const openCarrier = context.input.projectTypes.openCarrier(definition);
+  const openCarrier = context.input.program.projectTypes.openCarrier(definition);
   const wrapperType = rustTypeFromCarrierInContext(openCarrier, context);
   const dispatchType = rustProjectDispatchTraitType(openCarrier, context);
   const rootType = rustProjectRootType(openCarrier, context);
@@ -113,10 +113,10 @@ export function planPolymorphicClassDeclaration(
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
   const stateMarker = rustProjectStateMarker(definition, context);
-  const programErrorVariant = context.input.projectTypes.programErrorVariant(definition);
+  const programErrorVariant = context.input.program.projectTypes.programErrorVariant(definition);
   const publiclyReachable = programErrorVariant !== undefined ||
     rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
-  const exported = context.input.ast.hasModifierKind(declaration, "export");
+  const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
   const ownLayer = layers[layers.length - 1]!;
   const privateStateAccessors = planProjectPrivateStateAccessors(
     stateType,
@@ -165,7 +165,7 @@ export function planPolymorphicClassDeclaration(
         ...(baseStateType === undefined
           ? []
           : [{
-              name: context.input.projectTypes.baseStateFieldName(definition),
+              name: context.input.program.projectTypes.baseStateFieldName(definition),
               type: baseStateType,
               visibility: implementationVisibility,
               ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
@@ -174,7 +174,7 @@ export function planPolymorphicClassDeclaration(
           name: field.targetName,
           type: field.type,
           visibility: rustProjectMemberStorageVisibility(
-            context.input.ast,
+            context.input.program.source.ast,
             field.declaration,
             publiclyReachable,
           ),
@@ -269,7 +269,7 @@ function planProjectExternalErrorImplementations(
   wrapperType: RustType,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const external = context.input.projectTypes.externalBaseForDefinition(definition);
+  const external = context.input.program.projectTypes.externalBaseForDefinition(definition);
   if (external === undefined) {
     return [];
   }
@@ -278,8 +278,8 @@ function planProjectExternalErrorImplementations(
   if (name === undefined || message === undefined) {
     return undefined;
   }
-  const nameRead = context.input.projectTypes.memberSlotName(name.declaration, "read");
-  const messageRead = context.input.projectTypes.memberSlotName(message.declaration, "read");
+  const nameRead = context.input.program.projectTypes.memberSlotName(name.declaration, "read");
+  const messageRead = context.input.program.projectTypes.memberSlotName(message.declaration, "read");
   if (nameRead === undefined || messageRead === undefined) {
     return undefined;
   }
@@ -344,11 +344,11 @@ export function planPolymorphicInterfaceDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const definition = context.input.projectTypes.definitionForDeclaration(declaration);
-  if (definition?.kind !== "interface" || !context.input.projectTypes.isPolymorphic(definition)) {
+  const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
+  if (definition?.kind !== "interface" || !context.input.program.projectTypes.isPolymorphic(definition)) {
     return undefined;
   }
-  const carrier = context.input.projectTypes.openCarrier(definition);
+  const carrier = context.input.program.projectTypes.openCarrier(definition);
   const wrapperType = rustTypeFromCarrierInContext(carrier, context);
   const dispatchType = rustProjectDispatchTraitType(carrier, context);
   const trait = planProjectDispatchTrait(definition, carrier, context);
@@ -362,7 +362,7 @@ export function planPolymorphicInterfaceDeclaration(
   }
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
-  const exported = context.input.ast.hasModifierKind(declaration, "export");
+  const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
     context,
     definition.targetName,

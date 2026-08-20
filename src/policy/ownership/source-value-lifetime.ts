@@ -6,9 +6,11 @@ import {
 
 interface RustSourceLifetimeContext {
   readonly input: {
-    readonly ast: AstReader;
-    readonly source: {
-      readonly navigation: SourceProgramNavigation;
+    readonly program: {
+      readonly source: {
+        readonly ast: AstReader;
+        readonly navigation: SourceProgramNavigation;
+      };
     };
   };
 }
@@ -17,28 +19,28 @@ export function rustSourceReferenceCanMove(
   reference: Node,
   context: RustSourceLifetimeContext,
 ): boolean {
-  const selected = context.input.source.navigation.sourceReferenceFor(reference);
+  const selected = context.input.program.source.navigation.sourceReferenceFor(reference);
   const declaration = selected?.declaration;
   if (declaration === undefined ||
     !isLocalValueDeclaration(declaration, context) ||
     isInsideRepeatedRegion(reference, declaration, context)) {
     return false;
   }
-  const summary = context.input.source.navigation.declarationUseSummary(declaration);
+  const summary = context.input.program.source.navigation.declarationUseSummary(declaration);
   if (summary.bindingWritten || summary.captured || summary.exported) {
     return false;
   }
   const runtimeUses = summary.uses.filter((use) =>
     use.kind !== "source-linkage" && use.kind !== "type-only");
   return runtimeUses.length === 1 &&
-    sourceNodesEqual(context.input.ast, runtimeUses[0]?.reference, reference);
+    sourceNodesEqual(context.input.program.source.ast, runtimeUses[0]?.reference, reference);
 }
 
 function isLocalValueDeclaration(
   declaration: Node,
   context: RustSourceLifetimeContext,
 ): boolean {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   if (!ast.is.IsVariableDeclaration(declaration) &&
     !ast.is.IsParameterDeclaration(declaration)) {
     return false;
@@ -61,7 +63,7 @@ function isInsideRepeatedRegion(
   declaration: Node,
   context: RustSourceLifetimeContext,
 ): boolean {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const declarationCallable = enclosingCallable(declaration, context);
   let current = ast.parent(reference);
   while (current !== undefined && current !== declarationCallable) {
@@ -84,13 +86,13 @@ function enclosingCallable(
     if (isCallable(current, context)) {
       return current;
     }
-    current = context.input.ast.parent(current);
+    current = context.input.program.source.ast.parent(current);
   }
   return undefined;
 }
 
 function isCallable(node: Node, context: RustSourceLifetimeContext): boolean {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   return ast.is.IsFunctionDeclaration(node) || ast.is.IsFunctionExpression(node) ||
     ast.is.IsArrowFunction(node) || ast.is.IsMethodDeclaration(node) ||
     ast.is.IsConstructorDeclaration(node) || ast.is.IsGetAccessorDeclaration(node) ||

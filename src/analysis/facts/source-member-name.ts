@@ -22,7 +22,7 @@ export function rustProjectCallableTargetName(
   }
   if (ast.is.IsComputedPropertyName(name)) {
     const selected = context.semanticsFor(declaration)
-      .getResolvedWellKnownSymbolInfo(name);
+      .operations.wellKnownSymbol(name);
     return selected?.kind === "dispose"
       ? "dispose"
       : selected?.kind === "async-dispose"

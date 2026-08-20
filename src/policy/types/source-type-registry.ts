@@ -5,7 +5,7 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
-import type { TargetTypeRef } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustSourceEnumVariant {
   readonly name: string;

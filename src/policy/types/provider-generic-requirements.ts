@@ -1,7 +1,7 @@
-import type { TargetTypeRef } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustProviderTypeParameterRequirement,
-} from "../operations/model.js";
+} from "../../target-model/operations/model.js";
 import {
   isRustCopyCarrier,
   rustCarrierSupportsTrait,

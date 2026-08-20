@@ -7,7 +7,7 @@ import {
 import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
-import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import { rustProjectObjectStateField, rustProjectObjectType } from "../objects/project-objects.js";
 import { rustProjectStateType, rustProjectStateMarker, rustProjectTypeParameters } from "../objects/polymorphism/names.js";
@@ -15,13 +15,13 @@ import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "./classes.js";
-import type { RustItem, RustStructField } from "../../rust-ast/nodes.js";
+import type { RustItem, RustStructField } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../objects/project-storage-abi.js";
 
 export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const { ast } = context.input;
-  const enumName = context.input.names.nameForDeclaration(node) ?? "";
+  const { ast } = context.input.program.source;
+  const enumName = context.input.program.names.nameForDeclaration(node) ?? "";
   if (!isValidRustIdentifier(enumName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -41,7 +41,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       ));
       return undefined;
     }
-    const memberName = context.input.names.nameForDeclaration(member) ?? "";
+    const memberName = context.input.program.names.nameForDeclaration(member) ?? "";
     if (!isValidRustIdentifier(memberName)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, member),
@@ -50,7 +50,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       ));
       return undefined;
     }
-    const constant = context.input.analysis.getEnumMemberConstant(member);
+    const constant = context.input.program.analysis.getEnumMemberConstant(member);
     const value = constant?.value;
     if (typeof value !== "number" || !Number.isInteger(value)) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -88,9 +88,9 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
 }
 
 export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const { ast } = context.input;
-  const definition = context.input.projectTypes.definitionForDeclaration(node);
-  const interfaceName = context.input.names.nameForDeclaration(node) ?? "";
+  const { ast } = context.input.program.source;
+  const definition = context.input.program.projectTypes.definitionForDeclaration(node);
+  const interfaceName = context.input.program.names.nameForDeclaration(node) ?? "";
   if (!isValidRustIdentifier(interfaceName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -120,7 +120,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   }
   const typeParams = rustProjectTypeParameters(definition);
   const stateType = rustProjectStateType(
-    context.input.projectTypes.openCarrier(definition),
+    context.input.program.projectTypes.openCarrier(definition),
     context,
   );
   if (stateType === undefined) {
@@ -171,7 +171,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       const valueCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
       const keyType = rustTypeFromCarrierInContext(keyCarrier, context);
       const valueType = rustTypeFromCarrierInContext(valueCarrier, context);
-      const targetName = context.input.projectTypes.fieldStorageName(definition, member);
+      const targetName = context.input.program.projectTypes.fieldStorageName(definition, member);
       if (indexLayout === undefined || keyCarrier === undefined || valueCarrier === undefined ||
         keyType === undefined || valueType === undefined || targetName === undefined ||
         (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
@@ -202,7 +202,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    const fieldName = context.input.projectTypes.fieldStorageName(definition, member) ?? "";
+    const fieldName = context.input.program.projectTypes.fieldStorageName(definition, member) ?? "";
     const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
     const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
     if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -235,7 +235,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   if (fields.length !== layout.fields.length) {
     return undefined;
   }
-  const representation = context.input.objectRepresentations.representationFor(definition);
+  const representation = context.input.program.objectRepresentations.representationFor(definition);
   const stateCarrier = representation === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation);
@@ -297,10 +297,10 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
 }
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const { ast } = context.input;
-  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
-  const fact = context.input.facts.getFact(node, rustTypeAliasDeclarationFactKey);
-  const aliasName = context.input.names.nameForDeclaration(node) ?? "";
+  const { ast } = context.input.program.source;
+  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  const fact = context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey);
+  const aliasName = context.input.program.names.nameForDeclaration(node) ?? "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),

@@ -3,8 +3,8 @@ import type {
   RustExpr,
   RustStmt,
   RustType,
-} from "../../rust-ast/nodes.js";
-import { rustTypeEquals } from "../../rust-ast/type-equality.js";
+} from "../../target-ast/nodes.js";
+import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { rustBlockTerminates } from "../statements/block-flow.js";
 
 export interface RustFallibleBoundary {

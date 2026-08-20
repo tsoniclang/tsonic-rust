@@ -6,9 +6,9 @@ import type {
   RustCompilerTypeTraits,
 } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
-import type { RustNamedTypeTraitContract } from "../../../policy/types/model.js";
+import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition } from "../../packages/model.js";
-import type { RustProviderTypeParameterRequirement } from "../../../policy/operations/model.js";
+import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
 
 export function operationRow(
   operation: RustProviderOperationDefinition,

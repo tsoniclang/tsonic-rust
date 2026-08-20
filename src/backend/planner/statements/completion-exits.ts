@@ -1,4 +1,4 @@
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export function planRustReturnExit(

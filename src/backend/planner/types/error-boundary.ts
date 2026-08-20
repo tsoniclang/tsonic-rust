@@ -1,5 +1,5 @@
-import type { RustFallibleErrorBoundary } from "../../../policy/operations/error-boundary.js";
-import type { RustExpr, RustType } from "../../rust-ast/nodes.js";
+import type { RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
+import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import { rustRuntimeErrorTypeIdentity } from "../program/source-package-errors.js";
 
 export const rustTargetRuntimeErrorType: RustType = Object.freeze({

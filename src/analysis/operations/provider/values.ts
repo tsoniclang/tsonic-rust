@@ -17,7 +17,7 @@ import type {
 } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustTargetOperationFact } from "../../facts/keys.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function selectRustCheckedValue(
   request: RustCheckedValueSelectionInput,

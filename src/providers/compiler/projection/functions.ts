@@ -1,13 +1,13 @@
 import { functionSignatureDigest, operationRow, targetTraitPath, typeRequirements } from "./operations.js";
 import { parameterPassing, sourceTypeFor, targetTypeFor } from "./types.js";
 import { requireCurrentType, uniqueText } from "./utilities.js";
-import { rustBorrowedStrToStringValueConversion } from "../../../policy/conversions/model.js";
+import { rustBorrowedStrToStringValueConversion } from "../../../target-model/conversions/model.js";
 import { sourceMethodIsInstance } from "./declarations.js";
 import type { ProjectionContext } from "./model.js";
 import type { ProviderMemberDeclaration, ProviderParameterDeclaration, ProviderSignatureDeclaration } from "@tsonic/tsts";
 import type { RustCompilerFunction, RustCompilerType } from "../model/model.js";
 import type { RustProviderOperationDefinition } from "../../packages/model.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function projectFunction(
   fn: RustCompilerFunction,

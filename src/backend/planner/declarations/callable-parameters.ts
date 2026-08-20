@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
   KindArrayBindingPattern,
   KindObjectBindingPattern,
@@ -12,7 +12,7 @@ import {
   rustMutatedReferentFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
-import type { RustFunctionParam, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustFunctionParam, RustStmt } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import {
   requireRustCarrierRequirements,
@@ -60,7 +60,7 @@ export function planRustCallableParameters(
   syntheticNames: RustSyntheticNameState,
   options: { readonly requireStatic: boolean },
 ): RustCallableParameterPlan | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const params: RustFunctionParam[] = [];
   const prelude: RustParameterPrelude[] = [];
   for (const parameter of ast.parameters(callable)) {
@@ -78,11 +78,11 @@ export function planRustCallableParameters(
         (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern)
       ? nameNode
       : undefined;
-    const abi = context.input.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+    const abi = context.input.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
     const parameterCarrier = abi?.parameterCarrier;
     const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
     const parameterName = pattern === undefined
-      ? context.input.names.nameForDeclaration(parameter) ?? ""
+      ? context.input.program.names.nameForDeclaration(parameter) ?? ""
       : allocateRustSyntheticName(syntheticNames, "binding_parameter");
     if (!isValidRustIdentifier(parameterName) || parameterType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -96,7 +96,7 @@ export function planRustCallableParameters(
       !requireRustCarrierRequirements(parameterCarrier, ["static"], parameter, context)) {
       return undefined;
     }
-    const sourceCarrier = context.input.facts.getRuntimeCarrierFact(parameter)?.carrier;
+    const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(parameter)?.carrier;
     const locationStorage = rustLocationStorageForDeclaration(parameter, context);
     if (pattern !== undefined &&
       (abi?.mode !== "value" || sourceCarrier === undefined || parameterCarrier === undefined ||
@@ -121,8 +121,8 @@ export function planRustCallableParameters(
     const ownedBinding = parameterCarrier !== undefined &&
       parameterCarrier.kind !== "pointer" &&
       parameterCarrier.kind !== "reference";
-    const objectRepresentation = context.input.objectRepresentations.representationFor(
-      context.input.projectTypes.definitionForCarrier(parameterCarrier),
+    const objectRepresentation = context.input.program.objectRepresentations.representationFor(
+      context.input.program.projectTypes.definitionForCarrier(parameterCarrier),
     );
     const referentMutationRequiresMutableBinding =
       rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier) &&
@@ -130,12 +130,12 @@ export function planRustCallableParameters(
     const mutable = pattern === undefined &&
       locationStorage === undefined &&
       (
-        context.input.facts.getFact(
+        context.input.program.facts.getFact(
           parameter,
           rustMutatedBindingFactKey,
         ) !== undefined ||
         ownedBinding && referentMutationRequiresMutableBinding &&
-          context.input.facts.getFact(
+          context.input.program.facts.getFact(
             parameter,
             rustMutatedReferentFactKey,
           ) !== undefined

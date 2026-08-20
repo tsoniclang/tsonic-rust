@@ -24,7 +24,7 @@ import {
   rustTargetOperationIsDirectLocation,
 } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
@@ -121,7 +121,7 @@ export function planRustProviderEvaluationScope(
   const nameRoot = receiverNode ?? argumentNodes.find((node): node is Node => node !== undefined) ??
     context.sourceFile;
   const syntheticNames = context.syntheticNames ??
-    createRustSyntheticNameState(context.input.ast, nameRoot, []);
+    createRustSyntheticNameState(context.input.program.source.ast, nameRoot, []);
   for (const [index, slot] of sourceSlots.entries()) {
     const mutable = mutableInputs.get(slot.key);
     if (mutable?.kind === "promoted") {
@@ -216,7 +216,7 @@ function providerInputStabilizationKeys(
   }
   const effects = new Map(sourceSlots.map((slot) => [
     slot.key,
-    context.input.source.navigation.expressionEffects(slot.node),
+    context.input.program.source.navigation.expressionEffects(slot.node),
   ]));
   const sourceEffectOrder = sourceSlots
     .filter((slot) => !preplannedKeys.has(slot.key) &&
@@ -274,7 +274,7 @@ function providerInputUsesExistingBorrow(
   if (context.expressionOverrides?.get(node)?.valueForm === "shared-reference") {
     return true;
   }
-  const sourceParameter = context.input.facts.getFact(node, rustSourceParameterAbiFactKey);
+  const sourceParameter = context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
   return sourceParameter?.mode === input.mode &&
     rustTargetTypeRefEquals(sourceParameter.parameterCarrier, input.parameterCarrier);
 }
@@ -475,9 +475,9 @@ function providerMutableInputIsDirect(
   node: Node,
   context: RustPlanContext,
 ): boolean {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   if (ast.is.IsIdentifier(node)) {
-    const binding = context.input.facts.getFact(node, rustSourceBindingFactKey);
+    const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     return path !== undefined && isValidRustIdentifier(path);
   }
@@ -485,7 +485,7 @@ function providerMutableInputIsDirect(
   if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
     return true;
   }
-  const operation = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   return rustTargetOperationIsDirectLocation(operation) ||
     operation?.kind === "source-field" &&
       operation.storage === "project-object" &&
@@ -497,9 +497,9 @@ function providerDirectMutableRoot(
   node: Node,
   context: RustPlanContext,
 ): Node | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   if (ast.is.IsIdentifier(node)) {
-    return context.input.source.navigation.sourceReferenceFor(node)?.declaration;
+    return context.input.program.source.navigation.sourceReferenceFor(node)?.declaration;
   }
   const kind = ast.kindName(node);
   if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
@@ -541,14 +541,14 @@ function providerMutableLocationNode(
   sourceNode: Node,
   context: RustPlanContext,
 ): Node | undefined {
-  const operation = context.input.facts.getFact(
+  const operation = context.input.program.facts.getFact(
     sourceNode,
     rustTargetOperationFactKey,
   );
   if (operation?.kind !== "flow-marker") {
     return sourceNode;
   }
-  const arguments_ = [...context.input.ast.arguments(sourceNode)];
+  const arguments_ = [...context.input.program.source.ast.arguments(sourceNode)];
   if (operation.state === "borrowed-mut" &&
     arguments_.length === 1 && arguments_[0] !== undefined) {
     return arguments_[0];

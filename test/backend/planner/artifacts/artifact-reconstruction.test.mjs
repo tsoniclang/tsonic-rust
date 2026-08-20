@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createRustSourceFile,
-} from "../../../../dist/backend/rust-ast/nodes.js";
+} from "../../../../dist/backend/target-ast/nodes.js";
 import {
   rustSourceFileContractCandidate,
 } from "../../../../dist/backend/planner/artifacts/source-file-contract.js";

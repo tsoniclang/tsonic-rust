@@ -2,7 +2,7 @@ import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { stronglyConnectedSourceFiles } from "../../../analysis/program/module-graph.js";
-import type { RustItem, RustStmt, RustType } from "../../rust-ast/nodes.js";
+import type { RustItem, RustStmt, RustType } from "../../target-ast/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
 import {
@@ -47,14 +47,14 @@ export function planRustModuleInitializers(
       return;
     }
     active.add(sourceFile);
-    for (const dependency of input.source.navigation.moduleDependencies(sourceFile)) {
+    for (const dependency of input.program.source.navigation.moduleDependencies(sourceFile)) {
       visit(dependency.sourceFile);
     }
     active.delete(sourceFile);
     visited.add(sourceFile);
     const planned = plannedBySourceFile.get(sourceFile);
     const initialization = planned?.moduleInitialization;
-    const contract = packageInitializers.byFileName.get(input.ast.getFileName(sourceFile));
+    const contract = packageInitializers.byFileName.get(input.program.source.ast.getFileName(sourceFile));
     if (planned !== undefined && initialization !== undefined) {
       ordered.push({
         sourceFile,
@@ -178,10 +178,10 @@ function validateRuntimeModuleGraph(
   diagnostics: TargetDiagnostic[],
 ): boolean {
   const reachable = collectReachableSourceFiles(input, roots);
-  const components = stronglyConnectedSourceFiles(input.source.navigation, reachable);
+  const components = stronglyConnectedSourceFiles(input.program.source.navigation, reachable);
   let valid = true;
   for (const component of components) {
-    const cyclic = component.length > 1 || input.source.navigation
+    const cyclic = component.length > 1 || input.program.source.navigation
       .moduleDependencies(component[0]!)
       .some((dependency) => dependency.sourceFile === component[0]);
     if (!cyclic) {
@@ -189,13 +189,13 @@ function validateRuntimeModuleGraph(
     }
     const initialized = component.filter((sourceFile) =>
       plannedBySourceFile.get(sourceFile)?.moduleInitialization !== undefined ||
-      packageInitializers.byFileName.has(input.ast.getFileName(sourceFile)));
+      packageInitializers.byFileName.has(input.program.source.ast.getFileName(sourceFile)));
     if (initialized.length === 0) {
       continue;
     }
     valid = false;
     const files = component
-      .map((sourceFile) => input.ast.getFileName(sourceFile))
+      .map((sourceFile) => input.program.source.ast.getFileName(sourceFile))
       .sort((left, right) => left.localeCompare(right, "en"));
     diagnostics.push({
       code: "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE",
@@ -206,7 +206,7 @@ function validateRuntimeModuleGraph(
       evidence: [
         "target.capability=rust.backend.module-initialization",
         ...initialized
-          .map((sourceFile) => input.ast.getFileName(sourceFile))
+          .map((sourceFile) => input.program.source.ast.getFileName(sourceFile))
           .sort((left, right) => left.localeCompare(right, "en"))
           .map((fileName) => `runtime.initializer=${fileName}`),
       ],
@@ -225,7 +225,7 @@ function collectReachableSourceFiles(
       return;
     }
     reachable.add(sourceFile);
-    for (const dependency of input.source.navigation.moduleDependencies(sourceFile)) {
+    for (const dependency of input.program.source.navigation.moduleDependencies(sourceFile)) {
       visit(dependency.sourceFile);
     }
   };

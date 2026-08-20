@@ -19,9 +19,29 @@ import {
   rustLayerPolicies,
   rustLayerRules,
   rustRootPolicies,
+  rustSourceRules,
 } from "./layer-policy.mjs";
 
 const repositoryRoot = resolve(new URL("../..", import.meta.url).pathname);
+
+test("Rust architecture rules reject target-specific boundary mutations", () => {
+  const mutations = [
+    ["ARCH-RUST-CONFIG-001", "src/backend/planner/project.ts", "configuration.projectFile"],
+    ["ARCH-RUST-PRINTER-001", "src/print/source/index.ts", "finalizeRustSourceStyle(model);"],
+    ["ARCH-RUST-PLAN-001", "src/backend/artifact-model/output.ts", "readonly diagnostics: readonly string[];"],
+    ["ARCH-RUST-PROGRAM-001", "src/analysis/program/model.ts", "readonly values: Set<string>;"],
+    ["ARCH-RUST-PROVIDER-001", "src/providers/packages/model.ts", "interface RustProviderSemantics { readonly carrierPaths: ReadonlyMap<string, string>; }"],
+    ["ARCH-RUST-PROVIDER-002", "src/providers/packages/materialization.ts", "type Carriers = Readonly<Record<string, string>> | ReadonlyMap<string, string>;"],
+    ["ARCH-RUST-SELECTION-001", "src/analysis/operations/call.ts", "semantics.types.callSignatures(type);"],
+  ];
+  for (const [ruleId, file, source] of mutations) {
+    assert.equal(
+      rustSourceRules.some((rule) => rule.ruleId === ruleId && rule.matches(file, source)),
+      true,
+      `${ruleId} did not reject its mutation`,
+    );
+  }
+});
 
 test("Rust product imports conform to the declared architecture", () => {
   const sourceFiles = readSourceInventory(repositoryRoot, {
@@ -38,6 +58,7 @@ test("Rust product imports conform to the declared architecture", () => {
     forbiddenPackages: rustForbiddenPackages,
     forbiddenDirectories: rustForbiddenDirectories,
     rootPolicies: rustRootPolicies,
+    sourceRules: rustSourceRules,
   });
   const barrelFindings = evaluateBarrelModules(moduleAnalysis.modules, {
     allowedImplementationFiles: rustAllowedImplementationIndexes,
@@ -72,7 +93,7 @@ test("Rust package exposes only approved audience entrypoints", async () => {
       ["src/public/index.ts", [
         "RustPlanningContext",
         "RustTargetProgram",
-        "planRustArtifacts",
+        "planRustOutput",
         "printRustSourceFile",
       ]],
       ["src/public/provider.ts", [
@@ -80,7 +101,7 @@ test("Rust package exposes only approved audience entrypoints", async () => {
         "RustTargetProgram",
         "createRustCompilerWorkerClient",
         "rustTargetOperationFactKey",
-        "planRustArtifacts",
+        "planRustOutput",
         "printRustSourceFile",
       ]],
     ]),

@@ -11,8 +11,7 @@ test("cargo toolchain reports deterministic source-to-source artifacts without b
     artifactsRoot: "out",
     project: { entryPoint: "src/index.ts", targets: [] },
     target: { id: "rust", options: {} },
-    compileResult: {
-      diagnostics: [],
+    compileOutput: {
       artifacts: [
         { kind: "project", path: "Cargo.toml", text: "[package]" },
         { kind: "source", path: "src/lib.rs", language: "rust", text: "// generated" },

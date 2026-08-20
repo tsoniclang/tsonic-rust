@@ -1,7 +1,7 @@
 import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier } from "./carriers.js";
 import { builtInTargetCarrierIds } from "./model.js";
 import { isClosedMetadata } from "../../../policy/model/closed-data.js";
-import { isRustFallibleErrorBoundary } from "../../../policy/operations/error-boundary.js";
+import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { isRustNamedTypeTraitContract } from "../../../policy/types/target-types.js";
 import { isRustTargetTypeRef } from "../../../policy/types/equality.js";
 import { validateOperationRows, validateTypeParameterRequirements } from "./operations.js";
@@ -15,7 +15,7 @@ import type {
 } from "@tsonic/tsts";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function validateProviderPackageDefinition(definition: RustProviderPackageDefinition): void {
   const fail: Fail = (message) => {

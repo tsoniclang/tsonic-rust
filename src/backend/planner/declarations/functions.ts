@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Type } from "@tsonic/target-api/source";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../policy/types/target-types.js";
-import type { RustBlock, RustItem } from "../../rust-ast/nodes.js";
+import type { RustBlock, RustItem } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "../statements/index.js";
 import {
@@ -40,7 +40,7 @@ import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
-import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
 
@@ -48,13 +48,13 @@ export function planFunctionDeclarations(
   node: Node,
   outerContext: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const specializations = outerContext.input.sourceCallableSpecializations;
+  const specializations = outerContext.input.program.sourceCallableSpecializations;
   if (!specializations.requiresSpecialization(node)) {
     const item = planRustFunctionItem({
       callableDeclaration: node,
       nameDeclaration: node,
-      name: outerContext.input.names.functionNameForDeclaration(node),
-      exported: outerContext.input.ast.hasModifierKind(node, "export"),
+      name: outerContext.input.program.names.functionNameForDeclaration(node),
+      exported: outerContext.input.program.source.ast.hasModifierKind(node, "export"),
     }, outerContext);
     return item === undefined ? undefined : Object.freeze([item]);
   }
@@ -105,9 +105,9 @@ function planRustFunctionItem(
   outerContext: RustPlanContext,
 ): RustItem | undefined {
   const node = source.callableDeclaration;
-  const { ast } = outerContext.input;
+  const { ast } = outerContext.input.program.source;
   const isAsync = ast.hasModifierKind(node, "async");
-  const generatorFact = outerContext.input.facts.getFact(node, rustGeneratorFactKey);
+  const generatorFact = outerContext.input.program.facts.getFact(node, rustGeneratorFactKey);
   const isUnsafe = rustDeclarationRequiresUnsafe(
     node,
     "declaration",
@@ -118,7 +118,7 @@ function planRustFunctionItem(
     isUnsafe,
     outerContext.input,
   );
-  const asyncFact = outerContext.input.facts.getFact(node, rustAsyncFunctionFactKey);
+  const asyncFact = outerContext.input.program.facts.getFact(node, rustAsyncFunctionFactKey);
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(outerContext, node),
@@ -129,7 +129,7 @@ function planRustFunctionItem(
   }
   const isExported = source.exported;
   const name = source.name ??
-    outerContext.input.names.nameForDeclaration(source.nameDeclaration) ?? "";
+    outerContext.input.program.names.nameForDeclaration(source.nameDeclaration) ?? "";
   const declarationAttributes = [
     ...(rustSourceItemIsPubliclyReachable(outerContext, name)
       ? []
@@ -174,8 +174,8 @@ function planRustFunctionItem(
   const params = parameterPlan.params;
   const returnTypeNode = Node_Type(ast, node);
   const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
-    context.input.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
-  const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+    context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
+  const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
   const callableErrorBoundary = fallible
     ? rustErrorBoundaryForDeclaration(node, context)
     : undefined;

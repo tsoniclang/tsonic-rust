@@ -1,16 +1,14 @@
-import type { TargetCompileResult } from "@tsonic/target-api/artifacts";
-import type { RustArtifactPlanResult } from "../artifacts/model.js";
-import { printCargoManifest } from "../../print/cargo/manifest.js";
-import { printRustSourceFile } from "../../print/rust/index.js";
+import type { TargetCompileOutput } from "@tsonic/target-api/artifacts";
+import type { RustOutputPlan } from "../artifact-model/output.js";
+import { printCargoManifest } from "../../print/project/manifest.js";
+import { printRustSourceFile } from "../../print/source/index.js";
 
-export function materializeRustArtifacts(
-  plan: RustArtifactPlanResult,
-): TargetCompileResult {
-  if (plan.diagnostics.length > 0) {
-    return { artifacts: [], diagnostics: plan.diagnostics };
-  }
-  return {
-    artifacts: plan.artifacts.map((artifact) => artifact.kind === "project"
+export function materializeRustOutputPlan(
+  plan: RustOutputPlan,
+): TargetCompileOutput {
+  return Object.freeze({
+    artifacts: Object.freeze(plan.artifacts.map((artifact) => Object.freeze(
+      artifact.kind === "project"
       ? {
           kind: "project" as const,
           path: artifact.path,
@@ -21,7 +19,7 @@ export function materializeRustArtifacts(
           path: artifact.path,
           language: "rust",
           text: printRustSourceFile(artifact.model),
-        }),
-    diagnostics: [],
-  };
+        },
+    ))),
+  });
 }

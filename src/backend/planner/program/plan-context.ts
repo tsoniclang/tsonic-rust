@@ -4,7 +4,7 @@ import type { RustPlanningContext } from "../context.js";
 import type { RustGenericRequirementSet } from "../types/generic-requirements.js";
 import type { RustGeneratorFact, RustSourceBindingFact } from "../../../analysis/facts/keys.js";
 import { rustModuleBindingFactKey } from "../../../analysis/facts/keys.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import {
@@ -13,7 +13,7 @@ import {
   type RustSourcePackageErrorPlan,
 } from "./source-package-errors.js";
 import { rustSourceItemIdentity } from "./source-package-facades.js";
-import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../../rust-ast/nodes.js";
+import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../../target-ast/nodes.js";
 import {
   isValidRustIdentifier,
   rustSnakeCaseIdentifier,
@@ -30,7 +30,7 @@ export interface RustCapturedBinding {
   readonly declaration: Node;
   readonly path: string;
   readonly storage: "value" | "location";
-  readonly valueCarrier: import("../../../policy/types/model.js").TargetTypeRef;
+  readonly valueCarrier: import("../../../target-model/types/model.js").TargetTypeRef;
 }
 
 interface RustControlTargetBase {
@@ -44,7 +44,7 @@ interface RustControlTargetBase {
 export type RustControlTarget =
   | (RustControlTargetBase & {
       readonly kind: "loop";
-      readonly continuePrelude: readonly import("../../rust-ast/nodes.js").RustStmt[];
+      readonly continuePrelude: readonly import("../../target-ast/nodes.js").RustStmt[];
       readonly breakUsed: { value: boolean };
     })
   | (RustControlTargetBase & { readonly kind: "switch" | "label" });
@@ -109,17 +109,17 @@ export interface RustPlanContext {
   readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly projectDispatchRoot?: RustExpr;
   readonly objectLiteralImplementations?: RustObjectLiteralImplementationRegistry;
-  readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../../policy/types/model.js").TargetTypeRef>;
+  readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../../target-model/types/model.js").TargetTypeRef>;
 }
 
 export function rustErrorBoundaryForDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): RustSourcePackageErrorBoundary | undefined {
-  const sourceFile = context.input.ast.getSourceFile(declaration);
+  const sourceFile = context.input.program.source.ast.getSourceFile(declaration);
   const fileName = sourceFile === undefined
     ? undefined
-    : context.input.ast.getFileName(sourceFile);
+    : context.input.program.source.ast.getFileName(sourceFile);
   const ownerComponentId = fileName === undefined
     ? undefined
     : context.sourcePackageErrors.componentIdByFileName.get(fileName);
@@ -136,19 +136,19 @@ export function rustErrorBoundaryForProjectMember(
   declaration: Node,
   context: RustPlanContext,
 ): RustSourcePackageErrorBoundary | undefined {
-  const parent = context.input.ast.parent(declaration);
-  const kind = context.input.ast.kindName(declaration);
+  const parent = context.input.program.source.ast.parent(declaration);
+  const kind = context.input.program.source.ast.kindName(declaration);
   const projectMember = parent !== undefined &&
-    (context.input.ast.is.IsClassDeclaration(parent) ||
-      context.input.ast.is.IsInterfaceDeclaration(parent)) &&
-    !context.input.ast.hasModifierKind(declaration, "static") &&
+    (context.input.program.source.ast.is.IsClassDeclaration(parent) ||
+      context.input.program.source.ast.is.IsInterfaceDeclaration(parent)) &&
+    !context.input.program.source.ast.hasModifierKind(declaration, "static") &&
     (kind === "KindMethodDeclaration" || kind === "KindMethodSignature" ||
       kind === "KindGetAccessor" || kind === "KindSetAccessor" ||
       kind === "KindPropertyDeclaration" || kind === "KindPropertySignature");
   if (!projectMember) {
     return rustErrorBoundaryForDeclaration(declaration, context);
   }
-  const contracts = context.input.source.navigation.memberContracts(declaration);
+  const contracts = context.input.program.source.navigation.memberContracts(declaration);
   if (contracts.kind === "unresolved") {
     return undefined;
   }
@@ -198,7 +198,7 @@ export function rustSourceItemIsPubliclyReachable(
 ): boolean {
   return context.publishesImplementationAbi ||
     context.publicImplementationItemIdentities.has(rustSourceItemIdentity(
-    context.input.ast.getFileName(context.sourceFile),
+    context.input.program.source.ast.getFileName(context.sourceFile),
     itemName,
   ));
 }
@@ -249,11 +249,11 @@ export function rustSourceBindingPath(
   binding: RustSourceBindingFact,
 ): string | undefined {
   const moduleBinding = binding.scope === "module"
-    ? context.input.facts.getFact(binding.sourceDeclaration, rustModuleBindingFactKey)
+    ? context.input.program.facts.getFact(binding.sourceDeclaration, rustModuleBindingFactKey)
     : undefined;
   const name = moduleBinding?.storage === "native-callable" && moduleBinding.value !== undefined
     ? moduleBinding.value.name
-    : context.input.names.nameForDeclaration(binding.sourceDeclaration);
+    : context.input.program.names.nameForDeclaration(binding.sourceDeclaration);
   if (name === undefined || !isValidRustIdentifier(name)) {
     return undefined;
   }
@@ -268,7 +268,7 @@ export function isUpperSnakeName(name: string): boolean {
 }
 
 export function diagnosticInput(context: RustPlanContext, node: Node) {
-  return { ast: context.input.ast, sourceFile: context.sourceFile, node };
+  return { ast: context.input.program.source.ast, sourceFile: context.sourceFile, node };
 }
 
 export function sourceTypePath(
@@ -276,7 +276,7 @@ export function sourceTypePath(
   value: { readonly fileName: string; readonly typeName: string },
 ): string | undefined {
   const moduleName = context.moduleNameByFileName.get(value.fileName);
-  const typeName = context.input.names.nameForSourceType(value.fileName, value.typeName);
+  const typeName = context.input.program.names.nameForSourceType(value.fileName, value.typeName);
   if (moduleName === undefined || typeName === undefined || !isValidRustIdentifier(typeName)) {
     return undefined;
   }

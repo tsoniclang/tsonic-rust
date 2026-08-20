@@ -1,0 +1,1 @@
+export const rustTargetId = "rust";

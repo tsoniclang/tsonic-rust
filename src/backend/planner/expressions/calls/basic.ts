@@ -22,7 +22,7 @@ import { rustStringTargetType } from "../../../../policy/types/target-types.js";
 import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../../rust-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 
@@ -36,9 +36,9 @@ export function planCallExpression(node: Node, context: RustPlanContext): RustEx
 }
 
 function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const fact = rustOperationFact(node, context);
-  const callCarrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const callCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   const innerResultCarrier = fact?.kind === "source-call" ||
       fact?.kind === "provider-operation" ||
       fact?.kind === "object-shape-projection" ||
@@ -62,7 +62,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
     return undefined;
   }
   const sourceCallEffects = fact?.kind === "source-call"
-    ? context.input.facts.getFact(node, rustSourceCallEffectsFactKey)
+    ? context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey)
     : undefined;
   if (fact?.kind === "source-call" && !sourceCallEffectsMatch(fact, sourceCallEffects)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -72,7 +72,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
     ));
     return undefined;
   }
-  const callee = Node_Expression(context.input.ast, node);
+  const callee = Node_Expression(context.input.program.source.ast, node);
   if (fact?.kind === "typed-location") {
     return planRustTypedLocationCall(node, fact, context, planExpression);
   }
@@ -89,7 +89,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
     // Flow marker calls erase to their argument; passing shape comes from the
     // consuming position's finalized argument modes.
     const [argument] = args;
-    const [argumentNode] = context.input.ast.arguments(node);
+    const [argumentNode] = context.input.program.source.ast.arguments(node);
     return fact.state === "moved" && argumentNode !== undefined
       ? planRustNonConsumingValue(argumentNode, argument!, context)
       : argument;
@@ -144,9 +144,9 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     const receiverNode = callee !== undefined && ast.kindName(callee) === KindPropertyAccessExpression
-      ? Node_Expression(context.input.ast, callee)
+      ? Node_Expression(context.input.program.source.ast, callee)
       : undefined;
-    const providerArgumentNodes = [...context.input.ast.arguments(node)];
+    const providerArgumentNodes = [...context.input.program.source.ast.arguments(node)];
     if (providerArgumentNodes.length !== fact.abi.sourceArguments.length) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -192,9 +192,9 @@ function planRustDefaultValueCall(
   fact: Extract<RustTargetOperationFact, { readonly kind: "default-value" }>,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const sourceArguments = context.input.ast.arguments(node);
-  const selected = context.input.facts.getSelectedTargetCall(node);
-  const operation = context.input.facts.getSelectedTargetOperation(node);
+  const sourceArguments = context.input.program.source.ast.arguments(node);
+  const selected = context.input.program.facts.getSelectedTargetCall(node);
+  const operation = context.input.program.facts.getSelectedTargetOperation(node);
   if (!isDenseDataArray(sourceArguments) || sourceArguments.length !== 0 ||
     selected === undefined || selected.member.id !== fact.operationId ||
     selected.member.kind !== "method" || selected.member.static !== true ||
@@ -234,7 +234,7 @@ function planObjectShapeProjectionCall(
   fact: Extract<RustTargetOperationFact, { readonly kind: "object-shape-projection" }>,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const sourceArguments = context.input.ast.arguments(node);
+  const sourceArguments = context.input.program.source.ast.arguments(node);
   const staticCall = fact.sourceValueOrigin.kind === "argument";
   if (
     staticCall &&
@@ -254,7 +254,7 @@ function planObjectShapeProjectionCall(
     : fact.projection === "has-own"
       ? [rustStringTargetType()]
       : [];
-  const selected = context.input.facts.getSelectedTargetCall(node);
+  const selected = context.input.program.facts.getSelectedTargetCall(node);
   if (selected === undefined || selected.member.id !== fact.operationId ||
     selected.member.kind !== "method" ||
     (selected.member.static === true) !== staticCall ||
@@ -278,7 +278,7 @@ function planObjectShapeProjectionCall(
   if (!isDenseDataArray(sourceArguments) || sourceArguments.some((argument) => argument === undefined) ||
     sourceArguments.length !== expectedParameterCarriers.length ||
     sourceArguments.some((argument, index) => {
-      const passing = context.input.facts.getFact(argument!, rustArgumentPassingKey);
+      const passing = context.input.program.facts.getFact(argument!, rustArgumentPassingKey);
       return passing?.mode !== (staticCall && index === 0 ? "borrow-shared" : "by-value");
     })) {
     context.diagnostics.push(missingFactDiagnostic(

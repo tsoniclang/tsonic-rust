@@ -5,7 +5,7 @@ import {
   rustCarrierSupportsClone,
 } from "../../../policy/types/target-types.js";
 import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -22,7 +22,7 @@ export function planRustFlowReadProjection(
   fact: RustFlowReadProjectionFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const sourceCarrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   if (sourceCarrier === undefined ||
     !rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -42,7 +42,7 @@ export function planRustFlowReadProjection(
       return undefined;
     }
     const valueName = allocateRustSyntheticName(
-      context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+      context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
       "flow_value",
     );
     return {

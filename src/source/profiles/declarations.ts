@@ -3,8 +3,9 @@ import {
   typescriptNoLibUtilityDeclarations,
 } from "@tsonic/target-api/provider";
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
+import { rustTargetId } from "../../target-model/identities/target.js";
 
-export const rustSourceProfileOwnerId = "rust-provider";
+export const rustSourceProfileOwnerId = rustTargetId;
 export const rustJsSourceProfileOwnerId = "js";
 
 const sharedNoLibDeclarations = `

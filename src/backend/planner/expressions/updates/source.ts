@@ -23,7 +23,7 @@ import { rustSourceStaticFieldLocation } from "../../declarations/static-field-s
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../../rust-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustExpressionResultUse } from "../entry.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
@@ -34,13 +34,13 @@ export function planUnaryExpression(
   resultUse: RustExpressionResultUse,
 ): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
-  const operandNode = Node_Operand(context.input.ast, node);
+  const operandNode = Node_Operand(context.input.program.source.ast, node);
   if (fact !== undefined && fact.kind === "source-conversion" && fact.conversion === undefined) {
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.operator-carrier")) {
       return undefined;
     }
     if (!selectedOperationMatches(
-      context.input.facts.getSelectedTargetOperator(node),
+      context.input.program.facts.getSelectedTargetOperator(node),
       fact.operationId,
       "operator",
       fact.resultCarrier,
@@ -55,7 +55,7 @@ export function planUnaryExpression(
     }
     return operandNode === undefined
       ? undefined
-      : context.input.ast.kindName(operandNode) === KindNumericLiteral
+      : context.input.program.source.ast.kindName(operandNode) === KindNumericLiteral
         ? planNumericLiteralWithCarrier(operandNode, fact.resultCarrier, context)
         : planExpression(operandNode, context);
   }
@@ -71,7 +71,7 @@ export function planUnaryExpression(
     return undefined;
   }
   if (!selectedOperationMatches(
-    context.input.facts.getSelectedTargetOperator(node),
+    context.input.program.facts.getSelectedTargetOperator(node),
     fact.operationId,
     "operator",
     fact.resultCarrier,
@@ -97,7 +97,7 @@ export function planUnaryExpression(
   }
   const operand = operandNode === undefined
     ? undefined
-    : context.input.ast.kindName(operandNode) === KindNumericLiteral
+    : context.input.program.source.ast.kindName(operandNode) === KindNumericLiteral
       ? planNumericLiteralWithCarrier(operandNode, fact.resultCarrier, context)
       : planExpression(operandNode, context);
   return operand === undefined
@@ -137,7 +137,7 @@ function planRustUpdateExpression(
     context.usedAliases?.add("rt");
   }
   const returnsPrevious = resultUse === "value" &&
-    context.input.ast.kindName(expression) === KindPostfixUnaryExpression;
+    context.input.program.source.ast.kindName(expression) === KindPostfixUnaryExpression;
   const sourceAccessor = findRustUpdateSourceAccessor(operand, context);
   if (sourceAccessor !== undefined) {
     return planRustSourceAccessorUpdate(
@@ -236,7 +236,7 @@ function planRustUpdateExpression(
     return undefined;
   }
   if (resultUse === "discarded" &&
-    context.input.ast.kindName(operand) === KindIdentifier) {
+    context.input.program.source.ast.kindName(operand) === KindIdentifier) {
     return {
       kind: "assignment",
       operator: fact.operator,
@@ -262,14 +262,14 @@ function findRustUpdateSourceIndex(
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
-    const fact = context.input.facts.getFact(current, rustTargetOperationFactKey);
+    const fact = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
     if (fact?.kind === "source-index-signature") {
       return { expression: current, fact };
     }
-    if (context.input.ast.kindName(current) !== KindParenthesizedExpression) {
+    if (context.input.program.source.ast.kindName(current) !== KindParenthesizedExpression) {
       return undefined;
     }
-    current = Node_Expression(context.input.ast, current);
+    current = Node_Expression(context.input.program.source.ast, current);
   }
   return undefined;
 }
@@ -292,8 +292,8 @@ function planRustSourceIndexUpdate(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(context.input.ast, expression);
-  const keyNode = ElementAccessExpression_ArgumentExpression(context.input.ast, expression);
+  const receiverNode = Node_Expression(context.input.program.source.ast, expression);
+  const keyNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
   const plannedReceiver = receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context);
@@ -351,14 +351,14 @@ function findRustUpdateSourceStaticField(
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
-    const fact = context.input.facts.getFact(current, rustTargetOperationFactKey);
+    const fact = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
     if (fact?.kind === "source-static-field") {
       return { expression: current, fact };
     }
-    if (context.input.ast.kindName(current) !== KindParenthesizedExpression) {
+    if (context.input.program.source.ast.kindName(current) !== KindParenthesizedExpression) {
       return undefined;
     }
-    current = Node_Expression(context.input.ast, current);
+    current = Node_Expression(context.input.program.source.ast, current);
   }
   return undefined;
 }
@@ -387,7 +387,7 @@ function planRustSourceAccessorUpdate(
   const locationBindings: { name: string; value: RustExpr }[] = [];
   let receiver: RustExpr | undefined;
   if (accessor.receiver.kind === "instance") {
-    const receiverNode = Node_Expression(context.input.ast, accessorExpression);
+    const receiverNode = Node_Expression(context.input.program.source.ast, accessorExpression);
     const plannedReceiver = receiverNode === undefined
       ? undefined
       : planExpression(receiverNode, context);
@@ -462,14 +462,14 @@ export function findRustUpdateSourceAccessor(
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
-    const fact = context.input.facts.getFact(current, rustTargetOperationFactKey);
+    const fact = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
     if (fact?.kind === "source-accessor") {
       return { expression: current, fact };
     }
-    if (context.input.ast.kindName(current) !== KindParenthesizedExpression) {
+    if (context.input.program.source.ast.kindName(current) !== KindParenthesizedExpression) {
       return undefined;
     }
-    current = Node_Expression(context.input.ast, current);
+    current = Node_Expression(context.input.program.source.ast, current);
   }
   return undefined;
 }
@@ -491,7 +491,7 @@ function planRustSourceUnionFieldUpdate(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(context.input.ast, fieldExpression);
+  const receiverNode = Node_Expression(context.input.program.source.ast, fieldExpression);
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   if (receiver === undefined || context.syntheticNames === undefined) {
     return undefined;

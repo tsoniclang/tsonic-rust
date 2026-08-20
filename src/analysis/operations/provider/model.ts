@@ -26,7 +26,6 @@ export interface RustOperationsProviderOptions {
   readonly providerExports: readonly import("../../../providers/packages/model.js").RustProviderExportRow[];
   readonly providerRows: readonly RustProviderOperationRow[];
   readonly providerTypes: readonly import("../../../providers/packages/model.js").RustProviderTypeRow[];
-  readonly providerCarrierPaths: ReadonlyMap<string, string>;
   readonly jsEnabled: boolean;
   readonly regExpSubsetViolation: (pattern: string, flags: string) => string | undefined;
   readonly sourceProfiles: RustSourceProfileRegistry;

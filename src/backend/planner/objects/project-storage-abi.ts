@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { RustVisibility } from "../../rust-ast/nodes.js";
+import type { RustVisibility } from "../../target-ast/nodes.js";
 import { rustProjectMemberIsPrivate } from "../../../analysis/project-types/member-privacy.js";
 
 export function rustProjectImplementationVisibility(

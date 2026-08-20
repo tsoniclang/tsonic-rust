@@ -36,7 +36,7 @@ import type {
 } from "../../../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
-import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../policy/types/model.js";
+import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
@@ -547,7 +547,7 @@ function runtimeCallableTargetParameters(
   readonly parameters: readonly NonNullable<RustTargetMember["parameters"]>[number][];
   readonly sourceParameterIndexes: readonly number[];
 } | undefined {
-  const expanded = context.checker.selectCallParameterSlots(request.source);
+  const expanded = context.currentSemantics.operations.callParameterSlots(request.source);
   if (expanded === undefined) {
     return undefined;
   }

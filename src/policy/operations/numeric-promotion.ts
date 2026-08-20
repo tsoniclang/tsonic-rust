@@ -1,6 +1,6 @@
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../types/model.js";
-import type { RustValueConversion } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustValueConversion } from "../../target-model/operations/model.js";
 import {
   isRustNumericCarrier,
   rustSourcePrimitiveTargetType,

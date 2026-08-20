@@ -7,9 +7,9 @@ import type {
   RustFunctionParam,
   RustType,
   RustTypeParameter,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 import { closedMetadataKey } from "../../../policy/model/closed-data.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export type RustArtifactFacet =
   | "source-callable-surface"

@@ -4,7 +4,7 @@ import type {
   RustPlanWriter,
 } from "../../policy/model/selections.js";
 import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustAppliedValueCarrierReconciliation,
 } from "../../policy/types/value-carrier-reconciliation.js";

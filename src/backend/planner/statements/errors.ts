@@ -21,12 +21,12 @@ import { planExpression, providerSelectedCallMatches } from "../expressions/inde
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
+  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   if (fact === undefined || fact.kind !== "throw-op") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -44,7 +44,7 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     ));
     return undefined;
   }
-  const expression = Node_Expression(context.input.ast, node);
+  const expression = Node_Expression(context.input.program.source.ast, node);
   if (expression === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -54,7 +54,7 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     return undefined;
   }
   if (fact.error.kind === "runtime") {
-    const constructor = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+    const constructor = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
     if (constructor === undefined || constructor.kind !== "provider-operation" ||
       constructor.operationId !== fact.error.constructorOperationId ||
       constructor.abi.operationKind !== "constructor" ||
@@ -91,11 +91,11 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
         args: [value],
       };
   } else {
-    const definition = context.input.projectTypes.definitionForCarrier(fact.error.carrier);
+    const definition = context.input.program.projectTypes.definitionForCarrier(fact.error.carrier);
     const route = definition === undefined ||
-      context.input.projectTypes.programErrorVariant(definition) !== fact.error.variant ||
+      context.input.program.projectTypes.programErrorVariant(definition) !== fact.error.variant ||
       !rustTargetTypeRefEquals(
-        context.input.projectTypes.openCarrier(definition),
+        context.input.program.projectTypes.openCarrier(definition),
         fact.error.carrier,
       )
       ? undefined
@@ -133,11 +133,11 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
 }
 
 export function planTryStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const tryBlock = TryStatement_TryBlock(context.input.ast, node);
-  const catchClause = TryStatement_CatchClause(context.input.ast, node);
-  const catchBlock = CatchClause_Block(context.input.ast, catchClause);
-  const finallyBlock = TryStatement_FinallyBlock(context.input.ast, node);
+  const { ast } = context.input.program.source;
+  const tryBlock = TryStatement_TryBlock(context.input.program.source.ast, node);
+  const catchClause = TryStatement_CatchClause(context.input.program.source.ast, node);
+  const catchBlock = CatchClause_Block(context.input.program.source.ast, catchClause);
+  const finallyBlock = TryStatement_FinallyBlock(context.input.program.source.ast, node);
   if (tryBlock === undefined || (catchBlock === undefined && finallyBlock === undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -192,12 +192,12 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     if (catchBody === undefined) {
       return undefined;
     }
-    const catchDeclaration = CatchClause_VariableDeclaration(context.input.ast, catchClause);
-    const bindingNode = Node_Name(context.input.ast, catchDeclaration);
+    const catchDeclaration = CatchClause_VariableDeclaration(context.input.program.source.ast, catchClause);
+    const bindingNode = Node_Name(context.input.program.source.ast, catchDeclaration);
     const bindingSource = bindingNode === undefined ? "" : ast.text(bindingNode);
     let binding = bindingSource.length === 0
       ? "_"
-      : context.input.names.nameForDeclaration(catchDeclaration) ?? "";
+      : context.input.program.names.nameForDeclaration(catchDeclaration) ?? "";
     if (binding !== "_") {
       let used = false;
       const findUse = (candidate: Node): void => {

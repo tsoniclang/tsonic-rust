@@ -6,7 +6,7 @@ import {
 import {
   planRustSourcePackageCargo,
 } from "../../../../dist/backend/planner/program/source-package-crates.js";
-import { printCargoManifest } from "../../../../dist/print/cargo/manifest.js";
+import { printCargoManifest } from "../../../../dist/print/project/manifest.js";
 import {
   planRustSourcePackageErrors,
   resolveRustProgramErrorRoute,
@@ -29,8 +29,7 @@ test("source-package components are dependency ordered and ignore inactive packa
     ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],
     ["/dep/index.ts", sourceIdentity("/dep/index.ts", "dependency", "dependency_crate")],
   ]);
-  const result = planRustSourcePackageComponents({
-    target: { id: "rust", options: { outputType: "bin" } },
+  const result = planRustSourcePackageComponents(planningContext({
     sourcePackages: {
       components: [
         { id: "root", packages: ["root-package"], dependencies: ["dependency", "inactive"] },
@@ -41,7 +40,8 @@ test("source-package components are dependency ordered and ignore inactive packa
     projectTypes: {
       programErrorDefinitions: [{ fileName: "/dep/index.ts" }],
     },
-  }, identities, facadePlan("root", ["root", "dependency"]));
+    outputType: "bin",
+  }), identities, facadePlan("root", ["root", "dependency"]));
 
   assert.equal(result.kind, "accepted");
   assert.deepEqual(result.components.map((component) => component.componentId), [
@@ -60,13 +60,13 @@ test("source-package components are dependency ordered and ignore inactive packa
 
 test("library roots retain exact facade linkage and component cycles fail closed", () => {
   const rootIdentity = sourceIdentity("/root/index.ts", "root");
-  const library = planRustSourcePackageComponents({
-    target: { id: "rust", options: { outputType: "lib" } },
+  const library = planRustSourcePackageComponents(planningContext({
     sourcePackages: {
       components: [{ id: "root", packages: ["root-package"], dependencies: [] }],
     },
     projectTypes: { programErrorDefinitions: [] },
-  }, new Map([[rootIdentity.fileName, rootIdentity]]), facadePlan("root", ["root"]));
+    outputType: "lib",
+  }), new Map([[rootIdentity.fileName, rootIdentity]]), facadePlan("root", ["root"]));
   assert.equal(library.kind, "accepted");
   assert.equal(Object.hasOwn(library.components[0], "targetLinkage"), false);
   assert.equal(library.components[0].publishesImplementationAbi, true);
@@ -76,8 +76,7 @@ test("library roots retain exact facade linkage and component cycles fail closed
     "dependency",
     "dependency_crate",
   );
-  const cycle = planRustSourcePackageComponents({
-    target: { id: "rust", options: { outputType: "bin" } },
+  const cycle = planRustSourcePackageComponents(planningContext({
     sourcePackages: {
       components: [
         { id: "root", packages: ["root-package"], dependencies: ["dependency"] },
@@ -85,7 +84,8 @@ test("library roots retain exact facade linkage and component cycles fail closed
       ],
     },
     projectTypes: { programErrorDefinitions: [] },
-  }, new Map([
+    outputType: "bin",
+  }), new Map([
     [rootIdentity.fileName, rootIdentity],
     [dependencyIdentity.fileName, dependencyIdentity],
   ]), facadePlan("root", ["root", "dependency"]));
@@ -433,13 +433,13 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     programModuleName: "program",
     errorDomain: "project",
   }];
-  const result = planRustSourcePackageErrors({
+  const result = planRustSourcePackageErrors(planningContext({
     projectTypes: {
       programErrorDefinitions: [engineError],
       programErrorVariant: (definition) =>
         definition === engineError ? "EngineFailure" : undefined,
     },
-  }, new Map([
+  }), new Map([
     ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],
     ["/dep/errors.ts", sourceIdentity("/dep/errors.ts", "dependency", "engine_crate")],
   ]), components);
@@ -489,12 +489,12 @@ test("source-package error planning rejects unowned project errors", () => {
     sourceName: "MissingFailure",
     declaration: {},
   };
-  const result = planRustSourcePackageErrors({
+  const result = planRustSourcePackageErrors(planningContext({
     projectTypes: {
       programErrorDefinitions: [missingError],
       programErrorVariant: () => "MissingFailure",
     },
-  }, new Map([
+  }), new Map([
     ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],
   ]), [{
     componentId: "root",
@@ -535,6 +535,20 @@ function facadePlan(rootComponentId, componentIds) {
       [componentId, new Set()])),
     publicImplementationItemIdentitiesByComponent: new Map(componentIds.map((componentId) =>
       [componentId, new Set()])),
+  };
+}
+
+function planningContext({
+  sourcePackages = { components: [] },
+  projectTypes,
+  outputType = "bin",
+}) {
+  return {
+    input: { sourcePackages },
+    program: {
+      configuration: { outputType },
+      projectTypes,
+    },
   };
 }
 

@@ -4,7 +4,6 @@ import type {
   SourceFile,
 } from "@tsonic/tsts";
 import type {
-  TargetBackendContext,
   TargetCompileInput,
   TargetSelection,
 } from "@tsonic/target-api";
@@ -60,7 +59,6 @@ import {
 } from "./runtime-value-uses.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
-  readonly backend: TargetBackendContext;
   readonly target: TargetSelection;
   readonly jsEnabled: boolean;
   readonly ast: AstReader;
@@ -86,7 +84,6 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
 }
 
 export function createRustAnalysisContext(
-  backend: TargetBackendContext,
   input: TargetCompileInput,
   providerSemantics: RustProviderSemantics,
   jsEnabled: boolean,
@@ -113,7 +110,6 @@ export function createRustAnalysisContext(
   });
   return Object.freeze({
     source: input.source,
-    backend,
     target: input.target,
     jsEnabled,
     ast,
@@ -140,7 +136,7 @@ export function createRustAnalysisContext(
     diagnostics: [],
     analysis: Object.freeze({
       getEnumMemberConstant(node: Node) {
-        const value = input.source.semantics.forNode(node).getConstantValue(node);
+        const value = input.source.semantics.forNode(node).types.constantValue(node);
         return typeof value === "number" || typeof value === "string"
           ? { value }
           : undefined;

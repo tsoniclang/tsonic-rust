@@ -1,5 +1,3 @@
-import { createRustTargetPack } from "../../dist/index.js";
-
 // Canonical TargetCompileInput fixture for planner-only tests. It supplies a
 // closed empty semantic program rather than preserving the retired flat input.
 
@@ -188,31 +186,5 @@ export function fakeSourcePackageGraph(
       componentId,
     }],
     components: [{ id: componentId, packages: [packageId], dependencies: [] }],
-  };
-}
-
-export function fakeRuntimeContributionContext({ target = { id: "rust", options: {} }, selectedSurfaces = [], selectedPackages = [] } = {}) {
-  return {
-    project: { entryPoint: "src/index.ts", targets: [target] },
-    target,
-    selectedPackages,
-    selectedSurfaces,
-    paths: {
-      projectFilePath: "tsonic.json",
-      projectRoot: ".",
-      outputRoot: "out",
-      targetOutputRoot: "out/rust",
-    },
-  };
-}
-
-export function fakeBackendContext({ target = { id: "rust", options: {} } } = {}) {
-  return {
-    project: { entryPoint: "src/index.ts", targets: [target] },
-    projectDirectory: ".",
-    target,
-    targetPack: createRustTargetPack(),
-    selectedCapabilities: [],
-    selectedSurfaces: [],
   };
 }

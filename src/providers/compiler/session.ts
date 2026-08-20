@@ -8,9 +8,8 @@ import type {
   ProviderModuleResolution,
   SourceDeclarationProvider,
 } from "@tsonic/tsts";
-import type { TargetProviderContext } from "@tsonic/target-api/provider";
 import { materializeClosedMetadata } from "../../policy/model/closed-data.js";
-import { resolveRustUserCargoManifest } from "../../options/rust-user-project.js";
+import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type {
   RustProviderModuleDefinition,
   RustProviderOperationDefinition,
@@ -36,7 +35,7 @@ import {
 } from "./projection/projection.js";
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
 import type { RustCompilerProviderProjection } from "./projection/projection.js";
-import type { RustNamedTypeTraitContract } from "../../policy/types/model.js";
+import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { createRustCompilerWorkerClient } from "./protocol/worker-client.js";
 import type { RustCompilerWorkerClient } from "./protocol/worker-client.js";
 
@@ -51,16 +50,19 @@ const rustCompilerProviderDiagnosticCodes = Object.freeze({
 type RustCompilerProviderDiagnosticCode = keyof typeof rustCompilerProviderDiagnosticCodes;
 
 export interface RustCompilerProviderSession {
-  readonly snapshot?: RustCompilerProjectSnapshot;
   readonly sourceProviders: readonly SourceDeclarationProvider[];
   semantics(): RustProviderSemantics;
+  close(): void;
 }
 
 export function createRustCompilerProviderSession(
-  context: TargetProviderContext,
+  context: {
+    readonly configuration: RustTargetConfiguration;
+  },
   worker: RustCompilerWorkerClient = createRustCompilerWorkerClient(),
 ): RustCompilerProviderSession {
   const standardSnapshot = worker.standardSnapshot();
+  const standardSnapshotLease = createCompilerSnapshotLease(standardSnapshot);
   const standardVersion = compilerProviderVersion(standardSnapshot.digest);
   const standardRegistry = createProjectionRegistry({
     packageId: rustStandardProviderPackageId,
@@ -71,32 +73,33 @@ export function createRustCompilerProviderSession(
     packageId: rustStandardProviderPackageId,
     displayName: "Rust standard-library compiler provider",
     virtualScope: "standard",
-    snapshot: standardSnapshot,
+    snapshotLease: standardSnapshotLease,
+    configHash: standardSnapshot.digest,
     providerVersion: standardVersion,
     worker,
     registry: standardRegistry,
-    resolveModule(specifier: string) {
+    resolveModule(snapshot, specifier) {
       const request = standardModuleRequestFromSpecifier(specifier);
       if (request === undefined) {
         return undefined;
       }
-      const dependency = standardSnapshot.dependencies.find((candidate) =>
+      const dependency = snapshot.dependencies.find((candidate) =>
         candidate.alias === request.crateName);
       return dependency === undefined ? undefined : { dependency, modulePath: request.modulePath };
     },
   });
-  const projectFile = resolveRustUserCargoManifest(context.target, context.projectDirectory);
-  if (projectFile.kind === "absent") {
-    return Object.freeze({
+  const project = context.configuration.project;
+  if (project.kind === "generated") {
+    return createCompilerProviderSessionResult({
       sourceProviders: Object.freeze([standardProvider]),
-      semantics: () => standardRegistry.semantics(),
+      registries: Object.freeze([standardRegistry]),
+      snapshotLeases: Object.freeze([standardSnapshotLease]),
+      createSemantics: () => standardRegistry.semantics(),
     });
   }
-  if (projectFile.kind === "invalid") {
-    throw new Error(projectFile.message);
-  }
-  const manifestPath = projectFile.manifestPath;
+  const manifestPath = project.manifestPath;
   const snapshot = worker.snapshot(manifestPath);
+  const snapshotLease = createCompilerSnapshotLease(snapshot);
   const providerVersion = compilerProviderVersion(snapshot.digest);
   const registry = createProjectionRegistry({
     packageId: rustCompilerProviderPackageId,
@@ -109,22 +112,60 @@ export function createRustCompilerProviderSession(
       packageId: rustCompilerProviderPackageId,
       displayName: "Rust Cargo compiler provider",
       virtualScope: "cargo",
-      snapshot,
+      snapshotLease,
+      configHash: snapshot.digest,
       providerVersion,
       worker,
       registry,
-      resolveModule(specifier: string) {
-        return resolveCompilerModule(snapshot, specifier);
+      resolveModule(leasedSnapshot, specifier) {
+        return resolveCompilerModule(leasedSnapshot, specifier);
       },
     }),
   ];
-  return Object.freeze({
-    snapshot,
+  return createCompilerProviderSessionResult({
     sourceProviders: Object.freeze(sourceProviders),
-    semantics: () => mergeRustProviderSemantics(
+    registries: Object.freeze([standardRegistry, registry]),
+    snapshotLeases: Object.freeze([standardSnapshotLease, snapshotLease]),
+    createSemantics: () => mergeRustProviderSemantics(
       standardRegistry.semantics(),
       registry.semantics(),
     ),
+  });
+}
+
+function createCompilerProviderSessionResult(options: {
+  readonly sourceProviders: readonly SourceDeclarationProvider[];
+  readonly registries: readonly ProjectionRegistry[];
+  readonly snapshotLeases: readonly CompilerSnapshotLease[];
+  readonly createSemantics: () => RustProviderSemantics;
+}): RustCompilerProviderSession {
+  let state: "open" | "sealed" | "closed" = "open";
+  let semantics: RustProviderSemantics | undefined;
+  return Object.freeze({
+    sourceProviders: options.sourceProviders,
+    semantics(): RustProviderSemantics {
+      if (state === "closed") {
+        throw new Error("Rust compiler-provider session is closed.");
+      }
+      if (semantics === undefined) {
+        semantics = options.createSemantics();
+        state = "sealed";
+      }
+      return semantics;
+    },
+    close(): void {
+      if (state === "closed") {
+        return;
+      }
+      for (const registry of options.registries) {
+        registry.close();
+      }
+      for (const lease of options.snapshotLeases) {
+        lease.close();
+      }
+      semantics = undefined;
+      state = "closed";
+    },
   });
 }
 
@@ -133,16 +174,42 @@ interface ResolvedCompilerModule {
   readonly modulePath: readonly string[];
 }
 
+interface CompilerSnapshotLease {
+  get(): RustCompilerProjectSnapshot;
+  close(): void;
+}
+
+function createCompilerSnapshotLease(
+  initial: RustCompilerProjectSnapshot,
+): CompilerSnapshotLease {
+  let snapshot: RustCompilerProjectSnapshot | undefined = initial;
+  return Object.freeze({
+    get(): RustCompilerProjectSnapshot {
+      if (snapshot === undefined) {
+        throw new Error("Rust compiler-provider snapshot lease is closed.");
+      }
+      return snapshot;
+    },
+    close(): void {
+      snapshot = undefined;
+    },
+  });
+}
+
 function createCompilerProvider(
   options: {
     readonly packageId: string;
     readonly displayName: string;
     readonly virtualScope: string;
-    readonly snapshot: RustCompilerProjectSnapshot;
+    readonly snapshotLease: CompilerSnapshotLease;
+    readonly configHash: string;
     readonly providerVersion: string;
     readonly worker: RustCompilerWorkerClient;
     readonly registry: ProjectionRegistry;
-    readonly resolveModule: (specifier: string) => ResolvedCompilerModule | undefined;
+    readonly resolveModule: (
+      snapshot: RustCompilerProjectSnapshot,
+      specifier: string,
+    ) => ResolvedCompilerModule | undefined;
   },
 ): SourceDeclarationProvider {
   const providerId = rustProviderBindingProviderId(options.packageId);
@@ -151,17 +218,18 @@ function createCompilerProvider(
       id: providerId,
       version: options.providerVersion,
       extensionContractVersion: TstsSourceProviderContractVersion,
-      configHash: options.snapshot.digest,
+      configHash: options.configHash,
       displayName: options.displayName,
     }),
     declarationMaterialization: "incremental",
     ownsModule(specifier: string) {
-      return options.resolveModule(specifier) === undefined
+      return options.resolveModule(options.snapshotLease.get(), specifier) === undefined
         ? { kind: "unowned" as const }
         : { kind: "owned" as const };
     },
     resolveModule(specifier: string) {
-      const resolved = options.resolveModule(specifier);
+      const snapshot = options.snapshotLease.get();
+      const resolved = options.resolveModule(snapshot, specifier);
       if (resolved === undefined) {
         return providerDiagnostic(providerId,
           "RUST_COMPILER_PROVIDER_MODULE_UNOWNED",
@@ -182,7 +250,8 @@ function createCompilerProvider(
       resolution: ProviderModuleResolution,
       request: ProviderDeclarationRequest,
     ): ProviderDeclarationModel | ExtensionDiagnostic {
-      const resolved = options.resolveModule(resolution.moduleSpecifier);
+      const snapshot = options.snapshotLease.get();
+      const resolved = options.resolveModule(snapshot, resolution.moduleSpecifier);
       if (resolved === undefined) {
         return providerDiagnostic(providerId,
           "RUST_COMPILER_PROVIDER_MODULE_UNOWNED",
@@ -200,7 +269,7 @@ function createCompilerProvider(
       try {
         const requestedExports = requestedExportNames(request);
         const module = options.worker.module({
-          snapshot: options.snapshot,
+          snapshot,
           dependency,
           modulePath,
           ...(requestedExports === undefined ? {} : { requestedExports }),
@@ -224,6 +293,7 @@ function createCompilerProvider(
 interface ProjectionRegistry {
   add(projection: RustCompilerProviderProjection): void;
   semantics(): RustProviderSemantics;
+  close(): void;
 }
 
 function createProjectionRegistry(options: {
@@ -240,10 +310,11 @@ function createProjectionRegistry(options: {
   const typesByIdentity = new Map<string, RustProviderTypeDefinition>();
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
-  let sealed = false;
+  let state: "open" | "sealed" | "closed" = "open";
+  let sealedSemantics: RustProviderSemantics | undefined;
   return Object.freeze({
     add(projection: RustCompilerProviderProjection): void {
-      if (sealed) {
+      if (state !== "open") {
         throw new Error("Rust compiler-provider semantics are sealed for backend consumption.");
       }
       const existingModule = modules.get(projection.module.moduleSpecifier);
@@ -289,7 +360,13 @@ function createProjectionRegistry(options: {
       }
     },
     semantics(): RustProviderSemantics {
-      sealed = true;
+      if (state === "closed") {
+        throw new Error("Rust compiler-provider registry is closed.");
+      }
+      if (sealedSemantics !== undefined) {
+        return sealedSemantics;
+      }
+      state = "sealed";
       const moduleDefinitions = [...modules.entries()]
         .sort(([left], [right]) => compareText(left, right))
         .map(([moduleSpecifier, module]): RustProviderModuleDefinition => Object.freeze({
@@ -356,7 +433,27 @@ function createProjectionRegistry(options: {
           ? {}
           : { carrierTraits: Object.freeze(carrierTraitRecord) }),
       });
-      return collectRustProviderSemanticsFromDefinitions([definition]);
+      sealedSemantics = collectRustProviderSemanticsFromDefinitions([definition]);
+      return sealedSemantics;
+    },
+    close(): void {
+      if (state === "closed") {
+        return;
+      }
+      for (const module of modules.values()) {
+        module.exports.clear();
+        for (const names of module.imports.values()) {
+          names.clear();
+        }
+        module.imports.clear();
+      }
+      modules.clear();
+      operationsByIdentity.clear();
+      typesByIdentity.clear();
+      carrierPaths.clear();
+      carrierTraits.clear();
+      sealedSemantics = undefined;
+      state = "closed";
     },
   });
 }

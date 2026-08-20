@@ -9,8 +9,8 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../policy/ty
 import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
 import type { Fail } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
-import type { RustValueConversion } from "../../../policy/operations/model.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { RustValueConversion } from "../../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function validateCarrier(
   carrier: TargetTypeRef,
